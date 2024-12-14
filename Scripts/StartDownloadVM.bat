@@ -1,0 +1,1 @@
+"C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe" -T ws start "C:\VirtualMachines\Download-Ubuntu\Download-Ubuntu.vmx" nogui

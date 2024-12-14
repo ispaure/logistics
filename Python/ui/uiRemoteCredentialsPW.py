@@ -1,0 +1,41 @@
+import wrappers.rcloneWrapper as rcloneWrapper
+from commonUtils.pySideUtils import *
+
+show_verbose = True
+
+
+def ui_load_credentials(unlock_arg):
+
+    # Load Credentials
+    rcloneWrapper.add_remote_from_zip_to_rclone_conf(zip_path=unlock_arg['Path'],
+                                                     zip_pw=unlock_arg['Password'].txt())
+
+    # Close Window
+    # TODO Doesn't work anymore since the restructure
+    # unlock_arg['UI-Window'].dlg.main_win.close()
+
+
+class RemoteCredentialsPW(Window):
+    def __init__(self, file_path):
+        super().__init__('Enter Password for Credentials Archive')
+
+        # Set dimensions
+        self.width = 490
+        self.height = 100
+
+        # UNLOCK CREDENTIAL UI COMPONENTS ------------------------------------------------------------------------------
+
+        # --- OPTIONS ---
+        # Argument Dict
+        unlock_arg = {'Path': file_path, 'UI-Window': self}
+
+        # 1. Password Entry
+        # Create Label
+        Label('Password: ', self.dlg, QRect(10, 5, 400, 20))
+        # Create Argument
+        unlock_arg['Password'] = LineEdit('', self.dlg, QRect(100, 5, 380, 20), pw_field=True)
+
+        # --- BUTTON ---
+        button('Add Credentials to Rclone', self.dlg, QRect(0, 25, 490, 30), ui_load_credentials, unlock_arg)
+
+        # --------------------------------------------------------------------------------------------------------------

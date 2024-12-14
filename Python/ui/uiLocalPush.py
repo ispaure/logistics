@@ -1,0 +1,105 @@
+import wrappers.rcloneWrapper as rcloneWrapper
+from commonUtils.pySideUtils import *
+from commonUtils import fileUtils as fileUtils
+from pathlib import Path
+import os
+
+
+def push_to_cloud(remote_cls):
+    source_path = remote_cls['remote_cls'].directory_path
+    destination_path = remote_cls['remote_cls'].name + ':'
+    rcloneWrapper.rclone_sync(source_path, destination_path, track_renames=remote_cls['track_renames'].isChecked())
+
+
+def package_push_to_cloud(data_to_exec):
+    print('Initiating Package Push to Cloud Procedure')
+
+    # Get important values
+    local_remote_path = data_to_exec['Remote Class'].directory_path
+    cloud_remote_path = data_to_exec['Remote Class'].name + ':'
+    local_package_path = str(Path(data_to_exec['Push Directory'].text(), data_to_exec['Remote Class'].name))
+    parallel_amt = int(data_to_exec['Parallel Uploads Amount'].text())
+
+    # Execute ghetto sync
+    rcloneWrapper.rclone_sync_ghetto(local_remote_path, local_package_path, cloud_remote_path, parallel_amt)
+
+
+def push_specific_dir(data_to_exec):
+    print('Initiating Push to Cloud (Specific Dir)')
+
+    # Get important values
+    directory_path_to_push = data_to_exec['Push Specific Directory'].text()
+    if not os.path.isdir(directory_path_to_push):
+        display_msg_box_ok('Push Individual Folder', 'The path you have given is not a valid directory!')
+        return False
+    bandwidth_limit = data_to_exec['Bandwidth Limit'].text()
+    if bandwidth_limit == '':
+        bandwidth_limit = None
+    specific_dir_name = directory_path_to_push.split(fileUtils.get_split_character())[-1]
+    cloud_remote_path = data_to_exec['Remote Class'].name + ':' + specific_dir_name
+
+    # Execute specific dir sync
+    rcloneWrapper.rclone_sync(directory_path_to_push, cloud_remote_path, bw_limit=bandwidth_limit)
+
+
+class LocalPushUI(Window):
+    def __init__(self, remote_cls):
+        super().__init__('Local Push Options [{}]'.format(remote_cls.name))
+
+        # Set dimensions
+        self.width = 500
+        self.height = 390
+
+        # REGULAR PUSH -------------------------------------------------------------------------------------------------
+        # ENTERTAINMENT
+        panel = create_frame(self.dlg, QRect(5, 5, 490, 95))
+        Label('REGULAR PUSH TO CLOUD: ', panel, QRect(10, 10, 200, 13))
+        # Create Label
+        Label('Track renames: ', panel, QRect(10, 35, 400, 20))
+        # Create Argument
+        convert_arg = {}
+        convert_arg['track_renames'] = create_checkbox(panel, QRect(110, 35, 20, 20), default_state=False)
+        convert_arg['remote_cls'] = remote_cls
+        # Create regular push button
+        button('PUSH [Regular]', panel, QRect(85, 65, 320, 25), push_to_cloud, convert_arg)
+        # --------------------------------------------------------------------------------------------------------------
+
+        # GHETTO PUSH --------------------------------------------------------------------------------------------------
+        panel_ghetto = create_frame(self.dlg, QRect(5, 105, 490, 125))
+        # Label: Package for PUSH to CLOUD from ELSEWHERE
+        Label('PACKAGE PUSH to CLOUD [For Upload Elsewhere]:', panel_ghetto, QRect(10, 10, 400, 20))
+        # Create argument dictionary
+        arg_ghetto = {'Remote Class': remote_cls}
+        # Create file path label
+        Label('Destination Path: ', panel_ghetto, QRect(10, 35, 400, 20))
+        # Create file path field
+        path_textedit = LineEdit('J:\\', panel_ghetto, QRect(120, 35, 360, 20))
+        arg_ghetto['Push Directory'] = path_textedit
+        # Create parallel upload amt label
+        Label('Parallel Uploads [Amount]: ', panel_ghetto, QRect(10, 65, 470, 20))
+        # Create parallels uploads field user can set (default is 10)
+        parallel_up_textedit = LineEdit('10', panel_ghetto, QRect(180, 65, 50, 20))
+        arg_ghetto['Parallel Uploads Amount'] = parallel_up_textedit
+        # Create package for push to cloud
+        button('PACKAGE', panel_ghetto, QRect(85, 95, 320, 25), package_push_to_cloud, arg_ghetto)
+        # --------------------------------------------------------------------------------------------------------------
+
+        # ADD FOLDER ---------------------------------------------------------------------------------------------------
+        panel_add_dir = create_frame(self.dlg, QRect(5, 235, 490, 135))
+        # Label: Add Folder to CLOUD
+        Label('ADD FOLDER TO CLOUD:', panel_add_dir, QRect(10, 10, 400, 20))
+        Label('If folder with same name already exists on Cloud, it will get overwritten.', panel_add_dir, QRect(10, 30, 480, 20))
+        # Create argument dictionary
+        arg_custom_dir = {'Remote Class': remote_cls}
+        # Create file path label
+        Label('Specific Folder Path: ', panel_add_dir, QRect(10, 55, 400, 20))
+        # Create file path field
+        path_textedit_specific_dir = LineEdit('', panel_add_dir, QRect(160, 55, 300, 20))
+        arg_custom_dir['Push Specific Directory'] = path_textedit_specific_dir
+        # Create bandwidth limit label
+        Label('Bandwidth Limit: ', panel_add_dir, QRect(10, 80, 400, 20))
+        textedit_bw_limit = LineEdit('', panel_add_dir, QRect(160, 80, 300, 20))
+        arg_custom_dir['Bandwidth Limit'] = textedit_bw_limit
+        # Create package for push to cloud
+        button('PUSH [Specific Folder]', panel_add_dir, QRect(85, 105, 320, 25), push_specific_dir, arg_custom_dir)
+        # --------------------------------------------------------------------------------------------------------------
