@@ -13,6 +13,7 @@ import ui.uiBatchIndividualFoldersforCBZ as uiBatchIndividualFoldersforCBZ
 import ui.uiJPGExifBatchSetFieldComment as uiJPGExifBatchSetFieldComment
 import ui.uiListFilesWeirdChars as uiListFilesWeirdChars
 import wrappers.philipsHueWrapper as philipsHueWrapper
+from flightSim import flightSimUtils
 
 
 def push_logistics():
@@ -194,8 +195,17 @@ def display_lights(dialog_obj):
 
     # Bedroom
     display_room(line_name='Bedroom', line_height=78, panel=panel)
+
     # Kitchen
     display_room(line_name='Kitchen', line_height=112, panel=panel)
+
+
+def display_flight_sim(dialog_obj):
+    """
+    Display Flight Sim Tab things
+    """
+    panel = create_frame(dialog_obj, QRect(10, 10, 675, 150))
+    button('X-Plane: Set Flight Sim Monitors Desk Setup [Internal ON]', panel, QRect(10, 10, 350, 30), flightSimUtils.set_xp12_monitor_w_internal)
 
 
 class MainMenu(Window):
@@ -232,47 +242,56 @@ class MainMenu(Window):
         # Pull Logistics
         button('PULL Logistics', self.centralwidget, QRect(590, 470, 120, 25), pull_logistics)
 
-        # Tab 4 (LINKS)
-        self.tab4 = QWidget()
-        self.tab4.setEnabled(True)
-        self.tab4.setObjectName('Tab_Links')
-        self.tabWidget.addTab(self.tab4, '')
-        display_links(self.tab4)
+        # TAB (LINKS)
+        self.tab_links = QWidget()
+        self.tab_links.setEnabled(True)
+        self.tab_links.setObjectName('Tab_Links')
+        self.tabWidget.addTab(self.tab_links, '')
+        display_links(self.tab_links)
 
-        # Tab 5 (LIGHTS)
-        self.tab5 = QWidget()
-        self.tab5.setEnabled(True)
-        self.tab5.setObjectName('Tab_Links')
-        self.tabWidget.addTab(self.tab5, '')
-        display_lights(self.tab5)
+        # TAB (SMART HOME)
+        self.tab_smart_home = QWidget()
+        self.tab_smart_home.setEnabled(True)
+        self.tab_smart_home.setObjectName('Tab_Links')
+        self.tabWidget.addTab(self.tab_smart_home, '')
+        display_lights(self.tab_smart_home)
 
-        # Tab 1 (LOCAL)
-        self.tab = QWidget()
-        self.tab.setEnabled(True)
-        self.tab.setObjectName('Tab_Local')
-        self.tabWidget.addTab(self.tab, "")
-        display_remotes(self.tab, type='Local')
+        # TAB (RCLONE LOCAL)
+        self.tab_rclone_local = QWidget()
+        self.tab_rclone_local.setEnabled(True)
+        self.tab_rclone_local.setObjectName('Tab_Local')
+        self.tabWidget.addTab(self.tab_rclone_local, "")
+        display_remotes(self.tab_rclone_local, type='Local')
 
-        # Tab 2 (REMOTE)
-        self.tab2 = QWidget()
-        self.tab2.setEnabled(True)
-        self.tab2.setObjectName("Tab_Remote")
-        self.tabWidget.addTab(self.tab2, "")
-        display_remotes(self.tab2, type='Remote')
+        # TAB (RCLONE REMOTE)
+        self.tab_rclone_remote = QWidget()
+        self.tab_rclone_remote.setEnabled(True)
+        self.tab_rclone_remote.setObjectName("Tab_Remote")
+        self.tabWidget.addTab(self.tab_rclone_remote, "")
+        display_remotes(self.tab_rclone_remote, type='Remote')
 
-        # Tab 3 (DEBUG)
-        self.tab3 = QWidget()
-        self.tab3.setEnabled(True)
-        self.tab3.setObjectName("Tab_Debug")
-        self.tabWidget.addTab(self.tab3, "")
-        display_debug(self.tab3)
+        # TAB (FLIGHT SIM)
+        self.tab_flight_sim = QWidget()
+        self.tab_flight_sim.setEnabled(True)
+        self.tab_flight_sim.setObjectName("Tab_FlightSim")
+        self.tabWidget.addTab(self.tab_flight_sim, "")
+        display_flight_sim(self.tab_flight_sim)
+
+        # TAB (DEBUG)
+        self.tab_debug = QWidget()
+        self.tab_debug.setEnabled(True)
+        self.tab_debug.setObjectName("Tab_Debug")
+        self.tabWidget.addTab(self.tab_debug, "")
+        display_debug(self.tab_debug)
 
         _translate = QCoreApplication.translate
-        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), _translate('MainWindow', 'Local'))
-        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab2), _translate('MainWindow', 'Remote'))
-        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab3), _translate('MainWindow', 'Debug'))
-        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab4), _translate('MainWindow', 'Links'))
-        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab5), _translate('MainWindow', 'Smart Home'))
+
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_links), _translate('MainWindow', 'Links'))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_smart_home), _translate('MainWindow', 'Smart Home'))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_rclone_local), _translate('MainWindow', 'Local'))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_rclone_remote), _translate('MainWindow', 'Remote'))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_flight_sim), _translate('MainWindow', 'Flight Sim'))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_debug), _translate('MainWindow', 'Debug'))
 
 
 def display_main_menu():
