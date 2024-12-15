@@ -28,6 +28,5 @@ def set_xp12_monitor_w_internal():
 
     # Validated input-output, now transfer file!
     fileUtils.copy_file(window_pref_file_path_preset, window_pref_file_path_steam)
-    
     print('XP12 Preset Transferred!')
 
