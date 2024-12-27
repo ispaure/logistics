@@ -153,3 +153,23 @@ def set_xp12_m3_max_standalone():
                           draw_distance=4,
                           shadow_quality=2,
                           vegetation_quality=3)
+
+
+def set_xp12_m3_max_office():
+
+    # Get preset path
+    logistics_cfg = config.LogisticsConfig()
+    preset_path = Path(logistics_cfg.path_logistics_software, 'preset', 'X-Plane Window Positions [m3 max, office].prf')
+
+    # FSR Setting
+    fsr_setting = 3
+
+    # Set all xp12 settings
+    set_all_xp12_settings(preset_path=preset_path,
+                          ssao=2,
+                          fsr=2,
+                          msaa=1,
+                          draw_3d=3,
+                          draw_distance=3,
+                          shadow_quality=2,
+                          vegetation_quality=3)
