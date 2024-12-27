@@ -1,6 +1,6 @@
 import sys
 import ctypes
-import wrappers.cmdShellWrapper as cmdShellWrapper
+import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
 
 
 def empty_fn():

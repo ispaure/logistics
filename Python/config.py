@@ -73,6 +73,7 @@ class LogisticsConfig:
         self.path_logistics_software = str(Path(self.path_logistics, 'Software'))
         self.path_remote_network_mount = str(Path(self.server_path, config_section_map('DirectoryStructure', 'remote_network_mount_sub_path', config_file_path)))
         self.path_remote_local = str(Path(self.server_path, config_section_map('DirectoryStructure', 'remote_local_sub_path', config_file_path)))
+        self.temp_cmd = Path(self.path_logistics, 'Temp', 'sync_cmd.bat')
 
 
 def config_section_map(section, value, cfg_file_path=get_config_file_path()):
