@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 import sys
 import config
-import wrappers.cmdShellWrapper as cmdShellWrapper
+import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
 import time
 import wrappers.rcloneWrapper as rcloneWrapper
 import ui.uiManagePMS as uiManagePMS

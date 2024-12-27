@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import os
 from commonUtils.debugUtils import print_debug_msg as print_debug_msg
-import wrappers.cmdShellWrapper as cmdShellWrapper
+import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
 import time
 import wrappers.uiShellWrapper as uiShellWrapper
 import random
@@ -197,16 +197,16 @@ def mount_remote(remote_name, mount_path, timeout=None):
             os.makedirs(mount_path)
 
     # Execute commands
-    cmdShellWrapper.exec_cmd(mount_cmd, wait_for_output=False, in_new_window=False)
+    cmdShellWrapper.exec_cmd(mount_cmd, wait_for_output=False)
 
     # Wait a little bit
     time.sleep(0.125)
     # If didn't mount, try to mount a 2nd time
     if not os.path.exists(mount_path):
-        cmdShellWrapper.exec_cmd(mount_cmd, wait_for_output=False, in_new_window=False)
+        cmdShellWrapper.exec_cmd(mount_cmd, wait_for_output=False)
         time.sleep(0.25)
         if not os.path.exists(mount_path):
-            cmdShellWrapper.exec_cmd(mount_cmd, wait_for_output=False, in_new_window=False)
+            cmdShellWrapper.exec_cmd(mount_cmd, wait_for_output=False)
 
     # Debug Message (After Mount)
     print_debug_msg('Successfully mounted!', show_verbose)
@@ -394,11 +394,11 @@ def rclone_sync(source_path, destination_path, query=False, wait_for_output=Fals
                 Path(destination_path).mkdir(parents=True, exist_ok=True)
 
     if query:
-        output_lines = cmdShellWrapper.exec_cmd(baseline, wait_for_output=True, in_new_window=False)
+        output_lines = cmdShellWrapper.exec_cmd(baseline, wait_for_output=True)
         query_dict = rclone_sync_process_query(source_path, destination_path, output_lines)
         return query_dict
     else:
-        cmdShellWrapper.exec_cmd(baseline, wait_for_output=wait_for_output, in_new_window=True)
+        cmdShellWrapper.exec_cmd(baseline, wait_for_output=wait_for_output, in_new_window=config.LogisticsConfig().temp_cmd)
 
 
 def rclone_sync_ghetto(local_path, local_package_path, cloud_path, parallel_amt):

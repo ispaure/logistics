@@ -1,5 +1,5 @@
 
-import wrappers.cmdShellWrapper as cmdShellWrapper
+import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
 import config as config
 from pathlib import Path
 import sys
@@ -10,12 +10,12 @@ import webbrowser
 
 def run_repair_windows_script():
     cmd = 'start ' + str(Path(config.LogisticsConfig().path_logistics, 'Scripts', 'windows_system_files_repair.bat'))
-    cmdShellWrapper.exec_cmd(cmd, wait_for_output=False, in_new_window=False)
+    cmdShellWrapper.exec_cmd(cmd, wait_for_output=False)
 
 
 def run_repair_ntfs_on_d():
     cmd = 'start ' + str(Path(config.LogisticsConfig().path_logistics, 'Scripts', 'repair_ntfs_on_D.bat'))
-    cmdShellWrapper.exec_cmd(cmd, wait_for_output=False, in_new_window=False)
+    cmdShellWrapper.exec_cmd(cmd, wait_for_output=False)
 
 
 def open_calibre(calibre_library_path):

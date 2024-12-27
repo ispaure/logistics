@@ -5,7 +5,7 @@ import os
 from commonUtils import pySideUtils
 from commonUtils.debugUtils import print_debug_msg as print_debug_msg
 from pathlib import Path
-import wrappers.cmdShellWrapper as cmdShellWrapper
+import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
 import subprocess
 import sys
 from wrappers import rcloneWrapper as rcloneWrapper
@@ -138,7 +138,7 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
 
     # Send command to be executed
     print_debug_msg('Executing command string: \n' + yt_dl_cmd_str, show_verbose)
-    cmdShellWrapper.exec_cmd(yt_dl_cmd_str, wait_for_output=True, in_new_window=True)
+    cmdShellWrapper.exec_cmd(yt_dl_cmd_str, wait_for_output=True, in_new_window=config.LogisticsConfig().temp_cmd)
     print_debug_msg('Successfully executed!', show_verbose)
 
 
