@@ -1,3 +1,3 @@
 [submodule "Python/commonUtils"]
 	path = Python/commonUtils
-	url = git@github.com:ispaure/commonUtils.git
+	url = https://github.com/ispaure/commonUtils.git
