@@ -1,3 +1,4 @@
 [submodule "Python/commonUtils"]
 	path = Python/commonUtils
 	url = https://github.com/ispaure/commonUtils.git
+	branch = main
