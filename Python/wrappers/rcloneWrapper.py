@@ -9,7 +9,7 @@ import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
 import time
 import wrappers.uiShellWrapper as uiShellWrapper
 import random
-from logisticsUtils import zipUtils
+from commonUtils import zipUtils
 
 show_verbose = True
 

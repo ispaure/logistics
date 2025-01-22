@@ -2,7 +2,7 @@ import config
 from pathlib import Path
 import os
 import commonUtils.fileUtils as fileUtils
-import logisticsUtils.zipUtils as zipUtils
+from commonUtils import zipUtils
 
 
 show_verbose = True
@@ -48,7 +48,7 @@ def convert_cbr_to_cbz(target_file_path):
         # In here is convert procedure for file from beginning to end.
         fileUtils.delete_dir_contents(temp_convert_path)
         # Uncompress RAR
-        zipUtils.unrar_file(file, temp_convert_path)
+        zipUtils.unrar_file(file, temp_convert_path, unrar_sw_path=str(Path(config.LogisticsConfig().path_logistics_software, 'unrar')))
         # Zip File
         zipUtils.zip_file(temp_convert_path, file_name_zip, keep_root=False)
         # Need to rename after file creation because it does .zip regardless of what I say

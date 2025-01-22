@@ -7,7 +7,7 @@ import sys
 import os
 import commonUtils.fileUtils as fileUtils
 import wrappers.uiShellWrapper as uiShellWrapper
-from logisticsUtils import zipUtils
+from commonUtils import zipUtils
 
 
 def get_remote_cls_pmsdata(remote_cls):
