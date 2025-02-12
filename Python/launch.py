@@ -7,8 +7,8 @@ from PySide6.QtWidgets import *
 import config as config
 import wrappers.rcloneWrapper as rcloneWrapper
 import ui.uiMain as uiMain
-from commonUtils.debugUtils import *
 from commonUtils import pySideUtils
+from commonUtils.debugUtils import *
 
 
 def create_q_application():
@@ -19,6 +19,7 @@ def create_q_application():
         palette_cls = pySideUtils.Palette()
         palette_cls.set_dark()
         app.setPalette(palette_cls.palette)
+    return app
 
 
 # Get Config Information
@@ -39,7 +40,8 @@ rcloneWrapper.mount_all_rclone_conf_remotes(timeout=2)
 rcloneWrapper.get_all_remote_class()
 
 # Create QApplication
-create_q_application()
+app = create_q_application()
 
 # Display UI
-uiMain.display_main_menu()
+main_menu = uiMain.display_main_menu()
+sys.exit(app.exec())
