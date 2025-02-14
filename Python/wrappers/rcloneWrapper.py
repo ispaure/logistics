@@ -1,5 +1,7 @@
 
 import commonUtils.fileUtils as fileUtils
+from commonUtils.debugUtils import *
+from commonUtils.osUtils import *
 import config as config
 from pathlib import Path
 import sys
@@ -33,10 +35,14 @@ def clear_rclone_conf():
 
 def get_rclone_conf_path():
     """Returns path to the user's rclone configuration file. If it doesn't exist, a blank one is created"""
-    if sys.platform == 'win32':
-        rclone_conf_dir = str(Path(os.environ['USERPROFILE'], '.config', 'rclone'))
-    else:
-        rclone_conf_dir = str(Path(os.environ['HOME'], '.config', 'rclone'))
+    match get_os():
+        case OS.WIN:
+            rclone_conf_dir = str(Path(os.environ['USERPROFILE'], '.config', 'rclone'))
+        case OS.MAC:
+            rclone_conf_dir = str(Path(os.environ['HOME'], '.config', 'rclone'))
+        case _:
+            log(Severity.CRITICAL, 'Rclone', 'Invalid Platform!')
+            return
 
     if not os.path.exists(rclone_conf_dir):
         os.makedirs(rclone_conf_dir)
@@ -178,10 +184,14 @@ def mount_remote(remote_name, mount_path, timeout=None):
     print_debug_msg('Mounting "{}" at path "{}"...'.format(remote_name, mount_path), show_verbose)
 
     # Determine Command Line for Mount...
-    if sys.platform == 'win32':
-        rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone', 'rclone'))
-    else:
-        rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone_macos', 'rclone'))
+    match get_os():
+        case OS.WIN:
+            rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone', 'rclone'))
+        case OS.MAC:
+            rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone_macos', 'rclone'))
+        case _:
+            log(Severity.CRITICAL, 'Rclone', 'Invalid Platform!')
+            return
 
     # Create mount command
     mount_cmd = rclone_exec_pth + ' mount '
@@ -192,7 +202,7 @@ def mount_remote(remote_name, mount_path, timeout=None):
     mount_cmd += '{remote_name}: {mount_path}'.format(remote_name=remote_name, mount_path=mount_path)
 
     # If on MacOS, mount path must exist before it can be mounted!
-    if sys.platform != 'win32':
+    if get_os() == OS.MAC:
         if not os.path.exists(mount_path):
             os.makedirs(mount_path)
 
@@ -327,10 +337,14 @@ def get_remote_class(remote_dir):
 
 def get_rclone_path():
     # Determine path of sync file
-    if sys.platform == 'win32':
-        return str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone', 'rclone.exe'))
-    else:
-        return str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone_macos', 'rclone'))
+    match get_os():
+        case OS.WIN:
+            return str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone', 'rclone.exe'))
+        case OS.MAC:
+            return str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone_macos', 'rclone'))
+        case _:
+            log(Severity.CRITICAL, 'Rclone', 'Platform unsupported!')
+            return
 
 
 def get_all_remote_class():
@@ -378,20 +392,26 @@ def rclone_sync(source_path, destination_path, query=False, wait_for_output=Fals
                                                               destination_path=destination_path)
 
     if exit_on_done:
-        if sys.platform == 'win32':
-            baseline += '\nexit'
-        else:
-            return False
-            # TODO: Add MacOS Version of This!
+        match get_os():
+            case OS.WIN:
+                baseline += '\nexit'
+            case _:
+                log(Severity.CRITICAL, 'Rclone', 'Platform unsupported!')
+                return False
+                # TODO: Add MacOS Version of This!
 
     # If directory doesn't exist on destination yet, might need to create it
     if not os.path.exists(destination_path):
-        if sys.platform == 'win32':
-            if destination_path[1] == ':':
-                Path(destination_path).mkdir(parents=True, exist_ok=True)
-        else:
-            if destination_path[0] == '/':
-                Path(destination_path).mkdir(parents=True, exist_ok=True)
+        match get_os():
+            case OS.WIN:
+                if destination_path[1] == ':':
+                    Path(destination_path).mkdir(parents=True, exist_ok=True)
+            case OS.MAC:
+                if destination_path[0] == '/':
+                    Path(destination_path).mkdir(parents=True, exist_ok=True)
+            case _:
+                log(Severity.CRITICAL, 'Rclone', 'Platform unsupported!')
+                return
 
     if query:
         output_lines = cmdShellWrapper.exec_cmd(baseline, wait_for_output=True)
@@ -455,12 +475,16 @@ def rclone_sync_ghetto(local_path, local_package_path, cloud_path, parallel_amt)
     fileUtils.copy_file(str(Path(rclone_dir_macos, 'README.txt')), str(Path(rclone_dir_macos_copy, 'README.txt')))
 
     # Get important variables
-    if sys.platform == 'win32':
-        script_file_path = str(Path(local_package_path, 'run_backup.bat'))
-        rclone_exec_path = str(Path(local_package_path, 'rclone', 'rclone.exe'))
-    else:
-        script_file_path = str(Path(local_package_path, 'run_backup.command'))
-        rclone_exec_path = str(Path(local_package_path, 'rclone_macos', 'rclone'))
+    match get_os():
+        case OS.WIN:
+            script_file_path = str(Path(local_package_path, 'run_backup.bat'))
+            rclone_exec_path = str(Path(local_package_path, 'rclone', 'rclone.exe'))
+        case OS.MAC:
+            script_file_path = str(Path(local_package_path, 'run_backup.command'))
+            rclone_exec_path = str(Path(local_package_path, 'rclone_macos', 'rclone'))
+        case _:
+            log(Severity.CRITICAL, 'Rclone', 'Platform unsupported!')
+            return
 
     # If not created yet, create text file
     script_file_path_lst = []
@@ -476,10 +500,15 @@ def rclone_sync_ghetto(local_path, local_package_path, cloud_path, parallel_amt)
         local_file_package_path = file[0].replace(local_path, local_package_path)
         remote_file_path = file[1]
 
-        if sys.platform == 'win32':
-            local_file_name = local_file_path.split('\\')[-1]
-        else:
-            local_file_name = local_file_path.split('/')[-1]
+        match get_os():
+            case OS.WIN:
+                local_file_name = local_file_path.split('\\')[-1]
+            case OS.MAC:
+                local_file_name = local_file_path.split('/')[-1]
+            case _:
+                log(Severity.CRITICAL, 'Rclone', 'Platform unsupported!')
+                return
+
         remote_file_dir = remote_file_path[:-len(local_file_name)]
         local_file_package_path_dir_only = local_file_package_path[:-len(local_file_name)]
         if local_file_package_path_dir_only[-1] == '\\' or local_file_package_path_dir_only[-1] == '/':
@@ -536,33 +565,33 @@ def rclone_sync_process_query(source_path, destination_path, output_lines):
             file_path_to_copy = output_line[file_path_begin_loc:file_path_begin_loc + file_path_end_loc]
 
             # DETERMINE ABSOLUTE SOURCE PATH AND DESTINATION PATH
-            if sys.platform == 'win32':
+            match get_os():
 
-                # Determine File Path of Source
-                if source_path[1] == ':':  # Is a location on disk
-                    file_path_source = str(Path(source_path, file_path_to_copy))
-                else:  # Is a rclone remote location
-                    file_path_source = source_path + file_path_to_copy.replace('\\', '/')  # Rclone paths are always fwd
+                case OS.WIN:
+                    # Determine File Path of Source
+                    if source_path[1] == ':':  # Is a location on disk
+                        file_path_source = str(Path(source_path, file_path_to_copy))
+                    else:  # Is a rclone remote location
+                        file_path_source = source_path + file_path_to_copy.replace('\\', '/')  # Rclone paths are always fwd
 
-                # Determine File Path of Destination
-                if destination_path[1] == ':':  # Is a location on disk
-                    file_path_destination = str(Path(destination_path, file_path_to_copy))
-                else:  # Is a rclone remote location
-                    file_path_destination = destination_path + file_path_to_copy.replace('\\', '/')  # Rclone paths are always fwd
+                    # Determine File Path of Destination
+                    if destination_path[1] == ':':  # Is a location on disk
+                        file_path_destination = str(Path(destination_path, file_path_to_copy))
+                    else:  # Is a rclone remote location
+                        file_path_destination = destination_path + file_path_to_copy.replace('\\', '/')  # Rclone paths are always fwd
 
-            else:
+                case OS.MAC:
+                    # Determine File Path of Source
+                    if source_path[0] == '/':  # Is a location on disk
+                        file_path_source = str(Path(source_path, file_path_to_copy))
+                    else:  # Is a rclone remote location
+                        file_path_source = source_path + file_path_to_copy
 
-                # Determine File Path of Source
-                if source_path[0] == '/':  # Is a location on disk
-                    file_path_source = str(Path(source_path, file_path_to_copy))
-                else:  # Is a rclone remote location
-                    file_path_source = source_path + file_path_to_copy
-
-                # Determine File Path of Destination
-                if destination_path[0] == '/':  # Is a location on disk
-                    file_path_destination = str(Path(destination_path, file_path_to_copy))
-                else:  # Is a rclone remote location
-                    file_path_destination = destination_path + file_path_to_copy
+                    # Determine File Path of Destination
+                    if destination_path[0] == '/':  # Is a location on disk
+                        file_path_destination = str(Path(destination_path, file_path_to_copy))
+                    else:  # Is a rclone remote location
+                        file_path_destination = destination_path + file_path_to_copy
 
             # ADD THE FINDINGS TO THE LIST
             copy_lst.append([file_path_source, file_path_destination])

@@ -15,6 +15,8 @@ import ui.uiJPGExifBatchSetFieldComment as uiJPGExifBatchSetFieldComment
 import ui.uiListFilesWeirdChars as uiListFilesWeirdChars
 import wrappers.philipsHueWrapper as philipsHueWrapper
 from flightSim import flightSimUtils
+from commonUtils.osUtils import *
+from commonUtils.debugUtils import *
 
 
 def push_logistics():
@@ -226,11 +228,17 @@ class MainMenu(Window):
         self.tabWidget.setGeometry(QRect(10, 10, 700, 460))
         self.tabWidget.setToolTip("")
         self.tabWidget.setObjectName("tabWidget")
+
         # Set Font and Size
-        if sys.platform == 'win32':
-            font_size = 10
-        else:
-            font_size = 13
+        match get_os():
+            case OS.WIN:
+                font_size = 10
+            case OS.MAC:
+                font_size = 13
+            case _:
+                log(Severity.CRITICAL, 'uiMain', 'Platform unsupported!')
+                return
+
         self.tabWidget.setFont(QFont('Arial', font_size))
 
         # Load Credentials Button

@@ -1,6 +1,8 @@
 import sys
 import ctypes
 import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
+from commonUtils.osUtils import *
+from commonUtils.debugUtils import *
 
 
 def empty_fn():
@@ -39,18 +41,22 @@ def show_dialog_box(title, message, execute_fn=empty_fn):
 
     # Since Blender API doesn't have proper message box that waits on user, we have to get a bit creative.
 
-    if sys.platform == 'win32':  # Solution which only works on Windows
-        rc = show_dialog_box_win32(message, title)
-        if rc == MbConstants.IDOK:
-            execute_fn()
-            return True
-        elif rc == MbConstants.IDCANCEL:
-            return False
-    else:
-        message = message.replace('"', '')
-        message = message.replace("'", '')
-        if 'OK' in show_dialog_box_macos(message, title)[0]:
-            execute_fn()
-            return True
-        else:
-            return False
+    match get_os():
+        case OS.WIN:  # Solution which only works on Windows
+            rc = show_dialog_box_win32(message, title)
+            if rc == MbConstants.IDOK:
+                execute_fn()
+                return True
+            elif rc == MbConstants.IDCANCEL:
+                return False
+        case OS.MAC:
+            message = message.replace('"', '')
+            message = message.replace("'", '')
+            if 'OK' in show_dialog_box_macos(message, title)[0]:
+                execute_fn()
+                return True
+            else:
+                return False
+        case _:
+            log(Severity.CRITICAL, 'uiShellWrapper', 'Platform unsupported!')
+            return

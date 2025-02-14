@@ -11,17 +11,6 @@ from commonUtils import pySideUtils
 from commonUtils.debugUtils import *
 
 
-def create_q_application():
-    app = QApplication([])
-    app.setStyle('Fusion')
-    if sys.platform == 'win32':  # Windows
-        os.environ['QT_AUTO_SCREEN_SCALE_FACTOR'] = '1'
-        palette_cls = pySideUtils.Palette()
-        palette_cls.set_dark()
-        app.setPalette(palette_cls.palette)
-    return app
-
-
 # Get Config Information
 logistics_cfg = config.LogisticsConfig()
 
@@ -40,7 +29,7 @@ rcloneWrapper.mount_all_rclone_conf_remotes(timeout=2)
 rcloneWrapper.get_all_remote_class()
 
 # Create QApplication
-app = create_q_application()
+app = pySideUtils.initialize_q_app()
 
 # Display UI
 main_menu = uiMain.display_main_menu()
