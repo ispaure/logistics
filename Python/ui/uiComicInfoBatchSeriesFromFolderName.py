@@ -3,6 +3,8 @@ import commonUtils.fileUtils as fileUtils
 import ui.uiComicInfoBatchAuthorFromFolderName as uiComicInfoBatchAuthorFromFolderName
 import os
 from pathlib import Path
+from commonUtils.osUtils import *
+from commonUtils.debugUtils import *
 
 show_verbose = True
 
@@ -21,10 +23,14 @@ def comic_info_xml_replace_series(file_path, search, suffix):
     print('\nInitializing Batch Rename on File: ' + file_path)
 
     # Figure out the folder name
-    if sys.platform == 'win32':
-        replace = suffix + file_path.split('\\')[-2]
-    else:
-        replace = suffix + file_path.split('/')[-2]
+    match get_os():
+        case OS.WIN:
+            replace = suffix + file_path.split('\\')[-2]
+        case OS.MAC:
+            replace = suffix + file_path.split('/')[-2]
+        case _:
+            log(Severity.CRITICAL, 'uiComicInfoBatchSeriesFromFolderName', 'Platform unsupported!')
+            return
 
     print('Series name: ' + replace)
 

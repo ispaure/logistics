@@ -1,6 +1,8 @@
 from commonUtils.pySideUtils import *
 import commonUtils.fileUtils as fileUtils
 from pathlib import Path
+from commonUtils.debugUtils import *
+from commonUtils.osUtils import *
 
 show_verbose = True
 
@@ -35,10 +37,11 @@ def ui_move_cbz_to_new_created_dir(convert_arg):
             print(' - ' + file)
 
     for file in filter_file_lst:
-        if sys.platform == 'win32':
-            split_char = '\\'
-        else:
-            split_char = '/'
+        match get_os():
+            case OS.WIN:
+                split_char = '\\'
+            case _:
+                split_char = '/'
         print('This is what I will do')
         dir_name = file[:-len('.cbz')]
         print('Make new directory: ' + dir_name)

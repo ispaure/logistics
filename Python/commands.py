@@ -6,6 +6,9 @@ import sys
 import os
 import commonUtils.fileUtils as fileUtils
 import webbrowser
+from commonUtils.debugUtils import *
+from commonUtils.osUtils import *
+from commonUtils import zipUtils
 
 
 def run_repair_windows_script():
@@ -19,26 +22,25 @@ def run_repair_ntfs_on_d():
 
 
 def open_calibre(calibre_library_path):
-    if sys.platform == 'win32':
-        software_exec_path = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'Calibre2', 'calibre.exe'))
-        launch_cmd = '"{}" --with-library "{}"'.format(software_exec_path, calibre_library_path)
-        cmdShellWrapper.exec_cmd(launch_cmd, wait_for_output=False)
-    else:
-        # Calibre location on macOS
-        software_exec_path = str(Path('/Applications', 'calibre.app', 'Contents', 'MacOS', 'calibre'))
+    match get_os():
+        case OS.WIN:
+            software_exec_path = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'Calibre2', 'calibre.exe'))
+            launch_cmd = '"{}" --with-library "{}"'.format(software_exec_path, calibre_library_path)
+            cmdShellWrapper.exec_cmd(launch_cmd, wait_for_output=False)
+        case OS.MAC:
+            # Calibre location on macOS
+            software_exec_path = str(Path('/Applications', 'calibre.app', 'Contents', 'MacOS', 'calibre'))
 
-        # If macOS, calibre.app might not be installed yet (it doesn't come extracted in Logistics as it creates rclone
-        # bug. So check if it is installed. If not extract to folder.
-        if not os.path.exists(software_exec_path):
-            fileUtils.unzip_file(str(Path(config.LogisticsConfig().path_logistics, 'Software', 'calibre.app.zip')),
-                                 str(Path('/Applications')))
+            # If macOS, calibre.app might not be installed yet (it doesn't come extracted in Logistics as it creates rclone
+            # bug. So check if it is installed. If not extract to folder.
+            if not os.path.exists(software_exec_path):
+                zipUtils.unzip_file(str(Path(config.LogisticsConfig().path_logistics, 'Software', 'calibre.app.zip')), str(Path('/Applications')))
 
-        # Once it is known that calibre has been installed (or is there on macOS, can execute it.)
-        launch_cmd = '"{}" --with-library "{}"'.format(software_exec_path, calibre_library_path)
-        print(launch_cmd)
-        cmdShellWrapper.exec_cmd(launch_cmd, wait_for_output=False)
-        print('done')
-        pass
+            # Once it is known that calibre has been installed (or is there on macOS, can execute it.)
+            launch_cmd = '"{}" --with-library "{}"'.format(software_exec_path, calibre_library_path)
+            print(launch_cmd)
+            cmdShellWrapper.exec_cmd(launch_cmd, wait_for_output=False)
+            print('done')
 
 
 def open_url(entry_str):

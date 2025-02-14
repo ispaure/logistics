@@ -2,13 +2,16 @@ import configparser
 from pathlib import Path
 import sys
 import os
+from commonUtils.osUtils import *
+from commonUtils.debugUtils import *
 
 
 def get_dir_split_character():
-    if sys.platform == 'win32':
-        return '\\'
-    else:
-        return '/'
+    match get_os():
+        case OS.WIN:
+            return '\\'
+        case _:
+            return '/'
 
 
 def get_config_file_path():
@@ -53,20 +56,22 @@ class LogisticsConfig:
         config_file_path = get_config_file_path()
 
         # Retrieve and determine values
-        if sys.platform == 'win32':
-            user_home_dir = get_win32_user_home_dir()
-            sub_server_path = config_section_map('DirectoryStructure', 'server_path_win32', config_file_path)
-            self.server_path = str(Path(user_home_dir, sub_server_path))
-            self.pms_data_path = str(Path(os.environ['LOCALAPPDATA'], 'Plex Media Server'))
-            self.yac_lib_prefs_dir = None
-            self.temp_path = config_section_map('DirectoryStructure', 'temp_path_win32', config_file_path)
-        else:
-            user_home_dir = os.environ['HOME']
-            sub_server_path_macos = config_section_map('DirectoryStructure', 'server_path_macos', config_file_path)
-            self.server_path = str(Path(user_home_dir, sub_server_path_macos))
-            self.pms_data_path = str(Path(user_home_dir, 'Library', 'Application Support', 'Plex Media Server'))
-            self.yac_lib_prefs_dir = str(Path(user_home_dir, 'Library', 'Application Support', 'YACReader', 'YACReaderLibrary'))
-            self.temp_path = str(Path(user_home_dir, config_section_map('DirectoryStructure', 'temp_path_macos', config_file_path)))
+
+        match get_os():
+            case OS.WIN:
+                user_home_dir = get_win32_user_home_dir()
+                sub_server_path = config_section_map('DirectoryStructure', 'server_path_win32', config_file_path)
+                self.server_path = str(Path(user_home_dir, sub_server_path))
+                self.pms_data_path = str(Path(os.environ['LOCALAPPDATA'], 'Plex Media Server'))
+                self.yac_lib_prefs_dir = None
+                self.temp_path = config_section_map('DirectoryStructure', 'temp_path_win32', config_file_path)
+            case OS.MAC:
+                user_home_dir = os.environ['HOME']
+                sub_server_path_macos = config_section_map('DirectoryStructure', 'server_path_macos', config_file_path)
+                self.server_path = str(Path(user_home_dir, sub_server_path_macos))
+                self.pms_data_path = str(Path(user_home_dir, 'Library', 'Application Support', 'Plex Media Server'))
+                self.yac_lib_prefs_dir = str(Path(user_home_dir, 'Library', 'Application Support', 'YACReader', 'YACReaderLibrary'))
+                self.temp_path = str(Path(user_home_dir, config_section_map('DirectoryStructure', 'temp_path_macos', config_file_path)))
 
         # Subpaths
         self.path_logistics = str(Path(self.server_path, config_section_map('DirectoryStructure', 'logistics_sub_path', config_file_path)))

@@ -2,6 +2,8 @@ import wrappers.rcloneWrapper as rcloneWrapper
 from commonUtils.pySideUtils import *
 import sys
 import ui.uiRemoteCredentialsPW as uiRemoteCredentialsPW
+from commonUtils.osUtils import *
+from commonUtils.debugUtils import *
 
 
 def ui_load_credential_password_ui(arg):
@@ -37,10 +39,11 @@ class LoadRemoteCredentials(Window):
         # For each position, create a button
         for position, zip_file in zip(positions, zip_file_lst):
             # Find text for button's title
-            if sys.platform == 'win32':
-                button_text = zip_file.split('\\')[-1].replace('.zip', '')
-            else:
-                button_text = zip_file.split('/')[-1].replace('.zip', '')
+            match get_os():
+                case OS.WIN:
+                    button_text = zip_file.split('\\')[-1].replace('.zip', '')
+                case _:
+                    button_text = zip_file.split('/')[-1].replace('.zip', '')
             # Come up with argument list for function
             arg = {'Path': zip_file}
 

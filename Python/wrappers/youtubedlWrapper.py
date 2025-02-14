@@ -1,6 +1,8 @@
 
 import config
 import commonUtils.fileUtils as fileUtils
+from commonUtils.debugUtils import *
+from commonUtils.osUtils import *
 import os
 from commonUtils import pySideUtils
 from commonUtils.debugUtils import print_debug_msg as print_debug_msg
@@ -72,10 +74,11 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
     print_debug_msg('Preparing Youtube Download of Playlist/Channel from config file at path: ' + config_file_path, show_verbose)
 
     # Determine split char
-    if sys.platform == 'win32':
-        split_char = '\\'
-    else:
-        split_char = '/'
+    match get_os():
+        case OS.WIN:
+            split_char = '\\'
+        case _:
+            split_char = '/'
 
     # From Config File, get the info for the download
     config_path_name = config_file_path.split(split_char)[-1].split('.')[0]
@@ -98,10 +101,15 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
     if not master_branch:
         yt_dl_cmd_str = 'youtube-dl '
     else:
-        if sys.platform == 'win32':
-            yt_dl_cmd_str = 'python -m yt_dlp '
-        else:
-            yt_dl_cmd_str = 'python3 -m yt_dlp '
+        match get_os():
+            case OS.WIN:
+                yt_dl_cmd_str = 'python -m yt_dlp '
+            case OS.MAC:
+                yt_dl_cmd_str = 'python3 -m yt_dlp '
+            case _:
+                log(Severity.CRITICAL, 'youtubedlWrapper', 'Platform unsupported!')
+                return
+
     yt_dl_cmd_str += '{download_url} '.format(download_url=download_url)
     if playlist_reverse:
         yt_dl_cmd_str += '--playlist-reverse '
@@ -109,10 +117,14 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
         yt_dl_cmd_str += '--playlist-end ' + str(playlist_end) + ' '
     yt_dl_cmd_str += '{params} {extra_params} '.format(params=params, extra_params=additional_params)
 
-    if sys.platform == 'win32':
-        yt_dl_cmd_str += '--ffmpeg-location "' + str(Path(config.LogisticsConfig().path_logistics, 'Software', 'ffmpeg_win', 'ffmpeg.exe')) + '" '
-    else:
-        yt_dl_cmd_str += '--ffmpeg-location "' + str(Path(config.LogisticsConfig().path_logistics, 'Software', 'ffmpeg_macos', 'ffmpeg')) + '" '
+    match get_os():
+        case OS.WIN:
+            yt_dl_cmd_str += '--ffmpeg-location "' + str(Path(config.LogisticsConfig().path_logistics, 'Software', 'ffmpeg_win', 'ffmpeg.exe')) + '" '
+        case OS.MAC:
+            yt_dl_cmd_str += '--ffmpeg-location "' + str(Path(config.LogisticsConfig().path_logistics, 'Software', 'ffmpeg_macos', 'ffmpeg')) + '" '
+        case _:
+            log(Severity.CRITICAL, 'youtubedlWrapper', 'Platform unsupported!')
+            return
 
     # Creates a log file listing the completed downloads
     yt_dl_cmd_str += '--download-archive "' + str(Path(youtube_dl_cfg_path, 'CompleteLists', config_path_name + '_complete.lst')) + '" '
@@ -133,7 +145,7 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
 
     yt_dl_cmd_str += '--autonumber-start ' + str(count)
 
-    if sys.platform == 'win32':
+    if get_os() == OS.WIN:
         yt_dl_cmd_str += '\nexit'
 
     # Send command to be executed
@@ -152,10 +164,11 @@ def push_seasons(remote_cls):
     push_dir_lst = []
 
     # Determine split char
-    if sys.platform == 'win32':
-        split_char = '\\'
-    else:
-        split_char = '/'
+    match get_os():
+        case OS.WIN:
+            split_char = '\\'
+        case _:
+            split_char = '/'
 
     # If these channel dirs have a subdir with season in it, add to push list
     for channel_dir in channel_dir_lst:

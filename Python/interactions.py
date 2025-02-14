@@ -1,5 +1,7 @@
 
 import commonUtils.fileUtils as fileUtils
+from commonUtils.osUtils import *
+from commonUtils.debugUtils import *
 from pathlib import Path
 import os
 import sys
@@ -35,7 +37,7 @@ def interaction_02(remote_cls):
     # Only scan for local shares (can't work over rclone)
     if remote_cls.type == 'Local':
         # Detect ComicRack (on Windows)
-        if sys.platform == 'win32' and remote_cls.comic_rack_roaming is not None:
+        if get_os() == OS.WIN and remote_cls.comic_rack_roaming is not None:
             interaction_dict['Name'] = 'Open ComicRack'
             interaction_dict['Action'] = interaction_02_action_comic_rack
             return interaction_dict
