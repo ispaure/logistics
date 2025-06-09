@@ -13,6 +13,7 @@ import ui.uiComicInfoBatchSeriesFromFolderName as uiComicInfoBatchSeriesFromFold
 import ui.uiBatchIndividualFoldersforCBZ as uiBatchIndividualFoldersforCBZ
 import ui.uiJPGExifBatchSetFieldComment as uiJPGExifBatchSetFieldComment
 import ui.uiListFilesWeirdChars as uiListFilesWeirdChars
+import ui.uiBatchRenameMKAfromCSV as uiBatchRenameMKAfromCSV
 import wrappers.philipsHueWrapper as philipsHueWrapper
 from flightSim import flightSimUtils
 from commonUtils.osUtils import *
@@ -143,6 +144,8 @@ def display_debug(dialog_obj):
     button_open_win('.CBZ move in folder with name of file', dialog_obj, QRect(10, 190, 300, 30), uiBatchIndividualFoldersforCBZ.BatchIndividualFolderforCBZ)
     # List weird chars in dir (recursive)
     button_open_win('List Weird Chars in Dir', dialog_obj, QRect(10, 220, 200, 30), uiListFilesWeirdChars.ListFilesWeirdChars)
+    # Rename MKA from CSV in Directory
+    button_open_win('Rename MKA from CSV', dialog_obj, QRect(10, 250, 200, 30), uiBatchRenameMKAfromCSV.BatchRenameMKAfromCSV)
 
     # Hash change
     button_open_win('.JPG: EXIF Batch Set Comments Field', dialog_obj, QRect(260, 10, 250, 30), uiJPGExifBatchSetFieldComment.JPGEXIFBatchSetFieldComment)

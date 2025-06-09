@@ -95,8 +95,8 @@ def ui_comicinfoxml_batch_rename_author_to_dir_name(convert_arg):
 
     # Display initiating info
     print('Starting the Batch Rename of Author Name in ComicInfo.XML (based on folder name)')
-    batch_target_folder = convert_arg['target_dir'].text()
-    author_tag_to_replace = convert_arg['target_existing_tag'].text()
+    batch_target_folder = convert_arg['target_dir'].txt()
+    author_tag_to_replace = convert_arg['target_existing_tag'].txt()
     print('Target Folder: ' + batch_target_folder)
     print('Tag to Replace: ' + author_tag_to_replace)
 

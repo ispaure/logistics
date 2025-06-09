@@ -17,7 +17,7 @@ def package_push_to_cloud(data_to_exec):
     # Get important values
     local_remote_path = data_to_exec['Remote Class'].directory_path
     cloud_remote_path = data_to_exec['Remote Class'].name + ':'
-    local_package_path = str(Path(data_to_exec['Push Directory'].text(), data_to_exec['Remote Class'].name))
+    local_package_path = str(Path(data_to_exec['Push Directory'].txt(), data_to_exec['Remote Class'].name))
     parallel_amt = int(data_to_exec['Parallel Uploads Amount'].text())
 
     # Execute ghetto sync
@@ -28,11 +28,11 @@ def push_specific_dir(data_to_exec):
     print('Initiating Push to Cloud (Specific Dir)')
 
     # Get important values
-    directory_path_to_push = data_to_exec['Push Specific Directory'].text()
+    directory_path_to_push = data_to_exec['Push Specific Directory'].txt()
     if not os.path.isdir(directory_path_to_push):
         display_msg_box_ok('Push Individual Folder', 'The path you have given is not a valid directory!')
         return False
-    bandwidth_limit = data_to_exec['Bandwidth Limit'].text()
+    bandwidth_limit = data_to_exec['Bandwidth Limit'].txt()
     if bandwidth_limit == '':
         bandwidth_limit = None
     specific_dir_name = directory_path_to_push.split(fileUtils.get_split_character())[-1]

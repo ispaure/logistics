@@ -7,7 +7,7 @@ show_verbose = True
 def ui_dir_batch_convert_cbr_to_cbz(convert_arg):
 
     # Translate the argument dict to arguments and execute the proper function.
-    convertUtils.dir_batch_convert_cbr_to_cbz(target_dir=convert_arg['target_dir'].text(),
+    convertUtils.dir_batch_convert_cbr_to_cbz(target_dir=convert_arg['target_dir'].txt(),
                                               recursive=convert_arg['recursive'].isChecked())
 
 
