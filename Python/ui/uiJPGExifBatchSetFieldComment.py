@@ -7,9 +7,9 @@ show_verbose = True
 def ui_jpg_batch_set_exif_comments(convert_arg):
 
     # Translate the argument dict to arguments and execute the proper function.
-    piexifWrapper.jpg_batch_set_exif_comments(target_dir=convert_arg['target_dir'].text(),
+    piexifWrapper.jpg_batch_set_exif_comments(target_dir=convert_arg['target_dir'].txt(),
                                               recursive=convert_arg['recursive'].isChecked(),
-                                              comments=convert_arg['comments_field'].text())
+                                              comments=convert_arg['comments_field'].txt())
 
 
 class JPGEXIFBatchSetFieldComment(Window):

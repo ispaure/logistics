@@ -89,9 +89,9 @@ def ui_comicinfoxml_batch_rename_series_to_dir_name(convert_arg):
 
     # Display initiating info
     print('Starting the Batch Rename of Series Name in ComicInfo.XML (based on folder name and prefix)')
-    batch_target_folder = convert_arg['target_dir'].text()
-    series_tag_to_replace = convert_arg['target_existing_tag'].text()
-    suffix = convert_arg['series_prefix'].text()
+    batch_target_folder = convert_arg['target_dir'].txt()
+    series_tag_to_replace = convert_arg['target_existing_tag'].txt()
+    suffix = convert_arg['series_prefix'].txt()
     print('Target Folder: ' + batch_target_folder)
     print('Tag to Replace: ' + series_tag_to_replace)
 

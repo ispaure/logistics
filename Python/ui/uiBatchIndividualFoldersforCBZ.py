@@ -14,7 +14,7 @@ def ui_move_cbz_to_new_created_dir(convert_arg):
 
     # Display initiating info
     print('Starting the Batch Creation of Individual Folders for .CBZ and putting them in')
-    batch_target_folder = convert_arg['target_dir'].text()
+    batch_target_folder = convert_arg['target_dir'].txt()
     print('Target Folder: ' + batch_target_folder)
 
     # Get list of files (recursive)

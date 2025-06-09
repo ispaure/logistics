@@ -11,7 +11,7 @@ def ui_list_files_weird_chars(convert_arg):
 
     # Display initiating info
     print('Starting the printing of files with weird characters in their name in dir (recursive)')
-    batch_target_folder = convert_arg['target_dir'].text()
+    batch_target_folder = convert_arg['target_dir'].txt()
     print('Target Folder: ' + batch_target_folder)
 
     # Get list of files (recursive)
