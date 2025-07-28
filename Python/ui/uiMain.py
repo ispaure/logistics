@@ -14,6 +14,7 @@ import ui.uiBatchIndividualFoldersforCBZ as uiBatchIndividualFoldersforCBZ
 import ui.uiJPGExifBatchSetFieldComment as uiJPGExifBatchSetFieldComment
 import ui.uiListFilesWeirdChars as uiListFilesWeirdChars
 import ui.uiBatchRenameMKAfromCSV as uiBatchRenameMKAfromCSV
+import ui.uiBulkDeletePYCInDir as uiBulkDeletePYCInDir
 import wrappers.philipsHueWrapper as philipsHueWrapper
 from flightSim import flightSimUtils
 from commonUtils.osUtils import *
@@ -153,6 +154,9 @@ def display_debug(dialog_obj):
     # MacOS Sleep
     button('Disable macOS Lid Sleep', dialog_obj, QRect(260, 40, 250, 30), commands.disable_macos_lid_sleep)
     button('Enable macOS Lid Sleep', dialog_obj, QRect(260, 70, 250, 30), commands.enable_macos_lid_sleep)
+
+    # Bulk Delete .PYC in Dir
+    button_open_win('Bulk Delete .PYC in Dir', dialog_obj, QRect(10, 280, 200, 30), uiBulkDeletePYCInDir.BulkDeletePYCInDir)
 
 
 def display_lights(dialog_obj):
