@@ -57,5 +57,5 @@ GOTO :logistics_launch_script
 call %VENV_PATH%\Scripts\activate
 %VENV_PATH%\Scripts\python -m pip install -r %~dp0\Python\requirements.txt
 echo Executing Logistics...
-%VENV_PATH%\Scripts\python %~dp0\Python\main.py
+%VENV_PATH%\Scripts\python %~dp0\Python\launch.py
 pause
