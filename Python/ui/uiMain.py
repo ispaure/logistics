@@ -15,6 +15,7 @@ import ui.uiJPGExifBatchSetFieldComment as uiJPGExifBatchSetFieldComment
 import ui.uiListFilesWeirdChars as uiListFilesWeirdChars
 import ui.uiBatchRenameMKAfromCSV as uiBatchRenameMKAfromCSV
 import ui.uiBulkDeletePYCInDir as uiBulkDeletePYCInDir
+import ui.uiBatchCompressCBZ as uiBatchCompressCBZ
 import wrappers.philipsHueWrapper as philipsHueWrapper
 from flightSim import flightSimUtils
 from commonUtils.osUtils import *
@@ -157,6 +158,9 @@ def display_debug(dialog_obj):
 
     # Bulk Delete .PYC in Dir
     button_open_win('Bulk Delete .PYC in Dir', dialog_obj, QRect(10, 280, 200, 30), uiBulkDeletePYCInDir.BulkDeletePYCInDir)
+
+    # Batch Compress .CBZ in Dir
+    button_open_win('Batch Compress .CBZ in Dir', dialog_obj, QRect(10, 310, 200, 30), uiBatchCompressCBZ.DirBatchCompressCBZWindow)
 
 
 def display_lights(dialog_obj):
