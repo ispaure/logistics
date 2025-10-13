@@ -7,7 +7,7 @@ import commonUtils.cbzUtils as cbzUtils
 def ui_dir_batch_compress_cbz(convert_arg):
 
     # Translate the argument dict to arguments and execute the proper function.
-    cbzUtils.batch_compress_cbz(target_dir=convert_arg['target_dir'].txt(), recursive=convert_arg['recursive'].isChecked())
+    cbzUtils.batch_compress_cbz(target_dir=convert_arg['target_dir'].txt(), recursive=convert_arg['recursive'].isChecked(), always_keep_compressed=convert_arg['always_keep_compressed'].isChecked())
 
 
 class DirBatchCompressCBZWindow(Window):
@@ -16,7 +16,7 @@ class DirBatchCompressCBZWindow(Window):
 
         # Set dimensions
         self.width = 490
-        self.height = 115
+        self.height = 140
 
         # CONVERT CBR TO CBZ UI COMPONENTS -----------------------------------------------------------------------------
 
@@ -35,9 +35,11 @@ class DirBatchCompressCBZWindow(Window):
         Label('Recursive (Include Sub-folders): ', self.dlg, QRect(10, 43, 400, 20))
         # Create Argument
         convert_arg['recursive'] = create_checkbox(self.dlg, QRect(205, 28, 50, 50), default_state=True)
+        Label('Always Keep Compressed: ', self.dlg, QRect(10, 63, 400, 20))
+        convert_arg['always_keep_compressed'] = create_checkbox(self.dlg, QRect(205, 48, 50, 50), default_state=False)
 
         # --- BUTTON ---
-        button('Batch Compress', self.dlg, QRect(5, 80, 480, 30), ui_dir_batch_compress_cbz, convert_arg)
+        button('Batch Compress', self.dlg, QRect(5, 105, 480, 30), ui_dir_batch_compress_cbz, convert_arg)
 
         # --------------------------------------------------------------------------------------------------------------
 
