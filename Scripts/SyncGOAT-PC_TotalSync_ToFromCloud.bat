@@ -28,15 +28,15 @@ cd C:/Users/marca/Server/Logistics/Software/rclone
 echo OFFICIAL RCLONE SYNC
 echo GOAT-PC SYNCED TO DROPBOX BUSINESS ADVANCED
 
-echo -------------------------------------------
-echo Sync [PUSH] Server-Lib-ComicRack
-"C:\Users\marca\Server\Logistics\Software\rclone\rclone.exe" sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/Server-Lib-ComicRack" "Server-Lib-ComicRack:"
-echo -------------------------------------------
+REM echo -------------------------------------------
+REM echo Sync [PUSH] Server-Lib-ComicRack
+REM "C:\Users\marca\Server\Logistics\Software\rclone\rclone.exe" sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/REM Server-Lib-ComicRack" "Server-Lib-ComicRack:"
+REM echo -------------------------------------------
 
-echo -------------------------------------------
-echo Sync [PUSH] Server-Lib-Calibre
-"C:\Users\marca\Server\Logistics\Software\rclone\rclone.exe" sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/Server-Lib-Calibre" "Server-Lib-Calibre:"
-echo -------------------------------------------
+REM echo -------------------------------------------
+REM echo Sync [PUSH] Server-Lib-Calibre
+REM "C:\Users\marca\Server\Logistics\Software\rclone\rclone.exe" sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/REM Server-Lib-Calibre" "Server-Lib-Calibre:"
+REM echo -------------------------------------------
 
 echo -------------------------------------------
 echo Sync [PUSH] Server-Lib-ROM
