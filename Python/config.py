@@ -4,6 +4,7 @@ import sys
 import os
 from commonUtils.osUtils import *
 from commonUtils.debugUtils import *
+import commonUtils.marcUtils as marcUtils
 
 
 def get_dir_split_character():
@@ -15,21 +16,9 @@ def get_dir_split_character():
 
 
 def get_config_file_path():
-    # Get config file path
-    python_script_file_path = str(Path(__file__))
-    python_script_file_path_lst = python_script_file_path.split(get_dir_split_character())
-    python_script_file_dir_lst = []
-    for part in python_script_file_path_lst:
-        if part != python_script_file_path_lst[-1]:
-            python_script_file_dir_lst.append(part)
-
-    python_script_file_dir = ''
-    for part in python_script_file_dir_lst:
-        python_script_file_dir += part + get_dir_split_character()
-
-    config_file_path = str(Path(python_script_file_dir, 'configFile.ini'))
-
-    return config_file_path
+    current_dir = Path(__file__).resolve().parent
+    config_ini_path = current_dir / "configFile.ini"
+    return str(config_ini_path)
 
 
 def get_win32_user_doc_dir():
@@ -55,30 +44,50 @@ class LogisticsConfig:
         # Get config file path
         config_file_path = get_config_file_path()
 
-        # Retrieve and determine values
-
+        # Get Server Path
         match get_os():
             case OS.WIN:
                 user_home_dir = get_win32_user_home_dir()
                 sub_server_path = config_section_map('DirectoryStructure', 'server_path_win32', config_file_path)
                 self.server_path = str(Path(user_home_dir, sub_server_path))
-                self.pms_data_path = str(Path(os.environ['LOCALAPPDATA'], 'Plex Media Server'))
-                self.yac_lib_prefs_dir = None
-                self.temp_path = config_section_map('DirectoryStructure', 'temp_path_win32', config_file_path)
             case OS.MAC:
                 user_home_dir = os.environ['HOME']
                 sub_server_path_macos = config_section_map('DirectoryStructure', 'server_path_macos', config_file_path)
                 self.server_path = str(Path(user_home_dir, sub_server_path_macos))
-                self.pms_data_path = str(Path(user_home_dir, 'Library', 'Application Support', 'Plex Media Server'))
-                self.yac_lib_prefs_dir = str(Path(user_home_dir, 'Library', 'Application Support', 'YACReader', 'YACReaderLibrary'))
-                self.temp_path = str(Path(user_home_dir, config_section_map('DirectoryStructure', 'temp_path_macos', config_file_path)))
+            case _:
+                log(Severity.CRITICAL, 'config.py', 'OS not in list!')
+                sys.exit()
 
-        # Subpaths
-        self.path_logistics = str(Path(self.server_path, config_section_map('DirectoryStructure', 'logistics_sub_path', config_file_path)))
-        self.path_logistics_software = str(Path(self.path_logistics, 'Software'))
+        # Get Logistics directory
+        current_file = Path(__file__).resolve()
+        self.path_logistics = str(current_file.parent.parent)
+        # Get Scripts directory
+        self.path_logistics_scripts = str(Path(self.path_logistics, 'Scripts'))
+
+        # Get Logistics software directory
+        marc_dropbox_path = marcUtils.get_marc_dropbox_root()
+        if os.path.isdir(marc_dropbox_path):
+            self.path_logistics_software = str(Path(marc_dropbox_path, 'Software', 'Logistics', 'Software'))
+            self.path_logistics_remote_cred = str(Path(marc_dropbox_path, 'Software', 'Logistics', 'RemoteCredentials'))
+        else:
+            self.path_logistics_software = str(Path(self.server_path, 'Logistics', 'Software'))
+            self.path_logistics_remote_cred = str(Path(self.server_path, 'Logistics', 'RemoteCredentials'))
+
+        # Other paths
+        self.temp_path = str(Path(self.path_logistics, 'temp'))
         self.path_remote_network_mount = str(Path(self.server_path, config_section_map('DirectoryStructure', 'remote_network_mount_sub_path', config_file_path)))
         self.path_remote_local = str(Path(self.server_path, config_section_map('DirectoryStructure', 'remote_local_sub_path', config_file_path)))
-        self.temp_cmd = Path(self.path_logistics, 'Temp', 'sync_cmd.bat')
+        match get_os():
+            case OS.WIN:
+                self.pms_data_path = str(Path(os.environ['LOCALAPPDATA'], 'Plex Media Server'))
+                self.yac_lib_prefs_dir = None
+            case OS.MAC:
+                self.pms_data_path = str(Path(user_home_dir, 'Library', 'Application Support', 'Plex Media Server'))
+                self.yac_lib_prefs_dir = str(Path(user_home_dir, 'Library', 'Application Support', 'YACReader', 'YACReaderLibrary'))
+            case _:
+                log(Severity.CRITICAL, 'config.py', 'OS not in list!')
+                sys.exit()
+        self.temp_cmd = Path(self.temp_path, 'sync_cmd.bat')
 
 
 def config_section_map(section, value, cfg_file_path=get_config_file_path()):

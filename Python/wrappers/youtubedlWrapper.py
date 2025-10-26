@@ -119,9 +119,9 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
 
     match get_os():
         case OS.WIN:
-            yt_dl_cmd_str += '--ffmpeg-location "' + str(Path(config.LogisticsConfig().path_logistics, 'Software', 'ffmpeg_win', 'ffmpeg.exe')) + '" '
+            yt_dl_cmd_str += '--ffmpeg-location "' + str(Path(config.LogisticsConfig().path_logistics_software, 'ffmpeg_win', 'ffmpeg.exe')) + '" '
         case OS.MAC:
-            yt_dl_cmd_str += '--ffmpeg-location "' + str(Path(config.LogisticsConfig().path_logistics, 'Software', 'ffmpeg_macos', 'ffmpeg')) + '" '
+            yt_dl_cmd_str += '--ffmpeg-location "' + str(Path(config.LogisticsConfig().path_logistics_software, 'ffmpeg_macos', 'ffmpeg')) + '" '
         case _:
             log(Severity.CRITICAL, 'youtubedlWrapper', 'Platform unsupported!')
             return

@@ -84,7 +84,7 @@ def get_logistics_remote_credentials_zip_lst():
     logistics_cfg = config.LogisticsConfig()
 
     # Get a list of files in directory
-    remote_credentials_dir = str(Path(logistics_cfg.path_logistics, 'RemoteCredentials'))
+    remote_credentials_dir = str(logistics_cfg.path_logistics_remote_cred)
     file_lst = fileUtils.get_file_path_list(remote_credentials_dir)
 
     file_lst_filtered_txt = []
@@ -134,7 +134,7 @@ def get_rclone_conf_remote_credentials_dict():
 
 def add_logistics_remote_to_rclone_conf():
     logistics_cfg = config.LogisticsConfig()
-    remote_credentials_dir = str(Path(logistics_cfg.path_logistics, 'RemoteCredentials'))
+    remote_credentials_dir = str(logistics_cfg.path_logistics_remote_cred)
     add_remote_to_rclone_conf(remote_credentials_dir)
 
 
@@ -157,7 +157,7 @@ def add_remote_from_zip_to_rclone_conf(zip_path, zip_pw):
 
     # Figure out extraction directory
     logistics_cfg = config.LogisticsConfig()
-    extract_dir = str(Path(logistics_cfg.path_logistics, 'RemoteCredentials', 'Unpack'))
+    extract_dir = str(Path(logistics_cfg.temp_path, 'UnpackCredentials'))
 
     # Extract archive
     try:
@@ -186,9 +186,9 @@ def mount_remote(remote_name, mount_path, timeout=None):
     # Determine Command Line for Mount...
     match get_os():
         case OS.WIN:
-            rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone', 'rclone'))
+            rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics_software, 'rclone', 'rclone'))
         case OS.MAC:
-            rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone_macos', 'rclone'))
+            rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics_software, 'rclone_macos', 'rclone'))
         case _:
             log(Severity.CRITICAL, 'Rclone', 'Invalid Platform!')
             return
@@ -339,9 +339,9 @@ def get_rclone_path():
     # Determine path of sync file
     match get_os():
         case OS.WIN:
-            return str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone', 'rclone.exe'))
+            return str(Path(config.LogisticsConfig().path_logistics_software, 'rclone', 'rclone.exe'))
         case OS.MAC:
-            return str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone_macos', 'rclone'))
+            return str(Path(config.LogisticsConfig().path_logistics_software, 'rclone_macos', 'rclone'))
         case _:
             log(Severity.CRITICAL, 'Rclone', 'Platform unsupported!')
             return
@@ -457,8 +457,8 @@ def rclone_sync_ghetto(local_path, local_package_path, cloud_path, parallel_amt)
         print('Detected existing destination folder!')
 
     # Get existing software folders
-    rclone_dir_win32 = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone'))
-    rclone_dir_macos = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'rclone_macos'))
+    rclone_dir_win32 = str(Path(config.LogisticsConfig().path_logistics_software, 'rclone'))
+    rclone_dir_macos = str(Path(config.LogisticsConfig().path_logistics_software, 'rclone_macos'))
     # Get expected rclone folders for destination package (will be used to run rclone from other machine)
     rclone_dir_win32_copy = str(Path(local_package_path, 'rclone'))
     rclone_dir_macos_copy = str(Path(local_package_path, 'rclone_macos'))
