@@ -22,18 +22,6 @@ from commonUtils.osUtils import *
 from commonUtils.debugUtils import *
 
 
-def push_logistics():
-    source_path = config.LogisticsConfig().path_logistics
-    destination_path = 'Server-Logistics:'
-    rcloneWrapper.rclone_sync(source_path, destination_path)
-
-
-def pull_logistics():
-    source_path = 'Server-Logistics:'
-    destination_path = config.LogisticsConfig().path_logistics
-    rcloneWrapper.rclone_sync(source_path, destination_path)
-
-
 def display_remotes(dialog_obj, type):
     """
     Display remotes in the UI
@@ -257,12 +245,6 @@ class MainMenu(Window):
 
         # Clear Credentials from machine
         button('Clear Rclone.conf', self.centralwidget, QRect(215, 470, 130, 25), rcloneWrapper.clear_rclone_conf)
-
-        # Push Logistics
-        button('PUSH Logistics', self.centralwidget, QRect(470, 470, 120, 25), push_logistics)
-
-        # Pull Logistics
-        button('PULL Logistics', self.centralwidget, QRect(590, 470, 120, 25), pull_logistics)
 
         # TAB (LINKS)
         self.tab_links = QWidget()

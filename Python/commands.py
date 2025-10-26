@@ -12,19 +12,19 @@ from commonUtils import zipUtils
 
 
 def run_repair_windows_script():
-    cmd = 'start ' + str(Path(config.LogisticsConfig().path_logistics, 'Scripts', 'windows_system_files_repair.bat'))
+    cmd = 'start ' + str(Path(config.LogisticsConfig().path_logistics_scripts, 'windows_system_files_repair.bat'))
     cmdShellWrapper.exec_cmd(cmd, wait_for_output=False)
 
 
 def run_repair_ntfs_on_d():
-    cmd = 'start ' + str(Path(config.LogisticsConfig().path_logistics, 'Scripts', 'repair_ntfs_on_D.bat'))
+    cmd = 'start ' + str(Path(config.LogisticsConfig().path_logistics_scripts, 'repair_ntfs_on_D.bat'))
     cmdShellWrapper.exec_cmd(cmd, wait_for_output=False)
 
 
 def open_calibre(calibre_library_path):
     match get_os():
         case OS.WIN:
-            software_exec_path = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'Calibre2', 'calibre.exe'))
+            software_exec_path = str(Path(config.LogisticsConfig().path_logistics_software, 'Calibre2', 'calibre.exe'))
             launch_cmd = '"{}" --with-library "{}"'.format(software_exec_path, calibre_library_path)
             cmdShellWrapper.exec_cmd(launch_cmd, wait_for_output=False)
         case OS.MAC:
@@ -34,7 +34,7 @@ def open_calibre(calibre_library_path):
             # If macOS, calibre.app might not be installed yet (it doesn't come extracted in Logistics as it creates rclone
             # bug. So check if it is installed. If not extract to folder.
             if not os.path.exists(software_exec_path):
-                zipUtils.unzip_file(str(Path(config.LogisticsConfig().path_logistics, 'Software', 'calibre.app.zip')), str(Path('/Applications')))
+                zipUtils.unzip_file(str(Path(config.LogisticsConfig().path_logistics_software, 'calibre.app.zip')), str(Path('/Applications')))
 
             # Once it is known that calibre has been installed (or is there on macOS, can execute it.)
             launch_cmd = '"{}" --with-library "{}"'.format(software_exec_path, calibre_library_path)

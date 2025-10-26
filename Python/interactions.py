@@ -76,7 +76,7 @@ def interaction_02_action_comic_rack(remote_cls):
     time.sleep(0.2)
 
     # Start software
-    exec_path = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'ComicRack', 'ComicRack.exe'))
+    exec_path = str(Path(config.LogisticsConfig().path_logistics_software, 'ComicRack', 'ComicRack.exe'))
     cmdShellWrapper.exec_cmd('start ' + exec_path, wait_for_output=False)
 
 
@@ -84,12 +84,12 @@ def interaction_02_action_yac_reader_library(remote_cls):
     # If YACReader not installed, unzip in /Applications
     install_path = str(Path('/Applications', 'YACReader.app'))
     if not os.path.exists(install_path):
-        zip_path = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'YACReader.app.zip'))
+        zip_path = str(Path(config.LogisticsConfig().path_logistics_software, 'YACReader.app.zip'))
         fileUtils.unzip_file(zip_path, install_path)
     # If YACReaderLibrary not installed, unzip in /Applications
     install_path = str(Path('/Applications', 'YACReaderLibrary.app'))
     if not os.path.exists(install_path):
-        zip_path = str(Path(config.LogisticsConfig().path_logistics, 'Software', 'YACReaderLibrary.app.zip'))
+        zip_path = str(Path(config.LogisticsConfig().path_logistics_software, 'YACReaderLibrary.app.zip'))
         fileUtils.unzip_file(zip_path, install_path)
 
     yac_prefs_dir = config.LogisticsConfig().yac_lib_prefs_dir
