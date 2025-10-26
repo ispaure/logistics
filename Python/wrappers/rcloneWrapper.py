@@ -194,7 +194,7 @@ def mount_remote(remote_name, mount_path, timeout=None):
             return
 
     # Create mount command
-    mount_cmd = rclone_exec_pth + ' mount '
+    mount_cmd = f'"{rclone_exec_pth}"' + ' mount '
 
     if timeout is not None:
         mount_cmd += '--attr-timeout={}s '.format(timeout)
