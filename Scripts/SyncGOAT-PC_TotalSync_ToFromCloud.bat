@@ -30,38 +30,38 @@ echo GOAT-PC SYNCED TO DROPBOX BUSINESS ADVANCED
 
 REM echo -------------------------------------------
 REM echo Sync [PUSH] Server-Lib-ComicRack
-REM "C:\Users\marca\Server\Logistics\Software\rclone\rclone.exe" sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/REM Server-Lib-ComicRack" "Server-Lib-ComicRack:"
+REM rclone sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/REM Server-Lib-ComicRack" "Server-Lib-ComicRack:"
 REM echo -------------------------------------------
 
 REM echo -------------------------------------------
 REM echo Sync [PUSH] Server-Lib-Calibre
-REM "C:\Users\marca\Server\Logistics\Software\rclone\rclone.exe" sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/REM Server-Lib-Calibre" "Server-Lib-Calibre:"
+REM rclone sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/REM Server-Lib-Calibre" "Server-Lib-Calibre:"
 REM echo -------------------------------------------
 
 echo -------------------------------------------
 echo Sync [PUSH] Server-Lib-ROM
-"C:\Users\marca\Server\Logistics\Software\rclone\rclone.exe" sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/Server-Lib-ROM" "Server-Lib-ROM:"
+rclone sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/Server-Lib-ROM" "Server-Lib-ROM:"
 echo -------------------------------------------
 
 echo -------------------------------------------
 echo Sync [PUSH] Server-Perforce
-"C:\Users\marca\Server\Logistics\Software\rclone\rclone.exe" sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/Server-Perforce" "Server-Perforce:"
+rclone sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/Server-Perforce" "Server-Perforce:"
 echo -------------------------------------------
 
 echo -------------------------------------------
 echo Sync [PUSH] Server-Lib-Media
-"C:\Users\marca\Server\Logistics\Software\rclone\rclone.exe" sync --progress --bwlimit 100M --copy-links --delete-before "C:/Users/marca/Server/Local/Server-Lib-Media" "Server-Lib-Media:"
+rclone sync --progress --bwlimit 100M --copy-links --delete-before "C:/Users/marca/Server/Local/Server-Lib-Media" "Server-Lib-Media:"
 echo -------------------------------------------
 
 echo -------------------------------------------
 echo Sync [PUSH] Server-System-GOATPC
-"C:\Users\marca\Server\Logistics\Software\rclone\rclone.exe" sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/Server-System-GOATPC" "Server-System-GOATPC:"
+rclone sync --progress --bwlimit 100M --copy-links "C:/Users/marca/Server/Local/Server-System-GOATPC" "Server-System-GOATPC:"
 echo -------------------------------------------
 
 
 echo -------------------------------------------
 echo Sync [PUSH] 3D
-"C:\Users\marca\Server\Logistics\Software\rclone\rclone.exe" sync --progress --bwlimit 100M "C:/Users/marca/Server/Local/Server-Lib-3D" "Server-Lib-3D:"
+rclone sync --progress --bwlimit 100M "C:/Users/marca/Server/Local/Server-Lib-3D" "Server-Lib-3D:"
 echo -------------------------------------------
 
 
