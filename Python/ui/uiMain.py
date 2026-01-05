@@ -16,6 +16,7 @@ import ui.uiListFilesWeirdChars as uiListFilesWeirdChars
 import ui.uiBatchRenameMKAfromCSV as uiBatchRenameMKAfromCSV
 import ui.uiBulkDeletePYCInDir as uiBulkDeletePYCInDir
 import ui.uiBatchCompressCBZ as uiBatchCompressCBZ
+import ui.uiBatchCompressImageToWEBP as uiBatchCompressImageToWEBP
 import wrappers.philipsHueWrapper as philipsHueWrapper
 from flightSim import flightSimUtils
 from commonUtils.osUtils import *
@@ -149,6 +150,9 @@ def display_debug(dialog_obj):
 
     # Batch Compress .CBZ in Dir
     button_open_win('Batch Compress .CBZ in Dir', dialog_obj, QRect(10, 310, 200, 30), uiBatchCompressCBZ.DirBatchCompressCBZWindow)
+
+    # Batch Compress Image to WEBP in Dir
+    button_open_win('Batch Compress Images in Dir', dialog_obj, QRect(10, 340, 200, 30), uiBatchCompressImageToWEBP.DirBatchCompressImageWindow)
 
 
 def display_lights(dialog_obj):
