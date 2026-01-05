@@ -28,7 +28,7 @@ class DirBatchCompressCBZWindow(Window):
         # Create Label
         Label('Target Folder: ', self.dlg, QRect(10, 12, 400, 20))
         # Create Argument
-        convert_arg['target_dir'] = LineEdit(str(cbzUtils.default_path_to_convert), self.dlg, QRect(105, 10, 370, 25))
+        convert_arg['target_dir'] = LineEdit(str(cbzUtils.default_path_to_convert_cbz), self.dlg, QRect(105, 10, 370, 25))
 
         # 2. Recursive
         # Create Label
@@ -42,4 +42,3 @@ class DirBatchCompressCBZWindow(Window):
         button('Batch Compress', self.dlg, QRect(5, 105, 480, 30), ui_dir_batch_compress_cbz, convert_arg)
 
         # --------------------------------------------------------------------------------------------------------------
-
