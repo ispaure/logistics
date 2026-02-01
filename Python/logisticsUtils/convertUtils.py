@@ -48,7 +48,7 @@ def convert_cbr_to_cbz(target_file_path):
         # In here is convert procedure for file from beginning to end.
         fileUtils.delete_dir_contents(temp_convert_path)
         # Uncompress RAR
-        zipUtils.unrar_file(file, temp_convert_path, unrar_sw_path=str(Path(config.LogisticsConfig().path_logistics_software, 'unrar')))
+        zipUtils.unrar_file(file, temp_convert_path, unrar_sw_path=str(Path(config.LogisticsConfig().path_logistics_software_win, 'unrar')))
         # Zip File
         zipUtils.zip_file(temp_convert_path, file_name_zip, keep_root=False)
         # Need to rename after file creation because it does .zip regardless of what I say

@@ -122,7 +122,7 @@ def set_xp12_m3_max_flight_desk_internal():
 
     # Get preset path
     logistics_cfg = config.LogisticsConfig()
-    preset_path = Path(logistics_cfg.path_logistics_software, 'preset', 'X-Plane Window Positions [m3 max, flight desk, internal].prf')
+    preset_path = Path(logistics_cfg.path_logistics_software_general, 'x-plane', 'X-Plane Window Positions [m3 max, flight desk, internal].prf')
 
     # Set all xp12 settings
     set_all_xp12_settings(preset_path=preset_path,
@@ -139,7 +139,7 @@ def set_xp12_m3_max_standalone():
 
     # Get preset path
     logistics_cfg = config.LogisticsConfig()
-    preset_path = Path(logistics_cfg.path_logistics_software, 'preset', 'X-Plane Window Positions [m3 max, standalone].prf')
+    preset_path = Path(logistics_cfg.path_logistics_software_general, 'x-plane', 'X-Plane Window Positions [m3 max, standalone].prf')
 
     # FSR Setting
     fsr_setting = 3
@@ -159,7 +159,7 @@ def set_xp12_m3_max_office():
 
     # Get preset path
     logistics_cfg = config.LogisticsConfig()
-    preset_path = Path(logistics_cfg.path_logistics_software, 'preset', 'X-Plane Window Positions [m3 max, office].prf')
+    preset_path = Path(logistics_cfg.path_logistics_software_general, 'x-plane', 'X-Plane Window Positions [m3 max, office].prf')
 
     # FSR Setting
     fsr_setting = 3

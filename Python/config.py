@@ -80,11 +80,17 @@ class LogisticsConfig:
         # Get Logistics software directory
         marc_dropbox_path = marcUtils.get_marc_dropbox_root()
         if os.path.isdir(marc_dropbox_path):
-            self.path_logistics_software = str(Path(marc_dropbox_path, 'Software', 'Logistics', 'Software'))
-            self.path_logistics_remote_cred = str(Path(marc_dropbox_path, 'Software', 'Logistics', 'RemoteCredentials'))
+            self.path_logistics_software = str(Path(marc_dropbox_path, 'Software', 'GIT', 'logistics', 'Software'))
+            self.path_logistics_remote_cred = str(Path(marc_dropbox_path, 'Software', 'GIT', 'logistics', 'RemoteCredentials'))
         else:
             self.path_logistics_software = str(Path(self.server_path, 'Logistics', 'Software'))
             self.path_logistics_remote_cred = str(Path(self.server_path, 'Logistics', 'RemoteCredentials'))
+
+        # Get Logistics software director per-platform
+        self.path_logistics_software_win = str(Path(self.path_logistics_software, 'Windows'))
+        self.path_logistics_software_mac = str(Path(self.path_logistics_software, 'macOS'))
+        self.path_logistics_software_linux = str(Path(self.path_logistics_software, 'Linux'))
+        self.path_logistics_software_general = str(Path(self.path_logistics_software, 'General'))
 
         # Other paths
         self.temp_path = str(Path(self.path_logistics, 'temp'))
