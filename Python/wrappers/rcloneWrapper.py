@@ -196,10 +196,11 @@ def mount_remote(remote_name, mount_path, timeout=None):
 
     mount_cmd += f'{remote_name}: {mount_path}'
 
-    # If on MacOS, mount path must exist before it can be mounted!
-    if get_os() == OS.MAC:
-        if not os.path.exists(mount_path):
-            os.makedirs(mount_path)
+    # If on macOS or Linux, mount path must exist before it can be mounted!
+    match get_os():
+        case OS.MAC | OS.LINUX:
+            if not os.path.exists(mount_path):
+                os.makedirs(mount_path)
 
     # Execute commands
     cmdShellWrapper.exec_cmd(mount_cmd, wait_for_output=False)
@@ -364,7 +365,7 @@ def get_all_remote_class():
     return remote_cls_lst
 
 
-def rclone_sync(source_path, destination_path, query=False, wait_for_output=False, dry_run=False, track_renames=False, bw_limit=None, exit_on_done=False):
+def rclone_sync(source_path, destination_path, query=False, wait_for_output=False, dry_run=False, track_renames=False, bw_limit=None):
     # Determine Sync Command
     baseline = '"{rclone_path}"'.format(rclone_path=get_rclone_path())
     baseline += ' sync --progress --copy-links '
@@ -382,17 +383,7 @@ def rclone_sync(source_path, destination_path, query=False, wait_for_output=Fals
     # Add max tps (else might say that Too many requests or write operations)
     # baseline += '--tpslimit 12 '
 
-    baseline += '"{source_path}" "{destination_path}"'.format(source_path=source_path,
-                                                              destination_path=destination_path)
-
-    if exit_on_done:
-        match get_os():
-            case OS.WIN:
-                baseline += '\nexit'
-            case _:
-                log(Severity.CRITICAL, 'Rclone', 'Platform unsupported!')
-                return False
-                # TODO: Add MacOS Version of This!
+    baseline += f'"{source_path}" "{destination_path}"'
 
     # If directory doesn't exist on destination yet, might need to create it
     if not os.path.exists(destination_path):
@@ -400,12 +391,9 @@ def rclone_sync(source_path, destination_path, query=False, wait_for_output=Fals
             case OS.WIN:
                 if destination_path[1] == ':':
                     Path(destination_path).mkdir(parents=True, exist_ok=True)
-            case OS.MAC:
+            case OS.MAC | OS.LINUX:
                 if destination_path[0] == '/':
                     Path(destination_path).mkdir(parents=True, exist_ok=True)
-            case _:
-                log(Severity.CRITICAL, 'Rclone', 'Platform unsupported!')
-                return
 
     if query:
         output_lines = cmdShellWrapper.exec_cmd(baseline, wait_for_output=True)
@@ -414,6 +402,7 @@ def rclone_sync(source_path, destination_path, query=False, wait_for_output=Fals
     else:
         # cmdShellWrapper.exec_cmd(baseline, wait_for_output=wait_for_output, in_new_window=config.LogisticsConfig().temp_cmd)
         cmdShellWrapper.exec_cmd(baseline, wait_for_output=wait_for_output, in_new_window=True)
+        return None
 
 
 def rclone_sync_ghetto(local_path, local_package_path, cloud_path, parallel_amt):
