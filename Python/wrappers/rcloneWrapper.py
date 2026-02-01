@@ -176,15 +176,17 @@ def mount_remote(remote_name, mount_path, timeout=None):
     # Debug Message (Before Mount)
     print_debug_msg('Mounting "{}" at path "{}"...'.format(remote_name, mount_path), show_verbose)
 
-    # Determine Command Line for Mount...
-    match get_os():
-        case OS.WIN:
-            rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics_software, 'rclone', 'rclone'))
-        case OS.MAC:
-            rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics_software, 'rclone_macos', 'rclone'))
-        case _:
-            log(Severity.CRITICAL, 'Rclone', 'Invalid Platform!')
-            return
+    # TODO: Delete this if mount still works fine on windows (I think it should). It's duplicated code except it doesn't specify .exe like the other (on Windows)
+    # # Determine Command Line for Mount...
+    # match get_os():
+    #     case OS.WIN:
+    #         rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics_software, 'rclone', 'rclone'))
+    #     case OS.MAC:
+    #         rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics_software, 'rclone_macos', 'rclone'))
+    #     case _:
+    #         log(Severity.CRITICAL, 'Rclone', 'Invalid Platform!')
+    #         return
+    rclone_exec_pth = get_rclone_path()
 
     # Create mount command
     mount_cmd = f'"{rclone_exec_pth}"' + ' mount '
@@ -192,7 +194,7 @@ def mount_remote(remote_name, mount_path, timeout=None):
     if timeout is not None:
         mount_cmd += '--attr-timeout={}s '.format(timeout)
 
-    mount_cmd += '{remote_name}: {mount_path}'.format(remote_name=remote_name, mount_path=mount_path)
+    mount_cmd += f'{remote_name}: {mount_path}'
 
     # If on MacOS, mount path must exist before it can be mounted!
     if get_os() == OS.MAC:
