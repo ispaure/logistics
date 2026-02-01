@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Logistics Console
+Comment=Launch Logistics via UV in terminal
+Exec=/home/marca/GIT/logistics/LaunchLogistics_LINUX_UV.sh
+Terminal=true
+Icon=utilities-terminal
+Categories=Development;Utility;
