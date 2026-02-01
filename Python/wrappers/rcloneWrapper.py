@@ -412,7 +412,8 @@ def rclone_sync(source_path, destination_path, query=False, wait_for_output=Fals
         query_dict = rclone_sync_process_query(source_path, destination_path, output_lines)
         return query_dict
     else:
-        cmdShellWrapper.exec_cmd(baseline, wait_for_output=wait_for_output, in_new_window=config.LogisticsConfig().temp_cmd)
+        # cmdShellWrapper.exec_cmd(baseline, wait_for_output=wait_for_output, in_new_window=config.LogisticsConfig().temp_cmd)
+        cmdShellWrapper.exec_cmd(baseline, wait_for_output=wait_for_output, in_new_window=True)
 
 
 def rclone_sync_ghetto(local_path, local_package_path, cloud_path, parallel_amt):
