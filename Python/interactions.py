@@ -9,9 +9,9 @@ import config
 import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
 import time
 import wrappers.rcloneWrapper as rcloneWrapper
-import ui.uiManagePMS as uiManagePMS
-import ui.uiLocalPush as uiLocalPush
-import ui.uiYoutubeDL as uiYoutubeDL
+import ui.rclone.popup.uiManagePMS as uiManagePMS
+import ui.rclone.popup.uiLocalPush as uiLocalPush
+import ui.debug.popup.uiYoutubeDL as uiYoutubeDL
 import commands as commands
 
 

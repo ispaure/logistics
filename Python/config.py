@@ -54,9 +54,10 @@ class LogisticsConfig:
                 user_home_dir = os.environ['HOME']
                 sub_server_path_macos = config_section_map('DirectoryStructure', 'server_path_macos', config_file_path)
                 self.server_path = str(Path(user_home_dir, sub_server_path_macos))
-            case _:
-                log(Severity.CRITICAL, 'config.py', 'OS not in list!')
-                sys.exit()
+            case OS.LINUX:
+                user_home_dir = Path.home()
+                sub_server_path_linux = config_section_map('DirectoryStructure', 'server_path_linux', config_file_path)
+                self.server_path = str(Path(user_home_dir, sub_server_path_linux))
 
         # Get Logistics directory
         current_file = Path(__file__).resolve()

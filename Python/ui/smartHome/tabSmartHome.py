@@ -4,6 +4,7 @@ from commonUtils.osUtils import *
 
 
 def display_smart_home(dialog_obj):
+    print('smart home start')
     match get_os():
         case OS.WIN:
             display_lights(dialog_obj)
@@ -11,6 +12,7 @@ def display_smart_home(dialog_obj):
             display_lights(dialog_obj)
         case OS.LINUX:
             pass
+    print('smart home end')
 
 
 def display_lights(dialog_obj):
