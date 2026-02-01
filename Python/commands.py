@@ -41,6 +41,15 @@ def open_calibre(calibre_library_path):
             print(launch_cmd)
             cmdShellWrapper.exec_cmd(launch_cmd, wait_for_output=False)
             print('done')
+        case OS.LINUX:
+            # Calibre location on Linux
+            software_exec_path = str(Path(Path.home(), 'Applications', 'Calibre'))
+
+            # If Linux, calibre might not be installed yet
+            if not os.path.isdir(software_exec_path):
+                print('installing calibre')
+                cmdShellWrapper.exec_cmd('sudo -v && wget -nv -O- https://download.calibre-ebook.com/linux-installer.sh | sudo sh /dev/stdin', wait_for_output=False)
+                print('installed calibre')
 
 
 def open_url(entry_str):
