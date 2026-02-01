@@ -1,6 +1,6 @@
 from commonUtils.pySideUtils import *
 import commonUtils.fileUtils as fileUtils
-import ui.uiComicInfoBatchAuthorFromFolderName as uiComicInfoBatchAuthorFromFolderName
+import ui.debug.popup.uiComicInfoBatchAuthorFromFolderName as uiComicInfoBatchAuthorFromFolderName
 from pathlib import Path
 from commonUtils.osUtils import *
 from commonUtils.debugUtils import *
