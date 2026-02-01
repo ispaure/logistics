@@ -122,7 +122,8 @@ def unpackage_pms(remote_cls):
             fileUtils.delete_dir_contents(pms_data_path)
 
             # Put command in file and run
-            cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=config.LogisticsConfig().temp_cmd)
+            # cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=config.LogisticsConfig().temp_cmd)
+            cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=True)
         case OS.MAC:
             # Determine archive path
             zip_archive_path = str(Path(local_cls_pmsdata.directory_path, 'pms_data_mac.zip'))
@@ -195,7 +196,8 @@ def package_pms(remote_cls):
                 command += ' "' + directory + '"'
 
             # Put command in file and run
-            cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=config.LogisticsConfig().temp_cmd)
+            # cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=config.LogisticsConfig().temp_cmd)
+            cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=True)
         case OS.MAC:
             # Wipe (some) contents within -PMSDATA directory; registry file and archive
             file_lst = fileUtils.get_file_path_list(local_cls_pmsdata.directory_path)
