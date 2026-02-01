@@ -200,7 +200,7 @@ def mount_remote(remote_name, mount_path, timeout=None):
     match get_os():
         case OS.MAC | OS.LINUX:
             if not os.path.exists(mount_path):
-                os.makedirs(mount_path)
+                os.makedirs(mount_path, exist_ok=True)
 
     # Execute commands
     cmdShellWrapper.exec_cmd(mount_cmd, wait_for_output=False)

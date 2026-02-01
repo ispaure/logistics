@@ -37,19 +37,16 @@ def open_calibre(calibre_library_path):
                 zipUtils.unzip_file(str(Path(config.LogisticsConfig().path_logistics_software, 'calibre.app.zip')), str(Path('/Applications')))
 
             # Once it is known that calibre has been installed (or is there on macOS, can execute it.)
-            launch_cmd = '"{}" --with-library "{}"'.format(software_exec_path, calibre_library_path)
+            launch_cmd = f'"{software_exec_path}" --with-library "{calibre_library_path}"'
             print(launch_cmd)
             cmdShellWrapper.exec_cmd(launch_cmd, wait_for_output=False)
             print('done')
         case OS.LINUX:
-            # Calibre location on Linux
-            software_exec_path = str(Path(Path.home(), 'Applications', 'Calibre'))
-
             # If Linux, calibre might not be installed yet
-            if not os.path.isdir(software_exec_path):
-                print('installing calibre')
-                cmdShellWrapper.exec_cmd('sudo -v && wget -nv -O- https://download.calibre-ebook.com/linux-installer.sh | sudo sh /dev/stdin', wait_for_output=False)
-                print('installed calibre')
+            if not os.path.isdir('/var/lib/flatpak/app/com.calibre_ebook.calibre'):
+                log(Severity.CRITICAL, 'Open Calibre', 'Cannot Open Calibre because it is not installed on the system. install using Bazaar on Bazzite', popup=True)
+            else:
+                cmdShellWrapper.exec_cmd(f'flatpak run com.calibre_ebook.calibre --with-library "{calibre_library_path}"')
 
 
 def open_url(entry_str):
