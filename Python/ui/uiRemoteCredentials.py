@@ -1,9 +1,7 @@
 import wrappers.rcloneWrapper as rcloneWrapper
 from commonUtils.pySideUtils import *
-import sys
 import ui.uiRemoteCredentialsPW as uiRemoteCredentialsPW
 from commonUtils.osUtils import *
-from commonUtils.debugUtils import *
 
 
 def ui_load_credential_password_ui(arg):

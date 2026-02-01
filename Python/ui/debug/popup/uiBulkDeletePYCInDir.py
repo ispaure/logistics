@@ -1,6 +1,4 @@
 from commonUtils.pySideUtils import *
-import commonUtils.fileUtils
-
 show_verbose = True
 
 

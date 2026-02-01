@@ -3,8 +3,6 @@ import wrappers.rcloneWrapper as rcloneWrapper
 from commonUtils.pySideUtils import *
 import config
 from pathlib import Path
-import sys
-import os
 import commonUtils.fileUtils as fileUtils
 import wrappers.uiShellWrapper as uiShellWrapper
 from commonUtils import zipUtils
