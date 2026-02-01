@@ -10,7 +10,7 @@ import ui.uiMain as uiMain
 from commonUtils import pySideUtils
 from commonUtils.debugUtils import *
 
-
+print('test launch!')
 # Get Config Information
 logistics_cfg = config.LogisticsConfig()
 

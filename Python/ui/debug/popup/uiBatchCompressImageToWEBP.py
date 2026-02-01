@@ -1,18 +1,16 @@
 from commonUtils.pySideUtils import *
-import logisticsUtils.convertUtils as convertUtils
-import commonUtils.fileUtils as fileUtils
-import commonUtils.cbzUtils as cbzUtils
+import commonUtils.imageUtils as imageUtils
 
 
-def ui_dir_batch_compress_cbz(convert_arg):
+def ui_dir_batch_compress_image(convert_arg):
 
     # Translate the argument dict to arguments and execute the proper function.
-    cbzUtils.batch_compress_cbz(target_dir=convert_arg['target_dir'].txt(), recursive=convert_arg['recursive'].isChecked(), always_keep_compressed=convert_arg['always_keep_compressed'].isChecked())
+    imageUtils.batch_compress_image(target_dir=convert_arg['target_dir'].txt(), recursive=convert_arg['recursive'].isChecked(), always_keep_compressed=convert_arg['always_keep_compressed'].isChecked())
 
 
-class DirBatchCompressCBZWindow(Window):
+class DirBatchCompressImageWindow(Window):
     def __init__(self):
-        super().__init__('Batch Compress .CBZ')
+        super().__init__('Batch Compress Images to WEBP')
 
         # Set dimensions
         self.width = 490
@@ -28,7 +26,7 @@ class DirBatchCompressCBZWindow(Window):
         # Create Label
         Label('Target Folder: ', self.dlg, QRect(10, 12, 400, 20))
         # Create Argument
-        convert_arg['target_dir'] = LineEdit(str(cbzUtils.default_path_to_convert_cbz), self.dlg, QRect(105, 10, 370, 25))
+        convert_arg['target_dir'] = LineEdit(str(imageUtils.default_path_to_convert_img), self.dlg, QRect(105, 10, 370, 25))
 
         # 2. Recursive
         # Create Label
@@ -39,6 +37,6 @@ class DirBatchCompressCBZWindow(Window):
         convert_arg['always_keep_compressed'] = create_checkbox(self.dlg, QRect(205, 48, 50, 50), default_state=False)
 
         # --- BUTTON ---
-        button('Batch Compress', self.dlg, QRect(5, 105, 480, 30), ui_dir_batch_compress_cbz, convert_arg)
+        button('Batch Compress', self.dlg, QRect(5, 105, 480, 30), ui_dir_batch_compress_image, convert_arg)
 
         # --------------------------------------------------------------------------------------------------------------

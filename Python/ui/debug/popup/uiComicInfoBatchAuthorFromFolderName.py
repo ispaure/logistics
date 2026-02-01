@@ -1,6 +1,5 @@
 from commonUtils.pySideUtils import *
 import commonUtils.fileUtils as fileUtils
-import os
 from pathlib import Path
 import config as config
 from commonUtils.osUtils import *
