@@ -113,7 +113,7 @@ def unpackage_pms(remote_cls):
             # Extract archive contents to Local AppData, using 7-zip. In terminal window so that we can visualize as
             # this can take long. Also adds proper things to registry
             # Create 7z extract part in command
-            seven_zip_exec_path = str(Path(config.LogisticsConfig().path_logistics_software, '7-zip', '7z'))
+            seven_zip_exec_path = str(Path(config.LogisticsConfig().path_logistics_software_win, '7-zip', '7z'))
             command += '\n"{sz_path}" x -y "{sz_archive_path}" -o"{pms_data_path}"'.format(sz_path=seven_zip_exec_path,
                                                                                            sz_archive_path=seven_zip_archive_path,
                                                                                            pms_data_path=pms_data_path)
@@ -186,7 +186,7 @@ def package_pms(remote_cls):
             # Create command
             plex_registry_loc = 'HKEY_CURRENT_USER\\Software\\Plex, Inc.\\Plex Media Server'
             plex_registry_path = str(Path(local_cls_pmsdata.directory_path, 'pms_registry.reg'))
-            seven_zip_exec_path = str(Path(config.LogisticsConfig().path_logistics_software, '7-zip', '7z'))
+            seven_zip_exec_path = str(Path(config.LogisticsConfig().path_logistics_software_win, '7-zip', '7z'))
             seven_zip_archive_path = str(Path(local_cls_pmsdata.directory_path, 'pms_data.7z'))
             command = 'reg export "{}" "{}"'.format(plex_registry_loc, plex_registry_path)
             command += '\n"{}" a -y -mx1 -v5000000000 "{}"'.format(seven_zip_exec_path, seven_zip_archive_path)

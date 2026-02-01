@@ -11,19 +11,6 @@ def push_to_cloud(remote_cls):
     rcloneWrapper.rclone_sync(source_path, destination_path, track_renames=remote_cls['track_renames'].isChecked())
 
 
-def package_push_to_cloud(data_to_exec):
-    print('Initiating Package Push to Cloud Procedure')
-
-    # Get important values
-    local_remote_path = data_to_exec['Remote Class'].directory_path
-    cloud_remote_path = data_to_exec['Remote Class'].name + ':'
-    local_package_path = str(Path(data_to_exec['Push Directory'].txt(), data_to_exec['Remote Class'].name))
-    parallel_amt = int(data_to_exec['Parallel Uploads Amount'].text())
-
-    # Execute ghetto sync
-    rcloneWrapper.rclone_sync_ghetto(local_remote_path, local_package_path, cloud_remote_path, parallel_amt)
-
-
 def push_specific_dir(data_to_exec):
     print('Initiating Push to Cloud (Specific Dir)')
 
@@ -48,7 +35,7 @@ class LocalPushUI(Window):
 
         # Set dimensions
         self.width = 500
-        self.height = 390
+        self.height = 250
 
         # REGULAR PUSH -------------------------------------------------------------------------------------------------
         # ENTERTAINMENT
@@ -64,28 +51,8 @@ class LocalPushUI(Window):
         button('PUSH [Regular]', panel, QRect(85, 65, 320, 25), push_to_cloud, convert_arg)
         # --------------------------------------------------------------------------------------------------------------
 
-        # GHETTO PUSH --------------------------------------------------------------------------------------------------
-        panel_ghetto = create_frame(self.dlg, QRect(5, 105, 490, 125))
-        # Label: Package for PUSH to CLOUD from ELSEWHERE
-        Label('PACKAGE PUSH to CLOUD [For Upload Elsewhere]:', panel_ghetto, QRect(10, 10, 400, 20))
-        # Create argument dictionary
-        arg_ghetto = {'Remote Class': remote_cls}
-        # Create file path label
-        Label('Destination Path: ', panel_ghetto, QRect(10, 35, 400, 20))
-        # Create file path field
-        path_textedit = LineEdit('J:\\', panel_ghetto, QRect(120, 35, 360, 20))
-        arg_ghetto['Push Directory'] = path_textedit
-        # Create parallel upload amt label
-        Label('Parallel Uploads [Amount]: ', panel_ghetto, QRect(10, 65, 470, 20))
-        # Create parallels uploads field user can set (default is 10)
-        parallel_up_textedit = LineEdit('10', panel_ghetto, QRect(180, 65, 50, 20))
-        arg_ghetto['Parallel Uploads Amount'] = parallel_up_textedit
-        # Create package for push to cloud
-        button('PACKAGE', panel_ghetto, QRect(85, 95, 320, 25), package_push_to_cloud, arg_ghetto)
-        # --------------------------------------------------------------------------------------------------------------
-
         # ADD FOLDER ---------------------------------------------------------------------------------------------------
-        panel_add_dir = create_frame(self.dlg, QRect(5, 235, 490, 135))
+        panel_add_dir = create_frame(self.dlg, QRect(5, 105, 490, 135))
         # Label: Add Folder to CLOUD
         Label('ADD FOLDER TO CLOUD:', panel_add_dir, QRect(10, 10, 400, 20))
         Label('If folder with same name already exists on Cloud, it will get overwritten.', panel_add_dir, QRect(10, 30, 480, 20))

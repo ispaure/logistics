@@ -335,11 +335,11 @@ def get_rclone_path():
     # Determine path of sync file
     match get_os():
         case OS.WIN:
-            return str(Path(config.LogisticsConfig().path_logistics_software, 'rclone', 'rclone.exe'))
+            return str(Path(config.LogisticsConfig().path_logistics_software_win, 'rclone', 'rclone.exe'))
         case OS.MAC:
-            return str(Path(config.LogisticsConfig().path_logistics_software, 'rclone_macos', 'rclone'))
+            return str(Path(config.LogisticsConfig().path_logistics_software_mac, 'rclone', 'rclone'))
         case OS.LINUX:
-            return str((Path(config.LogisticsConfig().path_logistics_software, 'Linux', 'rclone-v1.73.0-linux-amd64', 'rclone')))
+            return str((Path(config.LogisticsConfig().path_logistics_software_linux, 'rclone-v1.73.0-linux-amd64', 'rclone')))
 
 
 def get_all_remote_class():
@@ -403,127 +403,6 @@ def rclone_sync(source_path, destination_path, query=False, wait_for_output=Fals
         # cmdShellWrapper.exec_cmd(baseline, wait_for_output=wait_for_output, in_new_window=config.LogisticsConfig().temp_cmd)
         cmdShellWrapper.exec_cmd(baseline, wait_for_output=wait_for_output, in_new_window=True)
         return None
-
-
-def rclone_sync_ghetto(local_path, local_package_path, cloud_path, parallel_amt):
-    """
-    Copy local files which are not synced to Cloud to a package path (ideally an external storage) which can then
-    be transported to another location for backup (ideal for uploading a large chunk of data when time is sparse).
-
-    NOTE: This does not delete files on Cloud and might not work 100% so one should always run a regular sync after
-    this is done to ensure there is nothing missing.
-
-    :param local_path: Local path to compare to cloud path
-    :type local_path: str
-    :param local_package_path: Path where files that haven't been copied will be moved to
-    :type local_package_path: str
-    :param cloud_path: Path to remote in cloud to compare with local path
-    :type cloud_path: str
-    :param parallel_amt: Will define how many .bat files there will be in local_package_path (parallel uploads later)
-    :type parallel_amt: Int
-    """
-    # Show important information
-    print('Local Path to Package: ' + local_path)
-    print('Local Package Path: ' + local_package_path)
-    print('Parallel Operations Amount: ' + str(parallel_amt))
-
-    # Run Sync Dryrun to get log of files not currently on Cloud
-    print('Running Rclone Sync Dryrun (To see what is missing from Cloud)...')
-    print('This can take a bit of time. Be patient!')
-    query_data = rclone_sync(source_path=local_path, destination_path=cloud_path, query=True, dry_run=True)
-    print('Done with Dryrun!')
-
-    # Create destination folder (if missing)
-    if not os.path.exists(local_package_path):
-        print('Creating destination folder...')
-        Path(local_package_path).mkdir(parents=True, exist_ok=True)
-    else:
-        print('Detected existing destination folder!')
-
-    # Get existing software folders
-    rclone_dir_win32 = str(Path(config.LogisticsConfig().path_logistics_software, 'rclone'))
-    rclone_dir_macos = str(Path(config.LogisticsConfig().path_logistics_software, 'rclone_macos'))
-    # Get expected rclone folders for destination package (will be used to run rclone from other machine)
-    rclone_dir_win32_copy = str(Path(local_package_path, 'rclone'))
-    rclone_dir_macos_copy = str(Path(local_package_path, 'rclone_macos'))
-    # Copy files, regardless if they are there or not already
-    fileUtils.copy_file(str(Path(rclone_dir_win32, 'git-log.txt')), str(Path(rclone_dir_win32_copy, 'git-log.txt')))
-    fileUtils.copy_file(str(Path(rclone_dir_win32, 'rclone.1')), str(Path(rclone_dir_win32_copy, 'rclone.1')))
-    fileUtils.copy_file(str(Path(rclone_dir_win32, 'rclone.exe')), str(Path(rclone_dir_win32_copy, 'rclone.exe')))
-    fileUtils.copy_file(str(Path(rclone_dir_win32, 'README.html')), str(Path(rclone_dir_win32_copy, 'README.html')))
-    fileUtils.copy_file(str(Path(rclone_dir_win32, 'README.txt')), str(Path(rclone_dir_win32_copy, 'README.txt')))
-    fileUtils.copy_file(str(Path(rclone_dir_macos, 'git-log.txt')), str(Path(rclone_dir_macos_copy, 'git-log.txt')))
-    fileUtils.copy_file(str(Path(rclone_dir_macos, 'rclone.1')), str(Path(rclone_dir_macos_copy, 'rclone.1')))
-    fileUtils.copy_file(str(Path(rclone_dir_macos, 'rclone')), str(Path(rclone_dir_macos_copy, 'rclone')))
-    fileUtils.copy_file(str(Path(rclone_dir_macos, 'README.html')), str(Path(rclone_dir_macos_copy, 'README.html')))
-    fileUtils.copy_file(str(Path(rclone_dir_macos, 'README.txt')), str(Path(rclone_dir_macos_copy, 'README.txt')))
-
-    # Get important variables
-    match get_os():
-        case OS.WIN:
-            script_file_path = str(Path(local_package_path, 'run_backup.bat'))
-            rclone_exec_path = str(Path(local_package_path, 'rclone', 'rclone.exe'))
-        case OS.MAC:
-            script_file_path = str(Path(local_package_path, 'run_backup.command'))
-            rclone_exec_path = str(Path(local_package_path, 'rclone_macos', 'rclone'))
-        case _:
-            log(Severity.CRITICAL, 'Rclone', 'Platform unsupported!')
-            return
-
-    # If not created yet, create text file
-    script_file_path_lst = []
-    for value in range(parallel_amt):
-        script_file_path_item = script_file_path.replace('run_backup', 'run_backup_' + str(value))
-        script_file_path_lst.append(script_file_path_item)
-        if not os.path.exists(script_file_path_item):
-            fileUtils.write_file(script_file_path_item, '')
-
-    # Process Files from List
-    for file in query_data['COPY']:
-        local_file_path = file[0]
-        local_file_package_path = file[0].replace(local_path, local_package_path)
-        remote_file_path = file[1]
-
-        match get_os():
-            case OS.WIN:
-                local_file_name = local_file_path.split('\\')[-1]
-            case OS.MAC:
-                local_file_name = local_file_path.split('/')[-1]
-            case _:
-                log(Severity.CRITICAL, 'Rclone', 'Platform unsupported!')
-                return
-
-        remote_file_dir = remote_file_path[:-len(local_file_name)]
-        local_file_package_path_dir_only = local_file_package_path[:-len(local_file_name)]
-        if local_file_package_path_dir_only[-1] == '\\' or local_file_package_path_dir_only[-1] == '/':
-            local_file_package_path_dir_only = local_file_package_path_dir_only[:-1]
-
-        print('')
-        print('Processing Local File Path: ' + local_file_path)
-        print('Intended Local Package File Path: ' + local_file_package_path)
-        print('Intended Future Cloud Destination Path: ' + remote_file_path)
-
-        if not os.path.exists(local_file_package_path):
-            print('Rclone sync file to package dir...')
-            # fileUtils.copy_file(local_file_path, local_file_package_path)
-            if not os.path.exists(local_file_package_path_dir_only):
-                print('Creating directory: ' + local_file_package_path_dir_only)
-                fileUtils.make_dir(local_file_package_path_dir_only)
-            rclone_sync(local_file_path, local_file_package_path_dir_only, query=True)
-            print('Rclone sync file succeeded!')
-            print('Adding to script file...')
-            rclone_command = '"{rclone_exec_path}" sync --progress "{source}" "{destination}"'.format(rclone_exec_path=rclone_exec_path, source=local_file_package_path, destination=remote_file_dir)
-            try:
-                fileUtils.write_file_append(random.choice(script_file_path_lst), rclone_command)
-            except:
-                print('Could not add to script file. Must be non-regular character in name')
-                # TODO: Make it work for files with strange characters.
-            print('Added to script file!')
-        else:
-            print('File already exists, bypassing copy...')
-
-    # Show completed!
-    print('Done Package Push to Cloud Procedure!')
 
 
 def rclone_sync_process_query(source_path, destination_path, output_lines):
