@@ -131,10 +131,6 @@ def interaction_04(remote_cls):
 def interaction_04_action(remote_cls):
     action = None
 
-    # Will need to create new .bat or .sh file and launch it separately, so we can see output
-
-    rclone_path = rcloneWrapper.get_rclone_path()
-
     # Determine rclone sync command
     if remote_cls.type == 'Local':
         local_push_cls = uiLocalPush.LocalPushUI(remote_cls)
