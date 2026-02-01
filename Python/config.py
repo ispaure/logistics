@@ -5,6 +5,8 @@ import os
 from commonUtils.osUtils import *
 from commonUtils.debugUtils import *
 import commonUtils.marcUtils as marcUtils
+import commonUtils.fileUtils as fileUtils
+from typing import *
 
 
 def get_dir_split_character():
@@ -19,6 +21,18 @@ def get_config_file_path():
     current_dir = Path(__file__).resolve().parent
     config_ini_path = current_dir / "configFile.ini"
     return str(config_ini_path)
+
+
+def get_plex_data_dir_linux() -> Optional[str]:
+    candidates = [
+        Path("/var/lib/plexmediaserver/Library/Application Support/Plex Media Server"),
+        Path.home() / ".var/app/tv.plex.PlexMediaServer/data/Plex Media Server",
+        Path.home() / "snap/plexmediaserver/common/Library/Application Support/Plex Media Server",
+    ]
+    for p in candidates:
+        if p.exists():
+            return str(p)
+    return None
 
 
 def get_win32_user_doc_dir():
@@ -45,17 +59,15 @@ class LogisticsConfig:
         config_file_path = get_config_file_path()
 
         # Get Server Path
+        user_home_dir = fileUtils.get_user_home_dir()
         match get_os():
             case OS.WIN:
-                user_home_dir = get_win32_user_home_dir()
                 sub_server_path = config_section_map('DirectoryStructure', 'server_path_win32', config_file_path)
                 self.server_path = str(Path(user_home_dir, sub_server_path))
             case OS.MAC:
-                user_home_dir = os.environ['HOME']
                 sub_server_path_macos = config_section_map('DirectoryStructure', 'server_path_macos', config_file_path)
                 self.server_path = str(Path(user_home_dir, sub_server_path_macos))
             case OS.LINUX:
-                user_home_dir = Path.home()
                 sub_server_path_linux = config_section_map('DirectoryStructure', 'server_path_linux', config_file_path)
                 self.server_path = str(Path(user_home_dir, sub_server_path_linux))
 
@@ -85,9 +97,9 @@ class LogisticsConfig:
             case OS.MAC:
                 self.pms_data_path = str(Path(user_home_dir, 'Library', 'Application Support', 'Plex Media Server'))
                 self.yac_lib_prefs_dir = str(Path(user_home_dir, 'Library', 'Application Support', 'YACReader', 'YACReaderLibrary'))
-            case _:
-                log(Severity.CRITICAL, 'config.py', 'OS not in list!')
-                sys.exit()
+            case OS.LINUX:
+                self.pms_data_path = get_plex_data_dir_linux
+                self.yac_lib_prefs_dir =self.yac_lib_prefs_dir = str(Path(user_home_dir, ".local", "share", "YACReader", "YACReaderLibrary"))
         self.temp_cmd = Path(self.temp_path, 'sync_cmd.bat')
 
 

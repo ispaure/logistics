@@ -35,14 +35,7 @@ def clear_rclone_conf():
 
 def get_rclone_conf_path():
     """Returns path to the user's rclone configuration file. If it doesn't exist, a blank one is created"""
-    match get_os():
-        case OS.WIN:
-            rclone_conf_dir = str(Path(os.environ['USERPROFILE'], '.config', 'rclone'))
-        case OS.MAC:
-            rclone_conf_dir = str(Path(os.environ['HOME'], '.config', 'rclone'))
-        case _:
-            log(Severity.CRITICAL, 'Rclone', 'Invalid Platform!')
-            return
+    rclone_conf_dir = Path(fileUtils.get_user_home_dir(), '.config', 'rclone')
 
     if not os.path.exists(rclone_conf_dir):
         os.makedirs(rclone_conf_dir)
@@ -342,9 +335,8 @@ def get_rclone_path():
             return str(Path(config.LogisticsConfig().path_logistics_software, 'rclone', 'rclone.exe'))
         case OS.MAC:
             return str(Path(config.LogisticsConfig().path_logistics_software, 'rclone_macos', 'rclone'))
-        case _:
-            log(Severity.CRITICAL, 'Rclone', 'Platform unsupported!')
-            return
+        case OS.LINUX:
+            return str((Path(config.LogisticsConfig().path_logistics_software, 'Linux', 'rclone-v1.73.0-linux-amd64', 'rclone')))
 
 
 def get_all_remote_class():

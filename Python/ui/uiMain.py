@@ -33,9 +33,8 @@ class MainMenu(Window):
                 font_size = 10
             case OS.MAC:
                 font_size = 13
-            case _:
-                log(Severity.CRITICAL, 'uiMain', 'Platform unsupported!')
-                return
+            case OS.LINUX:
+                font_size = 13
 
         self.tabWidget.setFont(QFont('Arial', font_size))
 
