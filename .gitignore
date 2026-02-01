@@ -4,3 +4,4 @@ RemoteCredentials
 Temp
 debug.log
 *.pyc
+venv
