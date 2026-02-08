@@ -15,9 +15,12 @@ VENV_DIR="$SCRIPT_DIR/venv"
 
 cd "$PY_DIR"
 
+# --- SMALL CHANGE START ---
+uv python install 3.12.2 >/dev/null 2>&1 || true
 if [[ ! -d "$VENV_DIR" ]]; then
-  uv venv "$VENV_DIR"
+  uv venv --python 3.12.2 "$VENV_DIR"
 fi
+# --- SMALL CHANGE END ---
 
 # Activate so pip installs into the venv
 # shellcheck disable=SC1090
