@@ -23,7 +23,7 @@ if '%errorlevel%' NEQ '0' (
 
 @echo off
 
-cd /d "B:\Yagi Dropbox\Marc-Andre Voyer\Software\Logistics\Software\rclone"
+cd /d "B:\Yagi Dropbox\Marc-Andre Voyer\Software\GIT\logistics\Software\Windows\rclone"
 
 echo OFFICIAL RCLONE SYNC
 echo GOAT-PC SYNCED TO DROPBOX BUSINESS ADVANCED
