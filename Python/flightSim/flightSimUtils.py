@@ -14,7 +14,7 @@ def set_xp12_setting(line_to_look_for: str, value: int):
     prefs_file = Path(get_xp12_dir(), 'Output', 'Preferences', 'X-Plane.prf')
 
     # Fetching existing lines
-    prefs_line_lst = fileUtils.read_file(str(prefs_file))
+    prefs_line_lst = fileUtils.read_file(prefs_file)
 
     # Rebuilding lines with proper setting
     updated_prefs_line_lst = []
