@@ -12,6 +12,7 @@ import time
 import wrappers.uiShellWrapper as uiShellWrapper
 import random
 from commonUtils import zipUtils
+from typing import *
 
 show_verbose = True
 
@@ -33,16 +34,16 @@ def clear_rclone_conf():
     fileUtils.delete_file(get_rclone_conf_path())
 
 
-def get_rclone_conf_path():
+def get_rclone_conf_path() -> Path:
     """Returns path to the user's rclone configuration file. If it doesn't exist, a blank one is created"""
     rclone_conf_dir = Path(fileUtils.get_user_home_dir(), '.config', 'rclone')
 
     if not os.path.exists(rclone_conf_dir):
         os.makedirs(rclone_conf_dir)
 
-    rclone_conf_file_pth = str(Path(rclone_conf_dir, 'rclone.conf'))
-    if not os.path.exists(rclone_conf_file_pth):
-        open(rclone_conf_file_pth, 'a').close()
+    rclone_conf_file_pth = Path(rclone_conf_dir, 'rclone.conf')
+    if not rclone_conf_file_pth.is_file():
+        open(str(rclone_conf_file_pth), 'a').close()
 
     return rclone_conf_file_pth
 
@@ -53,7 +54,7 @@ def get_remote_credentials_dict(remote_credentials_dir):
     """
 
     # Get a list of files in directory
-    file_lst = fileUtils.get_file_path_list(remote_credentials_dir)
+    file_lst: List[str] = fileUtils.get_file_path_list(remote_credentials_dir)
 
     file_lst_filtered_txt = []
     filtered_ext = '.txt'
@@ -63,7 +64,7 @@ def get_remote_credentials_dict(remote_credentials_dir):
 
     remote_credentials_dict = {}
     for file in file_lst_filtered_txt:
-        file_line_lst = fileUtils.read_file(file)
+        file_line_lst = fileUtils.read_file(Path(file))
         remote_name = file_line_lst[0][1:-1]
         remote_credentials_dict[remote_name] = file_line_lst
 
@@ -97,7 +98,7 @@ def get_rclone_conf_remote_credentials_dict():
         rclone_credentials_dict[current_entry_line_lst[0][1:-1]] = current_entry_line_lst
         return rclone_credentials_dict
 
-    rclone_conf = get_rclone_conf_path()
+    rclone_conf: Path = get_rclone_conf_path()
 
     # Read file
     rclone_conf_line_lst = fileUtils.read_file(rclone_conf)
