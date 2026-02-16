@@ -4,11 +4,10 @@ import sys
 # TODO Don't need this anymore
 # import install.installPythonPackage
 from PySide6.QtWidgets import *
-import config as config
-import wrappers.rcloneWrapper as rcloneWrapper
+import config
+from wrappers import rcloneWrapper
 import ui.uiMain as uiMain
 from commonUtils import pySideUtils
-from commonUtils.debugUtils import *
 from commonUtils.debugUtils import *
 from commonUtils.osUtils import *
 

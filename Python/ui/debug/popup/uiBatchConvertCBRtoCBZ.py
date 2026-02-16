@@ -1,5 +1,5 @@
 from commonUtils.pySideUtils import *
-import logisticsUtils.convertUtils as convertUtils
+from logisticsUtils import convertUtils
 
 show_verbose = True
 

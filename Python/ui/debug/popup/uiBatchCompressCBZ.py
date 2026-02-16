@@ -1,5 +1,5 @@
 from commonUtils.pySideUtils import *
-import commonUtils.cbzUtils as cbzUtils
+import logisticsUtils.cbzUtils as cbzUtils
 
 
 def ui_dir_batch_compress_cbz(convert_arg):

@@ -1,14 +1,11 @@
 
-import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
 import config as config
 from pathlib import Path
-import sys
-import os
-import commonUtils.fileUtils as fileUtils
 import webbrowser
 from commonUtils.debugUtils import *
 from commonUtils.osUtils import *
 from commonUtils import zipUtils
+from commonUtils.wrappers import cmdShellWrapper
 
 
 def run_repair_windows_script():

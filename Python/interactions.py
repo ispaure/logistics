@@ -1,17 +1,14 @@
 
-import commonUtils.fileUtils as fileUtils
+from commonUtils import fileUtils
 from commonUtils.osUtils import *
-from commonUtils.debugUtils import *
 from pathlib import Path
 import os
-import sys
 import config
-import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
+from commonUtils.wrappers import cmdShellWrapper
 import time
-import wrappers.rcloneWrapper as rcloneWrapper
-import ui.rclone.popup.uiManagePMS as uiManagePMS
-import ui.rclone.popup.uiLocalPush as uiLocalPush
-import ui.debug.popup.uiYoutubeDL as uiYoutubeDL
+from wrappers import rcloneWrapper
+from ui.rclone.popup import uiManagePMS, uiLocalPush
+from ui.debug.popup import uiYoutubeDL
 import commands as commands
 
 
