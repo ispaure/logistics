@@ -4,8 +4,7 @@ import sys
 import os
 from commonUtils.osUtils import *
 from commonUtils.debugUtils import *
-import commonUtils.marcUtils as marcUtils
-import commonUtils.fileUtils as fileUtils
+from commonUtils import marcUtils, fileUtils
 from typing import *
 
 

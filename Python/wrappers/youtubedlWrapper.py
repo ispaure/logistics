@@ -1,16 +1,15 @@
 
 import config
-import commonUtils.fileUtils as fileUtils
+from commonUtils import fileUtils, pySideUtils
 from commonUtils.debugUtils import *
 from commonUtils.osUtils import *
 import os
-from commonUtils import pySideUtils
-from commonUtils.debugUtils import print_debug_msg as print_debug_msg
+from commonUtils.debugUtils import print_debug_msg
 from pathlib import Path
-import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
+from commonUtils.wrappers import cmdShellWrapper
 import subprocess
 import sys
-from wrappers import rcloneWrapper as rcloneWrapper
+from . import rcloneWrapper
 
 
 show_verbose = True

@@ -1,5 +1,5 @@
 from commonUtils.pySideUtils import *
-import commonUtils.imageUtils as imageUtils
+import logisticsUtils.imageUtils as imageUtils
 
 
 def ui_dir_batch_compress_image(convert_arg):

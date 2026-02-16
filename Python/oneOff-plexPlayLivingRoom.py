@@ -1,5 +1,5 @@
 
-import wrappers.philipsHueWrapper as philipsHueWrapper
+from .wrappers import philipsHueWrapper
 
 # Turn on lights
 philipsHueWrapper.set_group_state('Living Room', True)
