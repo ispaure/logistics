@@ -336,11 +336,15 @@ def get_rclone_path():
     # Determine path of sync file
     match get_os():
         case OS.WIN:
-            return str(Path(config.LogisticsConfig().path_logistics_software_win, 'rclone', 'rclone.exe'))
+            return Path(config.LogisticsConfig().path_logistics_software_win, 'rclone', 'rclone.exe')
         case OS.MAC:
-            return str(Path(config.LogisticsConfig().path_logistics_software_mac, 'rclone', 'rclone'))
+            return Path(config.LogisticsConfig().path_logistics_software_mac, 'rclone', 'rclone')
         case OS.LINUX:
-            return str((Path(config.LogisticsConfig().path_logistics_software_linux, 'rclone-v1.73.0-linux-amd64', 'rclone')))
+            match get_arch():
+                case Arch.X86_64:
+                    return Path(config.LogisticsConfig().path_logistics_software_linux, 'rclone-v1.73.0-linux-amd64', 'rclone')
+                case Arch.ARM_64:
+                    return Path(config.LogisticsConfig().path_logistics_software_linux, 'rclone-v1.73.1-linux-arm64', 'rclone')
 
 
 def get_all_remote_class():
