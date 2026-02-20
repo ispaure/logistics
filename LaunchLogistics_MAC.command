@@ -27,7 +27,7 @@ PYTHON_PATH=$(pyenv which python3)
 echo "Python 3.12.2 ready!"
 
 # Set up the virtual environment (fixed location for Logistics)
-VENV_DIR="$HOME/Server/Logistics-VENV"
+VENV_DIR=VENV_DIR="$SCRIPT_DIR/venv"
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 
 # Verify Server folder exists
