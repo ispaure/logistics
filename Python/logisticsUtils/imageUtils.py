@@ -24,12 +24,6 @@ image_file_cls_supported_ext_lst = ['jpg', 'jpeg', 'bmp', 'tif', 'tiff', 'webp',
 
 default_path_to_convert_img = Path(fileUtils.get_user_home_dir(), 'Images2Convert')
 
-# WEBP Settings
-img_quality_color = 60  # Acceptable: 45, Good: 60, Overkill: 90
-img_quality_grayscale = 35  # Acceptable: 25, Good: 35, Overkill: 45
-img_max_long_edge: Union[None, int] = 5000
-img_max_height: Union[None, int] = None
-
 # Decide to keep the compressed image if its size is smaller than this percentage of the original.
 img_min_allowed_compression_percentage = 75
 # ----------------------------------------------------------------------------------------------------------------------
@@ -182,7 +176,13 @@ class ImageFile(fileUtils.File):
                 f'Size {self.size} bytes')
 
 
-def batch_compress_image(target_dir: Union[str, Path], recursive: bool = True, always_keep_compressed: bool = False):
+def batch_compress_image(target_dir: Union[str, Path],
+                         recursive: bool,
+                         always_keep_compressed: bool,
+                         img_quality_color: int,
+                         img_quality_grayscale: int,
+                         img_max_long_edge: Optional[int],
+                         img_max_height: Optional[int]):
     """Batch compresses images, updating the original file with the changed file."""
     func_name = 'batch_compress_image'
 
