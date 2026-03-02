@@ -246,7 +246,7 @@ class CompressionLog:
     def export(self, export_path: Path):
         txt_file = fileUtils.TXTFile(export_path)
         txt_file.line_lst = self.__compression_log_line_lst
-        txt_file.export()
+        txt_file.write_lines()
 
 
 class CBZImageFile(imageUtils.ImageFile):
@@ -506,13 +506,13 @@ class CBZFile(zipUtils.ZIPFile):
             log(Severity.DEBUG, tool_name, msg)
             self.compression_stats.has_comicinfo_xml = True
             comic_info_xml = ComicInfoXML(comic_info_xml_path)
-            comic_info_xml.import_line_lst()  # Import existing ComicInfo.xml
+            comic_info_xml.read_lines()  # Import existing ComicInfo.xml
             result = comic_info_xml.update_pages_in_line_lst(cbz_img_cls_lst)  # Update pages to match provided cbz_img_cls_lst
             if not result:
                 msg = 'ComicInfo.xml did not successfully update pages in line list!'
                 log(Severity.ERROR, tool_name, msg)
                 return False
-            comic_info_xml.export(export_path)  # Export in given folder
+            comic_info_xml.write_lines(export_path)  # Export in given folder
         else:
             msg = ('ComicInfo.xml unfortunately missing from original file! '
                    'Cannot rebuild updated pages list. Not a deal breaker.')
