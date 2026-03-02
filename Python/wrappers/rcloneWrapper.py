@@ -64,7 +64,9 @@ def get_remote_credentials_dict(remote_credentials_dir):
 
     remote_credentials_dict = {}
     for file in file_lst_filtered_txt:
-        file_line_lst = fileUtils.read_file(Path(file))
+        rconf_file = fileUtils.TXTFile(Path(file))
+        rconf_file.import_line_lst()
+        file_line_lst = rconf_file.line_lst
         remote_name = file_line_lst[0][1:-1]
         remote_credentials_dict[remote_name] = file_line_lst
 
@@ -101,7 +103,9 @@ def get_rclone_conf_remote_credentials_dict():
     rclone_conf: Path = get_rclone_conf_path()
 
     # Read file
-    rclone_conf_line_lst = fileUtils.read_file(rclone_conf)
+    rclone_conf_file = fileUtils.TXTFile(rclone_conf)
+    rclone_conf_file.import_line_lst()
+    rclone_conf_line_lst = rclone_conf_file.line_lst
 
     rclone_credentials_dict = {}
     current_entry_line_lst = []
