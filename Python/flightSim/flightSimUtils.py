@@ -15,7 +15,7 @@ def set_xp12_setting(line_to_look_for: str, value: int):
 
     # Fetching existing lines
     prefs_file = fileUtils.TXTFile(prefs_file_path)
-    prefs_file.import_line_lst()
+    prefs_file.read_lines()
 
     # Rebuilding lines with proper setting
     updated_prefs_line_lst = []
@@ -26,7 +26,7 @@ def set_xp12_setting(line_to_look_for: str, value: int):
             updated_prefs_line_lst.append(f'{prefs_line}')
 
     prefs_file.line_lst = updated_prefs_line_lst
-    prefs_file.export()
+    prefs_file.write_lines()
 
     print(f'Successfully Changed XP12 setting "{line_to_look_for}" to "{value}"')
 
