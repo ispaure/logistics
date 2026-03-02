@@ -223,10 +223,10 @@ class CompressionLog:
         self.__compression_log_line_lst: List[str] = []
 
     def append(self, string: str):
-        self.__compression_log_line_lst.append(f'{string}\n')
+        self.__compression_log_line_lst.append(string)
 
     def append_skip_line(self):
-        self.__compression_log_line_lst.append('\n')
+        self.__compression_log_line_lst.append('')
 
     def append_msg_start(self, quality_grayscale, quality_color, always_keep_compressed):
         self.append(f'|| Compression Log "{self.name}" ||')
@@ -244,7 +244,9 @@ class CompressionLog:
         self.__compression_log_line_lst = []
 
     def export(self, export_path: Path):
-        fileUtils.write_file(export_path, self.__compression_log_line_lst)
+        txt_file = fileUtils.TXTFile(export_path)
+        txt_file.line_lst = self.__compression_log_line_lst
+        txt_file.export()
 
 
 class CBZImageFile(imageUtils.ImageFile):

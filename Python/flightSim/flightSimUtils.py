@@ -11,22 +11,22 @@ def get_xp12_dir():
 
 def set_xp12_setting(line_to_look_for: str, value: int):
     # Getting file path to edit
-    prefs_file = Path(get_xp12_dir(), 'Output', 'Preferences', 'X-Plane.prf')
+    prefs_file_path = Path(get_xp12_dir(), 'Output', 'Preferences', 'X-Plane.prf')
 
     # Fetching existing lines
-    prefs_line_lst = fileUtils.read_file(prefs_file)
+    prefs_file = fileUtils.TXTFile(prefs_file_path)
+    prefs_file.import_line_lst()
 
     # Rebuilding lines with proper setting
     updated_prefs_line_lst = []
-    for prefs_line in prefs_line_lst:
+    for prefs_line in prefs_file.line_lst:
         if prefs_line.startswith(line_to_look_for):
-            updated_prefs_line_lst.append(f'{line_to_look_for}{value}\n')
+            updated_prefs_line_lst.append(f'{line_to_look_for}{value}')
         else:
-            updated_prefs_line_lst.append(f'{prefs_line}\n')
+            updated_prefs_line_lst.append(f'{prefs_line}')
 
-    # Output lines in file
-    with open(prefs_file, 'w') as file:
-        file.writelines(updated_prefs_line_lst)
+    prefs_file.line_lst = updated_prefs_line_lst
+    prefs_file.export()
 
     print(f'Successfully Changed XP12 setting "{line_to_look_for}" to "{value}"')
 
