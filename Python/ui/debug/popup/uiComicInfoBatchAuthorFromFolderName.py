@@ -1,5 +1,5 @@
 from commonUtils.pySideUtils import *
-import commonUtils.fileUtils as fileUtils
+from commonUtils import fileUtils, zipUtils
 from pathlib import Path
 import config as config
 from commonUtils.osUtils import *
@@ -59,15 +59,28 @@ def comic_info_xml_replace_author(file_path, search):
         # Delete contents in dir
         fileUtils.delete_dir_contents(temp_folder_path)
         # Uncompress ZIP
-        fileUtils.unzip_file(file_path_cbz, temp_folder_path)
+        zipUtils.unzip_file(file_path_cbz, temp_folder_path)
+
         # Search and replace within XML
         search_string = '<Writer>' + search + '</Writer>'
         replace_string = '<Writer>' + replace + '</Writer>'
-        fileUtils.search_replace_xml(comicinfo_xml_path, search_string, replace_string)
+
+        # ----------------------------------------------------------------------------------
+        # Untested change from sunsetting search_replace_xml
+        xml_file = fileUtils.TXTFile(Path(comicinfo_xml_path))
+        xml_file.read_lines()
+
+        xml_file.line_lst = [
+            line.replace(search_string, replace_string)
+            for line in xml_file.line_lst
+        ]
+        xml_file.write_lines()
+        # ----------------------------------------------------------------------------------
+
         # ZIP File
-        fileUtils.zip_file(temp_folder_path, file_path_zip, keep_root=False)
+        zipUtils.zip_file(temp_folder_path, file_path_zip, keep_root=False)
         # Rename to .CBZ (overwriting the previous file)
-        fileUtils.rename_file(file_path_zip, file_path_cbz)
+        fileUtils.rename_file(Path(file_path_zip), Path(file_path_cbz))
         # Clean convert dir
         fileUtils.delete_dir_contents(temp_folder_path)
         # Delete original file not needed because was overwritten
