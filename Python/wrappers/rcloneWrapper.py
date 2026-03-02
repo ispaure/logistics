@@ -144,11 +144,16 @@ def add_remote_to_rclone_conf(remote_credentials_dir):
     rclone_remote_credential_dict = get_rclone_conf_remote_credentials_dict()
     logistics_remote_credential_dict = get_remote_credentials_dict(remote_credentials_dir)
 
+    file_cls = fileUtils.TXTFile(rclone_conf_path)
+    file_cls.read_lines()
+
     for key, value in logistics_remote_credential_dict.items():
         if key not in rclone_remote_credential_dict.keys():  # If the key is not there, need to add the list of lines
-            fileUtils.append_line_lst_to_file(logistics_remote_credential_dict[key], rclone_conf_path)
-            # Add a blank line
-            fileUtils.append_line_lst_to_file([''], rclone_conf_path)
+
+            file_cls.line_lst.extend(logistics_remote_credential_dict[key])
+            file_cls.line_lst.append('')
+
+    file_cls.write_lines()
 
 
 def add_remote_from_zip_to_rclone_conf(zip_path, zip_pw):
