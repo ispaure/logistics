@@ -6,7 +6,10 @@ import ui.rclone.tabRclone as tabRclone
 import ui.links.tabLinks as tabLinks
 import ui.debug.tabDebug as tabDebug
 import ui.smartHome.tabSmartHome as tabSmartHome
+from minecraft import server as mcServer
+from ui.minecraft import tabMinecraftServer
 import ui.flightSim.tabFlightSim as tabFlightSim
+
 from commonUtils.osUtils import *
 from commonUtils.debugUtils import *
 
@@ -72,6 +75,20 @@ class MainMenu(Window):
         self.tabWidget.addTab(self.tab_rclone_remote, "")
         tabRclone.display_remotes(self.tab_rclone_remote, type='Remote')
 
+        # TAB (MINECRAFT SERVERS: JAVA)
+        self.tab_mc_servers_java = QWidget()
+        self.tab_mc_servers_java.setEnabled(True)
+        self.tab_mc_servers_java.setObjectName("Tab_MC_Servers_JAVA")
+        self.tabWidget.addTab(self.tab_mc_servers_java, "")
+        tabMinecraftServer.display_servers(self.tab_mc_servers_java, server_type=mcServer.MinecraftServerType.JAVA)
+
+        # TAB (MINECRAFT SERVERS: BEDROCK)
+        self.tab_mc_servers_bedrock = QWidget()
+        self.tab_mc_servers_bedrock.setEnabled(True)
+        self.tab_mc_servers_bedrock.setObjectName("Tab_MC_Servers_BEDROCK")
+        self.tabWidget.addTab(self.tab_mc_servers_bedrock, "")
+        tabMinecraftServer.display_servers(self.tab_mc_servers_bedrock, server_type=mcServer.MinecraftServerType.BEDROCK)
+
         # TAB (FLIGHT SIM)
         self.tab_flight_sim = QWidget()
         self.tab_flight_sim.setEnabled(True)
@@ -92,6 +109,8 @@ class MainMenu(Window):
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_smart_home), _translate('MainWindow', 'Smart Home'))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_rclone_local), _translate('MainWindow', 'Local'))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_rclone_remote), _translate('MainWindow', 'Remote'))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_mc_servers_java), _translate('MainWindow', 'Minecraft [JAVA]'))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_mc_servers_bedrock), _translate('MainWindow', 'Minecraft [BEDROCK]'))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_flight_sim), _translate('MainWindow', 'Flight Sim'))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_debug), _translate('MainWindow', 'Debug'))
 

@@ -95,6 +95,8 @@ class LogisticsConfig:
         self.temp_path = str(Path(self.path_logistics, 'temp'))
         self.path_remote_network_mount = str(Path(self.server_path, config_section_map('DirectoryStructure', 'remote_network_mount_sub_path', config_file_path)))
         self.path_remote_local = str(Path(self.server_path, config_section_map('DirectoryStructure', 'remote_local_sub_path', config_file_path)))
+        self.path_minecraft_servers_java: Path = Path(marc_dropbox_path, 'Software', 'Server', 'Minecraft')
+        self.path_minecraft_servers_bedrock: Path = Path(marc_dropbox_path, 'Software', 'Server', 'Minecraft (Bedrock)')
         match get_os():
             case OS.WIN:
                 self.pms_data_path = str(Path(os.environ['LOCALAPPDATA'], 'Plex Media Server'))
@@ -105,7 +107,6 @@ class LogisticsConfig:
             case OS.LINUX:
                 self.pms_data_path = get_plex_data_dir_linux
                 self.yac_lib_prefs_dir =self.yac_lib_prefs_dir = str(Path(user_home_dir, ".local", "share", "YACReader", "YACReaderLibrary"))
-        self.temp_cmd = Path(self.temp_path, 'sync_cmd.bat')
 
 
 def config_section_map(section, value, cfg_file_path=get_config_file_path()):

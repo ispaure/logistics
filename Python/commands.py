@@ -46,7 +46,7 @@ def open_calibre(calibre_library_path):
                 cmdShellWrapper.exec_cmd(f'flatpak run com.calibre_ebook.calibre --with-library "{calibre_library_path}"')
 
 
-def open_url(entry_str):
+def open_config_file_url(entry_str):
     """
     Opens URL from those stored in ConfigFile.ini
     """
@@ -54,7 +54,7 @@ def open_url(entry_str):
     cfg_file_pth = config.get_config_file_path()
     url = config.config_section_map('URLs', entry_str, cfg_file_pth)
 
-    if '<' and '>' in url:
+    if '<' in url and '>' in url:
         # Get computers internal ip addresses and resolve in URL if applicable
         computer_ips = {'goat-pc': config.config_section_map('ResolveIP', 'goat-pc', cfg_file_pth),
                         'yagi-mac': config.config_section_map('ResolveIP', 'yagi-mac', cfg_file_pth),
