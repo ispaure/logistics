@@ -12,6 +12,7 @@ import ui.debug.popup.uiBatchRenameMKAfromCSV as uiBatchRenameMKAfromCSV
 import ui.debug.popup.uiBulkDeletePYCInDir as uiBulkDeletePYCInDir
 import ui.debug.popup.uiBatchCompressCBZ as uiBatchCompressCBZ
 import ui.debug.popup.uiBatchCompressImageToWEBP as uiBatchCompressImageToWEBP
+import ui.debug.popup.uiConflictingCopiesDropbox as uiConflictingCopiesDropbox
 
 
 def display_debug(dialog_obj):
@@ -48,3 +49,6 @@ def display_debug(dialog_obj):
 
     # Batch Compress Image to WEBP in Dir
     button_open_win('Batch Compress Images in Dir', dialog_obj, QRect(10, 340, 200, 30), uiBatchCompressImageToWEBP.DirBatchCompressImageWindow)
+
+    # Conflicting Copies dropbox
+    button_open_win('Conflicting Copies (Dropbox)', dialog_obj, QRect(10, 370, 200, 30), uiConflictingCopiesDropbox.ConflictingCopiesDropbox)
