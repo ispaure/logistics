@@ -4,80 +4,138 @@ from pathlib import Path
 show_verbose = True
 
 
-def print_conflicting_copies_dropbox(convert_arg):
+def analyze_conflicting_copies(file_lst: List[fileUtils.File]):
+    """
+    Analyze Dropbox conflicting copies and classify them.
 
-    conflict_tool_name: str = 'Conflicting Copies Report'
-    directory = convert_arg['target_dir'].txt()
-    recursive = convert_arg['recursive'].isChecked()
+    Returns:
+        (with_original, without_original, unsure)
+    """
 
-    # Get list of Files
-    file_lst = fileUtils.get_file_list_from_path(directory, recursive=recursive)
-
-    # Conflicting file list
     conflicting_file_lst: List[fileUtils.File] = []
 
+    # Step 1: detect conflicts
     for file in file_lst:
         name_no_ext = file.name_without_ext
         if ' conflicted copy ' in name_no_ext and ' (' in name_no_ext and ')' in name_no_ext:
             conflicting_file_lst.append(file)
 
-    # Conflicting file without original
+    # Step 2: classify
     conflict_file_no_original_lst: List[fileUtils.File] = []
-    # Conflicting files with original
     conflict_file_with_original_lst: List[fileUtils.File] = []
-    # Unsure how to process
     conflict_file_unsure_process_lst: List[fileUtils.File] = []
 
     for file in conflicting_file_lst:
-        # Can we test for this file?
+
+        # Ambiguous naming
         if file.name_without_ext.count(' (') != 1:
             conflict_file_unsure_process_lst.append(file)
             continue
 
-        # Expected OG file name
         og_name = file.name_without_ext.split(' (')[0]
         parent = file.path.parent
-        og_path: Path = parent / f'{og_name}.{file.ext}'
 
-        # OG file exists
-        og_lower = str(og_path).lower()
+        if file.ext:
+            og_path = parent / f"{og_name}.{file.ext}"
+        else:
+            og_path = parent / og_name
 
-        if os.path.isfile(og_lower):
+        if og_path.exists():
             conflict_file_with_original_lst.append(file)
         else:
             conflict_file_no_original_lst.append(file)
 
-    # Gather message
+    return (
+        conflict_file_with_original_lst,
+        conflict_file_no_original_lst,
+        conflict_file_unsure_process_lst
+    )
 
-    # Has original
-    conflict_has_original_msg = f'Conflict Files with Original ({len(conflict_file_with_original_lst)}):\n'
-    for file in conflict_file_with_original_lst:
-        conflict_has_original_msg += f' - {file.path}\n'
-    log(Severity.INFO, conflict_tool_name, conflict_has_original_msg)
 
-    # No original
-    conflict_no_original_msg = f'Conflict Files without Original ({len(conflict_file_no_original_lst)})\n'
-    for file in conflict_file_no_original_lst:
-        conflict_no_original_msg += f' - {file.path}\n'
-    if len(conflict_file_no_original_lst) == 0:
-        severity = Severity.INFO
-    else:
-        severity = Severity.ERROR
-    log(severity, conflict_tool_name, conflict_no_original_msg)
+def print_conflicting_copies_dropbox(convert_arg):
 
-    # Could not evaluate properly
-    conflict_unsure_process_msg = f'Conflict Files cannot process ({len(conflict_file_unsure_process_lst)})\n'
-    for file in conflict_file_unsure_process_lst:
-        conflict_unsure_process_msg += f' - {file.path}\n'
-    if len(conflict_file_unsure_process_lst) == 0:
-        severity = Severity.INFO
-    else:
-        severity = Severity.CRITICAL
-    log(severity, conflict_tool_name, conflict_unsure_process_msg)
+    conflict_tool_name = 'Conflicting Copies Report'
+    directory = convert_arg['target_dir'].txt()
+    recursive = convert_arg['recursive'].isChecked()
+
+    file_lst = fileUtils.get_file_list_from_path(directory, recursive=recursive)
+
+    with_original, no_original, unsure = analyze_conflicting_copies(file_lst)
+
+    # With original
+    msg = f'Conflict Files with Original ({len(with_original)}):\n'
+    for file in with_original:
+        msg += f' - {file.path}\n'
+    log(Severity.INFO, conflict_tool_name, msg)
+
+    # Without original
+    msg = f'Conflict Files without Original ({len(no_original)}):\n'
+    for file in no_original:
+        msg += f' - {file.path}\n'
+    severity = Severity.INFO if not no_original else Severity.ERROR
+    log(severity, conflict_tool_name, msg)
+
+    # Unsure
+    msg = f'Conflict Files cannot process ({len(unsure)}):\n'
+    for file in unsure:
+        msg += f' - {file.path}\n'
+    severity = Severity.INFO if not unsure else Severity.CRITICAL
+    log(severity, conflict_tool_name, msg)
 
 
 def delete_conflicting_copies_dropbox(convert_arg):
-    pass
+
+    conflict_tool_name = 'Delete Conflicting Copies'
+    directory = convert_arg['target_dir'].txt()
+    recursive = convert_arg['recursive'].isChecked()
+
+    file_lst = fileUtils.get_file_list_from_path(directory, recursive=recursive)
+
+    with_original, no_original, unsure = analyze_conflicting_copies(file_lst)
+
+    # Safety check: abort if anything is not clean
+    if no_original or unsure:
+        msg = "Deletion aborted. Resolve conflicts before proceeding:\n"
+
+        if no_original:
+            msg += f'\nFiles WITHOUT original ({len(no_original)}):\n'
+            for file in no_original:
+                msg += f' - {file.path}\n'
+
+        if unsure:
+            msg += f'\nFiles that could NOT be processed safely ({len(unsure)}):\n'
+            for file in unsure:
+                msg += f' - {file.path}\n'
+
+        log(Severity.CRITICAL, conflict_tool_name, msg)
+        return
+
+    # Safe to proceed (all have originals)
+    deleted = []
+    failed = []
+
+    for file in with_original:
+        try:
+            result = file.delete_file()
+            if result:
+                deleted.append(file)
+            else:
+                failed.append(file)
+        except Exception as e:
+            failed.append(file)
+            log(Severity.ERROR, conflict_tool_name, f'Error deleting {file.path}: {e}')
+
+    # Report
+    msg = f'Deleted {len(deleted)} conflicting files (all had originals):\n'
+    for file in deleted:
+        msg += f' - {file.path}\n'
+    log(Severity.INFO, conflict_tool_name, msg)
+
+    if failed:
+        msg = f'Failed to delete {len(failed)} files:\n'
+        for file in failed:
+            msg += f' - {file.path}\n'
+        log(Severity.ERROR, conflict_tool_name, msg)
 
 
 class ConflictingCopiesDropbox(Window):
