@@ -40,7 +40,7 @@ def display_servers(dialog_obj, server_type: server.MinecraftServerType):
         ("Server", lambda s: s.name, lambda s: s.launch_server, lambda s: s.is_launchable()),
         ("Browse to Folder", lambda s: "Browse Folder", lambda s: s.open_dir, lambda s: s.can_open_dir()),
         ("Open Wiki", lambda s: "Open Wiki", lambda s: s.open_wiki, lambda s: s.can_open_wiki()),
-        ("Do Thing 1", lambda s: "Do Thing 1", lambda s: s.do_thing_1, lambda s: True),
+        ("Server.Properties", lambda s: "server.properties", lambda s: s.edit_properties, lambda s: s.can_edit_props()),
         ("Do Thing 2", lambda s: "Do Thing 2", lambda s: s.do_thing_2, lambda s: True),
     ]
 
