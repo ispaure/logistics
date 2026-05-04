@@ -21,6 +21,7 @@ class MinecraftServer:
     def __init__(self, path: Path):
         self.path: Path = path
         self.name: str = path.name
+        self.properties: fileUtils.TXTFile = fileUtils.TXTFile(path / 'server.properties')
         self.__log_name = f'{self.name} Minecraft Server'
         self.type: MinecraftServerType = self.__get_type()
         self.disk_app: Optional[appUtils.DiskApp] = self.__get_disk_app()
@@ -106,8 +107,8 @@ class MinecraftServer:
 
         webbrowser.open(self.wiki_url)
 
-    def do_thing_1(self):
-        pass
+    def edit_properties(self):
+        self.properties.edit_in_default_editor()
 
     def do_thing_2(self):
         pass
@@ -123,6 +124,9 @@ class MinecraftServer:
 
     def can_open_wiki(self):
         return self.wiki_url is not None
+    
+    def can_edit_props(self):
+        return self.properties.path.is_file()
 
 
 def get_minecraft_server_lst(servers_root: Path) -> List[MinecraftServer]:
