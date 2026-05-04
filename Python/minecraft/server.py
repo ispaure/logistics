@@ -20,7 +20,7 @@ class MinecraftServerType(Enum):
 class MinecraftServer:
     def __init__(self, path: Path):
         self.path: Path = path
-        self.name: str = path.stem
+        self.name: str = path.name
         self.__log_name = f'{self.name} Minecraft Server'
         self.type: MinecraftServerType = self.__get_type()
         self.disk_app: Optional[appUtils.DiskApp] = self.__get_disk_app()
