@@ -130,6 +130,10 @@ class MinecraftServer:
 
 
 def get_minecraft_server_lst(servers_root: Path) -> List[MinecraftServer]:
+
+    if not os.path.isdir(str(servers_root)):
+        return []
+
     dir_lst: Optional[List[str]] = fileUtils.get_dirs_path_list(servers_root)
 
     # If list was empty, return empty lst
