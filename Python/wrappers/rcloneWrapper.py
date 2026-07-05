@@ -345,7 +345,7 @@ def get_rclone_path():
     # Determine path of sync file
     match get_os():
         case OS.WIN:
-            return Path(config.LogisticsConfig().path_logistics_software_win, 'rclone', 'rclone.exe')
+            return Path(config.LogisticsConfig().path_logistics_software_win, 'rclone-2026', 'rclone.exe')
         case OS.MAC:
             return Path(config.LogisticsConfig().path_logistics_software_mac, 'rclone', 'rclone')
         case OS.LINUX:
