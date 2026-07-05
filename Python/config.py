@@ -78,7 +78,11 @@ class LogisticsConfig:
 
         # Get Logistics software directory
         marc_dropbox_path = marcUtils.get_marc_dropbox_root()
-        if os.path.isdir(marc_dropbox_path):
+
+        if os.path.isdir(Path(__file__).resolve().parent.parent / 'Software') and os.path.isdir(Path(__file__).resolve().parent.parent / 'RemoteCredentials'):
+            self.path_logistics_software = str(Path(__file__).resolve().parent.parent / 'Software')
+            self.path_logistics_remote_cred = str(Path(__file__).resolve().parent.parent / 'RemoteCredentials')
+        elif os.path.isdir(marc_dropbox_path):
             self.path_logistics_software = str(Path(marc_dropbox_path, 'Software', 'GIT', 'logistics', 'Software'))
             self.path_logistics_remote_cred = str(Path(marc_dropbox_path, 'Software', 'GIT', 'logistics', 'RemoteCredentials'))
         else:
@@ -95,8 +99,12 @@ class LogisticsConfig:
         self.temp_path = str(Path(self.path_logistics, 'temp'))
         self.path_remote_network_mount = str(Path(self.server_path, config_section_map('DirectoryStructure', 'remote_network_mount_sub_path', config_file_path)))
         self.path_remote_local = str(Path(self.server_path, config_section_map('DirectoryStructure', 'remote_local_sub_path', config_file_path)))
-        self.path_minecraft_servers_java: Path = Path(marc_dropbox_path, 'Software', 'Server', 'Minecraft')
-        self.path_minecraft_servers_bedrock: Path = Path(marc_dropbox_path, 'Software', 'Server', 'Minecraft (Bedrock)')
+        if os.path.isdir(marc_dropbox_path):
+            self.path_minecraft_servers_java: Path = Path(marc_dropbox_path, 'Software', 'Server', 'Minecraft')
+            self.path_minecraft_servers_bedrock: Path = Path(marc_dropbox_path, 'Software', 'Server', 'Minecraft (Bedrock)')
+        else:
+            self.path_minecraft_servers_java = None
+            self.path_minecraft_servers_bedrock = None
         match get_os():
             case OS.WIN:
                 self.pms_data_path = str(Path(os.environ['LOCALAPPDATA'], 'Plex Media Server'))
