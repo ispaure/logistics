@@ -1,14 +1,15 @@
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import List
 
 import config
 from commonUtils import fileUtils, pySideUtils
 from commonUtils.debugUtils import *
-from commonUtils.osUtils import *
-import os
 from commonUtils.debugUtils import print_debug_msg
-from pathlib import Path
+from commonUtils.osUtils import *
 from commonUtils.wrappers import cmdShellWrapper
-import subprocess
-import sys
 from . import rcloneWrapper
 
 
@@ -20,10 +21,14 @@ def reinstall_youtube_dl():
     """
     Reinstall Youtube DL, to make sure have new version
     """
-    subprocess.check_call([sys.executable, "-m", "pip", "install", 'youtube-dl'])
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'youtube-dl'])
+
     # Install Updated packages
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", '--force-reinstall', 'https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz', '--user'])
+        subprocess.check_call([
+            sys.executable, '-m', 'pip', 'install', '--force-reinstall',
+            'https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz', '--user',
+        ])
     except:
         print('Could not install plugin, still proceeding')
 
@@ -47,30 +52,29 @@ def download_all(youtube_dl_cfg_path):
         pySideUtils.display_msg_box_ok(tool_name, msg)
         return False
 
-    # Get each config file
-    config_dir_file_lst = fileUtils.get_file_path_list(config_directory)
-
-    # Filter the config file (making sure it only keeps .ini)
-    filtered_file_lst = []
-    filtered_ext = '.ini'
-    for file in config_dir_file_lst:
-        if file[-len(filtered_ext):] == filtered_ext:
-            filtered_file_lst.append(file)
+    # Get each .INI config file
+    config_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
+        config_directory, filter_extension='ini',
+    )
 
     # Download from each config file
-    for filtered_file in filtered_file_lst:
-        download(youtube_dl_cfg_path, filtered_file)
+    for config_file in config_file_lst:
+        download(youtube_dl_cfg_path, str(config_file.path))
 
 
 def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playlist_end=None, master_branch=True):
     """
     Downloads videos as specified in the config file at path.
+
     :param config_file_path: Path of config file for videos to download
     :type config_file_path: str
     """
 
     # Display in Log what is being done
-    print_debug_msg('Preparing Youtube Download of Playlist/Channel from config file at path: ' + config_file_path, show_verbose)
+    print_debug_msg(
+        'Preparing Youtube Download of Playlist/Channel from config file at path: ' + config_file_path,
+        show_verbose,
+    )
 
     # Determine split char
     match get_os():
@@ -93,10 +97,10 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
     print_debug_msg('Season Number: ' + season_number, show_verbose)
     print_debug_msg('Additional Parameters: ' + additional_params, show_verbose)
 
-    # Get Download Directory...
+    # Get Download Directory
     download_dir = str(Path(os.path.dirname(youtube_dl_cfg_path), channel_name, 'Season ' + str(season_number)))
 
-    # Create string for download command...
+    # Create string for download command
     if not master_branch:
         yt_dl_cmd_str = 'youtube-dl '
     else:
@@ -109,40 +113,50 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
                 log(Severity.CRITICAL, 'youtubedlWrapper', 'Platform unsupported!')
                 return
 
-    yt_dl_cmd_str += '{download_url} '.format(download_url=download_url)
+    yt_dl_cmd_str += f'{download_url} '
+
     if playlist_reverse:
         yt_dl_cmd_str += '--playlist-reverse '
+
     if playlist_end is not None:
-        yt_dl_cmd_str += '--playlist-end ' + str(playlist_end) + ' '
-    yt_dl_cmd_str += '{params} {extra_params} '.format(params=params, extra_params=additional_params)
+        yt_dl_cmd_str += f'--playlist-end {playlist_end} '
+
+    yt_dl_cmd_str += f'{params} {additional_params} '
 
     match get_os():
         case OS.WIN:
-            yt_dl_cmd_str += '--ffmpeg-location "' + str(Path(config.LogisticsConfig().path_logistics_software, 'ffmpeg_win', 'ffmpeg.exe')) + '" '
+            ffmpeg_path = Path(config.LogisticsConfig().path_logistics_software, 'ffmpeg_win', 'ffmpeg.exe')
         case OS.MAC:
-            yt_dl_cmd_str += '--ffmpeg-location "' + str(Path(config.LogisticsConfig().path_logistics_software, 'ffmpeg_macos', 'ffmpeg')) + '" '
+            ffmpeg_path = Path(config.LogisticsConfig().path_logistics_software, 'ffmpeg_macos', 'ffmpeg')
         case _:
             log(Severity.CRITICAL, 'youtubedlWrapper', 'Platform unsupported!')
             return
 
+    yt_dl_cmd_str += f'--ffmpeg-location "{ffmpeg_path}" '
+
     # Creates a log file listing the completed downloads
-    yt_dl_cmd_str += '--download-archive "' + str(Path(youtube_dl_cfg_path, 'CompleteLists', config_path_name + '_complete.lst')) + '" '
+    complete_list_path = Path(youtube_dl_cfg_path, 'CompleteLists', config_path_name + '_complete.lst')
+    yt_dl_cmd_str += f'--download-archive "{complete_list_path}" '
 
     # Sets the download file name
-    yt_dl_cmd_str += '-o ' + '"' + download_dir + split_char + '%(channel)s - s0' + str(season_number) + 'e%(autonumber)s - %(title).50s.%(ext)s' + '" '
+    yt_dl_cmd_str += (
+        f'-o "{download_dir}{split_char}%(channel)s - s0{season_number}'
+        f'e%(autonumber)s - %(title).50s.%(ext)s" '
+    )
 
     # Sets the auto numbering to start at X number (so it continues after the existing files)
     # Find how many files are already there, and start after
     if os.path.exists(download_dir):
-        existing_files_lst = fileUtils.get_file_path_list(download_dir)
+        existing_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(download_dir)
         count = 1
-        for existing_file in existing_files_lst:
-            if ' - s' and '.mp4' in existing_file:
+
+        for existing_file in existing_file_lst:
+            if ' - s' and '.mp4' in str(existing_file.path):
                 count += 1
     else:
         count = 1
 
-    yt_dl_cmd_str += '--autonumber-start ' + str(count)
+    yt_dl_cmd_str += f'--autonumber-start {count}'
 
     if get_os() == OS.WIN:
         yt_dl_cmd_str += '\nexit'
@@ -173,6 +187,7 @@ def push_seasons(remote_cls):
     # If these channel dirs have a subdir with season in it, add to push list
     for channel_dir in channel_dir_lst:
         channel_dir_sub_lst = fileUtils.get_dirs_path_list(channel_dir)
+
         for channel_dir_sub in channel_dir_sub_lst:
             if 'Season' in channel_dir_sub.split(split_char)[-1]:
                 push_dir_lst.append(channel_dir_sub)
@@ -180,22 +195,26 @@ def push_seasons(remote_cls):
     # Push Season folders
     for push_dir in push_dir_lst:
         source = push_dir
-        destination = remote_cls.name + ':' + push_dir.replace(remote_cls.directory_path, '')[1:].replace('\\', '/')
-        print('Pushing {} to {}'.format(source, destination))
-        rcloneWrapper.rclone_sync(source,
-                                  destination,
-                                  wait_for_output=True,
-                                  exit_on_done=True)
+        destination = remote_cls.name + ':' + push_dir.replace(
+            remote_cls.directory_path, '',
+        )[1:].replace('\\', '/')
+
+        print(f'Pushing {source} to {destination}')
+        rcloneWrapper.rclone_sync(source, destination, wait_for_output=True)
         print('Push complete!')
 
 
 def push_config(remote_cls):
     print('Push Config')
-    rcloneWrapper.rclone_sync(remote_cls.youtube_dl_cfg_path,
-                              remote_cls.name + ':' + remote_cls.youtube_dl_cfg_sub_path)
+    rcloneWrapper.rclone_sync(
+        remote_cls.youtube_dl_cfg_path,
+        remote_cls.name + ':' + remote_cls.youtube_dl_cfg_sub_path,
+    )
 
 
 def pull_config(remote_cls):
     print('Pull Config')
-    rcloneWrapper.rclone_sync(remote_cls.name + ':' + remote_cls.youtube_dl_cfg_sub_path,
-                              remote_cls.youtube_dl_cfg_path)
+    rcloneWrapper.rclone_sync(
+        remote_cls.name + ':' + remote_cls.youtube_dl_cfg_sub_path,
+        remote_cls.youtube_dl_cfg_path,
+    )

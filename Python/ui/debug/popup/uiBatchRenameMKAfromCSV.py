@@ -13,43 +13,53 @@ def ui_dir_batch_convert_cbr_to_cbz(convert_arg):
 
     # Make sure Target Dir is indeed a directory
     if not os.path.isdir(target_dir):
-        log(Severity.ERROR, tool_name, f"Invalid Directory Path")
+        log(Severity.ERROR, tool_name, 'Invalid Directory Path')
         return
 
     # Load the CSV file
-    csv_file_lst = fileUtils.get_file_path_list(target_dir, recursive=False, filter_extension='csv')
+    csv_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
+        target_dir,
+        recursive=False,
+        filter_extension='csv',
+    )
+
     if len(csv_file_lst) == 0:
-        log(Severity.ERROR, tool_name, f'.CSV file missing from root of directory')
+        log(Severity.ERROR, tool_name, '.CSV file missing from root of directory')
         return
 
     if len(csv_file_lst) > 1:
-        log(Severity.ERROR, tool_name, f'More than one .CSV file in directory')
+        log(Severity.ERROR, tool_name, 'More than one .CSV file in directory')
         return
 
     csv_file = csv_file_lst[0]
     chapter_name_sh = spreadsheetUtils.Spreadsheet('Chapter Names')
-    chapter_name_sh.import_file(csv_file)
+    chapter_name_sh.import_file(csv_file.path)
     row_lst = chapter_name_sh.get_rows()
 
     # List files in directory
-    mka_file_lst = fileUtils.get_file_path_list(target_dir, recursive=False, filter_extension='mka')
+    mka_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
+        target_dir,
+        recursive=False,
+        filter_extension='mka',
+    )
+
     for mka_file in mka_file_lst:
 
         # Get the Chapter Number, Throw Error if File Naming is not Perfectly Chapter_XX.mka
-        file_name = Path(mka_file).name
-        file_num_str = file_name.replace('Chapter_', '').replace('.mka', '')
+        file_num_str = mka_file.file_name.replace('Chapter_', '').replace('.mka', '')
         for char in file_num_str:
             if char not in '0123456789':
-                log(Severity.ERROR, tool_name, f'File {file_name} contains invalid naming (should be Chapter_XX.mka')
+                log(Severity.ERROR, tool_name, f'File {mka_file.file_name} contains invalid naming (should be Chapter_XX.mka')
                 return
+
         file_num_int = int(file_num_str)
 
         if file_num_int > len(row_lst):
-            log(Severity.ERROR, tool_name, f'File {file_name} does not have a chapter name in rows of .CSV file')
+            log(Severity.ERROR, tool_name, f'File {mka_file.file_name} does not have a chapter name in rows of .CSV file')
             return
 
         if row_lst[file_num_int - 1].get_cell(0).txt != str(file_num_int):
-            log(Severity.ERROR, tool_name, f'File {file_name} does not have proper chapter markings in column A (found {row_lst[file_num_int - 1].get_cell(0).txt} instead of {file_num_int})')
+            log(Severity.ERROR, tool_name, f'File {mka_file.file_name} does not have proper chapter markings in column A (found {row_lst[file_num_int - 1].get_cell(0).txt} instead of {file_num_int})')
             return
 
         chapter_name = row_lst[file_num_int - 1].get_cell(1).txt
@@ -57,7 +67,8 @@ def ui_dir_batch_convert_cbr_to_cbz(convert_arg):
         chapter_name_sanitized = chapter_name.replace('"', '')
 
         # Rename file
-        fileUtils.rename_file(mka_file, Path(Path(mka_file).parent, f'{file_num_int} - {chapter_name_sanitized}.mka'))
+        destination_path = Path(mka_file.path.parent, f'{file_num_int} - {chapter_name_sanitized}.mka')
+        fileUtils.rename_file(mka_file.path, destination_path)
 
 
 class BatchRenameMKAfromCSV(Window):

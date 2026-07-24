@@ -189,12 +189,11 @@ def batch_compress_image(target_dir: Union[str, Path],
     # --------------------------------------------------------------------------------------------------------------
     # STEP ONE: GATHER LIST OF IMAGE FILES TO CONVERT
     original_img_file_cls_lst: List[ImageFile] = []
-    file_lst = fileUtils.get_file_path_list(target_dir, recursive=recursive)
+    file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(target_dir, recursive=recursive)
+
     for file in file_lst:
-        file_path = Path(file)
-        file_cls = fileUtils.File(file_path)
-        if file_cls.ext in image_file_cls_supported_ext_lst:
-            image_file_cls = ImageFile(file_path)
+        if file.ext in image_file_cls_supported_ext_lst:
+            image_file_cls = ImageFile(file.path)
             original_img_file_cls_lst.append(image_file_cls)
 
     # --------------------------------------------------------------------------------------------------------------
@@ -203,11 +202,14 @@ def batch_compress_image(target_dir: Union[str, Path],
         if img_file_cls.ext != 'webp':
             log(Severity.DEBUG, f'imageUtils.{func_name}', f'Compressing {img_file_cls.file_name}...')
             dest_path = img_file_cls.path.with_suffix('.webp')
-            result = img_file_cls.compress(dest_path=dest_path,
-                                           quality_grayscale=img_quality_grayscale,
-                                           quality_color=img_quality_color,
-                                           max_long_edge=img_max_long_edge,
-                                           max_height=img_max_height)
+            result = img_file_cls.compress(
+                dest_path=dest_path,
+                quality_grayscale=img_quality_grayscale,
+                quality_color=img_quality_color,
+                max_long_edge=img_max_long_edge,
+                max_height=img_max_height,
+            )
+
             if not result:
                 msg = f'An error occurred whilst compressing {img_file_cls.file_name}!'
                 log(Severity.ERROR, f'cbzUtils.{func_name}', msg)

@@ -252,7 +252,7 @@ class CompressionLog:
 class CBZImageFile(imageUtils.ImageFile):
     def __init__(self, path: Path):
         super().__init__(path)
-    
+
     def get_comicinfo_xml_line(self, page_num: int):
         """
         Get the line for the image as it would appear in ComicInfo.XML
@@ -306,32 +306,31 @@ class CBZFile(zipUtils.ZIPFile):
                     return False
 
         # Delete files we know we must delete (incl. from subdirectories)
-        extracted_file_lst = fileUtils.get_file_path_list(extracted_dir, recursive=True)
+        extracted_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(extracted_dir, recursive=True)
         for extracted_file in extracted_file_lst:
-            file_cls = fileUtils.File(Path(extracted_file))
             # If File identified to DELETE
-            if file_cls.file_name in to_delete_file_name_lst:
-                msg = f'Deleting file from to-delete list: "{file_cls.file_name}"'
+            if extracted_file.file_name in to_delete_file_name_lst:
+                msg = f'Deleting file from to-delete list: "{extracted_file.file_name}"'
                 log(Severity.WARNING, sanitize_tool_name, msg)
-                result = file_cls.delete_file()
+                result = extracted_file.delete_file()
                 if not result:
-                    log(Severity.CRITICAL, sanitize_tool_name, f'Could not delete file "{file_cls.file_name}"')
+                    log(Severity.CRITICAL, sanitize_tool_name, f'Could not delete file "{extracted_file.file_name}"')
                     return False
                 continue
             # If File expected in archive, continue
-            elif file_cls.file_name in expected_file_name_lst:
+            elif extracted_file.file_name in expected_file_name_lst:
                 continue
             # If File is of these file types, not expected in archive unless previous "continue"
-            elif file_cls.ext in ['txt', 'url', 'nfo', 'html', 'sfv', 'rtf', 'ini', 'dat', 'css']:
-                msg = f'Deleting unexpected file of extension .{file_cls.ext}: "{file_cls.file_name}"'
+            elif extracted_file.ext in ['txt', 'url', 'nfo', 'html', 'sfv', 'rtf', 'ini', 'dat', 'css']:
+                msg = f'Deleting unexpected file of extension .{extracted_file.ext}: "{extracted_file.file_name}"'
                 log(Severity.WARNING, sanitize_tool_name, msg)
-                result = file_cls.delete_file()
+                result = extracted_file.delete_file()
                 if not result:
-                    log(Severity.CRITICAL, sanitize_tool_name, f'Could not delete file "{file_cls.file_name}"')
+                    log(Severity.CRITICAL, sanitize_tool_name, f'Could not delete file "{extracted_file.file_name}"')
                     return False
                 continue
-            elif file_cls.ext not in imageUtils.image_file_cls_supported_ext_lst:
-                msg = (f'Found unexpected file in archive!: "{file_cls.file_name}" Manual cleanup in the original'
+            elif extracted_file.ext not in imageUtils.image_file_cls_supported_ext_lst:
+                msg = (f'Found unexpected file in archive!: "{extracted_file.file_name}" Manual cleanup in the original'
                        f'.CBZ file required!')
                 log(Severity.ERROR, sanitize_tool_name, msg)
                 return False
@@ -341,12 +340,11 @@ class CBZFile(zipUtils.ZIPFile):
             dir_path_lst = fileUtils.get_dirs_path_list(extracted_dir)
 
             # Abort if root has subdir + any unsuspected file (including any image)
-            root_file_lst = fileUtils.get_file_path_list(extracted_dir, recursive=False)
+            root_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(extracted_dir, recursive=False)
             for root_file in root_file_lst:
-                file_cls = fileUtils.File(Path(root_file))
-                if file_cls.file_name not in expected_file_name_lst:
+                if root_file.file_name not in expected_file_name_lst:
                     msg = ('There is at least one subdirectory and at least one unsuspected file at the root: '
-                           f'"{file_cls.file_name}", which is not supported. Manual cleanup in the original '
+                           f'"{root_file.file_name}", which is not supported. Manual cleanup in the original '
                            f'.CBZ file required!')
                     log(Severity.ERROR, sanitize_tool_name, msg)
                     return False
@@ -358,21 +356,27 @@ class CBZFile(zipUtils.ZIPFile):
             if len(dir_path_lst) == 1:
                 dir_path = dir_path_lst[0]
                 dir_subdir_lst = fileUtils.get_dirs_path_list(dir_path)
-                dir_file_path_lst = fileUtils.get_file_path_list(dir_path, recursive=False)
-                if len(dir_subdir_lst) == 1 and len(dir_file_path_lst) == 0:
+                dir_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(dir_path, recursive=False)
+                if len(dir_subdir_lst) == 1 and len(dir_file_lst) == 0:
                     subdir_path = Path(dir_subdir_lst[0])
                     if not fileUtils.has_subdirectories(subdir_path):
-                        subdir_file_path_lst = fileUtils.get_file_path_list(subdir_path, recursive=False)
-                        if len(subdir_file_path_lst) > 0:
+                        subdir_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
+                            subdir_path,
+                            recursive=False,
+                        )
+                        if len(subdir_file_lst) > 0:
                             msg = ('Found only a single directory, which itself contains no files and exactly one '
                                    'subdirectory, which itself contains files but not any more directories. '
                                    'Moving files from the subdirectory to the directory.')
                             log(Severity.WARNING, tool_name, msg)
-                            for subdir_file_path in subdir_file_path_lst:
-                                destination_file_path = subdir_file_path.replace(str(subdir_path), str(dir_path))
-                                result = fileUtils.move_file(Path(subdir_file_path), Path(destination_file_path))
+                            for subdir_file in subdir_file_lst:
+                                destination_file_path = Path(
+                                    str(subdir_file.path).replace(str(subdir_path), str(dir_path))
+                                )
+                                result = fileUtils.move_file(subdir_file.path, destination_file_path)
                                 if not result:
-                                    msg = f'File move unsuccessful (source: "{subdir_file_path}", destination: "{destination_file_path}")!'
+                                    msg = (f'File move unsuccessful (source: "{subdir_file.path}", '
+                                           f'destination: "{destination_file_path}")!')
                                     log(Severity.CRITICAL, sanitize_tool_name, msg)
                                     return False
                             result = fileUtils.delete_dir(subdir_path)
@@ -396,17 +400,17 @@ class CBZFile(zipUtils.ZIPFile):
             # If there was just one directory, move the files in it to the root
             if len(dir_path_lst) == 1:
                 dir_path = dir_path_lst[0]
-                subdir_file_lst = fileUtils.get_file_path_list(dir_path, recursive=False)
+                subdir_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(dir_path, recursive=False)
                 for subdir_file in subdir_file_lst:
-                    file_cls = fileUtils.File(Path(subdir_file))
-                    destination_path = Path(extracted_dir, file_cls.file_name)
-                    result = fileUtils.move_file(file_cls.path, destination_path)
+                    destination_path = Path(extracted_dir, subdir_file.file_name)
+                    result = fileUtils.move_file(subdir_file.path, destination_path)
                     if not result:
-                        msg = f'File move unsuccessful (source: "{file_cls.path}", destination: "{destination_path}")!'
+                        msg = (f'File move unsuccessful (source: "{subdir_file.path}", '
+                               f'destination: "{destination_path}")!')
                         log(Severity.CRITICAL, sanitize_tool_name, msg)
                         return False
                 # Delete empty dir after everything has been moved to the root
-                if not fileUtils.has_subdirectories(Path(dir_path)) and len(fileUtils.get_file_path_list(dir_path, recursive=True)) == 0:
+                if not fileUtils.has_subdirectories(Path(dir_path)) and len(fileUtils.get_file_list_from_path(dir_path, recursive=True)) == 0:
                     result = fileUtils.delete_dir(Path(dir_path))
                     if not result:
                         msg = f'Could not delete "{dir_path}"!'
@@ -418,17 +422,16 @@ class CBZFile(zipUtils.ZIPFile):
                     return False
 
         # Get updated list of files (things may have been moved in previous step)
-        extracted_file_lst = fileUtils.get_file_path_list(extracted_dir, recursive=True)
+        extracted_file_lst = fileUtils.get_file_list_from_path(extracted_dir, recursive=True)
         need_padding_repair = False
         for extracted_file in extracted_file_lst:
-            file_cls = fileUtils.File(Path(extracted_file))
-            if len(file_cls.file_name) < 2:  # If file name is incredibly short, throw error
-                msg = (f'File "{file_cls.file_name}" has unbelievably tiny name. Manual cleanup in '
+            if len(extracted_file.file_name) < 2:  # If file name is incredibly short, throw error
+                msg = (f'File "{extracted_file.file_name}" has unbelievably tiny name. Manual cleanup in '
                        f'the original .CBZ file required!')
                 log(Severity.ERROR, sanitize_tool_name, msg)
                 return False
-            elif file_cls.file_name[1] == '.' and file_cls.file_name[0] in '0123456789':
-                msg = (f'Page "{file_cls.file_name}" within archive are named without padding (ex. 1.jpg), which can lead to improper '
+            elif extracted_file.file_name[1] == '.' and extracted_file.file_name[0] in '0123456789':
+                msg = (f'Page "{extracted_file.file_name}" within archive are named without padding (ex. 1.jpg), which can lead to improper '
                        f'sorting in applications such as ComicRack. Renaming with padding...')
                 log(Severity.WARNING, sanitize_tool_name, msg)
                 need_padding_repair = True
@@ -445,7 +448,7 @@ class CBZFile(zipUtils.ZIPFile):
         # Everything went as expected
         return True
 
-    def repair_padding(self, file_lst: List[str]) -> bool:
+    def repair_padding(self, file_lst: List[fileUtils.File]) -> bool:
         """
         Repair padding on a list of files
         """
@@ -459,39 +462,37 @@ class CBZFile(zipUtils.ZIPFile):
         else:
             padding_num_dec: int = 5
 
-        for file_path in file_lst:
-            file_cls = fileUtils.File(Path(file_path))
-
+        for file in file_lst:
             # Skip padding on non-image files
-            if file_cls.ext not in imageUtils.image_file_cls_supported_ext_lst:
+            if file.ext not in imageUtils.image_file_cls_supported_ext_lst:
                 continue
 
             # If there is not a single dot in the file name, throw an error
-            if file_cls.file_name.count('.') != 1:
+            if file.file_name.count('.') != 1:
                 msg = (f'File has weird number of dots in file name (just expecting number + extension!) '
                        f'Manual cleanup in the original .CBZ file required!')
                 log(Severity.ERROR, padding_tool_name, msg)
                 return False
 
             # Check there are only characters in name without extension
-            for char in file_cls.name_without_ext:
+            for char in file.name_without_ext:
                 if char not in '0123456789':
-                    msg = (f'File naming makes padding repair impossible! Name: "{file_cls.file_name}".'
+                    msg = (f'File naming makes padding repair impossible! Name: "{file.file_name}".'
                            f'Manual cleanup in the original .CBZ file required!')
                     log(Severity.ERROR, padding_tool_name, msg)
                     return False
 
             # Determine padded name (without ext)
-            padded_file_name_without_ext = file_cls.name_without_ext.zfill(padding_num_dec)
+            padded_file_name_without_ext = file.name_without_ext.zfill(padding_num_dec)
             # Determine padding path
-            padded_path = Path(file_cls.path.parent, f'{padded_file_name_without_ext}.{file_cls.ext}')
+            padded_path = Path(file.path.parent, f'{padded_file_name_without_ext}.{file.ext}')
             # If padded path is same as original (ex. 10.jpg with 2 of padding remains 10.jpg), no need to rename
-            if str(file_cls.path) == str(padded_path):
+            if file.path == padded_path:
                 continue
             # Rename file
-            result = fileUtils.rename_file(file_cls.path, padded_path)
+            result = fileUtils.rename_file(file.path, padded_path)
             if not result:
-                msg = f'File {file_path} could not be renamed!'
+                msg = f'File {file.path} could not be renamed!'
                 log(Severity.CRITICAL, padding_tool_name, msg)
                 return False
 
@@ -556,17 +557,18 @@ class CBZFile(zipUtils.ZIPFile):
         # --------------------------------------------------------------------------------------------------------------
         # STEP THREE: GATHER LIST OF IMAGE FILES FROM EXTRACTED DIRECTORY
         img_file_cls_lst: List[CBZImageFile] = []
-        extracted_file_path_lst = fileUtils.get_file_path_list(temp_dir_extracted_cbz, recursive=True)
-        for extracted_file_path in extracted_file_path_lst:
-            file_path = Path(extracted_file_path)
-            file_cls = fileUtils.File(file_path)
-            if file_cls.ext in imageUtils.image_file_cls_supported_ext_lst:
-                image_file_cls = CBZImageFile(file_path)
+        extracted_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
+            temp_dir_extracted_cbz,
+            recursive=True,
+        )
+        for extracted_file in extracted_file_lst:
+            if extracted_file.ext in imageUtils.image_file_cls_supported_ext_lst:
+                image_file_cls = CBZImageFile(extracted_file.path)
                 self.compression_stats.original_images_size += image_file_cls.size  # Log Size in Stats
                 img_file_cls_lst.append(image_file_cls)
-            elif file_cls.file_name not in ['ComicInfo.xml', 'CompressionLog.txt']:
+            elif extracted_file.file_name not in ['ComicInfo.xml', 'CompressionLog.txt']:
                 msg = (f'Unexpected File within "{self.path}" NOT CAUGHT OR '
-                       f'CLEANED DURING SANITIZE: "{file_cls.file_name}"')
+                       f'CLEANED DURING SANITIZE: "{extracted_file.file_name}"')
                 log(Severity.CRITICAL, f'cbzUtils.CBZFile.{func_name}', msg)
                 return False
 
@@ -693,16 +695,20 @@ def batch_compress_cbz(target_dir: Union[str, Path], recursive: bool = True, alw
     # Stats
     compression_stats = CompressionStats()
 
-    # Get list of .CBZ Files (as strings)
-    cbz_file_path_lst: List[str] = fileUtils.get_file_path_list(target_dir, recursive, filter_extension='cbz')
+    # Get list of .CBZ files
+    cbz_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
+        target_dir,
+        recursive=recursive,
+        filter_extension='cbz',
+    )
 
     # Build list of CBZFile
     cbz_file_cls_lst: List[CBZFile] = []
-    for cbz_file_path in cbz_file_path_lst:
-        if Path(cbz_file_path).name.startswith('._'):
-            log(Severity.WARNING, tool_name, f'Skipping file {cbz_file_path} because it is a macOS metadata file!')
+    for cbz_file in cbz_file_lst:
+        if cbz_file.file_name.startswith('._'):
+            log(Severity.WARNING, tool_name, f'Skipping file {cbz_file.path} because it is a macOS metadata file!')
             continue
-        cbz_file_cls = CBZFile(Path(cbz_file_path))
+        cbz_file_cls = CBZFile(cbz_file.path)
         cbz_file_cls_lst.append(cbz_file_cls)
 
     # Filter for cbz files which need conversion

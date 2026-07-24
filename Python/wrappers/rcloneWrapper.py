@@ -70,23 +70,13 @@ def get_remote_credentials_dict(remote_credentials_dir):
     return remote_credentials_dict
 
 
-def get_logistics_remote_credentials_zip_lst():
+def get_logistics_remote_credentials_zip_lst() -> List[fileUtils.File]:
     """
-    Gets a list of the paths to the remote credentials zip files available in Server/Logistics/RemoteCredentials
+    Gets a list of remote credential ZIP files available in
+    Server/Logistics/RemoteCredentials.
     """
     logistics_cfg = config.LogisticsConfig()
-
-    # Get a list of files in directory
-    remote_credentials_dir = str(logistics_cfg.path_logistics_remote_cred)
-    file_lst = fileUtils.get_file_path_list(remote_credentials_dir)
-
-    file_lst_filtered_txt = []
-    filtered_ext = '.zip'
-    for file in file_lst:
-        if file[-len(filtered_ext):] == filtered_ext:
-            file_lst_filtered_txt.append(file)
-
-    return file_lst_filtered_txt
+    return fileUtils.get_file_list_from_path(logistics_cfg.path_logistics_remote_cred, filter_extension='zip')
 
 
 def get_rclone_conf_remote_credentials_dict():

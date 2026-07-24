@@ -1,18 +1,23 @@
 import piexif
 import commonUtils.fileUtils as fileUtils
+from typing import List
 
 
 def jpg_batch_set_exif_comments(target_dir, recursive, comments):
     """
-    In designated folder, batch set exif comments for .jpg files to whichever is set in comments
+    In designated folder, batch set EXIF comments for .JPG files to whichever is set in comments.
     """
 
     # Gather list of JPG files
-    jpg_file_lst = fileUtils.get_file_path_list(target_dir, recursive, filter_extension='jpg')
+    jpg_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
+        target_dir,
+        recursive=recursive,
+        filter_extension='jpg',
+    )
 
     # For each file, assign comments tag only if it doesn't match
     for jpg_file in jpg_file_lst:
-        jpg_set_exif_comments(jpg_file, comments)
+        jpg_set_exif_comments(jpg_file.path, comments)
 
     print('DONE!')
 
