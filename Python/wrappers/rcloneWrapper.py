@@ -31,7 +31,7 @@ def clear_rclone_conf():
     """
     Deletes the local rclone.conf file, essentially clearing it.
     """
-    fileUtils.delete_file(get_rclone_conf_path())
+    fileUtils.File(get_rclone_conf_path()).delete_file()
 
 
 def get_rclone_conf_path() -> Path:
@@ -50,23 +50,20 @@ def get_rclone_conf_path() -> Path:
 
 def get_remote_credentials_dict(remote_credentials_dir):
     """
-    Gets a dict of the remote credentials available in Server/Logistics/RemoteCredentials
+    Gets a dict of the remote credentials available in
+    Server/Logistics/RemoteCredentials.
     """
-
-    # Get a list of files in directory
-    file_lst: List[str] = fileUtils.get_file_path_list(remote_credentials_dir)
-
-    file_lst_filtered_txt = []
-    filtered_ext = '.txt'
-    for file in file_lst:
-        if file[-len(filtered_ext):] == filtered_ext:
-            file_lst_filtered_txt.append(file)
+    file_lst = cast(
+        List[fileUtils.TXTFile],
+        fileUtils.get_file_list_from_path(
+            remote_credentials_dir,
+            filter_extension='txt',
+        ),
+    )
 
     remote_credentials_dict = {}
-    for file in file_lst_filtered_txt:
-        rconf_file = fileUtils.TXTFile(Path(file))
-        rconf_file.read_lines()
-        file_line_lst = rconf_file.line_lst
+    for file in file_lst:
+        file_line_lst = file.read_lines()
         remote_name = file_line_lst[0][1:-1]
         remote_credentials_dict[remote_name] = file_line_lst
 
