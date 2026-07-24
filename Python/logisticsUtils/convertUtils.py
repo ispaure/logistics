@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 import commonUtils.fileUtils as fileUtils
 from commonUtils import zipUtils
+from typing import List
 
 
 show_verbose = True
@@ -83,28 +84,25 @@ def dir_batch_convert_cbr_to_cbz(target_dir, recursive):
     # Tell User Files are Being Converted
     print('Batch Convert .CBR to .CBZ in directory "{}" [Recursive]...'.format(target_dir))
 
-    # Get list of files (recursive)
-    file_lst = fileUtils.get_file_path_list(target_dir, recursive)
-
-    # Filter by ext (.cbr)
-    filter_ext = '.cbr'
-    filter_file_lst = []
-    for file in file_lst:
-        if filter_ext.lower() == file[-len(filter_ext):].lower():
-            filter_file_lst.append(file)
+    # Get list of .CBR files
+    cbr_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
+        target_dir,
+        recursive=recursive,
+        filter_extension='cbr',
+    )
 
     # Display to user the search results
-    if len(filter_file_lst) == 0:
+    if len(cbr_file_lst) == 0:
         print('Did not find a .CBR file to convert')
         return False
     else:
-        print('Found {} files to convert:'.format(str(len(filter_file_lst))))
-        for file in filter_file_lst:
-            print(' - ' + file)
+        print('Found {} files to convert:'.format(str(len(cbr_file_lst))))
+        for file in cbr_file_lst:
+            print(f' - {file.path}')
 
-    for file in filter_file_lst:
-        convert_cbr_to_cbz(file)
+    for file in cbr_file_lst:
+        convert_cbr_to_cbz(file.path)
 
     # Finished Successfully
-    print('Conversion of {} files completed (as much as possible)!'.format(str(len(filter_file_lst))))
+    print('Conversion of {} files completed (as much as possible)!'.format(str(len(cbr_file_lst))))
     return True

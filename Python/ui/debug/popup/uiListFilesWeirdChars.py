@@ -15,7 +15,7 @@ def ui_list_files_weird_chars(convert_arg):
     print('Target Folder: ' + batch_target_folder)
 
     # Get list of files (recursive)
-    file_lst = fileUtils.get_file_path_list(batch_target_folder, recursive=True)
+    file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(batch_target_folder, recursive=True)
 
     # Weird characters list (some appear the same here (duplicates) but are in fact different characters, its tricky!)
     weird_char_lst = ['é', 'É', 'è', 'È', 'ê', 'Ê', 'ë', 'Ë',
@@ -32,9 +32,10 @@ def ui_list_files_weird_chars(convert_arg):
                       'ô', 'Ô']
 
     for file in file_lst:
+        file_name_str = str(file.path)
         for char in weird_char_lst:
-            if char in file:
-                print(' - ' + file)
+            if char in file_name_str:
+                print(' - ' + f"{file.path}")
 
     # Done going through list
     print('\n\nDone going through files list!')
