@@ -71,15 +71,15 @@ class MinecraftServer:
         return self.__get_cfg_value('Documentation', 'wiki')
 
     def __get_type(self) -> MinecraftServerType:
-        path_str_lst: List[str] = fileUtils.get_file_path_list(self.path)
+        file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(self.path)
 
-        # If no paths, label as "undefined"
-        if len(path_str_lst) == 0:
+        # If no files, label as "undefined"
+        if not file_lst:
             return MinecraftServerType.UNKNOWN
 
-        # If bedrock_server.exe, is bedrock
-        for path_str in path_str_lst:
-            if path_str.endswith('bedrock_server.exe'):
+        # If bedrock_server.exe exists, it is Bedrock
+        for file in file_lst:
+            if file.file_name == 'bedrock_server.exe':
                 return MinecraftServerType.BEDROCK
 
         # Else Java

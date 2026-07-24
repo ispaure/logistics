@@ -91,7 +91,8 @@ def comic_info_xml_replace_author(file_path, search):
         print('COULD NOT COMPLETE FILE SUCCESSFULLY!!!!' + file_path_cbz)
         # If corrupted or not renamed to cbz, obliterate
         if os.path.exists(file_path_zip):
-            fileUtils.delete_file(file_path_zip)
+            zip_file = fileUtils.File(Path(file_path_zip))
+            zip_file.delete_file()
         # Never delete .cbz, always source of truth. If there's another error its fine but that file is the final
         # and should never be deleted
         # Clean convert dir

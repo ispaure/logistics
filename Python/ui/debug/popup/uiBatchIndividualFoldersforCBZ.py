@@ -1,54 +1,53 @@
 from commonUtils.pySideUtils import *
 import commonUtils.fileUtils as fileUtils
+from commonUtils.debugUtils import *
 from pathlib import Path
 from commonUtils.osUtils import *
 
 show_verbose = True
 
 
-def ui_move_cbz_to_new_created_dir(convert_arg):
+def ui_move_cbz_to_new_created_dir(convert_arg) -> bool:
     """
-    Put CBZ in a folder with the name of the CBZ (useful for oneshots for komga)
+    Put each CBZ file in a folder with the same name as the CBZ.
+    Useful for one-shots in Komga.
     """
 
-    # Display initiating info
-    print('Starting the Batch Creation of Individual Folders for .CBZ and putting them in')
+    tool_name = 'Move CBZ to Individual Folders'
+    log(Severity.INFO, tool_name, 'Starting the batch creation of individual folders and moving each .CBZ file into its new folder.')
+
     batch_target_folder = convert_arg['target_dir'].txt()
-    print('Target Folder: ' + batch_target_folder)
+    log(Severity.INFO, tool_name, f'Target Folder: "{batch_target_folder}"')
 
-    # Get list of files (recursive)
-    file_lst = fileUtils.get_file_path_list(batch_target_folder, recursive=False)
+    file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(batch_target_folder, recursive=False, filter_extension='cbz')
 
-    # Filter by ext (.cbr)
-    filter_ext = '.cbz'
-    filter_file_lst = []
-    for file in file_lst:
-        if filter_ext.lower() == file[-len(filter_ext):].lower():
-            filter_file_lst.append(file)
-
-    # Display to user the search results
-    if len(filter_file_lst) == 0:
-        print('Did not find a .CBZ file')
+    if not file_lst:
+        log(Severity.WARNING, tool_name, 'Did not find a .CBZ file.')
         return False
-    else:
-        print('Found {} files to batch put in new folders:'.format(str(len(filter_file_lst))))
-        for file in filter_file_lst:
-            print(' - ' + file)
 
-    for file in filter_file_lst:
-        match get_os():
-            case OS.WIN:
-                split_char = '\\'
-            case _:
-                split_char = '/'
-        print('This is what I will do')
-        dir_name = file[:-len('.cbz')]
-        print('Make new directory: ' + dir_name)
-        fileUtils.make_dir(dir_name)
-        new_loc = str(Path(dir_name, file.split(split_char)[-1]))
-        print('Move file to new location: ' + new_loc)
-        fileUtils.copy_file(file, new_loc)
-        fileUtils.delete_file(file)
+    log(Severity.INFO, tool_name, f'Found {len(file_lst)} files to put in new folders:')
+    for file in file_lst:
+        log(Severity.INFO, tool_name, f' - "{file.path}"')
+
+    for file in file_lst:
+        dir_path = file.path.parent / file.name_without_ext
+        new_path = dir_path / file.file_name
+
+        log(Severity.INFO, tool_name, f'Make new directory: "{dir_path}"')
+        log(Severity.INFO, tool_name, f'Move file to new location: "{new_path}"')
+
+        fileUtils.make_dir(dir_path)
+
+        if not fileUtils.copy_file(file.path, new_path):
+            log(Severity.ERROR, tool_name, f'Failed to copy "{file.path}". The original was not deleted.')
+            return False
+
+        if not file.delete_file():
+            log(Severity.ERROR, tool_name, f'Copied "{file.path}" successfully, but failed to delete the original file.')
+            return False
+
+    log(Severity.INFO, tool_name, 'Finished moving all .CBZ files into individual folders.')
+    return True
 
 
 class BatchIndividualFolderforCBZ(Window):

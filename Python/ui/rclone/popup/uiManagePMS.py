@@ -39,9 +39,9 @@ def clear_local_pmsdata(remote_cls):
         rem_dir_lst = fileUtils.get_dirs_path_list(local_cls_pmsdata.directory_path)
         for rem_dir in rem_dir_lst:
             fileUtils.delete_dir(rem_dir)
-        rem_file_lst = fileUtils.get_file_path_list(local_cls_pmsdata.directory_path)
-        for rem_file in rem_file_lst:
-            fileUtils.delete_file(rem_file)
+        rem_file_lst = fileUtils.get_file_list_from_path(local_cls_pmsdata.directory_path)
+        for file in rem_file_lst:
+            file.delete_file()
 
 
 def get_local_cls_pmsdata(remote_cls):
@@ -159,65 +159,90 @@ def unpackage_pms(remote_cls):
             print('Files extracted! Finished')
 
 
-def package_pms(remote_cls):
+def package_pms(remote_cls) -> bool:
+    tool_name = 'Package Plex Media Server'
+    log(Severity.INFO, tool_name, 'Starting Plex Media Server packaging.')
 
     local_cls_pmsdata = get_local_cls_pmsdata(remote_cls)  # Get local class for the -PMSDATA
+    pms_data_path = config.LogisticsConfig().pms_data_path
+    pms_package_path = Path(local_cls_pmsdata.directory_path)
 
     # If AppData plex media server folder unreachable, cancel proceeding
-    if not os.path.exists(config.LogisticsConfig().pms_data_path):
-        msg = 'Cannot backup the Plex Media Server because directory path is invalid. Aborting!'
-        uiShellWrapper.show_dialog_box('Package Plex Media Server', msg)
+    if not os.path.exists(pms_data_path):
+        msg = f'Plex Media Server directory is invalid or unreachable: "{pms_data_path}". Aborting!'
+        log(Severity.ERROR, tool_name, msg)
+        uiShellWrapper.show_dialog_box(tool_name, msg)
         return False
 
     # Create local -PMSDATA directory (if it doesn't exist yet)
-    if not os.path.exists(local_cls_pmsdata.directory_path):
-        Path(local_cls_pmsdata.directory_path).mkdir(parents=True, exist_ok=True)
+    if not pms_package_path.exists():
+        log(Severity.DEBUG, tool_name, f'Creating package directory: "{pms_package_path}"')
+        pms_package_path.mkdir(parents=True, exist_ok=True)
 
     # Fetch information from registry and store in registry file
     # Compress (in file chunks) the Plex Media Server Directory contents in Local AppData
 
     match get_os():
         case OS.WIN:
+            log(Severity.DEBUG, tool_name, 'Packaging Windows Plex Media Server data.')
+
             # Wipe (some) contents within -PMSDATA directory; registry file and archive
-            file_lst = fileUtils.get_file_path_list(local_cls_pmsdata.directory_path)
+            file_lst = fileUtils.get_file_list_from_path(pms_package_path)
             for file in file_lst:
-                if 'pms_data.' in file.split('\\')[-1] or '.reg' in file.split('\\')[-1]:
-                    fileUtils.delete_file(file)
+                if 'pms_data.' in file.file_name or file.ext == 'reg':
+                    log(Severity.DEBUG, tool_name, f'Deleting previous package file: "{file.path}"')
+                    file.delete_file()
+
             # Create command
             plex_registry_loc = 'HKEY_CURRENT_USER\\Software\\Plex, Inc.\\Plex Media Server'
-            plex_registry_path = str(Path(local_cls_pmsdata.directory_path, 'pms_registry.reg'))
+            plex_registry_path = str(pms_package_path / 'pms_registry.reg')
             seven_zip_exec_path = str(Path(config.LogisticsConfig().path_logistics_software_win, '7-zip', '7z'))
-            seven_zip_archive_path = str(Path(local_cls_pmsdata.directory_path, 'pms_data.7z'))
+            seven_zip_archive_path = str(pms_package_path / 'pms_data.7z')
+
             command = 'reg export "{}" "{}"'.format(plex_registry_loc, plex_registry_path)
             command += '\n"{}" a -y -mx1 -v5000000000 "{}"'.format(seven_zip_exec_path, seven_zip_archive_path)
+
             # Get list of folders to include in 7z. Then add to end of last line
-            dir_lst = fileUtils.get_dirs_path_list(config.LogisticsConfig().pms_data_path)
+            dir_lst = fileUtils.get_dirs_path_list(pms_data_path)
             for directory in dir_lst:
-                command += ' "' + directory + '"'
+                command += f' "{directory}"'
+
+            log(Severity.INFO, tool_name, f'Creating Plex archive at "{seven_zip_archive_path}".')
 
             # Put command in file and run
             # cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=config.LogisticsConfig().temp_cmd)
             cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=True)
+
         case OS.MAC:
-            # Wipe (some) contents within -PMSDATA directory; registry file and archive
-            file_lst = fileUtils.get_file_path_list(local_cls_pmsdata.directory_path)
+            log(Severity.DEBUG, tool_name, 'Packaging macOS Plex Media Server data.')
+
+            # Wipe (some) contents within -PMSDATA directory; plist file and archive
+            file_lst = fileUtils.get_file_list_from_path(pms_package_path)
             for file in file_lst:
-                if 'pms_data_mac.' in file.split('\\')[-1]:
-                    fileUtils.delete_file(file)
-                elif '.plist' in file.split('\\')[-1]:
-                    fileUtils.delete_file(file)
+                if 'pms_data_mac.' in file.file_name or file.ext == 'plist':
+                    log(Severity.DEBUG, tool_name, f'Deleting previous package file: "{file.path}"')
+                    file.delete_file()
 
             # Copy plist file to -PMSDATA
-            plist_source_path = str(Path(os.environ['HOME'], 'Library', 'Preferences', 'com.plexapp.plexmediaserver.plist'))
-            plist_dest_path = str(Path(local_cls_pmsdata.directory_path, 'com.plexapp.plexmediaserver.plist'))
+            plist_source_path = Path(
+                os.environ['HOME'],
+                'Library',
+                'Preferences',
+                'com.plexapp.plexmediaserver.plist',
+            )
+            plist_dest_path = pms_package_path / 'com.plexapp.plexmediaserver.plist'
+
+            log(Severity.DEBUG, tool_name, f'Copying Plex preferences from "{plist_source_path}" to "{plist_dest_path}".')
             fileUtils.copy_file(plist_source_path, plist_dest_path)
 
             # Compress to zip
-            zip_archive_path = str(Path(local_cls_pmsdata.directory_path, 'pms_data_mac.zip'))
-            pms_data_path = config.LogisticsConfig().pms_data_path
-            print('Compressing Plex Media Server to archive...')  # TODO: Make it work on macOS (archive file)
+            zip_archive_path = pms_package_path / 'pms_data_mac.zip'
+
+            log(Severity.INFO, tool_name, f'Compressing Plex Media Server data to "{zip_archive_path}".')
             zipUtils.zip_file(pms_data_path, zip_archive_path)
-            print('Completed process!')
+            log(Severity.INFO, tool_name, 'Completed Plex Media Server packaging.')
+
+    return True
 
 
 class ManagePMS(Window):

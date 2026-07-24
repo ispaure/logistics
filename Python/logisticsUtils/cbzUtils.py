@@ -407,7 +407,7 @@ class CBZFile(zipUtils.ZIPFile):
                         return False
                 # Delete empty dir after everything has been moved to the root
                 if not fileUtils.has_subdirectories(Path(dir_path)) and len(fileUtils.get_file_path_list(dir_path, recursive=True)) == 0:
-                    result = fileUtils.delete_dir(dir_path)
+                    result = fileUtils.delete_dir(Path(dir_path))
                     if not result:
                         msg = f'Could not delete "{dir_path}"!'
                         log(Severity.CRITICAL, tool_name, msg)

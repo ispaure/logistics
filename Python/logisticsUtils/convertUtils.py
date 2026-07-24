@@ -56,7 +56,8 @@ def convert_cbr_to_cbz(target_file_path):
         # Clean convert dir
         fileUtils.delete_dir_contents(temp_convert_path)
         # Delete original file
-        fileUtils.delete_file(file)
+        original_file = fileUtils.File(file)
+        original_file.delete_file()
         # The conversion succeeded!
         return True
 
@@ -65,9 +66,11 @@ def convert_cbr_to_cbz(target_file_path):
 
         # If corrupted or not properly done zip file is there, obliterate it.
         if os.path.exists(file_name_zip):
-            fileUtils.delete_file(file_name_zip)
+            zip_file = fileUtils.File(file_name_zip)
+            zip_file.delete_file()
         elif os.path.exists(file_name_cbz):
-            fileUtils.delete_file(file_name_cbz)
+            cbz_file = fileUtils.File(file_name_cbz)
+            cbz_file.delete_file()
         # Clean convert dir
         fileUtils.delete_dir_contents(temp_convert_path)
 

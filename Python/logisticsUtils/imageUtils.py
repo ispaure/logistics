@@ -215,9 +215,9 @@ def batch_compress_image(target_dir: Union[str, Path],
 
             # STEP THREE: SELECT IMAGES TO KEEP
             if always_keep_compressed or img_file_cls.compressed_image.size < img_file_cls.size * img_min_allowed_compression_percentage / 100:
-                fileUtils.delete_file(img_file_cls.path)
+                img_file_cls.delete_file()
             else:
-                fileUtils.delete_file(img_file_cls.compressed_image.path)
+                img_file_cls.compressed_image.delete_file()
         else:
             msg = f'Image {img_file_cls.file_name} is already webp! Skipping...'
             log(Severity.DEBUG, f'imageUtils.{func_name}', msg)
