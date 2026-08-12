@@ -4,7 +4,13 @@ set -euo pipefail
 echo "Launching Logistics..."
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
-# ensure uv exists
+# Create Server folder if needed
+if [[ ! -d "$HOME/Server" ]]; then
+  echo "Creating Server folder..."
+  mkdir -p "$HOME/Server"
+fi
+
+# Ensure uv exists
 if ! command -v uv >/dev/null 2>&1; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
   export PATH="$HOME/.local/bin:$PATH"
@@ -15,12 +21,10 @@ VENV_DIR="$SCRIPT_DIR/venv"
 
 cd "$PY_DIR"
 
-# --- SMALL CHANGE START ---
 uv python install 3.12.2 >/dev/null 2>&1 || true
 if [[ ! -d "$VENV_DIR" ]]; then
   uv venv --python 3.12.2 "$VENV_DIR"
 fi
-# --- SMALL CHANGE END ---
 
 # Activate so pip installs into the venv
 # shellcheck disable=SC1090

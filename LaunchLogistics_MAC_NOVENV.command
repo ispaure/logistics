@@ -20,11 +20,10 @@ fi
 PYTHON_PATH=$(command -v python3)
 echo "Using $PYTHON_PATH ($PYTHON_VERSION)"
 
-# Verify Server folder exists
+# Create Server folder if needed
 if [ ! -d "$HOME/Server" ]; then
-    echo "ERROR: Expected folder $HOME/Server does not exist."
-    echo "Please create it before running this script."
-    exit 1
+    echo "Creating Server folder..."
+    mkdir -p "$HOME/Server"
 fi
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
