@@ -26,15 +26,16 @@ PYTHON_PATH=$(pyenv which python3)
 
 echo "Python 3.12.2 ready!"
 
-# Set up the virtual environment (fixed location for Logistics)
-VENV_DIR="$SCRIPT_DIR/venv"
+# Get the directory where this script is located
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 
-# Verify Server folder exists
+# Set up the virtual environment (fixed location for Logistics)
+VENV_DIR="$SCRIPT_DIR/venv"
+
+# Create Server folder if needed
 if [ ! -d "$HOME/Server" ]; then
-    echo "ERROR: Expected folder $HOME/Server does not exist."
-    echo "Please create it before running this script."
-    exit 1
+    echo "Creating Server folder..."
+    mkdir -p "$HOME/Server"
 fi
 
 if [ ! -d "$VENV_DIR" ]; then

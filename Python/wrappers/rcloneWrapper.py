@@ -233,7 +233,7 @@ def mount_all_rclone_conf_remotes(timeout=None):
     mount_path_lst = []
 
     for key in rclone_conf_remote_credential_dict.keys():
-        if 'Dropbox' not in key:
+        if 'Dropbox' not in key and 'gdrive' not in key:
             mount_path = str(Path(network_remote_mount_path, key))
             mount_remote(key, mount_path, timeout)
             mount_path_lst.append(mount_path)
@@ -358,6 +358,9 @@ def get_all_remote_class():
 
     # Get network remote classes
     path_remote_network = config.LogisticsConfig().path_remote_network_mount
+    if not os.path.exists(path_remote_network):
+        os.makedirs(path_remote_network)
+
     dir_lst = fileUtils.get_dirs_path_list(path_remote_network)
     dir_lst.sort()
     for directory in dir_lst:

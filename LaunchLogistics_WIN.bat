@@ -25,37 +25,35 @@ if '%errorlevel%' NEQ '0' (
 @echo off
 :: mode con: cols=160 lines=50
 
-set VENV_PATH=%USERPROFILE%\Server\Logistics-VENV
+set "VENV_PATH=%USERPROFILE%\Server\Logistics-VENV"
 
-:: Verify Server folder exists
-if not exist %USERPROFILE%\Server (
-    echo ERROR: Expected folder %USERPROFILE%\Server does not exist.
-    echo Please create it before running this script.
-    pause
-    exit /B 1
+:: Create Server folder if needed
+if not exist "%USERPROFILE%\Server" (
+    echo Creating Server folder...
+    mkdir "%USERPROFILE%\Server"
 )
 
 echo Initiating Logistics
 
 echo Detecting Python 3.12.2 installation...
-IF not exist %LOCALAPPDATA%\Programs\Python\Python312 (GOTO setup_python)
+IF not exist "%LOCALAPPDATA%\Programs\Python\Python312" (GOTO setup_python)
 echo Python 3.12.2 Detected! Proceeding...
 GOTO :setup_venv
 
 :setup_python
 echo Installing Python 3.12.2(x64) ...
-%~dp0\Software\python-3.12.2-amd64.exe /quiet PrependPath=1 Include_test=0 SimpleInstall=1
+"%~dp0Software\python-3.12.2-amd64.exe" /quiet PrependPath=1 Include_test=0 SimpleInstall=1
 echo Installed Python!
 GOTO :setup_venv
 
 :setup_venv
-IF exist %VENV_PATH% (GOTO logistics_launch_script)
-%LOCALAPPDATA%\Programs\Python\Python312\python -m venv %VENV_PATH%
+IF exist "%VENV_PATH%" (GOTO logistics_launch_script)
+"%LOCALAPPDATA%\Programs\Python\Python312\python" -m venv "%VENV_PATH%"
 GOTO :logistics_launch_script
 
 :logistics_launch_script
-call %VENV_PATH%\Scripts\activate
-%VENV_PATH%\Scripts\python -m pip install -r %~dp0\Python\requirements.txt
+call "%VENV_PATH%\Scripts\activate"
+"%VENV_PATH%\Scripts\python" -m pip install -r "%~dp0Python\requirements.txt"
 echo Executing Logistics...
-%VENV_PATH%\Scripts\python %~dp0\Python\launch.py
+"%VENV_PATH%\Scripts\python" "%~dp0Python\launch.py"
 pause
