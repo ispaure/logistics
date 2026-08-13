@@ -6,7 +6,7 @@ import config as config
 from pathlib import Path
 import sys
 import os
-from commonUtils.debugUtils import print_debug_msg as print_debug_msg
+from commonUtils.debugUtils import *
 import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
 import time
 import wrappers.uiShellWrapper as uiShellWrapper
@@ -173,16 +173,6 @@ def mount_remote(remote_name, mount_path, timeout=None):
     # Debug Message (Before Mount)
     print_debug_msg('Mounting "{}" at path "{}"...'.format(remote_name, mount_path), show_verbose)
 
-    # TODO: Delete this if mount still works fine on windows (I think it should). It's duplicated code except it doesn't specify .exe like the other (on Windows)
-    # # Determine Command Line for Mount...
-    # match get_os():
-    #     case OS.WIN:
-    #         rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics_software, 'rclone', 'rclone'))
-    #     case OS.MAC:
-    #         rclone_exec_pth = str(Path(config.LogisticsConfig().path_logistics_software, 'rclone_macos', 'rclone'))
-    #     case _:
-    #         log(Severity.CRITICAL, 'Rclone', 'Invalid Platform!')
-    #         return
     rclone_exec_pth = get_rclone_path()
 
     # Create mount command
@@ -215,15 +205,21 @@ def mount_remote(remote_name, mount_path, timeout=None):
     print_debug_msg('Successfully mounted!', show_verbose)
 
 
-def mount_all_rclone_conf_remotes(timeout=None):
+def mount_all_rclone_conf_remotes(timeout=None, wait_until_mounted=False):
     """
-    Mounts all rclone.conf remotes on disk
+    Mounts all rclone.conf remotes on disk.
+
+    Args:
+        timeout: Timeout passed to mount_remote().
+        wait_until_mounted: If True, wait indefinitely for all remotes to mount.
+                            If False, proceed immediately after starting the mounts.
     """
     # Get mount path
     network_remote_mount_path = config.LogisticsConfig().path_remote_network_mount
 
     # Create mount path if it doesn't exist yet
     if not os.path.exists(network_remote_mount_path):
+        log(Severity.INFO, 'mount_all_rclone_conf_remotes', f'Creating network mount directory: {network_remote_mount_path}')
         os.makedirs(network_remote_mount_path)
 
     # Get rclone conf remote dictionary
@@ -235,18 +231,29 @@ def mount_all_rclone_conf_remotes(timeout=None):
     for key in rclone_conf_remote_credential_dict.keys():
         if 'Dropbox' not in key and 'gdrive' not in key:
             mount_path = str(Path(network_remote_mount_path, key))
+
+            log(Severity.INFO, 'mount_all_rclone_conf_remotes', f'Mounting remote: {key} -> {mount_path}')
+
             mount_remote(key, mount_path, timeout)
             mount_path_lst.append(mount_path)
 
-    # Wait until all paths have been mounted before proceeding
-    max_wait = 10
-    current_wait = 0
+    # No remotes were found to mount
+    if not mount_path_lst:
+        log(Severity.WARNING, 'mount_all_rclone_conf_remotes', 'No rclone remotes found to mount')
+        return
+
+    # Proceed immediately unless explicitly asked to wait
+    if not wait_until_mounted:
+        log(Severity.DEBUG, 'mount_all_rclone_conf_remotes', 'Mount commands started, proceeding without waiting')
+        return
+
+    # Wait indefinitely until all paths have been mounted
+    log(Severity.INFO, 'mount_all_rclone_conf_remotes', 'Waiting for all rclone remotes to mount')
+
     while not check_path_valid_lst(mount_path_lst):
-        if current_wait < max_wait:
-            current_wait += 0.08
-            time.sleep(0.08)
-        else:
-            break
+        time.sleep(0.05)
+
+    log(Severity.INFO, 'mount_all_rclone_conf_remotes', 'All rclone remotes successfully mounted')
 
 
 def check_path_valid_lst(path_lst):
