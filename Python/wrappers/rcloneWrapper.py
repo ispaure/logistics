@@ -1,18 +1,25 @@
+# ----------------------------------------------------------------------------------------------------------------------
+# AUTHORSHIP INFORMATION - THIS FILE BELONGS TO MARC-ANDRE VOYER HELPER FUNCTIONS CODEBASE
+
+__author__ = 'Marc-André Voyer'
+__copyright__ = 'Copyright (C) 2020-2026, Marc-André Voyer'
+__license__ = "MIT License"
+__maintainer__ = 'Marc-André Voyer'
+__email__ = 'marcandre.voyer@gmail.com'
+__status__ = 'Production'
+
+# ----------------------------------------------------------------------------------------------------------------------
 
 import commonUtils.fileUtils as fileUtils
-from commonUtils.debugUtils import *
 from commonUtils.osUtils import *
 import config as config
 from pathlib import Path
-import sys
-import os
-from commonUtils.debugUtils import *
 import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
 import time
 import wrappers.uiShellWrapper as uiShellWrapper
-import random
 from commonUtils import zipUtils
 from typing import *
+from commonUtils.debugUtils import *
 
 show_verbose = True
 
@@ -213,9 +220,6 @@ def mount_remote(remote_name, mount_path, timeout=None):
     # Execute command
     cmdShellWrapper.exec_cmd(mount_cmd, wait_for_output=False)
 
-    # Debug Message (After Mount)
-    log(Severity.DEBUG, 'mount_remote', 'Mount command started successfully')
-
 
 def mount_all_rclone_conf_remotes(timeout=None, wait_until_mounted=False):
     """
@@ -245,9 +249,6 @@ def mount_all_rclone_conf_remotes(timeout=None, wait_until_mounted=False):
     # Mount all remotes
     for mount_path in mount_path_lst:
         key = Path(mount_path).name
-
-        log(Severity.INFO, 'mount_all_rclone_conf_remotes', f'Mounting remote: {key} -> {mount_path}')
-
         mount_remote(key, mount_path, timeout)
 
     # Proceed immediately unless explicitly asked to wait
