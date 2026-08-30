@@ -74,7 +74,7 @@ def interaction_02_action_comic_rack(remote_cls):
 
     # Start software
     exec_path = str(Path(config.LogisticsConfig().path_logistics_software_win, 'ComicRack', 'ComicRack.exe'))
-    cmdShellWrapper.exec_cmd('start ' + exec_path, wait_for_output=False)
+    cmdShellWrapper.exec_cmd(f'start "{exec_path}"', wait_for_output=False)
 
 
 def interaction_02_action_yac_reader_library(remote_cls):
