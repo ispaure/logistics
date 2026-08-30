@@ -179,11 +179,29 @@ def interaction_06_action(remote_cls):
         youtube_dl_cls.display_ui()
 
 
+def interaction_07(remote_cls):
+    interaction_dict = {}
+    if get_os() == OS.LINUX and remote_cls.perforce_p4d_path is not None and remote_cls.type == 'Local':
+        interaction_dict['Name'] = 'Launch P4D'
+    else:
+        interaction_dict['Name'] = 'N/A'
+    interaction_dict['Action'] = interaction_07_action
+    return interaction_dict
+
+
+def interaction_07_action(remote_cls):
+    if get_os() == OS.LINUX and remote_cls.perforce_p4d_path is not None and remote_cls.type == 'Local':
+        command = f'./{remote_cls.perforce_p4d_path} -C1 -r ./{remote_cls.perforce_data_path} -p ' \
+                  f'{remote_cls.perforce_port}'
+        cmdShellWrapper.exec_cmd(command, in_new_window=True, cwd=remote_cls.directory_path)
+
+
 interaction_fn_lst = [interaction_01,
                       interaction_02,
                       interaction_03,
                       interaction_05,
                       interaction_06,
+                      interaction_07,
                       interaction_04]
 
 

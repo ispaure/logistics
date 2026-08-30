@@ -304,6 +304,9 @@ class Remote:
         self.yac_reader_library_ini = None
         self.youtube_dl_cfg_path = None
         self.youtube_dl_cfg_sub_path = None
+        self.perforce_p4d_path = None
+        self.perforce_data_path = None
+        self.perforce_port = None
 
         # Read Configuration File
         config_path_loc = str(Path(self.directory_path, 'remoteConfig.ini'))
@@ -335,6 +338,17 @@ class Remote:
                 if sub_path is not None:
                     self.youtube_dl_cfg_path = str(Path(self.directory_path, sub_path.replace('\\', '/')))
                     self.youtube_dl_cfg_sub_path = sub_path
+
+                # Perforce Server
+                p4d_path = config.config_section_map('Perforce', 'p4d_path', config_path_loc)
+                if p4d_path is not None:
+                    self.perforce_p4d_path = p4d_path
+                data_path = config.config_section_map('Perforce', 'data_path', config_path_loc)
+                if data_path is not None:
+                    self.perforce_data_path = data_path
+                port_path = config.config_section_map('Perforce', 'port', config_path_loc)
+                if port_path is not None:
+                    self.perforce_port = port_path
 
 
 def get_remote_class(remote_dir):
