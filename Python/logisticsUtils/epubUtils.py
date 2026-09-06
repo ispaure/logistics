@@ -15,3 +15,11 @@ __status__ = 'Production'
 # ----------------------------------------------------------------------------------------------------------------------
 
 
+from commonUtils import fileUtils
+from pathlib import Path
+
+
+class EPUBFile(fileUtils.File):
+    def __init__(self, path: Path):
+        super().__init__(path)
+
