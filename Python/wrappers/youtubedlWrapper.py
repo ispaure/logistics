@@ -170,22 +170,23 @@ def push_seasons(remote_cls):
     print('Pushing Seasons')
 
     # Get list of existing channel dirs
-    channel_dir_lst = fileUtils.get_dirs_path_list(os.path.dirname(remote_cls.youtube_dl_cfg_path))
+    channel_root_directory = dirUtils.Directory(Path(remote_cls.youtube_dl_cfg_path).parent)
+    channel_dir_lst: List[dirUtils.Directory] = channel_root_directory.list_directories()
 
     # Initialize push list
-    push_dir_lst = []
+    push_dir_lst: List[dirUtils.Directory] = []
 
     # If these channel dirs have a subdir with season in it, add to push list
     for channel_dir in channel_dir_lst:
-        channel_dir_sub_lst = fileUtils.get_dirs_path_list(channel_dir)
+        channel_dir_sub_lst: List[dirUtils.Directory] = channel_dir.list_directories()
 
         for channel_dir_sub in channel_dir_sub_lst:
-            if 'Season' in Path(channel_dir_sub).name:
+            if 'Season' in channel_dir_sub.name:
                 push_dir_lst.append(channel_dir_sub)
 
     # Push Season folders
     for push_dir in push_dir_lst:
-        source = Path(push_dir)
+        source = push_dir.path
         destination = remote_cls.name + ':' + source.relative_to(remote_cls.path).as_posix()
 
         print(f'Pushing {source} to {destination}')

@@ -293,10 +293,10 @@ class CBZFile(zipUtils.ZIPFile):
         extracted_directory = dirUtils.Directory(extracted_dir)
 
         # Delete __MACOSX directories if there are any. Before evaluating other stuff.
-        dir_path_lst = fileUtils.get_dirs_path_list(extracted_directory.path)
-        for dir_path in dir_path_lst:
-            if Path(dir_path).name == '__MACOSX':
-                result = fileUtils.delete_dir(dir_path)
+        directory_lst: List[dirUtils.Directory] = extracted_directory.list_directories()
+        for directory in directory_lst:
+            if directory.name == '__MACOSX':
+                result = directory.delete()
                 if result:
                     msg = 'Found rogue folder "__MACOSX" in archive, deleted!'
                     log(Severity.WARNING, sanitize_tool_name, msg)
@@ -338,7 +338,7 @@ class CBZFile(zipUtils.ZIPFile):
 
         # If there is any subdirectory, it could be unexpected
         if fileUtils.has_subdirectories(extracted_directory.path):
-            dir_path_lst = fileUtils.get_dirs_path_list(extracted_directory.path)
+            directory_lst = extracted_directory.list_directories()
 
             # Abort if root has subdir + any unsuspected file (including any image)
             root_file_lst: List[fileUtils.File] = extracted_directory.list_files(recursive=False)
@@ -354,14 +354,12 @@ class CBZFile(zipUtils.ZIPFile):
             # Weird Edge case I had to account for (else it's repetitive manual work)
             # If there is exactly one directory, which itself contains no files and exactly one subdirectory
             # And that subdirectory does not contain itself anymore subdirectories, move the files to the directory.
-            if len(dir_path_lst) == 1:
-                dir_path = dir_path_lst[0]
-                directory = dirUtils.Directory(Path(dir_path))
-                dir_subdir_lst = fileUtils.get_dirs_path_list(directory.path)
+            if len(directory_lst) == 1:
+                directory = directory_lst[0]
+                subdirectory_lst: List[dirUtils.Directory] = directory.list_directories()
                 dir_file_lst: List[fileUtils.File] = directory.list_files(recursive=False)
-                if len(dir_subdir_lst) == 1 and len(dir_file_lst) == 0:
-                    subdir_path = Path(dir_subdir_lst[0])
-                    subdirectory = dirUtils.Directory(subdir_path)
+                if len(subdirectory_lst) == 1 and len(dir_file_lst) == 0:
+                    subdirectory = subdirectory_lst[0]
                     if not fileUtils.has_subdirectories(subdirectory.path):
                         subdir_file_lst: List[fileUtils.File] = subdirectory.list_files(recursive=False)
                         if len(subdir_file_lst) > 0:
@@ -379,28 +377,27 @@ class CBZFile(zipUtils.ZIPFile):
                                            f'destination: "{destination_file_path}")!')
                                     log(Severity.CRITICAL, sanitize_tool_name, msg)
                                     return False
-                            result = fileUtils.delete_dir(subdirectory.path)
+                            result = subdirectory.delete()
                             if not result:
                                 msg = f'Directory deletion was unsuccessful: "{subdirectory.path}"!'
                                 log(Severity.CRITICAL, sanitize_tool_name, msg)
                                 return False
 
-            # Refresh dir_path_lst because it may have changed
-            dir_path_lst = fileUtils.get_dirs_path_list(extracted_directory.path)
+            # Refresh directory_lst because it may have changed
+            directory_lst = extracted_directory.list_directories()
             # ----------------------------------------------------------------------------------------------------------
 
             # Abort if any directory itself has a subdirectory
-            for dir_path in dir_path_lst:
-                if fileUtils.has_subdirectories(Path(dir_path)):
-                    msg = (f'The subdirectory "{Path(dir_path).name}" has at least one subdirectory itself, which is '
+            for directory in directory_lst:
+                if fileUtils.has_subdirectories(directory.path):
+                    msg = (f'The subdirectory "{directory.name}" has at least one subdirectory itself, which is '
                            f'not supported. Manual cleanup in the original .CBZ file required!')
                     log(Severity.ERROR, sanitize_tool_name, msg)
                     return False
 
             # If there was just one directory, move the files in it to the root
-            if len(dir_path_lst) == 1:
-                dir_path = dir_path_lst[0]
-                directory = dirUtils.Directory(Path(dir_path))
+            if len(directory_lst) == 1:
+                directory = directory_lst[0]
                 subdir_file_lst: List[fileUtils.File] = directory.list_files(recursive=False)
                 for subdir_file in subdir_file_lst:
                     destination_path = Path(extracted_directory.path, subdir_file.file_name)
@@ -412,7 +409,7 @@ class CBZFile(zipUtils.ZIPFile):
                         return False
                 # Delete empty dir after everything has been moved to the root
                 if not fileUtils.has_subdirectories(directory.path) and len(directory.list_files(recursive=True)) == 0:
-                    result = fileUtils.delete_dir(directory.path)
+                    result = directory.delete()
                     if not result:
                         msg = f'Could not delete "{directory.path}"!'
                         log(Severity.CRITICAL, tool_name, msg)

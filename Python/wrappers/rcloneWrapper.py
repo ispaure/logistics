@@ -29,10 +29,11 @@ def clear_mounts():
     logistics_cfg = config.LogisticsConfig()
     # If mount folder exists, make sure there isn't anything left in it
     if os.path.exists(logistics_cfg.path_remote_network_mount):
-        dir_lst = fileUtils.get_dirs_path_list(logistics_cfg.path_remote_network_mount)
+        mount_directory = dirUtils.Directory(logistics_cfg.path_remote_network_mount)
+        dir_lst: List[dirUtils.Directory] = mount_directory.list_directories()
         for directory in dir_lst:
-            print('DELETE THIS: ' + directory)
-            fileUtils.delete_symbolic_link(directory)
+            print('DELETE THIS: ' + str(directory.path))
+            fileUtils.delete_symbolic_link(directory.path)
 
 
 def clear_rclone_conf():
@@ -384,10 +385,10 @@ def get_all_remote_class():
     if not os.path.exists(path_remote_local):
         os.makedirs(path_remote_local)
 
-    dir_lst = fileUtils.get_dirs_path_list(path_remote_local)
-    dir_lst.sort()
+    local_remote_directory = dirUtils.Directory(path_remote_local)
+    dir_lst: List[dirUtils.Directory] = local_remote_directory.list_directories()
     for directory in dir_lst:
-        remote_cls_lst.append(get_remote_class(directory))
+        remote_cls_lst.append(get_remote_class(directory.path))
 
     # Get network remote classes
     path_remote_network = config.LogisticsConfig().path_remote_network_mount
