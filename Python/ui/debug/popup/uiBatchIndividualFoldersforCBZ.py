@@ -1,5 +1,6 @@
 from commonUtils.pySideUtils import *
 import commonUtils.fileUtils as fileUtils
+from commonUtils import dirUtils
 from commonUtils.debugUtils import *
 from pathlib import Path
 from commonUtils.osUtils import *
@@ -16,10 +17,10 @@ def ui_move_cbz_to_new_created_dir(convert_arg) -> bool:
     tool_name = 'Move CBZ to Individual Folders'
     log(Severity.INFO, tool_name, 'Starting the batch creation of individual folders and moving each .CBZ file into its new folder.')
 
-    batch_target_folder = convert_arg['target_dir'].txt()
-    log(Severity.INFO, tool_name, f'Target Folder: "{batch_target_folder}"')
+    batch_target_folder = dirUtils.Directory(Path(convert_arg['target_dir'].txt()))
+    log(Severity.INFO, tool_name, f'Target Folder: "{batch_target_folder.path}"')
 
-    file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(batch_target_folder, recursive=False, filter_extension='cbz')
+    file_lst: List[fileUtils.File] = batch_target_folder.list_files(recursive=False, filter_extension='cbz')
 
     if not file_lst:
         log(Severity.WARNING, tool_name, 'Did not find a .CBZ file.')

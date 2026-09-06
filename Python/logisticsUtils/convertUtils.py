@@ -2,7 +2,7 @@ import config
 from pathlib import Path
 import os
 import commonUtils.fileUtils as fileUtils
-from commonUtils import zipUtils
+from commonUtils import dirUtils, zipUtils
 from typing import List
 
 
@@ -85,11 +85,8 @@ def dir_batch_convert_cbr_to_cbz(target_dir, recursive):
     print('Batch Convert .CBR to .CBZ in directory "{}" [Recursive]...'.format(target_dir))
 
     # Get list of .CBR files
-    cbr_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
-        target_dir,
-        recursive=recursive,
-        filter_extension='cbr',
-    )
+    target_directory = dirUtils.Directory(target_dir)
+    cbr_file_lst: List[fileUtils.File] = target_directory.list_files(recursive=recursive, filter_extension='cbr')
 
     # Display to user the search results
     if len(cbr_file_lst) == 0:

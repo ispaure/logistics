@@ -1,5 +1,6 @@
 from commonUtils.pySideUtils import *
 from commonUtils.debugUtils import *
+from commonUtils import dirUtils
 from pathlib import Path
 show_verbose = True
 
@@ -55,10 +56,10 @@ def analyze_conflicting_copies(file_lst: List[fileUtils.File]):
 def print_conflicting_copies_dropbox(convert_arg):
 
     conflict_tool_name = 'Conflicting Copies Report'
-    directory = convert_arg['target_dir'].txt()
+    directory = dirUtils.Directory(Path(convert_arg['target_dir'].txt()))
     recursive = convert_arg['recursive'].isChecked()
 
-    file_lst = fileUtils.get_file_list_from_path(directory, recursive=recursive)
+    file_lst = directory.list_files(recursive=recursive)
 
     with_original, no_original, unsure = analyze_conflicting_copies(file_lst)
 
@@ -86,10 +87,10 @@ def print_conflicting_copies_dropbox(convert_arg):
 def delete_conflicting_copies_dropbox(convert_arg):
 
     conflict_tool_name = 'Delete Conflicting Copies'
-    directory = convert_arg['target_dir'].txt()
+    directory = dirUtils.Directory(Path(convert_arg['target_dir'].txt()))
     recursive = convert_arg['recursive'].isChecked()
 
-    file_lst = fileUtils.get_file_list_from_path(directory, recursive=recursive)
+    file_lst = directory.list_files(recursive=recursive)
 
     with_original, no_original, unsure = analyze_conflicting_copies(file_lst)
 

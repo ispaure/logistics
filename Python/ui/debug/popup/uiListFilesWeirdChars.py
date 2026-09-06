@@ -1,6 +1,7 @@
 from commonUtils.pySideUtils import *
 import commonUtils.fileUtils as fileUtils
-
+from commonUtils import dirUtils
+from pathlib import Path
 show_verbose = True
 
 
@@ -10,12 +11,13 @@ def ui_list_files_weird_chars(convert_arg):
     """
 
     # Display initiating info
+
     print('Starting the printing of files with weird characters in their name in dir (recursive)')
-    batch_target_folder = convert_arg['target_dir'].txt()
-    print('Target Folder: ' + batch_target_folder)
+    batch_target_folder = dirUtils.Directory(Path(convert_arg['target_dir'].txt()))
+    print(f'Target Folder: {batch_target_folder.path}')
 
     # Get list of files (recursive)
-    file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(batch_target_folder, recursive=True)
+    file_lst: List[fileUtils.File] = batch_target_folder.list_files(recursive=True)
 
     # Weird characters list (some appear the same here (duplicates) but are in fact different characters, its tricky!)
     weird_char_lst = ['é', 'É', 'è', 'È', 'ê', 'Ê', 'ë', 'Ë',

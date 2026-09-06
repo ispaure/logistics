@@ -13,6 +13,7 @@ __status__ = 'Production'
 
 from pathlib import Path
 import commonUtils.fileUtils as fileUtils
+from commonUtils import dirUtils
 from PIL import Image, ImageStat, ImageOps
 from commonUtils.debugUtils import *
 from typing import *
@@ -188,8 +189,9 @@ def batch_compress_image(target_dir: Union[str, Path],
 
     # --------------------------------------------------------------------------------------------------------------
     # STEP ONE: GATHER LIST OF IMAGE FILES TO CONVERT
+    target_dir = dirUtils.Directory(Path(target_dir) if isinstance(target_dir, str) else target_dir)
     original_img_file_cls_lst: List[ImageFile] = []
-    file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(target_dir, recursive=recursive)
+    file_lst: List[fileUtils.File] = target_dir.list_files(recursive=recursive)
 
     for file in file_lst:
         if file.ext in image_file_cls_supported_ext_lst:

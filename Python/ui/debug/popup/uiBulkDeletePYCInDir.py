@@ -1,16 +1,18 @@
 from commonUtils.pySideUtils import *
 from commonUtils.debugUtils import *
+from commonUtils import dirUtils
+from pathlib import Path
 show_verbose = True
 
 
 def bulk_delete_pyc_in_dir(convert_arg):
 
-    directory = convert_arg['target_dir'].txt()
+    directory = dirUtils.Directory(Path(convert_arg['target_dir'].txt()))
     recursive = convert_arg['recursive'].isChecked()
-    file_lst = fileUtils.get_file_list_from_path(directory, recursive=recursive, filter_extension='pyc')
+    file_lst = directory.list_files(recursive=recursive, filter_extension='pyc')
     for file in file_lst:
         file.delete_file()
-    log(Severity.INFO, 'Bulk Delete PYC Files', f'Deleted PYC Files Recursively in "{directory}"')
+    log(Severity.INFO, 'Bulk Delete PYC Files', f'Deleted PYC Files Recursively in "{directory.path}"')
 
 
 class BulkDeletePYCInDir(Window):

@@ -1,5 +1,5 @@
 from commonUtils.pySideUtils import *
-from commonUtils import fileUtils
+from commonUtils import fileUtils, dirUtils
 from commonUtils.debugUtils import *
 from commonUtils import spreadsheetUtils
 from pathlib import Path
@@ -9,19 +9,15 @@ tool_name = 'Batch Rename MKA from CSV'
 
 
 def ui_dir_batch_convert_cbr_to_cbz(convert_arg):
-    target_dir = convert_arg['target_dir'].txt()
+    target_dir = dirUtils.Directory(Path(convert_arg['target_dir'].txt()))
 
     # Make sure Target Dir is indeed a directory
-    if not os.path.isdir(target_dir):
+    if not os.path.isdir(target_dir.path):
         log(Severity.ERROR, tool_name, 'Invalid Directory Path')
         return
 
     # Load the CSV file
-    csv_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
-        target_dir,
-        recursive=False,
-        filter_extension='csv',
-    )
+    csv_file_lst: List[fileUtils.File] = target_dir.list_files(recursive=False, filter_extension='csv')
 
     if len(csv_file_lst) == 0:
         log(Severity.ERROR, tool_name, '.CSV file missing from root of directory')
@@ -37,11 +33,7 @@ def ui_dir_batch_convert_cbr_to_cbz(convert_arg):
     row_lst = chapter_name_sh.get_rows()
 
     # List files in directory
-    mka_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
-        target_dir,
-        recursive=False,
-        filter_extension='mka',
-    )
+    mka_file_lst: List[fileUtils.File] = target_dir.list_files(recursive=False, filter_extension='mka')
 
     for mka_file in mka_file_lst:
 

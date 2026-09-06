@@ -1,5 +1,5 @@
 from commonUtils.pySideUtils import *
-from commonUtils import fileUtils, zipUtils
+from commonUtils import fileUtils, dirUtils, zipUtils
 from pathlib import Path
 import config as config
 from commonUtils.osUtils import *
@@ -104,17 +104,13 @@ def ui_comicinfoxml_batch_rename_author_to_dir_name(convert_arg):
 
     # Display initiating info
     print('Starting the Batch Rename of Author Name in ComicInfo.XML (based on folder name)')
-    batch_target_folder = convert_arg['target_dir'].txt()
+    batch_target_folder = dirUtils.Directory(Path(convert_arg['target_dir'].txt()))
     author_tag_to_replace = convert_arg['target_existing_tag'].txt()
-    print('Target Folder: ' + batch_target_folder)
+    print(f'Target Folder: {batch_target_folder.path}')
     print('Tag to Replace: ' + author_tag_to_replace)
 
     # Get list of .CBZ files recursively
-    cbz_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
-        batch_target_folder,
-        recursive=True,
-        filter_extension='cbz',
-    )
+    cbz_file_lst: List[fileUtils.File] = batch_target_folder.list_files(recursive=True, filter_extension='cbz')
 
     # Display to user the search results
     if len(cbz_file_lst) == 0:
