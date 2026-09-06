@@ -61,12 +61,10 @@ def get_remote_credentials_dict(remote_credentials_dir):
     Gets a dict of the remote credentials available in
     Server/Logistics/RemoteCredentials.
     """
+    remote_credentials_directory = dirUtils.Directory(remote_credentials_dir)
     file_lst = cast(
         List[fileUtils.TXTFile],
-        fileUtils.get_file_list_from_path(
-            remote_credentials_dir,
-            filter_extension='txt',
-        ),
+        remote_credentials_directory.list_files(filter_extension='txt'),
     )
 
     remote_credentials_dict = {}
@@ -84,7 +82,8 @@ def get_logistics_remote_credentials_zip_lst() -> List[fileUtils.File]:
     Server/Logistics/RemoteCredentials.
     """
     logistics_cfg = config.LogisticsConfig()
-    return fileUtils.get_file_list_from_path(logistics_cfg.path_logistics_remote_cred, filter_extension='zip')
+    remote_credentials_directory = dirUtils.Directory(logistics_cfg.path_logistics_remote_cred)
+    return remote_credentials_directory.list_files(filter_extension='zip')
 
 
 def get_rclone_conf_remote_credentials_dict():
@@ -148,11 +147,10 @@ def get_rclone_remote_mount_paths():
 
 def add_logistics_remote_to_rclone_conf():
     logistics_cfg = config.LogisticsConfig()
-    remote_credentials_dir = str(logistics_cfg.path_logistics_remote_cred)
-    add_remote_to_rclone_conf(remote_credentials_dir)
+    add_remote_to_rclone_conf(logistics_cfg.path_logistics_remote_cred)
 
 
-def add_remote_to_rclone_conf(remote_credentials_dir):
+def add_remote_to_rclone_conf(remote_credentials_dir: Path):
     """
     Adds the remotes found in the logistics folder to the rclone conf (if they are missing from there)
     """
@@ -176,7 +174,7 @@ def add_remote_from_zip_to_rclone_conf(zip_path, zip_pw):
 
     # Figure out extraction directory
     logistics_cfg = config.LogisticsConfig()
-    extract_dir = str(Path(logistics_cfg.temp_path, 'UnpackCredentials'))
+    extract_dir = Path(logistics_cfg.temp_path, 'UnpackCredentials')
 
     # Extract archive
     try:
@@ -283,13 +281,15 @@ class Remote(dirUtils.Directory):
     def __init__(self, remote_dir: Union[str, Path]):
         super().__init__(Path(remote_dir))
 
-        path_str = str(self.path)
+        logistics_cfg = config.LogisticsConfig()
 
         # Determine if it's local or not
-        if config.LogisticsConfig().path_remote_network_mount in path_str:
+        if self.path.is_relative_to(logistics_cfg.path_remote_network_mount):
             self.type = 'Remote'
-        elif config.LogisticsConfig().path_remote_local in path_str:
+        elif self.path.is_relative_to(logistics_cfg.path_remote_local):
             self.type = 'Local'
+        else:
+            log(Severity.CRITICAL, 'Remote.__init__', f'Remote path is not within a valid remote directory: "{self.path}"')
 
         # Determine if is -PMSDATA
         pms_data_string = '-PMSDATA'

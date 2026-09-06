@@ -39,7 +39,7 @@ def clear_local_pmsdata(remote_cls):
         rem_dir_lst = fileUtils.get_dirs_path_list(local_cls_pmsdata.path)
         for rem_dir in rem_dir_lst:
             fileUtils.delete_dir(rem_dir)
-        rem_file_lst = fileUtils.get_file_list_from_path(local_cls_pmsdata.path)
+        rem_file_lst = local_cls_pmsdata.list_files()
         for file in rem_file_lst:
             file.delete_file()
 
@@ -187,7 +187,7 @@ def package_pms(remote_cls) -> bool:
             log(Severity.DEBUG, tool_name, 'Packaging Windows Plex Media Server data.')
 
             # Wipe (some) contents within -PMSDATA directory; registry file and archive
-            file_lst = fileUtils.get_file_list_from_path(pms_package_path)
+            file_lst = local_cls_pmsdata.list_files()
             for file in file_lst:
                 if 'pms_data.' in file.file_name or file.ext == 'reg':
                     log(Severity.DEBUG, tool_name, f'Deleting previous package file: "{file.path}"')
@@ -217,7 +217,7 @@ def package_pms(remote_cls) -> bool:
             log(Severity.DEBUG, tool_name, 'Packaging macOS Plex Media Server data.')
 
             # Wipe (some) contents within -PMSDATA directory; plist file and archive
-            file_lst = fileUtils.get_file_list_from_path(pms_package_path)
+            file_lst = local_cls_pmsdata.list_files()
             for file in file_lst:
                 if 'pms_data_mac.' in file.file_name or file.ext == 'plist':
                     log(Severity.DEBUG, tool_name, f'Deleting previous package file: "{file.path}"')

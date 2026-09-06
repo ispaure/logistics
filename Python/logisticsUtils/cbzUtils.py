@@ -18,7 +18,7 @@ __status__ = 'Production'
 
 from pathlib import Path
 from typing import *
-from commonUtils import fileUtils, xmlUtils, zipUtils
+from commonUtils import fileUtils, dirUtils, xmlUtils, zipUtils
 from commonUtils.debugUtils import *
 from . import imageUtils
 from datetime import datetime
@@ -290,9 +290,10 @@ class CBZFile(zipUtils.ZIPFile):
         sanitize_tool_name = 'cbzUtils.CBZFile.sanitize_extracted_cbz'
         expected_file_name_lst = ['ComicInfo.xml', 'CompressionLog.txt']
         to_delete_file_name_lst = ['.DS_Store', 'Thumbs.db', 'Thumbs1.db']
+        extracted_directory = dirUtils.Directory(extracted_dir)
 
         # Delete __MACOSX directories if there are any. Before evaluating other stuff.
-        dir_path_lst = fileUtils.get_dirs_path_list(extracted_dir)
+        dir_path_lst = fileUtils.get_dirs_path_list(extracted_directory.path)
         for dir_path in dir_path_lst:
             if Path(dir_path).name == '__MACOSX':
                 result = fileUtils.delete_dir(dir_path)
@@ -306,7 +307,7 @@ class CBZFile(zipUtils.ZIPFile):
                     return False
 
         # Delete files we know we must delete (incl. from subdirectories)
-        extracted_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(extracted_dir, recursive=True)
+        extracted_file_lst: List[fileUtils.File] = extracted_directory.list_files(recursive=True)
         for extracted_file in extracted_file_lst:
             # If File identified to DELETE
             if extracted_file.file_name in to_delete_file_name_lst:
@@ -336,11 +337,11 @@ class CBZFile(zipUtils.ZIPFile):
                 return False
 
         # If there is any subdirectory, it could be unexpected
-        if fileUtils.has_subdirectories(extracted_dir):
-            dir_path_lst = fileUtils.get_dirs_path_list(extracted_dir)
+        if fileUtils.has_subdirectories(extracted_directory.path):
+            dir_path_lst = fileUtils.get_dirs_path_list(extracted_directory.path)
 
             # Abort if root has subdir + any unsuspected file (including any image)
-            root_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(extracted_dir, recursive=False)
+            root_file_lst: List[fileUtils.File] = extracted_directory.list_files(recursive=False)
             for root_file in root_file_lst:
                 if root_file.file_name not in expected_file_name_lst:
                     msg = ('There is at least one subdirectory and at least one unsuspected file at the root: '
@@ -355,15 +356,14 @@ class CBZFile(zipUtils.ZIPFile):
             # And that subdirectory does not contain itself anymore subdirectories, move the files to the directory.
             if len(dir_path_lst) == 1:
                 dir_path = dir_path_lst[0]
-                dir_subdir_lst = fileUtils.get_dirs_path_list(dir_path)
-                dir_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(dir_path, recursive=False)
+                directory = dirUtils.Directory(Path(dir_path))
+                dir_subdir_lst = fileUtils.get_dirs_path_list(directory.path)
+                dir_file_lst: List[fileUtils.File] = directory.list_files(recursive=False)
                 if len(dir_subdir_lst) == 1 and len(dir_file_lst) == 0:
                     subdir_path = Path(dir_subdir_lst[0])
-                    if not fileUtils.has_subdirectories(subdir_path):
-                        subdir_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
-                            subdir_path,
-                            recursive=False,
-                        )
+                    subdirectory = dirUtils.Directory(subdir_path)
+                    if not fileUtils.has_subdirectories(subdirectory.path):
+                        subdir_file_lst: List[fileUtils.File] = subdirectory.list_files(recursive=False)
                         if len(subdir_file_lst) > 0:
                             msg = ('Found only a single directory, which itself contains no files and exactly one '
                                    'subdirectory, which itself contains files but not any more directories. '
@@ -371,7 +371,7 @@ class CBZFile(zipUtils.ZIPFile):
                             log(Severity.WARNING, tool_name, msg)
                             for subdir_file in subdir_file_lst:
                                 destination_file_path = Path(
-                                    str(subdir_file.path).replace(str(subdir_path), str(dir_path))
+                                    str(subdir_file.path).replace(str(subdirectory.path), str(directory.path))
                                 )
                                 result = fileUtils.move_file(subdir_file.path, destination_file_path)
                                 if not result:
@@ -379,14 +379,14 @@ class CBZFile(zipUtils.ZIPFile):
                                            f'destination: "{destination_file_path}")!')
                                     log(Severity.CRITICAL, sanitize_tool_name, msg)
                                     return False
-                            result = fileUtils.delete_dir(subdir_path)
+                            result = fileUtils.delete_dir(subdirectory.path)
                             if not result:
-                                msg = f'Directory deletion was unsuccessful: "{subdir_path}"!'
+                                msg = f'Directory deletion was unsuccessful: "{subdirectory.path}"!'
                                 log(Severity.CRITICAL, sanitize_tool_name, msg)
                                 return False
 
             # Refresh dir_path_lst because it may have changed
-            dir_path_lst = fileUtils.get_dirs_path_list(extracted_dir)
+            dir_path_lst = fileUtils.get_dirs_path_list(extracted_directory.path)
             # ----------------------------------------------------------------------------------------------------------
 
             # Abort if any directory itself has a subdirectory
@@ -400,9 +400,10 @@ class CBZFile(zipUtils.ZIPFile):
             # If there was just one directory, move the files in it to the root
             if len(dir_path_lst) == 1:
                 dir_path = dir_path_lst[0]
-                subdir_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(dir_path, recursive=False)
+                directory = dirUtils.Directory(Path(dir_path))
+                subdir_file_lst: List[fileUtils.File] = directory.list_files(recursive=False)
                 for subdir_file in subdir_file_lst:
-                    destination_path = Path(extracted_dir, subdir_file.file_name)
+                    destination_path = Path(extracted_directory.path, subdir_file.file_name)
                     result = fileUtils.move_file(subdir_file.path, destination_path)
                     if not result:
                         msg = (f'File move unsuccessful (source: "{subdir_file.path}", '
@@ -410,19 +411,19 @@ class CBZFile(zipUtils.ZIPFile):
                         log(Severity.CRITICAL, sanitize_tool_name, msg)
                         return False
                 # Delete empty dir after everything has been moved to the root
-                if not fileUtils.has_subdirectories(Path(dir_path)) and len(fileUtils.get_file_list_from_path(dir_path, recursive=True)) == 0:
-                    result = fileUtils.delete_dir(Path(dir_path))
+                if not fileUtils.has_subdirectories(directory.path) and len(directory.list_files(recursive=True)) == 0:
+                    result = fileUtils.delete_dir(directory.path)
                     if not result:
-                        msg = f'Could not delete "{dir_path}"!'
+                        msg = f'Could not delete "{directory.path}"!'
                         log(Severity.CRITICAL, tool_name, msg)
                         return False
                 else:
-                    msg = f'Could not delete "{dir_path}" because it is not empty!'
+                    msg = f'Could not delete "{directory.path}" because it is not empty!'
                     log(Severity.CRITICAL, tool_name, msg)
                     return False
 
         # Get updated list of files (things may have been moved in previous step)
-        extracted_file_lst = fileUtils.get_file_list_from_path(extracted_dir, recursive=True)
+        extracted_file_lst = extracted_directory.list_files(recursive=True)
         need_padding_repair = False
         for extracted_file in extracted_file_lst:
             if len(extracted_file.file_name) < 2:  # If file name is incredibly short, throw error
@@ -557,10 +558,8 @@ class CBZFile(zipUtils.ZIPFile):
         # --------------------------------------------------------------------------------------------------------------
         # STEP THREE: GATHER LIST OF IMAGE FILES FROM EXTRACTED DIRECTORY
         img_file_cls_lst: List[CBZImageFile] = []
-        extracted_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
-            temp_dir_extracted_cbz,
-            recursive=True,
-        )
+        extracted_dir = dirUtils.Directory(temp_dir_extracted_cbz)
+        extracted_file_lst: List[fileUtils.File] = extracted_dir.list_files(recursive=True)
         for extracted_file in extracted_file_lst:
             if extracted_file.ext in imageUtils.image_file_cls_supported_ext_lst:
                 image_file_cls = CBZImageFile(extracted_file.path)
@@ -696,11 +695,8 @@ def batch_compress_cbz(target_dir: Union[str, Path], recursive: bool = True, alw
     compression_stats = CompressionStats()
 
     # Get list of .CBZ files
-    cbz_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
-        target_dir,
-        recursive=recursive,
-        filter_extension='cbz',
-    )
+    target_dir = dirUtils.Directory(Path(target_dir) if isinstance(target_dir, str) else target_dir)
+    cbz_file_lst: List[fileUtils.File] = target_dir.list_files(recursive=recursive, filter_extension='cbz')
 
     # Build list of CBZFile
     cbz_file_cls_lst: List[CBZFile] = []

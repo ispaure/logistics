@@ -1,8 +1,6 @@
-
-
 from typing import List, Optional
 from pathlib import Path
-from commonUtils import fileUtils, configUtils, appUtils
+from commonUtils import fileUtils, dirUtils, configUtils, appUtils
 from commonUtils.wrappers import cmdShellWrapper
 import webbrowser
 from commonUtils.osUtils import *
@@ -26,7 +24,6 @@ class MinecraftServer:
         self.type: MinecraftServerType = self.__get_type()
         self.disk_app: Optional[appUtils.DiskApp] = self.__get_disk_app()
         self.wiki_url: Optional[str] = self.__get_wiki_url()
-
 
     def __get_cfg_value(self, section, value):
         cfg_file_path = self.path / 'logistics_cfg.ini'
@@ -71,7 +68,7 @@ class MinecraftServer:
         return self.__get_cfg_value('Documentation', 'wiki')
 
     def __get_type(self) -> MinecraftServerType:
-        file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(self.path)
+        file_lst: List[fileUtils.File] = dirUtils.Directory(self.path).list_files()
 
         # If no files, label as "undefined"
         if not file_lst:
@@ -124,13 +121,12 @@ class MinecraftServer:
 
     def can_open_wiki(self):
         return self.wiki_url is not None
-    
+
     def can_edit_props(self):
         return self.properties.path.is_file()
 
 
 def get_minecraft_server_lst(servers_root: Path) -> List[MinecraftServer]:
-
     if not os.path.isdir(str(servers_root)):
         return []
 

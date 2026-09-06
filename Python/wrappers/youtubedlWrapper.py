@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List
 
 import config
-from commonUtils import fileUtils, pySideUtils
+from commonUtils import fileUtils, dirUtils, pySideUtils
 from commonUtils.debugUtils import *
 from commonUtils.debugUtils import print_debug_msg
 from commonUtils.osUtils import *
@@ -43,19 +43,17 @@ def download_all(youtube_dl_cfg_path):
     reinstall_youtube_dl()
 
     # Get config directory (where all download configs are stored)
-    config_directory = youtube_dl_cfg_path
+    config_directory = dirUtils.Directory(youtube_dl_cfg_path)
 
     # If that directory doesn't exist, throw error
-    if not os.path.isdir(config_directory):
-        msg = 'The specified directory for Youtube Download config files does not exist: \n' + config_directory
+    if not os.path.isdir(config_directory.path):
+        msg = 'The specified directory for Youtube Download config files does not exist: \n' + str(config_directory.path)
         msg += '\nAborting!'
         pySideUtils.display_msg_box_ok(tool_name, msg)
         return False
 
     # Get each .INI config file
-    config_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(
-        config_directory, filter_extension='ini',
-    )
+    config_file_lst: List[fileUtils.File] = config_directory.list_files(filter_extension='ini')
 
     # Download from each config file
     for config_file in config_file_lst:
@@ -98,7 +96,7 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
     print_debug_msg('Additional Parameters: ' + additional_params, show_verbose)
 
     # Get Download Directory
-    download_dir = str(Path(os.path.dirname(youtube_dl_cfg_path), channel_name, 'Season ' + str(season_number)))
+    download_dir = dirUtils.Directory(Path(os.path.dirname(youtube_dl_cfg_path), channel_name, 'Season ' + str(season_number)))
 
     # Create string for download command
     if not master_branch:
@@ -140,14 +138,14 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
 
     # Sets the download file name
     yt_dl_cmd_str += (
-        f'-o "{download_dir}{split_char}%(channel)s - s0{season_number}'
+        f'-o "{download_dir.path}{split_char}%(channel)s - s0{season_number}'
         f'e%(autonumber)s - %(title).50s.%(ext)s" '
     )
 
     # Sets the auto numbering to start at X number (so it continues after the existing files)
     # Find how many files are already there, and start after
-    if os.path.exists(download_dir):
-        existing_file_lst: List[fileUtils.File] = fileUtils.get_file_list_from_path(download_dir)
+    if os.path.exists(download_dir.path):
+        existing_file_lst: List[fileUtils.File] = download_dir.list_files()
         count = 1
 
         for existing_file in existing_file_lst:
