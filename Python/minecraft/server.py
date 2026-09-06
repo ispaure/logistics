@@ -68,7 +68,7 @@ class MinecraftServer:
         return self.__get_cfg_value('Documentation', 'wiki')
 
     def __get_type(self) -> MinecraftServerType:
-        file_lst: List[fileUtils.File] = dirUtils.Directory(self.path).list_files()
+        file_lst: List[fileUtils.File] = dirUtils.Directory(self.path).list_files(recursive=False)
 
         # If no files, label as "undefined"
         if not file_lst:
