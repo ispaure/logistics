@@ -188,7 +188,7 @@ def add_remote_from_zip_to_rclone_conf(zip_path, zip_pw):
     add_remote_to_rclone_conf(extract_dir)
 
     # Delete files in extract dir now that they have been added to rclone
-    fileUtils.delete_dir_contents(extract_dir)
+    dirUtils.Directory(extract_dir).delete_contents()
 
     # Debug Done
     print_debug_msg('Successfully loaded remote credentials!', show_verbose)

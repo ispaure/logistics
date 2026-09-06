@@ -527,7 +527,7 @@ class CBZFile(zipUtils.ZIPFile):
         self.compression_stats.reset()  # Statistics
         self.compression_log.reset()  # Logs
         fileUtils.make_dir(temp_compression_path)  # Make directory (if it doesn't exist)
-        fileUtils.delete_dir_contents(temp_compression_path)  # Delete directory contents
+        dirUtils.Directory(temp_compression_path).delete_contents()  # Delete directory contents
 
         # --------------------------------------------------------------------------------------------------------------
         # START LOGS
@@ -646,7 +646,7 @@ class CBZFile(zipUtils.ZIPFile):
         # --------------------------------------------------------------------------------------------------------------
         # STEP NINE: CLEAN TEMP DIRECTORIES
         # Wipe directories
-        fileUtils.delete_dir_contents(temp_compression_path)
+        dirUtils.Directory(temp_compression_path).delete_contents()
 
         # --------------------------------------------------------------------------------------------------------------
         # END LOGS

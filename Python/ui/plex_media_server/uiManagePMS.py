@@ -79,6 +79,8 @@ def unpackage_pms(remote_cls):
     if not os.path.exists(pms_data_path):
         pms_data_path.mkdir(parents=True, exist_ok=True)
 
+    pms_data_directory = dirUtils.Directory(pms_data_path)
+
     match get_os():
         case OS.WIN:
             # Determine archive path
@@ -119,7 +121,7 @@ def unpackage_pms(remote_cls):
                                                                                            pms_data_path=pms_data_path)
 
             # Wipe contents within Plex Media Server Data in Local AppData before extraction
-            fileUtils.delete_dir_contents(pms_data_path)
+            pms_data_directory.delete_contents()
 
             # Put command in file and run
             # cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=config.LogisticsConfig().temp_cmd)
@@ -151,7 +153,7 @@ def unpackage_pms(remote_cls):
                 fileUtils.copy_file(pms_plist_file_path, plist_destination_path)
 
             # Wipe contents within Plex Media Server Data in Local AppData
-            fileUtils.delete_dir_contents(pms_data_path)
+            pms_data_directory.delete_contents()
 
             # Extract archive contents to User's Application Support, using <name of software>.
             print('Extracting PMSDATA archive to Application Support... Please wait!')

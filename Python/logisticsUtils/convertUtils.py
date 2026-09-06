@@ -31,11 +31,13 @@ def convert_cbr_to_cbz(target_file_path: Path):
     else:
         print('Convert path existed! Proceeding...')
 
+    temp_convert_directory = dirUtils.Directory(temp_convert_path)
+
     # Make sure temp directory is empty
     temp_dir_contents = os.listdir(temp_convert_path)
     if len(temp_dir_contents) != 0:
         print('Convert path contained some files. Obliterating...')
-        fileUtils.delete_dir_contents(temp_convert_path)
+        temp_convert_directory.delete_contents()
     else:
         print('Convert path did not contain any files. Proceeding...')
 
@@ -46,7 +48,7 @@ def convert_cbr_to_cbz(target_file_path: Path):
     file_name_cbz: Path = file.with_suffix('.cbz')
     try:
         # In here is convert procedure for file from beginning to end.
-        fileUtils.delete_dir_contents(temp_convert_path)
+        temp_convert_directory.delete_contents()
         # Uncompress RAR
         zipUtils.unrar_file(file, temp_convert_path, unrar_sw_path=Path(config.LogisticsConfig().path_logistics_software_win, 'unrar'))
         # Zip File
@@ -54,7 +56,7 @@ def convert_cbr_to_cbz(target_file_path: Path):
         # Need to rename after file creation because it does .zip regardless of what I say
         fileUtils.rename_file(file_name_zip, file_name_cbz)
         # Clean convert dir
-        fileUtils.delete_dir_contents(temp_convert_path)
+        temp_convert_directory.delete_contents()
         # Delete original file
         original_file = fileUtils.File(file)
         original_file.delete_file()
@@ -72,7 +74,7 @@ def convert_cbr_to_cbz(target_file_path: Path):
             cbz_file = fileUtils.File(file_name_cbz)
             cbz_file.delete_file()
         # Clean convert dir
-        fileUtils.delete_dir_contents(temp_convert_path)
+        temp_convert_directory.delete_contents()
 
     # The conversion failed!
     return False
