@@ -38,6 +38,7 @@ def comic_info_xml_replace_author(file_path: Path, search: str):
     else:
         print('Convert path existed! Proceeding...')
 
+    temp_folder_directory = dirUtils.Directory(temp_folder_path)
     comicinfo_xml_path = Path(temp_folder_path, 'ComicInfo.xml')
 
     # Figure out zip name from file_path
@@ -47,7 +48,7 @@ def comic_info_xml_replace_author(file_path: Path, search: str):
     # Try from now on, if doesn't succeed, must be cautious about not losing files
     try:
         # Delete contents in dir
-        fileUtils.delete_dir_contents(temp_folder_path)
+        temp_folder_directory.delete_contents()
 
         # Uncompress ZIP
         zipUtils.unzip_file(file_path_cbz, temp_folder_path)
@@ -75,7 +76,7 @@ def comic_info_xml_replace_author(file_path: Path, search: str):
         fileUtils.rename_file(file_path_zip, file_path_cbz)
 
         # Clean convert dir
-        fileUtils.delete_dir_contents(temp_folder_path)
+        temp_folder_directory.delete_contents()
 
         # Delete original file not needed because was overwritten
         # The rename author succeeded!
@@ -92,7 +93,7 @@ def comic_info_xml_replace_author(file_path: Path, search: str):
         # and should never be deleted
 
         # Clean convert dir
-        fileUtils.delete_dir_contents(temp_folder_path)
+        temp_folder_directory.delete_contents()
 
 
 def ui_comicinfoxml_batch_rename_author_to_dir_name(convert_arg):
