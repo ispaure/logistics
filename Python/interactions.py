@@ -27,7 +27,7 @@ def inter_open_dir(remote_cls):
 def inter_open_dir_action(remote_cls):
     print('Opening Directory')
     print(remote_cls.path)
-    fileUtils.open_dir_path(remote_cls.path)
+    remote_cls.open()
 
 
 def inter_comic_rack_yac_reader(remote_cls):
