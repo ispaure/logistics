@@ -38,7 +38,7 @@ def inter_echo_calibre_epubs_to_boox_sd(calibre_lib: CalibreLibrary):
 
 def inter_echo_calibre_epubs_to_boox_sd_action(calibre_lib: CalibreLibrary):
     dest_pth: Path = Path('/Volumes', 'BOOX-SD', 'Calibre [EPUBs]', calibre_lib.name)
-    calibre_lib.echo_epubs(dest_pth)
+    calibre_lib.echo_book_formats(dest_pth, ['epub'])
 
 
 calibre_interaction_lst = [inter_open_calibre_dir,
