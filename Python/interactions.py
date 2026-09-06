@@ -1,4 +1,3 @@
-
 from commonUtils import fileUtils
 from commonUtils.osUtils import *
 from pathlib import Path
@@ -12,6 +11,7 @@ from ui.plex_media_server import uiManagePMS
 from ui.calibre import uiManageCalibre
 from ui.debug.popup import uiYoutubeDL
 import commands as commands
+from commonUtils.debugUtils import *
 
 
 def inter_open_dir(remote_cls):
@@ -53,8 +53,8 @@ def inter_comic_rack_yac_reader(remote_cls):
 
 def inter_comic_rack_action(remote_cls):
     # Determine ComicRack Preference Links
-    cyo_appdata_local_dir_path = str(Path(os.environ['USERPROFILE'], 'AppData', 'Local', 'cYo'))
-    cyo_appdata_roaming_dir_path = str(Path(os.environ['USERPROFILE'], 'AppData', 'Roaming', 'cYo'))
+    cyo_appdata_local_dir_path: Path = Path(os.environ['USERPROFILE'], 'AppData', 'Local', 'cYo')
+    cyo_appdata_roaming_dir_path: Path = Path(os.environ['USERPROFILE'], 'AppData', 'Roaming', 'cYo')
 
     # If paths are invalid, do not proceed!
     if cyo_appdata_local_dir_path is None or cyo_appdata_roaming_dir_path is None:
@@ -75,28 +75,33 @@ def inter_comic_rack_action(remote_cls):
     time.sleep(0.2)
 
     # Start software
-    exec_path = str(Path(config.LogisticsConfig().path_logistics_software_win, 'ComicRack', 'ComicRack.exe'))
+    exec_path: Path = Path(config.LogisticsConfig().path_logistics_software_win, 'ComicRack', 'ComicRack.exe')
     cmdShellWrapper.exec_cmd(f'start "{exec_path}"', wait_for_output=False)
 
 
 def inter_yac_reader_action(remote_cls):
     # If YACReader not installed, unzip in /Applications
-    install_path = str(Path('/Applications', 'YACReader.app'))
+    install_path: Path = Path('/Applications', 'YACReader.app')
     if not os.path.exists(install_path):
-        zip_path = str(Path(config.LogisticsConfig().path_logistics_software_mac, 'YACReader.app.zip'))
+        zip_path: Path = Path(config.LogisticsConfig().path_logistics_software_mac, 'YACReader.app.zip')
         fileUtils.unzip_file(zip_path, install_path)
+
     # If YACReaderLibrary not installed, unzip in /Applications
-    install_path = str(Path('/Applications', 'YACReaderLibrary.app'))
+    install_path = Path('/Applications', 'YACReaderLibrary.app')
     if not os.path.exists(install_path):
-        zip_path = str(Path(config.LogisticsConfig().path_logistics_software_mac, 'YACReaderLibrary.app.zip'))
+        zip_path = Path(config.LogisticsConfig().path_logistics_software_mac, 'YACReaderLibrary.app.zip')
         fileUtils.unzip_file(zip_path, install_path)
 
     yac_prefs_dir = config.LogisticsConfig().yac_lib_prefs_dir
+    if yac_prefs_dir is None:
+        log(Severity.CRITICAL, 'inter_yac_reader_action', 'YACReaderLibrary preferences directory is not configured for this platform')
+        return False
+
     # Create Directory where to put the library file
     fileUtils.make_dir(yac_prefs_dir)
 
     # Copy YACReaderLibrary ini file to Application Support
-    fileUtils.copy_file(remote_cls.yac_reader_library_ini, str(Path(yac_prefs_dir, 'YACReaderLibrary.ini')))
+    fileUtils.copy_file(remote_cls.yac_reader_library_ini, Path(yac_prefs_dir, 'YACReaderLibrary.ini'))
 
     # Open YACReader
     cmdShellWrapper.exec_cmd(str(Path('/Applications', 'YACReaderLibrary.app', 'Contents', 'MacOS', 'YACReaderLibrary')), wait_for_output=False)
@@ -140,7 +145,7 @@ def inter_rclone_push_pull_action(remote_cls):
 
     elif remote_cls.type == 'Remote':
         source_path = remote_cls.name + ':'
-        destination_path = str(Path(config.LogisticsConfig().path_remote_local, remote_cls.name))
+        destination_path: Path = Path(config.LogisticsConfig().path_remote_local, remote_cls.name)
         rcloneWrapper.rclone_sync(source_path, destination_path)
     else:
         print('Remote Type Invalid. Not proceeding in case this would screw up something big.')

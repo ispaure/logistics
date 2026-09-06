@@ -7,10 +7,10 @@ from commonUtils.debugUtils import *
 show_verbose = True
 
 
-def get_temp_loc_edit_comicinfoxml():
+def get_temp_loc_edit_comicinfoxml() -> Path:
     # Figure out the temporary convert directory
-    temp_convert_path = str(Path(config.LogisticsConfig().temp_path, 'Edit-ComicInfoXML'))
-    print('Convert path is: ' + temp_convert_path)
+    temp_convert_path: Path = Path(config.LogisticsConfig().temp_path, 'Edit-ComicInfoXML')
+    print('Convert path is: ' + str(temp_convert_path))
     return temp_convert_path
 
 
@@ -29,7 +29,7 @@ def comic_info_xml_replace_author(file_path: Path, search: str):
     print(f'Author name: {replace}')
 
     # Figure out temporary folder path
-    temp_folder_path = get_temp_loc_edit_comicinfoxml()
+    temp_folder_path: Path = get_temp_loc_edit_comicinfoxml()
 
     # Make sure temp directory exists, if not create it
     if not os.path.isdir(temp_folder_path):
