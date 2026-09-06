@@ -14,7 +14,7 @@ def get_remote_cls_pmsdata(remote_cls):
     """
     Get the remote class of the -PMSData of the current remote
     """
-    return rcloneWrapper.get_remote_class(str(Path(config.LogisticsConfig().path_remote_network_mount, remote_cls.name + '-PMSDATA')))
+    return rcloneWrapper.get_remote_class(Path(config.LogisticsConfig().path_remote_network_mount, remote_cls.name + '-PMSDATA'))
 
 
 def open_dir_remote_cls_pmsdata(remote_cls):
@@ -45,14 +45,14 @@ def clear_local_pmsdata(remote_cls):
 
 
 def get_local_cls_pmsdata(remote_cls):
-    return rcloneWrapper.get_remote_class(str(Path(config.LogisticsConfig().path_remote_local, remote_cls.name + '-PMSDATA')))
+    return rcloneWrapper.get_remote_class(Path(config.LogisticsConfig().path_remote_local, remote_cls.name + '-PMSDATA'))
 
 
 def pull_pms(remote_cls):
     remote_cls_pmsdata = get_remote_cls_pmsdata(remote_cls)  # Get remote class for the -PMSDATA
 
     source_path = remote_cls_pmsdata.name + ':'
-    destination_path = str(Path(config.LogisticsConfig().path_remote_local, remote_cls_pmsdata.name))
+    destination_path = Path(config.LogisticsConfig().path_remote_local, remote_cls_pmsdata.name)
 
     rcloneWrapper.rclone_sync(source_path, destination_path)
 
@@ -77,12 +77,12 @@ def unpackage_pms(remote_cls):
     # Make Plex Media Server directory in Location Used By Software (if it doesn't exist yet)
     pms_data_path = config.LogisticsConfig().pms_data_path
     if not os.path.exists(pms_data_path):
-        Path(pms_data_path).mkdir(parents=True, exist_ok=True)
+        pms_data_path.mkdir(parents=True, exist_ok=True)
 
     match get_os():
         case OS.WIN:
             # Determine archive path
-            seven_zip_archive_path = str(Path(local_cls_pmsdata.path, 'pms_data.7z.001'))
+            seven_zip_archive_path = Path(local_cls_pmsdata.path, 'pms_data.7z.001')
 
             # Make sure archive file exists, else throw error
             if not os.path.exists(seven_zip_archive_path):
@@ -91,7 +91,7 @@ def unpackage_pms(remote_cls):
                 return False
 
             # Find registry file, else throws warning
-            pms_reg_file_path = str(Path(local_cls_pmsdata.path, 'pms_registry.reg'))
+            pms_reg_file_path = Path(local_cls_pmsdata.path, 'pms_registry.reg')
 
             if not os.path.exists(pms_reg_file_path):
                 # Display Error Message
@@ -113,7 +113,7 @@ def unpackage_pms(remote_cls):
             # Extract archive contents to Local AppData, using 7-zip. In terminal window so that we can visualize as
             # this can take long. Also adds proper things to registry
             # Create 7z extract part in command
-            seven_zip_exec_path = str(Path(config.LogisticsConfig().path_logistics_software_win, '7-zip', '7z'))
+            seven_zip_exec_path = Path(config.LogisticsConfig().path_logistics_software_win, '7-zip', '7z')
             command += '\n"{sz_path}" x -y "{sz_archive_path}" -o"{pms_data_path}"'.format(sz_path=seven_zip_exec_path,
                                                                                            sz_archive_path=seven_zip_archive_path,
                                                                                            pms_data_path=pms_data_path)
@@ -126,7 +126,7 @@ def unpackage_pms(remote_cls):
             cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=True)
         case OS.MAC:
             # Determine archive path
-            zip_archive_path = str(Path(local_cls_pmsdata.path, 'pms_data_mac.zip'))
+            zip_archive_path = Path(local_cls_pmsdata.path, 'pms_data_mac.zip')
 
             # Make sure archive file exists, else throw error
             if not os.path.exists(zip_archive_path):
@@ -135,7 +135,7 @@ def unpackage_pms(remote_cls):
                 return False
 
             # Find plist file, else throws warning
-            pms_plist_file_path = str(Path(local_cls_pmsdata.path, 'com.plexapp.plexmediaserver.plist'))
+            pms_plist_file_path = Path(local_cls_pmsdata.path, 'com.plexapp.plexmediaserver.plist')
 
             if not os.path.exists(pms_plist_file_path):
                 # Display Error Message
@@ -147,7 +147,7 @@ def unpackage_pms(remote_cls):
                     return False
             else:
                 # Copy plist file to proper location
-                plist_destination_path = str(Path(os.environ['HOME'], 'Library', 'Preferences', 'com.plexapp.plexmediaserver.plist'))
+                plist_destination_path = Path(os.environ['HOME'], 'Library', 'Preferences', 'com.plexapp.plexmediaserver.plist')
                 fileUtils.copy_file(pms_plist_file_path, plist_destination_path)
 
             # Wipe contents within Plex Media Server Data in Local AppData
@@ -155,7 +155,7 @@ def unpackage_pms(remote_cls):
 
             # Extract archive contents to User's Application Support, using <name of software>.
             print('Extracting PMSDATA archive to Application Support... Please wait!')
-            zipUtils.unzip_file(zip_archive_path, pms_data_path[0:-len(pms_data_path.split('/')[-1])])
+            zipUtils.unzip_file(zip_archive_path, pms_data_path.parent)
             print('Files extracted! Finished')
 
 
@@ -195,9 +195,9 @@ def package_pms(remote_cls) -> bool:
 
             # Create command
             plex_registry_loc = 'HKEY_CURRENT_USER\\Software\\Plex, Inc.\\Plex Media Server'
-            plex_registry_path = str(pms_package_path / 'pms_registry.reg')
-            seven_zip_exec_path = str(Path(config.LogisticsConfig().path_logistics_software_win, '7-zip', '7z'))
-            seven_zip_archive_path = str(pms_package_path / 'pms_data.7z')
+            plex_registry_path = pms_package_path / 'pms_registry.reg'
+            seven_zip_exec_path = Path(config.LogisticsConfig().path_logistics_software_win, '7-zip', '7z')
+            seven_zip_archive_path = pms_package_path / 'pms_data.7z'
 
             command = 'reg export "{}" "{}"'.format(plex_registry_loc, plex_registry_path)
             command += '\n"{}" a -y -mx1 -v5000000000 "{}"'.format(seven_zip_exec_path, seven_zip_archive_path)

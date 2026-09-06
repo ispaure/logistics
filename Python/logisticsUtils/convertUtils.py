@@ -9,21 +9,20 @@ from typing import List
 show_verbose = True
 
 
-def get_temp_convert_path(convert_name):
+def get_temp_convert_path(convert_name) -> Path:
     # Figure out the temporary convert directory
-    temp_convert_path = str(Path(config.LogisticsConfig().temp_path, convert_name))
-    print('Convert path is: ' + temp_convert_path)
+    temp_convert_path: Path = Path(config.LogisticsConfig().temp_path, convert_name)
+    print('Convert path is: ' + str(temp_convert_path))
     return temp_convert_path
 
 
-def convert_cbr_to_cbz(target_file_path):
+def convert_cbr_to_cbz(target_file_path: Path):
 
     # Simplify var name to file
     file = target_file_path
-    filter_ext = '.cbz'
 
     # Get temp convert path
-    temp_convert_path = get_temp_convert_path('CBRtoCRZ-Convert')
+    temp_convert_path: Path = get_temp_convert_path('CBRtoCRZ-Convert')
 
     # Make sure temp directory exists, if not create it
     if not os.path.isdir(temp_convert_path):
@@ -43,13 +42,13 @@ def convert_cbr_to_cbz(target_file_path):
     print('Starting conversion now!\n')
 
     # Determine new file name
-    file_name_zip = file[:-len(filter_ext)] + '.zip'
-    file_name_cbz = file[:-len(filter_ext)] + '.cbz'
+    file_name_zip: Path = file.with_suffix('.zip')
+    file_name_cbz: Path = file.with_suffix('.cbz')
     try:
         # In here is convert procedure for file from beginning to end.
         fileUtils.delete_dir_contents(temp_convert_path)
         # Uncompress RAR
-        zipUtils.unrar_file(file, temp_convert_path, unrar_sw_path=str(Path(config.LogisticsConfig().path_logistics_software_win, 'unrar')))
+        zipUtils.unrar_file(file, temp_convert_path, unrar_sw_path=Path(config.LogisticsConfig().path_logistics_software_win, 'unrar'))
         # Zip File
         zipUtils.zip_file(temp_convert_path, file_name_zip, keep_root=False)
         # Need to rename after file creation because it does .zip regardless of what I say

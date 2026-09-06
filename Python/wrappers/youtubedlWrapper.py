@@ -43,7 +43,7 @@ def download_all(youtube_dl_cfg_path):
     reinstall_youtube_dl()
 
     # Get config directory (where all download configs are stored)
-    config_directory = dirUtils.Directory(youtube_dl_cfg_path)
+    config_directory = dirUtils.Directory(Path(youtube_dl_cfg_path))
 
     # If that directory doesn't exist, throw error
     if not os.path.isdir(config_directory.path):
@@ -175,27 +175,18 @@ def push_seasons(remote_cls):
     # Initialize push list
     push_dir_lst = []
 
-    # Determine split char
-    match get_os():
-        case OS.WIN:
-            split_char = '\\'
-        case _:
-            split_char = '/'
-
     # If these channel dirs have a subdir with season in it, add to push list
     for channel_dir in channel_dir_lst:
         channel_dir_sub_lst = fileUtils.get_dirs_path_list(channel_dir)
 
         for channel_dir_sub in channel_dir_sub_lst:
-            if 'Season' in channel_dir_sub.split(split_char)[-1]:
+            if 'Season' in Path(channel_dir_sub).name:
                 push_dir_lst.append(channel_dir_sub)
 
     # Push Season folders
     for push_dir in push_dir_lst:
-        source = push_dir
-        destination = remote_cls.name + ':' + push_dir.replace(
-            remote_cls.path, '',
-        )[1:].replace('\\', '/')
+        source = Path(push_dir)
+        destination = remote_cls.name + ':' + source.relative_to(remote_cls.path).as_posix()
 
         print(f'Pushing {source} to {destination}')
         rcloneWrapper.rclone_sync(source, destination, wait_for_output=True)

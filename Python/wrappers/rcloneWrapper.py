@@ -402,13 +402,16 @@ def get_all_remote_class():
     return remote_cls_lst
 
 
-def rclone_sync(source_path, destination_path, query=False, wait_for_output=False, dry_run=False, track_renames=False, bw_limit=None):
+def rclone_sync(source_path: Union[str, Path], destination_path: Union[str, Path], query=False, wait_for_output=False, dry_run=False, track_renames=False, bw_limit=None):
+    source_path_str = str(source_path)
+    destination_path_str = str(destination_path)
+
     # Determine Sync Command
     baseline = '"{rclone_path}"'.format(rclone_path=get_rclone_path())
     baseline += ' sync --progress --copy-links '
     if track_renames:
         baseline += '--track-renames '
-    if '-VM' in source_path:
+    if '-VM' in source_path_str:
         baseline += '--transfers=1 '
     else:
         baseline += '--transfers=10 '
@@ -420,21 +423,21 @@ def rclone_sync(source_path, destination_path, query=False, wait_for_output=Fals
     # Add max tps (else might say that Too many requests or write operations)
     # baseline += '--tpslimit 12 '
 
-    baseline += f'"{source_path}" "{destination_path}"'
+    baseline += f'"{source_path_str}" "{destination_path_str}"'
 
     # If directory doesn't exist on destination yet, might need to create it
     if not os.path.exists(destination_path):
         match get_os():
             case OS.WIN:
-                if destination_path[1] == ':':
+                if destination_path_str[1] == ':':
                     Path(destination_path).mkdir(parents=True, exist_ok=True)
             case OS.MAC | OS.LINUX:
-                if destination_path[0] == '/':
+                if destination_path_str[0] == '/':
                     Path(destination_path).mkdir(parents=True, exist_ok=True)
 
     if query:
         output_lines = cmdShellWrapper.exec_cmd(baseline, wait_for_output=True)
-        query_dict = rclone_sync_process_query(source_path, destination_path, output_lines)
+        query_dict = rclone_sync_process_query(source_path_str, destination_path_str, output_lines)
         return query_dict
     else:
         # cmdShellWrapper.exec_cmd(baseline, wait_for_output=wait_for_output, in_new_window=config.LogisticsConfig().temp_cmd)
@@ -442,11 +445,14 @@ def rclone_sync(source_path, destination_path, query=False, wait_for_output=Fals
         return None
 
 
-def rclone_sync_process_query(source_path, destination_path, output_lines):
+def rclone_sync_process_query(source_path: Union[str, Path], destination_path: Union[str, Path], output_lines):
     """
     Method used internally to process the output lines in something that actually means something.
     This is intended to analyze output lines from a rclone sync with --dry-run as one of the arguments!
     """
+    source_path_str = str(source_path)
+    destination_path_str = str(destination_path)
+
     # Create the query dict that will contain useful information
     query_dict = {}
 
@@ -469,29 +475,29 @@ def rclone_sync_process_query(source_path, destination_path, output_lines):
 
                 case OS.WIN:
                     # Determine File Path of Source
-                    if source_path[1] == ':':  # Is a location on disk
-                        file_path_source = str(Path(source_path, file_path_to_copy))
+                    if source_path_str[1] == ':':  # Is a location on disk
+                        file_path_source = str(Path(source_path_str, file_path_to_copy))
                     else:  # Is a rclone remote location
-                        file_path_source = source_path + file_path_to_copy.replace('\\', '/')  # Rclone paths are always fwd
+                        file_path_source = source_path_str + file_path_to_copy.replace('\\', '/')  # Rclone paths are always fwd
 
                     # Determine File Path of Destination
-                    if destination_path[1] == ':':  # Is a location on disk
-                        file_path_destination = str(Path(destination_path, file_path_to_copy))
+                    if destination_path_str[1] == ':':  # Is a location on disk
+                        file_path_destination = str(Path(destination_path_str, file_path_to_copy))
                     else:  # Is a rclone remote location
-                        file_path_destination = destination_path + file_path_to_copy.replace('\\', '/')  # Rclone paths are always fwd
+                        file_path_destination = destination_path_str + file_path_to_copy.replace('\\', '/')  # Rclone paths are always fwd
 
                 case OS.MAC:
                     # Determine File Path of Source
-                    if source_path[0] == '/':  # Is a location on disk
-                        file_path_source = str(Path(source_path, file_path_to_copy))
+                    if source_path_str[0] == '/':  # Is a location on disk
+                        file_path_source = str(Path(source_path_str, file_path_to_copy))
                     else:  # Is a rclone remote location
-                        file_path_source = source_path + file_path_to_copy
+                        file_path_source = source_path_str + file_path_to_copy
 
                     # Determine File Path of Destination
-                    if destination_path[0] == '/':  # Is a location on disk
-                        file_path_destination = str(Path(destination_path, file_path_to_copy))
+                    if destination_path_str[0] == '/':  # Is a location on disk
+                        file_path_destination = str(Path(destination_path_str, file_path_to_copy))
                     else:  # Is a rclone remote location
-                        file_path_destination = destination_path + file_path_to_copy
+                        file_path_destination = destination_path_str + file_path_to_copy
 
             # ADD THE FINDINGS TO THE LIST
             copy_lst.append([file_path_source, file_path_destination])

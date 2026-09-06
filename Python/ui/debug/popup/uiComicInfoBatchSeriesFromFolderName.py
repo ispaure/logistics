@@ -24,7 +24,7 @@ def comic_info_xml_replace_series(file_path: Path, search: str, suffix: str):
     print(f'Series name: {replace}')
 
     # Figure out temporary folder path
-    temp_folder_path = uiComicInfoBatchAuthorFromFolderName.get_temp_loc_edit_comicinfoxml()
+    temp_folder_path: Path = uiComicInfoBatchAuthorFromFolderName.get_temp_loc_edit_comicinfoxml()
 
     # Make sure temp directory exists, if not create it
     if not os.path.isdir(temp_folder_path):

@@ -32,18 +32,18 @@ class CalibreLibrary(dirUtils.Directory):
     def open_in_calibre(self):
         match get_os():
             case OS.WIN:
-                software_exec_path = str(Path(config.LogisticsConfig().path_logistics_software_win, 'Calibre2', 'calibre.exe'))
+                software_exec_path: Path = Path(config.LogisticsConfig().path_logistics_software_win, 'Calibre2', 'calibre.exe')
                 launch_cmd = '"{}" --with-library "{}"'.format(software_exec_path, self.path)
                 cmdShellWrapper.exec_cmd(launch_cmd, wait_for_output=False)
 
             case OS.MAC:
                 # Calibre location on macOS
-                software_exec_path = str(Path('/Applications', 'calibre.app', 'Contents', 'MacOS', 'calibre'))
+                software_exec_path: Path = Path('/Applications', 'calibre.app', 'Contents', 'MacOS', 'calibre')
 
                 # If macOS, calibre.app might not be installed yet (it doesn't come extracted in Logistics as it creates rclone
                 # bug. So check if it is installed. If not extract to folder.
                 if not os.path.exists(software_exec_path):
-                    zipUtils.unzip_file(str(Path(config.LogisticsConfig().path_logistics_software_mac, 'calibre.app.zip')), str(Path('/Applications')))
+                    zipUtils.unzip_file(Path(config.LogisticsConfig().path_logistics_software_mac, 'calibre.app.zip'), Path('/Applications'))
 
                 # Once it is known that calibre has been installed (or is there on macOS, can execute it.)
                 launch_cmd = f'"{software_exec_path}" --with-library "{self.path}"'
