@@ -21,14 +21,14 @@ def open_dir_remote_cls_pmsdata(remote_cls):
     """
     Opens the folder in explorer or finder of the current remote's -PMSDATA
     """
-    fileUtils.open_dir_path(get_remote_cls_pmsdata(remote_cls).path)
+    get_remote_cls_pmsdata(remote_cls).open()
 
 
 def open_dir_local_cls_pmsdata(remote_cls):
     """
     Opens the folder in explorer or finder of the current remote's -PMSDATA
     """
-    fileUtils.open_dir_path(get_local_cls_pmsdata(remote_cls).path)
+    get_local_cls_pmsdata(remote_cls).open()
 
 
 def clear_local_pmsdata(remote_cls):

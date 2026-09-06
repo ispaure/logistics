@@ -94,7 +94,7 @@ class MinecraftServer:
         self.disk_app.launch()
 
     def open_dir(self):
-        fileUtils.open_dir_path(self.path)
+        dirUtils.Directory(self.path).open()
 
     def open_wiki(self):
         if self.wiki_url is None:
