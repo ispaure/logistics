@@ -2,9 +2,6 @@
 import config as config
 from pathlib import Path
 import webbrowser
-from commonUtils.debugUtils import *
-from commonUtils.osUtils import *
-from commonUtils import zipUtils
 from commonUtils.wrappers import cmdShellWrapper
 
 
@@ -16,34 +13,6 @@ def run_repair_windows_script():
 def run_repair_ntfs_on_d():
     cmd = 'start ' + str(Path(config.LogisticsConfig().path_logistics_scripts, 'repair_ntfs_on_D.bat'))
     cmdShellWrapper.exec_cmd(cmd, wait_for_output=False)
-
-
-def open_calibre(calibre_library_path):
-    match get_os():
-        case OS.WIN:
-            software_exec_path = str(Path(config.LogisticsConfig().path_logistics_software_win, 'Calibre2', 'calibre.exe'))
-            launch_cmd = '"{}" --with-library "{}"'.format(software_exec_path, calibre_library_path)
-            cmdShellWrapper.exec_cmd(launch_cmd, wait_for_output=False)
-        case OS.MAC:
-            # Calibre location on macOS
-            software_exec_path = str(Path('/Applications', 'calibre.app', 'Contents', 'MacOS', 'calibre'))
-
-            # If macOS, calibre.app might not be installed yet (it doesn't come extracted in Logistics as it creates rclone
-            # bug. So check if it is installed. If not extract to folder.
-            if not os.path.exists(software_exec_path):
-                zipUtils.unzip_file(str(Path(config.LogisticsConfig().path_logistics_software_mac, 'calibre.app.zip')), str(Path('/Applications')))
-
-            # Once it is known that calibre has been installed (or is there on macOS, can execute it.)
-            launch_cmd = f'"{software_exec_path}" --with-library "{calibre_library_path}"'
-            print(launch_cmd)
-            cmdShellWrapper.exec_cmd(launch_cmd, wait_for_output=False)
-            print('done')
-        case OS.LINUX:
-            # If Linux, calibre might not be installed yet
-            if not os.path.isdir('/var/lib/flatpak/app/com.calibre_ebook.calibre'):
-                log(Severity.CRITICAL, 'Open Calibre', 'Cannot Open Calibre because it is not installed on the system. install using Bazaar on Bazzite', popup=True)
-            else:
-                cmdShellWrapper.exec_cmd(f'flatpak run com.calibre_ebook.calibre --with-library "{calibre_library_path}"')
 
 
 def open_config_file_url(entry_str):

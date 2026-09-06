@@ -6,7 +6,7 @@ import os
 
 
 def push_to_cloud(remote_cls):
-    source_path = remote_cls['remote_cls'].directory_path
+    source_path = remote_cls['remote_cls'].path
     destination_path = remote_cls['remote_cls'].name + ':'
     rcloneWrapper.rclone_sync(source_path, destination_path, track_renames=remote_cls['track_renames'].isChecked())
 

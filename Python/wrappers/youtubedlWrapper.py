@@ -196,7 +196,7 @@ def push_seasons(remote_cls):
     for push_dir in push_dir_lst:
         source = push_dir
         destination = remote_cls.name + ':' + push_dir.replace(
-            remote_cls.directory_path, '',
+            remote_cls.path, '',
         )[1:].replace('\\', '/')
 
         print(f'Pushing {source} to {destination}')

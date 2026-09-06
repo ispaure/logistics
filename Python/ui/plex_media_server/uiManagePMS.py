@@ -21,25 +21,25 @@ def open_dir_remote_cls_pmsdata(remote_cls):
     """
     Opens the folder in explorer or finder of the current remote's -PMSDATA
     """
-    fileUtils.open_dir_path(get_remote_cls_pmsdata(remote_cls).directory_path)
+    fileUtils.open_dir_path(get_remote_cls_pmsdata(remote_cls).path)
 
 
 def open_dir_local_cls_pmsdata(remote_cls):
     """
     Opens the folder in explorer or finder of the current remote's -PMSDATA
     """
-    fileUtils.open_dir_path(get_local_cls_pmsdata(remote_cls).directory_path)
+    fileUtils.open_dir_path(get_local_cls_pmsdata(remote_cls).path)
 
 
 def clear_local_pmsdata(remote_cls):
     local_cls_pmsdata = get_local_cls_pmsdata(remote_cls)  # Get local class for the -PMSDATA
 
-    if os.path.exists(local_cls_pmsdata.directory_path):
+    if os.path.exists(local_cls_pmsdata.path):
         # Wipe contents within -PMSDATA directory
-        rem_dir_lst = fileUtils.get_dirs_path_list(local_cls_pmsdata.directory_path)
+        rem_dir_lst = fileUtils.get_dirs_path_list(local_cls_pmsdata.path)
         for rem_dir in rem_dir_lst:
             fileUtils.delete_dir(rem_dir)
-        rem_file_lst = fileUtils.get_file_list_from_path(local_cls_pmsdata.directory_path)
+        rem_file_lst = fileUtils.get_file_list_from_path(local_cls_pmsdata.path)
         for file in rem_file_lst:
             file.delete_file()
 
@@ -60,7 +60,7 @@ def pull_pms(remote_cls):
 def push_pms(remote_cls):
     local_cls_pmsdata = get_local_cls_pmsdata(remote_cls)  # Get local class for the -PMSDATA
 
-    source_path = local_cls_pmsdata.directory_path
+    source_path = local_cls_pmsdata.path
     destination_path = local_cls_pmsdata.name + ':'
 
     rcloneWrapper.rclone_sync(source_path, destination_path)
@@ -71,7 +71,7 @@ def unpackage_pms(remote_cls):
     local_cls_pmsdata = get_local_cls_pmsdata(remote_cls)  # Get local class for the -PMSDATA
 
     # If folder to unpackage not there, cancel proceeding
-    if not os.path.exists(local_cls_pmsdata.directory_path):
+    if not os.path.exists(local_cls_pmsdata.path):
         return False
 
     # Make Plex Media Server directory in Location Used By Software (if it doesn't exist yet)
@@ -82,7 +82,7 @@ def unpackage_pms(remote_cls):
     match get_os():
         case OS.WIN:
             # Determine archive path
-            seven_zip_archive_path = str(Path(local_cls_pmsdata.directory_path, 'pms_data.7z.001'))
+            seven_zip_archive_path = str(Path(local_cls_pmsdata.path, 'pms_data.7z.001'))
 
             # Make sure archive file exists, else throw error
             if not os.path.exists(seven_zip_archive_path):
@@ -91,7 +91,7 @@ def unpackage_pms(remote_cls):
                 return False
 
             # Find registry file, else throws warning
-            pms_reg_file_path = str(Path(local_cls_pmsdata.directory_path, 'pms_registry.reg'))
+            pms_reg_file_path = str(Path(local_cls_pmsdata.path, 'pms_registry.reg'))
 
             if not os.path.exists(pms_reg_file_path):
                 # Display Error Message
@@ -126,7 +126,7 @@ def unpackage_pms(remote_cls):
             cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=True)
         case OS.MAC:
             # Determine archive path
-            zip_archive_path = str(Path(local_cls_pmsdata.directory_path, 'pms_data_mac.zip'))
+            zip_archive_path = str(Path(local_cls_pmsdata.path, 'pms_data_mac.zip'))
 
             # Make sure archive file exists, else throw error
             if not os.path.exists(zip_archive_path):
@@ -135,7 +135,7 @@ def unpackage_pms(remote_cls):
                 return False
 
             # Find plist file, else throws warning
-            pms_plist_file_path = str(Path(local_cls_pmsdata.directory_path, 'com.plexapp.plexmediaserver.plist'))
+            pms_plist_file_path = str(Path(local_cls_pmsdata.path, 'com.plexapp.plexmediaserver.plist'))
 
             if not os.path.exists(pms_plist_file_path):
                 # Display Error Message
@@ -165,7 +165,7 @@ def package_pms(remote_cls) -> bool:
 
     local_cls_pmsdata = get_local_cls_pmsdata(remote_cls)  # Get local class for the -PMSDATA
     pms_data_path = config.LogisticsConfig().pms_data_path
-    pms_package_path = Path(local_cls_pmsdata.directory_path)
+    pms_package_path = Path(local_cls_pmsdata.path)
 
     # If AppData plex media server folder unreachable, cancel proceeding
     if not os.path.exists(pms_data_path):

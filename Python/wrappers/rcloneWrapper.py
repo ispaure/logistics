@@ -20,6 +20,7 @@ import wrappers.uiShellWrapper as uiShellWrapper
 from commonUtils import zipUtils
 from typing import *
 from commonUtils.debugUtils import *
+from commonUtils import dirUtils
 
 show_verbose = True
 
@@ -275,19 +276,19 @@ def check_path_valid_lst(path_lst):
     return True
 
 
-class Remote:
+class Remote(dirUtils.Directory):
     """
     Stores the information of a remote
     """
-    def __init__(self, remote_dir):
-        # Get Basic Info
-        self.name = remote_dir.split(fileUtils.get_split_character())[-1]
-        self.directory_path = remote_dir
+    def __init__(self, remote_dir: Union[str, Path]):
+        super().__init__(Path(remote_dir))
+
+        path_str = str(self.path)
 
         # Determine if it's local or not
-        if config.LogisticsConfig().path_remote_network_mount in self.directory_path:
+        if config.LogisticsConfig().path_remote_network_mount in path_str:
             self.type = 'Remote'
-        elif config.LogisticsConfig().path_remote_local in self.directory_path:
+        elif config.LogisticsConfig().path_remote_local in path_str:
             self.type = 'Local'
 
         # Determine if is -PMSDATA
@@ -309,43 +310,45 @@ class Remote:
         self.perforce_port = None
 
         # Read Configuration File
-        config_path_loc = str(Path(self.directory_path, 'remoteConfig.ini'))
+        config_path_loc = str(Path(self.path, 'remoteConfig.ini'))
         if self.type == 'Local':
             if os.path.exists(config_path_loc):
 
                 # Comic Rack Local
                 sub_path = config.config_section_map('ComicRack', 'appdata_local_cyo_sub_path', config_path_loc)
                 if sub_path is not None:
-                    self.comic_rack_local = str(Path(self.directory_path, sub_path))
+                    self.comic_rack_local = str(Path(self.path, sub_path))
 
                 # Comic Rack Roaming
                 sub_path = config.config_section_map('ComicRack', 'appdata_roaming_cyo_sub_path', config_path_loc)
                 if sub_path is not None:
-                    self.comic_rack_roaming = str(Path(self.directory_path, sub_path))
+                    self.comic_rack_roaming = str(Path(self.path, sub_path))
 
                 # Calibre Library
                 sub_path = config.config_section_map('Calibre', 'calibre_lib_sub_path', config_path_loc)
                 if sub_path is not None:
-                    self.calibre_lib_path = str(Path(self.directory_path, sub_path))
+                    self.calibre_lib_path = str(Path(self.path, sub_path))
 
                 # YAC Reader Library INI Location
                 sub_path = config.config_section_map('YACReaderLibrary', 'yacreaderlibrary_ini_sub_path', config_path_loc)
                 if sub_path is not None:
-                    self.yac_reader_library_ini = str(Path(self.directory_path, sub_path.replace('\\', '/')))
+                    self.yac_reader_library_ini = str(Path(self.path, sub_path.replace('\\', '/')))
 
                 # Youtube Downloader
                 sub_path = config.config_section_map('Youtube-Download', 'config_sub_path', config_path_loc)
                 if sub_path is not None:
-                    self.youtube_dl_cfg_path = str(Path(self.directory_path, sub_path.replace('\\', '/')))
+                    self.youtube_dl_cfg_path = str(Path(self.path, sub_path.replace('\\', '/')))
                     self.youtube_dl_cfg_sub_path = sub_path
 
                 # Perforce Server
                 p4d_path = config.config_section_map('Perforce', 'p4d_path', config_path_loc)
                 if p4d_path is not None:
                     self.perforce_p4d_path = p4d_path
+
                 data_path = config.config_section_map('Perforce', 'data_path', config_path_loc)
                 if data_path is not None:
                     self.perforce_data_path = data_path
+
                 port_path = config.config_section_map('Perforce', 'port', config_path_loc)
                 if port_path is not None:
                     self.perforce_port = port_path
