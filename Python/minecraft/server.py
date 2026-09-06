@@ -130,17 +130,13 @@ def get_minecraft_server_lst(servers_root: Path) -> List[MinecraftServer]:
     if not os.path.isdir(str(servers_root)):
         return []
 
-    dir_lst: Optional[List[str]] = fileUtils.get_dirs_path_list(servers_root)
-
-    # If list was empty, return empty lst
-    if dir_lst is None:
-        return []
+    dir_lst: List[dirUtils.Directory] = dirUtils.Directory(servers_root).list_directories()
 
     # Else, create Minecraft servers from the list of directories
     minecraft_server_lst: List[MinecraftServer] = []
     for directory in dir_lst:
-        if not directory.endswith('Backups'):
-            mc_server = MinecraftServer(Path(directory))
+        if not directory.name.endswith('Backups'):
+            mc_server = MinecraftServer(directory.path)
             minecraft_server_lst.append(mc_server)
 
     return minecraft_server_lst

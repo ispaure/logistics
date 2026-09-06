@@ -5,7 +5,7 @@ import config
 from pathlib import Path
 import commonUtils.fileUtils as fileUtils
 import wrappers.uiShellWrapper as uiShellWrapper
-from commonUtils import zipUtils
+from commonUtils import dirUtils, zipUtils
 from commonUtils.osUtils import *
 from commonUtils.debugUtils import *
 
@@ -36,9 +36,9 @@ def clear_local_pmsdata(remote_cls):
 
     if os.path.exists(local_cls_pmsdata.path):
         # Wipe contents within -PMSDATA directory
-        rem_dir_lst = fileUtils.get_dirs_path_list(local_cls_pmsdata.path)
+        rem_dir_lst: List[dirUtils.Directory] = local_cls_pmsdata.list_directories()
         for rem_dir in rem_dir_lst:
-            fileUtils.delete_dir(rem_dir)
+            rem_dir.delete()
         rem_file_lst = local_cls_pmsdata.list_files()
         for file in rem_file_lst:
             file.delete_file()
@@ -203,9 +203,10 @@ def package_pms(remote_cls) -> bool:
             command += '\n"{}" a -y -mx1 -v5000000000 "{}"'.format(seven_zip_exec_path, seven_zip_archive_path)
 
             # Get list of folders to include in 7z. Then add to end of last line
-            dir_lst = fileUtils.get_dirs_path_list(pms_data_path)
+            pms_data_directory = dirUtils.Directory(pms_data_path)
+            dir_lst: List[dirUtils.Directory] = pms_data_directory.list_directories()
             for directory in dir_lst:
-                command += f' "{directory}"'
+                command += f' "{directory.path}"'
 
             log(Severity.INFO, tool_name, f'Creating Plex archive at "{seven_zip_archive_path}".')
 
