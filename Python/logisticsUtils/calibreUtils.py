@@ -22,6 +22,8 @@ from commonUtils.osUtils import *
 from commonUtils import zipUtils
 import os
 import re
+import unicodedata
+import xml.etree.ElementTree as ET
 import config
 from commonUtils.wrappers import cmdShellWrapper
 from commonUtils.debugUtils import *
@@ -60,51 +62,204 @@ class CalibreLibrary(dirUtils.Directory):
                 else:
                     cmdShellWrapper.exec_cmd(f'flatpak run com.calibre_ebook.calibre --with-library "{self.path}"')
 
-    def __get_series_index(self, book_directory: dirUtils.Directory) -> Union[str, None]:
+    def __get_clean_book_name(self, book_directory: dirUtils.Directory) -> str:
         """
-        Retrieves the Calibre series index from metadata.opf for a book.
-        Returns None if metadata.opf or calibre:series_index cannot be found.
+        Returns the Calibre book folder name without its trailing internal Calibre ID.
+
+        Example:
+            "Book Title (1234)"
+        becomes:
+            "Book Title"
+        """
+        return re.sub(r'\s+\(\d+\)$', '', book_directory.name)
+
+    def __normalize_series_index(self, series_index: str) -> str:
+        """
+        Simplifies Calibre series indexes such as 21.00 to 21 while preserving
+        meaningful decimal values such as 21.5.
+        """
+        if '.' in series_index:
+            series_index = series_index.rstrip('0').rstrip('.')
+
+        return series_index
+
+    def __normalize_path(self, path: Path) -> str:
+        """
+        Returns an NFC-normalized path string for reliable Unicode comparisons.
+
+        Filesystems can represent accented characters using different Unicode
+        compositions while displaying the same filename.
+        """
+        return unicodedata.normalize('NFC', str(path))
+
+    def __sanitize_file_name(self, file_name: str) -> str:
+        """
+        Removes or replaces characters that are unsafe or undesirable in filenames.
+
+        All dash variants and substituted characters use the standard ASCII dash (-).
+        Unicode characters are normalized to NFC for consistent filesystem names.
+        """
+        file_name = unicodedata.normalize('NFC', file_name)
+        file_name = re.sub(r'[‐-‒–—―]', '-', file_name)
+        file_name = re.sub(r'[\\/:*?"<>|]+', ' - ', file_name)
+        file_name = re.sub(r'\s*-\s*-\s*', ' - ', file_name)
+        file_name = re.sub(r'\s*-\s*', ' - ', file_name)
+        file_name = re.sub(r'\s+', ' ', file_name)
+        file_name = file_name.strip(' .-')
+
+        return file_name
+
+    def __title_contains_series(self, title: str, series: str) -> bool:
+        """
+        Returns True when the title already starts with the series name.
+
+        Punctuation between the series name and the rest of the title is allowed.
+        """
+        normalized_title = re.sub(r'\s+', ' ', title).strip().casefold()
+        normalized_series = re.sub(r'\s+', ' ', series).strip().casefold()
+
+        if normalized_title == normalized_series:
+            return True
+
+        if not normalized_title.startswith(normalized_series):
+            return False
+
+        remainder = normalized_title[len(normalized_series):]
+
+        return not remainder or bool(re.match(r'^[\s,:;\-‐-‒–—―()\[\]]', remainder))
+
+    def __title_contains_series_index(self, title: str, series_index: str) -> bool:
+        """
+        Returns True when the title already appears to contain the series index.
+
+        Examples:
+            "Book Volume 6" with index 6
+            "Book Vol. 6" with index 6
+            "Book Vol 6" with index 6
+        """
+        escaped_index = re.escape(series_index)
+
+        patterns = [
+            rf'\bvolume\s*0*{escaped_index}\b',
+            rf'\bvol\.?\s*0*{escaped_index}\b',
+        ]
+
+        for pattern in patterns:
+            if re.search(pattern, title, re.IGNORECASE):
+                return True
+
+        return False
+
+    def __get_metadata_book_name(self, book_directory: dirUtils.Directory) -> Union[str, None]:
+        """
+        Builds a human-readable book name from Calibre's metadata.opf.
+
+        Examples:
+            Title
+            Series - Title
+            Series - Title - Vol 5
+            Title Volume 5
+
+        Duplicate information is avoided where possible:
+        - The series is not prepended if the title already starts with it.
+        - Punctuation after the series name is tolerated.
+        - The series index is not appended if the title already contains the same volume.
         """
         metadata_path = book_directory.path / 'metadata.opf'
 
         if not metadata_path.is_file():
             return None
 
-        metadata_file = fileUtils.TXTFile(metadata_path)
+        try:
+            root = ET.parse(metadata_path).getroot()
+        except (ET.ParseError, OSError):
+            return None
 
-        for line in metadata_file.read_lines():
-            if 'name="calibre:series_index"' not in line:
-                continue
+        title = None
+        series = None
+        series_index = None
 
-            match_result = re.search(r'content="([^"]+)"', line)
+        for element in root.iter():
+            element_name = element.tag.split('}')[-1]
 
-            if match_result:
-                series_index = match_result.group(1)
+            if element_name == 'title' and element.text and title is None:
+                title = element.text.strip()
 
-                # Keep decimal series numbers intact, but simplify values such as 21.00 to 21.
-                if '.' in series_index:
-                    series_index = series_index.rstrip('0').rstrip('.')
+            if element_name == 'meta':
+                metadata_name = element.attrib.get('name')
+                metadata_content = element.attrib.get('content')
 
-                return series_index
+                if metadata_name == 'calibre:series' and metadata_content:
+                    series = metadata_content.strip()
+                elif metadata_name == 'calibre:series_index' and metadata_content:
+                    series_index = self.__normalize_series_index(metadata_content.strip())
 
-        return None
+        if not title and not series:
+            return None
+
+        if title:
+            book_name = title
+
+            if series and not self.__title_contains_series(title, series):
+                book_name = f'{series} - {title}'
+        else:
+            book_name = series
+
+        if series and series_index and not self.__title_contains_series_index(book_name, series_index):
+            book_name = f'{book_name} - Vol {series_index}'
+
+        return self.__sanitize_file_name(book_name)
+
+    def __get_export_book_name(self, book_directory: dirUtils.Directory) -> str:
+        """
+        Returns the preferred exported book name.
+
+        Calibre metadata is preferred. The cleaned Calibre folder name is used
+        as a fallback when metadata.opf cannot provide a usable name.
+        """
+        metadata_book_name = self.__get_metadata_book_name(book_directory)
+
+        if metadata_book_name:
+            return metadata_book_name
+
+        return self.__sanitize_file_name(self.__get_clean_book_name(book_directory))
 
     def echo_book_formats(self, destination: Path, extensions: List[str]):
         """
         Echoes supported book formats from this Calibre library to a flattened destination.
 
         Source:
-            Author / Book / Book.epub
-                            Book.pdf
+            Author / Book Name (Calibre ID) / Book.epub
+                                            Book.pdf
 
         Destination:
-            Author / Book.epub
-                     Book.pdf
+            Author / Metadata-based Book Name.epub
+                     Metadata-based Book Name.pdf
 
-        When multiple Calibre books would produce the same destination filename, their
-        Calibre series indexes are appended to distinguish them:
-            Book [21].epub
-            Book [65].epub
+        The destination filename is primarily built from metadata.opf.
+
+        Examples:
+            Title.epub
+            Series - Title.epub
+            Series - Title - Vol 5.epub
+
+        Duplicate information is avoided where possible. If the title already starts
+        with the series name, including when punctuation immediately follows it, the
+        series is not repeated. If the title already contains its volume number, an
+        additional "Vol X" suffix is not added.
+
+        Unsafe filename characters are replaced using the standard ASCII dash (-).
+        Unicode dash variants are also converted to the standard ASCII dash.
+
+        Unicode paths are normalized to NFC when comparing expected files with files
+        already present at the destination. This prevents visually identical accented
+        filenames with different Unicode compositions from being treated as different files.
+
+        If metadata cannot provide a usable name, the Calibre book folder name is used
+        after removing its trailing internal Calibre ID.
+
+        If multiple Calibre books would produce the same destination filename, a warning
+        is logged and the first file encountered is kept.
 
         The destination is treated as a one-way mirror:
         - All files matching one of the requested extensions are copied.
@@ -124,17 +279,17 @@ class CalibreLibrary(dirUtils.Directory):
 
         extensions = [extension.lower().lstrip('.') for extension in extensions]
 
-        candidate_files = {}
         expected_files = {}
         detected_count = 0
         missing_format_count = 0
         collision_count = 0
+        metadata_fallback_count = 0
         copied_count = 0
         recopied_count = 0
         deleted_count = 0
 
         # ------------------------------------------------------------------------------------------------------------------
-        # BUILD CANDIDATE BOOK FILE LIST
+        # BUILD EXPECTED BOOK FILE LIST
 
         for author_directory in self.list_directories():
             for book_directory in author_directory.list_directories():
@@ -145,39 +300,26 @@ class CalibreLibrary(dirUtils.Directory):
                     log(Severity.WARNING, tool_name, f'No supported format found for "{author_directory.name} / {book_directory.name}"')
                     continue
 
+                metadata_book_name = self.__get_metadata_book_name(book_directory)
+
+                if metadata_book_name:
+                    export_book_name = metadata_book_name
+                else:
+                    metadata_fallback_count += 1
+                    export_book_name = self.__sanitize_file_name(self.__get_clean_book_name(book_directory))
+                    log(Severity.WARNING, tool_name, f'Could not retrieve usable metadata name for "{author_directory.name} / {book_directory.name}". Using Calibre folder name instead.')
+
                 for book_file in book_files:
                     detected_count += 1
-                    destination_file_path = destination / author_directory.name / book_file.file_name
+                    destination_file_path = destination / author_directory.name / f'{export_book_name}.{book_file.ext}'
+                    destination_file_key = self.__normalize_path(destination_file_path)
 
-                    if destination_file_path not in candidate_files:
-                        candidate_files[destination_file_path] = []
+                    if destination_file_key in expected_files:
+                        collision_count += 1
+                        log(Severity.WARNING, tool_name, f'Book filename collision detected. Keeping first file.\nDestination: "{destination_file_path}"\nKeeping: "{expected_files[destination_file_key][1].path}"\nSkipping: "{book_file.path}"')
+                        continue
 
-                    candidate_files[destination_file_path].append((book_file, book_directory))
-
-        # ------------------------------------------------------------------------------------------------------------------
-        # RESOLVE FILENAME COLLISIONS
-
-        for destination_file_path, candidates in candidate_files.items():
-            if len(candidates) == 1:
-                expected_files[destination_file_path] = candidates[0][0]
-                continue
-
-            collision_count += 1
-            log(Severity.WARNING, tool_name, f'Book filename collision detected for "{destination_file_path.name}". Using Calibre series indexes to distinguish files.')
-
-            for book_file, book_directory in candidates:
-                series_index = self.__get_series_index(book_directory)
-
-                if series_index is None:
-                    log(Severity.CRITICAL, tool_name, f'Could not resolve filename collision because no Calibre series index was found.\nBook: "{book_directory.path}"\nFile: "{book_file.path}"')
-
-                collision_file_name = f'{book_file.name_without_ext} [{series_index}].{book_file.ext}'
-                collision_destination_path = destination_file_path.parent / collision_file_name
-
-                if collision_destination_path in expected_files:
-                    log(Severity.CRITICAL, tool_name, f'Book filename collision still exists after adding Calibre series index.\nDestination: "{collision_destination_path}"\nSource 1: "{expected_files[collision_destination_path].path}"\nSource 2: "{book_file.path}"')
-
-                expected_files[collision_destination_path] = book_file
+                    expected_files[destination_file_key] = (destination_file_path, book_file)
 
         # ------------------------------------------------------------------------------------------------------------------
         # REMOVE FILES THAT SHOULD NO LONGER EXIST
@@ -186,7 +328,9 @@ class CalibreLibrary(dirUtils.Directory):
             destination_directory = dirUtils.Directory(destination)
 
             for destination_file in destination_directory.list_files(recursive=True):
-                if destination_file.path not in expected_files:
+                destination_file_key = self.__normalize_path(destination_file.path)
+
+                if destination_file_key not in expected_files:
                     log(Severity.DEBUG, tool_name, f'Deleting obsolete file "{destination_file.path}"')
 
                     if not destination_file.delete_file():
@@ -197,7 +341,7 @@ class CalibreLibrary(dirUtils.Directory):
         # ------------------------------------------------------------------------------------------------------------------
         # COPY NEW OR CHANGED BOOK FILES
 
-        for destination_file_path, source_file in expected_files.items():
+        for destination_file_path, source_file in expected_files.values():
             if not destination_file_path.is_file():
                 if not fileUtils.copy_file(source_file.path, destination_file_path):
                     log(Severity.CRITICAL, tool_name, f'Could not copy book file from "{source_file.path}" to "{destination_file_path}"')
@@ -227,4 +371,4 @@ class CalibreLibrary(dirUtils.Directory):
         # ------------------------------------------------------------------------------------------------------------------
         # SUMMARY
 
-        log(Severity.INFO, tool_name, f'Detected {detected_count} supported file(s) | Missing format for {missing_format_count} book(s) | Resolved {collision_count} collision(s) | Copied {copied_count} new | Recopied {recopied_count} changed | Deleted {deleted_count} obsolete')
+        log(Severity.INFO, tool_name, f'Detected {detected_count} supported file(s) | Missing format for {missing_format_count} book(s) | Metadata fallbacks {metadata_fallback_count} | Collisions {collision_count} | Copied {copied_count} new | Recopied {recopied_count} changed | Deleted {deleted_count} obsolete')
