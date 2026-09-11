@@ -1,4 +1,4 @@
-from commonUtils.pySideUtils import *
+from commonUtils.ui import pyside
 import wrappers.piexifWrapper as piexifWrapper
 
 show_verbose = True
@@ -12,7 +12,7 @@ def ui_jpg_batch_set_exif_comments(convert_arg):
                                               comments=convert_arg['comments_field'].txt())
 
 
-class JPGEXIFBatchSetFieldComment(Window):
+class JPGEXIFBatchSetFieldComment(pyside.Window):
     def __init__(self):
         super().__init__('.JPG: Batch Set EXIF "Comments" Field')
         self.__name__ = 'Logistics Main UI Window'
@@ -29,23 +29,29 @@ class JPGEXIFBatchSetFieldComment(Window):
 
         # 1. Target Folder
         # Create Label
-        Label('Target Folder: ', self.dlg, QRect(10, 12, 400, 20))
+        pyside.Label('Target Folder: ', self.dlg, pyside.QRect(10, 12, 400, 20))
         # Create Argument
-        convert_arg['target_dir'] = LineEdit('', self.dlg, QRect(105, 10, 370, 25))
+        convert_arg['target_dir'] = pyside.LineEdit('', self.dlg, pyside.QRect(105, 10, 370, 25))
 
         # 2. Recursive
         # Create Label
-        Label('Recursive (Include Subfolders): ', self.dlg, QRect(10, 43, 400, 20))
+        pyside.Label('Recursive (Include Subfolders): ', self.dlg, pyside.QRect(10, 43, 400, 20))
         # Create Argument
-        convert_arg['recursive'] = create_checkbox(self.dlg, QRect(205, 28, 50, 50), default_state=True)
+        convert_arg['recursive'] = pyside.create_checkbox(
+            self.dlg, pyside.QRect(205, 28, 50, 50), default_state=True
+        )
 
         # 3. Comments field data
         # Create Label
-        Label('Comments field input (only alphanumeric, no spaces allowed): ', self.dlg, QRect(10, 68, 400, 20))
+        pyside.Label(
+            'Comments field input (only alphanumeric, no spaces allowed): ',
+            self.dlg, pyside.QRect(10, 68, 400, 20)
+        )
         # Create Argument
-        convert_arg['comments_field'] = LineEdit('', self.dlg, QRect(380, 68, 90, 20))
+        convert_arg['comments_field'] = pyside.LineEdit('', self.dlg, pyside.QRect(380, 68, 90, 20))
 
         # --- BUTTON ---
-        button('Batch Convert', self.dlg, QRect(5, 105, 480, 30), ui_jpg_batch_set_exif_comments, convert_arg)
+        pyside.button('Batch Convert', self.dlg, pyside.QRect(5, 105, 480, 30),
+                      ui_jpg_batch_set_exif_comments, convert_arg)
 
         # --------------------------------------------------------------------------------------------------------------

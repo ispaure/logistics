@@ -1,5 +1,4 @@
-
-from commonUtils.pySideUtils import *
+from commonUtils.ui import pyside
 from commonUtils.osUtils import *
 
 
@@ -20,40 +19,54 @@ def display_lights(dialog_obj):
     import wrappers.philipsHueWrapper as philipsHueWrapper
 
     def display_room(line_name, line_height, panel):
-        Label(str(line_name + ':'), panel, QRect(10, line_height + 5, 260, 13))
-        button('OFF', panel, QRect(100, line_height, 50, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.Label(str(line_name + ':'), panel, pyside.QRect(10, line_height + 5, 260, 13))
+        pyside.button('OFF', panel, pyside.QRect(100, line_height, 50, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': False})
-        button('1%', panel, QRect(155, line_height, 50, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.button('1%', panel, pyside.QRect(155, line_height, 50, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': True, 'Brightness': 0})
-        button('50%', panel, QRect(210, line_height, 50, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.button('50%', panel, pyside.QRect(210, line_height, 50, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': True, 'Brightness': 127})
-        button('100%', panel, QRect(265, line_height, 50, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.button('100%', panel, pyside.QRect(265, line_height, 50, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': True, 'Brightness': 255})
-        button('ON', panel, QRect(320, line_height, 50, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.button('ON', panel, pyside.QRect(320, line_height, 50, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': True})
-        button('R', panel, QRect(375, line_height, 20, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.button('R', panel, pyside.QRect(375, line_height, 20, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': True, 'Color': 'Red'})
-        button('O', panel, QRect(400, line_height, 20, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.button('O', panel, pyside.QRect(400, line_height, 20, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': True, 'Color': 'Orange'})
-        button('Y', panel, QRect(425, line_height, 20, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.button('Y', panel, pyside.QRect(425, line_height, 20, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': True, 'Color': 'Yellow'})
-        button('G', panel, QRect(450, line_height, 20, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.button('G', panel, pyside.QRect(450, line_height, 20, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': True, 'Color': 'Green'})
-        button('A', panel, QRect(475, line_height, 20, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.button('A', panel, pyside.QRect(475, line_height, 20, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': True, 'Color': 'Aqua'})
-        button('B', panel, QRect(500, line_height, 20, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.button('B', panel, pyside.QRect(500, line_height, 20, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': True, 'Color': 'Blue'})
-        button('P', panel, QRect(525, line_height, 20, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.button('P', panel, pyside.QRect(525, line_height, 20, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': True, 'Color': 'Purple'})
-        button('M', panel, QRect(550, line_height, 20, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.button('M', panel, pyside.QRect(550, line_height, 20, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': True, 'Color': 'Magenta'})
-        button('W', panel, QRect(575, line_height, 20, 20), philipsHueWrapper.set_group_prop_from_arg_dict,
+        pyside.button('W', panel, pyside.QRect(575, line_height, 20, 20),
+                      philipsHueWrapper.set_group_prop_from_arg_dict,
                       {'Room': line_name, 'State': True, 'Color': 'White'})
 
     # LIGHTS
-    panel = create_frame(dialog_obj, QRect(10, 10, 675, 150))
-    button('Connect Bridge', panel, QRect(550, 5, 120, 20), philipsHueWrapper.connect_bridge)
-    Label('LIGHTS: ', panel, QRect(10, 10, 120, 13))
+    panel = pyside.create_frame(dialog_obj, pyside.QRect(10, 10, 675, 150))
+    pyside.button('Connect Bridge', panel, pyside.QRect(550, 5, 120, 20), philipsHueWrapper.connect_bridge)
+    pyside.Label('LIGHTS: ', panel, pyside.QRect(10, 10, 120, 13))
 
     # Living Room
     display_room(line_name='Living Room', line_height=40, panel=panel)

@@ -63,8 +63,6 @@ def inter_comic_rack_action(remote_cls):
     # If they exist already, delete
     fileUtils.delete_symbolic_link(cyo_appdata_local_dir_path)
     fileUtils.delete_symbolic_link(cyo_appdata_roaming_dir_path)
-    fileUtils.delete_symbolic_link(cyo_appdata_local_dir_path)
-    fileUtils.delete_symbolic_link(cyo_appdata_roaming_dir_path)
 
     time.sleep(0.2)
 
@@ -76,7 +74,7 @@ def inter_comic_rack_action(remote_cls):
 
     # Start software
     exec_path: Path = Path(config.LogisticsConfig().path_logistics_software_win, 'ComicRack', 'ComicRack.exe')
-    cmdShellWrapper.exec_cmd(f'start "{exec_path}"', wait_for_output=False)
+    cmdShellWrapper.exec_cmd(f'start "" "{exec_path}"', wait_for_output=False)
 
 
 def inter_yac_reader_action(remote_cls):
@@ -104,7 +102,10 @@ def inter_yac_reader_action(remote_cls):
     fileUtils.copy_file(remote_cls.yac_reader_library_ini, Path(yac_prefs_dir, 'YACReaderLibrary.ini'))
 
     # Open YACReader
-    cmdShellWrapper.exec_cmd(str(Path('/Applications', 'YACReaderLibrary.app', 'Contents', 'MacOS', 'YACReaderLibrary')), wait_for_output=False)
+    cmdShellWrapper.exec_cmd(
+        str(Path('/Applications', 'YACReaderLibrary.app', 'Contents', 'MacOS', 'YACReaderLibrary')),
+        wait_for_output=False
+    )
 
 
 def inter_calibre_manage(remote_cls):

@@ -1,7 +1,8 @@
-from commonUtils.pySideUtils import *
+from commonUtils.ui import pyside
 from commonUtils.debugUtils import *
 from commonUtils import dirUtils
 from pathlib import Path
+
 show_verbose = True
 
 
@@ -10,12 +11,14 @@ def bulk_delete_pyc_in_dir(convert_arg):
     directory = dirUtils.Directory(Path(convert_arg['target_dir'].txt()))
     recursive = convert_arg['recursive'].isChecked()
     file_lst = directory.list_files(recursive=recursive, filter_extension='pyc')
+
     for file in file_lst:
         file.delete_file()
+
     log(Severity.INFO, 'Bulk Delete PYC Files', f'Deleted PYC Files Recursively in "{directory.path}"')
 
 
-class BulkDeletePYCInDir(Window):
+class BulkDeletePYCInDir(pyside.Window):
     def __init__(self):
         super().__init__('Bulk Delete .PYC in Directory')
 
@@ -31,17 +34,19 @@ class BulkDeletePYCInDir(Window):
 
         # 1. Target Folder
         # Create Label
-        Label('Target Folder: ', self.dlg, QRect(10, 12, 400, 20))
+        pyside.Label('Target Folder: ', self.dlg, pyside.QRect(10, 12, 400, 20))
         # Create Argument
-        convert_arg['target_dir'] = LineEdit('', self.dlg, QRect(105, 10, 370, 25))
+        convert_arg['target_dir'] = pyside.LineEdit('', self.dlg, pyside.QRect(105, 10, 370, 25))
 
         # 2. Recursive
         # Create Label
-        Label('Recursive (Include Subfolders): ', self.dlg, QRect(10, 43, 400, 20))
+        pyside.Label('Recursive (Include Subfolders): ', self.dlg, pyside.QRect(10, 43, 400, 20))
         # Create Argument
-        convert_arg['recursive'] = create_checkbox(self.dlg, QRect(205, 28, 50, 50), default_state=True)
+        convert_arg['recursive'] = pyside.create_checkbox(
+            self.dlg, pyside.QRect(205, 28, 50, 50), default_state=True
+        )
 
         # --- BUTTON ---
-        button('Bulk DELETE', self.dlg, QRect(5, 80, 480, 30), bulk_delete_pyc_in_dir, convert_arg)
+        pyside.button('Bulk DELETE', self.dlg, pyside.QRect(5, 80, 480, 30), bulk_delete_pyc_in_dir, convert_arg)
 
         # --------------------------------------------------------------------------------------------------------------

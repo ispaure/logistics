@@ -1,5 +1,5 @@
 import wrappers.rcloneWrapper as rcloneWrapper
-from commonUtils.pySideUtils import *
+from commonUtils.ui import pyside
 
 show_verbose = True
 
@@ -15,7 +15,7 @@ def ui_load_credentials(unlock_arg):
     # unlock_arg['UI-Window'].dlg.main_win.close()
 
 
-class RemoteCredentialsPW(Window):
+class RemoteCredentialsPW(pyside.Window):
     def __init__(self, file_path):
         super().__init__('Enter Password for Credentials Archive')
 
@@ -31,11 +31,12 @@ class RemoteCredentialsPW(Window):
 
         # 1. Password Entry
         # Create Label
-        Label('Password: ', self.dlg, QRect(10, 5, 400, 20))
+        pyside.Label('Password: ', self.dlg, pyside.QRect(10, 5, 400, 20))
         # Create Argument
-        unlock_arg['Password'] = LineEdit('', self.dlg, QRect(100, 5, 380, 20), pw_field=True)
+        unlock_arg['Password'] = pyside.LineEdit('', self.dlg, pyside.QRect(100, 5, 380, 20), pw_field=True)
 
         # --- BUTTON ---
-        button('Add Credentials to Rclone', self.dlg, QRect(0, 25, 490, 30), ui_load_credentials, unlock_arg)
+        pyside.button('Add Credentials to Rclone', self.dlg, pyside.QRect(0, 25, 490, 30),
+                      ui_load_credentials, unlock_arg)
 
         # --------------------------------------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-from commonUtils.pySideUtils import *
+from commonUtils.ui import pyside
 from commonUtils.debugUtils import *
 from commonUtils.dirUtils import Directory
 from logisticsUtils.calibreUtils import CalibreLibrary
@@ -56,7 +56,7 @@ def get_calibre_library_interactions(calibre_library_lst: List[CalibreLibrary]):
     return interaction_complete_lst, len(calibre_library_lst)
 
 
-class ManageCalibre(Window):
+class ManageCalibre(pyside.Window):
     def __init__(self, remote_cls: Remote):
         super().__init__('Manage Calibre [{}]'.format(remote_cls.name))
 
@@ -80,9 +80,11 @@ class ManageCalibre(Window):
                     height_per_row = 30
                     scroll_height = len(calibre_lib_cls_lst) * height_per_row + 50
 
-                    widget_content, grid_layout = create_scroll_area_grid(target=self.dlg,
-                                                                          rect=QRect(0, 0, self.width, self.height),
-                                                                          rect_content=create_size(self.width - 5, scroll_height))
+                    widget_content, grid_layout = pyside.create_scroll_area_grid(
+                        target=self.dlg,
+                        rect=pyside.QRect(0, 0, self.width, self.height),
+                        rect_content=pyside.create_size(self.width - 5, scroll_height)
+                    )
 
                     interactions_complete_lst, calibre_lib_amt = get_calibre_library_interactions(calibre_lib_cls_lst)
 
@@ -91,13 +93,19 @@ class ManageCalibre(Window):
 
                     for position, interaction in zip(positions, interactions_complete_lst):
                         interaction_dict = interaction[0](interaction[1])
-                        button_var = button(text=interaction_dict['Name'], target=widget_content, rect=QRect(0, 0, 120, 80), fn=interaction_dict['Action'], args=interaction[1])
+                        button_var = pyside.button(
+                            text=interaction_dict['Name'], target=widget_content,
+                            rect=pyside.QRect(0, 0, 120, 80), fn=interaction_dict['Action'], args=interaction[1]
+                        )
                         grid_layout.addWidget(button_var, *position)
 
                 else:
-                    Label('No Calibre libraries found', self.dlg, QRect(5, 5, 400, 25))
+                    pyside.Label('No Calibre libraries found', self.dlg, pyside.QRect(5, 5, 400, 25))
 
             case 'Remote':
-                Label('Manage Calibre tools are only supported for local remotes', self.dlg, QRect(5, 5, 400, 25))
+                pyside.Label(
+                    'Manage Calibre tools are only supported for local remotes',
+                    self.dlg, pyside.QRect(5, 5, 400, 25)
+                )
 
         # --------------------------------------------------------------------------------------------------------------

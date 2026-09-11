@@ -1,17 +1,13 @@
-import os
 import sys
-# This is needed even if greyed out!
-# TODO Don't need this anymore
-# import install.installPythonPackage
-from PySide6.QtWidgets import *
 import config
 from wrappers import rcloneWrapper
 import ui.uiMain as uiMain
-from commonUtils import pySideUtils
+from commonUtils.ui import pyside
 from commonUtils.debugUtils import *
 from commonUtils.osUtils import *
 
 log(Severity.INFO, 'Logistics', 'Executing launch.py')
+
 # Get Config Information
 log(Severity.DEBUG, 'Logistics', 'Get config.LogisticsConfig()')
 logistics_cfg = config.LogisticsConfig()
@@ -36,7 +32,7 @@ rcloneWrapper.get_all_remote_class()
 
 # Create QApplication
 log(Severity.DEBUG, 'PySide6', 'Create QApplication')
-app = pySideUtils.initialize_q_app()
+app = pyside.initialize_q_app()
 
 # Display UI
 log(Severity.DEBUG, 'PySide6', 'Display Main UI Window')

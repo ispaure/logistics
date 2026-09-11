@@ -1,6 +1,6 @@
 from typing import List
 
-from commonUtils.pySideUtils import *
+from commonUtils.ui import pyside
 from config import LogisticsConfig
 from minecraft import server
 
@@ -28,10 +28,10 @@ def display_servers(dialog_obj, server_type: server.MinecraftServerType):
     scroll_height = max(header_height + len(server_lst) * row_height + extra_padding, 80)
 
     # Scroll area + grid
-    widget_content, grid_layout = create_scroll_area_grid(
+    widget_content, grid_layout = pyside.create_scroll_area_grid(
         target=dialog_obj,
-        rect=QRect(0, 0, 700, 450),
-        rect_content=create_size(695, scroll_height)
+        rect=pyside.QRect(0, 0, 700, 450),
+        rect_content=pyside.create_size(695, scroll_height)
     )
 
     # Column definitions:
@@ -46,10 +46,10 @@ def display_servers(dialog_obj, server_type: server.MinecraftServerType):
 
     # # Optional header row (kept for clarity)
     # for col, (header_text, _, _, _) in enumerate(columns):
-    #     header_btn = button(
+    #     header_btn = pyside.button(
     #         text=header_text,
     #         target=widget_content,
-    #         rect=QRect(0, 0, 130, 30),
+    #         rect=pyside.QRect(0, 0, 130, 30),
     #         fn=None
     #     )
     #     header_btn.setEnabled(False)
@@ -58,10 +58,10 @@ def display_servers(dialog_obj, server_type: server.MinecraftServerType):
     # Server rows
     for row, mc_server in enumerate(server_lst, start=1):
         for col, (_, text_fn, callback_fn, enabled_fn) in enumerate(columns):
-            btn = button(
+            btn = pyside.button(
                 text=text_fn(mc_server),
                 target=widget_content,
-                rect=QRect(0, 0, 130, 30),
+                rect=pyside.QRect(0, 0, 130, 30),
                 fn=callback_fn(mc_server)
             )
 

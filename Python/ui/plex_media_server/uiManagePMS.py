@@ -1,10 +1,9 @@
 import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
 import wrappers.rcloneWrapper as rcloneWrapper
-from commonUtils.pySideUtils import *
+from commonUtils import ui
 import config
 from pathlib import Path
 import commonUtils.fileUtils as fileUtils
-import wrappers.uiShellWrapper as uiShellWrapper
 from commonUtils import dirUtils, zipUtils
 from commonUtils.osUtils import *
 from commonUtils.debugUtils import *
@@ -14,7 +13,9 @@ def get_remote_cls_pmsdata(remote_cls):
     """
     Get the remote class of the -PMSData of the current remote
     """
-    return rcloneWrapper.get_remote_class(Path(config.LogisticsConfig().path_remote_network_mount, remote_cls.name + '-PMSDATA'))
+    return rcloneWrapper.get_remote_class(
+        Path(config.LogisticsConfig().path_remote_network_mount, remote_cls.name + '-PMSDATA')
+    )
 
 
 def open_dir_remote_cls_pmsdata(remote_cls):
@@ -45,7 +46,9 @@ def clear_local_pmsdata(remote_cls):
 
 
 def get_local_cls_pmsdata(remote_cls):
-    return rcloneWrapper.get_remote_class(Path(config.LogisticsConfig().path_remote_local, remote_cls.name + '-PMSDATA'))
+    return rcloneWrapper.get_remote_class(
+        Path(config.LogisticsConfig().path_remote_local, remote_cls.name + '-PMSDATA')
+    )
 
 
 def pull_pms(remote_cls):
@@ -89,7 +92,7 @@ def unpackage_pms(remote_cls):
             # Make sure archive file exists, else throw error
             if not os.path.exists(seven_zip_archive_path):
                 msg = 'The 7z file to extract cannot be found within {}. Aborting!'.format(local_cls_pmsdata.name)
-                uiShellWrapper.show_dialog_box('Unpackage Plex Media Server', msg)
+                log(Severity.ERROR, 'Unpackage Plex Media Server', msg, popup=True)
                 return False
 
             # Find registry file, else throws warning
@@ -100,7 +103,7 @@ def unpackage_pms(remote_cls):
                 msg = 'The registry file to add cannot be found within {}.'.format(local_cls_pmsdata.name)
                 msg += '\nThe Plex Media Server contents can still be extracted, but some server settings will need to ' \
                        'be manually configured. Press OK to proceed or Cancel to Cancel'
-                result = uiShellWrapper.show_dialog_box('Unpackage Plex Media Server', msg)
+                result = ui.display_msg_box_ok_cancel('Unpackage Plex Media Server', msg)
 
                 # If user decides to cancel
                 if not result:
@@ -116,9 +119,11 @@ def unpackage_pms(remote_cls):
             # this can take long. Also adds proper things to registry
             # Create 7z extract part in command
             seven_zip_exec_path = Path(config.LogisticsConfig().path_logistics_software_win, '7-zip', '7z')
-            command += '\n"{sz_path}" x -y "{sz_archive_path}" -o"{pms_data_path}"'.format(sz_path=seven_zip_exec_path,
-                                                                                           sz_archive_path=seven_zip_archive_path,
-                                                                                           pms_data_path=pms_data_path)
+            command += '\n"{sz_path}" x -y "{sz_archive_path}" -o"{pms_data_path}"'.format(
+                sz_path=seven_zip_exec_path,
+                sz_archive_path=seven_zip_archive_path,
+                pms_data_path=pms_data_path
+            )
 
             # Wipe contents within Plex Media Server Data in Local AppData before extraction
             pms_data_directory.delete_contents()
@@ -126,6 +131,7 @@ def unpackage_pms(remote_cls):
             # Put command in file and run
             # cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=config.LogisticsConfig().temp_cmd)
             cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=True)
+
         case OS.MAC:
             # Determine archive path
             zip_archive_path = Path(local_cls_pmsdata.path, 'pms_data_mac.zip')
@@ -133,7 +139,7 @@ def unpackage_pms(remote_cls):
             # Make sure archive file exists, else throw error
             if not os.path.exists(zip_archive_path):
                 msg = 'The zip file to extract cannot be found within {}. Aborting!'.format(local_cls_pmsdata.name)
-                uiShellWrapper.show_dialog_box('Unpackage Plex Media Server', msg)
+                log(Severity.ERROR, 'Unpackage Plex Media Server', msg, popup=True)
                 return False
 
             # Find plist file, else throws warning
@@ -144,12 +150,14 @@ def unpackage_pms(remote_cls):
                 msg = 'The plist file to add cannot be found within {}.'.format(local_cls_pmsdata.name)
                 msg += '\nThe Plex Media Server contents can still be extracted, but some server settings will need to ' \
                        'be manually configured. Press OK to proceed or Cancel to Cancel'
-                result = uiShellWrapper.show_dialog_box('Unpackage Plex Media Server', msg)
+                result = ui.display_msg_box_ok_cancel('Unpackage Plex Media Server', msg)
                 if not result:
                     return False
             else:
                 # Copy plist file to proper location
-                plist_destination_path = Path(os.environ['HOME'], 'Library', 'Preferences', 'com.plexapp.plexmediaserver.plist')
+                plist_destination_path = Path(
+                    os.environ['HOME'], 'Library', 'Preferences', 'com.plexapp.plexmediaserver.plist'
+                )
                 fileUtils.copy_file(pms_plist_file_path, plist_destination_path)
 
             # Wipe contents within Plex Media Server Data in Local AppData
@@ -172,8 +180,7 @@ def package_pms(remote_cls) -> bool:
     # If AppData plex media server folder unreachable, cancel proceeding
     if not os.path.exists(pms_data_path):
         msg = f'Plex Media Server directory is invalid or unreachable: "{pms_data_path}". Aborting!'
-        log(Severity.ERROR, tool_name, msg)
-        uiShellWrapper.show_dialog_box(tool_name, msg)
+        log(Severity.ERROR, tool_name, msg, popup=True)
         return False
 
     # Create local -PMSDATA directory (if it doesn't exist yet)
@@ -248,7 +255,7 @@ def package_pms(remote_cls) -> bool:
     return True
 
 
-class ManagePMS(Window):
+class ManagePMS(ui.pyside.Window):
     def __init__(self, remote_cls):
         super().__init__('Manage PMS [{}]'.format(remote_cls.name))
 
@@ -271,26 +278,40 @@ class ManagePMS(Window):
             case 'Local':
 
                 # Open PMSData (Local) button
-                button('Open Local -PMSDATA', self.dlg, QRect(0, 3, 200, 30), open_dir_local_cls_pmsdata, remote_cls)
+                ui.pyside.button('Open Local -PMSDATA', self.dlg, ui.pyside.QRect(0, 3, 200, 30),
+                                 open_dir_local_cls_pmsdata, remote_cls)
 
                 # Clear LocalPMS button
-                button('Clear Local -PMSDATA', self.dlg, QRect(300, 3, 200, 30), clear_local_pmsdata, remote_cls)
+                ui.pyside.button('Clear Local -PMSDATA', self.dlg, ui.pyside.QRect(300, 3, 200, 30),
+                                 clear_local_pmsdata, remote_cls)
 
                 # Label: Restore PLEX Media Server Data from Cloud
-                Label('Restore PLEX Media Server Data from Cloud:', self.dlg, QRect(10, 43, 400, 20))
+                ui.pyside.Label('Restore PLEX Media Server Data from Cloud:', self.dlg,
+                                ui.pyside.QRect(10, 43, 400, 20))
 
                 # Buttons
-                button('1. Pull {}-PMSDATA from Remote to Local'.format(remote_cls.name), self.dlg, QRect(0, 65, 500, 30), pull_pms, remote_cls)
-                button('2. Unpackage Local {}-PMSDATA to {} PMS'.format(remote_cls.name, os_pref_folder_name), self.dlg, QRect(0, 95, 500, 30), unpackage_pms, remote_cls)
+                ui.pyside.button('1. Pull {}-PMSDATA from Remote to Local'.format(remote_cls.name), self.dlg,
+                                 ui.pyside.QRect(0, 65, 500, 30), pull_pms, remote_cls)
+                ui.pyside.button(
+                    '2. Unpackage Local {}-PMSDATA to {} PMS'.format(remote_cls.name, os_pref_folder_name),
+                    self.dlg, ui.pyside.QRect(0, 95, 500, 30), unpackage_pms, remote_cls
+                )
 
                 # Label: Restore PLEX Media Server Data from Cloud
-                Label('Backup PLEX Media Server Data to Cloud:', self.dlg, QRect(10, 150, 400, 20))
+                ui.pyside.Label('Backup PLEX Media Server Data to Cloud:', self.dlg,
+                                ui.pyside.QRect(10, 150, 400, 20))
+
                 # Buttons
-                button('1. Package {} PMS to Local {}-PMSDATA'.format(os_pref_folder_name, remote_cls.name), self.dlg, QRect(0, 172, 500, 30), package_pms, remote_cls)
-                button('2. PUSH {}-PMSDATA from Local to Remote'.format(remote_cls.name), self.dlg, QRect(0, 202, 500, 30), push_pms, remote_cls)
+                ui.pyside.button(
+                    '1. Package {} PMS to Local {}-PMSDATA'.format(os_pref_folder_name, remote_cls.name),
+                    self.dlg, ui.pyside.QRect(0, 172, 500, 30), package_pms, remote_cls
+                )
+                ui.pyside.button('2. PUSH {}-PMSDATA from Local to Remote'.format(remote_cls.name), self.dlg,
+                                 ui.pyside.QRect(0, 202, 500, 30), push_pms, remote_cls)
 
             case 'Remote':
                 # Open PMSData (Remote) button
-                button('Open Remote -PMSDATA', self.dlg, QRect(0, 3, 200, 30), open_dir_remote_cls_pmsdata, remote_cls)
+                ui.pyside.button('Open Remote -PMSDATA', self.dlg, ui.pyside.QRect(0, 3, 200, 30),
+                                 open_dir_remote_cls_pmsdata, remote_cls)
 
         # --------------------------------------------------------------------------------------------------------------
