@@ -1,8 +1,8 @@
 from commonUtils import fileUtils
+from commonUtils.debugUtils import log, Severity
 from pathlib import Path
 import config
 import os
-from commonUtils import pySideUtils
 
 
 def get_xp12_dir():
@@ -69,14 +69,15 @@ def set_xp12_shadow_quality_setting(shadow_quality_value: int):
 def set_xp12_monitor_preset(preset_path: Path):
     if not os.path.isfile(preset_path):
         msg = 'Preset file is missing, cannot apply preset!'
-        pySideUtils.display_msg_box_ok('XP12 Preset', msg)
+        log(Severity.ERROR, 'XP12 Preset', msg, popup=True)
         return
 
     # Get steam path of file
     window_pref_file_path_steam = Path(get_xp12_dir(), 'Output', 'Preferences', 'X-Plane Window Positions.prf')
+
     if not os.path.isfile(window_pref_file_path_steam):
         msg = 'Preset file is missing from X-Plane 12 installation. is X-Plane installed?'
-        pySideUtils.display_msg_box_ok('XP12 Preset', msg)
+        log(Severity.ERROR, 'XP12 Preset', msg, popup=True)
         return
 
     # Validated input-output, now transfer file!
@@ -119,57 +120,72 @@ def set_all_xp12_settings(preset_path: Path,
 
 
 def set_xp12_m3_max_flight_desk_internal():
-
     # Get preset path
     logistics_cfg = config.LogisticsConfig()
-    preset_path = Path(logistics_cfg.path_logistics_software_general, 'x-plane', 'X-Plane Window Positions [m3 max, flight desk, internal].prf')
+    preset_path = Path(
+        logistics_cfg.path_logistics_software_general,
+        'x-plane',
+        'X-Plane Window Positions [m3 max, flight desk, internal].prf'
+    )
 
     # Set all xp12 settings
-    set_all_xp12_settings(preset_path=preset_path,
-                          ssao=0,
-                          fsr=3,
-                          msaa=0,
-                          draw_3d=2,
-                          draw_distance=3,
-                          shadow_quality=0,
-                          vegetation_quality=2)
+    set_all_xp12_settings(
+        preset_path=preset_path,
+        ssao=0,
+        fsr=3,
+        msaa=0,
+        draw_3d=2,
+        draw_distance=3,
+        shadow_quality=0,
+        vegetation_quality=2
+    )
 
 
 def set_xp12_m3_max_standalone():
-
     # Get preset path
     logistics_cfg = config.LogisticsConfig()
-    preset_path = Path(logistics_cfg.path_logistics_software_general, 'x-plane', 'X-Plane Window Positions [m3 max, standalone].prf')
+    preset_path = Path(
+        logistics_cfg.path_logistics_software_general,
+        'x-plane',
+        'X-Plane Window Positions [m3 max, standalone].prf'
+    )
 
     # FSR Setting
     fsr_setting = 3
 
     # Set all xp12 settings
-    set_all_xp12_settings(preset_path=preset_path,
-                          ssao=2,
-                          fsr=0,
-                          msaa=1,
-                          draw_3d=3,
-                          draw_distance=4,
-                          shadow_quality=2,
-                          vegetation_quality=3)
+    set_all_xp12_settings(
+        preset_path=preset_path,
+        ssao=2,
+        fsr=0,
+        msaa=1,
+        draw_3d=3,
+        draw_distance=4,
+        shadow_quality=2,
+        vegetation_quality=3
+    )
 
 
 def set_xp12_m3_max_office():
-
     # Get preset path
     logistics_cfg = config.LogisticsConfig()
-    preset_path = Path(logistics_cfg.path_logistics_software_general, 'x-plane', 'X-Plane Window Positions [m3 max, office].prf')
+    preset_path = Path(
+        logistics_cfg.path_logistics_software_general,
+        'x-plane',
+        'X-Plane Window Positions [m3 max, office].prf'
+    )
 
     # FSR Setting
     fsr_setting = 3
 
     # Set all xp12 settings
-    set_all_xp12_settings(preset_path=preset_path,
-                          ssao=2,
-                          fsr=2,
-                          msaa=1,
-                          draw_3d=3,
-                          draw_distance=3,
-                          shadow_quality=2,
-                          vegetation_quality=3)
+    set_all_xp12_settings(
+        preset_path=preset_path,
+        ssao=2,
+        fsr=2,
+        msaa=1,
+        draw_3d=3,
+        draw_distance=3,
+        shadow_quality=2,
+        vegetation_quality=3
+    )
