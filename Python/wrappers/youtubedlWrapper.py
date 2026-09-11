@@ -5,16 +5,19 @@ from pathlib import Path
 from typing import List
 
 import config
-from commonUtils import fileUtils, dirUtils, pySideUtils
+from commonUtils import fileUtils, dirUtils
 from commonUtils.debugUtils import *
-from commonUtils.debugUtils import print_debug_msg
 from commonUtils.osUtils import *
 from commonUtils.wrappers import cmdShellWrapper
 from . import rcloneWrapper
 
 
 show_verbose = True
-params = '--format best --write-info-json --write-thumbnail --add-metadata --no-overwrites --ignore-errors --no-overwrites --restrict-filenames -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio" --merge-output-format mp4'
+params = (
+    '--format best --write-info-json --write-thumbnail --add-metadata --no-overwrites --ignore-errors '
+    '--no-overwrites --restrict-filenames -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio" '
+    '--merge-output-format mp4'
+)
 
 
 def reinstall_youtube_dl():
@@ -47,9 +50,9 @@ def download_all(youtube_dl_cfg_path):
 
     # If that directory doesn't exist, throw error
     if not os.path.isdir(config_directory.path):
-        msg = 'The specified directory for Youtube Download config files does not exist: \n' + str(config_directory.path)
-        msg += '\nAborting!'
-        pySideUtils.display_msg_box_ok(tool_name, msg)
+        msg = (f'The specified directory for Youtube Download config files does not exist:\n{config_directory.path}\n'
+               f'Aborting!')
+        log(Severity.ERROR, tool_name, msg, popup=True)
         return False
 
     # Get each .INI config file
@@ -96,7 +99,9 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
     print_debug_msg('Additional Parameters: ' + additional_params, show_verbose)
 
     # Get Download Directory
-    download_dir = dirUtils.Directory(Path(os.path.dirname(youtube_dl_cfg_path), channel_name, 'Season ' + str(season_number)))
+    download_dir = dirUtils.Directory(
+        Path(os.path.dirname(youtube_dl_cfg_path), channel_name, 'Season ' + str(season_number))
+    )
 
     # Create string for download command
     if not master_branch:
