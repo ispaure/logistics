@@ -1,7 +1,9 @@
-from commonUtils.pySideUtils import *
+from commonUtils.ui import pyside
 import commonUtils.fileUtils as fileUtils
 from commonUtils import dirUtils
 from pathlib import Path
+from typing import List
+
 show_verbose = True
 
 
@@ -43,7 +45,7 @@ def ui_list_files_weird_chars(convert_arg):
     print('\n\nDone going through files list!')
 
 
-class ListFilesWeirdChars(Window):
+class ListFilesWeirdChars(pyside.Window):
     def __init__(self):
         super().__init__('List Files with weird characters')
 
@@ -59,11 +61,14 @@ class ListFilesWeirdChars(Window):
 
         # 1. Target Folder
         # Create Label
-        Label('Target Folder: ', self.dlg, QRect(10, 12, 400, 20))
+        pyside.Label('Target Folder: ', self.dlg, pyside.QRect(10, 12, 400, 20))
         # Create Argument
-        convert_arg['target_dir'] = LineEdit('C:\\Server\\Local\\', self.dlg, QRect(105, 10, 370, 25))
+        convert_arg['target_dir'] = pyside.LineEdit(
+            'C:\\Server\\Local\\', self.dlg, pyside.QRect(105, 10, 370, 25)
+        )
 
         # --- BUTTON ---
-        button('List Files', self.dlg, QRect(5, 80, 480, 30), ui_list_files_weird_chars, convert_arg)
+        pyside.button('List Files', self.dlg, pyside.QRect(5, 80, 480, 30),
+                      ui_list_files_weird_chars, convert_arg)
 
         # --------------------------------------------------------------------------------------------------------------

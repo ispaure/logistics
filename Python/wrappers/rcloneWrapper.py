@@ -16,7 +16,7 @@ import config as config
 from pathlib import Path
 import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
 import time
-import wrappers.uiShellWrapper as uiShellWrapper
+from commonUtils import ui
 from commonUtils import zipUtils
 from typing import *
 from commonUtils.debugUtils import *
@@ -181,7 +181,7 @@ def add_remote_from_zip_to_rclone_conf(zip_path, zip_pw):
     try:
         zipUtils.unzip_file(zip_path, extract_dir, zip_pw)
     except:
-        uiShellWrapper.show_dialog_box('Load Remote Credential', 'Password is invalid')
+        ui.display_msg_box_ok('Load Remote Credential', 'Password is invalid')
         return False
 
     # Load credentials

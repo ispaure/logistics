@@ -1,4 +1,4 @@
-from commonUtils.pySideUtils import *
+from commonUtils.ui import pyside
 from logisticsUtils import convertUtils
 
 show_verbose = True
@@ -11,7 +11,7 @@ def ui_dir_batch_convert_cbr_to_cbz(convert_arg):
                                               recursive=convert_arg['recursive'].isChecked())
 
 
-class DirBatchConvertCBRtoCBZ(Window):
+class DirBatchConvertCBRtoCBZ(pyside.Window):
     def __init__(self):
         super().__init__('Batch Convert ComicBook RAR (.cbr) to ComicBook ZIP (.cbz)')
 
@@ -27,17 +27,22 @@ class DirBatchConvertCBRtoCBZ(Window):
 
         # 1. Target Folder
         # Create Label
-        Label('Target Folder: ', self.dlg, QRect(10, 12, 400, 20))
+        pyside.Label('Target Folder: ', self.dlg, pyside.QRect(10, 12, 400, 20))
         # Create Argument
-        convert_arg['target_dir'] = LineEdit('', self.dlg, QRect(105, 10, 370, 25))
+        convert_arg['target_dir'] = pyside.LineEdit('', self.dlg, pyside.QRect(105, 10, 370, 25))
 
         # 2. Recursive
         # Create Label
-        Label('Recursive (Include Subfolders): ', self.dlg, QRect(10, 43, 400, 20))
+        pyside.Label('Recursive (Include Subfolders): ', self.dlg, pyside.QRect(10, 43, 400, 20))
         # Create Argument
-        convert_arg['recursive'] = create_checkbox(self.dlg, QRect(205, 28, 50, 50), default_state=True)
+        convert_arg['recursive'] = pyside.create_checkbox(
+            self.dlg, pyside.QRect(205, 28, 50, 50), default_state=True
+        )
 
         # --- BUTTON ---
-        button('Batch Convert', self.dlg, QRect(5, 80, 480, 30), ui_dir_batch_convert_cbr_to_cbz, convert_arg)
+        pyside.button(
+            'Batch Convert', self.dlg, pyside.QRect(5, 80, 480, 30),
+            ui_dir_batch_convert_cbr_to_cbz, convert_arg
+        )
 
         # --------------------------------------------------------------------------------------------------------------

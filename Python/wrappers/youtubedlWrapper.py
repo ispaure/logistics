@@ -154,7 +154,7 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
         count = 1
 
         for existing_file in existing_file_lst:
-            if ' - s' and '.mp4' in str(existing_file.path):
+            if ' - s' in str(existing_file.path) and '.mp4' in str(existing_file.path):
                 count += 1
     else:
         count = 1

@@ -1,9 +1,10 @@
-from commonUtils.pySideUtils import *
+from commonUtils.ui import pyside
 import commonUtils.fileUtils as fileUtils
 from commonUtils import dirUtils
 from commonUtils.debugUtils import *
 from pathlib import Path
 from commonUtils.osUtils import *
+from typing import List
 
 show_verbose = True
 
@@ -51,7 +52,7 @@ def ui_move_cbz_to_new_created_dir(convert_arg) -> bool:
     return True
 
 
-class BatchIndividualFolderforCBZ(Window):
+class BatchIndividualFolderforCBZ(pyside.Window):
     def __init__(self):
         super().__init__('Create new folders for .CBZ and put then into it')
         self.__name__ = 'Logistics Main UI Window'
@@ -68,11 +69,12 @@ class BatchIndividualFolderforCBZ(Window):
 
         # 1. Target Folder
         # Create Label
-        Label('Target Folder: ', self.dlg, QRect(10, 12, 400, 20))
+        pyside.Label('Target Folder: ', self.dlg, pyside.QRect(10, 12, 400, 20))
         # Create Argument
-        convert_arg['target_dir'] = LineEdit('', self.dlg, QRect(105, 10, 370, 25))
+        convert_arg['target_dir'] = pyside.LineEdit('', self.dlg, pyside.QRect(105, 10, 370, 25))
 
         # --- BUTTON ---
-        button('Batch Create Folders', self.dlg, QRect(5, 80, 480, 30), ui_move_cbz_to_new_created_dir, convert_arg)
+        pyside.button('Batch Create Folders', self.dlg, pyside.QRect(5, 80, 480, 30),
+                      ui_move_cbz_to_new_created_dir, convert_arg)
 
         # --------------------------------------------------------------------------------------------------------------

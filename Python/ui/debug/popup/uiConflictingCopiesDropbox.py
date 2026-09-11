@@ -1,7 +1,9 @@
-from commonUtils.pySideUtils import *
+from commonUtils.ui import pyside
 from commonUtils.debugUtils import *
-from commonUtils import dirUtils
+from commonUtils import dirUtils, fileUtils
 from pathlib import Path
+from typing import List
+
 show_verbose = True
 
 
@@ -139,7 +141,7 @@ def delete_conflicting_copies_dropbox(convert_arg):
         log(Severity.ERROR, conflict_tool_name, msg)
 
 
-class ConflictingCopiesDropbox(Window):
+class ConflictingCopiesDropbox(pyside.Window):
     def __init__(self):
         super().__init__('Conflicting Copies in Dropbox')
 
@@ -155,18 +157,22 @@ class ConflictingCopiesDropbox(Window):
 
         # 1. Target Folder
         # Create Label
-        Label('Target Folder: ', self.dlg, QRect(10, 12, 400, 20))
+        pyside.Label('Target Folder: ', self.dlg, pyside.QRect(10, 12, 400, 20))
         # Create Argument
-        convert_arg['target_dir'] = LineEdit('', self.dlg, QRect(105, 10, 370, 25))
+        convert_arg['target_dir'] = pyside.LineEdit('', self.dlg, pyside.QRect(105, 10, 370, 25))
 
         # 2. Recursive
         # Create Label
-        Label('Recursive (Include Subfolders): ', self.dlg, QRect(10, 43, 400, 20))
+        pyside.Label('Recursive (Include Subfolders): ', self.dlg, pyside.QRect(10, 43, 400, 20))
         # Create Argument
-        convert_arg['recursive'] = create_checkbox(self.dlg, QRect(205, 28, 50, 50), default_state=True)
+        convert_arg['recursive'] = pyside.create_checkbox(
+            self.dlg, pyside.QRect(205, 28, 50, 50), default_state=True
+        )
 
         # --- BUTTON ---
-        button('Print Conflicting Copies', self.dlg, QRect(5, 80, 480, 30), print_conflicting_copies_dropbox, convert_arg)
-        button('Delete Conflicting Copies', self.dlg, QRect(5, 115, 480, 30), delete_conflicting_copies_dropbox, convert_arg)
+        pyside.button('Print Conflicting Copies', self.dlg, pyside.QRect(5, 80, 480, 30),
+                      print_conflicting_copies_dropbox, convert_arg)
+        pyside.button('Delete Conflicting Copies', self.dlg, pyside.QRect(5, 115, 480, 30),
+                      delete_conflicting_copies_dropbox, convert_arg)
 
         # --------------------------------------------------------------------------------------------------------------

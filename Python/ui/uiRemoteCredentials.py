@@ -1,7 +1,9 @@
 import wrappers.rcloneWrapper as rcloneWrapper
-from commonUtils.pySideUtils import *
+from commonUtils.ui import pyside
+from commonUtils import fileUtils
 import ui.uiRemoteCredentialsPW as uiRemoteCredentialsPW
 from commonUtils.osUtils import *
+from typing import List
 
 
 def ui_load_credential_password_ui(arg):
@@ -9,7 +11,7 @@ def ui_load_credential_password_ui(arg):
     rem_cred_cls.display_ui()
 
 
-class LoadRemoteCredentials(Window):
+class LoadRemoteCredentials(pyside.Window):
     def __init__(self):
         super().__init__('Load Remote Credentials')
 
@@ -27,10 +29,10 @@ class LoadRemoteCredentials(Window):
         scroll_height = len(zip_file_lst) * height_per_row
 
         # Create grid layout contained in scroll area
-        widget_content, grid_layout = create_scroll_area_grid(
+        widget_content, grid_layout = pyside.create_scroll_area_grid(
             target=self.dlg,
-            rect=QRect(0, 0, 400, 200),
-            rect_content=create_size(395, scroll_height),
+            rect=pyside.QRect(0, 0, 400, 200),
+            rect_content=pyside.create_size(395, scroll_height),
         )
 
         # Determine number of rows and columns
@@ -44,10 +46,10 @@ class LoadRemoteCredentials(Window):
             # Come up with argument list for function
             arg = {'Path': zip_file.path}
 
-            button_var = button(
+            button_var = pyside.button(
                 text=button_text,
                 target=widget_content,
-                rect=QRect(0, 0, 120, 80),
+                rect=pyside.QRect(0, 0, 120, 80),
                 fn=ui_load_credential_password_ui,
                 args=arg,
             )

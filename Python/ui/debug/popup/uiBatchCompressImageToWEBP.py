@@ -1,4 +1,4 @@
-from commonUtils.pySideUtils import *
+from commonUtils.ui import pyside
 import logisticsUtils.imageUtils as imageUtils
 
 
@@ -29,7 +29,7 @@ def ui_dir_batch_compress_image(convert_arg):
                                     img_max_height=img_max_height)
 
 
-class DirBatchCompressImageWindow(Window):
+class DirBatchCompressImageWindow(pyside.Window):
     def __init__(self):
         super().__init__('Batch Compress Images to WEBP')
 
@@ -42,48 +42,55 @@ class DirBatchCompressImageWindow(Window):
         convert_arg = {}
 
         # 1. Target Directory
-        Label('Target Folder: ', self.dlg, QRect(10, 12, 400, 20))
-        convert_arg['target_dir'] = LineEdit(
+        pyside.Label('Target Folder: ', self.dlg, pyside.QRect(10, 12, 400, 20))
+        convert_arg['target_dir'] = pyside.LineEdit(
             str(imageUtils.default_path_to_convert_img),
             self.dlg,
-            QRect(105, 10, 370, 25)
+            pyside.QRect(105, 10, 370, 25)
         )
 
         # 2. Recursive
-        Label('Recursive (Include Sub-folders): ', self.dlg, QRect(10, 43, 400, 20))
-        convert_arg['recursive'] = create_checkbox(self.dlg, QRect(205, 28, 50, 50), default_state=True)
+        pyside.Label('Recursive (Include Sub-folders): ', self.dlg, pyside.QRect(10, 43, 400, 20))
+        convert_arg['recursive'] = pyside.create_checkbox(
+            self.dlg, pyside.QRect(205, 28, 50, 50), default_state=True
+        )
 
         # 3. Always Keep Compressed Image ?
-        Label('Always Keep Compressed: ', self.dlg, QRect(10, 68, 400, 20))
-        convert_arg['always_keep_compressed'] = create_checkbox(self.dlg, QRect(205, 53, 50, 50), default_state=False)
+        pyside.Label('Always Keep Compressed: ', self.dlg, pyside.QRect(10, 68, 400, 20))
+        convert_arg['always_keep_compressed'] = pyside.create_checkbox(
+            self.dlg, pyside.QRect(205, 53, 50, 50), default_state=False
+        )
 
         # 4. Compression Parameters
-        Label('Compression Settings', self.dlg, QRect(10, 98, 400, 20))
+        pyside.Label('Compression Settings', self.dlg, pyside.QRect(10, 98, 400, 20))
 
         # --- Quality fields ---
-        Label('Image Quality (Color):', self.dlg, QRect(10, 123, 200, 20))
-        convert_arg['quality_color'] = LineEdit('80', self.dlg, QRect(205, 120, 70, 25))
+        pyside.Label('Image Quality (Color):', self.dlg, pyside.QRect(10, 123, 200, 20))
+        convert_arg['quality_color'] = pyside.LineEdit('80', self.dlg, pyside.QRect(205, 120, 70, 25))
 
-        Label('Image Quality (Grayscale):', self.dlg, QRect(10, 153, 200, 20))
-        convert_arg['quality_grayscale'] = LineEdit('45', self.dlg, QRect(205, 150, 70, 25))
+        pyside.Label('Image Quality (Grayscale):', self.dlg, pyside.QRect(10, 153, 200, 20))
+        convert_arg['quality_grayscale'] = pyside.LineEdit('45', self.dlg, pyside.QRect(205, 150, 70, 25))
 
         # --- Max Long Edge (toggle + value) ---
-        Label('Limit Max Long Edge:', self.dlg, QRect(10, 183, 200, 20))
-        convert_arg['enable_max_long_edge'] = create_checkbox(
+        pyside.Label('Limit Max Long Edge:', self.dlg, pyside.QRect(10, 183, 200, 20))
+        convert_arg['enable_max_long_edge'] = pyside.create_checkbox(
             self.dlg,
-            QRect(205, 168, 50, 50),
+            pyside.QRect(205, 168, 50, 50),
             default_state=True
         )
-        convert_arg['max_long_edge'] = LineEdit('5120', self.dlg, QRect(265, 180, 70, 25))
+        convert_arg['max_long_edge'] = pyside.LineEdit('5120', self.dlg, pyside.QRect(265, 180, 70, 25))
 
         # --- Max Height (toggle + value) ---
-        Label('Limit Max Height:', self.dlg, QRect(10, 213, 200, 20))
-        convert_arg['enable_max_height'] = create_checkbox(
+        pyside.Label('Limit Max Height:', self.dlg, pyside.QRect(10, 213, 200, 20))
+        convert_arg['enable_max_height'] = pyside.create_checkbox(
             self.dlg,
-            QRect(205, 198, 50, 50),
+            pyside.QRect(205, 198, 50, 50),
             default_state=False
         )
-        convert_arg['max_height'] = LineEdit('5000', self.dlg, QRect(265, 210, 70, 25))
+        convert_arg['max_height'] = pyside.LineEdit('5000', self.dlg, pyside.QRect(265, 210, 70, 25))
 
         # --- BUTTON ---
-        button('Batch Compress', self.dlg, QRect(5, 265, 480, 30), ui_dir_batch_compress_image, convert_arg)
+        pyside.button(
+            'Batch Compress', self.dlg, pyside.QRect(5, 265, 480, 30),
+            ui_dir_batch_compress_image, convert_arg
+        )
