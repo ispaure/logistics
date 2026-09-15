@@ -1,4 +1,4 @@
-from commonUtils import fileUtils, dirUtils
+from commonUtils import fileUtils, dirUtils, linkUtils
 from commonUtils.osUtils import *
 from pathlib import Path
 import os
@@ -56,21 +56,9 @@ def inter_comic_rack_action(remote_cls):
     cyo_appdata_local_dir_path: Path = Path(os.environ['USERPROFILE'], 'AppData', 'Local', 'cYo')
     cyo_appdata_roaming_dir_path: Path = Path(os.environ['USERPROFILE'], 'AppData', 'Roaming', 'cYo')
 
-    # If paths are invalid, do not proceed!
-    if cyo_appdata_local_dir_path is None or cyo_appdata_roaming_dir_path is None:
-        return False
-
-    # If they exist already, delete
-    fileUtils.delete_symbolic_link(cyo_appdata_local_dir_path)
-    fileUtils.delete_symbolic_link(cyo_appdata_roaming_dir_path)
-
-    time.sleep(0.2)
-
-    # Create links...
-    fileUtils.create_symbolic_link(remote_cls.comic_rack_local, cyo_appdata_local_dir_path)
-    fileUtils.create_symbolic_link(remote_cls.comic_rack_roaming, cyo_appdata_roaming_dir_path)
-
-    time.sleep(0.2)
+    # Create/update links
+    linkUtils.update_symbolic_link(remote_cls.comic_rack_local, cyo_appdata_local_dir_path)
+    linkUtils.update_symbolic_link(remote_cls.comic_rack_roaming, cyo_appdata_roaming_dir_path)
 
     # Start software
     exec_path: Path = Path(config.LogisticsConfig().path_logistics_software_win, 'ComicRack', 'ComicRack.exe')

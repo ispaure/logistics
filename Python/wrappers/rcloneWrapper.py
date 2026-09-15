@@ -10,7 +10,7 @@ __status__ = 'Production'
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-import commonUtils.fileUtils as fileUtils
+from commonUtils import fileUtils, linkUtils
 from commonUtils.osUtils import *
 import config as config
 from pathlib import Path
@@ -27,13 +27,14 @@ show_verbose = True
 
 def clear_mounts():
     logistics_cfg = config.LogisticsConfig()
+    mount_directory = dirUtils.Directory(logistics_cfg.path_remote_network_mount)
+
     # If mount folder exists, make sure there isn't anything left in it
-    if os.path.exists(logistics_cfg.path_remote_network_mount):
-        mount_directory = dirUtils.Directory(logistics_cfg.path_remote_network_mount)
+    if mount_directory.is_dir():
         dir_lst: List[dirUtils.Directory] = mount_directory.list_directories()
+
         for directory in dir_lst:
-            print('DELETE THIS: ' + str(directory.path))
-            fileUtils.delete_symbolic_link(directory.path)
+            linkUtils.delete_symbolic_link(directory.path)
 
 
 def clear_rclone_conf():
