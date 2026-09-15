@@ -6,6 +6,7 @@ import os
 import config as config
 from commonUtils.osUtils import *
 from commonUtils.debugUtils import *
+from commonUtils.fileTypes import txtType
 
 show_verbose = True
 
@@ -62,7 +63,7 @@ def comic_info_xml_replace_author(file_path: Path, search: str):
 
         # ----------------------------------------------------------------------------------
         # Untested change from sunsetting search_replace_xml
-        xml_file = fileUtils.TXTFile(comicinfo_xml_path)
+        xml_file = txtType.TXTFile(comicinfo_xml_path)
         xml_file.read_lines()
 
         xml_file.line_lst = [

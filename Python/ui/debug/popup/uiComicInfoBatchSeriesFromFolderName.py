@@ -6,6 +6,7 @@ from typing import List
 import os
 from commonUtils.osUtils import *
 from commonUtils.debugUtils import *
+from commonUtils.fileTypes import txtType
 
 show_verbose = True
 
@@ -55,7 +56,7 @@ def comic_info_xml_replace_series(file_path: Path, search: str, suffix: str):
         search_string = f'<Series>{search}</Series>'
         replace_string = f'<Series>{replace}</Series>'
 
-        xml_file = fileUtils.TXTFile(comicinfo_xml_path)
+        xml_file = txtType.TXTFile(comicinfo_xml_path)
         xml_file.read_lines()
 
         xml_file.line_lst = [

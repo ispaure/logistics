@@ -3,6 +3,7 @@ from commonUtils.debugUtils import log, Severity
 from pathlib import Path
 import config
 import os
+from commonUtils.fileTypes import txtType
 
 
 def get_xp12_dir():
@@ -14,7 +15,7 @@ def set_xp12_setting(line_to_look_for: str, value: int):
     prefs_file_path = Path(get_xp12_dir(), 'Output', 'Preferences', 'X-Plane.prf')
 
     # Fetching existing lines
-    prefs_file = fileUtils.TXTFile(prefs_file_path)
+    prefs_file = txtType.TXTFile(prefs_file_path)
     prefs_file.read_lines()
 
     # Rebuilding lines with proper setting
