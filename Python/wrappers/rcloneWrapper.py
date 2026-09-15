@@ -21,6 +21,7 @@ from commonUtils import zipUtils
 from typing import *
 from commonUtils.debugUtils import *
 from commonUtils import dirUtils
+from commonUtils import configUtils
 from commonUtils.fileTypes import txtType
 
 show_verbose = True
@@ -328,41 +329,41 @@ class Remote(dirUtils.Directory):
             if os.path.exists(config_path_loc):
 
                 # Comic Rack Local
-                sub_path = config.config_section_map('ComicRack', 'appdata_local_cyo_sub_path', config_path_loc)
+                sub_path = configUtils.config_section_map(config_path_loc, 'ComicRack', 'appdata_local_cyo_sub_path')
                 if sub_path is not None:
                     self.comic_rack_local = str(Path(self.path, sub_path))
 
                 # Comic Rack Roaming
-                sub_path = config.config_section_map('ComicRack', 'appdata_roaming_cyo_sub_path', config_path_loc)
+                sub_path = configUtils.config_section_map(config_path_loc, 'ComicRack', 'appdata_roaming_cyo_sub_path')
                 if sub_path is not None:
                     self.comic_rack_roaming = str(Path(self.path, sub_path))
 
                 # Calibre Library
-                sub_path = config.config_section_map('Calibre', 'calibre_lib_sub_path', config_path_loc)
+                sub_path = configUtils.config_section_map(config_path_loc, 'Calibre', 'calibre_lib_sub_path')
                 if sub_path is not None:
                     self.calibre_lib_path = str(Path(self.path, sub_path))
 
                 # YAC Reader Library INI Location
-                sub_path = config.config_section_map('YACReaderLibrary', 'yacreaderlibrary_ini_sub_path', config_path_loc)
+                sub_path = configUtils.config_section_map(config_path_loc, 'YACReaderLibrary', 'yacreaderlibrary_ini_sub_path')
                 if sub_path is not None:
                     self.yac_reader_library_ini = str(Path(self.path, sub_path.replace('\\', '/')))
 
                 # Youtube Downloader
-                sub_path = config.config_section_map('Youtube-Download', 'config_sub_path', config_path_loc)
+                sub_path = configUtils.config_section_map(config_path_loc, 'Youtube-Download', 'config_sub_path')
                 if sub_path is not None:
                     self.youtube_dl_cfg_path = str(Path(self.path, sub_path.replace('\\', '/')))
                     self.youtube_dl_cfg_sub_path = sub_path
 
                 # Perforce Server
-                p4d_path = config.config_section_map('Perforce', 'p4d_path', config_path_loc)
+                p4d_path = configUtils.config_section_map(config_path_loc, 'Perforce', 'p4d_path')
                 if p4d_path is not None:
                     self.perforce_p4d_path = p4d_path
 
-                data_path = config.config_section_map('Perforce', 'data_path', config_path_loc)
+                data_path = configUtils.config_section_map(config_path_loc, 'Perforce', 'data_path')
                 if data_path is not None:
                     self.perforce_data_path = data_path
 
-                port_path = config.config_section_map('Perforce', 'port', config_path_loc)
+                port_path = configUtils.config_section_map(config_path_loc, 'Perforce', 'port')
                 if port_path is not None:
                     self.perforce_port = port_path
 

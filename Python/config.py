@@ -1,8 +1,7 @@
-import configparser
 from pathlib import Path
 from commonUtils.osUtils import *
 from commonUtils.debugUtils import *
-from commonUtils import marcUtils, fileUtils
+from commonUtils import marcUtils, fileUtils, configUtils
 from typing import *
 
 
@@ -59,13 +58,13 @@ class LogisticsConfig:
         user_home_dir = fileUtils.get_user_home_dir()
         match get_os():
             case OS.WIN:
-                sub_server_path = config_section_map('DirectoryStructure', 'server_path_win32', config_file_path)
+                sub_server_path = configUtils.config_section_map(config_file_path, 'DirectoryStructure', 'server_path_win32')
                 self.server_path: Path = Path(user_home_dir, sub_server_path)
             case OS.MAC:
-                sub_server_path_macos = config_section_map('DirectoryStructure', 'server_path_macos', config_file_path)
+                sub_server_path_macos = configUtils.config_section_map(config_file_path, 'DirectoryStructure', 'server_path_macos')
                 self.server_path: Path = Path(user_home_dir, sub_server_path_macos)
             case OS.LINUX:
-                sub_server_path_linux = config_section_map('DirectoryStructure', 'server_path_linux', config_file_path)
+                sub_server_path_linux = configUtils.config_section_map(config_file_path, 'DirectoryStructure', 'server_path_linux')
                 self.server_path: Path = Path(user_home_dir, sub_server_path_linux)
 
         # Get Logistics directory
@@ -95,8 +94,8 @@ class LogisticsConfig:
 
         # Other paths
         self.temp_path: Path = Path(self.path_logistics, 'temp')
-        self.path_remote_network_mount: Path = Path(self.server_path, config_section_map('DirectoryStructure', 'remote_network_mount_sub_path', config_file_path))
-        self.path_remote_local: Path = Path(self.server_path, config_section_map('DirectoryStructure', 'remote_local_sub_path', config_file_path))
+        self.path_remote_network_mount: Path = Path(self.server_path, configUtils.config_section_map(config_file_path, 'DirectoryStructure', 'remote_network_mount_sub_path'))
+        self.path_remote_local: Path = Path(self.server_path, configUtils.config_section_map(config_file_path, 'DirectoryStructure', 'remote_local_sub_path'))
         if os.path.isdir(marc_dropbox_path):
             self.path_minecraft_servers_java: Optional[Path] = Path(marc_dropbox_path, 'Software', 'Server', 'Minecraft')
             self.path_minecraft_servers_bedrock: Optional[Path] = Path(marc_dropbox_path, 'Software', 'Server', 'Minecraft (Bedrock)')
@@ -113,39 +112,3 @@ class LogisticsConfig:
             case OS.LINUX:
                 self.pms_data_path: Optional[Path] = get_plex_data_dir_linux()
                 self.yac_lib_prefs_dir: Optional[Path] = Path(user_home_dir, ".local", "share", "YACReader", "YACReaderLibrary")
-
-
-def config_section_map(section, value, cfg_file_path=get_config_file_path()):
-    """
-    Retrieve a value from a section of a config file.
-    :param section: Name of section in which the value you want is found.
-    :type section: str
-    :param value: Name of the value you want to get as return
-    :type value: str
-    :param cfg_file_path: Path to the config file to look into
-    :type cfg_file_path: str
-    :rtype: str
-    """
-    # Read config file
-    config = configparser.ConfigParser()
-    config.read(cfg_file_path)
-    config.sections()
-
-    # Retrieve dict
-    dict1 = {}
-    try:
-        options = config.options(section)
-    except:
-        return None
-    for option in options:
-        try:
-            dict1[option] = config.get(section, option)
-            if dict1[option] == -1:
-                DebugPrint("skip: %s" % option)
-        except:
-            print("exception on %s!" % option)
-            dict1[option] = None
-    if value in dict1.keys():
-        return dict1[value]
-    else:
-        return None

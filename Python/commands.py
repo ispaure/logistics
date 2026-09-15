@@ -2,6 +2,7 @@ import config as config
 from pathlib import Path
 import webbrowser
 
+from commonUtils import configUtils
 from commonUtils.debugUtils import log, Severity
 from commonUtils.osUtils import OS, get_os
 from commonUtils.wrappers import cmdShellWrapper
@@ -39,14 +40,14 @@ def open_config_file_url(entry_str):
     """
     print('attempting to open url')
     cfg_file_pth = config.get_config_file_path()
-    url = config.config_section_map('URLs', entry_str, cfg_file_pth)
+    url = configUtils.config_section_map(cfg_file_pth, 'URLs', entry_str)
 
     if '<' in url and '>' in url:
         # Get computers internal ip addresses and resolve in URL if applicable
         computer_ips = {
-            'goat-pc': config.config_section_map('ResolveIP', 'goat-pc', cfg_file_pth),
-            'yagi-mac': config.config_section_map('ResolveIP', 'yagi-mac', cfg_file_pth),
-            'reserved-server': config.config_section_map('ResolveIP', 'reserved-server', cfg_file_pth),
+            'goat-pc': configUtils.config_section_map(cfg_file_pth, 'ResolveIP', 'goat-pc'),
+            'yagi-mac': configUtils.config_section_map(cfg_file_pth, 'ResolveIP', 'yagi-mac'),
+            'reserved-server': configUtils.config_section_map(cfg_file_pth, 'ResolveIP', 'reserved-server'),
         }
 
         # Resolve IP if necessary
