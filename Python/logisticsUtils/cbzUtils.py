@@ -18,10 +18,12 @@ __status__ = 'Production'
 
 from pathlib import Path
 from typing import *
-from commonUtils import fileUtils, dirUtils, xmlUtils, zipUtils
+from commonUtils import fileUtils, dirUtils, zipUtils
 from commonUtils.debugUtils import *
 from . import imageUtils
 from datetime import datetime
+from commonUtils.fileTypes import xmlType, txtType, zipType
+
 
 
 # User Defined Settings
@@ -57,7 +59,7 @@ temp_dir_result = Path(temp_compression_path, '3_Result')
 tool_name = 'commonUtils.cbzUtils'
 
 
-class ComicInfoXML(xmlUtils.XMLFile):
+class ComicInfoXML(xmlType.XMLFile):
     def __init__(self, path: Path):
         super().__init__(path)
 
@@ -244,7 +246,7 @@ class CompressionLog:
         self.__compression_log_line_lst = []
 
     def export(self, export_path: Path):
-        txt_file = fileUtils.TXTFile(export_path)
+        txt_file = txtType.TXTFile(export_path)
         txt_file.line_lst = self.__compression_log_line_lst
         txt_file.write_lines()
 
@@ -263,7 +265,7 @@ class CBZImageFile(imageUtils.ImageFile):
             return f'    <Page Image="{page_num}" ImageSize="{self.size}" ImageWidth="{self.width}" ImageHeight="{self.height}" />'
 
 
-class CBZFile(zipUtils.ZIPFile):
+class CBZFile(zipType.ZIPFile):
     # TODO: Test with a large comics folder and see if issues occur.
     def __init__(self, path: Path):
         super().__init__(path)

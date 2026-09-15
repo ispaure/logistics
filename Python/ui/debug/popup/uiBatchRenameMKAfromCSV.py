@@ -4,6 +4,7 @@ from typing import List
 from commonUtils.ui import pyside
 from commonUtils import fileUtils, dirUtils, spreadsheetUtils
 from commonUtils.debugUtils import *
+from commonUtils.fileTypes import csvType
 
 show_verbose = True
 tool_name = 'Batch Rename MKA from CSV'
@@ -30,7 +31,7 @@ def ui_rename_mka_from_csv(convert_arg):
 
     csv_file = csv_file_lst[0]
 
-    if not isinstance(csv_file, fileUtils.CSVFile):
+    if not isinstance(csv_file, csvType.CSVFile):
         log(Severity.ERROR, tool_name, f'Expected CSVFile, got {type(csv_file).__name__}')
         return
 

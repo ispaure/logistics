@@ -21,6 +21,7 @@ from commonUtils import zipUtils
 from typing import *
 from commonUtils.debugUtils import *
 from commonUtils import dirUtils
+from commonUtils.fileTypes import txtType
 
 show_verbose = True
 
@@ -75,7 +76,7 @@ def get_remote_credentials_dict(remote_credentials_dir):
     """
     remote_credentials_directory = dirUtils.Directory(remote_credentials_dir)
     file_lst = cast(
-        List[fileUtils.TXTFile],
+        List[txtType.TXTFile],
         remote_credentials_directory.list_files(filter_extension='txt'),
     )
 
@@ -109,7 +110,7 @@ def get_rclone_conf_remote_credentials_dict():
     rclone_conf: Path = get_rclone_conf_path()
 
     # Read file
-    rclone_conf_file = fileUtils.TXTFile(rclone_conf)
+    rclone_conf_file = txtType.TXTFile(rclone_conf)
     rclone_conf_file.read_lines()
     rclone_conf_line_lst = rclone_conf_file.line_lst
 
@@ -170,7 +171,7 @@ def add_remote_to_rclone_conf(remote_credentials_dir: Path):
     rclone_remote_credential_dict = get_rclone_conf_remote_credentials_dict()
     logistics_remote_credential_dict = get_remote_credentials_dict(remote_credentials_dir)
 
-    file_cls = fileUtils.TXTFile(rclone_conf_path)
+    file_cls = txtType.TXTFile(rclone_conf_path)
     file_cls.read_lines()
 
     for key, value in logistics_remote_credential_dict.items():

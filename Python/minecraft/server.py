@@ -7,6 +7,7 @@ from commonUtils.osUtils import *
 from commonUtils.debugUtils import *
 from enum import Enum
 import commands
+from commonUtils.fileTypes import txtType
 
 
 class MinecraftServerType(Enum):
@@ -19,7 +20,7 @@ class MinecraftServer:
     def __init__(self, path: Path):
         self.path: Path = path
         self.name: str = path.name
-        self.properties: fileUtils.TXTFile = fileUtils.TXTFile(path / 'server.properties')
+        self.properties: txtType.TXTFile = txtType.TXTFile(path / 'server.properties')
         self.__log_name = f'{self.name} Minecraft Server'
         self.type: MinecraftServerType = self.__get_type()
         self.disk_app: Optional[appUtils.DiskApp] = self.__get_disk_app()
