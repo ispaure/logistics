@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List
 
 import config
-from commonUtils import fileUtils, dirUtils
+from commonUtils import fileUtils, dirUtils, configUtils
 from commonUtils.debugUtils import *
 from commonUtils.osUtils import *
 from commonUtils.wrappers import cmdShellWrapper
@@ -70,11 +70,13 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
     :param config_file_path: Path of config file for videos to download
     :type config_file_path: str
     """
+    tool_name = 'Youtube Downloader'
 
     # Display in Log what is being done
-    print_debug_msg(
+    log(
+        Severity.INFO,
+        tool_name,
         'Preparing Youtube Download of Playlist/Channel from config file at path: ' + config_file_path,
-        show_verbose,
     )
 
     # Determine split char
@@ -86,17 +88,17 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
 
     # From Config File, get the info for the download
     config_path_name = config_file_path.split(split_char)[-1].split('.')[0]
-    channel_name = config.config_section_map('Youtube-DL', 'channel_name', config_file_path)
-    download_url = config.config_section_map('Youtube-DL', 'download_url', config_file_path)
-    season_number = config.config_section_map('Youtube-DL', 'season_number', config_file_path)
-    additional_params = config.config_section_map('Youtube-DL', 'additional_params', config_file_path)
+    channel_name = configUtils.config_section_map(config_file_path, 'Youtube-DL', 'channel_name')
+    download_url = configUtils.config_section_map(config_file_path, 'Youtube-DL', 'download_url')
+    season_number = configUtils.config_section_map(config_file_path, 'Youtube-DL', 'season_number')
+    additional_params = configUtils.config_section_map(config_file_path, 'Youtube-DL', 'additional_params')
 
     # Print Loaded Infos
-    print_debug_msg('Loaded configuration!', show_verbose)
-    print_debug_msg('Channel Name: ' + channel_name, show_verbose)
-    print_debug_msg('Download URL: ' + download_url, show_verbose)
-    print_debug_msg('Season Number: ' + season_number, show_verbose)
-    print_debug_msg('Additional Parameters: ' + additional_params, show_verbose)
+    log(Severity.INFO, tool_name, 'Loaded configuration!')
+    log(Severity.DEBUG, tool_name, 'Channel Name: ' + channel_name)
+    log(Severity.DEBUG, tool_name, 'Download URL: ' + download_url)
+    log(Severity.DEBUG, tool_name, 'Season Number: ' + season_number)
+    log(Severity.DEBUG, tool_name, 'Additional Parameters: ' + additional_params)
 
     # Get Download Directory
     download_dir = dirUtils.Directory(
@@ -165,10 +167,10 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
         yt_dl_cmd_str += '\nexit'
 
     # Send command to be executed
-    print_debug_msg('Executing command string: \n' + yt_dl_cmd_str, show_verbose)
+    log(Severity.DEBUG, tool_name, 'Executing command string: \n' + yt_dl_cmd_str)
     # cmdShellWrapper.exec_cmd(yt_dl_cmd_str, wait_for_output=True, in_new_window=config.LogisticsConfig().temp_cmd)
     cmdShellWrapper.exec_cmd(yt_dl_cmd_str, wait_for_output=True, in_new_window=True)
-    print_debug_msg('Successfully executed!', show_verbose)
+    log(Severity.INFO, tool_name, 'Successfully executed!')
 
 
 def push_seasons(remote_cls):

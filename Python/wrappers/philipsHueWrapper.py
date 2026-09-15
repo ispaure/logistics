@@ -1,6 +1,6 @@
-
 import config as config
 import phue
+from commonUtils import configUtils
 from commonUtils.debugUtils import print_debug_msg as print_debug_msg
 
 
@@ -56,7 +56,7 @@ def get_bridge():
 
 
 def get_bridge_address():
-    return config.config_section_map('ResolveIP', 'hue-hub')
+    return configUtils.config_section_map(config.get_config_file_path(), 'ResolveIP', 'hue-hub')
 
 
 def get_group_id_from_name(name):
@@ -138,4 +138,3 @@ def set_group_color(group_name, hue, saturation):
     bridge.set_group(group_id, 'hue', hue)
     # Set the saturation on group id
     bridge.set_group(group_id, 'sat', saturation)
-
