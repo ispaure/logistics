@@ -17,10 +17,8 @@ log(Severity.DEBUG, 'Logistics', 'Adds Remote Credentials to rclone.conf (if was
 rcloneWrapper.add_logistics_remote_to_rclone_conf()
 
 # Clear existing mounts (if symbolic links exist in mount folder, delete them)
-# Only for Windows
-if get_os() == OS.WIN:
-    log(Severity.DEBUG, 'rclone', 'Clear mounts on Windows')
-    rcloneWrapper.clear_mounts()
+log(Severity.DEBUG, 'rclone', 'Clear mounts on Windows')
+rcloneWrapper.clear_mounts()
 
 # Mount all remotes in mount folder
 log(Severity.DEBUG, 'rclone', 'Mount all remotes in mount folder')

@@ -26,6 +26,10 @@ show_verbose = True
 
 
 def clear_mounts():
+    # Remote network mount only fail to remove themselves on Windows when the application crash. So just fix on Windows.
+    if get_os() != OS.WIN:
+        return
+
     logistics_cfg = config.LogisticsConfig()
     mount_directory = dirUtils.Directory(logistics_cfg.path_remote_network_mount)
 
@@ -34,7 +38,13 @@ def clear_mounts():
         dir_lst: List[dirUtils.Directory] = mount_directory.list_directories()
 
         for directory in dir_lst:
-            linkUtils.delete_symbolic_link(directory.path)
+            # Symbolic links can always be safely removed without touching their targets
+            if directory.path.is_symlink():
+                linkUtils.delete_symbolic_link(directory.path)
+
+            # Empty real directories can also be safely removed
+            elif not directory.path.is_junction() and directory.is_dir_empty():
+                directory.delete()
 
 
 def clear_rclone_conf():
