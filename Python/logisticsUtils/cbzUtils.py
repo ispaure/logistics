@@ -536,7 +536,10 @@ class CBZFile(zipUtils.ZIPFile):
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP ONE : EXTRACTION OF .CBZ IN TEMP DIRECTORY
-        fileUtils.create_n_wipe_dir(temp_dir_extracted_cbz)  # Create Directory (If Needed) & Wipe
+        temp_dir_extracted_cbz_dir: dirUtils.Directory = dirUtils.Directory(temp_dir_extracted_cbz)
+        if not temp_dir_extracted_cbz_dir.is_dir():
+            temp_dir_extracted_cbz_dir.make_dir()
+        temp_dir_extracted_cbz_dir.delete_contents()
 
         result = self.extract(temp_dir_extracted_cbz)
         if not result:
@@ -570,7 +573,11 @@ class CBZFile(zipUtils.ZIPFile):
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP FOUR: COMPRESS LIST OF IMAGES TO .WEBP
-        fileUtils.create_n_wipe_dir(temp_dir_compressed_imgs)  # Create Directory (If Needed) & Wipe
+        temp_dir_compressed_imgs_dir: dirUtils.Directory = dirUtils.Directory(temp_dir_compressed_imgs)
+        if not temp_dir_compressed_imgs_dir.is_dir():
+            temp_dir_compressed_imgs_dir.make_dir()
+        temp_dir_compressed_imgs_dir.delete_contents()
+
         # Compress to WEBP
         for img_file_cls in img_file_cls_lst:
 
@@ -615,7 +622,11 @@ class CBZFile(zipUtils.ZIPFile):
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP SIX: MOVE KEPT IMAGES TO RESULT DIRECTORY
-        fileUtils.create_n_wipe_dir(temp_dir_result)  # Create Directory (If Needed) & Wipe
+        temp_dir_result_dir: dirUtils.Directory = dirUtils.Directory(temp_dir_result)
+        if not temp_dir_result_dir.is_dir():
+            temp_dir_result_dir.make_dir()
+        temp_dir_result_dir.delete_contents()
+
         # Move kept images to result folder
         for kept_image_cls in kept_image_cls_lst:
             kept_img_compress_dir_path_str = str(kept_image_cls.path.parent)
