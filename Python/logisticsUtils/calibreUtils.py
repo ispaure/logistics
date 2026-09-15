@@ -363,10 +363,9 @@ class CalibreLibrary(dirUtils.Directory):
         if destination.is_dir():
             for root, dirs, files in os.walk(destination, topdown=False):
                 for directory_name in dirs:
-                    directory_path = Path(root, directory_name)
-
-                    if fileUtils.is_dir_empty(directory_path):
-                        dirUtils.Directory(directory_path).delete()
+                    directory_dir = dirUtils.Directory(Path(root, directory_name))
+                    if directory_dir.is_dir_empty():
+                        directory_dir.delete()
 
         # ------------------------------------------------------------------------------------------------------------------
         # SUMMARY

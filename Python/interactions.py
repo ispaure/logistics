@@ -1,4 +1,4 @@
-from commonUtils import fileUtils
+from commonUtils import fileUtils, dirUtils
 from commonUtils.osUtils import *
 from pathlib import Path
 import os
@@ -90,16 +90,17 @@ def inter_yac_reader_action(remote_cls):
         zip_path = Path(config.LogisticsConfig().path_logistics_software_mac, 'YACReaderLibrary.app.zip')
         fileUtils.unzip_file(zip_path, install_path)
 
-    yac_prefs_dir = config.LogisticsConfig().yac_lib_prefs_dir
-    if yac_prefs_dir is None:
+    yac_prefs_dir_path = config.LogisticsConfig().yac_lib_prefs_dir
+    if yac_prefs_dir_path is None:
         log(Severity.CRITICAL, 'inter_yac_reader_action', 'YACReaderLibrary preferences directory is not configured for this platform')
         return False
 
     # Create Directory where to put the library file
-    fileUtils.make_dir(yac_prefs_dir)
+    yac_prefs_dir = dirUtils.Directory(yac_prefs_dir_path)
+    yac_prefs_dir.make_dir()
 
     # Copy YACReaderLibrary ini file to Application Support
-    fileUtils.copy_file(remote_cls.yac_reader_library_ini, Path(yac_prefs_dir, 'YACReaderLibrary.ini'))
+    fileUtils.copy_file(remote_cls.yac_reader_library_ini, Path(yac_prefs_dir_path, 'YACReaderLibrary.ini'))
 
     # Open YACReader
     cmdShellWrapper.exec_cmd(
