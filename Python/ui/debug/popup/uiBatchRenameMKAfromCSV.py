@@ -9,7 +9,7 @@ show_verbose = True
 tool_name = 'Batch Rename MKA from CSV'
 
 
-def ui_dir_batch_convert_cbr_to_cbz(convert_arg):
+def ui_rename_mka_from_csv(convert_arg):
     target_dir = dirUtils.Directory(Path(convert_arg['target_dir'].txt()))
 
     # Make sure Target Dir is indeed a directory
@@ -92,6 +92,6 @@ class BatchRenameMKAfromCSV(pyside.Window):
         convert_arg['target_dir'] = pyside.LineEdit('', self.dlg, pyside.QRect(105, 10, 370, 25))
 
         # --- BUTTON ---
-        pyside.button('Batch Convert', self.dlg, pyside.QRect(5, 80, 480, 30), ui_dir_batch_convert_cbr_to_cbz, convert_arg)
+        pyside.button('Batch Convert', self.dlg, pyside.QRect(5, 80, 480, 30), ui_rename_mka_from_csv, convert_arg)
 
         # --------------------------------------------------------------------------------------------------------------
