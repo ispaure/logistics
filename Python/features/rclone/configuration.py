@@ -51,3 +51,10 @@ def get_rclone_conf_remote_credentials_dict() -> dict:
         credentials = wrap_up_entry(current_entry_lines, credentials)
 
     return credentials
+
+
+def clear_rclone_conf():
+    """
+    Deletes the local rclone.conf file, essentially clearing it.
+    """
+    fileUtils.File(get_rclone_conf_path()).delete_file()

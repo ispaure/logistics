@@ -5,12 +5,12 @@ from typing import List
 import commonUtils.fileUtils as fileUtils
 import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
 import config
-import wrappers.rcloneWrapper as rcloneWrapper
 
 from commonUtils import dirUtils, ui, zipUtils
 from commonUtils.debugUtils import *
 from commonUtils.osUtils import *
 from features.plex import folders as plex_folders
+from features.rclone import sync as rclone_sync
 from models.local_folder import LocalFolder
 from models.remote_folder import RemoteFolder
 
@@ -60,7 +60,7 @@ def pull_pms(remote_cls):
     source_path = remote_cls_pmsdata.name + ':'
     destination_path = Path(config.LogisticsConfig().path_remote_local, remote_cls_pmsdata.name)
 
-    rcloneWrapper.rclone_sync(source_path, destination_path)
+    rclone_sync.rclone_sync(source_path, destination_path)
 
 
 def push_pms(remote_cls):
@@ -69,7 +69,7 @@ def push_pms(remote_cls):
     source_path = local_cls_pmsdata.path
     destination_path = local_cls_pmsdata.name + ':'
 
-    rcloneWrapper.rclone_sync(source_path, destination_path)
+    rclone_sync.rclone_sync(source_path, destination_path)
 
 
 def unpackage_pms(remote_cls):
