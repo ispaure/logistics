@@ -23,30 +23,13 @@ from commonUtils.debugUtils import *
 from commonUtils import dirUtils
 from commonUtils import configUtils
 from commonUtils.fileTypes import txtType
+from features.rclone import mounts
 
 show_verbose = True
 
 
 def clear_mounts():
-    # Remote network mount only fail to remove themselves on Windows when the application crash. So just fix on Windows.
-    if get_os() != OS.WIN:
-        return
-
-    logistics_cfg = config.LogisticsConfig()
-    mount_directory = dirUtils.Directory(logistics_cfg.path_remote_network_mount)
-
-    # If mount folder exists, make sure there isn't anything left in it
-    if mount_directory.is_dir():
-        dir_lst: List[dirUtils.Directory] = mount_directory.list_directories()
-
-        for directory in dir_lst:
-            # Symbolic links can always be safely removed without touching their targets
-            if directory.path.is_symlink():
-                linkUtils.delete_symbolic_link(directory.path)
-
-            # Empty real directories can also be safely removed
-            elif not directory.path.is_junction() and directory.is_dir_empty():
-                directory.delete()
+    mounts.clear_mounts()
 
 
 def clear_rclone_conf():
@@ -208,30 +191,7 @@ def add_remote_from_zip_to_rclone_conf(zip_path, zip_pw):
 
 
 def mount_remote(remote_name, mount_path, timeout=None):
-    """
-    Mounts a specific remote on disk
-    """
-    # Debug Message (Before Mount)
-    log(Severity.INFO, 'mount_remote', 'Mounting "{}" at path "{}"...'.format(remote_name, mount_path))
-
-    rclone_exec_pth = get_rclone_path()
-
-    # Create mount command
-    mount_cmd = f'"{rclone_exec_pth}"' + ' mount '
-
-    if timeout is not None:
-        mount_cmd += '--attr-timeout={}s '.format(timeout)
-
-    mount_cmd += f'{remote_name}: {mount_path}'
-
-    # If on macOS or Linux, mount path must exist before it can be mounted!
-    match get_os():
-        case OS.MAC | OS.LINUX:
-            if not os.path.exists(mount_path):
-                os.makedirs(mount_path, exist_ok=True)
-
-    # Execute command
-    cmdShellWrapper.exec_cmd(mount_cmd, wait_for_output=False)
+    return mounts.mount_remote(remote_name, mount_path, timeout)
 
 
 def mount_all_rclone_conf_remotes(timeout=None, wait_until_mounted=False):
