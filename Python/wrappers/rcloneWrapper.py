@@ -56,20 +56,7 @@ def get_rclone_conf_remote_credentials_dict():
 
 
 def get_rclone_remote_mount_paths():
-    """
-    Gets the expected mount paths for all supported rclone.conf remotes.
-    """
-    network_remote_mount_path = config.LogisticsConfig().path_remote_network_mount
-    rclone_conf_remote_credential_dict = get_rclone_conf_remote_credentials_dict()
-
-    mount_path_lst = []
-
-    for key in rclone_conf_remote_credential_dict.keys():
-        if 'Dropbox' not in key and 'gdrive' not in key:
-            mount_path = str(Path(network_remote_mount_path, key))
-            mount_path_lst.append(mount_path)
-
-    return mount_path_lst
+    return mounts.get_rclone_remote_mount_paths()
 
 
 def add_logistics_remote_to_rclone_conf():
@@ -108,50 +95,7 @@ def mount_remote(remote_name, mount_path, timeout=None):
 
 
 def mount_all_rclone_conf_remotes(timeout=None, wait_until_mounted=False):
-    """
-    Mounts all rclone.conf remotes on disk.
-
-    Args:
-        timeout: Timeout passed to mount_remote().
-        wait_until_mounted: If True, wait indefinitely for all remotes to mount.
-                            If False, proceed immediately after starting the mounts.
-    """
-    network_remote_mount_path = config.LogisticsConfig().path_remote_network_mount
-
-    if not os.path.exists(network_remote_mount_path):
-        log(Severity.INFO, 'mount_all_rclone_conf_remotes', f'Creating network mount directory: {network_remote_mount_path}')
-        os.makedirs(network_remote_mount_path)
-
-    mount_path_lst = get_rclone_remote_mount_paths()
-
-    if not mount_path_lst:
-        log(Severity.WARNING, 'mount_all_rclone_conf_remotes', 'No rclone remotes found to mount')
-        return
-
-    for mount_path in mount_path_lst:
-        key = Path(mount_path).name
-        mount_remote(key, mount_path, timeout)
-
-    if not wait_until_mounted:
-        log(Severity.DEBUG, 'mount_all_rclone_conf_remotes', 'Mount commands started, proceeding without waiting')
-        return
-
-    log(Severity.INFO, 'mount_all_rclone_conf_remotes', 'Waiting for all rclone remotes to mount')
-
-    while not check_path_valid_lst(mount_path_lst):
-        time.sleep(0.01)
-
-    log(Severity.INFO, 'mount_all_rclone_conf_remotes', 'All rclone remotes successfully mounted')
-
-
-def check_path_valid_lst(path_lst):
-    """
-    Checks that all paths in list are valid and only returns true when all of them are
-    """
-    for path in path_lst:
-        if not os.path.exists(path):
-            return False
-    return True
+    return mounts.mount_all_rclone_conf_remotes(timeout, wait_until_mounted)
 
 
 class Remote(dirUtils.Directory):
