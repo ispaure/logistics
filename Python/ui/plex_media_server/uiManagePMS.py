@@ -1,33 +1,37 @@
-import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
-import wrappers.rcloneWrapper as rcloneWrapper
-from commonUtils import ui
-import config
+import os
 from pathlib import Path
+from typing import List
+
 import commonUtils.fileUtils as fileUtils
-from commonUtils import dirUtils, zipUtils
-from commonUtils.osUtils import *
+import commonUtils.wrappers.cmdShellWrapper as cmdShellWrapper
+import config
+import wrappers.rcloneWrapper as rcloneWrapper
+
+from commonUtils import dirUtils, ui, zipUtils
 from commonUtils.debugUtils import *
+from commonUtils.osUtils import *
+from features.plex import folders as plex_folders
+from models.local_folder import LocalFolder
+from models.remote_folder import RemoteFolder
 
 
 def get_remote_cls_pmsdata(remote_cls):
     """
-    Get the remote class of the -PMSData of the current remote
+    Get the remote folder of the -PMSDATA of the current folder
     """
-    return rcloneWrapper.get_remote_class(
-        Path(config.LogisticsConfig().path_remote_network_mount, remote_cls.name + '-PMSDATA')
-    )
+    return plex_folders.get_remote_pms_data_folder(remote_cls)
 
 
 def open_dir_remote_cls_pmsdata(remote_cls):
     """
-    Opens the folder in explorer or finder of the current remote's -PMSDATA
+    Opens the folder in explorer or finder of the current folder's -PMSDATA
     """
     get_remote_cls_pmsdata(remote_cls).open()
 
 
 def open_dir_local_cls_pmsdata(remote_cls):
     """
-    Opens the folder in explorer or finder of the current remote's -PMSDATA
+    Opens the folder in explorer or finder of the current folder's -PMSDATA
     """
     get_local_cls_pmsdata(remote_cls).open()
 
@@ -40,15 +44,14 @@ def clear_local_pmsdata(remote_cls):
         rem_dir_lst: List[dirUtils.Directory] = local_cls_pmsdata.list_directories()
         for rem_dir in rem_dir_lst:
             rem_dir.delete()
+
         rem_file_lst = local_cls_pmsdata.list_files()
         for file in rem_file_lst:
             file.delete_file()
 
 
 def get_local_cls_pmsdata(remote_cls):
-    return rcloneWrapper.get_remote_class(
-        Path(config.LogisticsConfig().path_remote_local, remote_cls.name + '-PMSDATA')
-    )
+    return plex_folders.get_local_pms_data_folder(remote_cls)
 
 
 def pull_pms(remote_cls):
@@ -70,7 +73,6 @@ def push_pms(remote_cls):
 
 
 def unpackage_pms(remote_cls):
-
     local_cls_pmsdata = get_local_cls_pmsdata(remote_cls)  # Get local class for the -PMSDATA
 
     # If folder to unpackage not there, cancel proceeding
@@ -151,13 +153,12 @@ def unpackage_pms(remote_cls):
                 msg += '\nThe Plex Media Server contents can still be extracted, but some server settings will need to ' \
                        'be manually configured. Press OK to proceed or Cancel to Cancel'
                 result = ui.display_msg_box_ok_cancel('Unpackage Plex Media Server', msg)
+
                 if not result:
                     return False
             else:
                 # Copy plist file to proper location
-                plist_destination_path = Path(
-                    os.environ['HOME'], 'Library', 'Preferences', 'com.plexapp.plexmediaserver.plist'
-                )
+                plist_destination_path = Path(os.environ['HOME'], 'Library', 'Preferences', 'com.plexapp.plexmediaserver.plist')
                 fileUtils.copy_file(pms_plist_file_path, plist_destination_path)
 
             # Wipe contents within Plex Media Server Data in Local AppData
@@ -214,6 +215,7 @@ def package_pms(remote_cls) -> bool:
             # Get list of folders to include in 7z. Then add to end of last line
             pms_data_directory = dirUtils.Directory(pms_data_path)
             dir_lst: List[dirUtils.Directory] = pms_data_directory.list_directories()
+
             for directory in dir_lst:
                 command += f' "{directory.path}"'
 
@@ -228,18 +230,14 @@ def package_pms(remote_cls) -> bool:
 
             # Wipe (some) contents within -PMSDATA directory; plist file and archive
             file_lst = local_cls_pmsdata.list_files()
+
             for file in file_lst:
                 if 'pms_data_mac.' in file.file_name or file.ext == 'plist':
                     log(Severity.DEBUG, tool_name, f'Deleting previous package file: "{file.path}"')
                     file.delete_file()
 
             # Copy plist file to -PMSDATA
-            plist_source_path = Path(
-                os.environ['HOME'],
-                'Library',
-                'Preferences',
-                'com.plexapp.plexmediaserver.plist',
-            )
+            plist_source_path = Path(os.environ['HOME'], 'Library', 'Preferences', 'com.plexapp.plexmediaserver.plist')
             plist_dest_path = pms_package_path / 'com.plexapp.plexmediaserver.plist'
 
             log(Severity.DEBUG, tool_name, f'Copying Plex preferences from "{plist_source_path}" to "{plist_dest_path}".')
@@ -274,44 +272,38 @@ class ManagePMS(ui.pyside.Window):
                 log(Severity.CRITICAL, 'uiManagePMS', 'Unsupported Platform!')
                 return
 
-        match remote_cls.type:
-            case 'Local':
+        if isinstance(remote_cls, LocalFolder):
 
-                # Open PMSData (Local) button
-                ui.pyside.button('Open Local -PMSDATA', self.dlg, ui.pyside.QRect(0, 3, 200, 30),
-                                 open_dir_local_cls_pmsdata, remote_cls)
+            # Open PMSData (Local) button
+            ui.pyside.button('Open Local -PMSDATA', self.dlg, ui.pyside.QRect(0, 3, 200, 30),
+                             open_dir_local_cls_pmsdata, remote_cls)
 
-                # Clear LocalPMS button
-                ui.pyside.button('Clear Local -PMSDATA', self.dlg, ui.pyside.QRect(300, 3, 200, 30),
-                                 clear_local_pmsdata, remote_cls)
+            # Clear LocalPMS button
+            ui.pyside.button('Clear Local -PMSDATA', self.dlg, ui.pyside.QRect(300, 3, 200, 30),
+                             clear_local_pmsdata, remote_cls)
 
-                # Label: Restore PLEX Media Server Data from Cloud
-                ui.pyside.Label('Restore PLEX Media Server Data from Cloud:', self.dlg,
-                                ui.pyside.QRect(10, 43, 400, 20))
+            # Label: Restore PLEX Media Server Data from Cloud
+            ui.pyside.Label('Restore PLEX Media Server Data from Cloud:', self.dlg, ui.pyside.QRect(10, 43, 400, 20))
 
-                # Buttons
-                ui.pyside.button('1. Pull {}-PMSDATA from Remote to Local'.format(remote_cls.name), self.dlg,
-                                 ui.pyside.QRect(0, 65, 500, 30), pull_pms, remote_cls)
-                ui.pyside.button(
-                    '2. Unpackage Local {}-PMSDATA to {} PMS'.format(remote_cls.name, os_pref_folder_name),
-                    self.dlg, ui.pyside.QRect(0, 95, 500, 30), unpackage_pms, remote_cls
-                )
+            # Buttons
+            ui.pyside.button('1. Pull {}-PMSDATA from Remote to Local'.format(remote_cls.name), self.dlg,
+                             ui.pyside.QRect(0, 65, 500, 30), pull_pms, remote_cls)
+            ui.pyside.button('2. Unpackage Local {}-PMSDATA to {} PMS'.format(remote_cls.name, os_pref_folder_name),
+                             self.dlg, ui.pyside.QRect(0, 95, 500, 30), unpackage_pms, remote_cls)
 
-                # Label: Restore PLEX Media Server Data from Cloud
-                ui.pyside.Label('Backup PLEX Media Server Data to Cloud:', self.dlg,
-                                ui.pyside.QRect(10, 150, 400, 20))
+            # Label: Restore PLEX Media Server Data from Cloud
+            ui.pyside.Label('Backup PLEX Media Server Data to Cloud:', self.dlg, ui.pyside.QRect(10, 150, 400, 20))
 
-                # Buttons
-                ui.pyside.button(
-                    '1. Package {} PMS to Local {}-PMSDATA'.format(os_pref_folder_name, remote_cls.name),
-                    self.dlg, ui.pyside.QRect(0, 172, 500, 30), package_pms, remote_cls
-                )
-                ui.pyside.button('2. PUSH {}-PMSDATA from Local to Remote'.format(remote_cls.name), self.dlg,
-                                 ui.pyside.QRect(0, 202, 500, 30), push_pms, remote_cls)
+            # Buttons
+            ui.pyside.button('1. Package {} PMS to Local {}-PMSDATA'.format(os_pref_folder_name, remote_cls.name),
+                             self.dlg, ui.pyside.QRect(0, 172, 500, 30), package_pms, remote_cls)
+            ui.pyside.button('2. PUSH {}-PMSDATA from Local to Remote'.format(remote_cls.name), self.dlg,
+                             ui.pyside.QRect(0, 202, 500, 30), push_pms, remote_cls)
 
-            case 'Remote':
-                # Open PMSData (Remote) button
-                ui.pyside.button('Open Remote -PMSDATA', self.dlg, ui.pyside.QRect(0, 3, 200, 30),
-                                 open_dir_remote_cls_pmsdata, remote_cls)
+        elif isinstance(remote_cls, RemoteFolder):
+
+            # Open PMSData (Remote) button
+            ui.pyside.button('Open Remote -PMSDATA', self.dlg, ui.pyside.QRect(0, 3, 200, 30),
+                             open_dir_remote_cls_pmsdata, remote_cls)
 
         # --------------------------------------------------------------------------------------------------------------
