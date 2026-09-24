@@ -12,6 +12,7 @@ from commonUtils.wrappers import cmdShellWrapper
 
 from features.calibre import detection as calibre_detection
 from features.comics import detection as comics_detection
+from features.perforce import detection as perforce_detection
 from features.plex import detection as plex_detection
 from features.youtube_downloader import detection as youtube_downloader_detection
 from models.local_folder import LocalFolder
@@ -113,10 +114,7 @@ def inter_yac_reader_action(remote_cls):
 
     fileUtils.copy_file(yac_reader_library_ini, Path(yac_prefs_dir_path, 'YACReaderLibrary.ini'))
 
-    cmdShellWrapper.exec_cmd(
-        str(Path('/Applications', 'YACReaderLibrary.app', 'Contents', 'MacOS', 'YACReaderLibrary')),
-        wait_for_output=False
-    )
+    cmdShellWrapper.exec_cmd(str(Path('/Applications', 'YACReaderLibrary.app', 'Contents', 'MacOS', 'YACReaderLibrary')), wait_for_output=False)
 
 
 def inter_calibre_manage(remote_cls):
@@ -215,7 +213,7 @@ def interaction_06_action(remote_cls):
 def interaction_07(remote_cls):
     interaction_dict = {}
 
-    if get_os() == OS.LINUX and isinstance(remote_cls, LocalFolder) and getattr(remote_cls, 'perforce_p4d_path', None) is not None:
+    if get_os() == OS.LINUX and isinstance(remote_cls, LocalFolder) and perforce_detection.has_p4d_server(remote_cls):
         interaction_dict['Name'] = 'Launch P4D'
     else:
         interaction_dict['Name'] = 'N/A'
@@ -225,13 +223,18 @@ def interaction_07(remote_cls):
 
 
 def interaction_07_action(remote_cls):
-    perforce_p4d_path = getattr(remote_cls, 'perforce_p4d_path', None)
-    perforce_data_path = getattr(remote_cls, 'perforce_data_path', None)
-    perforce_port = getattr(remote_cls, 'perforce_port', None)
+    if get_os() != OS.LINUX or not isinstance(remote_cls, LocalFolder):
+        return False
 
-    if get_os() == OS.LINUX and isinstance(remote_cls, LocalFolder) and perforce_p4d_path is not None:
-        command = f'./{perforce_p4d_path} -C1 -r ./{perforce_data_path} -p {perforce_port}'
-        cmdShellWrapper.exec_cmd(command, in_new_window=True, cwd=remote_cls.path)
+    perforce_p4d_path = perforce_detection.get_p4d_path(remote_cls)
+    perforce_data_path = perforce_detection.get_data_path(remote_cls)
+    perforce_port = perforce_detection.get_port(remote_cls)
+
+    if perforce_p4d_path is None or perforce_data_path is None or perforce_port is None:
+        return False
+
+    command = f'./{perforce_p4d_path} -C1 -r ./{perforce_data_path} -p {perforce_port}'
+    cmdShellWrapper.exec_cmd(command, in_new_window=True, cwd=remote_cls.path)
 
 
 interaction_fn_lst = [

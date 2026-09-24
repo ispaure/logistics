@@ -1,0 +1,56 @@
+"""
+Detection helpers for the Logistics Perforce feature.
+"""
+
+from pathlib import Path
+
+from commonUtils import configUtils
+
+from models.local_folder import LocalFolder
+
+
+FOLDER_CONFIG_NAME = "remoteConfig.ini"
+
+PERFORCE_SECTION = "Perforce"
+P4D_PATH_KEY = "p4d_path"
+DATA_PATH_KEY = "data_path"
+PORT_KEY = "port"
+
+
+def get_p4d_path(folder: LocalFolder) -> str | None:
+    """Return the configured P4D executable path for a LocalFolder."""
+
+    config_path = Path(folder.path, FOLDER_CONFIG_NAME)
+
+    if not config_path.is_file():
+        return None
+
+    return configUtils.config_section_map(config_path, PERFORCE_SECTION, P4D_PATH_KEY)
+
+
+def get_data_path(folder: LocalFolder) -> str | None:
+    """Return the configured Perforce data path for a LocalFolder."""
+
+    config_path = Path(folder.path, FOLDER_CONFIG_NAME)
+
+    if not config_path.is_file():
+        return None
+
+    return configUtils.config_section_map(config_path, PERFORCE_SECTION, DATA_PATH_KEY)
+
+
+def get_port(folder: LocalFolder) -> str | None:
+    """Return the configured Perforce server port for a LocalFolder."""
+
+    config_path = Path(folder.path, FOLDER_CONFIG_NAME)
+
+    if not config_path.is_file():
+        return None
+
+    return configUtils.config_section_map(config_path, PERFORCE_SECTION, PORT_KEY)
+
+
+def has_p4d_server(folder: LocalFolder) -> bool:
+    """Return whether the LocalFolder has the required P4D server configuration."""
+
+    return get_p4d_path(folder) is not None and get_data_path(folder) is not None and get_port(folder) is not None
