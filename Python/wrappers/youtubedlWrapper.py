@@ -5,10 +5,12 @@ from pathlib import Path
 from typing import List
 
 import config
-from commonUtils import fileUtils, dirUtils, configUtils
+from commonUtils import configUtils, dirUtils, fileUtils
 from commonUtils.debugUtils import *
 from commonUtils.osUtils import *
 from commonUtils.wrappers import cmdShellWrapper
+from features.youtube_downloader import detection as youtube_downloader_detection
+from models.local_folder import LocalFolder
 from . import rcloneWrapper
 
 
@@ -28,10 +30,8 @@ def reinstall_youtube_dl():
 
     # Install Updated packages
     try:
-        subprocess.check_call([
-            sys.executable, '-m', 'pip', 'install', '--force-reinstall',
-            'https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz', '--user',
-        ])
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--force-reinstall',
+                               'https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz', '--user'])
     except:
         print('Could not install plugin, still proceeding')
 
@@ -50,8 +50,7 @@ def download_all(youtube_dl_cfg_path):
 
     # If that directory doesn't exist, throw error
     if not os.path.isdir(config_directory.path):
-        msg = (f'The specified directory for Youtube Download config files does not exist:\n{config_directory.path}\n'
-               f'Aborting!')
+        msg = f'The specified directory for Youtube Download config files does not exist:\n{config_directory.path}\nAborting!'
         log(Severity.ERROR, tool_name, msg, popup=True)
         return False
 
@@ -73,11 +72,7 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
     tool_name = 'Youtube Downloader'
 
     # Display in Log what is being done
-    log(
-        Severity.INFO,
-        tool_name,
-        'Preparing Youtube Download of Playlist/Channel from config file at path: ' + config_file_path,
-    )
+    log(Severity.INFO, tool_name, 'Preparing Youtube Download of Playlist/Channel from config file at path: ' + config_file_path)
 
     # Determine split char
     match get_os():
@@ -101,9 +96,7 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
     log(Severity.DEBUG, tool_name, 'Additional Parameters: ' + additional_params)
 
     # Get Download Directory
-    download_dir = dirUtils.Directory(
-        Path(os.path.dirname(youtube_dl_cfg_path), channel_name, 'Season ' + str(season_number))
-    )
+    download_dir = dirUtils.Directory(Path(os.path.dirname(youtube_dl_cfg_path), channel_name, 'Season ' + str(season_number)))
 
     # Create string for download command
     if not master_branch:
@@ -144,10 +137,7 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
     yt_dl_cmd_str += f'--download-archive "{complete_list_path}" '
 
     # Sets the download file name
-    yt_dl_cmd_str += (
-        f'-o "{download_dir.path}{split_char}%(channel)s - s0{season_number}'
-        f'e%(autonumber)s - %(title).50s.%(ext)s" '
-    )
+    yt_dl_cmd_str += f'-o "{download_dir.path}{split_char}%(channel)s - s0{season_number}e%(autonumber)s - %(title).50s.%(ext)s" '
 
     # Sets the auto numbering to start at X number (so it continues after the existing files)
     # Find how many files are already there, and start after
@@ -173,11 +163,17 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
     log(Severity.INFO, tool_name, 'Successfully executed!')
 
 
-def push_seasons(remote_cls):
+def push_seasons(remote_cls: LocalFolder):
     print('Pushing Seasons')
 
+    youtube_dl_cfg_path = youtube_downloader_detection.get_config_path(remote_cls)
+
+    if youtube_dl_cfg_path is None:
+        log(Severity.ERROR, 'push_seasons', f'No Youtube Download configuration found for "{remote_cls.name}"')
+        return False
+
     # Get list of existing channel dirs
-    channel_root_directory = dirUtils.Directory(Path(remote_cls.youtube_dl_cfg_path).parent)
+    channel_root_directory = dirUtils.Directory(youtube_dl_cfg_path.parent)
     channel_dir_lst: List[dirUtils.Directory] = channel_root_directory.list_directories()
 
     # Initialize push list
@@ -201,17 +197,27 @@ def push_seasons(remote_cls):
         print('Push complete!')
 
 
-def push_config(remote_cls):
+def push_config(remote_cls: LocalFolder):
     print('Push Config')
-    rcloneWrapper.rclone_sync(
-        remote_cls.youtube_dl_cfg_path,
-        remote_cls.name + ':' + remote_cls.youtube_dl_cfg_sub_path,
-    )
+
+    youtube_dl_cfg_path = youtube_downloader_detection.get_config_path(remote_cls)
+    youtube_dl_cfg_sub_path = youtube_downloader_detection.get_config_sub_path(remote_cls)
+
+    if youtube_dl_cfg_path is None or youtube_dl_cfg_sub_path is None:
+        log(Severity.ERROR, 'push_config', f'No Youtube Download configuration found for "{remote_cls.name}"')
+        return False
+
+    rcloneWrapper.rclone_sync(youtube_dl_cfg_path, remote_cls.name + ':' + youtube_dl_cfg_sub_path)
 
 
-def pull_config(remote_cls):
+def pull_config(remote_cls: LocalFolder):
     print('Pull Config')
-    rcloneWrapper.rclone_sync(
-        remote_cls.name + ':' + remote_cls.youtube_dl_cfg_sub_path,
-        remote_cls.youtube_dl_cfg_path,
-    )
+
+    youtube_dl_cfg_path = youtube_downloader_detection.get_config_path(remote_cls)
+    youtube_dl_cfg_sub_path = youtube_downloader_detection.get_config_sub_path(remote_cls)
+
+    if youtube_dl_cfg_path is None or youtube_dl_cfg_sub_path is None:
+        log(Severity.ERROR, 'pull_config', f'No Youtube Download configuration found for "{remote_cls.name}"')
+        return False
+
+    rcloneWrapper.rclone_sync(remote_cls.name + ':' + youtube_dl_cfg_sub_path, youtube_dl_cfg_path)

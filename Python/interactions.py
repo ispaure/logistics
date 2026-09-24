@@ -13,6 +13,7 @@ from commonUtils.wrappers import cmdShellWrapper
 from features.calibre import detection as calibre_detection
 from features.comics import detection as comics_detection
 from features.plex import detection as plex_detection
+from features.youtube_downloader import detection as youtube_downloader_detection
 from models.local_folder import LocalFolder
 from models.remote_folder import RemoteFolder
 
@@ -196,7 +197,7 @@ def inter_manage_pms_action(remote_cls):
 def interaction_06(remote_cls):
     interaction_dict = {}
 
-    if isinstance(remote_cls, LocalFolder) and getattr(remote_cls, 'youtube_dl_cfg_path', None) is not None:
+    if isinstance(remote_cls, LocalFolder) and youtube_downloader_detection.has_config(remote_cls):
         interaction_dict['Name'] = 'Youtube DL'
     else:
         interaction_dict['Name'] = 'N/A'
@@ -206,7 +207,7 @@ def interaction_06(remote_cls):
 
 
 def interaction_06_action(remote_cls):
-    if isinstance(remote_cls, LocalFolder) and getattr(remote_cls, 'youtube_dl_cfg_path', None) is not None:
+    if isinstance(remote_cls, LocalFolder) and youtube_downloader_detection.has_config(remote_cls):
         youtube_dl_cls = uiYoutubeDL.YoutubeDLUI(remote_cls)
         youtube_dl_cls.display_ui()
 
