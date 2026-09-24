@@ -24,6 +24,7 @@ from commonUtils import dirUtils
 from commonUtils import configUtils
 from commonUtils.fileTypes import txtType
 from features.rclone import configuration, credentials, executable, mounts, sync
+from models import folder_discovery
 
 show_verbose = True
 
@@ -180,29 +181,7 @@ def get_rclone_path():
 
 
 def get_all_remote_class():
-    remote_cls_lst = []
-
-    path_remote_local = config.LogisticsConfig().path_remote_local
-    if not os.path.exists(path_remote_local):
-        os.makedirs(path_remote_local)
-
-    local_remote_directory = dirUtils.Directory(path_remote_local)
-    dir_lst: List[dirUtils.Directory] = local_remote_directory.list_directories()
-
-    for directory in dir_lst:
-        remote_cls_lst.append(get_remote_class(directory.path))
-
-    path_remote_network = config.LogisticsConfig().path_remote_network_mount
-    if not os.path.exists(path_remote_network):
-        os.makedirs(path_remote_network)
-
-    mount_path_lst = get_rclone_remote_mount_paths()
-    mount_path_lst.sort()
-
-    for mount_path in mount_path_lst:
-        remote_cls_lst.append(get_remote_class(mount_path))
-
-    return remote_cls_lst
+    return folder_discovery.get_local_folders() + folder_discovery.get_remote_folders()
 
 
 def rclone_sync(source_path: Union[str, Path], destination_path: Union[str, Path], query=False, wait_for_output=False, dry_run=False, track_renames=False, bw_limit=None):
