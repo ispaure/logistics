@@ -1,5 +1,5 @@
 from commonUtils.ui import pyside
-from flightSim import flightSimUtils
+from features.flight_sim import flightSimUtils
 
 
 def display_flight_sim(dialog_obj):
