@@ -1,13 +1,11 @@
-from typing import List, Optional
-from pathlib import Path
-from commonUtils import fileUtils, dirUtils, configUtils, appUtils
-from commonUtils.wrappers import cmdShellWrapper
-import webbrowser
-from commonUtils.osUtils import *
-from commonUtils.debugUtils import *
 from enum import Enum
-import commands
+from pathlib import Path
+import webbrowser
+
+from commonUtils import appUtils, configUtils, dirUtils, fileUtils
+from commonUtils.debugUtils import *
 from commonUtils.fileTypes import txtType
+from commonUtils.osUtils import *
 
 
 class MinecraftServerType(Enum):
@@ -23,8 +21,8 @@ class MinecraftServer:
         self.properties: txtType.TXTFile = txtType.TXTFile(path / 'server.properties')
         self.__log_name = f'{self.name} Minecraft Server'
         self.type: MinecraftServerType = self.__get_type()
-        self.disk_app: Optional[appUtils.DiskApp] = self.__get_disk_app()
-        self.wiki_url: Optional[str] = self.__get_wiki_url()
+        self.disk_app: appUtils.DiskApp | None = self.__get_disk_app()
+        self.wiki_url: str | None = self.__get_wiki_url()
 
     def __get_cfg_value(self, section, value):
         cfg_file_path = self.path / 'logistics_cfg.ini'
@@ -35,7 +33,7 @@ class MinecraftServer:
 
         return configUtils.config_section_map(cfg_file_path, section, value)
 
-    def __get_disk_app(self) -> Optional[appUtils.DiskApp]:
+    def __get_disk_app(self) -> appUtils.DiskApp | None:
 
         match self.type:
             case MinecraftServerType.JAVA:
@@ -65,11 +63,11 @@ class MinecraftServer:
                 else:
                     return None
 
-    def __get_wiki_url(self) -> Optional[str]:
+    def __get_wiki_url(self) -> str | None:
         return self.__get_cfg_value('Documentation', 'wiki')
 
     def __get_type(self) -> MinecraftServerType:
-        file_lst: List[fileUtils.File] = dirUtils.Directory(self.path).list_files(recursive=False)
+        file_lst: list[fileUtils.File] = dirUtils.Directory(self.path).list_files(recursive=False)
 
         # If no files, label as "undefined"
         if not file_lst:
@@ -88,7 +86,7 @@ class MinecraftServer:
 
     def launch_server(self):
         if self.disk_app is None:
-            msg = f'Executable Path could not be determined for this platform. Aborting launch!'
+            msg = 'Executable Path could not be determined for this platform. Aborting launch!'
             log(Severity.ERROR, self.__log_name, msg, popup=True)
             return
 
@@ -99,7 +97,7 @@ class MinecraftServer:
 
     def open_wiki(self):
         if self.wiki_url is None:
-            msg = f'Wiki URL missing from config file'
+            msg = 'Wiki URL missing from config file'
             log(Severity.ERROR, self.__log_name, msg, popup=True)
             return
 
@@ -127,14 +125,15 @@ class MinecraftServer:
         return self.properties.path.is_file()
 
 
-def get_minecraft_server_lst(servers_root: Path) -> List[MinecraftServer]:
-    if not os.path.isdir(str(servers_root)):
+def get_minecraft_server_lst(servers_root: Path) -> list[MinecraftServer]:
+    if not servers_root.is_dir():
         return []
 
-    dir_lst: List[dirUtils.Directory] = dirUtils.Directory(servers_root).list_directories()
+    dir_lst: list[dirUtils.Directory] = dirUtils.Directory(servers_root).list_directories()
 
     # Else, create Minecraft servers from the list of directories
-    minecraft_server_lst: List[MinecraftServer] = []
+    minecraft_server_lst: list[MinecraftServer] = []
+
     for directory in dir_lst:
         if not directory.name.endswith('Backups'):
             mc_server = MinecraftServer(directory.path)
