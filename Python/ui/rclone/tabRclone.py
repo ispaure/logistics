@@ -1,9 +1,7 @@
 import interactions
-import wrappers.rcloneWrapper as rcloneWrapper
 
 from commonUtils.ui import pyside
-from models.local_folder import LocalFolder
-from models.remote_folder import RemoteFolder
+from models import folder_discovery
 
 
 def display_remotes(dialog_obj, type):
@@ -11,18 +9,13 @@ def display_remotes(dialog_obj, type):
     Display remotes in the UI.
     """
 
-    # Get list of Logistics folders
-    remote_cls_lst = rcloneWrapper.get_all_remote_class()
-
-    # Filter folders by model type.
-    display_lst = []
-
-    for remote_cls in remote_cls_lst:
-        if type == 'Local' and isinstance(remote_cls, LocalFolder):
-            display_lst.append(remote_cls)
-
-        elif type == 'Remote' and isinstance(remote_cls, RemoteFolder):
-            display_lst.append(remote_cls)
+    # Get Logistics folders for requested model type
+    if type == 'Local':
+        display_lst = folder_discovery.get_local_folders()
+    elif type == 'Remote':
+        display_lst = folder_discovery.get_remote_folders()
+    else:
+        display_lst = []
 
     # Determine size of grid contents
     height_per_row = 30
