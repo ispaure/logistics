@@ -1,38 +1,34 @@
 import sys
 import config
-from wrappers import rcloneWrapper
 import ui.uiMain as uiMain
-from commonUtils.ui import pyside
+
 from commonUtils.debugUtils import *
 from commonUtils.osUtils import *
+from commonUtils.ui import pyside
+from features import registry
 
-log(Severity.INFO, 'Logistics', 'Executing launch.py')
 
-# Get Config Information
-log(Severity.DEBUG, 'Logistics', 'Get config.LogisticsConfig()')
-logistics_cfg = config.LogisticsConfig()
+def main() -> int:
+    log(Severity.INFO, 'Logistics', 'Executing launch.py')
 
-# Adds Remote Credentials saved within the Logistics Dir to rclone.conf (if they weren't there yet)
-log(Severity.DEBUG, 'Logistics', 'Adds Remote Credentials to rclone.conf (if was not there yet')
-rcloneWrapper.add_logistics_remote_to_rclone_conf()
+    # Get Config Information
+    log(Severity.DEBUG, 'Logistics', 'Get config.LogisticsConfig()')
+    logistics_cfg = config.LogisticsConfig()
 
-# Clear existing mounts (if symbolic links exist in mount folder, delete them)
-log(Severity.DEBUG, 'rclone', 'Clear mounts on Windows')
-rcloneWrapper.clear_mounts()
+    # Initialize Features
+    log(Severity.DEBUG, 'Logistics', 'Initialize Features')
+    registry.initialize_features()
 
-# Mount all remotes in mount folder
-log(Severity.DEBUG, 'rclone', 'Mount all remotes in mount folder')
-rcloneWrapper.mount_all_rclone_conf_remotes(timeout=2)
+    # Create QApplication
+    log(Severity.DEBUG, 'PySide6', 'Create QApplication')
+    app = pyside.initialize_q_app()
 
-# Get All Remote Class
-log(Severity.DEBUG, 'rclone', 'Get all Remote Class')
-rcloneWrapper.get_all_remote_class()
+    # Display UI
+    log(Severity.DEBUG, 'PySide6', 'Display Main UI Window')
+    main_menu = uiMain.display_main_menu()
 
-# Create QApplication
-log(Severity.DEBUG, 'PySide6', 'Create QApplication')
-app = pyside.initialize_q_app()
+    return app.exec()
 
-# Display UI
-log(Severity.DEBUG, 'PySide6', 'Display Main UI Window')
-main_menu = uiMain.display_main_menu()
-sys.exit(app.exec())
+
+if __name__ == "__main__":
+    raise SystemExit(main())
