@@ -1,6 +1,6 @@
 from commonUtils.ui import pyside
 import commands
-import wrappers.plex.plexDatabaseReader as plexDatabaseReader
+from features.plex import database as plex_database
 import ui.debug.popup.uiBatchConvertCBRtoCBZ as uiBatchConvertCBRtoCBZ
 import ui.debug.popup.uiComicInfoBatchAuthorFromFolderName as uiComicInfoBatchAuthorFromFolderName
 import ui.debug.popup.uiComicInfoBatchSeriesFromFolderName as uiComicInfoBatchSeriesFromFolderName
@@ -22,7 +22,7 @@ def display_debug(dialog_obj):
 
     # PLEX Database Script
     pyside.button('PLEXDB - Parse Database test', dialog_obj, pyside.QRect(10, 70, 250, 30),
-                  plexDatabaseReader.test_script)
+                  plex_database.test_script)
 
     # Batch Convert .CBR to .CBZ
     pyside.button_open_win('Batch Convert .CBR to .CBZ', dialog_obj, pyside.QRect(10, 100, 250, 30),
