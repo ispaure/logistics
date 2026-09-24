@@ -10,6 +10,7 @@ from commonUtils.debugUtils import *
 from commonUtils.osUtils import *
 from commonUtils.wrappers import cmdShellWrapper
 
+from features.calibre import detection as calibre_detection
 from features.plex import detection as plex_detection
 from models.local_folder import LocalFolder
 from models.remote_folder import RemoteFolder
@@ -119,7 +120,7 @@ def inter_yac_reader_action(remote_cls):
 def inter_calibre_manage(remote_cls):
     interaction_dict = {}
 
-    if isinstance(remote_cls, LocalFolder) and getattr(remote_cls, 'calibre_lib_path', None) is not None:
+    if isinstance(remote_cls, LocalFolder) and calibre_detection.has_library(remote_cls):
         interaction_dict['Name'] = 'Manage Calibre'
     else:
         interaction_dict['Name'] = 'N/A'
@@ -129,7 +130,7 @@ def inter_calibre_manage(remote_cls):
 
 
 def inter_calibre_manage_action(remote_cls):
-    if isinstance(remote_cls, LocalFolder) and getattr(remote_cls, 'calibre_lib_path', None) is not None:
+    if isinstance(remote_cls, LocalFolder) and calibre_detection.has_library(remote_cls):
         manage_calibre_cls = uiManageCalibre.ManageCalibre(remote_cls)
         manage_calibre_cls.display_ui()
     else:
