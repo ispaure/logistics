@@ -1,25 +1,33 @@
-from commonUtils import fileUtils, dirUtils, linkUtils
-from commonUtils.osUtils import *
 from pathlib import Path
 import os
+
+import commands as commands
 import config
+import wrappers.rcloneWrapper as rcloneWrapper
+
+from commonUtils import dirUtils, fileUtils, linkUtils
+from commonUtils.debugUtils import *
+from commonUtils.osUtils import *
 from commonUtils.wrappers import cmdShellWrapper
-import time
-from wrappers import rcloneWrapper
-from ui.rclone.popup import uiLocalPush
-from ui.plex_media_server import uiManagePMS
+
+from features.plex import detection as plex_detection
+from models.local_folder import LocalFolder
+from models.remote_folder import RemoteFolder
+
 from ui.calibre import uiManageCalibre
 from ui.debug.popup import uiYoutubeDL
-import commands as commands
-from commonUtils.debugUtils import *
+from ui.plex_media_server import uiManagePMS
+from ui.rclone.popup import uiLocalPush
 
 
 def inter_open_dir(remote_cls):
     interaction_dict = {}
-    if 'Server-' in remote_cls.name[0:len('Server-')]:  # Visually remove "Server-" from name if possible
+
+    if 'Server-' in remote_cls.name[0:len('Server-')]:
         interaction_dict['Name'] = remote_cls.name[len('Server-'):]
     else:
         interaction_dict['Name'] = remote_cls.name
+
     interaction_dict['Action'] = inter_open_dir_action
     return interaction_dict
 
@@ -33,15 +41,17 @@ def inter_open_dir_action(remote_cls):
 def inter_comic_rack_yac_reader(remote_cls):
     interaction_dict = {}
 
-    # Only scan for local shares (can't work over rclone)
-    if remote_cls.type == 'Local':
-        # Detect ComicRack (on Windows)
-        if get_os() == OS.WIN and remote_cls.comic_rack_roaming is not None:
+    # These applications operate on Local folders only.
+    if isinstance(remote_cls, LocalFolder):
+
+        # Detect ComicRack on Windows.
+        if get_os() == OS.WIN and getattr(remote_cls, 'comic_rack_roaming', None) is not None:
             interaction_dict['Name'] = 'Open ComicRack'
             interaction_dict['Action'] = inter_comic_rack_action
             return interaction_dict
-        # Detect YacReaderLibrary (on macOS)
-        elif remote_cls.yac_reader_library_ini is not None:
+
+        # Detect YACReaderLibrary on macOS.
+        elif getattr(remote_cls, 'yac_reader_library_ini', None) is not None:
             interaction_dict['Name'] = 'Open YACReaderLibrary'
             interaction_dict['Action'] = inter_yac_reader_action
             return interaction_dict
@@ -52,13 +62,19 @@ def inter_comic_rack_yac_reader(remote_cls):
 
 
 def inter_comic_rack_action(remote_cls):
+    comic_rack_local = getattr(remote_cls, 'comic_rack_local', None)
+    comic_rack_roaming = getattr(remote_cls, 'comic_rack_roaming', None)
+
+    if comic_rack_local is None or comic_rack_roaming is None:
+        return False
+
     # Determine ComicRack Preference Links
     cyo_appdata_local_dir_path: Path = Path(os.environ['USERPROFILE'], 'AppData', 'Local', 'cYo')
     cyo_appdata_roaming_dir_path: Path = Path(os.environ['USERPROFILE'], 'AppData', 'Roaming', 'cYo')
 
     # Create/update links
-    linkUtils.update_symbolic_link(remote_cls.comic_rack_local, cyo_appdata_local_dir_path)
-    linkUtils.update_symbolic_link(remote_cls.comic_rack_roaming, cyo_appdata_roaming_dir_path)
+    linkUtils.update_symbolic_link(comic_rack_local, cyo_appdata_local_dir_path)
+    linkUtils.update_symbolic_link(comic_rack_roaming, cyo_appdata_roaming_dir_path)
 
     # Start software
     exec_path: Path = Path(config.LogisticsConfig().path_logistics_software_win, 'ComicRack', 'ComicRack.exe')
@@ -66,6 +82,11 @@ def inter_comic_rack_action(remote_cls):
 
 
 def inter_yac_reader_action(remote_cls):
+    yac_reader_library_ini = getattr(remote_cls, 'yac_reader_library_ini', None)
+
+    if yac_reader_library_ini is None:
+        return False
+
     # If YACReader not installed, unzip in /Applications
     install_path: Path = Path('/Applications', 'YACReader.app')
     if not os.path.exists(install_path):
@@ -79,6 +100,7 @@ def inter_yac_reader_action(remote_cls):
         fileUtils.unzip_file(zip_path, install_path)
 
     yac_prefs_dir_path = config.LogisticsConfig().yac_lib_prefs_dir
+
     if yac_prefs_dir_path is None:
         log(Severity.CRITICAL, 'inter_yac_reader_action', 'YACReaderLibrary preferences directory is not configured for this platform')
         return False
@@ -88,27 +110,26 @@ def inter_yac_reader_action(remote_cls):
     yac_prefs_dir.make_dir()
 
     # Copy YACReaderLibrary ini file to Application Support
-    fileUtils.copy_file(remote_cls.yac_reader_library_ini, Path(yac_prefs_dir_path, 'YACReaderLibrary.ini'))
+    fileUtils.copy_file(yac_reader_library_ini, Path(yac_prefs_dir_path, 'YACReaderLibrary.ini'))
 
     # Open YACReader
-    cmdShellWrapper.exec_cmd(
-        str(Path('/Applications', 'YACReaderLibrary.app', 'Contents', 'MacOS', 'YACReaderLibrary')),
-        wait_for_output=False
-    )
+    cmdShellWrapper.exec_cmd(str(Path('/Applications', 'YACReaderLibrary.app', 'Contents', 'MacOS', 'YACReaderLibrary')), wait_for_output=False)
 
 
 def inter_calibre_manage(remote_cls):
     interaction_dict = {}
-    if remote_cls.calibre_lib_path is not None and remote_cls.type == 'Local':
+
+    if isinstance(remote_cls, LocalFolder) and getattr(remote_cls, 'calibre_lib_path', None) is not None:
         interaction_dict['Name'] = 'Manage Calibre'
     else:
         interaction_dict['Name'] = 'N/A'
+
     interaction_dict['Action'] = inter_calibre_manage_action
     return interaction_dict
 
 
 def inter_calibre_manage_action(remote_cls):
-    if remote_cls.calibre_lib_path is not None and remote_cls.type == 'Local':
+    if isinstance(remote_cls, LocalFolder) and getattr(remote_cls, 'calibre_lib_path', None) is not None:
         manage_calibre_cls = uiManageCalibre.ManageCalibre(remote_cls)
         manage_calibre_cls.display_ui()
     else:
@@ -117,46 +138,57 @@ def inter_calibre_manage_action(remote_cls):
 
 def inter_rclone_push_pull(remote_cls):
     interaction_dict = {}
-    if remote_cls.type == 'Local':
+
+    if isinstance(remote_cls, LocalFolder):
         interaction_dict['Name'] = 'PUSH'
-    elif remote_cls.type == 'Remote':
+
+    elif isinstance(remote_cls, RemoteFolder):
         interaction_dict['Name'] = 'PULL'
+
+    else:
+        interaction_dict['Name'] = 'N/A'
+
     interaction_dict['Action'] = inter_rclone_push_pull_action
     return interaction_dict
 
 
 def inter_rclone_push_pull_action(remote_cls):
-    action = None
-
-    # Determine rclone sync command
-    if remote_cls.type == 'Local':
+    if isinstance(remote_cls, LocalFolder):
         local_push_cls = uiLocalPush.LocalPushUI(remote_cls)
         local_push_cls.display_ui()
 
-    elif remote_cls.type == 'Remote':
+    elif isinstance(remote_cls, RemoteFolder):
         source_path = remote_cls.name + ':'
         destination_path: Path = Path(config.LogisticsConfig().path_remote_local, remote_cls.name)
         rcloneWrapper.rclone_sync(source_path, destination_path)
+
     else:
-        print('Remote Type Invalid. Not proceeding in case this would screw up something big.')
+        print('Folder type invalid. Not proceeding in case this would screw up something big.')
         return False
 
 
 def inter_manage_pms(remote_cls):
     interaction_dict = {}
-    if remote_cls.name + '-PMSDATA' in rcloneWrapper.get_rclone_conf_remote_credentials_dict().keys():
+
+    remote_names = rcloneWrapper.get_rclone_conf_remote_credentials_dict().keys()
+
+    if plex_detection.has_pms_data_remote(remote_cls, remote_names):
         interaction_dict['Name'] = 'Manage PMS'
     else:
         interaction_dict['Name'] = 'N/A'
+
     interaction_dict['Action'] = inter_manage_pms_action
     return interaction_dict
 
 
 def inter_manage_pms_action(remote_cls):
     """
-    When interaction 5 is triggered, UI to Manage PMS Opens
+    Open the Plex Media Server management UI.
     """
-    if remote_cls.name + '-PMSDATA' in rcloneWrapper.get_rclone_conf_remote_credentials_dict().keys():
+
+    remote_names = rcloneWrapper.get_rclone_conf_remote_credentials_dict().keys()
+
+    if plex_detection.has_pms_data_remote(remote_cls, remote_names):
         manage_pms_cls = uiManagePMS.ManagePMS(remote_cls)
         manage_pms_cls.display_ui()
     else:
@@ -165,53 +197,66 @@ def inter_manage_pms_action(remote_cls):
 
 def interaction_06(remote_cls):
     interaction_dict = {}
-    if remote_cls.youtube_dl_cfg_path is not None and remote_cls.type == 'Local':
+
+    if isinstance(remote_cls, LocalFolder) and getattr(remote_cls, 'youtube_dl_cfg_path', None) is not None:
         interaction_dict['Name'] = 'Youtube DL'
     else:
         interaction_dict['Name'] = 'N/A'
+
     interaction_dict['Action'] = interaction_06_action
     return interaction_dict
 
 
 def interaction_06_action(remote_cls):
-    if remote_cls.youtube_dl_cfg_path is not None and remote_cls.type == 'Local':
+    if isinstance(remote_cls, LocalFolder) and getattr(remote_cls, 'youtube_dl_cfg_path', None) is not None:
         youtube_dl_cls = uiYoutubeDL.YoutubeDLUI(remote_cls)
         youtube_dl_cls.display_ui()
 
 
 def interaction_07(remote_cls):
     interaction_dict = {}
-    if get_os() == OS.LINUX and remote_cls.perforce_p4d_path is not None and remote_cls.type == 'Local':
+
+    if get_os() == OS.LINUX and isinstance(remote_cls, LocalFolder) and getattr(remote_cls, 'perforce_p4d_path', None) is not None:
         interaction_dict['Name'] = 'Launch P4D'
     else:
         interaction_dict['Name'] = 'N/A'
+
     interaction_dict['Action'] = interaction_07_action
     return interaction_dict
 
 
 def interaction_07_action(remote_cls):
-    if get_os() == OS.LINUX and remote_cls.perforce_p4d_path is not None and remote_cls.type == 'Local':
-        command = f'./{remote_cls.perforce_p4d_path} -C1 -r ./{remote_cls.perforce_data_path} -p ' \
-                  f'{remote_cls.perforce_port}'
+    perforce_p4d_path = getattr(remote_cls, 'perforce_p4d_path', None)
+    perforce_data_path = getattr(remote_cls, 'perforce_data_path', None)
+    perforce_port = getattr(remote_cls, 'perforce_port', None)
+
+    if get_os() == OS.LINUX and isinstance(remote_cls, LocalFolder) and perforce_p4d_path is not None:
+        command = f'./{perforce_p4d_path} -C1 -r ./{perforce_data_path} -p {perforce_port}'
         cmdShellWrapper.exec_cmd(command, in_new_window=True, cwd=remote_cls.path)
 
 
-interaction_fn_lst = [inter_open_dir,
-                      inter_comic_rack_yac_reader,
-                      inter_calibre_manage,
-                      inter_manage_pms,
-                      interaction_06,
-                      interaction_07,
-                      inter_rclone_push_pull]
+interaction_fn_lst = [
+    inter_open_dir,
+    inter_comic_rack_yac_reader,
+    inter_calibre_manage,
+    inter_manage_pms,
+    interaction_06,
+    interaction_07,
+    inter_rclone_push_pull,
+]
 
 
 def get_remote_cls_lst_interactions(remote_cls_lst):
     interaction_complete_lst = []
     remote_amt = 0
+
     for remote_cls in remote_cls_lst:
-        if not remote_cls.is_pms_data:
-            remote_amt += 1
-            for interaction in interaction_fn_lst:
-                interaction_complete_lst.append([interaction, remote_cls])
+        if plex_detection.is_pms_data_folder(remote_cls):
+            continue
+
+        remote_amt += 1
+
+        for interaction in interaction_fn_lst:
+            interaction_complete_lst.append([interaction, remote_cls])
 
     return interaction_complete_lst, remote_amt
