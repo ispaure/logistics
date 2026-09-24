@@ -6,7 +6,7 @@ import ui.rclone.tabRclone as tabRclone
 import ui.links.tabLinks as tabLinks
 import ui.debug.tabDebug as tabDebug
 import ui.smartHome.tabSmartHome as tabSmartHome
-from minecraft import server as mcServer
+from features.minecraft import server as mcServer
 from ui.minecraft import tabMinecraftServer
 import ui.flightSim.tabFlightSim as tabFlightSim
 

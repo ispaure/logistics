@@ -2,7 +2,7 @@ from typing import List
 
 from commonUtils.ui import pyside
 from config import LogisticsConfig
-from minecraft import server
+from features.minecraft import server
 
 
 def display_servers(dialog_obj, server_type: server.MinecraftServerType):
