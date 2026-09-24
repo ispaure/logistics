@@ -23,7 +23,7 @@ from commonUtils.debugUtils import *
 from commonUtils import dirUtils
 from commonUtils import configUtils
 from commonUtils.fileTypes import txtType
-from features.rclone import configuration, credentials, mounts
+from features.rclone import configuration, credentials, executable, mounts, sync
 
 show_verbose = True
 
@@ -176,17 +176,7 @@ def get_remote_class(remote_dir):
 
 
 def get_rclone_path():
-    match get_os():
-        case OS.WIN:
-            return Path(config.LogisticsConfig().path_logistics_software_win, 'rclone-2026', 'rclone.exe')
-        case OS.MAC:
-            return Path(config.LogisticsConfig().path_logistics_software_mac, 'rclone', 'rclone')
-        case OS.LINUX:
-            match get_arch():
-                case Arch.X86_64:
-                    return Path(config.LogisticsConfig().path_logistics_software_linux, 'rclone-v1.73.0-linux-amd64', 'rclone')
-                case Arch.ARM_64:
-                    return Path(config.LogisticsConfig().path_logistics_software_linux, 'rclone-v1.73.1-linux-arm64', 'rclone')
+    return executable.get_rclone_path()
 
 
 def get_all_remote_class():
@@ -198,6 +188,7 @@ def get_all_remote_class():
 
     local_remote_directory = dirUtils.Directory(path_remote_local)
     dir_lst: List[dirUtils.Directory] = local_remote_directory.list_directories()
+
     for directory in dir_lst:
         remote_cls_lst.append(get_remote_class(directory.path))
 
@@ -207,6 +198,7 @@ def get_all_remote_class():
 
     mount_path_lst = get_rclone_remote_mount_paths()
     mount_path_lst.sort()
+
     for mount_path in mount_path_lst:
         remote_cls_lst.append(get_remote_class(mount_path))
 
@@ -214,91 +206,8 @@ def get_all_remote_class():
 
 
 def rclone_sync(source_path: Union[str, Path], destination_path: Union[str, Path], query=False, wait_for_output=False, dry_run=False, track_renames=False, bw_limit=None):
-    source_path_str = str(source_path)
-    destination_path_str = str(destination_path)
-
-    baseline = '"{rclone_path}"'.format(rclone_path=get_rclone_path())
-    baseline += ' sync --progress --copy-links '
-
-    if track_renames:
-        baseline += '--track-renames '
-
-    if '-VM' in source_path_str:
-        baseline += '--transfers=1 '
-    else:
-        baseline += '--transfers=10 '
-
-    if bw_limit is not None:
-        baseline += '--bwlimit {}M '.format(bw_limit)
-
-    if dry_run:
-        baseline += '--dry-run '
-
-    baseline += f'"{source_path_str}" "{destination_path_str}"'
-
-    if not os.path.exists(destination_path):
-        match get_os():
-            case OS.WIN:
-                if destination_path_str[1] == ':':
-                    Path(destination_path).mkdir(parents=True, exist_ok=True)
-
-            case OS.MAC | OS.LINUX:
-                if destination_path_str[0] == '/':
-                    Path(destination_path).mkdir(parents=True, exist_ok=True)
-
-    if query:
-        output_lines = cmdShellWrapper.exec_cmd(baseline, wait_for_output=True)
-        query_dict = rclone_sync_process_query(source_path_str, destination_path_str, output_lines)
-        return query_dict
-
-    cmdShellWrapper.exec_cmd(baseline, wait_for_output=wait_for_output, in_new_window=True)
-    return None
+    return sync.rclone_sync(source_path, destination_path, query, wait_for_output, dry_run, track_renames, bw_limit)
 
 
 def rclone_sync_process_query(source_path: Union[str, Path], destination_path: Union[str, Path], output_lines):
-    """
-    Method used internally to process the output lines in something that actually means something.
-    This is intended to analyze output lines from a rclone sync with --dry-run as one of the arguments!
-    """
-    source_path_str = str(source_path)
-    destination_path_str = str(destination_path)
-
-    query_dict = {}
-    copy_lst = []
-
-    for output_line in output_lines:
-        if 'Skipped copy as --dry-run is set' in output_line:
-
-            notice_loc = output_line.find('NOTICE: ')
-            file_path_begin_loc = notice_loc + len('NOTICE: ')
-            file_path_end_loc = output_line[file_path_begin_loc:].find(':')
-            file_path_to_copy = output_line[file_path_begin_loc:file_path_begin_loc + file_path_end_loc]
-
-            match get_os():
-                case OS.WIN:
-                    if source_path_str[1] == ':':
-                        file_path_source = str(Path(source_path_str, file_path_to_copy))
-                    else:
-                        file_path_source = source_path_str + file_path_to_copy.replace('\\', '/')
-
-                    if destination_path_str[1] == ':':
-                        file_path_destination = str(Path(destination_path_str, file_path_to_copy))
-                    else:
-                        file_path_destination = destination_path_str + file_path_to_copy.replace('\\', '/')
-
-                case OS.MAC:
-                    if source_path_str[0] == '/':
-                        file_path_source = str(Path(source_path_str, file_path_to_copy))
-                    else:
-                        file_path_source = source_path_str + file_path_to_copy
-
-                    if destination_path_str[0] == '/':
-                        file_path_destination = str(Path(destination_path_str, file_path_to_copy))
-                    else:
-                        file_path_destination = destination_path_str + file_path_to_copy
-
-            copy_lst.append([file_path_source, file_path_destination])
-
-    query_dict['COPY'] = copy_lst
-
-    return query_dict
+    return sync.rclone_sync_process_query(source_path, destination_path, output_lines)
