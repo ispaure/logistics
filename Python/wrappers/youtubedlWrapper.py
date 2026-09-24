@@ -9,9 +9,9 @@ from commonUtils import configUtils, dirUtils, fileUtils
 from commonUtils.debugUtils import *
 from commonUtils.osUtils import *
 from commonUtils.wrappers import cmdShellWrapper
+from features.rclone import sync as rclone_sync
 from features.youtube_downloader import detection as youtube_downloader_detection
 from models.local_folder import LocalFolder
-from . import rcloneWrapper
 
 
 show_verbose = True
@@ -193,7 +193,7 @@ def push_seasons(remote_cls: LocalFolder):
         destination = remote_cls.name + ':' + source.relative_to(remote_cls.path).as_posix()
 
         print(f'Pushing {source} to {destination}')
-        rcloneWrapper.rclone_sync(source, destination, wait_for_output=True)
+        rclone_sync.rclone_sync(source, destination, wait_for_output=True)
         print('Push complete!')
 
 
@@ -207,7 +207,7 @@ def push_config(remote_cls: LocalFolder):
         log(Severity.ERROR, 'push_config', f'No Youtube Download configuration found for "{remote_cls.name}"')
         return False
 
-    rcloneWrapper.rclone_sync(youtube_dl_cfg_path, remote_cls.name + ':' + youtube_dl_cfg_sub_path)
+    rclone_sync.rclone_sync(youtube_dl_cfg_path, remote_cls.name + ':' + youtube_dl_cfg_sub_path)
 
 
 def pull_config(remote_cls: LocalFolder):
@@ -220,4 +220,4 @@ def pull_config(remote_cls: LocalFolder):
         log(Severity.ERROR, 'pull_config', f'No Youtube Download configuration found for "{remote_cls.name}"')
         return False
 
-    rcloneWrapper.rclone_sync(remote_cls.name + ':' + youtube_dl_cfg_sub_path, youtube_dl_cfg_path)
+    rclone_sync.rclone_sync(remote_cls.name + ':' + youtube_dl_cfg_sub_path, youtube_dl_cfg_path)

@@ -1,5 +1,6 @@
-import wrappers.rcloneWrapper as rcloneWrapper
+from features.rclone import credentials as rclone_credentials
 from commonUtils.ui import pyside
+
 
 show_verbose = True
 
@@ -7,8 +8,10 @@ show_verbose = True
 def ui_load_credentials(unlock_arg):
 
     # Load Credentials
-    rcloneWrapper.add_remote_from_zip_to_rclone_conf(zip_path=unlock_arg['Path'],
-                                                     zip_pw=unlock_arg['Password'].txt())
+    rclone_credentials.add_remote_from_zip_to_rclone_conf(
+        zip_path=unlock_arg['Path'],
+        zip_pw=unlock_arg['Password'].txt()
+    )
 
     # Close Window
     # TODO Doesn't work anymore since the restructure

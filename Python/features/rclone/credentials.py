@@ -7,7 +7,8 @@ from typing import cast
 
 import config
 
-from commonUtils import dirUtils, fileUtils
+from commonUtils import dirUtils, fileUtils, ui, zipUtils
+from commonUtils.debugUtils import print_debug_msg
 from commonUtils.fileTypes import txtType
 
 from . import configuration
@@ -63,3 +64,23 @@ def add_logistics_remote_to_rclone_conf() -> None:
 
     logistics_cfg = config.LogisticsConfig()
     add_remote_to_rclone_conf(logistics_cfg.path_logistics_remote_cred)
+
+
+def add_remote_from_zip_to_rclone_conf(zip_path: str | Path, zip_pw: str) -> bool:
+    """Extract a credential archive and add its remotes to the user's rclone.conf."""
+
+    logistics_cfg = config.LogisticsConfig()
+    extract_dir = Path(logistics_cfg.temp_path, "UnpackCredentials")
+
+    try:
+        zipUtils.unzip_file(zip_path, extract_dir, zip_pw)
+    except:
+        ui.display_msg_box_ok("Load Remote Credential", "Password is invalid")
+        return False
+
+    add_remote_to_rclone_conf(extract_dir)
+
+    dirUtils.Directory(extract_dir).delete_contents()
+
+    print_debug_msg("Successfully loaded remote credentials!", True)
+    return True

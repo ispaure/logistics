@@ -1,14 +1,15 @@
-import wrappers.rcloneWrapper as rcloneWrapper
-from commonUtils.ui import pyside
-from commonUtils.debugUtils import log, Severity
-from commonUtils import fileUtils as fileUtils
 import os
+
+from commonUtils import fileUtils as fileUtils
+from commonUtils.debugUtils import log, Severity
+from commonUtils.ui import pyside
+from features.rclone import sync as rclone_sync
 
 
 def push_to_cloud(remote_cls):
     source_path = remote_cls['remote_cls'].path
     destination_path = remote_cls['remote_cls'].name + ':'
-    rcloneWrapper.rclone_sync(source_path, destination_path, track_renames=remote_cls['track_renames'].isChecked())
+    rclone_sync.rclone_sync(source_path, destination_path, track_renames=remote_cls['track_renames'].isChecked())
 
 
 def push_specific_dir(data_to_exec):
@@ -31,7 +32,7 @@ def push_specific_dir(data_to_exec):
     cloud_remote_path = data_to_exec['Remote Class'].name + ':' + specific_dir_name
 
     # Execute specific dir sync
-    rcloneWrapper.rclone_sync(directory_path_to_push, cloud_remote_path, bw_limit=bandwidth_limit)
+    rclone_sync.rclone_sync(directory_path_to_push, cloud_remote_path, bw_limit=bandwidth_limit)
 
 
 class LocalPushUI(pyside.Window):

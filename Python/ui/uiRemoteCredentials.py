@@ -1,9 +1,10 @@
-import wrappers.rcloneWrapper as rcloneWrapper
-from commonUtils.ui import pyside
-from commonUtils import fileUtils
-import ui.uiRemoteCredentialsPW as uiRemoteCredentialsPW
-from commonUtils.osUtils import *
 from typing import List
+
+from commonUtils import fileUtils
+from commonUtils.ui import pyside
+from features.rclone import credentials as rclone_credentials
+
+import ui.uiRemoteCredentialsPW as uiRemoteCredentialsPW
 
 
 def ui_load_credential_password_ui(arg):
@@ -22,7 +23,7 @@ class LoadRemoteCredentials(pyside.Window):
         # UNLOCK CREDENTIALS ZIP LIST ----------------------------------------------------------------------------------
 
         # Gather list of ZIP Items to create buttons for
-        zip_file_lst: List[fileUtils.File] = rcloneWrapper.get_logistics_remote_credentials_zip_lst()
+        zip_file_lst: List[fileUtils.File] = rclone_credentials.get_logistics_remote_credentials_zip_lst()
 
         # Determine size of grid
         height_per_row = 30

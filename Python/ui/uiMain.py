@@ -1,5 +1,6 @@
-import wrappers.rcloneWrapper as rcloneWrapper
 from commonUtils.ui import pyside
+from features.rclone import configuration as rclone_configuration
+
 import ui.uiRemoteCredentials as uiRemoteCredentials
 import ui.rclone.tabRclone as tabRclone
 import ui.links.tabLinks as tabLinks
@@ -46,7 +47,7 @@ class MainMenu(pyside.Window):
 
         # Clear Credentials from machine
         pyside.button('Clear Rclone.conf', self.centralwidget, pyside.QRect(215, 470, 130, 25),
-                      rcloneWrapper.clear_rclone_conf)
+                      rclone_configuration.clear_rclone_conf)
 
         # TAB (LINKS)
         self.tab_links = pyside.QWidget()
