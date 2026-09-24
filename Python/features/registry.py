@@ -4,6 +4,7 @@ Feature discovery and loading for Logistics.
 
 import importlib
 from pathlib import Path
+from types import ModuleType
 
 
 def get_feature_names() -> list[str]:
@@ -32,7 +33,7 @@ def get_feature_names() -> list[str]:
     return sorted(feature_names)
 
 
-def load_features() -> list[object]:
+def load_features() -> list[ModuleType]:
     """
     Import and return all available Logistics feature modules.
     """
@@ -40,13 +41,13 @@ def load_features() -> list[object]:
     features = []
 
     for feature_name in get_feature_names():
-        feature = importlib.import_module(f"features.{feature_name}")
+        feature = importlib.import_module(f"{__package__}.{feature_name}")
         features.append(feature)
 
     return features
 
 
-def initialize_features() -> list[object]:
+def initialize_features() -> list[ModuleType]:
     """
     Load and initialize all available Logistics features.
     """
@@ -58,6 +59,12 @@ def initialize_features() -> list[object]:
 
         if initialize is None:
             continue
+
+        if not callable(initialize):
+            raise TypeError(
+                f"Feature '{feature.__name__}' defines initialize, "
+                f"but it is not callable."
+            )
 
         initialize()
 
