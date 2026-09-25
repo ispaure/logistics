@@ -97,7 +97,7 @@ def inter_rclone_push_pull_action(remote_cls):
 
 
 def inter_manage_pms(remote_cls):
-    remote_names = rclone_configuration.get_rclone_conf_remote_credentials_dict().keys()
+    remote_names = rclone_configuration.get_rclone_remote_names()
 
     if plex_detection.has_pms_data_remote(remote_cls, remote_names):
         return Interaction('Manage PMS', inter_manage_pms_action, remote_cls)
@@ -106,7 +106,7 @@ def inter_manage_pms(remote_cls):
 
 
 def inter_manage_pms_action(remote_cls):
-    remote_names = rclone_configuration.get_rclone_conf_remote_credentials_dict().keys()
+    remote_names = rclone_configuration.get_rclone_remote_names()
 
     if not plex_detection.has_pms_data_remote(remote_cls, remote_names):
         return False
