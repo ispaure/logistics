@@ -1,11 +1,11 @@
 from commonUtils.ui import pyside
-import logisticsUtils.cbzUtils as cbzUtils
+from features.comics import cbz
 
 
 def ui_dir_batch_compress_cbz(convert_arg):
 
     # Translate the argument dict to arguments and execute the proper function.
-    cbzUtils.batch_compress_cbz(target_dir=convert_arg['target_dir'].txt(), recursive=convert_arg['recursive'].isChecked(),
+    cbz.batch_compress_cbz(target_dir=convert_arg['target_dir'].txt(), recursive=convert_arg['recursive'].isChecked(),
                                 always_keep_compressed=convert_arg['always_keep_compressed'].isChecked())
 
 
@@ -28,7 +28,7 @@ class DirBatchCompressCBZWindow(pyside.Window):
         pyside.Label('Target Folder: ', self.dlg, pyside.QRect(10, 12, 400, 20))
         # Create Argument
         convert_arg['target_dir'] = pyside.LineEdit(
-            str(cbzUtils.default_path_to_convert_cbz), self.dlg, pyside.QRect(105, 10, 370, 25)
+            str(cbz.default_path_to_convert_cbz), self.dlg, pyside.QRect(105, 10, 370, 25)
         )
 
         # 2. Recursive

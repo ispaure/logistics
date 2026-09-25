@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import *
 from commonUtils import fileUtils, dirUtils, zipUtils
 from commonUtils.debugUtils import *
-from . import imageUtils
+from logisticsUtils import imageUtils
 from datetime import datetime
 from commonUtils.fileTypes import xmlType, txtType, zipType
 
@@ -56,7 +56,7 @@ temp_dir_compressed_imgs = Path(temp_compression_path, '2_Compressed_Images')
 temp_dir_result = Path(temp_compression_path, '3_Result')
 
 
-tool_name = 'commonUtils.cbzUtils'
+tool_name = 'features.comics.cbz'
 
 
 class ComicInfoXML(xmlType.XMLFile):

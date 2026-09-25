@@ -1,133 +1,16 @@
 from commonUtils.ui import pyside
-from commonUtils import fileUtils, dirUtils, zipUtils
-from pathlib import Path
-from typing import List
-import os
-import config as config
-from commonUtils.osUtils import *
-from commonUtils.debugUtils import *
-from commonUtils.fileTypes import txtType
+
+from features.comics import metadata
+
 
 show_verbose = True
 
 
-def get_temp_loc_edit_comicinfoxml() -> Path:
-    # Figure out the temporary convert directory
-    temp_convert_path: Path = Path(config.LogisticsConfig().temp_path, 'Edit-ComicInfoXML')
-    print('Convert path is: ' + str(temp_convert_path))
-    return temp_convert_path
-
-
-def comic_info_xml_replace_author(file_path: Path, search: str):
-    """
-    Search and replaces tag for author in ComicInfo.XML within a .CBZ file
-    (Extracts the file, modifies the .XML, repackages and overwrites the original file)
-
-    :param file_path: File path to the original .CBZ file
-    :param search: What to search for when doing search/replace
-    """
-    print(f'\nInitializing Batch Rename on File: {file_path}')
-
-    # Figure out the folder name
-    replace = file_path.parent.name
-    print(f'Author name: {replace}')
-
-    # Figure out temporary folder path
-    temp_folder_path: Path = get_temp_loc_edit_comicinfoxml()
-
-    # Make sure temp directory exists, if not create it
-    if not os.path.isdir(temp_folder_path):
-        print('\nConvert path did not exist! Creating...')
-        os.makedirs(temp_folder_path)
-    else:
-        print('Convert path existed! Proceeding...')
-
-    temp_folder_directory = dirUtils.Directory(temp_folder_path)
-    comicinfo_xml_path = Path(temp_folder_path, 'ComicInfo.xml')
-
-    # Figure out zip name from file_path
-    file_path_cbz = file_path
-    file_path_zip = file_path.with_suffix('.zip')
-
-    # Try from now on, if doesn't succeed, must be cautious about not losing files
-    try:
-        # Delete contents in dir
-        temp_folder_directory.delete_contents()
-
-        # Uncompress ZIP
-        zipUtils.unzip_file(file_path_cbz, temp_folder_path)
-
-        # Search and replace within XML
-        search_string = f'<Writer>{search}</Writer>'
-        replace_string = f'<Writer>{replace}</Writer>'
-
-        # ----------------------------------------------------------------------------------
-        # Untested change from sunsetting search_replace_xml
-        xml_file = txtType.TXTFile(comicinfo_xml_path)
-        xml_file.read_lines()
-
-        xml_file.line_lst = [
-            line.replace(search_string, replace_string)
-            for line in xml_file.line_lst
-        ]
-        xml_file.write_lines()
-        # ----------------------------------------------------------------------------------
-
-        # ZIP File
-        zipUtils.zip_file(temp_folder_path, file_path_zip, keep_root=False)
-
-        # Rename to .CBZ (overwriting the previous file)
-        fileUtils.rename_file(file_path_zip, file_path_cbz)
-
-        # Clean convert dir
-        temp_folder_directory.delete_contents()
-
-        # Delete original file not needed because was overwritten
-        # The rename author succeeded!
-        print('Finished renaming author!')
-
-    except Exception:
-        print(f'COULD NOT COMPLETE FILE SUCCESSFULLY!!!!{file_path_cbz}')
-
-        # If corrupted or not renamed to cbz, obliterate
-        if file_path_zip.exists():
-            fileUtils.File(file_path_zip).delete_file()
-
-        # Never delete .cbz, always source of truth. If there's another error its fine but that file is the final
-        # and should never be deleted
-
-        # Clean convert dir
-        temp_folder_directory.delete_contents()
-
-
 def ui_comicinfoxml_batch_rename_author_to_dir_name(convert_arg):
-    """
-    Batch rename authors within the ComicInfo.XML to the directory name in which the .CBZ is located.
-    NOTE: Author Tag must already be present in file and set to existing tag to replace.
-    WHAT THE SCRIPT DOES: Extract the .CBZ, search and replace within XML, repacks and replaces original file.
-    """
-
-    # Display initiating info
-    print('Starting the Batch Rename of Author Name in ComicInfo.XML (based on folder name)')
-    batch_target_folder = dirUtils.Directory(Path(convert_arg['target_dir'].txt()))
-    author_tag_to_replace = convert_arg['target_existing_tag'].txt()
-    print(f'Target Folder: {batch_target_folder.path}')
-    print('Tag to Replace: ' + author_tag_to_replace)
-
-    # Get list of .CBZ files recursively
-    cbz_file_lst: List[fileUtils.File] = batch_target_folder.list_files(recursive=True, filter_extension='cbz')
-
-    # Display to user the search results
-    if len(cbz_file_lst) == 0:
-        print('Did not find a .CBZ file')
-        return False
-    else:
-        print('Found {} files to batch rename author:'.format(str(len(cbz_file_lst))))
-        for file in cbz_file_lst:
-            print(f' - {file.path}')
-
-    for file in cbz_file_lst:
-        comic_info_xml_replace_author(file.path, author_tag_to_replace)
+    metadata.batch_rename_author_to_dir_name(
+        target_dir=convert_arg['target_dir'].txt(),
+        author_tag_to_replace=convert_arg['target_existing_tag'].txt()
+    )
 
 
 class ComicInfoBatchAuthorFromFolderName(pyside.Window):
@@ -135,32 +18,25 @@ class ComicInfoBatchAuthorFromFolderName(pyside.Window):
         super().__init__('ComicInfo.XML: Batch Set Author from Folder Name')
         self.__name__ = 'Logistics Main UI Window'
 
-        # Set dimensions
         self.width = 490
         self.height = 115
 
-        # CONVERT CBR TO CBZ UI COMPONENTS -----------------------------------------------------------------------------
-
-        # --- OPTIONS ---
-        # Arguments Dict
         convert_arg = {}
 
-        # 1. Target Folder
-        # Create Label
         pyside.Label('Target Folder: ', self.dlg, pyside.QRect(10, 12, 400, 20))
-        # Create Argument
         convert_arg['target_dir'] = pyside.LineEdit('', self.dlg, pyside.QRect(105, 10, 370, 25))
 
-        # 2. Recursive
-        # Create Label
         pyside.Label('Existing Author Tag to Replace: ', self.dlg, pyside.QRect(10, 43, 400, 20))
-        # Create Argument
         convert_arg['target_existing_tag'] = pyside.LineEdit(
-            'REPLACEAUTHORHERE', self.dlg, pyside.QRect(200, 43, 275, 25)
+            'REPLACEAUTHORHERE',
+            self.dlg,
+            pyside.QRect(200, 43, 275, 25)
         )
 
-        # --- BUTTON ---
-        pyside.button('Batch Replace Author Tag', self.dlg, pyside.QRect(5, 80, 480, 30),
-                      ui_comicinfoxml_batch_rename_author_to_dir_name, convert_arg)
-
-        # --------------------------------------------------------------------------------------------------------------
+        pyside.button(
+            'Batch Replace Author Tag',
+            self.dlg,
+            pyside.QRect(5, 80, 480, 30),
+            ui_comicinfoxml_batch_rename_author_to_dir_name,
+            convert_arg
+        )
