@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import *
 from commonUtils import fileUtils, dirUtils, zipUtils
 from commonUtils.debugUtils import *
-from logisticsUtils import imageUtils
+from features.images import processing as imageUtils
 from datetime import datetime
 from commonUtils.fileTypes import xmlType, txtType, zipType
 
