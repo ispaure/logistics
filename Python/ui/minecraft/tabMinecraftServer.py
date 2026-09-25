@@ -1,22 +1,17 @@
 from typing import List
 
 from commonUtils.ui import pyside
-from config import LogisticsConfig
-from features.minecraft import server
+
+from features.minecraft import detection, server
 
 
 def display_servers(dialog_obj, server_type: server.MinecraftServerType):
     """
     Display one row per Minecraft server with its actions.
     """
+
     # Server root path
-    match server_type:
-        case server.MinecraftServerType.JAVA:
-            server_path = LogisticsConfig().path_minecraft_servers_java
-        case server.MinecraftServerType.BEDROCK:
-            server_path = LogisticsConfig().path_minecraft_servers_bedrock
-        case _:
-            raise Exception('Invalid Minecraft Server Type in "display_servers" func')
+    server_path = detection.get_server_root_path(server_type)
 
     # Get servers
     server_lst: List[server.MinecraftServer] = server.get_minecraft_server_lst(server_path)

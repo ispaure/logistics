@@ -4,7 +4,8 @@ Detection helpers for the Logistics Comics feature.
 
 from pathlib import Path
 
-from commonUtils import configUtils
+from commonUtils import configUtils, fileUtils
+from commonUtils.osUtils import OS, get_os
 
 from models.local_folder import LocalFolder
 
@@ -77,3 +78,19 @@ def has_yac_reader_library(folder: LocalFolder) -> bool:
     """Return whether the LocalFolder has YACReaderLibrary configuration."""
 
     return get_yac_reader_library_ini_path(folder) is not None
+
+
+def get_yac_reader_library_prefs_path() -> Path | None:
+    """Return the YACReaderLibrary preferences directory for the current platform."""
+
+    user_home_dir = fileUtils.get_user_home_dir()
+
+    match get_os():
+        case OS.MAC:
+            return Path(user_home_dir, 'Library', 'Application Support', 'YACReader', 'YACReaderLibrary')
+
+        case OS.LINUX:
+            return Path(user_home_dir, '.local', 'share', 'YACReader', 'YACReaderLibrary')
+
+        case _:
+            return None
