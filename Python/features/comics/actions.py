@@ -65,10 +65,14 @@ def open_yac_reader_library(folder: LocalFolder) -> bool:
         zip_path = Path(config.LogisticsConfig().path_logistics_software_mac, 'YACReaderLibrary.app.zip')
         fileUtils.unzip_file(zip_path, install_path)
 
-    yac_prefs_dir_path = config.LogisticsConfig().yac_lib_prefs_dir
+    yac_prefs_dir_path = detection.get_yac_reader_library_prefs_path()
 
     if yac_prefs_dir_path is None:
-        log(Severity.CRITICAL, 'open_yac_reader_library', 'YACReaderLibrary preferences directory is not configured for this platform')
+        log(
+            Severity.CRITICAL,
+            'open_yac_reader_library',
+            'YACReaderLibrary preferences directory is not configured for this platform'
+        )
         return False
 
     yac_prefs_dir = dirUtils.Directory(yac_prefs_dir_path)

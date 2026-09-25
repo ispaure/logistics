@@ -125,8 +125,8 @@ class MinecraftServer:
         return self.properties.path.is_file()
 
 
-def get_minecraft_server_lst(servers_root: Path) -> list[MinecraftServer]:
-    if not servers_root.is_dir():
+def get_minecraft_server_lst(servers_root: Path | None) -> list[MinecraftServer]:
+    if servers_root is None or not servers_root.is_dir():
         return []
 
     dir_lst: list[dirUtils.Directory] = dirUtils.Directory(servers_root).list_directories()

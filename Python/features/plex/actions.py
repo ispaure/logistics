@@ -16,6 +16,7 @@ from commonUtils.debugUtils import Severity, log
 from commonUtils.osUtils import OS, get_os
 from commonUtils.wrappers import cmdShellWrapper
 
+from features.plex import detection as plex_detection
 from features.plex import folders as plex_folders
 from features.rclone import sync as rclone_sync
 
@@ -54,10 +55,12 @@ def clear_local_pmsdata(remote_cls):
 
     if os.path.exists(local_cls_pmsdata.path):
         rem_dir_lst: List[dirUtils.Directory] = local_cls_pmsdata.list_directories()
+
         for rem_dir in rem_dir_lst:
             rem_dir.delete()
 
         rem_file_lst = local_cls_pmsdata.list_files()
+
         for file in rem_file_lst:
             file.delete_file()
 
@@ -98,8 +101,13 @@ def unpackage_pms(remote_cls):
     if not os.path.exists(local_cls_pmsdata.path):
         return False
 
-    pms_data_path = config.LogisticsConfig().pms_data_path
-    if not os.path.exists(pms_data_path):
+    pms_data_path = plex_detection.get_pms_data_path()
+
+    if pms_data_path is None:
+        log(Severity.ERROR, 'Unpackage Plex Media Server', 'Could not determine the Plex Media Server data directory.', popup=True)
+        return False
+
+    if not pms_data_path.exists():
         pms_data_path.mkdir(parents=True, exist_ok=True)
 
     pms_data_directory = dirUtils.Directory(pms_data_path)
@@ -136,7 +144,6 @@ def unpackage_pms(remote_cls):
             )
 
             pms_data_directory.delete_contents()
-
             cmdShellWrapper.exec_cmd(command, wait_for_output=False, in_new_window=True)
 
         case OS.MAC:
@@ -167,6 +174,8 @@ def unpackage_pms(remote_cls):
             zipUtils.unzip_file(zip_archive_path, pms_data_path.parent)
             print('Files extracted! Finished')
 
+    return True
+
 
 def package_pms(remote_cls) -> bool:
     """Package the current Plex Media Server data into the local -PMSDATA folder."""
@@ -175,10 +184,10 @@ def package_pms(remote_cls) -> bool:
     log(Severity.INFO, tool_name, 'Starting Plex Media Server packaging.')
 
     local_cls_pmsdata = get_local_cls_pmsdata(remote_cls)
-    pms_data_path = config.LogisticsConfig().pms_data_path
+    pms_data_path = plex_detection.get_pms_data_path()
     pms_package_path = Path(local_cls_pmsdata.path)
 
-    if not os.path.exists(pms_data_path):
+    if pms_data_path is None or not pms_data_path.exists():
         msg = f'Plex Media Server directory is invalid or unreachable: "{pms_data_path}". Aborting!'
         log(Severity.ERROR, tool_name, msg, popup=True)
         return False
@@ -192,6 +201,7 @@ def package_pms(remote_cls) -> bool:
             log(Severity.DEBUG, tool_name, 'Packaging Windows Plex Media Server data.')
 
             file_lst = local_cls_pmsdata.list_files()
+
             for file in file_lst:
                 if 'pms_data.' in file.file_name or file.ext == 'reg':
                     log(Severity.DEBUG, tool_name, f'Deleting previous package file: "{file.path}"')
