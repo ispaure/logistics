@@ -1,5 +1,5 @@
 from commonUtils.ui import pyside
-import wrappers.piexifWrapper as piexifWrapper
+import commonUtils.wrappers.piexifWrapper as piexifWrapper
 
 show_verbose = True
 
