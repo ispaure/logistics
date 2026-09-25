@@ -4,25 +4,34 @@ Provides flight-simulator-related integration for Logistics.
 
 ## Responsibilities
 
-- Expose flight simulator operations through Logistics.
-- Manage flight simulator configuration and preset workflows.
+- Detect flight simulator installation and preference paths.
+- Apply X-Plane 12 graphics settings.
+- Apply X-Plane 12 window-position presets.
 - Keep flight-simulator-specific behavior isolated from Logistics core.
 - Allow flight simulator support to remain optional.
 
+## Structure
+
+- `detection.py` resolves X-Plane installation and preference paths.
+- `actions.py` applies X-Plane settings and preset configurations.
+- `__init__.py` exposes the feature to the Logistics feature registry.
+
+The Flight Sim UI only presents controls and delegates behavior to this feature package.
+
 ## Initialization
 
-This feature currently does not require startup initialization.
+This feature does not require startup initialization.
 
-It is discovered and loaded by the Logistics feature registry, but performs no work until flight simulator functionality is actually used.
+It is discovered and loaded by the Logistics feature registry, but performs no work until flight simulator functionality is used.
 
-## Current Implementation
+## X-Plane 12
 
-The feature currently relies on existing flight simulator logic elsewhere in the project.
+The current implementation targets the Steam installation of X-Plane 12 on macOS.
 
-That implementation may be moved into this feature package later as part of a dedicated flight simulator refactor.
+X-Plane preferences are resolved from the user's Application Support directory. Preset files are stored under the Logistics General software directory and copied into the active X-Plane preferences when selected.
 
 ## Notes
 
 Flight Simulator is an optional Logistics feature.
 
-Any current configuration, detection, or folder-specific behavior continues to use the existing Logistics mechanisms. That behavior is intentionally not being changed as part of the feature-system refactor.
+Platform or simulator support can be expanded later without moving simulator-specific behavior back into the UI or Logistics core.

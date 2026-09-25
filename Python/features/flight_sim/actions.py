@@ -1,23 +1,24 @@
+"""
+Actions for the Logistics Flight Simulator feature.
+"""
+
 from pathlib import Path
 
 import config
 
 from commonUtils import fileUtils
-from commonUtils.debugUtils import log, Severity
+from commonUtils.debugUtils import Severity, log
 from commonUtils.fileTypes import txtType
 
-
-def get_xp12_dir() -> Path:
-    return Path(fileUtils.get_user_application_support(), 'Steam', 'steamapps', 'common', 'X-Plane 12')
+from features.flight_sim import detection
 
 
 def set_xp12_setting(line_to_look_for: str, value: int):
-    # Get preferences file
-    prefs_file_path = get_xp12_dir() / 'Output' / 'Preferences' / 'X-Plane.prf'
-    prefs_file = txtType.TXTFile(prefs_file_path)
+    """Set a value in the X-Plane 12 preferences file."""
+
+    prefs_file = txtType.TXTFile(detection.get_xp12_preferences_path())
     prefs_file.read_lines()
 
-    # Rebuild preferences with updated setting
     updated_prefs_line_lst = []
 
     for prefs_line in prefs_file.line_lst:
@@ -61,22 +62,22 @@ def set_xp12_shadow_quality_setting(shadow_quality_value: int):
 
 
 def set_xp12_monitor_preset(preset_path: Path):
+    """Copy an X-Plane 12 window-position preset into the active preferences."""
+
     if not preset_path.is_file():
         msg = 'Preset file is missing, cannot apply preset!'
         log(Severity.ERROR, 'XP12 Preset', msg, popup=True)
         return
 
-    # Get X-Plane window preferences path
-    window_pref_file_path_steam = get_xp12_dir() / 'Output' / 'Preferences' / 'X-Plane Window Positions.prf'
+    window_pref_file_path = detection.get_xp12_window_positions_path()
 
-    if not window_pref_file_path_steam.is_file():
-        msg = 'Preset file is missing from X-Plane 12 installation. is X-Plane installed?'
+    if not window_pref_file_path.is_file():
+        msg = 'X-Plane 12 window preferences file is missing. Is X-Plane installed?'
         log(Severity.ERROR, 'XP12 Preset', msg, popup=True)
         return
 
-    # Transfer preset
-    fileUtils.copy_file(preset_path, window_pref_file_path_steam)
-    print(f'XP12 Preset Transferred from {preset_path} to {window_pref_file_path_steam}!')
+    fileUtils.copy_file(preset_path, window_pref_file_path)
+    print(f'XP12 Preset Transferred from {preset_path} to {window_pref_file_path}!')
 
 
 def set_all_xp12_settings(
