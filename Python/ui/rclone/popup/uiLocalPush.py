@@ -1,38 +1,18 @@
-import os
-
-from commonUtils import fileUtils as fileUtils
-from commonUtils.debugUtils import log, Severity
 from commonUtils.ui import pyside
-from features.rclone import sync as rclone_sync
+
+from features.rclone import actions as rclone_actions
 
 
-def push_to_cloud(remote_cls):
-    source_path = remote_cls['remote_cls'].path
-    destination_path = remote_cls['remote_cls'].name + ':'
-    rclone_sync.rclone_sync(source_path, destination_path, track_renames=remote_cls['track_renames'].isChecked())
+def push_to_cloud(data_to_exec):
+    rclone_actions.push_to_cloud(data_to_exec['remote_cls'], track_renames=data_to_exec['track_renames'].isChecked())
 
 
 def push_specific_dir(data_to_exec):
-    print('Initiating Push to Cloud (Specific Dir)')
-
-    # Get important values
-    directory_path_to_push = data_to_exec['Push Specific Directory'].txt()
-
-    if not os.path.isdir(directory_path_to_push):
-        msg = 'The path you have given is not a valid directory!'
-        log(Severity.ERROR, 'Push Individual Folder', msg, popup=True)
-        return False
-
-    bandwidth_limit = data_to_exec['Bandwidth Limit'].txt()
-
-    if bandwidth_limit == '':
-        bandwidth_limit = None
-
-    specific_dir_name = directory_path_to_push.split(fileUtils.get_split_character())[-1]
-    cloud_remote_path = data_to_exec['Remote Class'].name + ':' + specific_dir_name
-
-    # Execute specific dir sync
-    rclone_sync.rclone_sync(directory_path_to_push, cloud_remote_path, bw_limit=bandwidth_limit)
+    rclone_actions.push_specific_directory(
+        data_to_exec['Remote Class'],
+        data_to_exec['Push Specific Directory'].txt(),
+        data_to_exec['Bandwidth Limit'].txt()
+    )
 
 
 class LocalPushUI(pyside.Window):
@@ -53,9 +33,7 @@ class LocalPushUI(pyside.Window):
 
         # Create Argument
         convert_arg = {}
-        convert_arg['track_renames'] = pyside.create_checkbox(
-            panel, pyside.QRect(110, 35, 20, 20), default_state=False
-        )
+        convert_arg['track_renames'] = pyside.create_checkbox(panel, pyside.QRect(110, 35, 20, 20), default_state=False)
         convert_arg['remote_cls'] = remote_cls
 
         # Create regular push button
@@ -67,11 +45,8 @@ class LocalPushUI(pyside.Window):
 
         # Label: Add Folder to CLOUD
         pyside.Label('ADD FOLDER TO CLOUD:', panel_add_dir, pyside.QRect(10, 10, 400, 20))
-        pyside.Label(
-            'If folder with same name already exists on Cloud, it will get overwritten.',
-            panel_add_dir,
-            pyside.QRect(10, 30, 480, 20)
-        )
+        pyside.Label('If folder with same name already exists on Cloud, it will get overwritten.', panel_add_dir,
+                     pyside.QRect(10, 30, 480, 20))
 
         # Create argument dictionary
         arg_custom_dir = {'Remote Class': remote_cls}
@@ -89,6 +64,5 @@ class LocalPushUI(pyside.Window):
         arg_custom_dir['Bandwidth Limit'] = textedit_bw_limit
 
         # Create package for push to cloud
-        pyside.button('PUSH [Specific Folder]', panel_add_dir, pyside.QRect(85, 105, 320, 25),
-                      push_specific_dir, arg_custom_dir)
+        pyside.button('PUSH [Specific Folder]', panel_add_dir, pyside.QRect(85, 105, 320, 25), push_specific_dir, arg_custom_dir)
         # --------------------------------------------------------------------------------------------------------------
