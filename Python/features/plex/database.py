@@ -1,4 +1,4 @@
-import wrappers.sqlWrapper as sql_wrapper
+import commonUtils.wrappers.sqlWrapper as sql_wrapper
 
 
 def get_plex_db_table_media_items(db_file):
