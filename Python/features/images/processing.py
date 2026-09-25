@@ -1,3 +1,7 @@
+"""
+Image processing helpers for the Logistics Images feature.
+"""
+
 # ----------------------------------------------------------------------------------------------------------------------
 # AUTHORSHIP INFORMATION - THIS FILE BELONGS TO MARC-ANDRE VOYER HELPER FUNCTIONS CODEBASE
 
@@ -48,7 +52,7 @@ class ImageFile(fileUtils.File):
             with Image.open(self.path) as img:
                 self.width, self.height = img.size
         except Exception as e:
-            log(Severity.CRITICAL, "fileUtils.imageUtils.ImageFile.__set_width_height",
+            log(Severity.CRITICAL, "features.images.processing.ImageFile.__set_width_height",
                 f"Failed to read image dimensions for {self.path}: {e}")
 
     from PIL import Image, ImageChops
@@ -95,7 +99,7 @@ class ImageFile(fileUtils.File):
                 return self.color
 
         except Exception as e:
-            log(Severity.CRITICAL, "fileUtils.imageUtils.ImageFile.__set_color_property",
+            log(Severity.CRITICAL, "features.images.processing.ImageFile.__set_color_property",
                 f"Failed to determine if image is color for {self.path}: {e}")
             raise
 
@@ -162,7 +166,7 @@ class ImageFile(fileUtils.File):
 
         except Exception as e:
             log(Severity.ERROR,
-                'fileUtils.imageUtils.ImageFile.compress',
+                'features.images.processing.ImageFile.compress',
                 f'Failed to convert/compress image {self.path}: {e}')
             return False
 
@@ -202,7 +206,7 @@ def batch_compress_image(target_dir: Union[str, Path],
     # STEP TWO: COMPRESS LIST OF IMAGES TO .WEBP, REPLACE IF SMALLER OR ALWAYS_KEEP_COMPRESSED
     for img_file_cls in original_img_file_cls_lst:
         if img_file_cls.ext != 'webp':
-            log(Severity.DEBUG, f'imageUtils.{func_name}', f'Compressing {img_file_cls.file_name}...')
+            log(Severity.DEBUG, f'features.images.processing.{func_name}', f'Compressing {img_file_cls.file_name}...')
             dest_path = img_file_cls.path.with_suffix('.webp')
             result = img_file_cls.compress(
                 dest_path=dest_path,
@@ -214,7 +218,7 @@ def batch_compress_image(target_dir: Union[str, Path],
 
             if not result:
                 msg = f'An error occurred whilst compressing {img_file_cls.file_name}!'
-                log(Severity.ERROR, f'cbzUtils.{func_name}', msg)
+                log(Severity.ERROR, f'features.images.processing.{func_name}', msg)
                 return False
 
             # STEP THREE: SELECT IMAGES TO KEEP
@@ -224,7 +228,7 @@ def batch_compress_image(target_dir: Union[str, Path],
                 img_file_cls.compressed_image.delete_file()
         else:
             msg = f'Image {img_file_cls.file_name} is already webp! Skipping...'
-            log(Severity.DEBUG, f'imageUtils.{func_name}', msg)
+            log(Severity.DEBUG, f'features.images.processing.{func_name}', msg)
 
     # Done
     log(Severity.INFO, 'Image Compression', 'Images Compression Completed successfully!')
