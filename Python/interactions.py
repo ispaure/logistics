@@ -1,16 +1,13 @@
 from pathlib import Path
-import os
 
-import commands as commands
 import config
 
-from commonUtils import dirUtils, fileUtils, linkUtils
-from commonUtils.debugUtils import *
-from commonUtils.osUtils import *
-from commonUtils.wrappers import cmdShellWrapper
+from commonUtils.osUtils import OS, get_os
 
 from features.calibre import detection as calibre_detection
+from features.comics import actions as comics_actions
 from features.comics import detection as comics_detection
+from features.perforce import actions as perforce_actions
 from features.perforce import detection as perforce_detection
 from features.plex import detection as plex_detection
 from features.rclone import configuration as rclone_configuration
@@ -67,55 +64,14 @@ def inter_comic_rack_action(remote_cls):
     if not isinstance(remote_cls, LocalFolder):
         return False
 
-    comic_rack_local = comics_detection.get_comic_rack_local_path(remote_cls)
-    comic_rack_roaming = comics_detection.get_comic_rack_roaming_path(remote_cls)
-
-    if comic_rack_local is None or comic_rack_roaming is None:
-        return False
-
-    cyo_appdata_local_dir_path: Path = Path(os.environ['USERPROFILE'], 'AppData', 'Local', 'cYo')
-    cyo_appdata_roaming_dir_path: Path = Path(os.environ['USERPROFILE'], 'AppData', 'Roaming', 'cYo')
-
-    linkUtils.update_symbolic_link(comic_rack_local, cyo_appdata_local_dir_path)
-    linkUtils.update_symbolic_link(comic_rack_roaming, cyo_appdata_roaming_dir_path)
-
-    exec_path: Path = Path(config.LogisticsConfig().path_logistics_software_win, 'ComicRack', 'ComicRack.exe')
-    cmdShellWrapper.exec_cmd(f'start "" "{exec_path}"', wait_for_output=False)
+    return comics_actions.open_comic_rack(remote_cls)
 
 
 def inter_yac_reader_action(remote_cls):
     if not isinstance(remote_cls, LocalFolder):
         return False
 
-    yac_reader_library_ini = comics_detection.get_yac_reader_library_ini_path(remote_cls)
-
-    if yac_reader_library_ini is None:
-        return False
-
-    # If YACReader not installed, unzip in /Applications
-    install_path: Path = Path('/Applications', 'YACReader.app')
-    if not os.path.exists(install_path):
-        zip_path: Path = Path(config.LogisticsConfig().path_logistics_software_mac, 'YACReader.app.zip')
-        fileUtils.unzip_file(zip_path, install_path)
-
-    # If YACReaderLibrary not installed, unzip in /Applications
-    install_path = Path('/Applications', 'YACReaderLibrary.app')
-    if not os.path.exists(install_path):
-        zip_path = Path(config.LogisticsConfig().path_logistics_software_mac, 'YACReaderLibrary.app.zip')
-        fileUtils.unzip_file(zip_path, install_path)
-
-    yac_prefs_dir_path = config.LogisticsConfig().yac_lib_prefs_dir
-
-    if yac_prefs_dir_path is None:
-        log(Severity.CRITICAL, 'inter_yac_reader_action', 'YACReaderLibrary preferences directory is not configured for this platform')
-        return False
-
-    yac_prefs_dir = dirUtils.Directory(yac_prefs_dir_path)
-    yac_prefs_dir.make_dir()
-
-    fileUtils.copy_file(yac_reader_library_ini, Path(yac_prefs_dir_path, 'YACReaderLibrary.ini'))
-
-    cmdShellWrapper.exec_cmd(str(Path('/Applications', 'YACReaderLibrary.app', 'Contents', 'MacOS', 'YACReaderLibrary')), wait_for_output=False)
+    return comics_actions.open_yac_reader_library(remote_cls)
 
 
 def inter_calibre_manage(remote_cls):
@@ -161,7 +117,7 @@ def inter_rclone_push_pull_action(remote_cls):
 
     elif isinstance(remote_cls, RemoteFolder):
         source_path = remote_cls.name + ':'
-        destination_path: Path = Path(config.LogisticsConfig().path_remote_local, remote_cls.name)
+        destination_path = Path(config.LogisticsConfig().path_remote_local, remote_cls.name)
         rclone_sync.rclone_sync(source_path, destination_path)
 
     else:
@@ -224,18 +180,10 @@ def interaction_07(remote_cls):
 
 
 def interaction_07_action(remote_cls):
-    if get_os() != OS.LINUX or not isinstance(remote_cls, LocalFolder):
+    if not isinstance(remote_cls, LocalFolder):
         return False
 
-    perforce_p4d_path = perforce_detection.get_p4d_path(remote_cls)
-    perforce_data_path = perforce_detection.get_data_path(remote_cls)
-    perforce_port = perforce_detection.get_port(remote_cls)
-
-    if perforce_p4d_path is None or perforce_data_path is None or perforce_port is None:
-        return False
-
-    command = f'./{perforce_p4d_path} -C1 -r ./{perforce_data_path} -p {perforce_port}'
-    cmdShellWrapper.exec_cmd(command, in_new_window=True, cwd=remote_cls.path)
+    return perforce_actions.launch_server(remote_cls)
 
 
 interaction_fn_lst = [
