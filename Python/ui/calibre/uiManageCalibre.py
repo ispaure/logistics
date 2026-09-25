@@ -1,9 +1,8 @@
-from pathlib import Path
 from typing import List
 
-from commonUtils.debugUtils import *
-from commonUtils.dirUtils import Directory
 from commonUtils.ui import pyside
+
+from features.calibre import actions as calibre_actions
 from logisticsUtils.calibreUtils import CalibreLibrary
 from models.local_folder import LocalFolder
 
@@ -16,7 +15,7 @@ def inter_open_calibre_dir(calibre_lib: CalibreLibrary):
 
 
 def inter_open_calibre_dir_action(calibre_lib: CalibreLibrary):
-    calibre_lib.open()
+    calibre_actions.open_library(calibre_lib)
 
 
 def inter_launch_calibre(calibre_lib: CalibreLibrary):
@@ -27,7 +26,7 @@ def inter_launch_calibre(calibre_lib: CalibreLibrary):
 
 
 def inter_launch_calibre_action(calibre_lib: CalibreLibrary):
-    calibre_lib.open_in_calibre()
+    calibre_actions.launch_calibre(calibre_lib)
 
 
 def inter_echo_calibre_epubs_to_boox_sd(calibre_lib: CalibreLibrary):
@@ -38,8 +37,7 @@ def inter_echo_calibre_epubs_to_boox_sd(calibre_lib: CalibreLibrary):
 
 
 def inter_echo_calibre_epubs_to_boox_sd_action(calibre_lib: CalibreLibrary):
-    dest_pth: Path = Path('/Volumes', 'BOOX-SD', 'Calibre [EPUBs]', calibre_lib.name)
-    calibre_lib.echo_book_formats(dest_pth, ['epub'])
+    calibre_actions.echo_epubs_to_boox_sd(calibre_lib)
 
 
 calibre_interaction_lst = [
@@ -71,14 +69,7 @@ class ManageCalibre(pyside.Window):
             return
 
         # Get Calibre libraries from the local folder.
-        calibre_lib_cls_lst: List[CalibreLibrary] = []
-        folder_subdir_lst: List[Directory] = folder.list_directories()
-
-        for folder_subdir in folder_subdir_lst:
-            db_file_lst = folder_subdir.list_files(recursive=False, filter_extension='db')
-
-            if db_file_lst:
-                calibre_lib_cls_lst.append(CalibreLibrary(folder_subdir.path))
+        calibre_lib_cls_lst = calibre_actions.get_libraries(folder)
 
         if not calibre_lib_cls_lst:
             pyside.Label('No Calibre libraries found', self.dlg, pyside.QRect(5, 5, 400, 25))

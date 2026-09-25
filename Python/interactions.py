@@ -1,7 +1,3 @@
-from pathlib import Path
-
-import config
-
 from commonUtils.osUtils import OS, get_os
 
 from features.calibre import detection as calibre_detection
@@ -10,8 +6,8 @@ from features.comics import detection as comics_detection
 from features.perforce import actions as perforce_actions
 from features.perforce import detection as perforce_detection
 from features.plex import detection as plex_detection
+from features.rclone import actions as rclone_actions
 from features.rclone import configuration as rclone_configuration
-from features.rclone import sync as rclone_sync
 from features.youtube_downloader import detection as youtube_downloader_detection
 from models.local_folder import LocalFolder
 from models.remote_folder import RemoteFolder
@@ -116,9 +112,7 @@ def inter_rclone_push_pull_action(remote_cls):
         local_push_cls.display_ui()
 
     elif isinstance(remote_cls, RemoteFolder):
-        source_path = remote_cls.name + ':'
-        destination_path = Path(config.LogisticsConfig().path_remote_local, remote_cls.name)
-        rclone_sync.rclone_sync(source_path, destination_path)
+        return rclone_actions.pull_from_cloud(remote_cls)
 
     else:
         print('Folder type invalid. Not proceeding in case this would screw up something big.')
