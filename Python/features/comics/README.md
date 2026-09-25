@@ -4,25 +4,40 @@ Provides comic-related integration for Logistics.
 
 ## Responsibilities
 
-- Expose comic-related operations through Logistics.
-- Work with comic archives and comic metadata.
-- Support comic-specific workflows such as CBZ processing and compression.
-- Keep comic functionality optional rather than making it a requirement for Logistics itself.
+- Detect and configure comic-reader integrations.
+- Work with CBZ and CBR comic archives.
+- Edit ComicInfo.xml metadata.
+- Support comic-specific conversion, compression, and organization workflows.
+- Keep comic-specific behavior isolated from Logistics core and UI code.
+
+## Structure
+
+- `actions.py` contains user-facing comic actions such as reader launching and CBZ organization.
+- `detection.py` contains ComicRack and YACReader detection/configuration helpers.
+- `cbz.py` contains CBZ compression and processing behavior.
+- `conversion.py` contains CBR to CBZ conversion behavior.
+- `metadata.py` contains ComicInfo.xml metadata editing behavior.
+- `__init__.py` exposes the feature to the Logistics feature registry.
 
 ## Initialization
 
-This feature currently does not require startup initialization.
+This feature does not require startup initialization.
 
-It is discovered and loaded by the Logistics feature registry, but performs no work until comic functionality is actually used.
+It is discovered and loaded by the Logistics feature registry, but performs no work until comic functionality is used.
 
-## Current Implementation
+## Safety Notes
 
-The feature currently relies on existing comic-related logic elsewhere in the project.
+Several Comics operations modify or replace files.
 
-That implementation may be moved into this feature package later as part of a dedicated comics refactor.
+CBR to CBZ conversion deletes the original CBR after a successful conversion.
+ComicInfo metadata operations unpack and rebuild CBZ archives.
+CBZ organization copies each archive into a new folder and then deletes the original after the copy succeeds.
+CBZ compression may replace existing archives.
 
-## Notes
+These operations should be tested against disposable data when behavioral changes are made.
 
-Comics is an optional Logistics feature.
+## Future Work
 
-Any current folder detection, configuration, or comic-specific behavior continues to use the existing Logistics mechanisms. That behavior is intentionally not being changed as part of the feature-system refactor.
+`logisticsUtils/epubUtils.py` is intentionally retained for future EPUB development.
+
+Image utilities remain separate because they are also used outside the Comics feature.

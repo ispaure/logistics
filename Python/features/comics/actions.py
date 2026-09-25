@@ -7,6 +7,7 @@ Actions for the Logistics Comics feature.
 
 import os
 from pathlib import Path
+from typing import List
 
 import config
 
@@ -53,13 +54,11 @@ def open_yac_reader_library(folder: LocalFolder) -> bool:
     if yac_reader_library_ini is None:
         return False
 
-    # If YACReader not installed, unzip in /Applications
     install_path = Path('/Applications', 'YACReader.app')
     if not install_path.exists():
         zip_path = Path(config.LogisticsConfig().path_logistics_software_mac, 'YACReader.app.zip')
         fileUtils.unzip_file(zip_path, install_path)
 
-    # If YACReaderLibrary not installed, unzip in /Applications
     install_path = Path('/Applications', 'YACReaderLibrary.app')
     if not install_path.exists():
         zip_path = Path(config.LogisticsConfig().path_logistics_software_mac, 'YACReaderLibrary.app.zip')
@@ -83,4 +82,62 @@ def open_yac_reader_library(folder: LocalFolder) -> bool:
     exec_path = Path('/Applications', 'YACReaderLibrary.app', 'Contents', 'MacOS', 'YACReaderLibrary')
     cmdShellWrapper.exec_cmd(str(exec_path), wait_for_output=False)
 
+    return True
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# CBZ ACTIONS
+
+def move_cbz_to_individual_folders(target_dir) -> bool:
+    """
+    Put each top-level CBZ file in a folder with the same name as the CBZ.
+
+    Useful for one-shots in Komga.
+    """
+
+    tool_name = 'Move CBZ to Individual Folders'
+    log(
+        Severity.INFO,
+        tool_name,
+        'Starting the batch creation of individual folders and moving each .CBZ file into its new folder.'
+    )
+
+    batch_target_folder = dirUtils.Directory(Path(target_dir))
+    log(Severity.INFO, tool_name, f'Target Folder: "{batch_target_folder.path}"')
+
+    file_lst: List[fileUtils.File] = batch_target_folder.list_files(
+        recursive=False,
+        filter_extension='cbz'
+    )
+
+    if not file_lst:
+        log(Severity.WARNING, tool_name, 'Did not find a .CBZ file.')
+        return False
+
+    log(Severity.INFO, tool_name, f'Found {len(file_lst)} files to put in new folders:')
+    for file in file_lst:
+        log(Severity.INFO, tool_name, f' - "{file.path}"')
+
+    for file in file_lst:
+        dir_path = file.path.parent / file.name_without_ext
+        new_path = dir_path / file.file_name
+
+        log(Severity.INFO, tool_name, f'Make new directory: "{dir_path}"')
+        log(Severity.INFO, tool_name, f'Move file to new location: "{new_path}"')
+
+        fileUtils.make_dir(dir_path)
+
+        if not fileUtils.copy_file(file.path, new_path):
+            log(Severity.ERROR, tool_name, f'Failed to copy "{file.path}". The original was not deleted.')
+            return False
+
+        if not file.delete_file():
+            log(
+                Severity.ERROR,
+                tool_name,
+                f'Copied "{file.path}" successfully, but failed to delete the original file.'
+            )
+            return False
+
+    log(Severity.INFO, tool_name, 'Finished moving all .CBZ files into individual folders.')
     return True
