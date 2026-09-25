@@ -1,8 +1,7 @@
-import ui.uiMain as uiMain
-
 from commonUtils.debugUtils import Severity, log
 from commonUtils.ui import pyside
 from features import registry
+from ui_new.main_window import MainWindow
 
 
 def main() -> int:
@@ -18,7 +17,8 @@ def main() -> int:
 
     # Display UI
     log(Severity.DEBUG, 'PySide6', 'Display Main UI Window')
-    uiMain.display_main_menu()
+    main_window = MainWindow()
+    main_window.display_ui()
 
     return app.exec()
 
