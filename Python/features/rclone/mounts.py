@@ -66,11 +66,11 @@ def get_rclone_remote_mount_paths() -> list[str]:
     """Return the expected mount paths for supported rclone.conf remotes."""
 
     network_remote_mount_path = config.LogisticsConfig().path_remote_network_mount
-    rclone_conf_remote_credentials = configuration.get_rclone_conf_remote_credentials_dict()
+    remote_names = configuration.get_rclone_remote_names()
 
     mount_paths = []
 
-    for remote_name in rclone_conf_remote_credentials:
+    for remote_name in remote_names:
         if "Dropbox" in remote_name or "gdrive" in remote_name:
             continue
 

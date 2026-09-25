@@ -42,19 +42,20 @@ def get_logistics_remote_credentials_zip_lst() -> list[fileUtils.File]:
 def add_remote_to_rclone_conf(remote_credentials_dir: str | Path) -> None:
     """Add missing remotes from a credential directory to the user's rclone.conf."""
 
-    rclone_conf_path = configuration.get_rclone_conf_path()
-    rclone_conf_credentials = configuration.get_rclone_conf_remote_credentials_dict()
+    rclone_conf_path = configuration.ensure_rclone_conf()
+    existing_remote_names = set(configuration.get_rclone_remote_names())
     remote_credentials = get_remote_credentials_dict(remote_credentials_dir)
 
     rclone_conf_file = txtType.TXTFile(rclone_conf_path)
     rclone_conf_file.read_lines()
 
     for remote_name, remote_lines in remote_credentials.items():
-        if remote_name in rclone_conf_credentials:
+        if remote_name in existing_remote_names:
             continue
 
         rclone_conf_file.line_lst.extend(remote_lines)
         rclone_conf_file.line_lst.append("")
+        existing_remote_names.add(remote_name)
 
     rclone_conf_file.write_lines()
 
