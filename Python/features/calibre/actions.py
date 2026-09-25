@@ -7,8 +7,10 @@ Actions for the Logistics Calibre feature.
 
 from pathlib import Path
 
-from logisticsUtils.calibreUtils import CalibreLibrary
+from features.calibre import detection
+from features.calibre.library import CalibreLibrary
 from models.local_folder import LocalFolder
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # LIBRARY DISCOVERY
@@ -16,15 +18,7 @@ from models.local_folder import LocalFolder
 def get_libraries(folder: LocalFolder) -> list[CalibreLibrary]:
     """Return the Calibre libraries contained in a LocalFolder."""
 
-    calibre_libraries = []
-
-    for subdirectory in folder.list_directories():
-        db_files = subdirectory.list_files(recursive=False, filter_extension='db')
-
-        if db_files:
-            calibre_libraries.append(CalibreLibrary(subdirectory.path))
-
-    return calibre_libraries
+    return [CalibreLibrary(library_path) for library_path in detection.get_library_paths(folder)]
 
 
 # ----------------------------------------------------------------------------------------------------------------------
