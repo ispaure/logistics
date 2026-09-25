@@ -31,17 +31,21 @@ def display_remotes(dialog_obj, type):
     # Get interactions
     interactions_complete_lst, remote_amt = interactions.get_remote_cls_lst_interactions(display_lst)
 
-    # Determine number of rows and columns
-    positions = [(i, j) for i in range(len(display_lst)) for j in range(len(interactions_complete_lst) // remote_amt)]
+    if remote_amt == 0:
+        return
 
-    # For each position (in order, from left to right, top to bottom) create a button with the correct thing
-    for position, name in zip(positions, interactions_complete_lst):
+    # Determine number of rows and columns
+    interaction_amt = len(interactions_complete_lst) // remote_amt
+    positions = [(i, j) for i in range(remote_amt) for j in range(interaction_amt)]
+
+    # Create interaction buttons
+    for position, interaction in zip(positions, interactions_complete_lst):
         button_var = pyside.button(
-            text=name[0](name[1])['Name'],
+            text=interaction.name,
             target=widget_content,
             rect=pyside.QRect(0, 0, 120, 80),
-            fn=name[0](name[1])['Action'],
-            args=name[1]
+            fn=interaction.action,
+            args=interaction.args
         )
 
         grid_layout.addWidget(button_var, *position)

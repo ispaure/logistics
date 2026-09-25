@@ -1,4 +1,3 @@
-import subprocess
 import sys
 from pathlib import Path
 from typing import List
@@ -6,8 +5,8 @@ from typing import List
 import config
 
 from commonUtils import configUtils, dirUtils, fileUtils
-from commonUtils.debugUtils import *
-from commonUtils.osUtils import *
+from commonUtils.debugUtils import Severity, log
+from commonUtils.osUtils import OS, get_os
 from commonUtils.wrappers import cmdShellWrapper
 from features.rclone import sync as rclone_sync
 from features.youtube_downloader import detection as youtube_downloader_detection
@@ -22,25 +21,21 @@ params = (
 )
 
 
-def reinstall_youtube_dl():
+def update_yt_dlp():
     """
-    Reinstall Youtube DL, to make sure have new version.
+    Update yt-dlp in the Python environment currently running Logistics.
     """
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'youtube-dl'])
+    tool_name = 'Update yt-dlp'
+    python_exec = f'"{sys.executable}"'
 
-    # Install updated packages
+    log(Severity.INFO, tool_name, f'Updating yt-dlp using Python environment: {sys.executable}')
+
+    command = f'{python_exec} -m pip install --upgrade yt-dlp'
+
     try:
-        subprocess.check_call([
-            sys.executable,
-            '-m',
-            'pip',
-            'install',
-            '--force-reinstall',
-            'https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz',
-            '--user'
-        ])
-    except:
-        print('Could not install plugin, still proceeding')
+        cmdShellWrapper.exec_cmd(command, wait_for_output=True)
+    except Exception as exception:
+        log(Severity.WARNING, tool_name, f'Could not update yt-dlp. Still proceeding.\n{exception}')
 
 
 def download_all(youtube_dl_cfg_path):
@@ -49,8 +44,8 @@ def download_all(youtube_dl_cfg_path):
     """
     tool_name = 'Batch Youtube Downloader'
 
-    # Reinstall Youtube DL
-    reinstall_youtube_dl()
+    # Update yt-dlp
+    update_yt_dlp()
 
     # Get config directory where all download configs are stored
     config_directory = dirUtils.Directory(Path(youtube_dl_cfg_path))
@@ -68,7 +63,7 @@ def download_all(youtube_dl_cfg_path):
         download(youtube_dl_cfg_path, str(config_file.path))
 
 
-def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playlist_end=None, master_branch=True):
+def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playlist_end=None):
     """
     Downloads videos as specified in the config file at path.
 
@@ -101,18 +96,7 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
     download_dir = dirUtils.Directory(youtube_dl_cfg_path.parent / channel_name / ('Season ' + str(season_number)))
 
     # Create string for download command
-    if not master_branch:
-        yt_dl_cmd_str = 'youtube-dl '
-    else:
-        match get_os():
-            case OS.WIN:
-                yt_dl_cmd_str = 'python -m yt_dlp '
-            case OS.MAC:
-                yt_dl_cmd_str = 'python3 -m yt_dlp '
-            case _:
-                log(Severity.CRITICAL, tool_name, 'Platform unsupported!')
-                return
-
+    yt_dl_cmd_str = f'"{sys.executable}" -m yt_dlp '
     yt_dl_cmd_str += f'{download_url} '
 
     if playlist_reverse:

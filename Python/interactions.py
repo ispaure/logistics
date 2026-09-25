@@ -9,6 +9,7 @@ from features.plex import detection as plex_detection
 from features.rclone import actions as rclone_actions
 from features.rclone import configuration as rclone_configuration
 from features.youtube_downloader import detection as youtube_downloader_detection
+from models.interaction import Interaction
 from models.local_folder import LocalFolder
 from models.remote_folder import RemoteFolder
 
@@ -19,15 +20,12 @@ from ui.rclone.popup import uiLocalPush
 
 
 def inter_open_dir(remote_cls):
-    interaction_dict = {}
-
-    if 'Server-' in remote_cls.name[0:len('Server-')]:
-        interaction_dict['Name'] = remote_cls.name[len('Server-'):]
+    if remote_cls.name.startswith('Server-'):
+        name = remote_cls.name[len('Server-'):]
     else:
-        interaction_dict['Name'] = remote_cls.name
+        name = remote_cls.name
 
-    interaction_dict['Action'] = inter_open_dir_action
-    return interaction_dict
+    return Interaction(name, inter_open_dir_action, remote_cls)
 
 
 def inter_open_dir_action(remote_cls):
@@ -37,23 +35,14 @@ def inter_open_dir_action(remote_cls):
 
 
 def inter_comic_rack_yac_reader(remote_cls):
-    interaction_dict = {}
-
     if isinstance(remote_cls, LocalFolder):
-
         if get_os() == OS.WIN and comics_detection.has_comic_rack(remote_cls):
-            interaction_dict['Name'] = 'Open ComicRack'
-            interaction_dict['Action'] = inter_comic_rack_action
-            return interaction_dict
+            return Interaction('Open ComicRack', inter_comic_rack_action, remote_cls)
 
-        elif comics_detection.has_yac_reader_library(remote_cls):
-            interaction_dict['Name'] = 'Open YACReaderLibrary'
-            interaction_dict['Action'] = inter_yac_reader_action
-            return interaction_dict
+        if comics_detection.has_yac_reader_library(remote_cls):
+            return Interaction('Open YACReaderLibrary', inter_yac_reader_action, remote_cls)
 
-    interaction_dict['Name'] = 'N/A'
-    interaction_dict['Action'] = None
-    return interaction_dict
+    return Interaction('N/A', None)
 
 
 def inter_comic_rack_action(remote_cls):
@@ -71,109 +60,84 @@ def inter_yac_reader_action(remote_cls):
 
 
 def inter_calibre_manage(remote_cls):
-    interaction_dict = {}
-
     if isinstance(remote_cls, LocalFolder) and calibre_detection.has_library(remote_cls):
-        interaction_dict['Name'] = 'Manage Calibre'
-    else:
-        interaction_dict['Name'] = 'N/A'
+        return Interaction('Manage Calibre', inter_calibre_manage_action, remote_cls)
 
-    interaction_dict['Action'] = inter_calibre_manage_action
-    return interaction_dict
+    return Interaction('N/A', None)
 
 
 def inter_calibre_manage_action(remote_cls):
-    if isinstance(remote_cls, LocalFolder) and calibre_detection.has_library(remote_cls):
-        manage_calibre_cls = uiManageCalibre.ManageCalibre(remote_cls)
-        manage_calibre_cls.display_ui()
-    else:
-        print('NOT HAVE CALIBRE LIBRARIES')
+    if not isinstance(remote_cls, LocalFolder) or not calibre_detection.has_library(remote_cls):
+        return False
+
+    manage_calibre_cls = uiManageCalibre.ManageCalibre(remote_cls)
+    manage_calibre_cls.display_ui()
 
 
 def inter_rclone_push_pull(remote_cls):
-    interaction_dict = {}
-
     if isinstance(remote_cls, LocalFolder):
-        interaction_dict['Name'] = 'PUSH'
+        return Interaction('PUSH', inter_rclone_push_pull_action, remote_cls)
 
-    elif isinstance(remote_cls, RemoteFolder):
-        interaction_dict['Name'] = 'PULL'
+    if isinstance(remote_cls, RemoteFolder):
+        return Interaction('PULL', inter_rclone_push_pull_action, remote_cls)
 
-    else:
-        interaction_dict['Name'] = 'N/A'
-
-    interaction_dict['Action'] = inter_rclone_push_pull_action
-    return interaction_dict
+    return Interaction('N/A', None)
 
 
 def inter_rclone_push_pull_action(remote_cls):
     if isinstance(remote_cls, LocalFolder):
         local_push_cls = uiLocalPush.LocalPushUI(remote_cls)
         local_push_cls.display_ui()
+        return
 
-    elif isinstance(remote_cls, RemoteFolder):
+    if isinstance(remote_cls, RemoteFolder):
         return rclone_actions.pull_from_cloud(remote_cls)
 
-    else:
-        print('Folder type invalid. Not proceeding in case this would screw up something big.')
-        return False
+    return False
 
 
 def inter_manage_pms(remote_cls):
-    interaction_dict = {}
-
     remote_names = rclone_configuration.get_rclone_conf_remote_credentials_dict().keys()
 
     if plex_detection.has_pms_data_remote(remote_cls, remote_names):
-        interaction_dict['Name'] = 'Manage PMS'
-    else:
-        interaction_dict['Name'] = 'N/A'
+        return Interaction('Manage PMS', inter_manage_pms_action, remote_cls)
 
-    interaction_dict['Action'] = inter_manage_pms_action
-    return interaction_dict
+    return Interaction('N/A', None)
 
 
 def inter_manage_pms_action(remote_cls):
     remote_names = rclone_configuration.get_rclone_conf_remote_credentials_dict().keys()
 
-    if plex_detection.has_pms_data_remote(remote_cls, remote_names):
-        manage_pms_cls = uiManagePMS.ManagePMS(remote_cls)
-        manage_pms_cls.display_ui()
-    else:
-        print('NOPE')
+    if not plex_detection.has_pms_data_remote(remote_cls, remote_names):
+        return False
+
+    manage_pms_cls = uiManagePMS.ManagePMS(remote_cls)
+    manage_pms_cls.display_ui()
 
 
-def interaction_06(remote_cls):
-    interaction_dict = {}
-
+def inter_youtube_downloader(remote_cls):
     if isinstance(remote_cls, LocalFolder) and youtube_downloader_detection.has_config(remote_cls):
-        interaction_dict['Name'] = 'Youtube DL'
-    else:
-        interaction_dict['Name'] = 'N/A'
+        return Interaction('Youtube DL', inter_youtube_downloader_action, remote_cls)
 
-    interaction_dict['Action'] = interaction_06_action
-    return interaction_dict
+    return Interaction('N/A', None)
 
 
-def interaction_06_action(remote_cls):
-    if isinstance(remote_cls, LocalFolder) and youtube_downloader_detection.has_config(remote_cls):
-        youtube_dl_cls = uiYoutubeDL.YoutubeDLUI(remote_cls)
-        youtube_dl_cls.display_ui()
+def inter_youtube_downloader_action(remote_cls):
+    if not isinstance(remote_cls, LocalFolder) or not youtube_downloader_detection.has_config(remote_cls):
+        return False
+
+    youtube_dl_cls = uiYoutubeDL.YoutubeDLUI(remote_cls)
+    youtube_dl_cls.display_ui()
 
 
-def interaction_07(remote_cls):
-    interaction_dict = {}
-
+def inter_perforce(remote_cls):
     if get_os() == OS.LINUX and isinstance(remote_cls, LocalFolder) and perforce_detection.has_p4d_server(remote_cls):
-        interaction_dict['Name'] = 'Launch P4D'
-    else:
-        interaction_dict['Name'] = 'N/A'
+        return Interaction('Launch P4D', inter_perforce_action, remote_cls)
 
-    interaction_dict['Action'] = interaction_07_action
-    return interaction_dict
+    return Interaction('N/A', None)
 
 
-def interaction_07_action(remote_cls):
+def inter_perforce_action(remote_cls):
     if not isinstance(remote_cls, LocalFolder):
         return False
 
@@ -185,8 +149,8 @@ interaction_fn_lst = [
     inter_comic_rack_yac_reader,
     inter_calibre_manage,
     inter_manage_pms,
-    interaction_06,
-    interaction_07,
+    inter_youtube_downloader,
+    inter_perforce,
     inter_rclone_push_pull,
 ]
 
@@ -201,7 +165,7 @@ def get_remote_cls_lst_interactions(remote_cls_lst):
 
         remote_amt += 1
 
-        for interaction in interaction_fn_lst:
-            interaction_complete_lst.append([interaction, remote_cls])
+        for interaction_fn in interaction_fn_lst:
+            interaction_complete_lst.append(interaction_fn(remote_cls))
 
     return interaction_complete_lst, remote_amt
