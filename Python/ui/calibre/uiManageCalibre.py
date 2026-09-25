@@ -3,7 +3,7 @@ from typing import List
 from commonUtils.ui import pyside
 
 from features.calibre import actions as calibre_actions
-from logisticsUtils.calibreUtils import CalibreLibrary
+from features.calibre.library import CalibreLibrary
 from models.local_folder import LocalFolder
 
 
