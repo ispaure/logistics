@@ -2,7 +2,7 @@
 UI contributions exposed by the Logistics rclone feature.
 """
 
-from features.contributions import FeatureContributions, FolderFeatureContribution, UIAction
+from features.contributions import FeatureContributions, FolderFeatureContribution, PageContribution, UIAction
 from features.rclone import actions
 from models.folder_entry import FolderEntry
 
@@ -50,6 +50,13 @@ def get_contributions() -> FeatureContributions:
                 name='rclone',
                 is_available=_is_available,
                 get_actions=_get_actions,
+                order=10
+            )
+        ],
+        pages=[
+            PageContribution(
+                name='rclone',
+                page_id='rclone',
                 order=10
             )
         ]
