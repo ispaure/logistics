@@ -3,6 +3,7 @@ User-facing FUSE actions for rclone remotes.
 """
 
 import shlex
+from pathlib import Path
 
 from commonUtils import ui
 from commonUtils.debugUtils import Severity, log
@@ -34,7 +35,11 @@ def launch_installer() -> bool:
         )
         return False
 
-    log(Severity.INFO, 'FUSE', f'Launching {dependency_name} installer: "{installer_path}"')
+    log(
+        Severity.INFO,
+        'FUSE',
+        f'Launching {dependency_name} installer: "{installer_path}"'
+    )
 
     match get_os():
         case OS.MAC:
@@ -48,20 +53,29 @@ def launch_installer() -> bool:
     return True
 
 
-def mount_and_open_remote(remote_name: str) -> bool:
+def mount_and_open_remote(
+    remote_name: str,
+    config_path: str | Path
+) -> bool:
     """Mount one rclone remote on demand and open its mounted directory."""
 
     if not detection.is_installed():
         launch_installer()
         return False
 
-    mount_path = mounts.ensure_remote_mounted(remote_name, attr_timeout=2, wait_timeout=10)
+    mount_path = mounts.ensure_remote_mounted(
+        remote_name,
+        config_path,
+        attr_timeout=2,
+        wait_timeout=10
+    )
 
     if mount_path is None:
         ui.display_msg_box_ok(
             'Remote Mount Failed',
             f'Could not mount rclone remote "{remote_name}".\n\n'
-            f'Expected mount location:\n{mounts.get_remote_mount_path(remote_name)}'
+            f'Expected mount location:\n'
+            f'{mounts.get_remote_mount_path(remote_name)}'
         )
         return False
 

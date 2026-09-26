@@ -2,6 +2,8 @@
 UI contributions exposed by the Logistics Plex feature.
 """
 
+from pathlib import Path
+
 from commonUtils.osUtils import OS, get_os
 
 from features.contributions import (
@@ -25,7 +27,11 @@ def _has_manage_pms(entry: FolderEntry) -> bool:
     if get_os() not in (OS.WIN, OS.MAC):
         return False
 
-    remote_names = rclone_configuration.get_rclone_remote_names()
+    if entry.remote_source != 'rclone' or entry.remote_context is None:
+        return False
+
+    config_path = Path(entry.remote_context)
+    remote_names = rclone_configuration.get_rclone_remote_names(config_path)
     return detection.has_pms_data_remote(entry.local, remote_names)
 
 
@@ -39,7 +45,7 @@ def _get_folder_actions(entry: FolderEntry) -> list[UIAction]:
         UIAction(
             name='Manage PMS...',
             workflow_id='plex_manage',
-            workflow_data=entry.local,
+            workflow_data=entry,
             description='Back up or restore Plex Media Server data using the matching -PMSDATA remote.'
         )
     ]

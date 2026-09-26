@@ -8,36 +8,47 @@ from commonUtils import fileUtils
 from commonUtils.fileTypes import txtType
 
 
+def get_rclone_config_dir() -> Path:
+    """Return the current user's rclone configuration directory."""
+
+    return Path(fileUtils.get_user_home_dir(), '.config', 'rclone')
+
+
+def ensure_rclone_config_dir() -> Path:
+    """Ensure the rclone configuration directory exists and return it."""
+
+    config_dir = get_rclone_config_dir()
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir
+
+
 def get_rclone_conf_path() -> Path:
-    """Return the current user's rclone configuration file path."""
+    """Return the legacy/default rclone.conf path."""
 
-    return Path(fileUtils.get_user_home_dir(), '.config', 'rclone', 'rclone.conf')
-
-
-def ensure_rclone_conf() -> Path:
-    """Ensure the current user's rclone configuration file exists and return its path."""
-
-    rclone_conf_path = get_rclone_conf_path()
-    rclone_conf_path.parent.mkdir(parents=True, exist_ok=True)
-    rclone_conf_path.touch(exist_ok=True)
-
-    return rclone_conf_path
+    return get_rclone_config_dir() / 'rclone.conf'
 
 
-def get_rclone_remote_names() -> list[str]:
-    """Return the remote names currently defined in rclone.conf."""
+def get_credential_config_path(credential_zip_path: str | Path) -> Path:
+    """Return the generated .conf path paired with one credential ZIP."""
 
-    rclone_conf_path = get_rclone_conf_path()
+    credential_name = Path(credential_zip_path).stem
+    return get_rclone_config_dir() / f'{credential_name}.conf'
 
-    if not rclone_conf_path.is_file():
+
+def get_rclone_remote_names(config_path: str | Path) -> list[str]:
+    """Return remote names defined in one explicit rclone config file."""
+
+    config_path = Path(config_path)
+
+    if not config_path.is_file():
         return []
 
-    rclone_conf_file = txtType.TXTFile(rclone_conf_path)
-    rclone_conf_file.read_lines()
+    config_file = txtType.TXTFile(config_path)
+    config_file.read_lines()
 
     remote_names = []
 
-    for line in rclone_conf_file.line_lst:
+    for line in config_file.line_lst:
         stripped_line = line.strip()
 
         if stripped_line.startswith('[') and stripped_line.endswith(']'):
@@ -46,12 +57,48 @@ def get_rclone_remote_names() -> list[str]:
     return remote_names
 
 
-def clear_rclone_conf() -> None:
-    """Delete the local rclone.conf file if it exists."""
+def delete_config_file(config_path: str | Path) -> bool:
+    """Delete one rclone .conf file if it exists."""
 
-    rclone_conf_path = get_rclone_conf_path()
+    config_path = Path(config_path)
 
-    if not rclone_conf_path.is_file():
-        return
+    if not config_path.is_file():
+        return False
 
-    fileUtils.File(rclone_conf_path).delete_file()
+    fileUtils.File(config_path).delete_file()
+    return True
+
+
+def get_all_conf_paths() -> list[Path]:
+    """Return all .conf files directly inside the rclone configuration folder."""
+
+    config_dir = get_rclone_config_dir()
+
+    if not config_dir.is_dir():
+        return []
+
+    return sorted(
+        (
+            path
+            for path in config_dir.iterdir()
+            if path.is_file() and path.suffix.casefold() == '.conf'
+        ),
+        key=lambda path: path.name.casefold()
+    )
+
+
+def clear_all_conf_files() -> list[Path]:
+    """
+    Delete every .conf file directly inside the rclone configuration folder.
+
+    This includes the legacy/default rclone.conf and Logistics-generated
+    per-credential config files. Credential ZIP packages are not touched.
+    """
+
+    deleted_paths = []
+
+    for config_path in get_all_conf_paths():
+        if delete_config_file(config_path):
+            deleted_paths.append(config_path)
+
+    return deleted_paths

@@ -3,6 +3,7 @@ Logical folder model for the new Logistics UI.
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 from .local_folder import LocalFolder
 
@@ -12,12 +13,15 @@ class FolderEntry:
     """
     Represents one logical Logistics folder across local and remote storage.
 
-    A folder may exist locally, remotely, or in both places.
+    A folder may exist locally, remotely, or in both places. Remote source
+    context is intentionally opaque to the core model.
     """
 
     name: str
     local: LocalFolder | None = None
     remote_name: str | None = None
+    remote_source: str | None = None
+    remote_context: Any = None
 
     @property
     def has_local(self) -> bool:

@@ -125,7 +125,12 @@ def is_remote_ready(remote_name: str, probe_timeout: float = 2) -> bool:
     )
 
 
-def mount_remote(remote_name: str, mount_path: Path, timeout=None) -> bool:
+def mount_remote(
+    remote_name: str,
+    config_path: str | Path,
+    mount_path: Path,
+    timeout=None
+) -> bool:
     """Start mounting a specific rclone remote at the given path."""
 
     if is_mount_path_mounted(mount_path):
@@ -144,7 +149,7 @@ def mount_remote(remote_name: str, mount_path: Path, timeout=None) -> bool:
         )
         return False
 
-    if remote_name not in configuration.get_rclone_remote_names():
+    if remote_name not in configuration.get_rclone_remote_names(config_path):
         log(Severity.ERROR, 'mount_remote', f'No rclone remote named "{remote_name}" is configured')
         return False
 
@@ -163,6 +168,8 @@ def mount_remote(remote_name: str, mount_path: Path, timeout=None) -> bool:
 
     command_parts = [
         _quote_shell_arg(rclone_path),
+        '--config',
+        _quote_shell_arg(config_path),
         'mount',
     ]
 
@@ -275,7 +282,12 @@ def wait_until_remote_ready(remote_name: str, timeout: float = 15) -> bool:
     return is_remote_ready(remote_name)
 
 
-def ensure_remote_mounted(remote_name: str, attr_timeout=None, wait_timeout: float = 15) -> Path | None:
+def ensure_remote_mounted(
+    remote_name: str,
+    config_path: str | Path,
+    attr_timeout=None,
+    wait_timeout: float = 15
+) -> Path | None:
     """Ensure one rclone remote is mounted, responsive, and ready to open."""
 
     mount_path = get_remote_mount_path(remote_name)
@@ -293,7 +305,12 @@ def ensure_remote_mounted(remote_name: str, attr_timeout=None, wait_timeout: flo
         if not unmount_remote(remote_name):
             return None
 
-    if not mount_remote(remote_name, mount_path, timeout=attr_timeout):
+    if not mount_remote(
+        remote_name,
+        config_path,
+        mount_path,
+        timeout=attr_timeout
+    ):
         return None
 
     if wait_until_remote_ready(remote_name, timeout=wait_timeout):
@@ -312,11 +329,11 @@ def ensure_remote_mounted(remote_name: str, attr_timeout=None, wait_timeout: flo
     return None
 
 
-def get_rclone_remote_mount_paths() -> list[str]:
-    """Return the expected mount paths for supported rclone.conf remotes."""
+def get_rclone_remote_mount_paths(config_path: str | Path) -> list[str]:
+    """Return expected mount paths for supported remotes in one config."""
 
     network_remote_mount_path = config.LogisticsConfig().path_remote_network_mount
-    remote_names = configuration.get_rclone_remote_names()
+    remote_names = configuration.get_rclone_remote_names(config_path)
 
     mount_paths = []
 
@@ -329,14 +346,18 @@ def get_rclone_remote_mount_paths() -> list[str]:
     return mount_paths
 
 
-def mount_all_rclone_conf_remotes(timeout=None, wait_until_mounted=False) -> None:
+def mount_all_rclone_conf_remotes(
+    config_path: str | Path,
+    timeout=None,
+    wait_until_mounted=False
+) -> None:
     """
-    Mount all supported rclone.conf remotes.
+    Mount all supported remotes from one explicit rclone config.
 
     Retained as an explicit utility. Logistics no longer calls this automatically at startup.
     """
 
-    mount_paths = get_rclone_remote_mount_paths()
+    mount_paths = get_rclone_remote_mount_paths(config_path)
 
     if not mount_paths:
         log(Severity.WARNING, 'mount_all_rclone_conf_remotes', 'No rclone remotes found to mount')
@@ -344,7 +365,7 @@ def mount_all_rclone_conf_remotes(timeout=None, wait_until_mounted=False) -> Non
 
     for mount_path_str in mount_paths:
         mount_path = Path(mount_path_str)
-        mount_remote(mount_path.name, mount_path, timeout)
+        mount_remote(mount_path.name, config_path, mount_path, timeout)
 
     if not wait_until_mounted:
         log(Severity.DEBUG, 'mount_all_rclone_conf_remotes', 'Mount commands started, proceeding without waiting')

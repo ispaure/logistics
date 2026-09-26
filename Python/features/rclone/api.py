@@ -1,14 +1,11 @@
 """
 Public API for the Logistics rclone feature.
-
-This module provides the interface Logistics should use when interacting
-with rclone itself.
 """
 
-from . import credentials
+from . import configuration
 
 
 def initialize() -> None:
-    """Initialize rclone configuration/credentials."""
+    """Ensure the private rclone config directory is available."""
 
-    credentials.add_logistics_remote_to_rclone_conf()
+    configuration.ensure_rclone_config_dir()

@@ -62,12 +62,20 @@ def _is_excluded_folder_name(folder_name: str, excluded_suffixes: tuple[str, ...
     return folder_name.casefold().endswith(excluded_suffixes)
 
 
-def get_folder_entries(remote_names: Iterable[str] = ()) -> list[FolderEntry]:
+def get_folder_entries(
+    remote_names: Iterable[str] = (),
+    remote_source: str | None = None,
+    remote_context=None,
+    include_local_only: bool = True
+) -> list[FolderEntry]:
     """
-    Merge Server/Local folders with remote names supplied by feature contributions.
+    Build logical folder entries for Local or one selected remote source.
 
     Local and remote folder names are matched case-sensitively. A remote only
     merges with a local folder when their names are exactly identical.
+
+    When include_local_only is False, local folders without a matching remote
+    are omitted from the result. This is used by source-specific remote views.
 
     Exact names in excluded_remote_names are ignored only on the remote side.
 
@@ -106,13 +114,18 @@ def get_folder_entries(remote_names: Iterable[str] = ()) -> list[FolderEntry]:
 
         remote_names_by_name.setdefault(remote_name, remote_name)
 
-    folder_names = set(local_folders_by_name) | set(remote_names_by_name)
+    if include_local_only:
+        folder_names = set(local_folders_by_name) | set(remote_names_by_name)
+    else:
+        folder_names = set(remote_names_by_name)
 
     return [
         FolderEntry(
             name=folder_name,
             local=local_folders_by_name.get(folder_name),
-            remote_name=remote_names_by_name.get(folder_name)
+            remote_name=remote_names_by_name.get(folder_name),
+            remote_source=remote_source if folder_name in remote_names_by_name else None,
+            remote_context=remote_context if folder_name in remote_names_by_name else None
         )
         for folder_name in sorted(folder_names)
     ]

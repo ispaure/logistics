@@ -151,7 +151,7 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
     log(Severity.INFO, tool_name, 'Successfully executed!')
 
 
-def push_seasons(folder: LocalFolder):
+def push_seasons(folder: LocalFolder, config_path: str | Path):
     from features.rclone import sync as rclone_sync
 
     print('Pushing Seasons')
@@ -183,11 +183,16 @@ def push_seasons(folder: LocalFolder):
         destination = folder.name + ':' + source.relative_to(folder.path).as_posix()
 
         print(f'Pushing {source} to {destination}')
-        rclone_sync.rclone_sync(source, destination, wait_for_output=True)
+        rclone_sync.rclone_sync(
+            source,
+            destination,
+            config_path=config_path,
+            wait_for_output=True
+        )
         print('Push complete!')
 
 
-def push_config(folder: LocalFolder):
+def push_config(folder: LocalFolder, config_path: str | Path):
     from features.rclone import sync as rclone_sync
 
     print('Push Config')
@@ -199,10 +204,14 @@ def push_config(folder: LocalFolder):
         log(Severity.ERROR, 'push_config', f'No Youtube Download configuration found for "{folder.name}"')
         return False
 
-    rclone_sync.rclone_sync(youtube_dl_cfg_path, folder.name + ':' + youtube_dl_cfg_sub_path)
+    rclone_sync.rclone_sync(
+        youtube_dl_cfg_path,
+        folder.name + ':' + youtube_dl_cfg_sub_path,
+        config_path=config_path
+    )
 
 
-def pull_config(folder: LocalFolder):
+def pull_config(folder: LocalFolder, config_path: str | Path):
     from features.rclone import sync as rclone_sync
 
     print('Pull Config')
@@ -214,4 +223,8 @@ def pull_config(folder: LocalFolder):
         log(Severity.ERROR, 'pull_config', f'No Youtube Download configuration found for "{folder.name}"')
         return False
 
-    rclone_sync.rclone_sync(folder.name + ':' + youtube_dl_cfg_sub_path, youtube_dl_cfg_path)
+    rclone_sync.rclone_sync(
+        folder.name + ':' + youtube_dl_cfg_sub_path,
+        youtube_dl_cfg_path,
+        config_path=config_path
+    )

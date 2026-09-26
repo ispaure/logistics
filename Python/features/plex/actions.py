@@ -68,7 +68,7 @@ def clear_local_pmsdata(remote_cls):
 # ----------------------------------------------------------------------------------------------------------------------
 # SYNC ACTIONS
 
-def pull_pms(remote_cls):
+def pull_pms(remote_cls, config_path: str | Path):
     """Pull the remote -PMSDATA folder to its local location."""
 
     remote_cls_pmsdata = get_remote_cls_pmsdata(remote_cls)
@@ -76,10 +76,14 @@ def pull_pms(remote_cls):
     source_path = remote_cls_pmsdata.name + ':'
     destination_path = Path(config.LogisticsConfig().path_remote_local, remote_cls_pmsdata.name)
 
-    rclone_sync.rclone_sync(source_path, destination_path)
+    rclone_sync.rclone_sync(
+        source_path,
+        destination_path,
+        config_path=config_path
+    )
 
 
-def push_pms(remote_cls):
+def push_pms(remote_cls, config_path: str | Path):
     """Push the local -PMSDATA folder to its remote location."""
 
     local_cls_pmsdata = get_local_cls_pmsdata(remote_cls)
@@ -87,7 +91,11 @@ def push_pms(remote_cls):
     source_path = local_cls_pmsdata.path
     destination_path = local_cls_pmsdata.name + ':'
 
-    rclone_sync.rclone_sync(source_path, destination_path)
+    rclone_sync.rclone_sync(
+        source_path,
+        destination_path,
+        config_path=config_path
+    )
 
 
 # ----------------------------------------------------------------------------------------------------------------------
