@@ -8,6 +8,7 @@ from features.contributions import (
     PageContribution,
     RemoteFolderSourceContribution,
     UIAction,
+    WorkflowContribution,
 )
 from features.rclone import actions, configuration
 from models.folder_entry import FolderEntry
@@ -47,6 +48,18 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
     return ui_actions
 
 
+def _open_push_workflow(data=None, parent=None):
+    from features.rclone.ui.push_dialog import RclonePushDialog
+
+    dialog = RclonePushDialog(data, parent=parent)
+    return dialog.exec()
+
+
+def _create_page(parent=None):
+    from features.rclone.ui.page import RclonePage
+
+    return RclonePage(parent=parent)
+
 
 def get_contributions() -> FeatureContributions:
     """Return UI contributions provided by rclone."""
@@ -67,10 +80,17 @@ def get_contributions() -> FeatureContributions:
                 order=10
             )
         ],
+        workflows=[
+            WorkflowContribution(
+                workflow_id='rclone_push',
+                handler=_open_push_workflow
+            )
+        ],
         pages=[
             PageContribution(
                 name='rclone',
                 page_id='rclone',
+                create_page=_create_page,
                 order=10
             )
         ]

@@ -1,5 +1,5 @@
 """
-Links page for the replacement Logistics UI.
+Links page for the Logistics feature UI.
 """
 
 from commonUtils.ui import pyside

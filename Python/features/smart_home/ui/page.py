@@ -1,5 +1,5 @@
 """
-Smart Home page for the replacement Logistics UI.
+Smart Home page for the Logistics feature UI.
 """
 
 from commonUtils.ui import pyside

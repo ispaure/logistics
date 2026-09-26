@@ -5,6 +5,7 @@ Comics feature integration for Logistics.
 
 FEATURE_NAME = "comics"
 FEATURE_LABEL = "Comics"
+FEATURE_DEPENDENCIES = ("images",)
 
 
 def get_contributions():

@@ -4,7 +4,13 @@ UI contributions exposed by the Logistics Plex feature.
 
 from commonUtils.osUtils import OS, get_os
 
-from features.contributions import DebugActionContribution, FeatureContributions, FolderFeatureContribution, UIAction
+from features.contributions import (
+    DebugActionContribution,
+    FeatureContributions,
+    FolderFeatureContribution,
+    UIAction,
+    WorkflowContribution,
+)
 from features.plex import database, detection
 from features.rclone import configuration as rclone_configuration
 from models.folder_entry import FolderEntry
@@ -38,6 +44,12 @@ def _get_folder_actions(entry: FolderEntry) -> list[UIAction]:
         )
     ]
 
+def _open_manage_pms(data=None, parent=None):
+    from features.plex.ui.manage_pms_dialog import PlexManagePMSDialog
+
+    dialog = PlexManagePMSDialog(data, parent=parent)
+    return dialog.exec()
+
 
 def get_contributions() -> FeatureContributions:
     """Return UI contributions provided by Plex."""
@@ -49,6 +61,12 @@ def get_contributions() -> FeatureContributions:
                 is_available=_has_manage_pms,
                 get_actions=_get_folder_actions,
                 order=40
+            )
+        ],
+        workflows=[
+            WorkflowContribution(
+                workflow_id='plex_manage',
+                handler=_open_manage_pms
             )
         ],
         debug_actions=[

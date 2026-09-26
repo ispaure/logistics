@@ -1,5 +1,5 @@
 """
-Calibre library management workflow for the replacement Logistics UI.
+Calibre library management workflow for the Logistics feature UI.
 """
 
 from commonUtils import ui

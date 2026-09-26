@@ -4,7 +4,6 @@ Main window for Logistics.
 
 from commonUtils.ui import pyside
 from features import registry
-from ui_new import page_registry
 from ui_new.pages.debug import DebugPage
 from ui_new.pages.folders import FoldersPage
 from ui_new.pages.servers import ServersPage
@@ -65,10 +64,7 @@ class MainWindow(pyside.Window):
                 (
                     contribution.order,
                     contribution.name,
-                    page_registry.create_page(
-                        contribution.page_id,
-                        parent=self.dlg
-                    )
+                    contribution.create_page(self.dlg)
                 )
             )
 

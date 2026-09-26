@@ -1,5 +1,5 @@
 """
-Plex Media Server backup and restore workflow for the replacement Logistics UI.
+Plex Media Server backup and restore workflow for the Logistics feature UI.
 """
 
 from commonUtils import ui
