@@ -4,6 +4,7 @@ Main window for the replacement Logistics UI.
 
 from commonUtils.ui import pyside
 from features import registry
+from ui_new.pages.debug import DebugPage
 from ui_new.pages.folders import FoldersPage
 from ui_new.pages.placeholder import PlaceholderPage
 from ui_new.pages.servers import ServersPage
@@ -21,6 +22,7 @@ class MainWindow(pyside.Window):
         self.tabs = pyside.QTabWidget()
         self.folders_page = None
         self.servers_page = None
+        self.debug_page = None
 
         self._build_layout()
         self._populate_tabs()
@@ -77,13 +79,8 @@ class MainWindow(pyside.Window):
                 links_page.name
             )
 
-        self.tabs.addTab(
-            PlaceholderPage(
-                'Debug',
-                'Debug actions contributed by enabled features will be generated here.'
-            ),
-            'Debug'
-        )
+        self.debug_page = DebugPage()
+        self.tabs.addTab(self.debug_page, 'Debug')
 
     def _tab_changed(self, _index):
         """Refresh dynamic pages when they become active."""
@@ -95,3 +92,6 @@ class MainWindow(pyside.Window):
 
         if current_widget is self.servers_page:
             self.servers_page.refresh()
+
+        if current_widget is self.debug_page:
+            self.debug_page.refresh()

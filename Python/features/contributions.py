@@ -86,13 +86,29 @@ class ServerProviderContribution:
 class DebugActionContribution:
     """
     An action contributed to the dynamically generated Debug UI.
+
+    Like UIAction, a Debug action may either execute directly or request a
+    named frontend workflow.
     """
 
     name: str
-    callback: Callable[[], Any]
+    callback: Callable[[], Any] | None = None
     description: str | None = None
     destructive: bool = False
+    enabled: bool = True
+    workflow_id: str | None = None
+    workflow_data: Any = None
     order: int = 0
+
+    def __post_init__(self):
+        has_callback = self.callback is not None
+        has_workflow = self.workflow_id is not None
+
+        if has_callback == has_workflow:
+            raise ValueError(
+                f'DebugActionContribution "{self.name}" must define exactly one '
+                f'of callback or workflow_id.'
+            )
 
 
 # ----------------------------------------------------------------------------------------------------------------------
