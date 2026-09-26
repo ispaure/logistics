@@ -6,7 +6,6 @@ from commonUtils.ui import pyside
 from features import registry
 from ui_new.pages.debug import DebugPage
 from ui_new.pages.folders import FoldersPage
-from ui_new.pages.placeholder import PlaceholderPage
 from ui_new.pages.servers import ServersPage
 
 
@@ -59,25 +58,16 @@ class MainWindow(pyside.Window):
         smart_home_page = contributed_pages.get('smart_home')
 
         if smart_home_page is not None:
-            self.tabs.addTab(
-                PlaceholderPage(
-                    smart_home_page.name,
-                    'Smart Home controls will be migrated here.'
-                ),
-                smart_home_page.name
-            )
+            from ui_new.pages.smart_home import SmartHomePage
+
+            self.tabs.addTab(SmartHomePage(), smart_home_page.name)
 
         links_page = contributed_pages.get('links')
 
         if links_page is not None:
-            self.tabs.addTab(
-                PlaceholderPage(
-                    links_page.name,
-                    'Links will be organized here into Self-Improvement, '
-                    'Quick Links, and Entertainment.'
-                ),
-                links_page.name
-            )
+            from ui_new.pages.links import LinksPage
+
+            self.tabs.addTab(LinksPage(), links_page.name)
 
         self.debug_page = DebugPage()
         self.tabs.addTab(self.debug_page, 'Debug')
