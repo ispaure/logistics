@@ -1,5 +1,6 @@
 from pathlib import Path
 from commonUtils import configUtils, fileUtils, marcUtils
+from commonUtils.debugUtils import Severity, log
 from commonUtils.osUtils import OS, get_os
 
 
@@ -41,18 +42,44 @@ class LogisticsConfig:
 
         # External Logistics resources
         marc_dropbox_path = marcUtils.get_marc_dropbox_root()
-        local_software_path = self.path_logistics / 'Software'
-        local_credentials_path = self.path_logistics / 'RemoteCredentials'
 
-        if local_software_path.is_dir() and local_credentials_path.is_dir():
-            self.path_logistics_software: Path = local_software_path
-            self.path_logistics_remote_cred: Path = local_credentials_path
-        elif marc_dropbox_path is not None and Path(marc_dropbox_path).is_dir():
-            self.path_logistics_software: Path = Path(marc_dropbox_path, 'Software', 'GIT', 'logistics', 'Software')
-            self.path_logistics_remote_cred: Path = Path(marc_dropbox_path, 'Software', 'GIT', 'logistics', 'RemoteCredentials')
+        dropbox_software_path = None
+        dropbox_credentials_path = None
+
+        if marc_dropbox_path is not None:
+            dropbox_logistics_path = Path(marc_dropbox_path, 'Software', 'GIT', 'logistics')
+            dropbox_software_path = dropbox_logistics_path / 'Software'
+            dropbox_credentials_path = dropbox_logistics_path / 'RemoteCredentials'
+
+        project_software_path = self.path_logistics / 'Software'
+        project_credentials_path = self.path_logistics / 'RemoteCredentials'
+
+        if (
+            dropbox_software_path is not None
+            and dropbox_credentials_path is not None
+            and dropbox_software_path.is_dir()
+            and dropbox_credentials_path.is_dir()
+        ):
+            self.path_logistics_software: Path = dropbox_software_path
+            self.path_logistics_remote_cred: Path = dropbox_credentials_path
+        elif project_software_path.is_dir() and project_credentials_path.is_dir():
+            self.path_logistics_software: Path = project_software_path
+            self.path_logistics_remote_cred: Path = project_credentials_path
         else:
-            self.path_logistics_software: Path = self.server_path / 'Logistics' / 'Software'
-            self.path_logistics_remote_cred: Path = self.server_path / 'Logistics' / 'RemoteCredentials'
+            dropbox_location = (
+                str(dropbox_software_path.parent)
+                if dropbox_software_path is not None
+                else 'Unavailable'
+            )
+
+            log(
+                Severity.CRITICAL,
+                'Logistics Resources',
+                'Could not resolve required Software and RemoteCredentials folders.\n'
+                f'Dropbox location: {dropbox_location}\n'
+                f'Project location: {self.path_logistics}',
+                popup=True
+            )
 
         # Platform-specific software directories
         self.path_logistics_software_win: Path = self.path_logistics_software / 'Windows'
