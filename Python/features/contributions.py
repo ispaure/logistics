@@ -65,7 +65,9 @@ class ServerProviderContribution:
     """
     A provider of server-like entities for the Servers UI.
 
-    Server objects are intentionally opaque to the shared UI layer.
+    Server objects are intentionally opaque to the shared UI layer. Providers
+    supply the display name, optional group, optional details, and actions for
+    each server they return.
     """
 
     name: str
@@ -73,6 +75,7 @@ class ServerProviderContribution:
     get_display_name: Callable[[Any], str]
     get_actions: Callable[[Any], list[UIAction]]
     get_group_name: Callable[[Any], str] | None = None
+    get_details: Callable[[Any], list[tuple[str, str]]] | None = None
     order: int = 0
 
 
