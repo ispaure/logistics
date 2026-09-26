@@ -21,10 +21,10 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
     if entry.local is not None and entry.remote_name is not None:
         ui_actions.append(
             UIAction(
-                name='Push',
-                callback=lambda folder=entry.local: actions.push_to_cloud(folder),
-                description='Sync the local folder to its matching rclone remote.',
-                destructive=True
+                name='Push...',
+                description='Configure and push local data to the matching rclone remote.',
+                workflow_id='rclone_push',
+                workflow_data=entry
             )
         )
 

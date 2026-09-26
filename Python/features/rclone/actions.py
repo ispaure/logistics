@@ -9,7 +9,7 @@ from pathlib import Path
 
 import config
 
-from commonUtils import fileUtils
+from commonUtils import dirUtils
 from commonUtils.debugUtils import Severity, log
 
 from features.rclone import sync as rclone_sync
@@ -47,7 +47,7 @@ def push_to_cloud(folder: LocalFolder, track_renames: bool = False) -> None:
 def push_specific_directory(folder: LocalFolder, directory_path: str, bandwidth_limit: str | None = None) -> bool:
     """Push a specific directory into a Logistics folder's rclone remote."""
 
-    directory = fileUtils.Directory(directory_path)
+    directory = dirUtils.Directory(Path(directory_path))
 
     if not directory.is_dir():
         log(Severity.ERROR, 'Push Individual Folder', 'The path you have given is not a valid directory!', popup=True)
