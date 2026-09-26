@@ -1,5 +1,5 @@
 """
-Feature discovery, loading, initialization, and UI contribution aggregation for Logistics.
+Feature discovery, loading, initialization, and contribution aggregation for Logistics.
 """
 
 import importlib
@@ -13,6 +13,7 @@ from features.contributions import (
     FolderFeatureContribution,
     PageContribution,
     RegisteredContribution,
+    RemoteFolderSourceContribution,
     ServerProviderContribution,
 )
 
@@ -162,6 +163,20 @@ def _collect_contributions(attribute_name: str) -> list[RegisteredContribution[T
             )
 
     return registered
+
+
+def get_remote_folder_sources() -> list[RegisteredContribution[RemoteFolderSourceContribution]]:
+    """Return all remote-folder source contributions in deterministic order."""
+
+    sources = _collect_contributions('remote_folder_sources')
+
+    return sorted(
+        sources,
+        key=lambda registered: (
+            registered.contribution.order,
+            registered.contribution.name.casefold()
+        )
+    )
 
 
 def get_folder_features() -> list[RegisteredContribution[FolderFeatureContribution]]:

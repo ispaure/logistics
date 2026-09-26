@@ -1,8 +1,8 @@
 """
-UI contribution contracts for Logistics features.
+UI and discovery contribution contracts for Logistics features.
 
-Features may contribute to any combination of UI surfaces without depending
-on each other or on the concrete UI implementation.
+Features may contribute to any combination of application surfaces without
+depending on each other or on concrete frontend implementations.
 """
 
 from dataclasses import dataclass, field
@@ -40,6 +40,23 @@ class UIAction:
             raise ValueError(
                 f'UIAction "{self.name}" must define exactly one of callback or workflow_id.'
             )
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# REMOTE FOLDER SOURCES
+
+@dataclass(frozen=True)
+class RemoteFolderSourceContribution:
+    """
+    A provider of configured remote logical folder names.
+
+    The generic folder-entry service receives these names as data and therefore
+    does not need to know which feature or storage backend supplied them.
+    """
+
+    name: str
+    get_remote_names: Callable[[], list[str]]
+    order: int = 0
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -119,8 +136,14 @@ class PageContribution:
     """
     A standalone page contributed to the main Logistics navigation.
 
-    page_id identifies the UI implementation without making the feature import
-    a concrete PySide page or other frontend code.
+    page_id resolves to ``ui_new.pages.<page_id>``. The page class follows the
+    ``<PageId>Page`` naming convention, keeping feature packages independent
+    from concrete PySide page implementations.
+
+    order is shared with core tabs. Current core positions are:
+      - Folders: 0
+      - Servers: 20
+      - Debug: 100
     """
 
     name: str
@@ -134,12 +157,13 @@ class PageContribution:
 @dataclass
 class FeatureContributions:
     """
-    All UI contributions exposed by one feature.
+    Contributions exposed by one feature.
 
     Every contribution type is optional. A feature may contribute to several
-    UI surfaces, one surface, or none at all.
+    application surfaces, one surface, or none at all.
     """
 
+    remote_folder_sources: list[RemoteFolderSourceContribution] = field(default_factory=list)
     folder_features: list[FolderFeatureContribution] = field(default_factory=list)
     server_providers: list[ServerProviderContribution] = field(default_factory=list)
     debug_actions: list[DebugActionContribution] = field(default_factory=list)

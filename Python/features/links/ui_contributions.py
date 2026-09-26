@@ -13,7 +13,7 @@ def get_contributions() -> FeatureContributions:
             PageContribution(
                 name='Links',
                 page_id='links',
-                order=30
+                order=40
             )
         ]
     )

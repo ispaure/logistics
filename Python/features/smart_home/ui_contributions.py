@@ -13,7 +13,7 @@ def get_contributions() -> FeatureContributions:
             PageContribution(
                 name='Smart Home',
                 page_id='smart_home',
-                order=40
+                order=30
             )
         ]
     )

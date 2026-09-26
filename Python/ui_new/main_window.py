@@ -1,12 +1,20 @@
 """
-Main window for the replacement Logistics UI.
+Main window for Logistics.
 """
 
 from commonUtils.ui import pyside
 from features import registry
+from ui_new import page_registry
 from ui_new.pages.debug import DebugPage
 from ui_new.pages.folders import FoldersPage
 from ui_new.pages.servers import ServersPage
+
+
+CORE_TABS = (
+    (0, 'Folders', FoldersPage),
+    (20, 'Servers', ServersPage),
+    (100, 'Debug', DebugPage),
+)
 
 
 class MainWindow(pyside.Window):
@@ -19,9 +27,6 @@ class MainWindow(pyside.Window):
         self.dlg.setMinimumSize(850, 550)
 
         self.tabs = pyside.QTabWidget()
-        self.folders_page = None
-        self.servers_page = None
-        self.debug_page = None
 
         self._build_layout()
         self._populate_tabs()
@@ -37,51 +42,51 @@ class MainWindow(pyside.Window):
         self.tabs.currentChanged.connect(self._tab_changed)
 
     def _populate_tabs(self):
-        contributed_pages = {
-            registered.contribution.page_id: registered.contribution
-            for registered in registry.get_pages()
-        }
+        """Build core and feature-contributed tabs in one ordered list."""
 
-        self.folders_page = FoldersPage()
-        self.tabs.addTab(self.folders_page, 'Folders')
+        tabs = [
+            (order, name, page_type(parent=self.dlg))
+            for order, name, page_type in CORE_TABS
+        ]
 
-        rclone_page = contributed_pages.get('rclone')
+        seen_page_ids = set()
 
-        if rclone_page is not None:
-            from ui_new.pages.rclone import RclonePage
+        for registered in registry.get_pages():
+            contribution = registered.contribution
 
-            self.tabs.addTab(RclonePage(), rclone_page.name)
+            if contribution.page_id in seen_page_ids:
+                raise ValueError(
+                    f'Duplicate contributed page ID: {contribution.page_id}'
+                )
 
-        self.servers_page = ServersPage()
-        self.tabs.addTab(self.servers_page, 'Servers')
+            seen_page_ids.add(contribution.page_id)
 
-        smart_home_page = contributed_pages.get('smart_home')
+            tabs.append(
+                (
+                    contribution.order,
+                    contribution.name,
+                    page_registry.create_page(
+                        contribution.page_id,
+                        parent=self.dlg
+                    )
+                )
+            )
 
-        if smart_home_page is not None:
-            from ui_new.pages.smart_home import SmartHomePage
-
-            self.tabs.addTab(SmartHomePage(), smart_home_page.name)
-
-        links_page = contributed_pages.get('links')
-
-        if links_page is not None:
-            from ui_new.pages.links import LinksPage
-
-            self.tabs.addTab(LinksPage(), links_page.name)
-
-        self.debug_page = DebugPage()
-        self.tabs.addTab(self.debug_page, 'Debug')
+        for _order, name, page in sorted(
+            tabs,
+            key=lambda item: (item[0], item[1].casefold())
+        ):
+            self.tabs.addTab(page, name)
 
     def _tab_changed(self, _index):
-        """Refresh dynamic pages when they become active."""
+        """Refresh the active page when that page exposes a refresh method."""
 
         current_widget = self.tabs.currentWidget()
 
-        if current_widget is self.folders_page:
-            self.folders_page.refresh()
+        if current_widget is None:
+            return
 
-        if current_widget is self.servers_page:
-            self.servers_page.refresh()
+        refresh = getattr(current_widget, 'refresh', None)
 
-        if current_widget is self.debug_page:
-            self.debug_page.refresh()
+        if callable(refresh):
+            refresh()
