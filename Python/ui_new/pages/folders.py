@@ -6,14 +6,19 @@ from commonUtils import ui
 from commonUtils.ui import pyside
 
 from features import registry
-from features.contributions import UIAction
+from features.contributions import RemoteFolderSource, UIAction
 from services.folder_entries import get_folder_entries
 from ui_new import workflows
+
+
+LOCAL_SOURCE_NAME = 'Local'
 
 
 class FoldersPage(pyside.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        self.source_combo = pyside.QComboBox()
 
         self.folder_tree = pyside.QTreeWidget()
         self.folder_tree.setHeaderHidden(True)
@@ -47,7 +52,14 @@ class FoldersPage(pyside.QWidget):
         title_font.setBold(True)
         title_label.setFont(title_font)
 
+        source_label = pyside.QLabel('Source')
+        source_font = source_label.font()
+        source_font.setBold(True)
+        source_label.setFont(source_font)
+
         left_layout.addWidget(title_label)
+        left_layout.addWidget(source_label)
+        left_layout.addWidget(self.source_combo)
         left_layout.addWidget(self.folder_tree)
 
         splitter = pyside.QSplitter(pyside.Qt.Orientation.Horizontal)
@@ -60,17 +72,93 @@ class FoldersPage(pyside.QWidget):
         root_layout.addWidget(splitter)
 
     def _connect_signals(self):
+        self.source_combo.currentIndexChanged.connect(self._source_changed)
         self.folder_tree.currentItemChanged.connect(self._selection_changed)
 
     def refresh(self):
-        """Refresh merged folder discovery while preserving the last real folder selection."""
+        """Refresh available sources and folders while preserving selection where possible."""
 
-        remote_names = []
+        selected_source_name = self.source_combo.currentText()
+
+        if selected_source_name == '':
+            selected_source_name = LOCAL_SOURCE_NAME
+
+        self.source_combo.blockSignals(True)
+        self.source_combo.clear()
+        self.source_combo.addItem(LOCAL_SOURCE_NAME, None)
 
         for registered in registry.get_remote_folder_sources():
-            remote_names.extend(registered.contribution.get_remote_names())
+            contribution = registered.contribution
 
-        entries = get_folder_entries(remote_names)
+            for source in contribution.get_sources():
+                self.source_combo.addItem(
+                    source.name,
+                    (registered.feature_name, source)
+                )
+
+        selected_index = self._find_source_index(selected_source_name)
+        self.source_combo.setCurrentIndex(selected_index)
+        self.source_combo.blockSignals(False)
+
+        self._refresh_folder_tree()
+
+    def _find_source_index(self, source_name: str) -> int:
+        for index in range(self.source_combo.count()):
+            if self.source_combo.itemText(index) == source_name:
+                return index
+
+        return 0
+
+    def _source_changed(self, _index):
+        self._refresh_folder_tree()
+
+    def _get_selected_remote_source(self) -> tuple[str, RemoteFolderSource] | None:
+        selected_data = self.source_combo.currentData(pyside.Qt.ItemDataRole.UserRole)
+
+        if selected_data is None:
+            return None
+
+        return selected_data
+
+    def _get_all_remote_names(self) -> set[str]:
+        """
+        Return exact remote names available from all currently loaded sources.
+
+        The Local view uses this to avoid duplicating folders that can already
+        be browsed through a remote source. Matching intentionally remains
+        case-sensitive.
+        """
+
+        remote_names = set()
+
+        for registered in registry.get_remote_folder_sources():
+            contribution = registered.contribution
+
+            for source in contribution.get_sources():
+                remote_names.update(source.get_remote_names())
+
+        return remote_names
+
+    def _refresh_folder_tree(self):
+        selected_source = self._get_selected_remote_source()
+
+        if selected_source is None:
+            remote_names = self._get_all_remote_names()
+            entries = [
+                entry
+                for entry in get_folder_entries()
+                if entry.name not in remote_names
+            ]
+        else:
+            feature_name, source = selected_source
+            remote_names = source.get_remote_names()
+
+            entries = get_folder_entries(
+                remote_names,
+                remote_source=feature_name,
+                remote_context=source.context,
+                include_local_only=False
+            )
 
         self.folder_tree.clear()
         self._entry_items = {}
@@ -142,7 +230,15 @@ class FoldersPage(pyside.QWidget):
         layout = pyside.QVBoxLayout(widget)
         layout.setContentsMargins(24, 24, 24, 24)
 
-        label = pyside.QLabel('No local or configured remote folders were found.')
+        if self._get_selected_remote_source() is None:
+            message = (
+                'No local-only folders were found. Local folders already '
+                'available through a loaded remote source are hidden here.'
+            )
+        else:
+            message = 'No configured remote folders were found for this source.'
+
+        label = pyside.QLabel(message)
         label.setWordWrap(True)
 
         layout.addWidget(label)
@@ -184,7 +280,13 @@ class FoldersPage(pyside.QWidget):
             if not actions:
                 continue
 
-            layout.addWidget(self._create_action_section(contribution.name, actions, entry.name))
+            layout.addWidget(
+                self._create_action_section(
+                    contribution.name,
+                    actions,
+                    entry.name
+                )
+            )
 
         layout.addStretch()
         self.detail_scroll.setWidget(widget)
@@ -197,10 +299,18 @@ class FoldersPage(pyside.QWidget):
         status_layout = pyside.QGridLayout()
 
         status_layout.addWidget(pyside.QLabel('Local:'), 0, 0)
-        status_layout.addWidget(pyside.QLabel('Available' if entry.has_local else 'Not available'), 0, 1)
+        status_layout.addWidget(
+            pyside.QLabel('Available' if entry.has_local else 'Not available'),
+            0,
+            1
+        )
 
         status_layout.addWidget(pyside.QLabel('Remote:'), 1, 0)
-        status_layout.addWidget(pyside.QLabel('Configured' if entry.has_remote else 'Not configured'), 1, 1)
+        status_layout.addWidget(
+            pyside.QLabel('Configured' if entry.has_remote else 'Not configured'),
+            1,
+            1
+        )
 
         next_row = 2
 
@@ -208,7 +318,9 @@ class FoldersPage(pyside.QWidget):
             status_layout.addWidget(pyside.QLabel('Local path:'), next_row, 0)
 
             path_label = pyside.QLabel(str(entry.local.path))
-            path_label.setTextInteractionFlags(pyside.Qt.TextInteractionFlag.TextSelectableByMouse)
+            path_label.setTextInteractionFlags(
+                pyside.Qt.TextInteractionFlag.TextSelectableByMouse
+            )
             path_label.setWordWrap(True)
             status_layout.addWidget(path_label, next_row, 1)
 
@@ -218,7 +330,9 @@ class FoldersPage(pyside.QWidget):
             status_layout.addWidget(pyside.QLabel('Remote name:'), next_row, 0)
 
             remote_label = pyside.QLabel(entry.remote_name)
-            remote_label.setTextInteractionFlags(pyside.Qt.TextInteractionFlag.TextSelectableByMouse)
+            remote_label.setTextInteractionFlags(
+                pyside.Qt.TextInteractionFlag.TextSelectableByMouse
+            )
             status_layout.addWidget(remote_label, next_row, 1)
 
         status_layout.setColumnStretch(1, 1)
@@ -226,12 +340,19 @@ class FoldersPage(pyside.QWidget):
 
         if entry.local is not None:
             open_button = pyside.QPushButton('Open Folder')
-            open_button.clicked.connect(lambda _checked=False, folder=entry.local: folder.open())
+            open_button.clicked.connect(
+                lambda _checked=False, folder=entry.local: folder.open()
+            )
             layout.addWidget(open_button)
 
         return group
 
-    def _create_action_section(self, title: str, actions: list[UIAction], entry_name: str):
+    def _create_action_section(
+        self,
+        title: str,
+        actions: list[UIAction],
+        entry_name: str
+    ):
         group = pyside.QGroupBox(title)
         layout = pyside.QVBoxLayout(group)
         layout.setSpacing(8)
@@ -244,7 +365,8 @@ class FoldersPage(pyside.QWidget):
                 button.setToolTip(action.description)
 
             button.clicked.connect(
-                lambda _checked=False, action=action, entry_name=entry_name: self._execute_action(action, entry_name)
+                lambda _checked=False, action=action, entry_name=entry_name:
+                self._execute_action(action, entry_name)
             )
 
             layout.addWidget(button)
@@ -263,7 +385,8 @@ class FoldersPage(pyside.QWidget):
         if action.destructive:
             confirmed = ui.display_msg_box_ok_cancel(
                 'Confirm Action',
-                f'Run "{action.name}" for "{entry_name}"?\n\nThis action may modify files.'
+                f'Run "{action.name}" for "{entry_name}"?\n\n'
+                'This action may modify files.'
             )
 
             if not confirmed:

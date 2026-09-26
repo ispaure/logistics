@@ -34,11 +34,24 @@ class UIAction:
 
 
 @dataclass(frozen=True)
-class RemoteFolderSourceContribution:
-    """A provider of configured remote logical-folder names."""
+class RemoteFolderSource:
+    """
+    One selectable remote-folder context exposed to the generic Folders page.
+
+    context is backend-owned opaque data passed through FolderEntry objects.
+    """
 
     name: str
     get_remote_names: Callable[[], list[str]]
+    context: Any = None
+
+
+@dataclass(frozen=True)
+class RemoteFolderSourceContribution:
+    """A provider of selectable remote-folder sources."""
+
+    name: str
+    get_sources: Callable[[], list[RemoteFolderSource]]
     order: int = 0
 
 

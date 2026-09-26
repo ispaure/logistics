@@ -2,6 +2,8 @@
 YouTube Downloader workflow for the Logistics feature UI.
 """
 
+from pathlib import Path
+
 from commonUtils import ui
 from commonUtils.ui import pyside
 
@@ -22,6 +24,11 @@ class YouTubeDownloaderDialog(pyside.QDialog):
 
         self.entry = entry
         self.folder = entry.local
+        self.rclone_config_path = None
+
+        if entry.remote_source == 'rclone' and entry.remote_context is not None:
+            self.rclone_config_path = Path(entry.remote_context)
+
         self.config_path = detection.get_config_path(self.folder)
 
         if self.config_path is None:
@@ -118,7 +125,11 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         pull_config_button = pyside.QPushButton('Pull Remote Config')
 
         rclone_available = registry.is_feature_available('rclone')
-        remote_enabled = self.entry.remote_name is not None and rclone_available
+        remote_enabled = (
+            self.entry.remote_name is not None
+            and self.rclone_config_path is not None
+            and rclone_available
+        )
 
         if not rclone_available:
             explanation = pyside.QLabel(
@@ -168,7 +179,7 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         )
 
         if confirmed:
-            downloader.push_seasons(self.folder)
+            downloader.push_seasons(self.folder, self.rclone_config_path)
 
     def _push_config(self):
         confirmed = ui.display_msg_box_ok_cancel(
@@ -178,7 +189,7 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         )
 
         if confirmed:
-            downloader.push_config(self.folder)
+            downloader.push_config(self.folder, self.rclone_config_path)
 
     def _pull_config(self):
         confirmed = ui.display_msg_box_ok_cancel(
@@ -188,4 +199,4 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         )
 
         if confirmed:
-            downloader.pull_config(self.folder)
+            downloader.pull_config(self.folder, self.rclone_config_path)

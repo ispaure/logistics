@@ -2,22 +2,34 @@
 Plex Media Server backup and restore workflow for the Logistics feature UI.
 """
 
+from pathlib import Path
+
 from commonUtils import ui
 from commonUtils.osUtils import OS, get_os
 from commonUtils.ui import pyside
 
 from features.plex import actions, detection
-from models.local_folder import LocalFolder
+from models.folder_entry import FolderEntry
 
 
 class PlexManagePMSDialog(pyside.QDialog):
-    def __init__(self, folder: LocalFolder, parent=None):
+    def __init__(self, entry: FolderEntry, parent=None):
         super().__init__(parent)
 
-        if not isinstance(folder, LocalFolder):
-            raise TypeError(f'Expected LocalFolder, got {type(folder).__name__}.')
+        if not isinstance(entry, FolderEntry):
+            raise TypeError(
+                f'Expected FolderEntry, got {type(entry).__name__}.'
+            )
 
-        self.folder = folder
+        if entry.local is None:
+            raise ValueError('Plex Manage PMS requires a local folder.')
+
+        if entry.remote_source != 'rclone' or entry.remote_context is None:
+            raise ValueError('Plex Manage PMS requires an rclone config context.')
+
+        self.entry = entry
+        self.folder = entry.local
+        self.config_path = Path(entry.remote_context)
         self.local_pmsdata = actions.get_local_cls_pmsdata(folder)
         self.remote_pmsdata = actions.get_remote_cls_pmsdata(folder)
         self.pms_data_path = detection.get_pms_data_path()
@@ -188,7 +200,7 @@ class PlexManagePMSDialog(pyside.QDialog):
         )
 
         if confirmed:
-            actions.pull_pms(self.folder)
+            actions.pull_pms(self.folder, self.config_path)
 
     def _unpackage_pms(self):
         confirmed = ui.display_msg_box_ok_cancel(
@@ -218,4 +230,4 @@ class PlexManagePMSDialog(pyside.QDialog):
         )
 
         if confirmed:
-            actions.push_pms(self.folder)
+            actions.push_pms(self.folder, self.config_path)

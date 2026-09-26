@@ -10,11 +10,27 @@ from commonUtils.wrappers import cmdShellWrapper
 from . import executable
 
 
-def rclone_sync(source_path: str | Path, destination_path: str | Path, query=False, wait_for_output=False, dry_run=False, track_renames=False, bw_limit=None):
+def rclone_sync(
+    source_path: str | Path,
+    destination_path: str | Path,
+    *,
+    config_path: str | Path,
+    query=False,
+    wait_for_output=False,
+    dry_run=False,
+    track_renames=False,
+    bw_limit=None
+):
+    """Synchronize using one explicit rclone config file."""
+
     source_path_str = str(source_path)
     destination_path_str = str(destination_path)
+    config_path_str = str(config_path)
 
-    baseline = f'"{executable.get_rclone_path()}" sync --progress --copy-links '
+    baseline = (
+        f'"{executable.get_rclone_path()}" '
+        f'--config "{config_path_str}" sync --progress --copy-links '
+    )
 
     if track_renames:
         baseline += '--track-renames '
@@ -43,14 +59,29 @@ def rclone_sync(source_path: str | Path, destination_path: str | Path, query=Fal
                     Path(destination_path).mkdir(parents=True, exist_ok=True)
 
     if query:
-        output_lines = cmdShellWrapper.exec_cmd(baseline, wait_for_output=True)
-        return rclone_sync_process_query(source_path_str, destination_path_str, output_lines)
+        output_lines = cmdShellWrapper.exec_cmd(
+            baseline,
+            wait_for_output=True
+        )
+        return rclone_sync_process_query(
+            source_path_str,
+            destination_path_str,
+            output_lines
+        )
 
-    cmdShellWrapper.exec_cmd(baseline, wait_for_output=wait_for_output, in_new_window=True)
+    cmdShellWrapper.exec_cmd(
+        baseline,
+        wait_for_output=wait_for_output,
+        in_new_window=True
+    )
     return None
 
 
-def rclone_sync_process_query(source_path: str | Path, destination_path: str | Path, output_lines):
+def rclone_sync_process_query(
+    source_path: str | Path,
+    destination_path: str | Path,
+    output_lines
+):
     """
     Process output from an rclone sync dry run and return the files that would be copied.
     """
@@ -67,30 +98,51 @@ def rclone_sync_process_query(source_path: str | Path, destination_path: str | P
         notice_loc = output_line.find('NOTICE: ')
         file_path_begin_loc = notice_loc + len('NOTICE: ')
         file_path_end_loc = output_line[file_path_begin_loc:].find(':')
-        file_path_to_copy = output_line[file_path_begin_loc:file_path_begin_loc + file_path_end_loc]
+        file_path_to_copy = output_line[
+            file_path_begin_loc:file_path_begin_loc + file_path_end_loc
+        ]
 
         match get_os():
             case OS.WIN:
                 if len(source_path_str) > 1 and source_path_str[1] == ':':
-                    file_path_source = str(Path(source_path_str, file_path_to_copy))
+                    file_path_source = str(
+                        Path(source_path_str, file_path_to_copy)
+                    )
                 else:
-                    file_path_source = source_path_str + file_path_to_copy.replace('\\', '/')
+                    file_path_source = (
+                        source_path_str
+                        + file_path_to_copy.replace('\\', '/')
+                    )
 
-                if len(destination_path_str) > 1 and destination_path_str[1] == ':':
-                    file_path_destination = str(Path(destination_path_str, file_path_to_copy))
+                if (
+                    len(destination_path_str) > 1
+                    and destination_path_str[1] == ':'
+                ):
+                    file_path_destination = str(
+                        Path(destination_path_str, file_path_to_copy)
+                    )
                 else:
-                    file_path_destination = destination_path_str + file_path_to_copy.replace('\\', '/')
+                    file_path_destination = (
+                        destination_path_str
+                        + file_path_to_copy.replace('\\', '/')
+                    )
 
             case OS.MAC | OS.LINUX:
                 if source_path_str.startswith('/'):
-                    file_path_source = str(Path(source_path_str, file_path_to_copy))
+                    file_path_source = str(
+                        Path(source_path_str, file_path_to_copy)
+                    )
                 else:
                     file_path_source = source_path_str + file_path_to_copy
 
                 if destination_path_str.startswith('/'):
-                    file_path_destination = str(Path(destination_path_str, file_path_to_copy))
+                    file_path_destination = str(
+                        Path(destination_path_str, file_path_to_copy)
+                    )
                 else:
-                    file_path_destination = destination_path_str + file_path_to_copy
+                    file_path_destination = (
+                        destination_path_str + file_path_to_copy
+                    )
 
         copy_lst.append([file_path_source, file_path_destination])
 

@@ -60,3 +60,16 @@ directly read the same setting.
 A feature depending on another feature does not make the dependency's private
 configuration shared. The owning feature remains responsible for exposing the
 behavior or data needed by dependent features.
+
+
+## Remote folder source context
+
+Remote features may contribute multiple selectable Folders sources through
+`RemoteFolderSourceContribution`.
+
+The generic Folders page always owns a `Local` source. A remote source supplies
+remote names plus opaque backend context. That context is carried through the
+generic `FolderEntry` model and interpreted only by the feature that owns it.
+
+For rclone, the context is the selected credential `.conf` path. The context
+does not become part of logical folder identity or filesystem layout.

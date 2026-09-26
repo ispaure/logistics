@@ -16,9 +16,15 @@ class RclonePushDialog(pyside.QDialog):
         super().__init__(parent)
 
         if entry.local is None or entry.remote_name is None:
-            raise ValueError('rclone Push requires a folder with both local and remote data.')
+            raise ValueError(
+                'rclone Push requires a folder with both local and remote data.'
+            )
+
+        if entry.remote_source != 'rclone' or entry.remote_context is None:
+            raise ValueError('rclone Push requires an explicit rclone config context.')
 
         self.entry = entry
+        self.config_path = Path(entry.remote_context)
 
         self.setWindowTitle(f'Push - {entry.name}')
         self.setMinimumWidth(620)
@@ -212,6 +218,7 @@ class RclonePushDialog(pyside.QDialog):
         if self.regular_radio.isChecked():
             actions.push_to_cloud(
                 self.entry.local,
+                self.config_path,
                 track_renames=self.track_renames.isChecked()
             )
             self.accept()
@@ -230,6 +237,7 @@ class RclonePushDialog(pyside.QDialog):
 
         if actions.push_specific_directory(
             self.entry.local,
+            self.config_path,
             directory_path,
             bandwidth_limit
         ):
