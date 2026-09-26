@@ -1,11 +1,12 @@
 """
-Merged folder discovery for the new Logistics UI.
+Merged logical-folder construction for Logistics.
 """
+
+from collections.abc import Iterable
 
 import config
 
 from commonUtils import configUtils
-from features.rclone import configuration as rclone_configuration
 from models import folder_discovery
 from models.folder_entry import FolderEntry
 
@@ -35,7 +36,7 @@ def _get_configured_name_values(key: str) -> list[str]:
 
 
 def _get_excluded_remote_names() -> set[str]:
-    """Return exact rclone remote names excluded from logical folder discovery."""
+    """Return exact configured remote names excluded from logical folder discovery."""
 
     return {
         name.casefold()
@@ -61,11 +62,14 @@ def _is_excluded_folder_name(folder_name: str, excluded_suffixes: tuple[str, ...
     return folder_name.casefold().endswith(excluded_suffixes)
 
 
-def get_folder_entries() -> list[FolderEntry]:
+def get_folder_entries(remote_names: Iterable[str] = ()) -> list[FolderEntry]:
     """
-    Return logical folder entries merged from Server/Local and rclone.conf.
+    Merge Server/Local folders with remote names supplied by feature contributions.
 
-    Exact names in excluded_remote_names are ignored only on the rclone side.
+    Local and remote folder names are matched case-sensitively. A remote only
+    merges with a local folder when their names are exactly identical.
+
+    Exact names in excluded_remote_names are ignored only on the remote side.
 
     Names ending in excluded_folder_name_suffixes are omitted from the complete
     logical folder list, whether they exist locally, remotely, or in both places.
@@ -73,7 +77,6 @@ def get_folder_entries() -> list[FolderEntry]:
     """
 
     local_folders = folder_discovery.get_local_folders()
-    remote_names = rclone_configuration.get_rclone_remote_names()
 
     excluded_remote_names = _get_excluded_remote_names()
     excluded_folder_suffixes = _get_excluded_folder_name_suffixes()
@@ -84,23 +87,32 @@ def get_folder_entries() -> list[FolderEntry]:
         if not _is_excluded_folder_name(folder.name, excluded_folder_suffixes)
     }
 
-    remote_names_by_casefold = {
-        remote_name.casefold(): remote_name
-        for remote_name in remote_names
-        if remote_name.casefold() not in excluded_remote_names
-        and not _is_excluded_folder_name(remote_name, excluded_folder_suffixes)
-    }
+    remote_names_by_name = {}
 
-    folder_names = sorted(
-        set(local_folders_by_name) | set(remote_names_by_casefold.values()),
-        key=str.casefold
-    )
+    for remote_name in remote_names:
+        if not remote_name:
+            continue
+
+        remote_name = str(remote_name).strip()
+
+        if not remote_name:
+            continue
+
+        if remote_name.casefold() in excluded_remote_names:
+            continue
+
+        if _is_excluded_folder_name(remote_name, excluded_folder_suffixes):
+            continue
+
+        remote_names_by_name.setdefault(remote_name, remote_name)
+
+    folder_names = set(local_folders_by_name) | set(remote_names_by_name)
 
     return [
         FolderEntry(
             name=folder_name,
             local=local_folders_by_name.get(folder_name),
-            remote_name=remote_names_by_casefold.get(folder_name.casefold())
+            remote_name=remote_names_by_name.get(folder_name)
         )
-        for folder_name in folder_names
+        for folder_name in sorted(folder_names)
     ]

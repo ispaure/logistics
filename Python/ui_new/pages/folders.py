@@ -65,7 +65,12 @@ class FoldersPage(pyside.QWidget):
     def refresh(self):
         """Refresh merged folder discovery while preserving the last real folder selection."""
 
-        entries = get_folder_entries()
+        remote_names = []
+
+        for registered in registry.get_remote_folder_sources():
+            remote_names.extend(registered.contribution.get_remote_names())
+
+        entries = get_folder_entries(remote_names)
 
         self.folder_tree.clear()
         self._entry_items = {}
@@ -137,7 +142,7 @@ class FoldersPage(pyside.QWidget):
         layout = pyside.QVBoxLayout(widget)
         layout.setContentsMargins(24, 24, 24, 24)
 
-        label = pyside.QLabel('No folders were found in Server/Local or rclone.conf.')
+        label = pyside.QLabel('No local or configured remote folders were found.')
         label.setWordWrap(True)
 
         layout.addWidget(label)

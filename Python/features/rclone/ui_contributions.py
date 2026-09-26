@@ -2,8 +2,14 @@
 UI contributions exposed by the Logistics rclone feature.
 """
 
-from features.contributions import FeatureContributions, FolderFeatureContribution, PageContribution, UIAction
-from features.rclone import actions, fuse, mounts
+from features.contributions import (
+    FeatureContributions,
+    FolderFeatureContribution,
+    PageContribution,
+    RemoteFolderSourceContribution,
+    UIAction,
+)
+from features.rclone import actions, configuration, fuse, mounts
 from models.folder_entry import FolderEntry
 
 
@@ -98,6 +104,13 @@ def get_contributions() -> FeatureContributions:
     """Return UI contributions provided by rclone."""
 
     return FeatureContributions(
+        remote_folder_sources=[
+            RemoteFolderSourceContribution(
+                name='rclone',
+                get_remote_names=configuration.get_rclone_remote_names,
+                order=10
+            )
+        ],
         folder_features=[
             FolderFeatureContribution(
                 name='rclone',

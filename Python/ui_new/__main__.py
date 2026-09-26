@@ -1,8 +1,7 @@
 """
-Preview launcher for the replacement Logistics UI.
+Alternative module launcher for the Logistics UI.
 
-The normal ``launch.py`` continues to start the legacy UI until migration is
-complete.
+The normal application entry point remains ``launch.py``.
 """
 
 from commonUtils.ui import pyside
