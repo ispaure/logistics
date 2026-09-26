@@ -9,7 +9,7 @@ from features.contributions import (
     RemoteFolderSourceContribution,
     UIAction,
 )
-from features.rclone import actions, configuration, fuse, mounts
+from features.rclone import actions, configuration, fuse
 from models.folder_entry import FolderEntry
 
 
@@ -54,47 +54,26 @@ def _is_fuse_available(entry: FolderEntry) -> bool:
 
 
 def _get_fuse_actions(entry: FolderEntry) -> list[UIAction]:
-    """Return on-demand FUSE mount/open actions for one rclone remote."""
+    """
+    Return the lazy FUSE action for one rclone remote.
+
+    Folder selection must not probe the mount or perform any remote/network work.
+    FUSE availability, existing mount state, mounting, and readiness are resolved
+    only when the user explicitly clicks the action.
+    """
 
     remote_name = entry.remote_name
 
     if remote_name is None:
         return []
 
-    if not fuse.is_installed():
-        dependency_name = fuse.get_dependency_name()
-        installer_path = fuse.get_installer_path()
-
-        if installer_path is not None:
-            return [
-                UIAction(
-                    name=f'Install {dependency_name}...',
-                    callback=fuse.launch_installer,
-                    description=(
-                        f'{dependency_name} is required before rclone can mount remote folders on this platform. '
-                        f'Launch the bundled installer at {installer_path}.'
-                    )
-                )
-            ]
-
-        return [
-            UIAction(
-                name=f'{dependency_name} Required...',
-                callback=fuse.launch_installer,
-                description='FUSE support is required before this rclone remote can be mounted.'
-            )
-        ]
-
-    is_mounted = mounts.is_remote_ready(remote_name)
-
     return [
         UIAction(
-            name='Open Remote Folder' if is_mounted else 'Mount and Open Remote Folder',
+            name='Open Mount Folder',
             callback=lambda remote_name=remote_name: fuse.mount_and_open_remote(remote_name),
             description=(
-                'Open the existing FUSE mount for this rclone remote.'
-                if is_mounted
-                else 'Mount only this rclone remote through FUSE, wait for it to become available, then open it.'
+                'Open this rclone remote mount. If it is not already mounted, '
+                'mount it on demand first.'
             )
         )
     ]

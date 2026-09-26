@@ -14,7 +14,6 @@ from commonUtils.debugUtils import Severity, log
 
 from features.rclone import sync as rclone_sync
 from models.local_folder import LocalFolder
-from models.remote_folder import RemoteFolder
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -27,12 +26,6 @@ def pull_remote(remote_name: str) -> None:
     destination_path = Path(config.LogisticsConfig().path_remote_local, remote_name)
 
     rclone_sync.rclone_sync(source_path, destination_path)
-
-
-def pull_from_cloud(folder: RemoteFolder) -> None:
-    """Pull an rclone remote to its local Logistics folder."""
-
-    pull_remote(folder.name)
 
 
 def push_to_cloud(folder: LocalFolder, track_renames: bool = False) -> None:

@@ -20,7 +20,6 @@ Configured URLs may contain placeholders such as:
 
 - `<goat-pc>`
 - `<yagi-mac>`
-- `<reserved-server>`
 
 The feature replaces these placeholders using values from the `ResolveIP` section of `configFile.ini` before opening the URL.
 
