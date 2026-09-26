@@ -106,9 +106,6 @@ class MinecraftServer:
     def edit_properties(self):
         self.properties.edit_in_default_editor()
 
-    def do_thing_2(self):
-        pass
-
     # ------------------------------------------------------------------------------------------------------------------
     # Can I Action?
 
