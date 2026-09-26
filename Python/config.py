@@ -11,7 +11,10 @@ def get_config_file_path() -> Path:
 
 class LogisticsConfig:
     """
-    Stores the Logistics configuration.
+    Stores shared Logistics configuration.
+
+    Feature-specific settings belong in the owning feature package rather than
+    in the root configFile.ini.
     """
 
     def __init__(self):

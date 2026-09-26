@@ -43,3 +43,20 @@ registry. If a Debug action references a workflow, the generic workflow
 dispatcher resolves the corresponding feature-contributed workflow.
 
 The Debug page never imports feature implementations directly.
+
+
+## Configuration ownership
+
+Feature-specific configuration belongs inside the feature package:
+
+```text
+features/<feature>/config.ini
+```
+
+A value should remain in the root Logistics configuration only when it is
+application-level/core configuration or when multiple independent features
+directly read the same setting.
+
+A feature depending on another feature does not make the dependency's private
+configuration shared. The owning feature remains responsible for exposing the
+behavior or data needed by dependent features.

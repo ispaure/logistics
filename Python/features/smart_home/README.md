@@ -50,3 +50,12 @@ smart_home/
 ```
 
 Additional smart home integrations can be added under this feature as needed.
+
+## Configuration
+
+Smart Home owns its Philips Hue bridge configuration in:
+
+`features/smart_home/config.ini`
+
+The root Logistics configuration does not contain Smart Home-specific network
+addresses.
