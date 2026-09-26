@@ -4,6 +4,7 @@ Main window for the replacement Logistics UI.
 
 from commonUtils.ui import pyside
 from features import registry
+from ui_new.pages.folders import FoldersPage
 from ui_new.pages.placeholder import PlaceholderPage
 
 
@@ -35,15 +36,7 @@ class MainWindow(pyside.Window):
             for registered in registry.get_pages()
         }
 
-        self.tabs.addTab(
-            PlaceholderPage(
-                'Folders',
-                'Combined Local and rclone-backed folders will live here. '
-                'Selecting a folder on the left will show general and '
-                'feature-contributed actions on the right.'
-            ),
-            'Folders'
-        )
+        self.tabs.addTab(FoldersPage(), 'Folders')
 
         self.tabs.addTab(
             PlaceholderPage(
