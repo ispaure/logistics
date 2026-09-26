@@ -15,5 +15,11 @@ def open_workflow(workflow_id: str, data=None, parent=None):
             dialog = RclonePushDialog(data, parent=parent)
             return dialog.exec()
 
+        case 'calibre_manage':
+            from ui_new.dialogs.calibre_manage import CalibreManageDialog
+
+            dialog = CalibreManageDialog(data, parent=parent)
+            return dialog.exec()
+
         case _:
             raise ValueError(f'Unknown UI workflow: {workflow_id}')
