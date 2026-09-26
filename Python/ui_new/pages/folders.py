@@ -15,9 +15,13 @@ class FoldersPage(pyside.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.folder_list = pyside.QListWidget()
-        self.folder_list.setMinimumWidth(220)
-        self.folder_list.setMaximumWidth(320)
+        self.folder_tree = pyside.QTreeWidget()
+        self.folder_tree.setHeaderHidden(True)
+        self.folder_tree.setMinimumWidth(220)
+        self.folder_tree.setMaximumWidth(320)
+
+        self.selected_entry_name = None
+        self._entry_items = {}
 
         self.detail_scroll = pyside.QScrollArea()
         self.detail_scroll.setWidgetResizable(True)
@@ -44,7 +48,7 @@ class FoldersPage(pyside.QWidget):
         title_label.setFont(title_font)
 
         left_layout.addWidget(title_label)
-        left_layout.addWidget(self.folder_list)
+        left_layout.addWidget(self.folder_tree)
 
         splitter = pyside.QSplitter(pyside.Qt.Orientation.Horizontal)
         splitter.addWidget(left_widget)
@@ -56,43 +60,76 @@ class FoldersPage(pyside.QWidget):
         root_layout.addWidget(splitter)
 
     def _connect_signals(self):
-        self.folder_list.currentItemChanged.connect(self._selection_changed)
+        self.folder_tree.currentItemChanged.connect(self._selection_changed)
 
     def refresh(self):
-        """Refresh merged folder discovery while preserving the current selection when possible."""
-
-        current_item = self.folder_list.currentItem()
-        selected_name = current_item.text() if current_item is not None else None
-
-        self.folder_list.clear()
+        """Refresh merged folder discovery while preserving the last real folder selection."""
 
         entries = get_folder_entries()
 
-        for entry in entries:
-            item = pyside.QListWidgetItem(entry.name)
-            item.setData(pyside.Qt.ItemDataRole.UserRole, entry)
-            self.folder_list.addItem(item)
+        self.folder_tree.clear()
+        self._entry_items = {}
 
         if not entries:
+            self.selected_entry_name = None
             self._show_empty_state()
             return
 
-        target_row = 0
+        tree_items = {}
 
-        if selected_name is not None:
-            for row in range(self.folder_list.count()):
-                if self.folder_list.item(row).text() == selected_name:
-                    target_row = row
-                    break
+        for entry in entries:
+            name_parts = entry.name.split('-')
+            parent_item = None
+            path_parts = []
 
-        self.folder_list.setCurrentRow(target_row)
+            for index, name_part in enumerate(name_parts):
+                path_parts.append(name_part)
+                item_path = tuple(path_parts)
+
+                item = tree_items.get(item_path)
+
+                if item is None:
+                    item = pyside.QTreeWidgetItem([name_part])
+                    tree_items[item_path] = item
+
+                    if parent_item is None:
+                        self.folder_tree.addTopLevelItem(item)
+                    else:
+                        parent_item.addChild(item)
+
+                if index == len(name_parts) - 1:
+                    item.setData(0, pyside.Qt.ItemDataRole.UserRole, entry)
+                    self._entry_items[entry.name] = item
+
+                parent_item = item
+
+        for item in tree_items.values():
+            if item.data(0, pyside.Qt.ItemDataRole.UserRole) is None:
+                font = item.font(0)
+                font.setBold(True)
+                item.setFont(0, font)
+
+        self.folder_tree.expandAll()
+
+        selected_item = self._entry_items.get(self.selected_entry_name)
+
+        if selected_item is None:
+            first_entry = entries[0]
+            self.selected_entry_name = first_entry.name
+            selected_item = self._entry_items[first_entry.name]
+
+        self.folder_tree.setCurrentItem(selected_item)
 
     def _selection_changed(self, current, _previous):
         if current is None:
-            self._show_empty_state()
             return
 
-        entry = current.data(pyside.Qt.ItemDataRole.UserRole)
+        entry = current.data(0, pyside.Qt.ItemDataRole.UserRole)
+
+        if entry is None:
+            return
+
+        self.selected_entry_name = entry.name
         self._show_entry(entry)
 
     def _show_empty_state(self):

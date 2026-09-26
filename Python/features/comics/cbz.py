@@ -25,7 +25,6 @@ from datetime import datetime
 from commonUtils.fileTypes import xmlType, txtType, zipType
 
 
-
 # User Defined Settings
 
 # Default directory for conversion (What shows up as default in the UI)
