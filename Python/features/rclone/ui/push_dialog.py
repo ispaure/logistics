@@ -1,5 +1,5 @@
 """
-Modern rclone Push workflow for the replacement Logistics UI.
+Modern rclone Push workflow for the Logistics feature UI.
 """
 
 from pathlib import Path

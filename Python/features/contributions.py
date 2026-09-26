@@ -1,8 +1,8 @@
 """
-UI and discovery contribution contracts for Logistics features.
+Contribution contracts used by Logistics features.
 
-Features may contribute to any combination of application surfaces without
-depending on each other or on concrete frontend implementations.
+Features contribute capabilities and lazy UI factories without the generic
+frontend importing feature-specific implementations.
 """
 
 from dataclasses import dataclass, field
@@ -11,18 +11,9 @@ from typing import Any, Callable, Generic, TypeVar
 from models.folder_entry import FolderEntry
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# SHARED ACTION
-
 @dataclass(frozen=True)
 class UIAction:
-    """
-    A user-facing action exposed by a feature.
-
-    An action either executes a backend callback directly or requests a named
-    UI workflow. UI workflows are resolved by the frontend, keeping features
-    independent from concrete PySide implementations.
-    """
+    """A user-facing action exposed by a feature."""
 
     name: str
     callback: Callable[[], Any] | None = None
@@ -42,31 +33,18 @@ class UIAction:
             )
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# REMOTE FOLDER SOURCES
-
 @dataclass(frozen=True)
 class RemoteFolderSourceContribution:
-    """
-    A provider of configured remote logical folder names.
-
-    The generic folder-entry service receives these names as data and therefore
-    does not need to know which feature or storage backend supplied them.
-    """
+    """A provider of configured remote logical-folder names."""
 
     name: str
     get_remote_names: Callable[[], list[str]]
     order: int = 0
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# FOLDER CONTRIBUTIONS
-
 @dataclass(frozen=True)
 class FolderFeatureContribution:
-    """
-    A feature section that may appear for a logical FolderEntry.
-    """
+    """A feature section that may appear for a logical FolderEntry."""
 
     name: str
     is_available: Callable[[FolderEntry], bool]
@@ -74,18 +52,9 @@ class FolderFeatureContribution:
     order: int = 0
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# SERVER CONTRIBUTIONS
-
 @dataclass(frozen=True)
 class ServerProviderContribution:
-    """
-    A provider of server-like entities for the Servers UI.
-
-    Server objects are intentionally opaque to the shared UI layer. Providers
-    supply the display name, optional group, optional details, and actions for
-    each server they return.
-    """
+    """A provider of server-like entities for the generic Servers UI."""
 
     name: str
     get_servers: Callable[[], list[Any]]
@@ -96,17 +65,9 @@ class ServerProviderContribution:
     order: int = 0
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# DEBUG CONTRIBUTIONS
-
 @dataclass(frozen=True)
 class DebugActionContribution:
-    """
-    An action contributed to the dynamically generated Debug UI.
-
-    Like UIAction, a Debug action may either execute directly or request a
-    named frontend workflow.
-    """
+    """An action contributed to the generic Debug page."""
 
     name: str
     callback: Callable[[], Any] | None = None
@@ -128,45 +89,38 @@ class DebugActionContribution:
             )
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# STANDALONE PAGE CONTRIBUTIONS
+@dataclass(frozen=True)
+class WorkflowContribution:
+    """
+    A lazily opened feature-owned UI workflow.
+
+    The handler receives workflow data and an optional parent widget. Feature UI
+    imports should stay inside the handler.
+    """
+
+    workflow_id: str
+    handler: Callable[[Any, Any], Any]
+
 
 @dataclass(frozen=True)
 class PageContribution:
-    """
-    A standalone page contributed to the main Logistics navigation.
-
-    page_id resolves to ``ui_new.pages.<page_id>``. The page class follows the
-    ``<PageId>Page`` naming convention, keeping feature packages independent
-    from concrete PySide page implementations.
-
-    order is shared with core tabs. Current core positions are:
-      - Folders: 0
-      - Servers: 20
-      - Debug: 100
-    """
+    """A standalone feature-owned page contributed to the main navigation."""
 
     name: str
     page_id: str
+    create_page: Callable[[Any], Any]
     order: int = 0
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# FEATURE CONTRIBUTIONS
-
 @dataclass
 class FeatureContributions:
-    """
-    Contributions exposed by one feature.
-
-    Every contribution type is optional. A feature may contribute to several
-    application surfaces, one surface, or none at all.
-    """
+    """All optional contribution types exposed by one feature."""
 
     remote_folder_sources: list[RemoteFolderSourceContribution] = field(default_factory=list)
     folder_features: list[FolderFeatureContribution] = field(default_factory=list)
     server_providers: list[ServerProviderContribution] = field(default_factory=list)
     debug_actions: list[DebugActionContribution] = field(default_factory=list)
+    workflows: list[WorkflowContribution] = field(default_factory=list)
     pages: list[PageContribution] = field(default_factory=list)
 
 
@@ -175,9 +129,7 @@ T = TypeVar('T')
 
 @dataclass(frozen=True)
 class RegisteredContribution(Generic[T]):
-    """
-    A contribution paired with the feature that supplied it.
-    """
+    """A contribution paired with the feature that supplied it."""
 
     feature_name: str
     feature_label: str

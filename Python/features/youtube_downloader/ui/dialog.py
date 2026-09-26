@@ -1,5 +1,5 @@
 """
-YouTube Downloader workflow for the replacement Logistics UI.
+YouTube Downloader workflow for the Logistics feature UI.
 """
 
 from commonUtils import ui

@@ -1,5 +1,5 @@
 """
-rclone management page for the replacement Logistics UI.
+rclone management page for the Logistics feature UI.
 """
 
 from commonUtils import ui

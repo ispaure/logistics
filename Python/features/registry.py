@@ -16,6 +16,7 @@ from features.contributions import (
     RegisteredContribution,
     RemoteFolderSourceContribution,
     ServerProviderContribution,
+    WorkflowContribution,
 )
 
 
@@ -317,7 +318,37 @@ def get_debug_actions() -> list[RegisteredContribution[DebugActionContribution]]
     return _collect_contributions('debug_actions')
 
 
+def get_workflows() -> list[RegisteredContribution[WorkflowContribution]]:
+    """Return all contributed UI workflows."""
+
+    return _collect_contributions('workflows')
+
+
+def get_workflow(workflow_id: str) -> RegisteredContribution[WorkflowContribution]:
+    """Return one contributed workflow and enforce globally unique workflow IDs."""
+
+    matches = [
+        registered
+        for registered in get_workflows()
+        if registered.contribution.workflow_id == workflow_id
+    ]
+
+    if not matches:
+        raise ValueError(f'Unknown UI workflow: {workflow_id}')
+
+    if len(matches) > 1:
+        feature_names = ', '.join(
+            sorted(registered.feature_name for registered in matches)
+        )
+        raise ValueError(
+            f'Duplicate UI workflow ID "{workflow_id}" contributed by: {feature_names}'
+        )
+
+    return matches[0]
+
+
 def get_pages() -> list[RegisteredContribution[PageContribution]]:
+
     """Return all standalone page contributions, ordered by page order then name."""
 
     pages = _collect_contributions('pages')
