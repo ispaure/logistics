@@ -1,0 +1,57 @@
+"""
+UI contributions exposed by the Logistics Perforce feature.
+"""
+
+from commonUtils.osUtils import OS, get_os
+
+from features.contributions import FeatureContributions, FolderFeatureContribution, UIAction
+from features.perforce import actions, detection
+from models.folder_entry import FolderEntry
+
+
+def _is_available(entry: FolderEntry) -> bool:
+    """Return whether this logical folder contains a configured P4D server."""
+
+    return entry.local is not None and detection.has_p4d_server(entry.local)
+
+
+def _get_actions(entry: FolderEntry) -> list[UIAction]:
+    """Return Perforce actions available for a logical folder entry."""
+
+    if entry.local is None:
+        return []
+
+    folder = entry.local
+
+    p4d_path = detection.get_p4d_path(folder)
+    data_path = detection.get_data_path(folder)
+    port = detection.get_port(folder)
+
+    description = (
+        f'Launch P4D using "{p4d_path}" with data path "{data_path}" '
+        f'on port {port}. Linux only.'
+    )
+
+    return [
+        UIAction(
+            name='Launch P4D',
+            callback=lambda folder=folder: actions.launch_server(folder),
+            description=description,
+            enabled=get_os() == OS.LINUX
+        )
+    ]
+
+
+def get_contributions() -> FeatureContributions:
+    """Return UI contributions provided by Perforce."""
+
+    return FeatureContributions(
+        folder_features=[
+            FolderFeatureContribution(
+                name='Perforce',
+                is_available=_is_available,
+                get_actions=_get_actions,
+                order=30
+            )
+        ]
+    )
