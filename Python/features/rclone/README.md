@@ -19,7 +19,7 @@ The Folders UI exposes a separate `fuse` contribution for configured rclone remo
 - Linux uses the system FUSE support.
 - macOS detects macFUSE and can launch the bundled `Software/macOS/macfuse-5.0.5.dmg` installer when missing.
 - Windows detects WinFsp and can launch the bundled `Software/Windows/winfsp-1.11.22176.msi` installer when missing.
-- Once the dependency is available, `Mount & Open Remote Folder` mounts only the selected remote under
+- Once the dependency is available, `Mount and Open Remote Folder` mounts only the selected remote under
   `Server/NetworkMount/<remote>` and opens it.
 - Already-mounted remotes expose `Open Remote Folder` instead of starting another mount process.
 

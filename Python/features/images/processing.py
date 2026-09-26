@@ -55,8 +55,6 @@ class ImageFile(fileUtils.File):
             log(Severity.CRITICAL, "features.images.processing.ImageFile.__set_width_height",
                 f"Failed to read image dimensions for {self.path}: {e}")
 
-    from PIL import Image, ImageChops
-
     def __set_color_property(self, chroma_std_threshold: float = 2.5, sample_max: int = 512) -> bool:
         """
         Sets and returns self.color:

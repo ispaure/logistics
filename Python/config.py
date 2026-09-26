@@ -1,6 +1,4 @@
 from pathlib import Path
-from typing import Optional
-
 from commonUtils import configUtils, fileUtils, marcUtils
 from commonUtils.osUtils import OS, get_os
 
@@ -72,12 +70,3 @@ class LogisticsConfig:
         self.path_remote_network_mount: Path = self.server_path / remote_network_mount_sub_path
         self.path_remote_local: Path = self.server_path / remote_local_sub_path
 
-        # Minecraft server paths
-        if marc_dropbox_path is not None and Path(marc_dropbox_path).is_dir():
-            self.path_minecraft_servers_java: Optional[Path] = Path(marc_dropbox_path, 'Software', 'Server', 'Minecraft')
-            self.path_minecraft_servers_bedrock: Optional[Path] = Path(
-                marc_dropbox_path, 'Software', 'Server', 'Minecraft (Bedrock)'
-            )
-        else:
-            self.path_minecraft_servers_java = None
-            self.path_minecraft_servers_bedrock = None
