@@ -27,6 +27,12 @@ def open_workflow(workflow_id: str, data=None, parent=None):
             dialog = PlexManagePMSDialog(data, parent=parent)
             return dialog.exec()
 
+        case 'youtube_downloader_manage':
+            from ui_new.dialogs.youtube_downloader import YouTubeDownloaderDialog
+
+            dialog = YouTubeDownloaderDialog(data, parent=parent)
+            return dialog.exec()
+
         case _ if workflow_id.startswith('debug_'):
             from ui_new.dialogs.debug_tools import open_debug_tool
 
