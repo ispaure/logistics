@@ -19,14 +19,27 @@ class UIAction:
     """
     A user-facing action exposed by a feature.
 
-    The callback should already be bound to any model or context it needs.
+    An action either executes a backend callback directly or requests a named
+    UI workflow. UI workflows are resolved by the frontend, keeping features
+    independent from concrete PySide implementations.
     """
 
     name: str
-    callback: Callable[[], Any]
+    callback: Callable[[], Any] | None = None
     description: str | None = None
     destructive: bool = False
     enabled: bool = True
+    workflow_id: str | None = None
+    workflow_data: Any = None
+
+    def __post_init__(self):
+        has_callback = self.callback is not None
+        has_workflow = self.workflow_id is not None
+
+        if has_callback == has_workflow:
+            raise ValueError(
+                f'UIAction "{self.name}" must define exactly one of callback or workflow_id.'
+            )
 
 
 # ----------------------------------------------------------------------------------------------------------------------

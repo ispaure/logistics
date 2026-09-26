@@ -2,11 +2,13 @@
 Folders page for the replacement Logistics UI.
 """
 
+from commonUtils import ui
 from commonUtils.ui import pyside
 
 from features import registry
 from features.contributions import UIAction
 from services.folder_entries import get_folder_entries
+from ui_new import workflows
 
 
 class FoldersPage(pyside.QWidget):
@@ -208,16 +210,21 @@ class FoldersPage(pyside.QWidget):
         return group
 
     def _execute_action(self, action: UIAction, entry_name: str):
+        if action.workflow_id is not None:
+            workflows.open_workflow(
+                action.workflow_id,
+                data=action.workflow_data,
+                parent=self
+            )
+            return
+
         if action.destructive:
-            result = pyside.QMessageBox.question(
-                self,
+            confirmed = ui.display_msg_box_ok_cancel(
                 'Confirm Action',
-                f'Run "{action.name}" for "{entry_name}"?\n\nThis action may modify files.',
-                pyside.QMessageBox.StandardButton.Yes | pyside.QMessageBox.StandardButton.No,
-                pyside.QMessageBox.StandardButton.No
+                f'Run "{action.name}" for "{entry_name}"?\n\nThis action may modify files.'
             )
 
-            if result != pyside.QMessageBox.StandardButton.Yes:
+            if not confirmed:
                 return
 
         action.callback()
