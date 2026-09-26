@@ -1,8 +1,7 @@
-import config
 import phue
 
-from commonUtils import configUtils
 from commonUtils.debugUtils import print_debug_msg
+from features.smart_home import configuration
 
 
 show_verbose = True
@@ -56,7 +55,7 @@ def get_bridge():
 
 
 def get_bridge_address():
-    return configUtils.config_section_map(config.get_config_file_path(), 'ResolveIP', 'hue-hub')
+    return configuration.get_philips_hue_bridge_address()
 
 
 def get_group_id_from_name(name):
