@@ -8,7 +8,6 @@ from commonUtils import configUtils, dirUtils, fileUtils
 from commonUtils.debugUtils import Severity, log
 from commonUtils.osUtils import OS, get_os
 from commonUtils.wrappers import cmdShellWrapper
-from features.rclone import sync as rclone_sync
 from features.youtube_downloader import detection as youtube_downloader_detection
 from models.local_folder import LocalFolder
 
@@ -153,6 +152,8 @@ def download(youtube_dl_cfg_path, config_file_path, playlist_reverse=True, playl
 
 
 def push_seasons(folder: LocalFolder):
+    from features.rclone import sync as rclone_sync
+
     print('Pushing Seasons')
 
     youtube_dl_cfg_path = youtube_downloader_detection.get_config_path(folder)
@@ -187,6 +188,8 @@ def push_seasons(folder: LocalFolder):
 
 
 def push_config(folder: LocalFolder):
+    from features.rclone import sync as rclone_sync
+
     print('Push Config')
 
     youtube_dl_cfg_path = youtube_downloader_detection.get_config_path(folder)
@@ -200,6 +203,8 @@ def push_config(folder: LocalFolder):
 
 
 def pull_config(folder: LocalFolder):
+    from features.rclone import sync as rclone_sync
+
     print('Pull Config')
 
     youtube_dl_cfg_path = youtube_downloader_detection.get_config_path(folder)

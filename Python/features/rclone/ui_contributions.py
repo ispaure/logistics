@@ -9,7 +9,7 @@ from features.contributions import (
     RemoteFolderSourceContribution,
     UIAction,
 )
-from features.rclone import actions, configuration, fuse
+from features.rclone import actions, configuration
 from models.folder_entry import FolderEntry
 
 
@@ -47,37 +47,6 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
     return ui_actions
 
 
-def _is_fuse_available(entry: FolderEntry) -> bool:
-    """Return whether this logical folder has a remote that can be mounted through FUSE."""
-
-    return entry.remote_name is not None
-
-
-def _get_fuse_actions(entry: FolderEntry) -> list[UIAction]:
-    """
-    Return the lazy FUSE action for one rclone remote.
-
-    Folder selection must not probe the mount or perform any remote/network work.
-    FUSE availability, existing mount state, mounting, and readiness are resolved
-    only when the user explicitly clicks the action.
-    """
-
-    remote_name = entry.remote_name
-
-    if remote_name is None:
-        return []
-
-    return [
-        UIAction(
-            name='Open Mount Folder',
-            callback=lambda remote_name=remote_name: fuse.mount_and_open_remote(remote_name),
-            description=(
-                'Open this rclone remote mount. If it is not already mounted, '
-                'mount it on demand first.'
-            )
-        )
-    ]
-
 
 def get_contributions() -> FeatureContributions:
     """Return UI contributions provided by rclone."""
@@ -96,12 +65,6 @@ def get_contributions() -> FeatureContributions:
                 is_available=_is_available,
                 get_actions=_get_actions,
                 order=10
-            ),
-            FolderFeatureContribution(
-                name='fuse',
-                is_available=_is_fuse_available,
-                get_actions=_get_fuse_actions,
-                order=15
             )
         ],
         pages=[

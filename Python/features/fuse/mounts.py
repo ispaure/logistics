@@ -15,7 +15,7 @@ from commonUtils.debugUtils import Severity, log
 from commonUtils.osUtils import OS, get_os
 from commonUtils.wrappers import cmdShellWrapper
 
-from . import configuration, executable
+from features.rclone import configuration, executable
 
 
 READY_MARKER = '__LOGISTICS_RCLONE_MOUNT_READY__'

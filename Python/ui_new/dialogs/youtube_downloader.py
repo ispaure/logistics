@@ -5,6 +5,7 @@ YouTube Downloader workflow for the replacement Logistics UI.
 from commonUtils import ui
 from commonUtils.ui import pyside
 
+from features import registry
 from features.youtube_downloader import detection, downloader
 from models.folder_entry import FolderEntry
 
@@ -116,7 +117,16 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         push_config_button = pyside.QPushButton('Push Local Config')
         pull_config_button = pyside.QPushButton('Pull Remote Config')
 
-        remote_enabled = self.entry.remote_name is not None
+        rclone_available = registry.is_feature_available('rclone')
+        remote_enabled = self.entry.remote_name is not None and rclone_available
+
+        if not rclone_available:
+            explanation = pyside.QLabel(
+                'The optional rclone feature is not installed. '
+                'Downloads remain available, but remote sync actions are disabled.'
+            )
+            explanation.setWordWrap(True)
+            layout.addWidget(explanation)
 
         push_seasons_button.setEnabled(remote_enabled)
         push_config_button.setEnabled(remote_enabled)
