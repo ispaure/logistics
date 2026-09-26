@@ -1,5 +1,14 @@
 """
-YouTube downloader feature integration for Logistics.
+YouTube Downloader feature integration for Logistics.
 """
 
+
 FEATURE_NAME = "youtube_downloader"
+FEATURE_LABEL = "YouTube Downloader"
+
+
+def get_contributions():
+    """Return UI contributions provided by this feature."""
+
+    from features.youtube_downloader.ui_contributions import get_contributions as _get_contributions
+    return _get_contributions()

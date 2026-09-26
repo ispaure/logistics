@@ -10,52 +10,85 @@ from models import folder_discovery
 from models.folder_entry import FolderEntry
 
 
-def _get_excluded_remote_names() -> set[str]:
-    """
-    Return configured rclone remote names that should not appear as logical folders.
+FOLDERS_SECTION = 'Folders'
+EXCLUDED_REMOTE_NAMES_KEY = 'excluded_remote_names'
+EXCLUDED_FOLDER_NAME_SUFFIXES_KEY = 'excluded_folder_name_suffixes'
 
-    Names are stored in configFile.ini as one comma-separated value and compared
-    case-insensitively.
-    """
 
-    excluded_names = configUtils.config_section_map(
+def _get_configured_name_values(key: str) -> list[str]:
+    """Return one comma-separated Folders setting as a cleaned list."""
+
+    value = configUtils.config_section_map(
         config.get_config_file_path(),
-        'Folders',
-        'excluded_remote_names'
+        FOLDERS_SECTION,
+        key
     )
 
-    if not excluded_names:
-        return set()
+    if not value:
+        return []
+
+    return [
+        item.strip()
+        for item in value.split(',')
+        if item.strip()
+    ]
+
+
+def _get_excluded_remote_names() -> set[str]:
+    """Return exact rclone remote names excluded from logical folder discovery."""
 
     return {
-        name.strip().casefold()
-        for name in excluded_names.split(',')
-        if name.strip()
+        name.casefold()
+        for name in _get_configured_name_values(EXCLUDED_REMOTE_NAMES_KEY)
     }
+
+
+def _get_excluded_folder_name_suffixes() -> tuple[str, ...]:
+    """Return case-insensitive suffixes excluded from the complete logical folder list."""
+
+    return tuple(
+        suffix.casefold()
+        for suffix in _get_configured_name_values(EXCLUDED_FOLDER_NAME_SUFFIXES_KEY)
+    )
+
+
+def _is_excluded_folder_name(folder_name: str, excluded_suffixes: tuple[str, ...]) -> bool:
+    """Return whether a logical folder name matches one of the configured suffix exclusions."""
+
+    if not excluded_suffixes:
+        return False
+
+    return folder_name.casefold().endswith(excluded_suffixes)
 
 
 def get_folder_entries() -> list[FolderEntry]:
     """
     Return logical folder entries merged from Server/Local and rclone.conf.
 
-    Existing LocalFolder and RemoteFolder discovery remains unchanged for the
-    legacy UI. Remote names listed in [Folders] excluded_remote_names are omitted
-    from the merged remote set, but a matching local folder can still appear.
+    Exact names in excluded_remote_names are ignored only on the rclone side.
+
+    Names ending in excluded_folder_name_suffixes are omitted from the complete
+    logical folder list, whether they exist locally, remotely, or in both places.
+    This is intended for implementation/storage companions such as -PMSDATA.
     """
 
     local_folders = folder_discovery.get_local_folders()
     remote_names = rclone_configuration.get_rclone_remote_names()
+
     excluded_remote_names = _get_excluded_remote_names()
+    excluded_folder_suffixes = _get_excluded_folder_name_suffixes()
 
     local_folders_by_name = {
         folder.name: folder
         for folder in local_folders
+        if not _is_excluded_folder_name(folder.name, excluded_folder_suffixes)
     }
 
     remote_names_by_casefold = {
         remote_name.casefold(): remote_name
         for remote_name in remote_names
         if remote_name.casefold() not in excluded_remote_names
+        and not _is_excluded_folder_name(remote_name, excluded_folder_suffixes)
     }
 
     folder_names = sorted(
