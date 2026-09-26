@@ -18,6 +18,7 @@ class MainWindow(pyside.Window):
         self.dlg.setMinimumSize(850, 550)
 
         self.tabs = pyside.QTabWidget()
+        self.folders_page = None
 
         self._build_layout()
         self._populate_tabs()
@@ -30,13 +31,23 @@ class MainWindow(pyside.Window):
 
         self.dlg.setCentralWidget(central_widget)
 
+        self.tabs.currentChanged.connect(self._tab_changed)
+
     def _populate_tabs(self):
         contributed_pages = {
             registered.contribution.page_id: registered.contribution
             for registered in registry.get_pages()
         }
 
-        self.tabs.addTab(FoldersPage(), 'Folders')
+        self.folders_page = FoldersPage()
+        self.tabs.addTab(self.folders_page, 'Folders')
+
+        rclone_page = contributed_pages.get('rclone')
+
+        if rclone_page is not None:
+            from ui_new.pages.rclone import RclonePage
+
+            self.tabs.addTab(RclonePage(), rclone_page.name)
 
         self.tabs.addTab(
             PlaceholderPage(
@@ -77,3 +88,16 @@ class MainWindow(pyside.Window):
             ),
             'Debug'
         )
+
+    def _tab_changed(self, _index):
+        """
+        Refresh dynamic pages when they become active.
+
+        rclone configuration changes can alter the logical folder list, so the
+        Folders page is refreshed whenever the user returns to it.
+        """
+
+        current_widget = self.tabs.currentWidget()
+
+        if current_widget is self.folders_page:
+            self.folders_page.refresh()
