@@ -25,23 +25,36 @@ def _get_server_actions(minecraft_server: server.MinecraftServer) -> list[UIActi
         UIAction(
             name='Launch Server',
             callback=minecraft_server.launch_server,
+            description='Launch this Minecraft server.',
             enabled=minecraft_server.is_launchable()
         ),
         UIAction(
-            name='Browse Folder',
+            name='Open Folder',
             callback=minecraft_server.open_dir,
+            description='Open the server directory.',
             enabled=minecraft_server.can_open_dir()
-        ),
-        UIAction(
-            name='Open Wiki',
-            callback=minecraft_server.open_wiki,
-            enabled=minecraft_server.can_open_wiki()
         ),
         UIAction(
             name='server.properties',
             callback=minecraft_server.edit_properties,
+            description='Open server.properties in the default text editor.',
             enabled=minecraft_server.can_edit_props()
         ),
+        UIAction(
+            name='Open Wiki',
+            callback=minecraft_server.open_wiki,
+            description='Open the configured documentation or wiki URL.',
+            enabled=minecraft_server.can_open_wiki()
+        ),
+    ]
+
+
+def _get_server_details(minecraft_server: server.MinecraftServer) -> list[tuple[str, str]]:
+    """Return display details for one Minecraft server."""
+
+    return [
+        ('Type', minecraft_server.type.value),
+        ('Path', str(minecraft_server.path)),
     ]
 
 
@@ -55,6 +68,7 @@ def get_contributions() -> FeatureContributions:
                 get_servers=_get_servers,
                 get_display_name=lambda minecraft_server: minecraft_server.name,
                 get_group_name=lambda minecraft_server: minecraft_server.type.value,
+                get_details=_get_server_details,
                 get_actions=_get_server_actions
             )
         ]

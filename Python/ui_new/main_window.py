@@ -6,6 +6,7 @@ from commonUtils.ui import pyside
 from features import registry
 from ui_new.pages.folders import FoldersPage
 from ui_new.pages.placeholder import PlaceholderPage
+from ui_new.pages.servers import ServersPage
 
 
 class MainWindow(pyside.Window):
@@ -19,6 +20,7 @@ class MainWindow(pyside.Window):
 
         self.tabs = pyside.QTabWidget()
         self.folders_page = None
+        self.servers_page = None
 
         self._build_layout()
         self._populate_tabs()
@@ -49,14 +51,8 @@ class MainWindow(pyside.Window):
 
             self.tabs.addTab(RclonePage(), rclone_page.name)
 
-        self.tabs.addTab(
-            PlaceholderPage(
-                'Servers',
-                'Game-server providers will populate this page. Selecting a '
-                'server on the left will show its available actions on the right.'
-            ),
-            'Servers'
-        )
+        self.servers_page = ServersPage()
+        self.tabs.addTab(self.servers_page, 'Servers')
 
         smart_home_page = contributed_pages.get('smart_home')
 
@@ -90,14 +86,12 @@ class MainWindow(pyside.Window):
         )
 
     def _tab_changed(self, _index):
-        """
-        Refresh dynamic pages when they become active.
-
-        rclone configuration changes can alter the logical folder list, so the
-        Folders page is refreshed whenever the user returns to it.
-        """
+        """Refresh dynamic pages when they become active."""
 
         current_widget = self.tabs.currentWidget()
 
         if current_widget is self.folders_page:
             self.folders_page.refresh()
+
+        if current_widget is self.servers_page:
+            self.servers_page.refresh()
