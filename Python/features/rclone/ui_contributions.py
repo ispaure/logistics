@@ -1,0 +1,56 @@
+"""
+UI contributions exposed by the Logistics rclone feature.
+"""
+
+from features.contributions import FeatureContributions, FolderFeatureContribution, UIAction
+from features.rclone import actions
+from models.folder_entry import FolderEntry
+
+
+def _is_available(entry: FolderEntry) -> bool:
+    """Return whether rclone has actions for this logical folder."""
+
+    return entry.has_remote
+
+
+def _get_actions(entry: FolderEntry) -> list[UIAction]:
+    """Return rclone actions available for a logical folder entry."""
+
+    ui_actions = []
+
+    if entry.local is not None and entry.remote_name is not None:
+        ui_actions.append(
+            UIAction(
+                name='Push',
+                callback=lambda folder=entry.local: actions.push_to_cloud(folder),
+                description='Sync the local folder to its matching rclone remote.',
+                destructive=True
+            )
+        )
+
+    if entry.remote_name is not None:
+        ui_actions.append(
+            UIAction(
+                name='Pull',
+                callback=lambda remote_name=entry.remote_name: actions.pull_remote(remote_name),
+                description='Sync the rclone remote into its matching local folder.',
+                destructive=True
+            )
+        )
+
+    return ui_actions
+
+
+def get_contributions() -> FeatureContributions:
+    """Return UI contributions provided by rclone."""
+
+    return FeatureContributions(
+        folder_features=[
+            FolderFeatureContribution(
+                name='rclone',
+                is_available=_is_available,
+                get_actions=_get_actions,
+                order=10
+            )
+        ]
+    )

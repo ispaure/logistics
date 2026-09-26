@@ -20,13 +20,19 @@ from models.remote_folder import RemoteFolder
 # ----------------------------------------------------------------------------------------------------------------------
 # FOLDER ACTIONS
 
+def pull_remote(remote_name: str) -> None:
+    """Pull an rclone remote to its matching local Logistics folder."""
+
+    source_path = remote_name + ':'
+    destination_path = Path(config.LogisticsConfig().path_remote_local, remote_name)
+
+    rclone_sync.rclone_sync(source_path, destination_path)
+
+
 def pull_from_cloud(folder: RemoteFolder) -> None:
     """Pull an rclone remote to its local Logistics folder."""
 
-    source_path = folder.name + ':'
-    destination_path = Path(config.LogisticsConfig().path_remote_local, folder.name)
-
-    rclone_sync.rclone_sync(source_path, destination_path)
+    pull_remote(folder.name)
 
 
 def push_to_cloud(folder: LocalFolder, track_renames: bool = False) -> None:
