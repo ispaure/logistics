@@ -83,7 +83,7 @@ def _get_fuse_actions(entry: FolderEntry) -> list[UIAction]:
 
     return [
         UIAction(
-            name='Open Remote Folder' if is_mounted else 'Mount & Open Remote Folder',
+            name='Open Remote Folder' if is_mounted else 'Mount and Open Remote Folder',
             callback=lambda remote_name=remote_name: fuse.mount_and_open_remote(remote_name),
             description=(
                 'Open the existing FUSE mount for this rclone remote.'
