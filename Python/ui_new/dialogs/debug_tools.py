@@ -15,6 +15,16 @@ from features.images import actions as image_actions
 from features.media import mka
 
 
+def _coerce_initial_path(initial_path) -> str:
+    if initial_path is None:
+        return ''
+
+    if isinstance(initial_path, Path):
+        return str(initial_path)
+
+    return str(initial_path)
+
+
 class _DebugToolDialog(pyside.QDialog):
     def __init__(self, title: str, description: str, action_text: str, destructive: bool, parent=None):
         super().__init__(parent)
@@ -116,7 +126,7 @@ class _DebugToolDialog(pyside.QDialog):
 
 
 class ConvertCbrDialog(_DebugToolDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'Batch Convert CBR to CBZ',
             'Convert CBR archives in a directory to CBZ. Successfully converted CBR files are replaced by CBZ files.',
@@ -125,7 +135,7 @@ class ConvertCbrDialog(_DebugToolDialog):
             parent
         )
 
-        self.target_dir = self._add_directory_field('Target folder:')
+        self.target_dir = self._add_directory_field('Target folder:', _coerce_initial_path(initial_path))
         self.recursive = pyside.QCheckBox('Include subfolders')
         self.recursive.setChecked(True)
         self.form.addRow('Recursive:', self.recursive)
@@ -141,7 +151,7 @@ class ConvertCbrDialog(_DebugToolDialog):
 
 
 class ComicAuthorDialog(_DebugToolDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'ComicInfo.xml - Set Author from Folder Name',
             'Replace a specific ComicInfo.xml Writer value using each CBZ parent folder name.',
@@ -150,7 +160,7 @@ class ComicAuthorDialog(_DebugToolDialog):
             parent
         )
 
-        self.target_dir = self._add_directory_field('Target folder:')
+        self.target_dir = self._add_directory_field('Target folder:', _coerce_initial_path(initial_path))
         self.existing_tag = pyside.QLineEdit('REPLACEAUTHORHERE')
         self.form.addRow('Existing author tag:', self.existing_tag)
 
@@ -168,7 +178,7 @@ class ComicAuthorDialog(_DebugToolDialog):
 
 
 class ComicSeriesDialog(_DebugToolDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'ComicInfo.xml - Set Series from Folder Name',
             'Replace a specific ComicInfo.xml Series value using each CBZ parent folder name and an optional prefix.',
@@ -177,7 +187,7 @@ class ComicSeriesDialog(_DebugToolDialog):
             parent
         )
 
-        self.target_dir = self._add_directory_field('Target folder:')
+        self.target_dir = self._add_directory_field('Target folder:', _coerce_initial_path(initial_path))
         self.existing_tag = pyside.QLineEdit('REPLACESERIESHERE')
         self.prefix = pyside.QLineEdit()
 
@@ -199,7 +209,7 @@ class ComicSeriesDialog(_DebugToolDialog):
 
 
 class CbzIndividualFoldersDialog(_DebugToolDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'Move CBZ into Individual Folders',
             'Create one folder per top-level CBZ file and move each CBZ into its matching folder.',
@@ -208,7 +218,7 @@ class CbzIndividualFoldersDialog(_DebugToolDialog):
             parent
         )
 
-        self.target_dir = self._add_directory_field('Target folder:')
+        self.target_dir = self._add_directory_field('Target folder:', _coerce_initial_path(initial_path))
 
     def _execute(self):
         target = self._require_directory(self.target_dir)
@@ -221,7 +231,7 @@ class CbzIndividualFoldersDialog(_DebugToolDialog):
 
 
 class CompressCbzDialog(_DebugToolDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'Batch Compress CBZ',
             'Compress images inside CBZ archives using the existing Comics compression pipeline.',
@@ -230,10 +240,12 @@ class CompressCbzDialog(_DebugToolDialog):
             parent
         )
 
-        self.target_dir = self._add_directory_field(
-            'Target folder:',
-            str(cbz.default_path_to_convert_cbz)
-        )
+        default_path = _coerce_initial_path(initial_path)
+
+        if default_path == '':
+            default_path = str(cbz.default_path_to_convert_cbz)
+
+        self.target_dir = self._add_directory_field('Target folder:', default_path)
 
         self.recursive = pyside.QCheckBox('Include subfolders')
         self.recursive.setChecked(True)
@@ -259,7 +271,7 @@ class CompressCbzDialog(_DebugToolDialog):
 
 
 class WeirdCharactersDialog(_DebugToolDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'List Files with Weird Characters',
             'Recursively list files whose paths contain configured problematic Unicode characters.',
@@ -268,10 +280,12 @@ class WeirdCharactersDialog(_DebugToolDialog):
             parent
         )
 
-        self.target_dir = self._add_directory_field(
-            'Target folder:',
-            str(Path.home() / 'Server' / 'Local')
-        )
+        default_path = _coerce_initial_path(initial_path)
+
+        if default_path == '':
+            default_path = str(Path.home() / 'Server' / 'Local')
+
+        self.target_dir = self._add_directory_field('Target folder:', default_path)
 
     def _execute(self):
         target = self._require_directory(self.target_dir)
@@ -284,7 +298,7 @@ class WeirdCharactersDialog(_DebugToolDialog):
 
 
 class DeletePycDialog(_DebugToolDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'Bulk Delete PYC Files',
             'Delete .pyc files from the selected directory.',
@@ -293,7 +307,7 @@ class DeletePycDialog(_DebugToolDialog):
             parent
         )
 
-        self.target_dir = self._add_directory_field('Target folder:')
+        self.target_dir = self._add_directory_field('Target folder:', _coerce_initial_path(initial_path))
         self.recursive = pyside.QCheckBox('Include subfolders')
         self.recursive.setChecked(True)
         self.form.addRow('Recursive:', self.recursive)
@@ -309,7 +323,7 @@ class DeletePycDialog(_DebugToolDialog):
 
 
 class ImageCompressDialog(_DebugToolDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'Batch Compress Images to WEBP',
             'Compress supported images to WEBP using the existing Images pipeline.',
@@ -318,10 +332,12 @@ class ImageCompressDialog(_DebugToolDialog):
             parent
         )
 
-        self.target_dir = self._add_directory_field(
-            'Target folder:',
-            str(image_actions.get_default_compression_path())
-        )
+        default_path = _coerce_initial_path(initial_path)
+
+        if default_path == '':
+            default_path = str(image_actions.get_default_compression_path())
+
+        self.target_dir = self._add_directory_field('Target folder:', default_path)
 
         self.recursive = pyside.QCheckBox('Include subfolders')
         self.recursive.setChecked(True)
@@ -393,7 +409,7 @@ class ImageCompressDialog(_DebugToolDialog):
 
 
 class ExifCommentsDialog(_DebugToolDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'JPG EXIF - Batch Set Comments',
             'Set the EXIF Comments field on JPG files in the selected directory.',
@@ -402,7 +418,7 @@ class ExifCommentsDialog(_DebugToolDialog):
             parent
         )
 
-        self.target_dir = self._add_directory_field('Target folder:')
+        self.target_dir = self._add_directory_field('Target folder:', _coerce_initial_path(initial_path))
 
         self.recursive = pyside.QCheckBox('Include subfolders')
         self.recursive.setChecked(True)
@@ -427,7 +443,7 @@ class ExifCommentsDialog(_DebugToolDialog):
 
 
 class RenameMkaDialog(_DebugToolDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'Rename MKA from CSV',
             'Rename Chapter_XX.mka files using chapter names from the directory CSV file.',
@@ -436,7 +452,7 @@ class RenameMkaDialog(_DebugToolDialog):
             parent
         )
 
-        self.target_dir = self._add_directory_field('Target folder:')
+        self.target_dir = self._add_directory_field('Target folder:', _coerce_initial_path(initial_path))
 
     def _execute(self):
         target = self._require_directory(self.target_dir)
@@ -449,7 +465,7 @@ class RenameMkaDialog(_DebugToolDialog):
 
 
 class DropboxConflictsDialog(pyside.QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_path=None, parent=None):
         super().__init__(parent)
 
         self.setWindowTitle('Dropbox Conflicting Copies')
@@ -472,7 +488,7 @@ class DropboxConflictsDialog(pyside.QDialog):
         description.setWordWrap(True)
 
         form = pyside.QFormLayout()
-        self.target_dir = pyside.QLineEdit()
+        self.target_dir = pyside.QLineEdit(_coerce_initial_path(initial_path))
 
         browse_button = pyside.QPushButton('Browse...')
         target_widget = pyside.QWidget()
@@ -581,7 +597,7 @@ _DIALOGS = {
 }
 
 
-def open_debug_tool(workflow_id: str, parent=None):
+def open_debug_tool(workflow_id: str, data=None, parent=None):
     """Open one registered Debug workflow dialog."""
 
     dialog_type = _DIALOGS.get(workflow_id)
@@ -589,5 +605,5 @@ def open_debug_tool(workflow_id: str, parent=None):
     if dialog_type is None:
         raise ValueError(f'Unknown Debug workflow: {workflow_id}')
 
-    dialog = dialog_type(parent=parent)
+    dialog = dialog_type(initial_path=data, parent=parent)
     return dialog.exec()
