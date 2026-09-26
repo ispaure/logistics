@@ -2,9 +2,9 @@
 YouTube Downloader feature integration for Logistics.
 """
 
-
-FEATURE_NAME = "youtube_downloader"
-FEATURE_LABEL = "YouTube Downloader"
+FEATURE_NAME = 'youtube_downloader'
+FEATURE_LABEL = 'YouTube Downloader'
+FEATURE_OPTIONAL_DEPENDENCIES = ('rclone',)
 
 
 def get_contributions():

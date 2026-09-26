@@ -1,5 +1,5 @@
 """
-Feature discovery, loading, initialization, and contribution aggregation for Logistics.
+Feature discovery, dependency handling, initialization, and contribution aggregation for Logistics.
 """
 
 import importlib
@@ -7,6 +7,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import TypeVar
 
+from commonUtils.debugUtils import Severity, log
 from features.contributions import (
     DebugActionContribution,
     FeatureContributions,
@@ -26,7 +27,7 @@ T = TypeVar('T')
 
 def get_feature_names() -> list[str]:
     """
-    Return the names of feature packages available in the features directory.
+    Return the package names of features available in the features directory.
 
     A valid feature is a direct subdirectory containing an __init__.py file.
     """
@@ -50,24 +51,162 @@ def get_feature_names() -> list[str]:
 
 
 def load_features() -> list[ModuleType]:
-    """Import and return all available Logistics feature modules."""
+    """Import and return all physically available Logistics feature modules."""
 
     features = []
 
-    for feature_name in get_feature_names():
-        feature = importlib.import_module(f'{__package__}.{feature_name}')
+    for package_name in get_feature_names():
+        feature = importlib.import_module(f'{__package__}.{package_name}')
         features.append(feature)
 
     return features
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+# FEATURE METADATA / DEPENDENCIES
+
+def _get_feature_name(feature: ModuleType) -> str:
+    """Return the stable feature name for a feature module."""
+
+    return getattr(feature, 'FEATURE_NAME', feature.__name__.rsplit('.', 1)[-1])
+
+
+def _get_feature_label(feature: ModuleType) -> str:
+    """Return the human-readable feature label used for grouping contributions."""
+
+    explicit_label = getattr(feature, 'FEATURE_LABEL', None)
+
+    if explicit_label is not None:
+        return explicit_label
+
+    return _get_feature_name(feature).replace('_', ' ').title()
+
+
+def _get_dependency_names(feature: ModuleType, attribute_name: str) -> tuple[str, ...]:
+    """Return and validate one dependency metadata tuple from a feature."""
+
+    dependency_names = getattr(feature, attribute_name, ())
+
+    if not isinstance(dependency_names, (tuple, list)):
+        raise TypeError(
+            f"Feature '{feature.__name__}' {attribute_name} must be a tuple/list of feature names."
+        )
+
+    for dependency_name in dependency_names:
+        if not isinstance(dependency_name, str) or not dependency_name:
+            raise TypeError(
+                f"Feature '{feature.__name__}' {attribute_name} contains an invalid feature name."
+            )
+
+    return tuple(dependency_names)
+
+
+def get_feature_dependencies(feature: ModuleType) -> tuple[str, ...]:
+    """Return hard dependencies declared by a feature."""
+
+    return _get_dependency_names(feature, 'FEATURE_DEPENDENCIES')
+
+
+def get_feature_optional_dependencies(feature: ModuleType) -> tuple[str, ...]:
+    """Return optional dependencies declared by a feature."""
+
+    return _get_dependency_names(feature, 'FEATURE_OPTIONAL_DEPENDENCIES')
+
+
+def _get_feature_map() -> dict[str, ModuleType]:
+    """Return loaded features indexed by stable FEATURE_NAME."""
+
+    feature_map = {}
+
+    for feature in load_features():
+        feature_name = _get_feature_name(feature)
+
+        if feature_name in feature_map:
+            raise ValueError(f'Duplicate Logistics feature name: {feature_name}')
+
+        feature_map[feature_name] = feature
+
+    return feature_map
+
+
+def _is_feature_available(
+    feature_name: str,
+    feature_map: dict[str, ModuleType],
+    resolving: tuple[str, ...] = ()
+) -> bool:
+    """Resolve hard dependencies recursively for one feature."""
+
+    feature = feature_map.get(feature_name)
+
+    if feature is None:
+        return False
+
+    if feature_name in resolving:
+        dependency_chain = ' -> '.join((*resolving, feature_name))
+        raise RuntimeError(f'Circular Logistics feature dependency: {dependency_chain}')
+
+    next_resolving = (*resolving, feature_name)
+
+    for dependency_name in get_feature_dependencies(feature):
+        if not _is_feature_available(dependency_name, feature_map, next_resolving):
+            return False
+
+    return True
+
+
+def is_feature_available(feature_name: str) -> bool:
+    """
+    Return whether a feature exists and all of its hard dependencies are available.
+
+    Optional dependencies do not affect feature availability.
+    """
+
+    return _is_feature_available(feature_name, _get_feature_map())
+
+
+def get_available_features() -> list[ModuleType]:
+    """Return features whose hard dependencies are all available."""
+
+    feature_map = _get_feature_map()
+
+    return [
+        feature
+        for feature in feature_map.values()
+        if _is_feature_available(_get_feature_name(feature), feature_map)
+    ]
+
+
+def _log_unavailable_features() -> None:
+    """Log features skipped because one or more hard dependencies are unavailable."""
+
+    feature_map = _get_feature_map()
+
+    for feature_name, feature in feature_map.items():
+        if _is_feature_available(feature_name, feature_map):
+            continue
+
+        dependencies = get_feature_dependencies(feature)
+        missing = [
+            dependency_name
+            for dependency_name in dependencies
+            if not _is_feature_available(dependency_name, feature_map)
+        ]
+
+        log(
+            Severity.WARNING,
+            'Feature Registry',
+            f'Skipping feature "{feature_name}". Missing hard dependencies: {", ".join(missing)}'
+        )
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 # FEATURE INITIALIZATION
 
 def initialize_features() -> list[ModuleType]:
-    """Load and initialize all available Logistics features."""
+    """Initialize every feature whose hard dependencies are available."""
 
-    features = load_features()
+    _log_unavailable_features()
+    features = get_available_features()
 
     for feature in features:
         initialize = getattr(feature, 'initialize', None)
@@ -89,37 +228,18 @@ def initialize_features() -> list[ModuleType]:
 # ----------------------------------------------------------------------------------------------------------------------
 # CONTRIBUTIONS
 
-def _get_feature_name(feature: ModuleType) -> str:
-    """Return the stable feature name for a feature module."""
-
-    return getattr(feature, 'FEATURE_NAME', feature.__name__.rsplit('.', 1)[-1])
-
-
-def _get_feature_label(feature: ModuleType) -> str:
-    """Return the human-readable feature label used for grouping contributions."""
-
-    explicit_label = getattr(feature, 'FEATURE_LABEL', None)
-
-    if explicit_label is not None:
-        return explicit_label
-
-    return _get_feature_name(feature).replace('_', ' ').title()
-
-
 def get_feature_contributions() -> list[tuple[ModuleType, FeatureContributions]]:
     """
-    Return contribution sets exposed by all loaded features.
+    Return contribution sets exposed by available features.
 
-    A feature participates by defining:
-
-        get_contributions() -> FeatureContributions
-
-    Features that do not define get_contributions are simply skipped.
+    Features with unsatisfied hard dependencies are skipped before
+    get_contributions() is called, allowing their implementation modules to
+    safely import the dependencies they explicitly require.
     """
 
     feature_contributions = []
 
-    for feature in load_features():
+    for feature in get_available_features():
         get_contributions = getattr(feature, 'get_contributions', None)
 
         if get_contributions is None:
@@ -145,7 +265,7 @@ def get_feature_contributions() -> list[tuple[ModuleType, FeatureContributions]]
 
 
 def _collect_contributions(attribute_name: str) -> list[RegisteredContribution[T]]:
-    """Collect one contribution type from every feature."""
+    """Collect one contribution type from every available feature."""
 
     registered = []
 

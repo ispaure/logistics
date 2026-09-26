@@ -5,14 +5,12 @@ rclone feature integration for Logistics.
 from . import api
 
 
-FEATURE_NAME = "rclone"
-FEATURE_LABEL = "rclone"
+FEATURE_NAME = 'rclone'
+FEATURE_LABEL = 'rclone'
 
 
 def initialize() -> None:
-    """
-    Initialize the rclone feature.
-    """
+    """Initialize the rclone feature."""
 
     api.initialize()
 
