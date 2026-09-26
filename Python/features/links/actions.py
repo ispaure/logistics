@@ -27,7 +27,6 @@ def open_config_file_url(entry_str: str) -> None:
         computer_ips = {
             'goat-pc': configUtils.config_section_map(config_file_path, 'ResolveIP', 'goat-pc'),
             'yagi-mac': configUtils.config_section_map(config_file_path, 'ResolveIP', 'yagi-mac'),
-            'reserved-server': configUtils.config_section_map(config_file_path, 'ResolveIP', 'reserved-server'),
         }
 
         for key, value in computer_ips.items():
