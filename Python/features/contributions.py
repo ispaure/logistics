@@ -34,6 +34,28 @@ class UIAction:
 
 
 @dataclass(frozen=True)
+class LocalFolderSource:
+    """
+    One selectable local-folder context exposed to the generic Folders page.
+
+    get_local_folders returns the local folders shown for this source.
+    """
+
+    name: str
+    get_local_folders: Callable[[], list[Any]]
+    context: Any = None
+
+
+@dataclass(frozen=True)
+class LocalFolderSourceContribution:
+    """A provider of selectable local-folder sources."""
+
+    name: str
+    get_sources: Callable[[], list[LocalFolderSource]]
+    order: int = 0
+
+
+@dataclass(frozen=True)
 class RemoteFolderSource:
     """
     One selectable remote-folder context exposed to the generic Folders page.
@@ -129,6 +151,7 @@ class PageContribution:
 class FeatureContributions:
     """All optional contribution types exposed by one feature."""
 
+    local_folder_sources: list[LocalFolderSourceContribution] = field(default_factory=list)
     remote_folder_sources: list[RemoteFolderSourceContribution] = field(default_factory=list)
     folder_features: list[FolderFeatureContribution] = field(default_factory=list)
     server_providers: list[ServerProviderContribution] = field(default_factory=list)
