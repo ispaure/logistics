@@ -81,7 +81,7 @@ def _get_remote_sources() -> list[RemoteFolderSource]:
     for config_path in credentials.get_loaded_credential_config_paths():
         sources.append(
             RemoteFolderSource(
-                name=f'rclone [{config_path.stem}]',
+                name=config_path.stem,
                 get_remote_names=lambda config_path=config_path:
                 configuration.get_rclone_remote_names(config_path),
                 context=config_path

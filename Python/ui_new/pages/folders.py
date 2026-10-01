@@ -2,11 +2,13 @@
 Folders page for the replacement Logistics UI.
 """
 
+from collections import Counter
+
 from commonUtils import ui
 from commonUtils.ui import pyside
 
 from features import registry
-from features.contributions import LocalFolderSource, RemoteFolderSource, UIAction
+from features.contributions import UIAction
 from services.folder_entries import get_folder_entries
 from ui_new import workflows
 
@@ -19,6 +21,14 @@ class FoldersPage(pyside.QWidget):
         super().__init__(parent)
 
         self.source_combo = pyside.QComboBox()
+        self.source_label = pyside.QLabel('Source')
+        self.credential_combo = pyside.QComboBox()
+        self.credential_label = pyside.QLabel('Credential')
+        self._remote_sources = []
+        self._local_sources = []
+        self._local_folders = []
+        self._remote_names = set()
+        self._selected_entry_key = None
 
         self.folder_tree = pyside.QTreeWidget()
         self.folder_tree.setHeaderHidden(True)
@@ -52,14 +62,16 @@ class FoldersPage(pyside.QWidget):
         title_font.setBold(True)
         title_label.setFont(title_font)
 
-        source_label = pyside.QLabel('Source')
-        source_font = source_label.font()
+        source_font = self.source_label.font()
         source_font.setBold(True)
-        source_label.setFont(source_font)
+        self.source_label.setFont(source_font)
+        self.credential_label.setFont(source_font)
 
         left_layout.addWidget(title_label)
-        left_layout.addWidget(source_label)
+        left_layout.addWidget(self.source_label)
         left_layout.addWidget(self.source_combo)
+        left_layout.addWidget(self.credential_label)
+        left_layout.addWidget(self.credential_combo)
         left_layout.addWidget(self.folder_tree)
 
         splitter = pyside.QSplitter(pyside.Qt.Orientation.Horizontal)
@@ -73,112 +85,151 @@ class FoldersPage(pyside.QWidget):
 
     def _connect_signals(self):
         self.source_combo.currentIndexChanged.connect(self._source_changed)
+        self.credential_combo.currentIndexChanged.connect(self._credential_changed)
         self.folder_tree.currentItemChanged.connect(self._selection_changed)
 
     def refresh(self):
-        """Refresh available sources and folders while preserving selection where possible."""
+        """Refresh source groups while preserving the selected credential and folder."""
 
-        selected_source_name = self.source_combo.currentText()
-
-        if selected_source_name == '':
-            selected_source_name = LOCAL_SOURCE_NAME
-
+        selected_source_name = self.source_combo.currentText() or LOCAL_SOURCE_NAME
+        selected_credential = self.credential_combo.currentData()
+        self._remote_sources = [
+            (registered.feature_name, registered.contribution.name, source)
+            for registered in registry.get_remote_folder_sources()
+            for source in registered.contribution.get_sources()
+        ]
+        self._remote_names = {
+            name
+            for feature_name, _label, source in self._remote_sources
+            for name in source.get_remote_names()
+        }
+        self._local_sources = [
+            (registered.feature_name, registered.contribution.name,
+             source, list(source.get_local_folders()))
+            for registered in registry.get_local_folder_sources()
+            for source in registered.contribution.get_sources()
+        ]
+        local_entries = get_folder_entries()
+        self._local_folders = [entry.local for entry in local_entries if entry.local is not None]
         self.source_combo.blockSignals(True)
         self.source_combo.clear()
-
         if self._get_local_only_entries():
             self.source_combo.addItem(LOCAL_SOURCE_NAME, ('local', None))
 
-        for registered in registry.get_local_folder_sources():
-            contribution = registered.contribution
+        groups = {}
+        for feature, label, source, folders in self._local_sources:
+            entries = self._get_unresolved_local_entries(folders)
+            if entries:
+                groups.setdefault((feature, label), []).extend(entries)
+        for (feature, label), entries in groups.items():
+            self.source_combo.addItem(label, ('local_source', feature, entries))
 
-            for source in contribution.get_sources():
-                self.source_combo.addItem(
-                    source.name,
-                    ('local_source', registered.feature_name, source)
-                )
+        groups = {}
+        for feature, label, source in self._remote_sources:
+            groups.setdefault((feature, label), []).append(source)
+        for (feature, label), sources in groups.items():
+            self.source_combo.addItem(label, ('remote', feature, sources))
 
-        for registered in registry.get_remote_folder_sources():
-            contribution = registered.contribution
-
-            for source in contribution.get_sources():
-                self.source_combo.addItem(
-                    source.name,
-                    ('remote', registered.feature_name, source)
-                )
-
-        selected_index = self._find_source_index(selected_source_name)
-        self.source_combo.setCurrentIndex(selected_index)
+        self.source_combo.setCurrentIndex(self._find_source_index(selected_source_name))
         self.source_combo.blockSignals(False)
-
+        show_source = self.source_combo.count() > 1
+        self.source_label.setVisible(show_source)
+        self.source_combo.setVisible(show_source)
+        self._refresh_credentials(selected_credential)
         self._refresh_folder_tree()
 
     def _find_source_index(self, source_name: str) -> int:
         for index in range(self.source_combo.count()):
             if self.source_combo.itemText(index) == source_name:
                 return index
-
         return 0
 
     def _source_changed(self, _index):
+        self._refresh_credentials()
+        self._refresh_folder_tree()
+
+    def _credential_changed(self, _index):
         self._refresh_folder_tree()
 
     def _get_selected_source(self):
-        """Return the selected source descriptor stored in the source combo."""
-
         return self.source_combo.currentData(pyside.Qt.ItemDataRole.UserRole)
 
-    def _get_all_remote_names(self) -> set[str]:
-        """
-        Return exact remote names available from all currently loaded sources.
+    def _refresh_credentials(self, selected_credential=None):
+        """A newly chosen remote source always starts with all credentials."""
 
-        The Local view uses this to avoid duplicating folders that can already
-        be browsed through a remote source. Matching intentionally remains
-        case-sensitive.
-        """
+        selected_source = self._get_selected_source()
+        is_remote = selected_source is not None and selected_source[0] == 'remote'
+        self.credential_combo.blockSignals(True)
+        self.credential_combo.clear()
+        if is_remote:
+            self.credential_combo.addItem('All', None)
+            for source in selected_source[2]:
+                self.credential_combo.addItem(source.name, source.context)
+            if selected_credential is not None:
+                for index in range(1, self.credential_combo.count()):
+                    if self.credential_combo.itemData(index) == selected_credential:
+                        self.credential_combo.setCurrentIndex(index)
+                        break
+        self.credential_combo.blockSignals(False)
+        self.credential_label.setVisible(is_remote)
+        self.credential_combo.setVisible(is_remote)
 
-        remote_names = set()
-
-        for registered in registry.get_remote_folder_sources():
-            contribution = registered.contribution
-
-            for source in contribution.get_sources():
-                remote_names.update(source.get_remote_names())
-
-        return remote_names
+    def _get_unresolved_local_entries(self, folders):
+        return [
+            entry for entry in get_folder_entries(local_folders=folders)
+            if entry.name not in self._remote_names
+        ]
 
     def _get_local_only_entries(self):
-        """Return local folders not already represented by a remote source."""
+        """Hide local folders represented by a remote or a dedicated local source."""
 
-        remote_names = self._get_all_remote_names()
+        source_paths = {
+            folder.path
+            for _feature, _label, _source, folders in self._local_sources
+            for folder in folders
+        }
+        return self._get_unresolved_local_entries([
+            folder for folder in self._local_folders if folder.path not in source_paths
+        ])
 
-        return [
-            entry
-            for entry in get_folder_entries()
-            if entry.name not in remote_names
-        ]
+    @staticmethod
+    def _entry_key(entry):
+        """Keep same-named folders from different credentials independently selectable."""
+
+        return (entry.name, entry.remote_source, str(entry.remote_context),
+                str(entry.local.path) if entry.local is not None else None)
 
     def _refresh_folder_tree(self):
         selected_source = self._get_selected_source()
         source_type = selected_source[0] if selected_source is not None else 'local'
+        entry_labels = {}
 
         if source_type == 'local':
             entries = self._get_local_only_entries()
         elif source_type == 'local_source':
-            _source_type, _feature_name, source = selected_source
-            entries = get_folder_entries(
-                local_folders=source.get_local_folders()
-            )
+            entries = selected_source[2]
+            for entry in entries:
+                entry_labels[self._entry_key(entry)] = str(entry.local.path)
         else:
-            _source_type, feature_name, source = selected_source
-            remote_names = source.get_remote_names()
+            _source_type, feature_name, sources = selected_source
+            selected_credential = self.credential_combo.currentData()
+            entries = []
+            for source in sources:
+                if selected_credential is not None and source.context != selected_credential:
+                    continue
+                source_entries = get_folder_entries(
+                    source.get_remote_names(),
+                    remote_source=feature_name,
+                    remote_context=source.context,
+                    include_local_only=False,
+                    local_folders=self._local_folders
+                )
+                entries.extend(source_entries)
+                for entry in source_entries:
+                    entry_labels[self._entry_key(entry)] = source.name
 
-            entries = get_folder_entries(
-                remote_names,
-                remote_source=feature_name,
-                remote_context=source.context,
-                include_local_only=False
-            )
+        entries.sort(key=lambda entry: (entry.name, str(entry.remote_context)))
+        name_counts = Counter(entry.name for entry in entries)
 
         self.folder_tree.clear()
         self._entry_items = {}
@@ -194,10 +245,15 @@ class FoldersPage(pyside.QWidget):
             name_parts = entry.name.split('-')
             parent_item = None
             path_parts = []
+            entry_key = self._entry_key(entry)
 
             for index, name_part in enumerate(name_parts):
                 path_parts.append(name_part)
                 item_path = tuple(path_parts)
+                is_leaf = index == len(name_parts) - 1
+                if is_leaf and name_counts[entry.name] > 1:
+                    item_path = (*item_path, entry_key)
+                    name_part = f'{name_part} [{entry_labels[entry_key]}]'
 
                 item = tree_items.get(item_path)
 
@@ -212,7 +268,7 @@ class FoldersPage(pyside.QWidget):
 
                 if index == len(name_parts) - 1:
                     item.setData(0, pyside.Qt.ItemDataRole.UserRole, entry)
-                    self._entry_items[entry.name] = item
+                    self._entry_items[entry_key] = item
 
                 parent_item = item
 
@@ -224,12 +280,13 @@ class FoldersPage(pyside.QWidget):
 
         self.folder_tree.expandAll()
 
-        selected_item = self._entry_items.get(self.selected_entry_name)
+        selected_item = self._entry_items.get(self._selected_entry_key)
 
         if selected_item is None:
             first_entry = entries[0]
             self.selected_entry_name = first_entry.name
-            selected_item = self._entry_items[first_entry.name]
+            self._selected_entry_key = self._entry_key(first_entry)
+            selected_item = self._entry_items[self._selected_entry_key]
 
         self.folder_tree.setCurrentItem(selected_item)
 
@@ -243,6 +300,7 @@ class FoldersPage(pyside.QWidget):
             return
 
         self.selected_entry_name = entry.name
+        self._selected_entry_key = self._entry_key(entry)
         self._show_entry(entry)
 
     def _show_empty_state(self):
