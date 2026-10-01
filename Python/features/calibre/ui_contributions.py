@@ -28,6 +28,7 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
         )
     ]
 
+
 def _open_manage_workflow(data=None, parent=None):
     from features.calibre.ui.manage_dialog import CalibreManageDialog
 
