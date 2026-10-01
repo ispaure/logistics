@@ -3,7 +3,7 @@ UI contributions exposed by the Logistics Calibre feature.
 """
 
 from features.calibre import detection
-from features.contributions import FeatureContributions, FolderFeatureContribution, UIAction, WorkflowContribution
+from features.contributions import FeatureContributions, FolderFeatureContribution
 from models.folder_entry import FolderEntry
 
 
@@ -13,27 +13,18 @@ def _is_available(entry: FolderEntry) -> bool:
     return entry.local is not None and detection.has_library(entry.local)
 
 
-def _get_actions(entry: FolderEntry) -> list[UIAction]:
-    """Return Calibre actions available for a logical folder entry."""
+def _get_actions(_entry: FolderEntry):
+    """Calibre uses a custom folder widget rather than flat folder actions."""
 
-    if entry.local is None:
-        return []
-
-    return [
-        UIAction(
-            name='Manage Libraries...',
-            description='Browse and operate on Calibre libraries contained in this folder.',
-            workflow_id='calibre_manage',
-            workflow_data=entry.local
-        )
-    ]
+    return []
 
 
-def _open_manage_workflow(data=None, parent=None):
-    from features.calibre.ui.manage_dialog import CalibreManageDialog
+def _create_widget(entry: FolderEntry, parent=None):
+    """Create the Calibre library selector/action section for a folder."""
 
-    dialog = CalibreManageDialog(data, parent=parent)
-    return dialog.exec()
+    from features.calibre.folder_widget import CalibreFolderWidget
+
+    return CalibreFolderWidget(entry, parent=parent)
 
 
 def get_contributions() -> FeatureContributions:
@@ -45,13 +36,8 @@ def get_contributions() -> FeatureContributions:
                 name='Calibre',
                 is_available=_is_available,
                 get_actions=_get_actions,
-                order=20
-            )
-        ],
-        workflows=[
-            WorkflowContribution(
-                workflow_id='calibre_manage',
-                handler=_open_manage_workflow
+                order=20,
+                create_widget=_create_widget
             )
         ]
     )
