@@ -85,7 +85,9 @@ class FoldersPage(pyside.QWidget):
 
         self.source_combo.blockSignals(True)
         self.source_combo.clear()
-        self.source_combo.addItem(LOCAL_SOURCE_NAME, ('local', None))
+
+        if self._get_local_only_entries():
+            self.source_combo.addItem(LOCAL_SOURCE_NAME, ('local', None))
 
         for registered in registry.get_local_folder_sources():
             contribution = registered.contribution
@@ -145,17 +147,23 @@ class FoldersPage(pyside.QWidget):
 
         return remote_names
 
+    def _get_local_only_entries(self):
+        """Return local folders not already represented by a remote source."""
+
+        remote_names = self._get_all_remote_names()
+
+        return [
+            entry
+            for entry in get_folder_entries()
+            if entry.name not in remote_names
+        ]
+
     def _refresh_folder_tree(self):
         selected_source = self._get_selected_source()
         source_type = selected_source[0] if selected_source is not None else 'local'
 
         if source_type == 'local':
-            remote_names = self._get_all_remote_names()
-            entries = [
-                entry
-                for entry in get_folder_entries()
-                if entry.name not in remote_names
-            ]
+            entries = self._get_local_only_entries()
         elif source_type == 'local_source':
             _source_type, _feature_name, source = selected_source
             entries = get_folder_entries(
