@@ -300,6 +300,14 @@ class FoldersPage(pyside.QWidget):
             if not contribution.is_available(entry):
                 continue
 
+            if contribution.create_widget is not None:
+                feature_widget = contribution.create_widget(entry, self)
+
+                if feature_widget is not None:
+                    layout.addWidget(feature_widget)
+
+                continue
+
             actions = contribution.get_actions(entry)
 
             if not actions:

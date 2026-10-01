@@ -2,27 +2,32 @@
 Detection helpers for the Logistics Minecraft feature.
 """
 
-from pathlib import Path
+from commonUtils.dirUtils import Directory
+from models.local_folder import LocalFolder
 
-from commonUtils import marcUtils
-
-from features.minecraft.server import MinecraftServerType
+from features.minecraft.server import MinecraftServer
 
 
-def get_server_root_path(server_type: MinecraftServerType) -> Path | None:
-    """Return the configured root directory for a Minecraft server type."""
+MAX_SERVER_DEPTH = 3
 
-    marc_dropbox_path = marcUtils.get_marc_dropbox_root()
 
-    if marc_dropbox_path is None or not Path(marc_dropbox_path).is_dir():
-        return None
+def get_servers(folder: LocalFolder) -> list[MinecraftServer]:
+    """Return Minecraft servers found up to three directory levels below a local folder."""
 
-    match server_type:
-        case MinecraftServerType.JAVA:
-            return Path(marc_dropbox_path, 'Software', 'Server', 'Minecraft')
+    # Directory.list_directories(depth=2) returns immediate children plus two
+    # additional levels, which corresponds to paths 1-3 levels below folder.
+    directories = Directory(folder.path).list_directories(depth=MAX_SERVER_DEPTH - 1)
 
-        case MinecraftServerType.BEDROCK:
-            return Path(marc_dropbox_path, 'Software', 'Server', 'Minecraft (Bedrock)')
+    server_paths = [
+        directory.path
+        for directory in directories
+        if (directory.path / 'server.properties').is_file()
+    ]
 
-        case _:
-            return None
+    return [MinecraftServer(path) for path in server_paths]
+
+
+def has_server(folder: LocalFolder) -> bool:
+    """Return whether a local folder contains at least one Minecraft server."""
+
+    return bool(get_servers(folder))
