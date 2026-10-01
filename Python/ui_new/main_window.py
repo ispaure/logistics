@@ -6,12 +6,10 @@ from commonUtils.ui import pyside
 from features import registry
 from ui_new.pages.debug import DebugPage
 from ui_new.pages.folders import FoldersPage
-from ui_new.pages.servers import ServersPage
 
 
 CORE_TABS = (
     (0, 'Folders', FoldersPage),
-    (20, 'Servers', ServersPage),
     (100, 'Debug', DebugPage),
 )
 
@@ -20,8 +18,8 @@ class MainWindow(pyside.Window):
     def __init__(self):
         super().__init__('Logistics', main_window=True)
 
-        self.width = 1100
-        self.height = 700
+        self.width = 850
+        self.height = 550
         self.dlg.resize(self.width, self.height)
         self.dlg.setMinimumSize(850, 550)
 
