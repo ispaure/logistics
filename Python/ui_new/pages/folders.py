@@ -6,7 +6,7 @@ from commonUtils import ui
 from commonUtils.ui import pyside
 
 from features import registry
-from features.contributions import RemoteFolderSource, UIAction
+from features.contributions import LocalFolderSource, RemoteFolderSource, UIAction
 from services.folder_entries import get_folder_entries
 from ui_new import workflows
 
@@ -85,7 +85,16 @@ class FoldersPage(pyside.QWidget):
 
         self.source_combo.blockSignals(True)
         self.source_combo.clear()
-        self.source_combo.addItem(LOCAL_SOURCE_NAME, None)
+        self.source_combo.addItem(LOCAL_SOURCE_NAME, ('local', None))
+
+        for registered in registry.get_local_folder_sources():
+            contribution = registered.contribution
+
+            for source in contribution.get_sources():
+                self.source_combo.addItem(
+                    source.name,
+                    ('local_source', registered.feature_name, source)
+                )
 
         for registered in registry.get_remote_folder_sources():
             contribution = registered.contribution
@@ -93,7 +102,7 @@ class FoldersPage(pyside.QWidget):
             for source in contribution.get_sources():
                 self.source_combo.addItem(
                     source.name,
-                    (registered.feature_name, source)
+                    ('remote', registered.feature_name, source)
                 )
 
         selected_index = self._find_source_index(selected_source_name)
@@ -112,13 +121,10 @@ class FoldersPage(pyside.QWidget):
     def _source_changed(self, _index):
         self._refresh_folder_tree()
 
-    def _get_selected_remote_source(self) -> tuple[str, RemoteFolderSource] | None:
-        selected_data = self.source_combo.currentData(pyside.Qt.ItemDataRole.UserRole)
+    def _get_selected_source(self):
+        """Return the selected source descriptor stored in the source combo."""
 
-        if selected_data is None:
-            return None
-
-        return selected_data
+        return self.source_combo.currentData(pyside.Qt.ItemDataRole.UserRole)
 
     def _get_all_remote_names(self) -> set[str]:
         """
@@ -140,17 +146,23 @@ class FoldersPage(pyside.QWidget):
         return remote_names
 
     def _refresh_folder_tree(self):
-        selected_source = self._get_selected_remote_source()
+        selected_source = self._get_selected_source()
+        source_type = selected_source[0] if selected_source is not None else 'local'
 
-        if selected_source is None:
+        if source_type == 'local':
             remote_names = self._get_all_remote_names()
             entries = [
                 entry
                 for entry in get_folder_entries()
                 if entry.name not in remote_names
             ]
+        elif source_type == 'local_source':
+            _source_type, _feature_name, source = selected_source
+            entries = get_folder_entries(
+                local_folders=source.get_local_folders()
+            )
         else:
-            feature_name, source = selected_source
+            _source_type, feature_name, source = selected_source
             remote_names = source.get_remote_names()
 
             entries = get_folder_entries(
@@ -230,11 +242,16 @@ class FoldersPage(pyside.QWidget):
         layout = pyside.QVBoxLayout(widget)
         layout.setContentsMargins(24, 24, 24, 24)
 
-        if self._get_selected_remote_source() is None:
+        selected_source = self._get_selected_source()
+        source_type = selected_source[0] if selected_source is not None else 'local'
+
+        if source_type == 'local':
             message = (
                 'No local-only folders were found. Local folders already '
                 'available through a loaded remote source are hidden here.'
             )
+        elif source_type == 'local_source':
+            message = 'No folders were found for this local source.'
         else:
             message = 'No configured remote folders were found for this source.'
 

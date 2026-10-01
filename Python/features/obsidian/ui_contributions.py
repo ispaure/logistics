@@ -2,7 +2,7 @@
 UI contributions exposed by the Logistics Obsidian feature.
 """
 
-from features.obsidian import actions, detection
+from features.obsidian import detection
 from features.contributions import FeatureContributions, FolderFeatureContribution, UIAction, WorkflowContribution
 from models.folder_entry import FolderEntry
 from commonUtils.dirUtils import Directory
@@ -21,11 +21,10 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
         return []
 
     vaults = detection.get_vault_paths(entry.local)
-    single_vault = len(vaults) == 1
 
     return [
         UIAction(
-            name='Open Vault' if single_vault else f'Open {vault.name} Vault',
+            name=f'Open "{vault.name}" Vault',
             description=f'Open Obsidian vault "{vault.name}".',
             workflow_id='obsidian_open_vault',
             workflow_data=vault
@@ -35,11 +34,13 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
 
 
 def _open_vault_workflow(data=None, parent=None):
-    """Open the selected vault in Obsidian."""
+    """Open the selected Obsidian vault."""
 
     if not isinstance(data, Directory):
         return False
 
+    # Import locally to keep UI contribution discovery lightweight.
+    from features.obsidian import actions
     return actions.open_vault(data)
 
 

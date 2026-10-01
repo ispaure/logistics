@@ -12,6 +12,7 @@ from features.contributions import (
     DebugActionContribution,
     FeatureContributions,
     FolderFeatureContribution,
+    LocalFolderSourceContribution,
     PageContribution,
     RegisteredContribution,
     RemoteFolderSourceContribution,
@@ -284,6 +285,20 @@ def _collect_contributions(attribute_name: str) -> list[RegisteredContribution[T
             )
 
     return registered
+
+
+def get_local_folder_sources() -> list[RegisteredContribution[LocalFolderSourceContribution]]:
+    """Return all local-folder source contributions in deterministic order."""
+
+    sources = _collect_contributions('local_folder_sources')
+
+    return sorted(
+        sources,
+        key=lambda registered: (
+            registered.contribution.order,
+            registered.contribution.name.casefold()
+        )
+    )
 
 
 def get_remote_folder_sources() -> list[RegisteredContribution[RemoteFolderSourceContribution]]:

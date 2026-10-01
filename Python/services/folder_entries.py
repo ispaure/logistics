@@ -9,6 +9,7 @@ import config
 from commonUtils import configUtils
 from models import folder_discovery
 from models.folder_entry import FolderEntry
+from models.local_folder import LocalFolder
 
 
 FOLDERS_SECTION = 'Folders'
@@ -66,7 +67,8 @@ def get_folder_entries(
     remote_names: Iterable[str] = (),
     remote_source: str | None = None,
     remote_context=None,
-    include_local_only: bool = True
+    include_local_only: bool = True,
+    local_folders: Iterable[LocalFolder] | None = None
 ) -> list[FolderEntry]:
     """
     Build logical folder entries for Local or one selected remote source.
@@ -84,7 +86,10 @@ def get_folder_entries(
     This is intended for implementation/storage companions such as -PMSDATA.
     """
 
-    local_folders = folder_discovery.get_local_folders()
+    if local_folders is None:
+        local_folders = folder_discovery.get_local_folders()
+    else:
+        local_folders = list(local_folders)
 
     excluded_remote_names = _get_excluded_remote_names()
     excluded_folder_suffixes = _get_excluded_folder_name_suffixes()
