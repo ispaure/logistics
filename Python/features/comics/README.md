@@ -16,7 +16,7 @@ Provides comic-related integration for Logistics.
 - `detection.py` contains ComicRack and YACReader detection/configuration helpers.
 - `cbz.py` orchestrates CBZ compression and keeps the public entry points and settings.
 - `sanitization.py` contains archive cleanup, wrapper flattening, and page-padding rules.
-- `comicinfo.py` rebuilds ComicInfo page records without reserializing unrelated XML.
+- `comicinfo.py` parses ComicInfo XML, rebuilds page records, and serializes consistent formatting while preserving other metadata.
 - `compression_stats.py` contains compression statistics and text logging.
 - `archive_io.py` builds, verifies, and commits replacement archives.
 - `conversion.py` contains CBR to CBZ conversion behavior.
@@ -56,7 +56,7 @@ The established output rules are preserved:
 - Numeric padding is triggered by single-digit page names. The existing count thresholds remain: fewer than 90 files uses two digits, fewer than 950 uses three, otherwise five. The count includes recognized metadata files, as before. Mixed/non-numeric names are refused when repair is needed.
 - Delete `__MACOSX`, `.DS_Store`, `Thumbs.db`, and `Thumbs1.db`. Keep the existing removal list for unwanted text/web/sidecar extensions; reject other unsupported files.
 - Flatten one wrapper folder, including the existing special case of one empty wrapper containing one leaf folder. Multiple leaf folders remain separate; unsupported deeper layouts and mixed root pages/subfolders are refused.
-- Missing ComicInfo.xml is allowed. When present, update PageCount and rebuild Pages from the chosen images, with page zero marked FrontCover. Preserve the existing line-based formatting and unrelated metadata. Unsupported formatting or invalid/inconsistent XML now fails safely instead of allowing a replacement with omitted metadata.
+- Missing ComicInfo.xml is allowed. When present, parse XML and update PageCount and rebuild Pages from the chosen images, with page zero marked FrontCover. Compact XML, different indentation, empty page sections, and missing PageCount/Pages elements are supported. Other metadata, namespaced elements/attributes, and comments/processing instructions inside the root are preserved. Output uses UTF-8 and two-space indentation; namespace prefixes may change. Malformed XML, incorrect roots, and duplicate page sections/counts fail safely before archive replacement.
 - Write CompressionLog.txt and use its presence at the archive root as the batch skip marker. Single-file compression still permits explicit recompression.
 
 The uniform-color detection bug was subsequently fixed with approval: the shared detector checks mean chroma distance from neutral as well as the existing variation test, with the same tolerance. Uniform colors and sufficiently tinted pages now receive color quality 60. This intentionally changes their compressed bytes and can change whether WebP meets the retention threshold; marked archives remain skipped.
@@ -82,7 +82,7 @@ PYTHONPATH=Python python3 -m unittest discover -s Python/tests -v
 
 The regression suite uses disposable fixtures and simulated failures. It covers exact retention boundaries, unchanged encoder settings, forced compression, original page preservation, resize/page XML results, padding cutoffs, cleanup/flattening, concurrency isolation, collisions, invalid archives/XML, failed copies/encoding/builds/replacement, existing destinations, metadata escaping, and conversion commit ordering.
 
-A review-time comparison against the original compressor covered six fixture/override combinations: page bytes, member names, ComicInfo XML, and logs matched exactly except timestamps. Only the original multiline log export incompatibility was patched to make that comparison runnable. ZIP container bytes/timestamps are not claimed to be identical. Real RAR extraction and desktop dialogs require separate platform validation; conversion tests simulate the external extractor.
+A comparison before the structural XML update covered six fixture/override combinations against the original compressor: page bytes, member names, ComicInfo XML, and logs matched exactly except timestamps. Only the original multiline log export incompatibility was patched to make that comparison runnable. ComicInfo formatting is now normalized, while its other metadata values and the established page attribute policy are preserved. ZIP container bytes/timestamps are not claimed to be identical. Real RAR extraction and desktop dialogs require separate platform validation; conversion tests simulate the external extractor.
 
 ## Future Work
 
