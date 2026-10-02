@@ -9,7 +9,7 @@ import errno
 from unittest.mock import patch
 
 from PIL import Image
-from features.images import processing
+from features.images import actions, processing
 
 
 class ImageStagingTests(unittest.TestCase):
@@ -52,6 +52,38 @@ class ImageStagingTests(unittest.TestCase):
                     self.assertTrue(self.run_batch())
                 self.assertEqual(source.read_bytes(), original)
                 self.assertFalse((self.root / '.page.webp').exists())
+
+    def test_excluding_webp_preserves_inputs_and_skips_outputs_on_repeated_runs(self):
+        existing = self.source('existing.WEBP')
+        original = existing.read_bytes()
+        invalid = self.root / 'invalid.webp'
+        invalid.write_bytes(b'not an image')
+        subfolder = self.root / 'nested'
+        subfolder.mkdir()
+        incoming = subfolder / 'incoming.png'
+        Image.new('RGBA', (32,32), (255,0,0,128)).save(incoming)
+        kwargs = dict(target_dir=self.root, recursive=True, always_keep_compressed=True,
+                      quality_color=60, quality_grayscale=35, max_long_edge=None,
+                      max_height=None, exclude_webp=True)
+        self.assertTrue(actions.batch_compress_to_webp(**kwargs))
+        self.assertEqual(existing.read_bytes(), original)
+        self.assertEqual(invalid.read_bytes(), b'not an image')
+        output = incoming.with_suffix('.webp')
+        self.assertFalse(incoming.exists())
+        encoded = output.read_bytes()
+        with patch.object(processing.ImageFile, 'compress') as compress:
+            self.assertTrue(actions.batch_compress_to_webp(**kwargs))
+            compress.assert_not_called()
+        self.assertEqual(output.read_bytes(), encoded)
+        self.assertEqual(existing.read_bytes(), original)
+
+    def test_disabling_webp_exclusion_allows_recompression(self):
+        source = self.source()
+        original = source.read_bytes()
+        with patch.object(processing.ImageFile, 'compress', self.fake_encoder(source, original, 74)):
+            self.assertTrue(actions.batch_compress_to_webp(
+                self.root, False, True, 60, 35, None, None, exclude_webp=False))
+        self.assertEqual(source.read_bytes(), b'compressed output')
 
     def test_webp_source_is_replaced_below_threshold(self):
         source = self.source()
