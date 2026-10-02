@@ -5,13 +5,15 @@ CBR to CBZ conversion helpers for the Logistics Comics feature.
 # ----------------------------------------------------------------------------------------------------------------------
 # IMPORTS
 
-import os
 from pathlib import Path
 from typing import List
+from tempfile import TemporaryDirectory
 
 import config
 
 from commonUtils import dirUtils, fileUtils, zipUtils
+from commonUtils.debugUtils import Severity, log
+from .archive_io import replace_archive, archive_unchanged
 
 
 show_verbose = True
@@ -28,64 +30,34 @@ def get_temp_convert_path(convert_name) -> Path:
     return temp_convert_path
 
 
-def convert_cbr_to_cbz(target_file_path: Path):
-    """Convert one CBR archive to CBZ, replacing the original CBR on success."""
-
-    file = target_file_path
-
-    temp_convert_path = get_temp_convert_path('CBRtoCRZ-Convert')
-
-    if not os.path.isdir(temp_convert_path):
-        print('\nConvert path did not exist! Creating...')
-        os.makedirs(temp_convert_path)
-    else:
-        print('Convert path existed! Proceeding...')
-
-    temp_convert_directory = dirUtils.Directory(temp_convert_path)
-
-    temp_dir_contents = os.listdir(temp_convert_path)
-    if len(temp_dir_contents) != 0:
-        print('Convert path contained some files. Obliterating...')
-        temp_convert_directory.delete_contents()
-    else:
-        print('Convert path did not contain any files. Proceeding...')
-
-    print('Starting conversion now!\n')
-
-    file_name_zip = file.with_suffix('.zip')
-    file_name_cbz = file.with_suffix('.cbz')
-
+def convert_cbr_to_cbz(target_file_path: Path) -> bool:
+    """Delete a CBR only after its CBZ has been built and verified successfully."""
+    source = Path(target_file_path)
+    destination = source.with_suffix('.cbz')
+    if destination.exists() or destination.is_symlink():
+        log(Severity.ERROR, 'CBR conversion', f'Destination already exists: {destination}')
+        return False
     try:
-        temp_convert_directory.delete_contents()
-
-        zipUtils.unrar_file(
-            file,
-            temp_convert_path,
-            unrar_sw_path=Path(config.LogisticsConfig().path_logistics_software_win, 'unrar')
-        )
-
-        zipUtils.zip_file(temp_convert_path, file_name_zip, keep_root=False)
-
-        fileUtils.rename_file(file_name_zip, file_name_cbz)
-
-        temp_convert_directory.delete_contents()
-
-        original_file = fileUtils.File(file)
-        original_file.delete_file()
-
+        original_stat = source.stat()
+        with TemporaryDirectory(prefix='logistics-cbr-', ignore_cleanup_errors=True) as workspace:
+            extracted = Path(workspace)
+            # Let patool discover an installed extractor on the current platform.
+            # The old Windows software path was also passed on macOS/Linux.
+            result = zipUtils.unrar_file(source, extracted)
+            # unrar_file returns None on success; an explicit False is a failure.
+            if result is False:
+                raise OSError(f'Could not extract {source}')
+            if not archive_unchanged(source, original_stat):
+                raise RuntimeError(f'CBR changed while extracting: {source}')
+            replace_archive(extracted, destination, overwrite=False)
+        if not archive_unchanged(source, original_stat):
+            raise RuntimeError(f'CBR changed while creating CBZ: {source}')
+        if not fileUtils.File(source).delete_file():
+            raise OSError(f'CBZ created, but original CBR could not be deleted: {source}')
         return True
-
-    except:
-        if os.path.exists(file_name_zip):
-            zip_file = fileUtils.File(file_name_zip)
-            zip_file.delete_file()
-        elif os.path.exists(file_name_cbz):
-            cbz_file = fileUtils.File(file_name_cbz)
-            cbz_file.delete_file()
-
-        temp_convert_directory.delete_contents()
-
-    return False
+    except Exception as error:
+        log(Severity.ERROR, 'CBR conversion', f'Could not convert "{source}": {error}')
+        return False
 
 
 def dir_batch_convert_cbr_to_cbz(target_dir, recursive):
@@ -107,8 +79,10 @@ def dir_batch_convert_cbr_to_cbz(target_dir, recursive):
     for file in cbr_file_lst:
         print(f' - {file.path}')
 
+    successful = True
     for file in cbr_file_lst:
-        convert_cbr_to_cbz(file.path)
+        if not convert_cbr_to_cbz(file.path):
+            successful = False
 
     print('Conversion of {} files completed (as much as possible)!'.format(str(len(cbr_file_lst))))
-    return True
+    return successful

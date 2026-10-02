@@ -1,7 +1,6 @@
+"""CBZ compression orchestration and the established image-retention policy."""
+
 from __future__ import annotations
-"""
-Hosts functions related to CBZ (ComicBook Zip) files
-"""
 
 # ----------------------------------------------------------------------------------------------------------------------
 # AUTHORSHIP INFORMATION - THIS FILE BELONGS TO MARC-ANDRE VOYER HELPER FUNCTIONS CODEBASE
@@ -18,11 +17,18 @@ __status__ = 'Production'
 
 from pathlib import Path
 from typing import *
-from commonUtils import fileUtils, dirUtils, zipUtils
+from commonUtils import fileUtils, dirUtils
 from commonUtils.debugUtils import *
 from features.images import processing as imageUtils
-from datetime import datetime
-from commonUtils.fileTypes import xmlType, txtType, zipType
+import os
+import zipfile
+from tempfile import TemporaryDirectory
+from PIL import Image
+from commonUtils.fileTypes import zipType
+from .comicinfo import ComicInfoXML
+from .compression_stats import CompressionStats, CompressionLog
+from .sanitization import CBZSanitizationMixin
+from .archive_io import replace_archive, validate_archive_members
 
 
 # User Defined Settings
@@ -48,7 +54,8 @@ cbz_img_max_height: Union[None, int] = 2400
 # Decide to keep the compressed image if its size is smaller than this percentage of the original.
 cbz_img_min_allowed_compression_percentage = 75
 
-# Temporary Folders for Compression
+# Legacy paths retained for callers of the ComicInfo export helper.
+# Compression itself uses a private TemporaryDirectory for each archive.
 temp_compression_path = Path(fileUtils.get_user_home_dir(), 'Temp_CBZ_Compression')
 temp_dir_extracted_cbz = Path(temp_compression_path, '1_Extracted_CBZ')
 temp_dir_compressed_imgs = Path(temp_compression_path, '2_Compressed_Images')
@@ -58,196 +65,13 @@ temp_dir_result = Path(temp_compression_path, '3_Result')
 tool_name = 'features.comics.cbz'
 
 
-class ComicInfoXML(xmlType.XMLFile):
-    def __init__(self, path: Path):
-        super().__init__(path)
-
-    def update_pages_in_line_lst(self, cbz_image_file_lst: List[CBZImageFile]) -> bool:
-        """
-        Updates comic pages in the ComicInfo.xml line list, from the provided image list (Page count & information for each page)
-        """
-
-        # Local helper can directly access cbz_image_file_lst and updated_line_lst
-        def append_pages_lines():
-            for page_number, cbz_image_file in enumerate(cbz_image_file_lst):
-                page_line = cbz_image_file.get_comicinfo_xml_line(page_number)
-                updated_line_lst.append(page_line)
-
-        # Check that the list of line isn't 0 lines long, which means the lines were not previously loaded!
-        if len(self.line_lst) == 0:
-            log(Severity.CRITICAL, tool_name, 'Cannot Update Pages in ComicInfo.xml line List as it is empty and not loaded!')
-            return False
-
-        went_through_pages_section = False  # Update once have written the page lines
-        updated_line_lst = []
-        in_page_section = False
-
-        for line in self.line_lst:
-            if line.startswith('  <PageCount>'):
-                updated_line_lst.append(f'  <PageCount>{len(cbz_image_file_lst)}</PageCount>')
-                continue
-            if not in_page_section:
-                if line == '  <Pages />':
-                    log(Severity.WARNING, tool_name, 'ComicInfoXML.update_pages_in_line_lst: Hit the <Pages /> line, meaning no page information was previously registered. Repairing...')
-                    updated_line_lst.append('  <Pages>')
-                    append_pages_lines()
-                    updated_line_lst.append('  </Pages>')
-                    went_through_pages_section = True
-                elif line == '  <Pages>':
-                    updated_line_lst.append(line)
-                    append_pages_lines()
-                    in_page_section = True
-                else:
-                    updated_line_lst.append(line)
-            else:
-                if line == '  </Pages>':
-                    updated_line_lst.append(line)
-                    in_page_section = False
-                    went_through_pages_section = True
-
-        if not went_through_pages_section:
-            log(Severity.CRITICAL, tool_name, f'Did not go through Pages Section of ComicInfo.XML! {self.line_lst}')
-            return False
-
-        self.line_lst = updated_line_lst
-        return True
-
-
-class CompressionStats:
-    def __init__(self):
-        self.has_comicinfo_xml: Optional[bool] = None
-        self.original_images_size = 0
-        self.compressed_images_size = 0
-        self.kept_images_size = 0
-        self.kept_images_compressed_cnt = 0
-        self.kept_images_original_cnt = 0
-        self.total_file_count = 0
-        self.compressed_file_count = 0
-        self.already_compressed_file_count = 0
-        self.error_during_compression = 0
-
-    def reset(self):
-        for key in (
-            "original_images_size", "compressed_images_size",
-            "kept_images_size", "kept_images_compressed_cnt",
-            "kept_images_original_cnt", "total_file_count",
-            "compressed_file_count", "already_compressed_file_count",
-            "error_during_compression"
-        ):
-            setattr(self, key, 0)
-        self.has_comicinfo_xml = None
-
-    def __add__(self, other: CompressionStats) -> CompressionStats:
-        new = CompressionStats()
-        for key in (
-            "original_images_size", "compressed_images_size",
-            "kept_images_size", "kept_images_compressed_cnt",
-            "kept_images_original_cnt", "total_file_count",
-            "compressed_file_count", "already_compressed_file_count",
-            "error_during_compression"
-        ):
-            setattr(new, key, getattr(self, key) + getattr(other, key))
-        return new
-
-    def __iadd__(self, other: CompressionStats) -> CompressionStats:
-        for key in (
-            "original_images_size", "compressed_images_size",
-            "kept_images_size", "kept_images_compressed_cnt",
-            "kept_images_original_cnt", "total_file_count",
-            "compressed_file_count", "already_compressed_file_count",
-            "error_during_compression"
-        ):
-            setattr(self, key, getattr(self, key) + getattr(other, key))
-        return self
-
-    def __to_mb(self, value_bytes: int) -> float:
-        return value_bytes / (1024 * 1024)
-
-    def get_summary(self):
-
-        summary = "||Compression Statistics||\n"
-
-        # conversions and helpers
-
-        reduction_bytes = self.original_images_size - self.kept_images_size
-        new_size_mb = self.get_new_size_mb()
-        orig_size_mb = self.get_original_size_mb()
-        reduction_mb = self.__to_mb(reduction_bytes)
-
-        if self.original_images_size == 0:
-            reduction_pct = 'N/A'
-            new_pct = 'N/A'
-        else:
-            reduction_pct = 100 - (self.kept_images_size / self.original_images_size * 100)
-            reduction_pct = f'-{reduction_pct:.2f}'
-            new_pct = self.kept_images_size / self.original_images_size * 100
-            new_pct = f'{new_pct:.2f}'
-
-        if getattr(self, "total_file_count", 0) > 0:
-            summary += (
-                "  |CBZ Files|\n"
-                f"    Total File Count in Dir:    {self.total_file_count}\n"
-                f"    Already Compressed:         {self.already_compressed_file_count}\n"
-                f"    Error During Compression:   {self.error_during_compression}\n"
-                f"    Successful Compression:     {self.compressed_file_count}\n"
-            )
-
-        summary += (
-            f"  |Images|\n"
-            f"    Original # Kept:            {self.kept_images_original_cnt}\n"
-            f"    Compressed # Kept:          {self.kept_images_compressed_cnt}\n"
-            f"  |Archive|\n"
-            f"    Original Size:              {orig_size_mb:.2f} MB\n"
-            f"    Reduction Size:             {reduction_mb:.2f} MB\n"
-            f"    New Size:                   {new_size_mb:.2f} MB\n"
-            f"    Reduction (%):              {reduction_pct}%\n"
-            f"    New (%):                    {new_pct}%"
-        )
-
-        return summary
-
-    def get_original_size_mb(self):
-        return self.__to_mb(self.original_images_size)
-
-    def get_new_size_mb(self):
-        return self.__to_mb(self.kept_images_size)
-
-    def print_summary(self):
-        """Print only the integer stats in a clean format."""
-        print(self.get_summary())
-
-
-class CompressionLog:
-    def __init__(self, name: str):
-        self.name: str = name
-        self.ext = 'cbz'
-        self.__compression_log_line_lst: List[str] = []
-
-    def append(self, string: str):
-        self.__compression_log_line_lst.append(string)
-
-    def append_skip_line(self):
-        self.__compression_log_line_lst.append('')
-
-    def append_msg_start(self, quality_grayscale, quality_color, always_keep_compressed):
-        self.append(f'|| Compression Log "{self.name}" ||')
-        self.append(f'Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
-        self.append(f'Quality Setting for WEBP Compression: Grayscale: "{quality_grayscale}", Color: "{quality_color}"')
-        if always_keep_compressed:
-            self.append(f'Parameter: Always Keep Compressed Image, Regardless if Smaller')
-        self.append_skip_line()
-
-    def append_msg_end(self, compression_stats: CompressionStats):
-        self.append_skip_line()
-        self.append(compression_stats.get_summary())
-
-    def reset(self):
-        self.__compression_log_line_lst = []
-
-    def export(self, export_path: Path):
-        txt_file = txtType.TXTFile(export_path)
-        txt_file.line_lst = self.__compression_log_line_lst
-        txt_file.write_lines()
+def validate_compression_options(always_keep_compressed: bool,
+                                 preserve_animated_and_multipage_originals: bool) -> bool:
+    if always_keep_compressed and preserve_animated_and_multipage_originals:
+        log(Severity.ERROR, tool_name,
+            'Preserve animated and multipage originals cannot be used at same time as always keep compressed images.')
+        return False
+    return True
 
 
 class CBZImageFile(imageUtils.ImageFile):
@@ -264,8 +88,7 @@ class CBZImageFile(imageUtils.ImageFile):
             return f'    <Page Image="{page_num}" ImageSize="{self.size}" ImageWidth="{self.width}" ImageHeight="{self.height}" />'
 
 
-class CBZFile(zipType.ZIPFile):
-    # TODO: Test with a large comics folder and see if issues occur.
+class CBZFile(CBZSanitizationMixin, zipType.ZIPFile):
     def __init__(self, path: Path):
         super().__init__(path)
 
@@ -278,229 +101,14 @@ class CBZFile(zipType.ZIPFile):
         self.compression_stats: CompressionStats = CompressionStats()
         # Compression log
         self.compression_log: CompressionLog = CompressionLog(self.file_name)
-        self.__compression_log_line_lst: List[str] = []
 
     def is_already_compressed(self):
-        return any(f == 'CompressionLog.txt' for f in self.get_root_file_lst())
+        with zipfile.ZipFile(self.path) as archive:
+            return 'CompressionLog.txt' in archive.namelist()
 
-    def sanitize_extracted_cbz(self, extracted_dir) -> bool:
-        """
-        Sanitize files of an extracted CBZ whenever possible. AKA clean up dirty files!
-        If not possible, return an error.
-        """
-        sanitize_tool_name = 'cbzUtils.CBZFile.sanitize_extracted_cbz'
-        expected_file_name_lst = ['ComicInfo.xml', 'CompressionLog.txt']
-        to_delete_file_name_lst = ['.DS_Store', 'Thumbs.db', 'Thumbs1.db']
-        extracted_directory = dirUtils.Directory(extracted_dir)
-
-        # Delete __MACOSX directories if there are any. Before evaluating other stuff.
-        directory_lst: List[dirUtils.Directory] = extracted_directory.list_directories()
-        for directory in directory_lst:
-            if directory.name == '__MACOSX':
-                result = directory.delete()
-                if result:
-                    msg = 'Found rogue folder "__MACOSX" in archive, deleted!'
-                    log(Severity.WARNING, sanitize_tool_name, msg)
-                # Abort (critical) if it could not delete directory
-                else:
-                    msg = f'Could not delete __MACOSX directory in {self.path}!'
-                    log(Severity.CRITICAL, sanitize_tool_name, msg)
-                    return False
-
-        # Delete files we know we must delete (incl. from subdirectories)
-        extracted_file_lst: List[fileUtils.File] = extracted_directory.list_files(recursive=True)
-        for extracted_file in extracted_file_lst:
-            # If File identified to DELETE
-            if extracted_file.file_name in to_delete_file_name_lst:
-                msg = f'Deleting file from to-delete list: "{extracted_file.file_name}"'
-                log(Severity.WARNING, sanitize_tool_name, msg)
-                result = extracted_file.delete_file()
-                if not result:
-                    log(Severity.CRITICAL, sanitize_tool_name, f'Could not delete file "{extracted_file.file_name}"')
-                    return False
-                continue
-            # If File expected in archive, continue
-            elif extracted_file.file_name in expected_file_name_lst:
-                continue
-            # If File is of these file types, not expected in archive unless previous "continue"
-            elif extracted_file.ext in ['txt', 'url', 'nfo', 'html', 'sfv', 'rtf', 'ini', 'dat', 'css']:
-                msg = f'Deleting unexpected file of extension .{extracted_file.ext}: "{extracted_file.file_name}"'
-                log(Severity.WARNING, sanitize_tool_name, msg)
-                result = extracted_file.delete_file()
-                if not result:
-                    log(Severity.CRITICAL, sanitize_tool_name, f'Could not delete file "{extracted_file.file_name}"')
-                    return False
-                continue
-            elif extracted_file.ext not in imageUtils.image_file_cls_supported_ext_lst:
-                msg = (f'Found unexpected file in archive!: "{extracted_file.file_name}" Manual cleanup in the original'
-                       f'.CBZ file required!')
-                log(Severity.ERROR, sanitize_tool_name, msg)
-                return False
-
-        # If there is any subdirectory, it could be unexpected
-        if fileUtils.has_subdirectories(extracted_directory.path):
-            directory_lst = extracted_directory.list_directories()
-
-            # Abort if root has subdir + any unsuspected file (including any image)
-            root_file_lst: List[fileUtils.File] = extracted_directory.list_files(recursive=False)
-            for root_file in root_file_lst:
-                if root_file.file_name not in expected_file_name_lst:
-                    msg = ('There is at least one subdirectory and at least one unsuspected file at the root: '
-                           f'"{root_file.file_name}", which is not supported. Manual cleanup in the original '
-                           f'.CBZ file required!')
-                    log(Severity.ERROR, sanitize_tool_name, msg)
-                    return False
-
-            # ----------------------------------------------------------------------------------------------------------
-            # Weird Edge case I had to account for (else it's repetitive manual work)
-            # If there is exactly one directory, which itself contains no files and exactly one subdirectory
-            # And that subdirectory does not contain itself anymore subdirectories, move the files to the directory.
-            if len(directory_lst) == 1:
-                directory = directory_lst[0]
-                subdirectory_lst: List[dirUtils.Directory] = directory.list_directories()
-                dir_file_lst: List[fileUtils.File] = directory.list_files(recursive=False)
-                if len(subdirectory_lst) == 1 and len(dir_file_lst) == 0:
-                    subdirectory = subdirectory_lst[0]
-                    if not fileUtils.has_subdirectories(subdirectory.path):
-                        subdir_file_lst: List[fileUtils.File] = subdirectory.list_files(recursive=False)
-                        if len(subdir_file_lst) > 0:
-                            msg = ('Found only a single directory, which itself contains no files and exactly one '
-                                   'subdirectory, which itself contains files but not any more directories. '
-                                   'Moving files from the subdirectory to the directory.')
-                            log(Severity.WARNING, tool_name, msg)
-                            for subdir_file in subdir_file_lst:
-                                destination_file_path = Path(
-                                    str(subdir_file.path).replace(str(subdirectory.path), str(directory.path))
-                                )
-                                result = fileUtils.move_file(subdir_file.path, destination_file_path)
-                                if not result:
-                                    msg = (f'File move unsuccessful (source: "{subdir_file.path}", '
-                                           f'destination: "{destination_file_path}")!')
-                                    log(Severity.CRITICAL, sanitize_tool_name, msg)
-                                    return False
-                            result = subdirectory.delete()
-                            if not result:
-                                msg = f'Directory deletion was unsuccessful: "{subdirectory.path}"!'
-                                log(Severity.CRITICAL, sanitize_tool_name, msg)
-                                return False
-
-            # Refresh directory_lst because it may have changed
-            directory_lst = extracted_directory.list_directories()
-            # ----------------------------------------------------------------------------------------------------------
-
-            # Abort if any directory itself has a subdirectory
-            for directory in directory_lst:
-                if fileUtils.has_subdirectories(directory.path):
-                    msg = (f'The subdirectory "{directory.name}" has at least one subdirectory itself, which is '
-                           f'not supported. Manual cleanup in the original .CBZ file required!')
-                    log(Severity.ERROR, sanitize_tool_name, msg)
-                    return False
-
-            # If there was just one directory, move the files in it to the root
-            if len(directory_lst) == 1:
-                directory = directory_lst[0]
-                subdir_file_lst: List[fileUtils.File] = directory.list_files(recursive=False)
-                for subdir_file in subdir_file_lst:
-                    destination_path = Path(extracted_directory.path, subdir_file.file_name)
-                    result = fileUtils.move_file(subdir_file.path, destination_path)
-                    if not result:
-                        msg = (f'File move unsuccessful (source: "{subdir_file.path}", '
-                               f'destination: "{destination_path}")!')
-                        log(Severity.CRITICAL, sanitize_tool_name, msg)
-                        return False
-                # Delete empty dir after everything has been moved to the root
-                if not fileUtils.has_subdirectories(directory.path) and len(directory.list_files(recursive=True)) == 0:
-                    result = directory.delete()
-                    if not result:
-                        msg = f'Could not delete "{directory.path}"!'
-                        log(Severity.CRITICAL, tool_name, msg)
-                        return False
-                else:
-                    msg = f'Could not delete "{directory.path}" because it is not empty!'
-                    log(Severity.CRITICAL, tool_name, msg)
-                    return False
-
-        # Get updated list of files (things may have been moved in previous step)
-        extracted_file_lst = extracted_directory.list_files(recursive=True)
-        need_padding_repair = False
-        for extracted_file in extracted_file_lst:
-            if len(extracted_file.file_name) < 2:  # If file name is incredibly short, throw error
-                msg = (f'File "{extracted_file.file_name}" has unbelievably tiny name. Manual cleanup in '
-                       f'the original .CBZ file required!')
-                log(Severity.ERROR, sanitize_tool_name, msg)
-                return False
-            elif extracted_file.file_name[1] == '.' and extracted_file.file_name[0] in '0123456789':
-                msg = (f'Page "{extracted_file.file_name}" within archive are named without padding (ex. 1.jpg), which can lead to improper '
-                       f'sorting in applications such as ComicRack. Renaming with padding...')
-                log(Severity.WARNING, sanitize_tool_name, msg)
-                need_padding_repair = True
-                break  # Identified that we need padding repair, no need to process further in verifications.
-
-        # Padding repair
-        if need_padding_repair:  # When flagged previously as needed.
-            result = self.repair_padding(file_lst=extracted_file_lst)
-            if not result:
-                msg = f'Error whilst applying padding! Manual cleanup in the original .CBZ file required!'
-                log(Severity.ERROR, sanitize_tool_name, msg)
-                return False
-
-        # Everything went as expected
-        return True
-
-    def repair_padding(self, file_lst: List[fileUtils.File]) -> bool:
-        """
-        Repair padding on a list of files
-        """
-        padding_tool_name = 'Repair .CBZ File Padding'
-
-        # Get padding length
-        if len(file_lst) < 90:  # Could put 99, but being safer than sorry
-            padding_num_dec: int = 2
-        elif len(file_lst) < 950:  # Could put 999, but being safer than sorry
-            padding_num_dec: int = 3
-        else:
-            padding_num_dec: int = 5
-
-        for file in file_lst:
-            # Skip padding on non-image files
-            if file.ext not in imageUtils.image_file_cls_supported_ext_lst:
-                continue
-
-            # If there is not a single dot in the file name, throw an error
-            if file.file_name.count('.') != 1:
-                msg = (f'File has weird number of dots in file name (just expecting number + extension!) '
-                       f'Manual cleanup in the original .CBZ file required!')
-                log(Severity.ERROR, padding_tool_name, msg)
-                return False
-
-            # Check there are only characters in name without extension
-            for char in file.name_without_ext:
-                if char not in '0123456789':
-                    msg = (f'File naming makes padding repair impossible! Name: "{file.file_name}".'
-                           f'Manual cleanup in the original .CBZ file required!')
-                    log(Severity.ERROR, padding_tool_name, msg)
-                    return False
-
-            # Determine padded name (without ext)
-            padded_file_name_without_ext = file.name_without_ext.zfill(padding_num_dec)
-            # Determine padding path
-            padded_path = Path(file.path.parent, f'{padded_file_name_without_ext}.{file.ext}')
-            # If padded path is same as original (ex. 10.jpg with 2 of padding remains 10.jpg), no need to rename
-            if file.path == padded_path:
-                continue
-            # Rename file
-            result = fileUtils.rename_file(file.path, padded_path)
-            if not result:
-                msg = f'File {file.path} could not be renamed!'
-                log(Severity.CRITICAL, padding_tool_name, msg)
-                return False
-
-        # If got here, succeeded
-        return True
-
-    def export_comicinfo_xml_with_updated_pages(self, cbz_img_cls_lst: List[CBZImageFile], export_path: Path):
+    def export_comicinfo_xml_with_updated_pages(self, cbz_img_cls_lst: List[CBZImageFile], export_path: Path, extracted_dir: Path | None = None):
         # Build ComicInfo.xml with updated pages list (If existing ComicInfo.xml found)
-        comic_info_xml_path = Path(temp_dir_extracted_cbz, 'ComicInfo.xml')
+        comic_info_xml_path = Path(extracted_dir or temp_dir_extracted_cbz, 'ComicInfo.xml')
         if os.path.isfile(comic_info_xml_path):
             msg = 'ComicInfo.xml located! Rebuilding with updated pages list...'
             log(Severity.DEBUG, tool_name, msg)
@@ -520,28 +128,40 @@ class CBZFile(zipType.ZIPFile):
             self.compression_stats.has_comicinfo_xml = False
         return True
 
-    def compress_to_webp(self, always_keep_compressed: bool = False):
+    def compress_to_webp(self, always_keep_compressed: bool = False,
+                         preserve_animated_and_multipage_originals: bool = False):
+        """Compress in an isolated workspace; replace the original only on success."""
+        self.compression_stats.reset()
+        self.compression_log.reset()
+        if not validate_compression_options(always_keep_compressed, preserve_animated_and_multipage_originals):
+            return False
+        try:
+            original_stat = self.path.stat()
+            with TemporaryDirectory(prefix='logistics-cbz-', ignore_cleanup_errors=True) as workspace:
+                return self._compress_to_webp(Path(workspace), always_keep_compressed, original_stat,
+                                              preserve_animated_and_multipage_originals)
+        except Exception as error:
+            log(Severity.ERROR, tool_name, f'Compression failed for "{self.path}": {error}')
+            return False
+
+    def _compress_to_webp(self, workspace: Path, always_keep_compressed: bool, original_stat,
+                          preserve_animated_and_multipage_originals: bool):
         func_name = 'compress_to_webp'
+        temp_dir_extracted_cbz = workspace / '1_Extracted_CBZ'
+        temp_dir_compressed_imgs = workspace / '2_Compressed_Images'
+        temp_dir_result = workspace / '3_Result'
 
-        # --------------------------------------------------------------------------------------------------------------
-        # RESET
-        self.compression_stats.reset()  # Statistics
-        self.compression_log.reset()  # Logs
-        fileUtils.make_dir(temp_compression_path)  # Make directory (if it doesn't exist)
-        dirUtils.Directory(temp_compression_path).delete_contents()  # Delete directory contents
-
-        # --------------------------------------------------------------------------------------------------------------
         # START LOGS
         log(Severity.INFO, tool_name, f'Compressing "{self.file_name}"!')
         self.compression_log.append_msg_start(cbz_img_quality_grayscale, cbz_img_quality_color, always_keep_compressed)
+        if preserve_animated_and_multipage_originals:
+            self.compression_log.append('Parameter: Preserve animated and multipage originals')
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP ONE : EXTRACTION OF .CBZ IN TEMP DIRECTORY
-        temp_dir_extracted_cbz_dir: dirUtils.Directory = dirUtils.Directory(temp_dir_extracted_cbz)
-        if not temp_dir_extracted_cbz_dir.is_dir():
-            temp_dir_extracted_cbz_dir.make_dir()
-        temp_dir_extracted_cbz_dir.delete_contents()
+        temp_dir_extracted_cbz.mkdir()
 
+        validate_archive_members(self.path)
         result = self.extract(temp_dir_extracted_cbz)
         if not result:
             msg = f'Unable to extract "{self.path}" properly!'
@@ -559,10 +179,19 @@ class CBZFile(zipType.ZIPFile):
         # --------------------------------------------------------------------------------------------------------------
         # STEP THREE: GATHER LIST OF IMAGE FILES FROM EXTRACTED DIRECTORY
         img_file_cls_lst: List[CBZImageFile] = []
+        preserved_paths = set()
         extracted_dir = dirUtils.Directory(temp_dir_extracted_cbz)
         extracted_file_lst: List[fileUtils.File] = extracted_dir.list_files(recursive=True)
         for extracted_file in extracted_file_lst:
+            if (extracted_file.file_name == 'ComicInfo.xml'
+                    and extracted_file.path.parent != temp_dir_extracted_cbz):
+                raise ValueError(f'Nested ComicInfo.xml would be omitted: {extracted_file.path}')
             if extracted_file.ext in imageUtils.image_file_cls_supported_ext_lst:
+                # Reject unreadable pages before ImageFile's interactive dimension error.
+                with Image.open(extracted_file.path) as image:
+                    if preserve_animated_and_multipage_originals and getattr(image, 'n_frames', 1) > 1:
+                        preserved_paths.add(extracted_file.path)
+                    image.verify()
                 image_file_cls = CBZImageFile(extracted_file.path)
                 self.compression_stats.original_images_size += image_file_cls.size  # Log Size in Stats
                 img_file_cls_lst.append(image_file_cls)
@@ -574,25 +203,36 @@ class CBZFile(zipType.ZIPFile):
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP FOUR: COMPRESS LIST OF IMAGES TO .WEBP
-        temp_dir_compressed_imgs_dir: dirUtils.Directory = dirUtils.Directory(temp_dir_compressed_imgs)
-        if not temp_dir_compressed_imgs_dir.is_dir():
-            temp_dir_compressed_imgs_dir.make_dir()
-        temp_dir_compressed_imgs_dir.delete_contents()
+        temp_dir_compressed_imgs.mkdir()
+
+        if not img_file_cls_lst:
+            raise ValueError('Archive contains no image pages')
+        output_paths = set()
+        for image in img_file_cls_lst:
+            relative = image.path.relative_to(temp_dir_extracted_cbz)
+            if image.path not in preserved_paths:
+                relative = relative.with_suffix('.webp')
+            key = relative.as_posix().casefold()
+            if key in output_paths:
+                raise ValueError(f'Pages would overwrite the same WebP file: {relative}')
+            output_paths.add(key)
 
         # Compress to WEBP
         for img_file_cls in img_file_cls_lst:
+            if img_file_cls.path in preserved_paths:
+                continue
 
             # Get output path
             # Doing this to account for potential sub folders.
-            img_original_dir_path_str = str(img_file_cls.path.parent)
-            img_compress_dir_path_str = img_original_dir_path_str.replace(str(temp_dir_extracted_cbz), str(temp_dir_compressed_imgs))
-            img_compress_file_path = Path(img_compress_dir_path_str, f'{img_file_cls.name_without_ext}.webp')
+            img_compress_file_path = temp_dir_compressed_imgs / img_file_cls.path.relative_to(
+                temp_dir_extracted_cbz).with_suffix('.webp')
 
             result = img_file_cls.compress(dest_path=img_compress_file_path,
                                            quality_grayscale=cbz_img_quality_grayscale,
                                            quality_color=cbz_img_quality_color,
                                            max_long_edge=cbz_img_max_long_edge,
-                                           max_height=cbz_img_max_height)
+                                           max_height=cbz_img_max_height,
+                                           preserve_alpha=False)
             if not result:
                 msg = f'An error occurred whilst compressing {img_file_cls.file_name}!'
                 log(Severity.ERROR, f'cbzUtils.CBZFile.{func_name}', msg)
@@ -606,7 +246,12 @@ class CBZFile(zipType.ZIPFile):
         for img_file_cls in img_file_cls_lst:
             page_count += 1
             # Select compressed image if at least smaller by specified amount, else keep original
-            if always_keep_compressed or img_file_cls.compressed_image.size < img_file_cls.size * cbz_img_min_allowed_compression_percentage / 100:
+            if img_file_cls.path in preserved_paths:
+                kept_image_cls = img_file_cls
+                self.compression_log.append(
+                    f'Page #{page_count:04d}: {kept_image_cls.get_description()}, Verdict: Preserved animated/multipage original')
+                self.compression_stats.kept_images_original_cnt += 1
+            elif always_keep_compressed or img_file_cls.compressed_image.size < img_file_cls.size * cbz_img_min_allowed_compression_percentage / 100:
                 if always_keep_compressed:
                     verdict = 'ALWAYS Compressed Image'
                 else:
@@ -623,29 +268,26 @@ class CBZFile(zipType.ZIPFile):
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP SIX: MOVE KEPT IMAGES TO RESULT DIRECTORY
-        temp_dir_result_dir: dirUtils.Directory = dirUtils.Directory(temp_dir_result)
-        if not temp_dir_result_dir.is_dir():
-            temp_dir_result_dir.make_dir()
-        temp_dir_result_dir.delete_contents()
+        temp_dir_result.mkdir()
 
         # Move kept images to result folder
         for kept_image_cls in kept_image_cls_lst:
-            kept_img_compress_dir_path_str = str(kept_image_cls.path.parent)
-
-            # Attempt to replace paths, will replace whichever it can (if kept compressed or original image)
-            # Doing this to account for potential sub folders.
-            kept_img_result_dir_path_str = kept_img_compress_dir_path_str.replace(str(temp_dir_compressed_imgs), str(temp_dir_result))
-            kept_img_result_dir_path_str = kept_img_result_dir_path_str.replace(str(temp_dir_extracted_cbz), str(temp_dir_result))
-            kept_img_result_file_path = Path(kept_img_result_dir_path_str, kept_image_cls.file_name)
+            source_root = (temp_dir_compressed_imgs if kept_image_cls.path.is_relative_to(
+                temp_dir_compressed_imgs) else temp_dir_extracted_cbz)
+            kept_img_result_file_path = temp_dir_result / kept_image_cls.path.relative_to(source_root)
 
             # Copy image in Result folder
-            fileUtils.copy_file(kept_image_cls.path, kept_img_result_file_path)
+            if not fileUtils.copy_file(kept_image_cls.path, kept_img_result_file_path):
+                raise OSError(f'Could not copy page: {kept_image_cls.path}')
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP SEVEN: WRAP-UP OTHER FILES
         # Export ComicInfo.xml (With Updated Pages List!) to Result Directory
-        self.export_comicinfo_xml_with_updated_pages(cbz_img_cls_lst=kept_image_cls_lst,
-                                                     export_path=Path(temp_dir_result, 'ComicInfo.xml'))
+        if not self.export_comicinfo_xml_with_updated_pages(
+                cbz_img_cls_lst=kept_image_cls_lst,
+                export_path=Path(temp_dir_result, 'ComicInfo.xml'),
+                extracted_dir=temp_dir_extracted_cbz):
+            raise ValueError('ComicInfo.xml page update failed')
         # Add summary to compression log
         self.compression_log.append_msg_end(self.compression_stats)
         # Dump Compression Log File on Disk
@@ -653,12 +295,7 @@ class CBZFile(zipType.ZIPFile):
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP EIGHT: FROM CONTENTS OF THE RESULT DIRECTORY, BUILD ARCHIVE OVERWRITING THE ORIGINAL .CBZ
-        zipUtils.zip_file(temp_dir_result, self.path, keep_root=False)
-
-        # --------------------------------------------------------------------------------------------------------------
-        # STEP NINE: CLEAN TEMP DIRECTORIES
-        # Wipe directories
-        dirUtils.Directory(temp_compression_path).delete_contents()
+        replace_archive(temp_dir_result, self.path, expected_stat=original_stat)
 
         # --------------------------------------------------------------------------------------------------------------
         # END LOGS
@@ -668,29 +305,17 @@ class CBZFile(zipType.ZIPFile):
         return True
 
 
-def batch_compress_cbz(target_dir: Union[str, Path], recursive: bool = True, always_keep_compressed: bool = False):
-    """
-    Tool to compress .CBZ files, so they take less space. Only tested on macOS for now.
+def batch_compress_cbz(target_dir: Union[str, Path], recursive: bool = True, always_keep_compressed: bool = False,
+                       preserve_animated_and_multipage_originals: bool = False) -> CompressionStats | None:
+    """Compress unmarked CBZs independently and return aggregate statistics.
 
-    1. Builds up a list of all .CBZ files in a given directory (recursively)
-    2. For each .CBZ file which does not contain a CompressionLog.txt file:
-        a.) Wipe ~/Temp_CBZ_Compression (recursively). Confirm it worked.
-        b.) Extract .CBZ in ~/Temp_CBZ_Compression/Extracted_CBZ
-        c.) Get list of extracted image files (.BMP, .JPG, .JPEG, .PNG, .WEBM) <- Throw error if sub-folders or unexpected file types
-        d.) Compress as .JPG format (using desired compression setting) in ~/Temp_CBZ_Compression/Compressed_JPGs
-        For each compressed .JPG file:
-            a.) If at least 25% smaller than the original, copy compressed (else, original) to ~/Temp_CBZ_Compression/Result
-        e.) If ComicInfo.XML file in ~Temp_CBZ_Compression/Input, recreate using resulting images in Output dir
-        f.) Write a CompressionLog.txt file in Output, logging if originals or compressed version is kept
-        g.) Compress contents of ~/Temp_CBZ_Compression/Output to .CBZ, overwriting the original file
-    3. Write to console that conversion is complete, giving a brief summary outlining the following:
-        -Compressed Number of .CBZ Files / Total Number of .CBZ Files (Newly Compressed vs Already Compressed)
-        -Amount of Images Compressed that were kept vs using original instead (Number & Percentage)
-        -Space Savings (Before -> After) (Number & Percentage)
-    :param target_dir:
-    :param recursive: When True, compress .CBZ within subdirectories
-    :param always_keep_compressed: When True, always take the compressed image in lieu of the original file.
+    Preserve the established cleanup, ordering, padding, WebP settings and
+    strict size-retention rule. A failed archive is kept intact and the batch
+    continues with later files. Only successful results enter size totals.
+    Conflicting options log an error and return None before accessing archives.
     """
+    if not validate_compression_options(always_keep_compressed, preserve_animated_and_multipage_originals):
+        return None
 
     # Display basic information in console
     log_message = f'Initialize Batch Compress .CBZ in {target_dir} '
@@ -719,19 +344,28 @@ def batch_compress_cbz(target_dir: Union[str, Path], recursive: bool = True, alw
     # Filter for cbz files which need conversion
     cbz_file_cls_to_compress_lst: List[CBZFile] = []
     for cbz_file_cls in cbz_file_cls_lst:
-        if cbz_file_cls.is_already_compressed():
+        try:
+            already_compressed = cbz_file_cls.is_already_compressed()
+        except (OSError, zipfile.BadZipFile) as error:
+            compression_stats.error_during_compression += 1
+            log(Severity.ERROR, tool_name, f'Cannot read "{cbz_file_cls.path}": {error}')
+            continue
+        if already_compressed:
             compression_stats.already_compressed_file_count += 1
             log(Severity.WARNING, tool_name, f'Skipping "{cbz_file_cls.file_name}"; Already Compressed!')
         else:
             cbz_file_cls_to_compress_lst.append(cbz_file_cls)
 
     # Log number of files not yet compressed
-    log(Severity.INFO, tool_name, f'{len(cbz_file_cls_to_compress_lst)}/{len(cbz_file_cls_lst)} ({len(cbz_file_cls_to_compress_lst)/len(cbz_file_cls_lst)*100}%) of CBZ Files Awaiting Compression!')
+    pending_percentage = len(cbz_file_cls_to_compress_lst) / len(cbz_file_cls_lst) * 100 if cbz_file_cls_lst else 0
+    log(Severity.INFO, tool_name, f'{len(cbz_file_cls_to_compress_lst)}/{len(cbz_file_cls_lst)} ({pending_percentage}%) of CBZ Files Awaiting Compression!')
 
     # Compress CBZ
     compression_stats.total_file_count = len(cbz_file_cls_lst)
     for cbz_file in cbz_file_cls_to_compress_lst:
-        result = cbz_file.compress_to_webp(always_keep_compressed=always_keep_compressed)
+        result = cbz_file.compress_to_webp(
+            always_keep_compressed=always_keep_compressed,
+            preserve_animated_and_multipage_originals=preserve_animated_and_multipage_originals)
         if result:
             compression_stats.compressed_file_count += 1
             compression_stats += cbz_file.compression_stats
@@ -740,3 +374,4 @@ def batch_compress_cbz(target_dir: Union[str, Path], recursive: bool = True, alw
             compression_stats.error_during_compression += 1
 
     compression_stats.print_summary()
+    return compression_stats

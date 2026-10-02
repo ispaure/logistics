@@ -2,6 +2,7 @@
 Comics-specific workflow dialogs.
 """
 
+from commonUtils import ui
 from commonUtils.ui import pyside
 
 from features.comics import actions as comics_actions
@@ -9,7 +10,16 @@ from features.comics import cbz, conversion, metadata
 from ui_new.dialogs.tool_dialog import ToolDialog, coerce_initial_path
 
 
-class ConvertCbrDialog(ToolDialog):
+class ComicsToolDialog(ToolDialog):
+    def _require_directory(self, line_edit):
+        target = super()._require_directory(line_edit)
+        if target is not None and not target.is_dir():
+            ui.display_msg_box_ok(self.windowTitle(), 'Choose an existing directory.')
+            return None
+        return target
+
+
+class ConvertCbrDialog(ComicsToolDialog):
     def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'Batch Convert CBR to CBZ',
@@ -30,10 +40,12 @@ class ConvertCbrDialog(ToolDialog):
         if target is None or not self._confirm():
             return
 
-        conversion.dir_batch_convert_cbr_to_cbz(target, self.recursive.isChecked())
+        if not conversion.dir_batch_convert_cbr_to_cbz(target, self.recursive.isChecked()):
+            ui.display_msg_box_ok(self.windowTitle(), 'Some files could not be converted, or no CBR files were found. See the log for details.')
+            return
         self.accept()
 
-class ComicAuthorDialog(ToolDialog):
+class ComicAuthorDialog(ComicsToolDialog):
     def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'ComicInfo.xml - Set Author from Folder Name',
@@ -53,13 +65,16 @@ class ComicAuthorDialog(ToolDialog):
         if target is None or not self._confirm():
             return
 
-        metadata.batch_rename_author_to_dir_name(
+        successful = metadata.batch_rename_author_to_dir_name(
             target_dir=target,
             author_tag_to_replace=self.existing_tag.text()
         )
+        if not successful:
+            ui.display_msg_box_ok(self.windowTitle(), 'Some files could not be updated, or no CBZ files were found. See the log for details.')
+            return
         self.accept()
 
-class ComicSeriesDialog(ToolDialog):
+class ComicSeriesDialog(ComicsToolDialog):
     def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'ComicInfo.xml - Set Series from Folder Name',
@@ -82,14 +97,17 @@ class ComicSeriesDialog(ToolDialog):
         if target is None or not self._confirm():
             return
 
-        metadata.batch_rename_series_to_dir_name(
+        successful = metadata.batch_rename_series_to_dir_name(
             target_dir=target,
             series_tag_to_replace=self.existing_tag.text(),
             suffix=self.prefix.text()
         )
+        if not successful:
+            ui.display_msg_box_ok(self.windowTitle(), 'Some files could not be updated, or no CBZ files were found. See the log for details.')
+            return
         self.accept()
 
-class CbzIndividualFoldersDialog(ToolDialog):
+class CbzIndividualFoldersDialog(ComicsToolDialog):
     def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'Move CBZ into Individual Folders',
@@ -107,10 +125,12 @@ class CbzIndividualFoldersDialog(ToolDialog):
         if target is None or not self._confirm():
             return
 
-        comics_actions.move_cbz_to_individual_folders(target)
+        if not comics_actions.move_cbz_to_individual_folders(target):
+            ui.display_msg_box_ok(self.windowTitle(), 'The move did not complete, or no CBZ files were found. See the log for details.')
+            return
         self.accept()
 
-class CompressCbzDialog(ToolDialog):
+class CompressCbzDialog(ComicsToolDialog):
     def __init__(self, initial_path=None, parent=None):
         super().__init__(
             'Batch Compress CBZ',
@@ -133,18 +153,40 @@ class CompressCbzDialog(ToolDialog):
         self.always_keep = pyside.QCheckBox('Always keep compressed images')
         self.always_keep.setChecked(False)
 
+        self.preserve_originals = pyside.QCheckBox('Preserve animated and multipage originals')
+        self.preserve_originals.setChecked(False)
+        preserve_help = pyside.QLabel('Cannot be used at same time as always keep compressed images.')
+        preserve_help.setWordWrap(True)
+        self.preserve_originals.setToolTip(preserve_help.text())
+
         self.form.addRow('Recursive:', self.recursive)
         self.form.addRow('Compression:', self.always_keep)
+        self.form.addRow('', self.preserve_originals)
+        self.form.addRow('', preserve_help)
 
     def _execute(self):
+        if not cbz.validate_compression_options(
+                self.always_keep.isChecked(), self.preserve_originals.isChecked()):
+            ui.display_msg_box_ok(self.windowTitle(), self.preserve_originals.toolTip())
+            return
         target = self._require_directory(self.target_dir)
 
         if target is None or not self._confirm():
             return
 
-        cbz.batch_compress_cbz(
+        stats = cbz.batch_compress_cbz(
             target_dir=target,
             recursive=self.recursive.isChecked(),
-            always_keep_compressed=self.always_keep.isChecked()
+            always_keep_compressed=self.always_keep.isChecked(),
+            preserve_animated_and_multipage_originals=self.preserve_originals.isChecked()
         )
+        if stats is None:
+            return
+        if stats.error_during_compression:
+            ui.display_msg_box_ok(
+                self.windowTitle(),
+                f'{stats.compressed_file_count} compressed, {stats.already_compressed_file_count} already compressed, '
+                f'{stats.error_during_compression} failed. See the log for details.'
+            )
+            return
         self.accept()
