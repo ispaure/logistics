@@ -30,6 +30,10 @@ class ImageCompressDialog(ToolDialog):
         self.recursive = pyside.QCheckBox('Include subfolders')
         self.recursive.setChecked(True)
 
+        self.exclude_webp = pyside.QCheckBox('Exclude existing WebP images')
+        self.exclude_webp.setChecked(True)
+        self.exclude_webp.setToolTip('Skip .webp inputs to avoid recompressing images on repeated runs.')
+
         self.always_keep = pyside.QCheckBox('Always keep compressed images')
         self.always_keep.setChecked(False)
         self.preserve_originals = pyside.QCheckBox('Preserve animated and multipage originals')
@@ -55,6 +59,7 @@ class ImageCompressDialog(ToolDialog):
         self.max_height.setValidator(pyside.QIntValidator(1, 100000, self))
 
         self.form.addRow('Recursive:', self.recursive)
+        self.form.addRow('Input files:', self.exclude_webp)
         self.form.addRow('Compression:', self.always_keep)
         self.form.addRow('', self.preserve_originals)
         self.form.addRow('', preserve_help)
@@ -112,7 +117,8 @@ class ImageCompressDialog(ToolDialog):
                 quality_grayscale=int(self.quality_grayscale.text()),
                 max_long_edge=int(self.max_long_edge.text()) if self.enable_max_long_edge.isChecked() else None,
                 max_height=int(self.max_height.text()) if self.enable_max_height.isChecked() else None,
-                preserve_animated_and_multipage_originals=self.preserve_originals.isChecked()
+                preserve_animated_and_multipage_originals=self.preserve_originals.isChecked(),
+                exclude_webp=self.exclude_webp.isChecked()
             )
         except Exception as error:
             ui.display_msg_box_ok(self.windowTitle(), f'Compression could not complete: {error}')

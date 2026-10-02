@@ -314,7 +314,8 @@ def batch_compress_image(target_dir: Union[str, Path],
                          img_quality_grayscale: int,
                          img_max_long_edge: Optional[int],
                          img_max_height: Optional[int],
-                         preserve_animated_and_multipage_originals: bool | None = None):
+                         preserve_animated_and_multipage_originals: bool | None = None,
+                         exclude_webp: bool = False):
     """Stage WebP encodings as dot-prefixed siblings, then retain or replace originals."""
     func_name = 'batch_compress_image'
     if preserve_animated_and_multipage_originals is None:
@@ -330,6 +331,8 @@ def batch_compress_image(target_dir: Union[str, Path],
 
     try:
         for file in file_lst:
+            if exclude_webp and file.ext == 'webp':
+                continue
             if file.ext in image_file_cls_supported_ext_lst and not file.file_name.startswith('.'):
                 image_file_cls = ImageFile(file.path)
                 original_img_file_cls_lst.append(image_file_cls)
