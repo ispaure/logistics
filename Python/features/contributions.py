@@ -86,6 +86,7 @@ class FolderFeatureContribution:
     get_actions: Callable[[FolderEntry], list[UIAction]]
     order: int = 0
     create_widget: Callable[[FolderEntry, Any], Any] | None = None
+    actions_horizontal: bool = False
 
 
 @dataclass(frozen=True)

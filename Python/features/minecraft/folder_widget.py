@@ -16,9 +16,12 @@ class MinecraftFolderWidget(pyside.QGroupBox):
         self.servers = detection.get_servers(entry.local) if entry.local is not None else []
         self.filtered_servers: list[MinecraftServer] = []
 
-        self.server_type_combo = pyside.QComboBox()
-        self.server_type_combo.addItem('Java', MinecraftServerType.JAVA)
-        self.server_type_combo.addItem('Bedrock', MinecraftServerType.BEDROCK)
+        self.server_type_tabs = pyside.QTabBar()
+        self.server_type_tabs.setExpanding(False)
+        self.server_type_tabs.setAccessibleName('Minecraft server edition')
+        for server_type in (MinecraftServerType.JAVA, MinecraftServerType.BEDROCK):
+            index = self.server_type_tabs.addTab(server_type.value)
+            self.server_type_tabs.setTabData(index, server_type)
 
         self.server_list = pyside.QListWidget()
         self.server_list.setMinimumWidth(150)
@@ -31,7 +34,7 @@ class MinecraftFolderWidget(pyside.QGroupBox):
 
         self._build_layout()
 
-        self.server_type_combo.currentIndexChanged.connect(self._server_type_changed)
+        self.server_type_tabs.currentChanged.connect(self._server_type_changed)
         self.server_list.currentRowChanged.connect(self._server_changed)
 
         self._select_initial_server_type()
@@ -45,7 +48,7 @@ class MinecraftFolderWidget(pyside.QGroupBox):
         server_panel_layout = pyside.QVBoxLayout(server_panel)
         server_panel_layout.setContentsMargins(0, 0, 0, 0)
         server_panel_layout.setSpacing(6)
-        server_panel_layout.addWidget(self.server_type_combo)
+        server_panel_layout.addWidget(self.server_type_tabs)
         server_panel_layout.addWidget(self.server_list, 1)
 
         layout.addWidget(server_panel)
@@ -58,13 +61,9 @@ class MinecraftFolderWidget(pyside.QGroupBox):
         has_bedrock = any(server.type == MinecraftServerType.BEDROCK for server in self.servers)
 
         if has_java:
-            self.server_type_combo.setCurrentIndex(
-                self.server_type_combo.findData(MinecraftServerType.JAVA)
-            )
+            self.server_type_tabs.setCurrentIndex(0)
         elif has_bedrock:
-            self.server_type_combo.setCurrentIndex(
-                self.server_type_combo.findData(MinecraftServerType.BEDROCK)
-            )
+            self.server_type_tabs.setCurrentIndex(1)
 
     def _server_type_changed(self, _index: int):
         self._populate_servers()
@@ -73,7 +72,7 @@ class MinecraftFolderWidget(pyside.QGroupBox):
         self.server_list.clear()
         self._clear_details()
 
-        selected_type = self.server_type_combo.currentData()
+        selected_type = self.server_type_tabs.tabData(self.server_type_tabs.currentIndex())
         self.filtered_servers = [
             server
             for server in self.servers

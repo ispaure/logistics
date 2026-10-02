@@ -20,8 +20,9 @@ class FoldersPage(pyside.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.source_combo = pyside.QComboBox()
-        self.source_label = pyside.QLabel('Source')
+        self.source_tabs = pyside.QTabBar()
+        self.source_tabs.setExpanding(False)
+        self.source_tabs.setAccessibleName('Folder sources')
         self.credential_combo = pyside.QComboBox()
         self.credential_label = pyside.QLabel('Credential')
         self._remote_sources = []
@@ -29,6 +30,7 @@ class FoldersPage(pyside.QWidget):
         self._local_folders = []
         self._remote_names = set()
         self._selected_entry_key = None
+        self._initial_show_pending = True
 
         self.folder_tree = pyside.QTreeWidget()
         self.folder_tree.setHeaderHidden(True)
@@ -46,6 +48,12 @@ class FoldersPage(pyside.QWidget):
         self._connect_signals()
         self.refresh()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._initial_show_pending:
+            self._initial_show_pending = False
+            self.refresh()
+
     def _build_layout(self):
         root_layout = pyside.QHBoxLayout(self)
         root_layout.setContentsMargins(16, 16, 16, 16)
@@ -62,14 +70,12 @@ class FoldersPage(pyside.QWidget):
         title_font.setBold(True)
         title_label.setFont(title_font)
 
-        source_font = self.source_label.font()
+        source_font = self.credential_label.font()
         source_font.setBold(True)
-        self.source_label.setFont(source_font)
         self.credential_label.setFont(source_font)
 
         left_layout.addWidget(title_label)
-        left_layout.addWidget(self.source_label)
-        left_layout.addWidget(self.source_combo)
+        left_layout.addWidget(self.source_tabs)
         left_layout.addWidget(self.credential_label)
         left_layout.addWidget(self.credential_combo)
         left_layout.addWidget(self.folder_tree)
@@ -84,14 +90,14 @@ class FoldersPage(pyside.QWidget):
         root_layout.addWidget(splitter)
 
     def _connect_signals(self):
-        self.source_combo.currentIndexChanged.connect(self._source_changed)
+        self.source_tabs.currentChanged.connect(self._source_changed)
         self.credential_combo.currentIndexChanged.connect(self._credential_changed)
         self.folder_tree.currentItemChanged.connect(self._selection_changed)
 
     def refresh(self):
         """Refresh source groups while preserving the selected credential and folder."""
 
-        selected_source_name = self.source_combo.currentText() or LOCAL_SOURCE_NAME
+        selected_source_name = self.source_tabs.tabText(self.source_tabs.currentIndex()) or LOCAL_SOURCE_NAME
         selected_credential = self.credential_combo.currentData()
         self._remote_sources = [
             (registered.feature_name, registered.contribution.name, source)
@@ -111,10 +117,12 @@ class FoldersPage(pyside.QWidget):
         ]
         local_entries = get_folder_entries()
         self._local_folders = [entry.local for entry in local_entries if entry.local is not None]
-        self.source_combo.blockSignals(True)
-        self.source_combo.clear()
+        self.source_tabs.blockSignals(True)
+        while self.source_tabs.count():
+            self.source_tabs.removeTab(0)
         if self._get_local_only_entries():
-            self.source_combo.addItem(LOCAL_SOURCE_NAME, ('local', None))
+            index = self.source_tabs.addTab(LOCAL_SOURCE_NAME)
+            self.source_tabs.setTabData(index, ('local', None))
 
         groups = {}
         for feature, label, source, folders in self._local_sources:
@@ -122,25 +130,25 @@ class FoldersPage(pyside.QWidget):
             if entries:
                 groups.setdefault((feature, label), []).extend(entries)
         for (feature, label), entries in groups.items():
-            self.source_combo.addItem(label, ('local_source', feature, entries))
+            index = self.source_tabs.addTab(label)
+            self.source_tabs.setTabData(index, ('local_source', feature, entries))
 
         groups = {}
         for feature, label, source in self._remote_sources:
             groups.setdefault((feature, label), []).append(source)
         for (feature, label), sources in groups.items():
-            self.source_combo.addItem(label, ('remote', feature, sources))
+            index = self.source_tabs.addTab(label)
+            self.source_tabs.setTabData(index, ('remote', feature, sources))
 
-        self.source_combo.setCurrentIndex(self._find_source_index(selected_source_name))
-        self.source_combo.blockSignals(False)
-        show_source = self.source_combo.count() > 1
-        self.source_label.setVisible(show_source)
-        self.source_combo.setVisible(show_source)
+        self.source_tabs.setCurrentIndex(self._find_source_index(selected_source_name))
+        self.source_tabs.blockSignals(False)
+        self.source_tabs.setVisible(self.source_tabs.count() > 0)
         self._refresh_credentials(selected_credential)
         self._refresh_folder_tree()
 
     def _find_source_index(self, source_name: str) -> int:
-        for index in range(self.source_combo.count()):
-            if self.source_combo.itemText(index) == source_name:
+        for index in range(self.source_tabs.count()):
+            if self.source_tabs.tabText(index) == source_name:
                 return index
         return 0
 
@@ -152,7 +160,7 @@ class FoldersPage(pyside.QWidget):
         self._refresh_folder_tree()
 
     def _get_selected_source(self):
-        return self.source_combo.currentData(pyside.Qt.ItemDataRole.UserRole)
+        return self.source_tabs.tabData(self.source_tabs.currentIndex())
 
     def _refresh_credentials(self, selected_credential=None):
         """A newly chosen remote source always starts with all credentials."""
@@ -375,7 +383,8 @@ class FoldersPage(pyside.QWidget):
                 self._create_action_section(
                     contribution.name,
                     actions,
-                    entry.name
+                    entry.name,
+                    horizontal=contribution.actions_horizontal
                 )
             )
 
@@ -442,10 +451,11 @@ class FoldersPage(pyside.QWidget):
         self,
         title: str,
         actions: list[UIAction],
-        entry_name: str
+        entry_name: str,
+        horizontal: bool = False
     ):
         group = pyside.QGroupBox(title)
-        layout = pyside.QVBoxLayout(group)
+        layout = pyside.QHBoxLayout(group) if horizontal else pyside.QVBoxLayout(group)
         layout.setSpacing(8)
 
         for action in actions:
