@@ -196,6 +196,19 @@ class ComicsTests(unittest.TestCase):
             with self.subTest(xml=xml):
                 self.assert_compression_rejected({'01.png': image_bytes(), 'ComicInfo.xml': xml})
 
+    def test_xml_character_references_and_unicode_separators_survive_repeated_updates(self):
+        xml = ('<ComicInfo><Summary>A &#13; B &#x85; C &#x2028; D &#x2029; E</Summary>'
+               '<Notes>Literal \u0085 / \u2028 / \u2029 separators</Notes><Pages/></ComicInfo>')
+        expected = ElementTree.fromstring(xml)
+        path = self.archive({'01.png': image_bytes(), 'ComicInfo.xml': xml})
+        for iteration in range(2):
+            with self.subTest(iteration=iteration):
+                self.assertTrue(cbz.CBZFile(path).compress_to_webp(True), self.output.getvalue())
+                with zipfile.ZipFile(path) as archive:
+                    result = ElementTree.fromstring(archive.read('ComicInfo.xml'))
+                    self.assertEqual(result.findtext('Summary'), expected.findtext('Summary'))
+                    self.assertEqual(result.findtext('Notes'), expected.findtext('Notes'))
+
     def test_malformed_xml_preserves_original(self):
         self.assert_compression_rejected({'01.png': image_bytes(), 'ComicInfo.xml': '<broken>'})
 
