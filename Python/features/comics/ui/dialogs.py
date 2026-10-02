@@ -154,7 +154,7 @@ class CompressCbzDialog(ComicsToolDialog):
         self.always_keep.setChecked(False)
 
         self.preserve_originals = pyside.QCheckBox('Preserve animated and multipage originals')
-        self.preserve_originals.setChecked(False)
+        self.preserve_originals.setChecked(True)
         preserve_help = pyside.QLabel('Cannot be used at same time as always keep compressed images.')
         preserve_help.setWordWrap(True)
         self.preserve_originals.setToolTip(preserve_help.text())

@@ -2,9 +2,11 @@
 Images workflow dialogs.
 """
 
+from commonUtils import ui
 from commonUtils.ui import pyside
 
 from features.images import actions as image_actions
+from features.images import processing
 from ui_new.dialogs.tool_dialog import ToolDialog, coerce_initial_path
 
 
@@ -30,6 +32,11 @@ class ImageCompressDialog(ToolDialog):
 
         self.always_keep = pyside.QCheckBox('Always keep compressed images')
         self.always_keep.setChecked(False)
+        self.preserve_originals = pyside.QCheckBox('Preserve animated and multipage originals')
+        self.preserve_originals.setChecked(True)
+        preserve_help = pyside.QLabel('Cannot be used at same time as always keep compressed images.')
+        preserve_help.setWordWrap(True)
+        self.preserve_originals.setToolTip(preserve_help.text())
 
         self.quality_color = pyside.QLineEdit('80')
         self.quality_color.setValidator(pyside.QIntValidator(1, 100, self))
@@ -49,6 +56,8 @@ class ImageCompressDialog(ToolDialog):
 
         self.form.addRow('Recursive:', self.recursive)
         self.form.addRow('Compression:', self.always_keep)
+        self.form.addRow('', self.preserve_originals)
+        self.form.addRow('', preserve_help)
         self.form.addRow('Color quality:', self.quality_color)
         self.form.addRow('Grayscale quality:', self.quality_grayscale)
         self.form.addRow('Limit max long edge:', self._create_enabled_value_row(
@@ -74,23 +83,44 @@ class ImageCompressDialog(ToolDialog):
         return widget
 
     def _execute(self):
+        if not processing.validate_compression_options(
+                self.always_keep.isChecked(), self.preserve_originals.isChecked()):
+            ui.display_msg_box_ok(self.windowTitle(), self.preserve_originals.toolTip())
+            return
         target = self._require_directory(self.target_dir)
 
-        if target is None or not self._confirm():
+        if target is None:
+            return
+        if not target.is_dir():
+            ui.display_msg_box_ok(self.windowTitle(), 'Choose an existing directory.')
             return
 
-        max_long_edge = int(self.max_long_edge.text()) if self.enable_max_long_edge.isChecked() else None
-        max_height = int(self.max_height.text()) if self.enable_max_height.isChecked() else None
-
-        image_actions.batch_compress_to_webp(
-            target_dir=target,
-            recursive=self.recursive.isChecked(),
-            always_keep_compressed=self.always_keep.isChecked(),
-            quality_color=int(self.quality_color.text()),
-            quality_grayscale=int(self.quality_grayscale.text()),
-            max_long_edge=max_long_edge,
-            max_height=max_height
-        )
+        if any(not field.hasAcceptableInput() for field in (
+                self.quality_color, self.quality_grayscale,
+                *([self.max_long_edge] if self.enable_max_long_edge.isChecked() else []),
+                *([self.max_height] if self.enable_max_height.isChecked() else []))):
+            ui.display_msg_box_ok(self.windowTitle(), 'Enter valid quality and size values.')
+            return
+        if not self._confirm():
+            return
+        try:
+            successful = image_actions.batch_compress_to_webp(
+                target_dir=target,
+                recursive=self.recursive.isChecked(),
+                always_keep_compressed=self.always_keep.isChecked(),
+                quality_color=int(self.quality_color.text()),
+                quality_grayscale=int(self.quality_grayscale.text()),
+                max_long_edge=int(self.max_long_edge.text()) if self.enable_max_long_edge.isChecked() else None,
+                max_height=int(self.max_height.text()) if self.enable_max_height.isChecked() else None,
+                preserve_animated_and_multipage_originals=self.preserve_originals.isChecked()
+            )
+        except Exception as error:
+            ui.display_msg_box_ok(self.windowTitle(), f'Compression could not complete: {error}')
+            return
+        if not successful:
+            ui.display_msg_box_ok(self.windowTitle(),
+                'Compression stopped before the batch completed. Some files may have been converted. See the log for details.')
+            return
         self.accept()
 
 class ExifCommentsDialog(ToolDialog):

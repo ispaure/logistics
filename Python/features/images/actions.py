@@ -28,7 +28,8 @@ def batch_compress_to_webp(
         quality_color: int,
         quality_grayscale: int,
         max_long_edge: int | None,
-        max_height: int | None):
+        max_height: int | None,
+        preserve_animated_and_multipage_originals: bool | None = None):
     """Batch compress supported images to WEBP."""
 
     return processing.batch_compress_image(
@@ -38,7 +39,8 @@ def batch_compress_to_webp(
         img_quality_color=quality_color,
         img_quality_grayscale=quality_grayscale,
         img_max_long_edge=max_long_edge,
-        img_max_height=max_height
+        img_max_height=max_height,
+        preserve_animated_and_multipage_originals=preserve_animated_and_multipage_originals
     )
 
 
