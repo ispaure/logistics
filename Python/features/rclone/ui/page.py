@@ -34,6 +34,7 @@ class RclonePage(pyside.QWidget):
         self.password_input = pyside.QLineEdit()
         self.password_input.setEchoMode(pyside.QLineEdit.EchoMode.Password)
         self.password_input.setPlaceholderText('Credential archive password')
+        self.password_input.setMinimumHeight(self.password_input.sizeHint().height())
 
         self.load_button = pyside.QPushButton('Load / Replace Credentials')
         self.remove_button = pyside.QPushButton('Remove Loaded Config')
@@ -77,7 +78,11 @@ class RclonePage(pyside.QWidget):
 
         splitter = pyside.QSplitter(pyside.Qt.Orientation.Horizontal)
         splitter.addWidget(self._create_packages_panel())
-        splitter.addWidget(self._create_details_panel())
+        details_scroll = pyside.QScrollArea()
+        details_scroll.setWidgetResizable(True)
+        details_scroll.setFrameShape(pyside.QFrame.Shape.NoFrame)
+        details_scroll.setWidget(self._create_details_panel())
+        splitter.addWidget(details_scroll)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([260, 740])
@@ -123,6 +128,9 @@ class RclonePage(pyside.QWidget):
         self.package_name.setFont(name_font)
 
         package_form = pyside.QFormLayout()
+        package_form.setFieldGrowthPolicy(
+            pyside.QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
+        )
         package_form.addRow('ZIP path:', self.package_path)
         package_form.addRow('Generated config:', self.generated_config_path)
         package_form.addRow('Status:', self.loaded_status)
