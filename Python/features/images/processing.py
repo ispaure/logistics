@@ -16,6 +16,8 @@ __status__ = 'Production'
 # IMPORTS
 
 from pathlib import Path
+import os
+import stat
 import commonUtils.fileUtils as fileUtils
 from commonUtils import dirUtils
 from PIL import Image, ImageStat, ImageOps
@@ -62,13 +64,14 @@ class ImageFile(fileUtils.File):
           - False => grayscale image
 
         Heuristic:
-          - Convert to YCbCr and examine stddev of Cb/Cr (chroma) channels.
-          - Truly grayscale images have ~flat Cb/Cr => very low stddev.
+          - Convert to YCbCr and examine variation and mean of Cb/Cr channels.
+          - Grayscale chroma is nearly flat and centered on neutral (128).
+          - Uniform colors have low variation but non-neutral mean chroma.
           - JPEG artifacts or slight noise tolerated via threshold.
 
         Params:
           chroma_std_threshold: raise to be more forgiving (treat near-gray as grayscale).
-          sample_max: downsize longest edge to this for speed; does not affect accuracy much.
+          sample_max: downsize longest edge to this for speed; small color details can be diluted.
         """
         try:
             with Image.open(self.path) as img:
@@ -88,11 +91,16 @@ class ImageFile(fileUtils.File):
                     ycbcr = ycbcr.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.BILINEAR)
 
                 _, cb, cr = ycbcr.split()
-                cb_std = ImageStat.Stat(cb).stddev[0]
-                cr_std = ImageStat.Stat(cr).stddev[0]
+                cb_stats = ImageStat.Stat(cb)
+                cr_stats = ImageStat.Stat(cr)
 
-                # If both chroma stddevs are tiny, it's grayscale
-                is_color = (cb_std > chroma_std_threshold) or (cr_std > chroma_std_threshold)
+                # Keep the existing variation test and tolerance, and also detect
+                # uniform color/tints whose chroma is offset from neutral.
+                is_color = any(
+                    channel.stddev[0] > chroma_std_threshold
+                    or abs(channel.mean[0] - 128) > chroma_std_threshold
+                    for channel in (cb_stats, cr_stats)
+                )
                 self.color = is_color
                 return self.color
 
@@ -106,18 +114,30 @@ class ImageFile(fileUtils.File):
                  quality_grayscale: int,
                  quality_color: int,
                  max_long_edge: int | None = None,
-                 max_height: int | None = None) -> bool:
+                 max_height: int | None = None,
+                 preserve_alpha: bool = True,
+                 *, defer_replace: bool = False) -> bool:
         """
         Compresses the image file to a .JPG or .WEBP at the destination path.
 
-        - Automatically converts non-RGB formats (e.g. RGBA, P) to RGB.
-        - Overwrites existing file at dest_path if present.
+        - Preserves alpha for WebP by default, including palette transparency.
+        - Set preserve_alpha=False to discard transparency without compositing.
+        - JPEG cannot preserve alpha and always discards it.
+        - Encodes to a dot-prefixed sibling, then renames to dest_path on success.
+        - Overwrites existing file at dest_path only after encoding and verification.
+        - defer_replace=True leaves compressed_image pointing at the dot file so
+          the caller can compare sizes before publishing or discarding it.
         - 'quality' ranges from 1 (lowest) to 95 (highest).
         - If max_long_edge is set (e.g., 2200), longest side is capped to that size.
         - If max_height is set (e.g., 3200), height is capped to that size.
           Both caps can be used independently or together.
         - Output format is deduced from dest_path extension (.jpg/.jpeg/.webp)
         """
+        self.compressed_image = None
+        dest_path = Path(dest_path)
+        staged_path = dest_path.with_name(f'.{dest_path.name}')
+        owns_stage = False
+        leave_staged = False
         try:
             with Image.open(self.path) as img:
                 img = ImageOps.exif_transpose(img)
@@ -127,8 +147,12 @@ class ImageFile(fileUtils.File):
 
                 quality = quality_color if self.color else quality_grayscale
 
-                # Convert if image has alpha channel or palette
-                if img.mode in ("RGBA", "LA", "P"):
+                dest_path = Path(dest_path)
+                ext = dest_path.suffix.lower()
+                has_alpha = 'A' in img.getbands() or 'transparency' in img.info
+                if has_alpha and preserve_alpha and ext == '.webp':
+                    img = img.convert('RGBA')
+                elif has_alpha or img.mode == 'P':
                     img = img.convert("RGB")
 
                 # --- Unified downscale ---
@@ -146,27 +170,41 @@ class ImageFile(fileUtils.File):
                     img = img.resize(new_size, Image.Resampling.LANCZOS)
                 # --------------------------
 
-                dest_path = Path(dest_path)
                 dest_path.parent.mkdir(parents=True, exist_ok=True)
+                with staged_path.open('xb'):
+                    pass
+                owns_stage = True
 
-                ext = dest_path.suffix.lower()
                 if ext in (".jpg", ".jpeg"):
-                    img.save(dest_path, "JPEG", quality=quality, optimize=True)
+                    img.save(staged_path, "JPEG", quality=quality, optimize=True)
                 elif ext == ".webp":
-                    img.save(dest_path, "WEBP", quality=quality, method=6)
+                    img.save(staged_path, "WEBP", quality=quality, method=6)
                 else:
                     log(Severity.CRITICAL, 'ImageFile.compress', f"Unsupported export format: {ext}")
                     return False
 
+            # Close the input before replacement (also required on Windows).
+            with Image.open(staged_path) as encoded:
+                encoded.verify()
+            if defer_replace:
+                self.compressed_image = self.__class__(staged_path)
+                leave_staged = True
+            else:
+                if dest_path.exists():
+                    staged_path.chmod(stat.S_IMODE(dest_path.stat().st_mode))
+                os.replace(staged_path, dest_path)
                 self.compressed_image = self.__class__(dest_path)
-                self.compressed_image.color = self.color
-                return True
+            self.compressed_image.color = self.color
+            return True
 
         except Exception as e:
             log(Severity.ERROR,
                 'features.images.processing.ImageFile.compress',
                 f'Failed to convert/compress image {self.path}: {e}')
             return False
+        finally:
+            if owns_stage and not leave_staged and staged_path.exists():
+                staged_path.unlink()
 
     def get_description(self):
         if self.color is None:
@@ -186,7 +224,7 @@ def batch_compress_image(target_dir: Union[str, Path],
                          img_quality_grayscale: int,
                          img_max_long_edge: Optional[int],
                          img_max_height: Optional[int]):
-    """Batch compresses images, updating the original file with the changed file."""
+    """Stage WebP encodings as dot-prefixed siblings, then retain or replace originals."""
     func_name = 'batch_compress_image'
 
     # --------------------------------------------------------------------------------------------------------------
@@ -196,37 +234,56 @@ def batch_compress_image(target_dir: Union[str, Path],
     file_lst: List[fileUtils.File] = target_dir.list_files(recursive=recursive)
 
     for file in file_lst:
-        if file.ext in image_file_cls_supported_ext_lst:
+        if file.ext in image_file_cls_supported_ext_lst and not file.file_name.startswith('.'):
             image_file_cls = ImageFile(file.path)
             original_img_file_cls_lst.append(image_file_cls)
 
-    # --------------------------------------------------------------------------------------------------------------
-    # STEP TWO: COMPRESS LIST OF IMAGES TO .WEBP, REPLACE IF SMALLER OR ALWAYS_KEEP_COMPRESSED
+    # Stage every encoding beside its destination so WebP inputs remain intact
+    # until the strict size rule (or explicit override) chooses the new file.
     for img_file_cls in original_img_file_cls_lst:
-        if img_file_cls.ext != 'webp':
-            log(Severity.DEBUG, f'features.images.processing.{func_name}', f'Compressing {img_file_cls.file_name}...')
-            dest_path = img_file_cls.path.with_suffix('.webp')
+        source_path = img_file_cls.path
+        dest_path = source_path.with_suffix('.webp')
+        staged_path = None
+        owns_staged_file = False
+        try:
+            if dest_path != source_path and (dest_path.exists() or dest_path.is_symlink()):
+                raise FileExistsError(f'Output already exists: {dest_path}')
+            log(Severity.DEBUG, f'features.images.processing.{func_name}',
+                f'Compressing {img_file_cls.file_name}...')
             result = img_file_cls.compress(
                 dest_path=dest_path,
+                defer_replace=True,
                 quality_grayscale=img_quality_grayscale,
                 quality_color=img_quality_color,
                 max_long_edge=img_max_long_edge,
                 max_height=img_max_height,
             )
-
             if not result:
-                msg = f'An error occurred whilst compressing {img_file_cls.file_name}!'
-                log(Severity.ERROR, f'features.images.processing.{func_name}', msg)
-                return False
+                raise OSError(f'Could not compress {source_path}')
+            staged_path = img_file_cls.compressed_image.path
+            owns_staged_file = True
 
-            # STEP THREE: SELECT IMAGES TO KEEP
-            if always_keep_compressed or img_file_cls.compressed_image.size < img_file_cls.size * img_min_allowed_compression_percentage / 100:
-                img_file_cls.delete_file()
-            else:
-                img_file_cls.compressed_image.delete_file()
-        else:
-            msg = f'Image {img_file_cls.file_name} is already webp! Skipping...'
-            log(Severity.DEBUG, f'features.images.processing.{func_name}', msg)
+            if (always_keep_compressed or img_file_cls.compressed_image.size
+                    < img_file_cls.size * img_min_allowed_compression_percentage / 100):
+                if dest_path == source_path:
+                    # Same-filesystem replacement keeps a WebP source intact
+                    # until its complete replacement is ready.
+                    staged_path.chmod(stat.S_IMODE(source_path.stat().st_mode))
+                    os.replace(staged_path, dest_path)
+                else:
+                    # Exclusive publication refuses a destination created by
+                    # another operation while this image was being encoded.
+                    os.link(staged_path, dest_path)
+                    staged_path.unlink()
+                    if not img_file_cls.delete_file():
+                        raise OSError(f'Output created, but could not delete {source_path}')
+            # Otherwise cleanup discards the stage and retains the source bytes.
+        except Exception as error:
+            log(Severity.ERROR, f'features.images.processing.{func_name}', str(error))
+            return False
+        finally:
+            if owns_staged_file and staged_path.exists():
+                staged_path.unlink()
 
-    # Done
     log(Severity.INFO, 'Image Compression', 'Images Compression Completed successfully!')
+    return True

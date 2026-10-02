@@ -1,210 +1,76 @@
-"""
-ComicInfo.xml metadata operations for the Logistics Comics feature.
-"""
+"""Transactional, line-preserving ComicInfo.xml author and series edits."""
 
-# ----------------------------------------------------------------------------------------------------------------------
-# IMPORTS
-
-import os
 from pathlib import Path
-from typing import List
+from tempfile import TemporaryDirectory
+from xml.etree import ElementTree
+from xml.sax.saxutils import escape
 
 import config
-
-from commonUtils import dirUtils, fileUtils, zipUtils
+from commonUtils import dirUtils, zipUtils
+from commonUtils.debugUtils import Severity, log
 from commonUtils.fileTypes import txtType
+from .archive_io import replace_archive, validate_archive_members
 
-
-# ----------------------------------------------------------------------------------------------------------------------
-# TEMP PATH
 
 def get_temp_loc_edit_comicinfoxml() -> Path:
-    """Return the temporary directory used when editing ComicInfo.xml files."""
-
-    temp_convert_path = Path(config.LogisticsConfig().temp_path, 'Edit-ComicInfoXML')
-    print('Convert path is: ' + str(temp_convert_path))
-    return temp_convert_path
+    """Legacy workspace location; edits now use isolated temporary directories."""
+    return Path(config.LogisticsConfig().temp_path, 'Edit-ComicInfoXML')
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# AUTHOR
-
-def comic_info_xml_replace_author(file_path: Path, search: str):
-    """
-    Search and replace the Writer tag in ComicInfo.xml within a CBZ file.
-
-    The replacement value is the name of the CBZ file's parent directory.
-    """
-
-    print(f'\nInitializing Batch Rename on File: {file_path}')
-
-    replace = file_path.parent.name
-    print(f'Author name: {replace}')
-
-    temp_folder_path = get_temp_loc_edit_comicinfoxml()
-
-    if not os.path.isdir(temp_folder_path):
-        print('\nConvert path did not exist! Creating...')
-        os.makedirs(temp_folder_path)
-    else:
-        print('Convert path existed! Proceeding...')
-
-    temp_folder_directory = dirUtils.Directory(temp_folder_path)
-    comicinfo_xml_path = Path(temp_folder_path, 'ComicInfo.xml')
-
-    file_path_cbz = file_path
-    file_path_zip = file_path.with_suffix('.zip')
-
+def _replace_tag(file_path: Path, tag: str, search: str, replacement: str) -> bool:
+    file_path = Path(file_path)
     try:
-        temp_folder_directory.delete_contents()
-
-        zipUtils.unzip_file(file_path_cbz, temp_folder_path)
-
-        search_string = f'<Writer>{search}</Writer>'
-        replace_string = f'<Writer>{replace}</Writer>'
-
-        xml_file = txtType.TXTFile(comicinfo_xml_path)
-        xml_file.read_lines()
-
-        xml_file.line_lst = [
-            line.replace(search_string, replace_string)
-            for line in xml_file.line_lst
-        ]
-        xml_file.write_lines()
-
-        zipUtils.zip_file(temp_folder_path, file_path_zip, keep_root=False)
-
-        fileUtils.rename_file(file_path_zip, file_path_cbz)
-
-        temp_folder_directory.delete_contents()
-
-        print('Finished renaming author!')
-
-    except Exception:
-        print(f'COULD NOT COMPLETE FILE SUCCESSFULLY!!!!{file_path_cbz}')
-
-        if file_path_zip.exists():
-            fileUtils.File(file_path_zip).delete_file()
-
-        temp_folder_directory.delete_contents()
-
-
-def batch_rename_author_to_dir_name(target_dir, author_tag_to_replace: str):
-    """Batch replace ComicInfo Writer tags using each CBZ parent directory name."""
-
-    print('Starting the Batch Rename of Author Name in ComicInfo.XML (based on folder name)')
-
-    batch_target_folder = dirUtils.Directory(Path(target_dir))
-
-    print(f'Target Folder: {batch_target_folder.path}')
-    print('Tag to Replace: ' + author_tag_to_replace)
-
-    cbz_file_lst: List[fileUtils.File] = batch_target_folder.list_files(
-        recursive=True,
-        filter_extension='cbz'
-    )
-
-    if len(cbz_file_lst) == 0:
-        print('Did not find a .CBZ file')
+        original_stat = file_path.stat()
+        validate_archive_members(file_path)
+        with TemporaryDirectory(prefix='logistics-comicinfo-', ignore_cleanup_errors=True) as workspace:
+            extracted = Path(workspace)
+            if not zipUtils.unzip_file(file_path, extracted):
+                raise OSError(f'Could not extract {file_path}')
+            xml_file = txtType.TXTFile(extracted / 'ComicInfo.xml')
+            xml_file.read_lines()
+            ElementTree.fromstring('\n'.join(xml_file.line_lst))
+            search_string = f'<{tag}>{search}</{tag}>'
+            replace_string = f'<{tag}>{escape(replacement)}</{tag}>'
+            updated_lines = [line.replace(search_string, replace_string) for line in xml_file.line_lst]
+            if updated_lines == xml_file.line_lst:
+                return True
+            ElementTree.fromstring('\n'.join(updated_lines))
+            xml_file.line_lst = updated_lines
+            xml_file.write_lines()
+            replace_archive(extracted, file_path, expected_stat=original_stat)
+        return True
+    except Exception as error:
+        log(Severity.ERROR, 'ComicInfo edit', f'Could not update "{file_path}": {error}')
         return False
 
-    print('Found {} files to batch rename author:'.format(str(len(cbz_file_lst))))
-    for file in cbz_file_lst:
-        print(f' - {file.path}')
 
-    for file in cbz_file_lst:
-        comic_info_xml_replace_author(file.path, author_tag_to_replace)
-
-    return True
+def comic_info_xml_replace_author(file_path: Path, search: str) -> bool:
+    """Replace the exact Writer tag with the CBZ parent directory name."""
+    file_path = Path(file_path)
+    return _replace_tag(file_path, 'Writer', search, file_path.parent.name)
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# SERIES
-
-def comic_info_xml_replace_series(file_path: Path, search: str, suffix: str):
-    """
-    Search and replace the Series tag in ComicInfo.xml within a CBZ file.
-
-    The replacement value is the supplied prefix followed by the CBZ file's parent directory name.
-    """
-
-    print(f'\nInitializing Batch Rename on File: {file_path}')
-
-    replace = suffix + file_path.parent.name
-    print(f'Series name: {replace}')
-
-    temp_folder_path = get_temp_loc_edit_comicinfoxml()
-
-    if not os.path.isdir(temp_folder_path):
-        print('\nConvert path did not exist! Creating...')
-        os.makedirs(temp_folder_path)
-    else:
-        print('Convert path existed! Proceeding...')
-
-    temp_folder_directory = dirUtils.Directory(temp_folder_path)
-    comicinfo_xml_path = Path(temp_folder_path, 'ComicInfo.xml')
-
-    file_path_cbz = file_path
-    file_path_zip = file_path.with_suffix('.zip')
-
-    try:
-        temp_folder_directory.delete_contents()
-
-        zipUtils.unzip_file(file_path_cbz, temp_folder_path)
-
-        search_string = f'<Series>{search}</Series>'
-        replace_string = f'<Series>{replace}</Series>'
-
-        xml_file = txtType.TXTFile(comicinfo_xml_path)
-        xml_file.read_lines()
-
-        xml_file.line_lst = [
-            line.replace(search_string, replace_string)
-            for line in xml_file.line_lst
-        ]
-        xml_file.write_lines()
-
-        zipUtils.zip_file(temp_folder_path, file_path_zip, keep_root=False)
-
-        fileUtils.rename_file(file_path_zip, file_path_cbz, force=True)
-
-        temp_folder_directory.delete_contents()
-
-        print('Finished renaming series!')
-
-    except Exception:
-        print(f'COULD NOT COMPLETE FILE SUCCESSFULLY!!!!{file_path_cbz}')
-
-        if file_path_zip.exists():
-            fileUtils.File(file_path_zip).delete_file()
-
-        temp_folder_directory.delete_contents()
+def comic_info_xml_replace_series(file_path: Path, search: str, suffix: str) -> bool:
+    """Replace the exact Series tag with the supplied prefix plus the parent name."""
+    file_path = Path(file_path)
+    return _replace_tag(file_path, 'Series', search, suffix + file_path.parent.name)
 
 
-def batch_rename_series_to_dir_name(target_dir, series_tag_to_replace: str, suffix: str):
-    """Batch replace ComicInfo Series tags using each CBZ parent directory name."""
-
-    print('Starting the Batch Rename of Series Name in ComicInfo.XML (based on folder name and prefix)')
-
-    batch_target_folder = dirUtils.Directory(Path(target_dir))
-
-    print(f'Target Folder: {batch_target_folder.path}')
-    print('Tag to Replace: ' + series_tag_to_replace)
-
-    cbz_file_lst: List[fileUtils.File] = batch_target_folder.list_files(
-        recursive=True,
-        filter_extension='cbz'
-    )
-
-    if len(cbz_file_lst) == 0:
-        print('Did not find a .CBZ file')
+def _batch_replace(target_dir, operation) -> bool:
+    files = dirUtils.Directory(Path(target_dir)).list_files(recursive=True, filter_extension='cbz')
+    if not files:
+        log(Severity.WARNING, 'ComicInfo batch edit', 'Did not find a .CBZ file')
         return False
+    successful = True
+    for file in files:
+        if not operation(file.path):
+            successful = False
+    return successful
 
-    print('Found {} files to batch rename series:'.format(str(len(cbz_file_lst))))
-    for file in cbz_file_lst:
-        print(f' - {file.path}')
 
-    for file in cbz_file_lst:
-        comic_info_xml_replace_series(file.path, series_tag_to_replace, suffix)
+def batch_rename_author_to_dir_name(target_dir, author_tag_to_replace: str) -> bool:
+    return _batch_replace(target_dir, lambda path: comic_info_xml_replace_author(path, author_tag_to_replace))
 
-    return True
+
+def batch_rename_series_to_dir_name(target_dir, series_tag_to_replace: str, suffix: str) -> bool:
+    return _batch_replace(target_dir, lambda path: comic_info_xml_replace_series(path, series_tag_to_replace, suffix))

@@ -11,7 +11,7 @@ from typing import List
 
 import config
 
-from commonUtils import dirUtils, fileUtils, linkUtils
+from commonUtils import dirUtils, fileUtils, linkUtils, zipUtils
 from commonUtils.debugUtils import Severity, log
 from commonUtils.wrappers import cmdShellWrapper
 
@@ -57,12 +57,14 @@ def open_yac_reader_library(folder: LocalFolder) -> bool:
     install_path = Path('/Applications', 'YACReader.app')
     if not install_path.exists():
         zip_path = Path(config.LogisticsConfig().path_logistics_software_mac, 'YACReader.app.zip')
-        fileUtils.unzip_file(zip_path, install_path)
+        if not zipUtils.unzip_file(zip_path, install_path):
+            return False
 
     install_path = Path('/Applications', 'YACReaderLibrary.app')
     if not install_path.exists():
         zip_path = Path(config.LogisticsConfig().path_logistics_software_mac, 'YACReaderLibrary.app.zip')
-        fileUtils.unzip_file(zip_path, install_path)
+        if not zipUtils.unzip_file(zip_path, install_path):
+            return False
 
     yac_prefs_dir_path = detection.get_yac_reader_library_prefs_path()
 
@@ -77,7 +79,8 @@ def open_yac_reader_library(folder: LocalFolder) -> bool:
     yac_prefs_dir = dirUtils.Directory(yac_prefs_dir_path)
     yac_prefs_dir.make_dir()
 
-    fileUtils.copy_file(yac_reader_library_ini, Path(yac_prefs_dir_path, 'YACReaderLibrary.ini'))
+    if not fileUtils.copy_file(yac_reader_library_ini, Path(yac_prefs_dir_path, 'YACReaderLibrary.ini')):
+        return False
 
     exec_path = Path('/Applications', 'YACReaderLibrary.app', 'Contents', 'MacOS', 'YACReaderLibrary')
     cmdShellWrapper.exec_cmd(str(exec_path), wait_for_output=False)
@@ -125,6 +128,9 @@ def move_cbz_to_individual_folders(target_dir) -> bool:
         log(Severity.INFO, tool_name, f'Make new directory: "{dir_path}"')
         log(Severity.INFO, tool_name, f'Move file to new location: "{new_path}"')
 
+        if new_path.exists() or new_path.is_symlink():
+            log(Severity.ERROR, tool_name, f'Destination already exists: "{new_path}". Original kept.')
+            return False
         fileUtils.make_dir(dir_path)
 
         if not fileUtils.copy_file(file.path, new_path):
