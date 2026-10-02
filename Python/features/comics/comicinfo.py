@@ -16,6 +16,12 @@ class ComicInfoXML(xmlType.XMLFile):
     def __init__(self, path: Path):
         super().__init__(path)
 
+    def read_lines(self) -> List[str]:
+        # Unicode line separators are valid XML text, not file line endings.
+        with self.path.open('r', encoding='utf-8-sig') as source:
+            self.line_lst = source.read().split('\n')
+        return self.line_lst
+
     def update_pages_in_line_lst(self, cbz_image_file_lst: List[CBZImageFile]) -> bool:
         """Rebuild page records while preserving other metadata and XML comments."""
         if not self.line_lst:
@@ -57,7 +63,10 @@ class ComicInfoXML(xmlType.XMLFile):
                 pages.append(page)
 
             ElementTree.indent(root, space='  ')
-            serialized = ElementTree.tostring(root, encoding='utf-8', xml_declaration=True)
+            serialized = ElementTree.tostring(root, encoding='utf-8', xml_declaration=True).decode('utf-8')
+            # ElementTree emits literal CRs in text; XML readers would normalize
+            # them to LF. Preserve CRs originally supplied as character references.
+            serialized = serialized.replace('\r', '&#13;')
             validated = ElementTree.fromstring(serialized)
             if len(validated.findall(f'{pages_tag}/{namespace}Page')) != len(cbz_image_file_lst):
                 raise ValueError('ComicInfo page records do not match image count')
@@ -67,5 +76,5 @@ class ComicInfoXML(xmlType.XMLFile):
             log(Severity.ERROR, tool_name, f'Invalid ComicInfo.xml: {error}')
             return False
 
-        self.line_lst = serialized.decode('utf-8').splitlines()
+        self.line_lst = serialized.split('\n')
         return True
