@@ -137,7 +137,64 @@ class ComicsTests(unittest.TestCase):
 
     def test_xml_update_failure_preserves_original(self):
         self.assert_compression_rejected({'01.png': image_bytes(),
-                                         'ComicInfo.xml': '<ComicInfo><PageCount>1</PageCount></ComicInfo>'})
+                                         'ComicInfo.xml': '<ComicInfo><Pages/><Pages/></ComicInfo>'})
+
+    def test_xml_formatting_variations_rebuild_pages_and_preserve_metadata(self):
+        variants = [
+            '<ComicInfo><Title>A &amp; B</Title><PageCount>99</PageCount>'
+            '<Pages><Page Image="98" Bookmark="Old" DoublePage="True" /></Pages></ComicInfo>',
+            '<ComicInfo>\n\t<Title>A &amp; B</Title>\n<PageCount>99</PageCount>\n'
+            '\t<Pages>\n<Page Image="98"/>\n</Pages>\n</ComicInfo>',
+            '<ComicInfo><Title>A &amp; B</Title><PageCount>99</PageCount><Pages/></ComicInfo>',
+            '<ComicInfo><Title>A &amp; B</Title></ComicInfo>',
+        ]
+        for xml in variants:
+            with self.subTest(xml=xml):
+                path = self.archive({'01.png': image_bytes(), '02.png': image_bytes(),
+                                     'ComicInfo.xml': xml})
+                self.assertTrue(cbz.CBZFile(path).compress_to_webp(True), self.output.getvalue())
+                with zipfile.ZipFile(path) as archive:
+                    serialized = archive.read('ComicInfo.xml')
+                    root = ElementTree.fromstring(serialized)
+                    self.assertEqual(root.findtext('Title'), 'A & B')
+                    self.assertEqual(root.findtext('PageCount'), '2')
+                    pages = root.findall('./Pages/Page')
+                    self.assertEqual([page.get('Image') for page in pages], ['0', '1'])
+                    self.assertEqual(pages[0].get('Type'), 'FrontCover')
+                    self.assertIsNone(pages[1].get('Type'))
+                    self.assertTrue(all('Bookmark' not in page.attrib and 'DoublePage' not in page.attrib
+                                        for page in pages))
+                    self.assertIn(b'\n  <PageCount>2</PageCount>', serialized)
+
+    def test_xml_namespaces_comments_and_metadata_content_are_preserved(self):
+        xml = ('<?xml version="1.0"?><ComicInfo xmlns="urn:comicinfo" '
+               'xmlns:extra="urn:extra" extra:flag="yes"><!-- Keep this comment -->'
+               '<?keep processing?><Title>Été &amp; comics</Title>'
+               '<Notes> First line\n Second line </Notes>'
+               '<extra:Data extra:value="a &amp; b">Custom text</extra:Data>'
+               '<PageCount>99</PageCount><Pages><Page Image="98" /></Pages></ComicInfo>')
+        path = self.archive({'01.png': image_bytes(), 'ComicInfo.xml': xml})
+        self.assertTrue(cbz.CBZFile(path).compress_to_webp(True), self.output.getvalue())
+        with zipfile.ZipFile(path) as archive:
+            serialized = archive.read('ComicInfo.xml')
+            root = ElementTree.fromstring(serialized)
+            self.assertEqual(root.get('{urn:extra}flag'), 'yes')
+            self.assertEqual(root.findtext('{urn:comicinfo}Title'), 'Été & comics')
+            self.assertEqual(root.findtext('{urn:comicinfo}Notes'), ' First line\n Second line ')
+            custom = root.find('{urn:extra}Data')
+            self.assertEqual(custom.text, 'Custom text')
+            self.assertEqual(custom.get('{urn:extra}value'), 'a & b')
+            self.assertEqual(root.findtext('{urn:comicinfo}PageCount'), '1')
+            self.assertEqual(len(root.findall('{urn:comicinfo}Pages/{urn:comicinfo}Page')), 1)
+            self.assertIn(b'<!-- Keep this comment -->', serialized)
+            self.assertIn(b'<?keep processing?>', serialized)
+
+    def test_ambiguous_or_wrong_root_xml_preserves_original(self):
+        for xml in ('<ComicInfo><PageCount>1</PageCount><PageCount>2</PageCount><Pages/></ComicInfo>',
+                    '<Other><PageCount>1</PageCount><Pages/></Other>',
+                    '<ComicInfo><PageCount><Count>1</Count></PageCount><Pages/></ComicInfo>'):
+            with self.subTest(xml=xml):
+                self.assert_compression_rejected({'01.png': image_bytes(), 'ComicInfo.xml': xml})
 
     def test_malformed_xml_preserves_original(self):
         self.assert_compression_rejected({'01.png': image_bytes(), 'ComicInfo.xml': '<broken>'})
