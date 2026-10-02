@@ -18,6 +18,8 @@ __status__ = 'Production'
 from pathlib import Path
 from io import BytesIO
 import os
+import errno
+import shutil
 import stat
 import commonUtils.fileUtils as fileUtils
 from commonUtils import dirUtils
@@ -41,6 +43,29 @@ def _source_signature(path: Path):
     snapshot = path.stat()
     return (snapshot.st_dev, snapshot.st_ino, snapshot.st_size, snapshot.st_mode,
             snapshot.st_mtime_ns, snapshot.st_ctime_ns)
+
+
+def _publish_staged_image(staged_path: Path, destination: Path):
+    """Publish without overwriting, falling back when hard links are unavailable."""
+    try:
+        os.link(staged_path, destination)
+        return
+    except OSError as error:
+        if (error.errno not in {errno.EXDEV, errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP, errno.EPERM}
+                and getattr(error, 'winerror', None) not in (1, 50)):
+            raise
+
+    owns_destination = False
+    try:
+        with staged_path.open('rb') as source, destination.open('xb') as output:
+            owns_destination = True
+            shutil.copyfileobj(source, output)
+            output.flush()
+            os.fsync(output.fileno())
+    except Exception:
+        if owns_destination:
+            destination.unlink()
+        raise
 
 
 def validate_compression_options(always_keep_compressed: bool,
@@ -356,7 +381,7 @@ def batch_compress_image(target_dir: Union[str, Path],
                 else:
                     # Exclusive publication refuses a destination created by
                     # another operation while this image was being encoded.
-                    os.link(staged_path, dest_path)
+                    _publish_staged_image(staged_path, dest_path)
                     staged_path.unlink()
                     if not img_file_cls.source_unchanged():
                         raise RuntimeError(f'Output created, but source changed before deletion: {source_path}')

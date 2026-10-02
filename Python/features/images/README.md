@@ -32,6 +32,8 @@ The shared encoder carries ICC profiles and EXIF into WebP/JPEG output. Applied 
 
 Shared encoding and standalone publication/deletion check the source's identity, size, permissions, and modification/change timestamps, refusing observed changes during processing. Existing WebP filenames retain their original spelling, using normalized `File.ext` to recognize the format. The image dialog reports exceptions and failed/partial batches and stays open; it validates the target and numeric fields before running.
 
+Standalone publication prefers an exclusive hard link from the completed candidate. When the filesystem does not support hard links, it exclusively creates the destination and copies, flushes, and closes the candidate before deleting the original. Failed copies remove partial outputs; existing destinations are never overwritten. The fallback destination is visible during copying, so publication is not atomic on those filesystems.
+
 Low-level EXIF read/write behavior remains in:
 
 `commonUtils.wrappers.piexifWrapper`
