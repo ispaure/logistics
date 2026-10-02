@@ -26,6 +26,12 @@ Dot-file staging is implemented by shared `ImageFile.compress()`: it writes `.pa
 
 Standalone batch compression includes existing WebP inputs and uses deferred replacement. It compares the dot file using the existing strict under-75% rule (or always-keep override), and only then publishes the output. Losing/failed candidates are removed and the original stays intact. Existing output files belonging to another source are refused. Dot-prefixed inputs are skipped. No temporary directory is used for image staging. Comics uses the same shared dot-and-rename step inside its existing compressed-images directory, then performs its normal page-retention selection; final comic member names are unchanged.
 
+Animated/multipage originals are preserved by default in both workflow dialogs. Explicit preservation and always-keep compression cannot be enabled together. For API calls with the preservation argument omitted, normal compression preserves multiframe originals, while an explicit always-keep request permits first-frame conversion. Passing `preserve_animated_and_multipage_originals=False` also permits it. Static GIFs are processed normally.
+
+The shared encoder carries ICC profiles and EXIF into WebP/JPEG output. Applied EXIF orientation is removed to avoid a second rotation; existing EXIF dimensions are updated after resizing. RGB profiles are retained unchanged. CMYK/gray profiles are transformed to sRGB when writing WebP, which stores RGB pixels, and the matching sRGB profile is embedded. Invalid or unsupported profiles fail safely. This intentionally adds metadata bytes to the size comparison and may cause more originals to be retained.
+
+Shared encoding and standalone publication/deletion check the source's identity, size, permissions, and modification/change timestamps, refusing observed changes during processing. Existing WebP filenames retain their original spelling, using normalized `File.ext` to recognize the format. The image dialog reports exceptions and failed/partial batches and stays open; it validates the target and numeric fields before running.
+
 Low-level EXIF read/write behavior remains in:
 
 `commonUtils.wrappers.piexifWrapper`

@@ -129,10 +129,12 @@ class CBZFile(CBZSanitizationMixin, zipType.ZIPFile):
         return True
 
     def compress_to_webp(self, always_keep_compressed: bool = False,
-                         preserve_animated_and_multipage_originals: bool = False):
+                         preserve_animated_and_multipage_originals: bool | None = None):
         """Compress in an isolated workspace; replace the original only on success."""
         self.compression_stats.reset()
         self.compression_log.reset()
+        if preserve_animated_and_multipage_originals is None:
+            preserve_animated_and_multipage_originals = not always_keep_compressed
         if not validate_compression_options(always_keep_compressed, preserve_animated_and_multipage_originals):
             return False
         try:
@@ -306,7 +308,7 @@ class CBZFile(CBZSanitizationMixin, zipType.ZIPFile):
 
 
 def batch_compress_cbz(target_dir: Union[str, Path], recursive: bool = True, always_keep_compressed: bool = False,
-                       preserve_animated_and_multipage_originals: bool = False) -> CompressionStats | None:
+                       preserve_animated_and_multipage_originals: bool | None = None) -> CompressionStats | None:
     """Compress unmarked CBZs independently and return aggregate statistics.
 
     Preserve the established cleanup, ordering, padding, WebP settings and
@@ -314,6 +316,8 @@ def batch_compress_cbz(target_dir: Union[str, Path], recursive: bool = True, alw
     continues with later files. Only successful results enter size totals.
     Conflicting options log an error and return None before accessing archives.
     """
+    if preserve_animated_and_multipage_originals is None:
+        preserve_animated_and_multipage_originals = not always_keep_compressed
     if not validate_compression_options(always_keep_compressed, preserve_animated_and_multipage_originals):
         return None
 
