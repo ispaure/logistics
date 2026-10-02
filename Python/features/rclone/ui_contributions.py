@@ -120,7 +120,8 @@ def get_contributions() -> FeatureContributions:
                 name='rclone',
                 is_available=_is_available,
                 get_actions=_get_actions,
-                order=10
+                order=10,
+                actions_horizontal=True
             )
         ],
         workflows=[
