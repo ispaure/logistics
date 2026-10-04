@@ -11,10 +11,14 @@ Provides Dropbox-specific maintenance tools for Logistics.
 
 ## Structure
 
+- `detection.py` locates Dropbox account roots and lists their folders.
+- `ui_contributions.py` contributes folder sources and the cleanup workflow.
 - `conflicts.py` contains conflicting-copy detection, reporting, and cleanup behavior.
 - `__init__.py` exposes the feature to the Logistics feature registry.
 
 ## Conflicting Copy Safety
+
+The Folders page offers one source per account discovered through Dropbox's platform-specific `info.json`, listing immediate child directories of each account root. Missing or unconfigured installations contribute no sources. Local folders inside detected roots receive a Conflicting Copies workflow.
 
 Conflicting-copy deletion is intentionally conservative.
 

@@ -19,7 +19,7 @@ Current functionality includes:
 - Setting group hue and saturation.
 - Applying predefined color presets.
 
-The Hue Bridge address is resolved through the Logistics configuration.
+The Hue Bridge address is read from this feature's `config.ini`, under `[PhilipsHue]` / `bridge_address`.
 
 ### Tautulli
 
@@ -31,7 +31,7 @@ The current scripts control Philips Hue lights in the living room based on Plex 
 - `plex_pause_living_room.py`
 - `plex_stop_living_room.py`
 
-These scripts are retained as external automation entry points and can be configured in Tautulli if the integration is enabled again.
+These scripts are external automation entry points, not event listeners started by Logistics. Configure Tautulli to run them with the Logistics Python environment and `Python/` on the import path.
 
 ## Structure
 
@@ -39,6 +39,10 @@ These scripts are retained as external automation entry points and can be config
 smart_home/
 ├── __init__.py
 ├── README.md
+├── config.ini
+├── configuration.py
+├── ui_contributions.py
+├── ui/
 ├── philips_hue/
 │   ├── __init__.py
 │   └── api.py

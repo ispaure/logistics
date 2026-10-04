@@ -28,7 +28,7 @@ It is discovered and loaded by the Logistics feature registry, but performs no w
 
 The current implementation targets the Steam installation of X-Plane 12 on macOS.
 
-X-Plane preferences are resolved from the user's Application Support directory. Preset files are stored under the Logistics General software directory and copied into the active X-Plane preferences when selected.
+X-Plane preferences are resolved under `Steam/steamapps/common/X-Plane 12/Output/Preferences` within the user's Application Support directory. Preset files are stored under the Logistics General software directory and copied into the active X-Plane preferences when selected.
 
 ## Notes
 

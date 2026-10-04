@@ -106,5 +106,16 @@ Other features may explicitly depend on it when they use rclone behavior:
 
 ## Notes
 
+The executable resolver uses the private `Software/` directory, rather than searching PATH:
+
+| Platform | Relative executable path |
+| --- | --- |
+| Windows | `Windows/rclone-2026/rclone.exe` |
+| macOS | `macOS/rclone/rclone` |
+| Linux x86_64 | `Linux/rclone-v1.73.0-linux-amd64/rclone` |
+| Linux ARM64 | `Linux/rclone-v1.73.1-linux-arm64/rclone` |
+
+Credential ZIPs contain `.txt` files whose first line is a rclone section header (such as `[Media]`), followed by that remote's configuration lines. Loading combines the entries into the package's dedicated `.conf`.
+
 Logistics core does not depend on rclone. Local folders continue to work when
 the rclone feature is not distributed with the application.
