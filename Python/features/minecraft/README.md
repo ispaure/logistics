@@ -4,38 +4,46 @@ Provides Minecraft server integration for Logistics.
 
 ## Responsibilities
 
-- Discover configured Java and Bedrock server roots.
+- Discover Java and Bedrock servers within selected local folders.
 - Represent individual Minecraft servers.
 - Launch supported servers.
 - Open server folders and documentation.
 - Edit `server.properties`.
-- Contribute Minecraft servers to the generic Servers page.
+- Contribute a Minecraft server selector and controls to the Folders page.
 
 ## Structure
 
-- `detection.py` resolves the Java and Bedrock server roots.
+- `detection.py` finds directories containing `server.properties`.
 - `server.py` contains the `MinecraftServer` model and server actions.
-- `ui_contributions.py` contributes Minecraft as a server provider.
+- `folder_widget.py` contains the server selector and controls.
+- `ui_contributions.py` contributes the Minecraft section to Folders.
 - `__init__.py` exposes the feature to the Logistics feature registry.
 
 ## Detection
 
-Minecraft server roots are resolved from the configured Marc Dropbox location.
+Servers are discovered one to three directory levels below the selected local folder. Any directory containing `server.properties` is included; discovery does not use fixed Dropbox roots or exclude directories by a `Backups` suffix.
 
-Java servers are discovered under:
+A server containing `bedrock_server.exe` is classified as Bedrock and can be launched on Windows. Other detected servers are classified as Java.
 
-`Software/Server/Minecraft`
+## Launch configuration
 
-Bedrock servers are discovered under:
+Java servers use `logistics_cfg.ini` in the server directory:
 
-`Software/Server/Minecraft (Bedrock)`
+```ini
+[LaunchScript]
+win = start.bat
+mac = start.command
+linux = start.sh
 
-Each immediate child directory is represented as a Minecraft server, except
-directories whose names end in `Backups`.
+[Documentation]
+wiki = https://minecraft.wiki/
+```
+
+Script paths are relative to the server directory. Include entries for the platforms you use. Missing launch settings prevent launching; missing documentation prevents opening the wiki. Property edits modify the server's `server.properties`.
 
 ## Initialization
 
 This feature does not require startup initialization.
 
 It is discovered by the Logistics feature registry and performs no work until
-the Servers page requests Minecraft server information.
+the Folders page requests Minecraft server information.

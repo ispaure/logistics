@@ -25,6 +25,8 @@ Provides comic-related integration for Logistics.
 
 ## Initialization
 
+Comics has a hard feature dependency on `images`. Reader actions launch external ComicRack or YACReader integrations; Logistics does not currently provide an embedded comic-reading interface.
+
 This feature does not require startup initialization.
 
 It is discovered and loaded by the Logistics feature registry, but performs no work until comic functionality is used.
@@ -86,6 +88,6 @@ A comparison before the structural XML update covered six fixture/override combi
 
 ## Future Work
 
-`logisticsUtils/epubUtils.py` is intentionally retained for future EPUB development.
+EPUB support is not currently implemented in this feature.
 
 Image utilities remain separate because they are also used outside the Comics feature.
