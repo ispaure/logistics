@@ -40,6 +40,12 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
             callback=lambda folder=folder: actions.launch_server(folder),
             description=description,
             enabled=get_os() == OS.LINUX
+        ),
+        UIAction(
+            name=f'Open P4 Console (Port: {port})',
+            callback=lambda folder=folder: actions.open_console(folder),
+            description='Open a terminal for this server. Type p4 commands without the path or port. Linux only; requires a local or installed p4 client.',
+            enabled=get_os() == OS.LINUX and detection.get_p4_client_path(folder) is not None
         )
     ]
 
