@@ -3,6 +3,7 @@ Detection helpers for the Logistics Perforce feature.
 """
 
 from pathlib import Path
+import shutil
 
 from commonUtils import configUtils
 
@@ -65,6 +66,15 @@ def get_server_id(folder: LocalFolder) -> str | None:
         return None
 
     return server_id or None
+
+
+def get_p4_client_path(folder: LocalFolder) -> str | None:
+    """Prefer the folder's P4 client, falling back to the system PATH."""
+
+    local_client = Path(folder.path, 'p4')
+    if local_client.is_file():
+        return str(local_client.resolve())
+    return shutil.which('p4')
 
 
 def has_p4d_server(folder: LocalFolder) -> bool:
