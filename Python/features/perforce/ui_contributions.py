@@ -26,6 +26,8 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
     p4d_path = detection.get_p4d_path(folder)
     data_path = detection.get_data_path(folder)
     port = detection.get_port(folder)
+    server_id = detection.get_server_id(folder)
+    name = f'Launch P4D {server_id.upper()} (Port: {port})' if server_id else f'Launch P4D (Port: {port})'
 
     description = (
         f'Launch P4D using "{p4d_path}" with data path "{data_path}" '
@@ -34,7 +36,7 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
 
     return [
         UIAction(
-            name='Launch P4D',
+            name=name,
             callback=lambda folder=folder: actions.launch_server(folder),
             description=description,
             enabled=get_os() == OS.LINUX

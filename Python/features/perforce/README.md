@@ -15,6 +15,8 @@ port = 1666
 
 Both paths are relative to the selected folder, which is the working directory. All three settings must be present for the folder to receive the Perforce section. Supply the P4D executable and server data separately.
 
+The button reads `server.id` from the configured data directory and displays its trimmed, uppercase contents with the port, for example `Launch P4D MY-SERVER (Port: 1666)`. If `server.id` is missing, empty, or unreadable, the button displays `Launch P4D (Port: 1666)`.
+
 The action launches `./<p4d_path> -C1 -r ./<data_path> -p <port>` in a new terminal. It does not provide provisioning, stop controls, or health monitoring.
 
 ## Structure
