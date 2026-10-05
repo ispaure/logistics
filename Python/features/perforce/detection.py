@@ -50,6 +50,23 @@ def get_port(folder: LocalFolder) -> str | None:
     return configUtils.config_section_map(config_path, PERFORCE_SECTION, PORT_KEY)
 
 
+def get_server_id(folder: LocalFolder) -> str | None:
+    """Read the server ID from the configured data directory."""
+
+    data_path = get_data_path(folder)
+    if not data_path:
+        return None
+
+    try:
+        server_id = Path(folder.path, data_path, 'server.id').read_text(
+            encoding='utf-8-sig'
+        ).strip()
+    except (OSError, UnicodeError):
+        return None
+
+    return server_id or None
+
+
 def has_p4d_server(folder: LocalFolder) -> bool:
     """Return whether the LocalFolder has the required P4D server configuration."""
 
