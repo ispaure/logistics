@@ -45,7 +45,7 @@ class ComicLibraryWindow(qt.QMainWindow):
         self.library_status = qt.QLabel()
         self.library_status.setTextFormat(qt.Qt.TextFormat.PlainText)
         layout.addWidget(self.library_status)
-        self.catalog_status = qt.QLabel('Reading library suggestions…')
+        self.catalog_status = qt.QLabel()
         self.catalog_status.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.catalog_status.hide()
         layout.addWidget(self.catalog_status)
@@ -182,8 +182,13 @@ class ComicLibraryWindow(qt.QMainWindow):
                 if isinstance(window, qt.QMainWindow) and window not in self.reader_connections:
                     window.metadata_saved.connect(self._metadata_saved)
                     self.reader_connections.append(window)
+                    window.destroyed.connect(lambda: self._reader_closed(window))
             except Exception as issue:
                 qt.QMessageBox.warning(self, 'Cannot open reader', str(issue))
+
+    def _reader_closed(self, window):
+        if window in self.reader_connections:
+            self.reader_connections.remove(window)
 
     def _reader_finished(self):
         self.reader_busy = False

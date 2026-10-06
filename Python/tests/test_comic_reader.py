@@ -135,7 +135,7 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
 
     def test_reader_rapid_navigation_and_close_during_page_load(self):
         from threading import Event
-        from features.comics.ui import reader as ui_reader
+        from features.comics.ui import reader_pages as ui_reader
         reader = self.native_reader()
         released = Event()
         original = ui_reader.read_image

@@ -148,6 +148,10 @@ class SpreadTests(unittest.TestCase):
         path = self.archive('marked.cbz', pages_xml='<Pages><Page Image="0" DoublePage="true" /></Pages>')
         self.assertEqual(ComicPages(path).double_pages, {0})
         reader = self.reader(path)
+        reader.set_mode('single')
+        self.assertTrue(reader.menus.mode_actions['single'].isChecked())
+        reader.set_mode('auto')
+        self.assertTrue(reader.menus.mode_actions['auto'].isChecked())
         self.assertEqual(reader.displayed_pages, (0,))
         reader.step(1); self.wait(reader)
         self.assertEqual(reader.displayed_pages, (1, 2))
@@ -187,7 +191,7 @@ class SpreadTests(unittest.TestCase):
         portrait = qt.QImage(800, 1200, qt.QImage.Format.Format_RGB32)
         landscape = qt.QImage(1600, 1000, qt.QImage.Format.Format_RGB32)
         images = {0: portrait, 1: portrait, 2: landscape, 3: portrait, 4: portrait}
-        with patch('features.comics.ui.reader.read_image', side_effect=lambda pages, index: images[index]):
+        with patch('features.comics.ui.reader_pages.read_image', side_effect=lambda pages, index: images[index]):
             start, _ = read_previous(pages, 3, (1500, 900), 'auto')
             self.assertEqual(start, 3)
             start, _ = read_previous(pages, 2, (1500, 900), 'auto')
