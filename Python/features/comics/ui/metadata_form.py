@@ -15,31 +15,86 @@ class MetadataForm(qt.QTabWidget):
         super().__init__(parent)
         self.editors = {}
         self.baseline = {}
+        self.mixed = set()
+        self.touched = set()
+        self.captions = {}
+        self.revert_buttons = {}
+        self._normal_palettes = {}
+        self._labels = {}
         self._details_tab()
         self._plot_tab()
 
-    def _field_changed(self, *args):
+    def _field_changed(self, field, *args):
+        self.touched.add(field)
+        self._refresh_field(field)
         self.changed.emit()
 
     def values(self):
         return {field: editor_value(editor) for field, editor in self.editors.items()}
 
     def changes(self):
-        return {field: value for field, value in self.values().items()
-                if value != self.baseline.get(field, '')}
+        values = self.values()
+        return {field: values[field] for field in self.touched
+                if field in self.mixed or values[field] != self.baseline[field]}
 
     def load(self, info):
-        # Read every exposed field before touching controls, so an ambiguous
-        # field cannot leave a partially populated form.
-        values = {field: info.get_field(field) for field in self.editors}
-        for field, value in values.items():
-            load_editor(self.editors[field], value)
-        self.mark_saved()
+        self.load_values([{field: info.get_field(field) for field in self.editors}])
 
-    def mark_saved(self):
-        # Qt normalizes text-area line endings. Baseline the displayed values
-        # so another edit cannot silently rewrite untouched XML whitespace.
+    def load_values(self, documents):
+        if not documents:
+            raise ValueError('No comic metadata to edit')
+        self.mixed = {field for field in self.editors
+                      if any(values[field] != documents[0][field] for values in documents[1:])}
+        self.touched.clear()
+        for field, editor in self.editors.items():
+            value = '' if field in self.mixed else documents[0][field]
+            load_editor(editor, value)
+        # Qt normalizes multiline whitespace. Compare with what was displayed
+        # so untouched XML text is never rewritten by another field's edit.
         self.baseline = self.values()
+        for field in self.editors:
+            self._refresh_field(field)
+
+    def revert_field(self, field):
+        load_editor(self.editors[field], self.baseline[field])
+        self.touched.discard(field)
+        self._refresh_field(field)
+        self.changed.emit()
+
+    def _refresh_field(self, field):
+        editor = self.editors[field]
+        pending = field in self.changes()
+        mixed = field in self.mixed and field not in self.touched
+        palette = qt.QPalette(self._normal_palettes[field])
+        if mixed:
+            muted = palette.color(qt.QPalette.ColorGroup.Disabled, qt.QPalette.ColorRole.Text)
+            palette.setColor(qt.QPalette.ColorRole.Text, muted)
+        editor.setPalette(palette)
+        placeholder = 'Multiple values — unchanged' if mixed else ''
+        if isinstance(editor, (qt.QAbstractSpinBox, qt.QComboBox)):
+            editor.lineEdit().setPlaceholderText(placeholder)
+        else:
+            editor.setPlaceholderText(placeholder)
+        caption = self.captions[field]
+        caption.setText(self._labels[field] + (': *' if pending else ':'))
+        self.revert_buttons[field].setVisible(pending)
+        editor.setProperty('mixedValue', mixed)
+        editor.setProperty('pendingChange', pending)
+
+    def _register(self, field, editor, label, caption, header):
+        self.editors[field] = editor
+        self.captions[field] = caption
+        self._labels[field] = label
+        self._normal_palettes[field] = qt.QPalette(editor.palette())
+        revert = qt.QToolButton()
+        revert.setText('↶')
+        revert.setToolTip('Revert this field to its original value(s)')
+        revert.setAccessibleName(f'Revert {label}')
+        revert.setFixedSize(18, 16)
+        revert.hide()
+        revert.clicked.connect(lambda: self.revert_field(field))
+        header.addWidget(revert)
+        self.revert_buttons[field] = revert
 
     def _field_box(self, label):
         box = qt.QWidget()
@@ -51,12 +106,16 @@ class MetadataForm(qt.QTabWidget):
         font = caption.font()
         font.setBold(True)
         caption.setFont(font)
-        layout.addWidget(caption)
-        return box, layout, caption
+        header = qt.QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.setSpacing(0)
+        header.addWidget(caption, 1)
+        layout.addLayout(header)
+        return box, layout, caption, header
 
     def _field(self, field, label, choices=None, multiline=False):
-        box, layout, caption = self._field_box(label)
-        editor = create_editor(field, self._field_changed, choices, multiline)
+        box, layout, caption, header = self._field_box(label)
+        editor = create_editor(field, lambda *args: self._field_changed(field), choices, multiline)
         editor.setMinimumWidth(0)
         if multiline:
             editor.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Ignored)
@@ -64,7 +123,7 @@ class MetadataForm(qt.QTabWidget):
             box.setFixedHeight(caption.sizeHint().height() + 2 + INPUT_HEIGHT)
             editor.setFixedHeight(INPUT_HEIGHT)
             editor.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Fixed)
-        self.editors[field] = editor
+        self._register(field, editor, label, caption, header)
         layout.addWidget(editor, 1)
         return box
 
@@ -73,7 +132,7 @@ class MetadataForm(qt.QTabWidget):
                                         for value in ComicInfoXML.ENUMS[field]])
 
     def _library_only(self, label, field):
-        box, layout, caption = self._field_box(label)
+        box, layout, caption, header = self._field_box(label)
         box.setFixedHeight(caption.sizeHint().height() + 2 + INPUT_HEIGHT)
         editor = qt.QComboBox()
         editor.addItem('ComicRack library only')
@@ -143,9 +202,11 @@ class MetadataForm(qt.QTabWidget):
         text_tabs = qt.QTabWidget()
         for field in ('Summary', 'Notes', 'Review'):
             # The text editor fills each sub-tab, like the screenshot.
-            editor = create_editor(field, self._field_changed, multiline=True)
-            self.editors[field] = editor
-            text_tabs.addTab(editor, field)
+            editor = create_editor(field, lambda *args, name=field: self._field_changed(name), multiline=True)
+            box, layout, caption, header = self._field_box(field)
+            self._register(field, editor, field, caption, header)
+            layout.addWidget(editor, 1)
+            text_tabs.addTab(box, field)
         grid.addWidget(text_tabs, 0, 0, 1, 2)
         grid.setRowStretch(0, 3)
         grid.setRowStretch(1, 0)

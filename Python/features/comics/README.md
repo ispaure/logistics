@@ -57,6 +57,20 @@ Previous/Next navigate the CBZ siblings currently loaded in the browser, with th
 same save/discard/cancel protection. Disk operations run in background threads;
 windows cannot close while their operation is active.
 
+Bulk editing supports extended selection of CBZ files, folders or both. Folder
+contents are included recursively and overlapping selections are deduplicated.
+The editor works on the resolved file list loaded at opening time. Shared values
+use the normal OS palette; differing values appear as muted “Multiple values —
+unchanged” placeholders. Editing any field restores normal text and marks its
+caption with `*`; the adjacent revert arrow restores its original value(s).
+Only explicit pending fields are applied. Previous/Next are disabled for batches.
+
+All documents are validated and checked for external changes before the first
+write. Each CBZ is replaced independently after verification; the batch is not a
+single filesystem transaction. A later I/O failure reports exact file paths and
+keeps pending edits, while successful files retain their updated in-memory state.
+Retrying skips no-op edits on files that already succeeded.
+
 Field mappings follow the [Anansi ComicInfo documentation](https://anansi-project.github.io/docs/comicinfo/documentation)
 and [v2.0 schema](https://github.com/anansi-project/comicinfo/blob/main/schema/v2.0/ComicInfo.xsd),
 with Tags and Translator from the [v2.1 draft](https://anansi-project.github.io/docs/comicinfo/schemas/v2.1):

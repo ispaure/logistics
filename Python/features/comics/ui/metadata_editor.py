@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from features.comics.library import ComicDocument
+from features.comics.selection import ComicSelection, normalize_targets
 from .metadata_form import MetadataForm
 from .operations import Operation
 
@@ -22,15 +22,18 @@ class MetadataEditor(qt.QDialog):
         font = self.font()
         font.setPointSizeF(10)
         self.setFont(font)
-        self.path = Path(path)
+        self.targets = normalize_targets(path)
+        self.path = self.targets[0]
         self.siblings = list(siblings or [self.path])
         if self.path not in self.siblings:
             self.siblings.append(self.path)
         self.document = None
+        self.selection = None
         self.busy = False
         self.pending_action = None
+        self.is_bulk = len(self.targets) > 1 or self.path.is_dir()
         self._setup_ui()
-        self._load(self.path)
+        self._load(self.targets)
 
     def _setup_ui(self):
         layout = qt.QVBoxLayout(self)
@@ -72,14 +75,14 @@ class MetadataEditor(qt.QDialog):
         return self.tabs.changes()
 
     def _update_buttons(self):
-        available = self.document is not None and not self.busy
+        available = self.selection is not None and not self.busy
         self.tabs.setEnabled(available)
         self.ok_button.setEnabled(available)
         self.apply_button.setEnabled(available and bool(self._changes()))
         self.cancel_button.setEnabled(not self.busy)
         index = self.siblings.index(self.path)
-        self.previous_button.setEnabled(available and index > 0)
-        self.next_button.setEnabled(available and index < len(self.siblings) - 1)
+        self.previous_button.setEnabled(available and not self.is_bulk and index > 0)
+        self.next_button.setEnabled(available and not self.is_bulk and index < len(self.siblings) - 1)
 
     def _operate(self, callback, finished):
         self.busy = True
@@ -97,30 +100,42 @@ class MetadataEditor(qt.QDialog):
         if action:
             action()
 
-    def _load(self, path):
-        self.path = path
+    def _load(self, targets):
+        self.targets = normalize_targets(targets)
+        self.path = self.targets[0]
         self.document = None
-        self.setWindowTitle(f'Edit Metadata — {path.name}')
-        self.message.setText('Reading ComicInfo.xml…')
-        self._operate(lambda: ComicDocument(path), self._loaded)
+        self.selection = None
+        self.is_bulk = len(self.targets) > 1 or self.path.is_dir()
+        title = f'{len(self.targets)} selected items' if self.is_bulk else self.path.name
+        self.setWindowTitle(f'Edit Metadata — {title}')
+        self.message.setText('Reading selected comics…')
+        self._operate(lambda: ComicSelection(self.targets), self._loaded)
 
-    def _loaded(self, document, error):
+    def _loaded(self, selection, error):
         if error:
             self.message.show()
             self.message.setText(f'Cannot read metadata: {error}')
             return
         try:
-            self.tabs.load(document.info)
+            self.tabs.load_values(selection.field_values(self.editors))
         except Exception as error:
             self.message.show()
             self.message.setText(f'Cannot read metadata: {error}')
             return
-        self.document = document
-        self.message.setText('Only changed fields are saved; other XML metadata is retained.' if document.exists else
-                             'No ComicInfo.xml yet. Apply or OK will create it when fields are changed.')
+        self.selection = selection
+        self.document = selection.documents[0]
+        count = len(selection.documents)
+        self.is_bulk = self.is_bulk or count > 1
+        if self.is_bulk:
+            self.setWindowTitle(f'Edit Metadata — {count} comics')
+            self.message.show()
+            self.message.setText(f'{count} comics. Muted fields have multiple values. Only fields marked * will change.')
+        else:
+            self.message.setText('Only changed fields are saved; other XML metadata is retained.' if self.document.exists else
+                                 'No ComicInfo.xml yet. Apply or OK will create it when fields are changed.')
 
     def _save(self, after=None):
-        if self.busy or self.document is None:
+        if self.busy or self.selection is None:
             return
         changes = self._changes()
         if not changes:
@@ -128,28 +143,35 @@ class MetadataEditor(qt.QDialog):
                 after()
             return
         try:
-            self.document.prepare_metadata(changes)
+            self.selection.validate_changes(changes)
         except Exception as error:
             qt.QMessageBox.warning(self, 'Check metadata', str(error))
             return
-        document = self.document
+        selection = self.selection
         self.pending_action = after
         self.message.setText('Saving and verifying the comic archive…')
         def save():
-            document.save(changes)
-            return document
+            return selection.save(changes)
         self._operate(save, self._saved)
 
-    def _saved(self, document, error):
+    def _saved(self, result, error):
         if error:
             self.pending_action = None
+            self.message.show()
             self.message.setText(f'Could not save: {error}. Close and reopen to reload a changed archive.')
             qt.QMessageBox.warning(self, 'Metadata was not saved', error)
+            return
+        for path in result.saved:
+            self.saved.emit(path)
+        if result.failed:
+            self.pending_action = None
+            details = '\n'.join(f'{path}: {message}' for path, message in result.failed.items())
+            self.message.show()
+            self.message.setText(f'{len(result.saved)} saved; {len(result.failed)} failed. Pending changes are kept.')
+            qt.QMessageBox.warning(self, 'Some metadata was not saved', details)
         else:
-            self.document = document
-            self.tabs.mark_saved()
-            self.message.setText('Metadata saved.')
-            self.saved.emit(self.path)
+            self.tabs.load_values(self.selection.field_values(self.editors))
+            self.message.setText(f'Metadata saved to {len(result.saved)} comic(s).')
 
     def _ok(self):
         self._save(after=lambda: super(MetadataEditor, self).accept())
