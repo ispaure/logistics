@@ -47,6 +47,7 @@ class ComicLibraryWindow(qt.QMainWindow):
         layout.addWidget(self.library_status)
         self.catalog_status = qt.QLabel('Reading library suggestions…')
         self.catalog_status.setTextFormat(qt.Qt.TextFormat.PlainText)
+        self.catalog_status.hide()
         layout.addWidget(self.catalog_status)
         self.file_browser = FileBrowser(parent=self,
             services={'comics.edit_metadata': lambda targets: self._open_editor(targets),
@@ -145,7 +146,7 @@ class ComicLibraryWindow(qt.QMainWindow):
             return
         self.catalog_busy = True
         self.catalog_pending = False
-        self.catalog_status.setText('Updating library suggestions…')
+        self.catalog_status.hide()
         self.catalog_operation = Operation(
             lambda: self.catalog.refresh(self.catalog_operation.isInterruptionRequested), self)
         self.catalog_operation.completed.connect(self._catalog_loaded)
@@ -154,15 +155,14 @@ class ComicLibraryWindow(qt.QMainWindow):
 
     def _catalog_loaded(self, result, error):
         if error:
+            self.catalog_status.show()
             self.catalog_status.setText('Library suggestions could not be updated; manual entry is available.')
             self.catalog_status.setToolTip(error)
         elif result is not None:
             self.suggestions = result['suggestions']
             self.suggestions_changed.emit(self.suggestions)
-            status = f"Suggestions from {result['count']} comics"
-            if result['errors']:
-                status += f" · {len(result['errors'])} indexing issue(s)"
-            self.catalog_status.setText(status)
+            self.catalog_status.setVisible(bool(result['errors']))
+            self.catalog_status.setText(f"{len(result['errors'])} indexing issue(s)")
             self.catalog_status.setToolTip('\n'.join(result['errors']))
 
     def _catalog_finished(self):

@@ -60,7 +60,12 @@ collapsed and offers **List**, **Tiles**, and **Columns** views. List mode keeps
 Name, Date Modified and Size columns; tiles show asynchronously loaded first-page
 covers, and column mode follows folder hierarchies horizontally. Three icon buttons
 switch views. Tile cells share the available width evenly, resizing covers before
-adding columns. Covers and selected previews use physical pixels for the display
+adding columns. Folder-only directories use smaller square cells, and folders in
+mixed directories use half-size icons by default. The tile-only **Size** menu adjusts
+folder size from 25% to 100%. Layouts update immediately on resize or navigation;
+a reserved scrollbar gutter keeps columns stable. Column chevrons are compact,
+files end the trail, and unused space follows the current theme.
+Covers and selected previews use physical pixels for the display
 scale, keeping them sharp on high-DPI screens. Tile covers are
 loaded for visible items and kept in a bounded 128-entry memory cache; they are
 not added to the metadata JSON. Double-click folders in any mode to enter them.
@@ -123,7 +128,9 @@ follow `Manga=YesAndRightToLeft`; absent/other values default to left-to-right.
 For right-to-left comics the slider starts at the right end and moves left as pages
 advance; the Next control is left of Previous. Up/Down navigate sequentially;
 Home/End jump to first/last page. Navigation advances past the displayed spread,
-and these shortcuts also work while the slider is focused. Holding a key does not
+and these shortcuts work immediately with focus on any reader control, without
+a preliminary click on the slider. Metadata dialogs and menus retain their own
+keyboard handling. Holding a key does not
 trigger repeated navigation.
 
 Separate Previous/Next File buttons are grouped above the canvas. They use naturally
@@ -139,7 +146,10 @@ Saving there refreshes the reader's archive snapshot and reading direction while
 preserving its page position, and refreshes an associated library's preview and
 suggestions. External archive changes still require reopening the reader.
 Full Screen/F11 toggles full-screen display; Escape returns to the normal window.
-Rapid navigation loads only the latest queued page, and closing during a load
+The current page or spread stays visible while its replacement decodes. Images
+and page labels switch together after a successful load; failures keep the current
+image visible and report the error in the status bar. Initial opening alone uses a
+loading placeholder. Rapid navigation loads only the latest queued page, and closing during a load
 safely waits for that worker. Reopening an unchanged comic raises its existing
 reader; reader windows are independent of the library window. Progress is displayed
 for the current session and is not persisted.

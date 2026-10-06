@@ -97,6 +97,7 @@ class ComicReaderWindow(qt.QMainWindow):
         self.resize(950, 900)
         self.pages = pages
         self.page = 0
+        self.shown_page = 0
         self.mode = 'auto'
         self.images = {}
         self.displayed_pages = (0,)
@@ -130,6 +131,8 @@ class ComicReaderWindow(qt.QMainWindow):
         header.addWidget(fullscreen)
         layout.addLayout(header)
         self.canvas = PageCanvas()
+        self.canvas.setFocusPolicy(qt.Qt.FocusPolicy.StrongFocus)
+        self.setFocusProxy(self.canvas)
         layout.addWidget(self.canvas, 1)
         self.canvas.resized.connect(self._resized)
         controls = qt.QHBoxLayout()
@@ -148,16 +151,36 @@ class ComicReaderWindow(qt.QMainWindow):
         controls.addWidget(self.progress_label)
         layout.addLayout(controls)
         self.setCentralWidget(container)
-        for key, callback in (('Right', lambda: self.step(-1 if self.pages.right_to_left else 1)),
-                              ('Left', lambda: self.step(1 if self.pages.right_to_left else -1)),
-                              ('Down', lambda: self.step(1)), ('Up', lambda: self.step(-1)),
-                              ('Home', lambda: self.go(0)), ('End', lambda: self.go(len(self.pages.pages) - 1)),
-                              ('Escape', self.leave_fullscreen)):
-            shortcut = qt.QShortcut(qt.QKeySequence(key), self)
-            shortcut.setAutoRepeat(False)
-            shortcut.activated.connect(callback)
+        qt.QApplication.instance().installEventFilter(self)
         self._configure_file()
         self.go(0)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.canvas.setFocus(qt.Qt.FocusReason.OtherFocusReason)
+
+    def eventFilter(self, watched, event):
+        if (not isinstance(watched, qt.QWidget) or watched.window() is not self
+                or event.type() not in (qt.QEvent.Type.ShortcutOverride, qt.QEvent.Type.KeyPress)):
+            return super().eventFilter(watched, event)
+        modifiers = event.modifiers() & ~qt.Qt.KeyboardModifier.KeypadModifier
+        keys = (qt.Qt.Key.Key_Left, qt.Qt.Key.Key_Right, qt.Qt.Key.Key_Up, qt.Qt.Key.Key_Down,
+                qt.Qt.Key.Key_Home, qt.Qt.Key.Key_End, qt.Qt.Key.Key_Escape)
+        if modifiers or event.key() not in keys:
+            return super().eventFilter(watched, event)
+        event.accept()
+        if event.type() == qt.QEvent.Type.KeyPress and not event.isAutoRepeat():
+            key = event.key()
+            if key in (qt.Qt.Key.Key_Left, qt.Qt.Key.Key_Right):
+                forward = (key == qt.Qt.Key.Key_Left) if self.pages.right_to_left else (key == qt.Qt.Key.Key_Right)
+                self.step(1 if forward else -1)
+            elif key in (qt.Qt.Key.Key_Up, qt.Qt.Key.Key_Down):
+                self.step(1 if key == qt.Qt.Key.Key_Down else -1)
+            elif key in (qt.Qt.Key.Key_Home, qt.Qt.Key.Key_End):
+                self.go(0 if key == qt.Qt.Key.Key_Home else len(self.pages.pages) - 1)
+            else:
+                self.leave_fullscreen()
+        return True
 
     def _button(self, name, icon):
         button = qt.QToolButton()
@@ -242,7 +265,7 @@ class ComicReaderWindow(qt.QMainWindow):
             return
         end = self.displayed_pages[-1]
         blocker = qt.QSignalBlocker(self.progress)
-        self.progress.setValue(0 if self.page == 0 else end)
+        self.progress.setValue(0 if self.shown_page == 0 else end)
         blocker.unblock()
         numbers = ' & '.join(str(index + 1) for index in self.displayed_pages)
         self.progress_label.setText(f'{numbers} / {len(self.pages.pages)} · {(end + 1) / len(self.pages.pages):.0%}')
@@ -273,7 +296,7 @@ class ComicReaderWindow(qt.QMainWindow):
         if not hasattr(self, 'canvas') or not hasattr(self, 'progress'):
             return
         sizes = {index: (image.width(), image.height()) for index, image in self.images.items()}
-        self.displayed_pages = visible_pages(self.page, sizes, (self.canvas.width(), self.canvas.height()),
+        self.displayed_pages = visible_pages(self.shown_page, sizes, (self.canvas.width(), self.canvas.height()),
                                             self.mode, self.pages.double_pages)
         pixmaps = [(index, qt.QPixmap.fromImage(self.images[index])) for index in self.displayed_pages if index in self.images]
         self.canvas.set_pages(pixmaps, self.pages.right_to_left)
@@ -287,10 +310,6 @@ class ComicReaderWindow(qt.QMainWindow):
             self.previous_starts.clear()
         index = max(0, min(index, len(self.pages.pages) - 1))
         self.page = index
-        self.images = {}
-        self.displayed_pages = (index,)
-        self.canvas.set_pages((), False)
-        self.canvas.message = 'Loading page…'
         self._update_controls()
         if self.busy:
             self.pending_page = (index, previous)
@@ -316,9 +335,10 @@ class ComicReaderWindow(qt.QMainWindow):
     def step(self, direction):
         if self.closing or self.file_loading:
             return
-        if direction > 0 and self.displayed_pages[-1] < len(self.pages.pages) - 1:
+        end = self.displayed_pages[-1] if self.page == self.shown_page else self.page
+        if direction > 0 and end < len(self.pages.pages) - 1:
             self.previous_starts.append(self.page)
-            self.go(self.displayed_pages[-1] + 1, clear_history=False)
+            self.go(end + 1, clear_history=False)
         elif direction < 0 and self.page > 0:
             if self.previous_starts and self.previous_starts[-1] < self.page:
                 previous = self.previous_starts.pop()
@@ -352,8 +372,12 @@ class ComicReaderWindow(qt.QMainWindow):
             return
         if error:
             self.canvas.message = f'Cannot read page: {error}'
+            self.statusBar().showMessage(self.canvas.message, 8000)
+            self.page = self.shown_page
             self.canvas.update()
+            self._update_controls()
         else:
+            self.shown_page = index
             self.images = images
             self._update_spread()
 
@@ -405,6 +429,7 @@ class ComicReaderWindow(qt.QMainWindow):
             self._refresh_siblings()
             return
         self.pages, self.page, self.images = result
+        self.shown_page = self.page
         self.previous_starts.clear()
         self.displayed_pages = (self.page,)
         self._configure_file()
