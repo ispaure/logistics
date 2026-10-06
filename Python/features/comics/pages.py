@@ -31,6 +31,21 @@ class ComicPages:
                                  and not Path(info.filename).name.startswith('._')), key=natural_key)
         if not self.pages:
             raise ValueError('This archive contains no supported image pages')
+        self.double_pages = set()
+        root = self.document.info.xml_root
+        for container in root.childNodes:
+            if container.localName != 'Pages' or container.namespaceURI != root.namespaceURI:
+                continue
+            for page in container.childNodes:
+                if page.localName != 'Page' or page.namespaceURI != root.namespaceURI:
+                    continue
+                if page.getAttribute('DoublePage').lower() in ('true', '1', 'yes'):
+                    try:
+                        index = int(page.getAttribute('Image'))
+                        if 0 <= index < len(self.pages):
+                            self.double_pages.add(index)
+                    except ValueError:
+                        pass
         try:
             self.right_to_left = self.document.info.get_field('Manga') == 'YesAndRightToLeft'
         except ValueError:
@@ -67,10 +82,10 @@ class ComicPages:
             return result.getvalue()
 
 
-def load_preview(path):
+def load_preview(path, size=(960, 1320)):
     document = ComicDocument(path)
     try:
-        cover = ComicPages(path, document).cover()
+        cover = ComicPages(path, document).cover(size)
         error = ''
     except Exception as issue:
         cover, error = b'', str(issue)
