@@ -2,6 +2,7 @@
 
 from commonUtils.ui import pyside as qt
 from features.comics.comicinfo import ComicInfoXML
+from features.comics.edit_state import MetadataEditState
 from .metadata_widgets import create_editor, editor_value, load_editor
 
 INPUT_HEIGHT = 22
@@ -14,13 +15,10 @@ class MetadataForm(qt.QTabWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.editors = {}
-        self.baseline = {}
-        self.mixed = set()
-        self.touched = set()
+        self.state = MetadataEditState()
         self.captions = {}
         self.revert_buttons = {}
         self.clear_buttons = {}
-        self.original_values = {}
         self._base_tooltips = {}
         self._normal_palettes = {}
         self._labels = {}
@@ -28,7 +26,7 @@ class MetadataForm(qt.QTabWidget):
         self._plot_tab()
 
     def _field_changed(self, field, *args):
-        self.touched.add(field)
+        self.state.fields[field].edit(editor_value(self.editors[field]))
         self._refresh_field(field)
         self.changed.emit()
 
@@ -36,52 +34,51 @@ class MetadataForm(qt.QTabWidget):
         return {field: editor_value(editor) for field, editor in self.editors.items()}
 
     def changes(self):
-        values = self.values()
-        return {field: values[field] for field in self.touched
-                if field in self.mixed or values[field] != self.baseline[field]}
+        return self.state.changes()
 
     def load(self, info):
         self.load_values([{field: info.get_field(field) for field in self.editors}])
 
     def load_values(self, documents):
-        if not documents:
-            raise ValueError('No comic metadata to edit')
-        self.original_values = {field: tuple(values[field] for values in documents) for field in self.editors}
-        self.mixed = {field for field in self.editors
-                      if any(values[field] != documents[0][field] for values in documents[1:])}
-        self.touched.clear()
+        self.state.reset(documents, self.editors)
         for field, editor in self.editors.items():
-            value = '' if field in self.mixed else documents[0][field]
-            load_editor(editor, value)
-        # Qt normalizes multiline whitespace. Compare with what was displayed
-        # so untouched XML text is never rewritten by another field's edit.
-        self.baseline = self.values()
+            entry = self.state.fields[field]
+            load_editor(editor, entry.baseline)
+            # Qt normalizes text-area whitespace. Preserve the loaded original
+            # XML until this field is explicitly changed.
+            entry.baseline = editor_value(editor)
         for field in self.editors:
             self._refresh_field(field)
 
+    def apply_pending(self, changes):
+        for field, value in changes.items():
+            load_editor(self.editors[field], value)
+            self.state.fields[field].edit(value)
+            self._refresh_field(field)
+        self.changed.emit()
+
     def revert_field(self, field):
-        load_editor(self.editors[field], self.baseline[field])
-        self.touched.discard(field)
+        entry = self.state.fields[field]
+        load_editor(self.editors[field], entry.baseline)
+        self.state.revert(field)
         self._refresh_field(field)
         self.changed.emit()
 
     def clear_field(self, field):
         """An explicit clear is needed when a mixed field already displays blank."""
-        load_editor(self.editors[field], '')
-        self.touched.add(field)
-        self._refresh_field(field)
-        self.changed.emit()
+        self.apply_pending({field: ''})
 
     def _refresh_field(self, field):
         editor = self.editors[field]
-        pending = field in self.changes()
-        mixed = field in self.mixed and field not in self.touched
+        entry = self.state.fields[field]
+        pending = entry.changed
+        mixed = entry.mixed and not pending
         palette = qt.QPalette(self._normal_palettes[field])
         if mixed:
             muted = palette.color(qt.QPalette.ColorGroup.Disabled, qt.QPalette.ColorRole.Text)
             palette.setColor(qt.QPalette.ColorRole.Text, muted)
         editor.setPalette(palette)
-        placeholder = 'Multiple values — unchanged' if mixed else ''
+        placeholder = ('Mixed' if isinstance(editor, qt.QAbstractSpinBox) else 'Multiple values — unchanged') if mixed else ''
         if isinstance(editor, (qt.QAbstractSpinBox, qt.QComboBox)):
             editor.lineEdit().setPlaceholderText(placeholder)
         else:
@@ -90,7 +87,7 @@ class MetadataForm(qt.QTabWidget):
         caption.setText(self._labels[field] + (': *' if pending else ':'))
         self.revert_buttons[field].setVisible(pending)
         self.clear_buttons[field].setVisible(mixed)
-        distinct = list(dict.fromkeys(self.original_values.get(field, ())))
+        distinct = list(dict.fromkeys(entry.originals))
         if mixed:
             examples = ', '.join(repr(value[:80]) if value else '(blank)' for value in distinct[:4])
             suffix = '…' if len(distinct) > 4 else ''

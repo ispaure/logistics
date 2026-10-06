@@ -31,6 +31,7 @@ class MetadataEditor(qt.QDialog):
         self.selection = None
         self.busy = False
         self.pending_action = None
+        self.last_save_error = None
         self.is_bulk = len(self.targets) > 1 or self.path.is_dir()
         self._setup_ui()
         self._load(self.targets)
@@ -92,7 +93,7 @@ class MetadataEditor(qt.QDialog):
         self.apply_button.setEnabled(available and bool(changes))
         self.review_button.setEnabled(available)
         self.reload_button.setEnabled(not self.busy)
-        if available and self.is_bulk:
+        if available and self.is_bulk and not self.last_save_error:
             fields = len(changes)
             count = len(self.selection.documents)
             self.message.setText(f'{count} comics · {fields} pending field(s). * = changed, ↶ = revert, × = clear mixed values.')
@@ -122,6 +123,7 @@ class MetadataEditor(qt.QDialog):
         self.path = self.targets[0]
         self.document = None
         self.selection = None
+        self.last_save_error = None
         self.is_bulk = len(self.targets) > 1 or self.path.is_dir()
         title = f'{len(self.targets)} selected items' if self.is_bulk else self.path.name
         self.setWindowTitle(f'Edit Metadata — {title}')
@@ -188,6 +190,7 @@ class MetadataEditor(qt.QDialog):
                 after()
             return
         selection = self.selection
+        self.last_save_error = None
         self.pending_action = after
         self.message.setText('Saving and verifying the comic archive…')
         def save():
@@ -198,16 +201,21 @@ class MetadataEditor(qt.QDialog):
         if error:
             self.pending_action = None
             self.message.show()
-            self.message.setText(f'Could not save: {error}. Close and reopen to reload a changed archive.')
+            self.last_save_error = f'Could not save: {error}. Use Reload to refresh changed files.'
+            self.message.setText(self.last_save_error)
             qt.QMessageBox.warning(self, 'Metadata was not saved', error)
             return
         for path in result.saved:
             self.saved.emit(path)
         if result.failed:
             self.pending_action = None
+            pending = self._changes()
+            self.tabs.load_values(self.selection.field_values(self.editors))
+            self.tabs.apply_pending(pending)
             details = '\n'.join(f'{path}: {message}' for path, message in result.failed.items())
             self.message.show()
-            self.message.setText(f'{len(result.saved)} saved; {len(result.failed)} failed. Pending changes are kept.')
+            self.last_save_error = f'{len(result.saved)} saved; {len(result.failed)} failed. Pending changes are kept.'
+            self.message.setText(self.last_save_error)
             qt.QMessageBox.warning(self, 'Some metadata was not saved', details)
         else:
             self.tabs.load_values(self.selection.field_values(self.editors))

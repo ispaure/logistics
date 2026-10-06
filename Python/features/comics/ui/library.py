@@ -71,6 +71,7 @@ class ComicLibraryWindow(qt.QMainWindow):
         menu = self._context_menu_for(self.tree.indexAt(point))
         if menu is not None:
             menu.exec(self.tree.viewport().mapToGlobal(point))
+            menu.deleteLater()
 
     def _context_menu_for(self, index):
         path = Path(self.model.filePath(index)) if index.isValid() else None
@@ -119,7 +120,10 @@ class ComicLibraryWindow(qt.QMainWindow):
         if self.busy:
             self.refresh_pending = True
         elif self.model.filePath(self.tree.currentIndex()) == str(path):
-            self._load(path)
+            if len(self.tree.selectionModel().selectedRows(0)) > 1:
+                self._selection_changed()
+            else:
+                self._load(path)
 
     def _selection_changed(self, selected=None, deselected=None):
         indexes = self.tree.selectionModel().selectedRows(0)
@@ -132,7 +136,7 @@ class ComicLibraryWindow(qt.QMainWindow):
             self.heading.setText(f'{len(indexes)} items selected')
             self.message.setText('Right-click the selection to edit its CBZ metadata together. Folders include subfolders.')
         else:
-            index = indexes[0] if indexes else self.tree.currentIndex()
+            index = indexes[0] if indexes else qt.QModelIndex()
             self._selected(index, qt.QModelIndex())
 
     def _selected(self, current, previous):

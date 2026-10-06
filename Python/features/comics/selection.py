@@ -11,7 +11,10 @@ from .library import ComicDocument
 def normalize_targets(targets):
     if isinstance(targets, (str, Path)):
         targets = [targets]
-    return tuple(dict.fromkeys(Path(path).absolute() for path in targets))
+    normalized = tuple(dict.fromkeys(Path(os.path.abspath(path)) for path in targets))
+    if not normalized:
+        raise ValueError('Select at least one CBZ file or folder')
+    return normalized
 
 
 def selected_comics(targets):
@@ -19,11 +22,19 @@ def selected_comics(targets):
     found = {}
     def add(path):
         if path.suffix.lower() == '.cbz' and not path.is_symlink() and path.is_file():
-            snapshot = path.stat()
-            found.setdefault((snapshot.st_dev, snapshot.st_ino), path)
+            canonical = path.resolve()
+            found.setdefault(canonical, path)
     def scan_error(error):
         raise error
-    for path in normalize_targets(targets):
+    targets = normalize_targets(targets)
+    for path in targets:
+        if path.is_symlink():
+            raise ValueError(f'Symbolic links cannot be edited: {path}')
+    # Drop covered children before walking, even if selected before the parent.
+    folders = [path for path in targets if path.is_dir() and not path.is_symlink()]
+    roots = [path for path in targets
+             if not any(parent != path and parent in path.parents for parent in folders)]
+    for path in roots:
         if path.is_symlink():
             raise ValueError(f'Symbolic links cannot be edited: {path}')
         if path.is_dir():
@@ -51,7 +62,16 @@ class ComicSelection:
 
     def __init__(self, targets):
         self.targets = normalize_targets(targets)
-        self.documents = [ComicDocument(path) for path in selected_comics(self.targets)]
+        paths = selected_comics(self.targets)
+        for path in paths:
+            if path.stat().st_nlink > 1:
+                raise ValueError(f'Hard-linked CBZs need independent copies before editing: {path}')
+        self.documents = []
+        for path in paths:
+            try:
+                self.documents.append(ComicDocument(path))
+            except Exception as error:
+                raise ValueError(f'Cannot load {path}: {error}') from error
 
     def field_values(self, fields):
         return [{name: document.info.get_field(name) for name in fields}
