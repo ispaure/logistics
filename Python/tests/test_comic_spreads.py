@@ -89,6 +89,59 @@ class SpreadTests(unittest.TestCase):
             self.assertEqual(reader.canvas.visual_pages, (2, 1) if rtl else (1, 2))
             reader.close(); self.app.processEvents()
 
+    def test_navigation_keys_work_without_slider_focus(self):
+        from PySide6.QtTest import QTest
+        reader = self.reader(self.archive('keys.cbz'), wide=False)
+        for widget in (reader, reader.canvas, reader.previous_button, reader.next_button, reader.progress):
+            reader.go(0)
+            self.wait(reader)
+            widget.setFocus()
+            QTest.keyClick(widget, qt.Qt.Key.Key_Right)
+            self.wait(reader)
+            self.assertEqual(reader.shown_page, 1)
+        editor = reader.edit_metadata()
+        self.wait(reader)
+        before = reader.shown_page
+        field = editor.editors['Series']
+        field.setFocus()
+        QTest.keyClick(field, qt.Qt.Key.Key_Right)
+        self.wait(reader)
+        self.assertEqual(reader.shown_page, before)
+        editor.reject()
+
+    def test_current_spread_stays_visible_during_load_resize_and_failure(self):
+        from threading import Event
+        from features.comics.ui import reader as reader_module
+        reader = self.reader(self.archive('loading.cbz'))
+        before = reader.canvas.visual_pages
+        old_image = reader.canvas.pixmap.cacheKey()
+        old_label = reader.progress_label.text()
+        released = Event()
+        original = reader_module.read_candidates
+        def delayed(pages, index):
+            released.wait(5)
+            return original(pages, index)
+        with patch.object(reader_module, 'read_candidates', delayed):
+            reader.step(1)
+            self.app.processEvents()
+            self.assertTrue(reader.busy)
+            self.assertEqual(reader.canvas.visual_pages, before)
+            self.assertEqual(reader.canvas.pixmap.cacheKey(), old_image)
+            self.assertEqual(reader.progress_label.text(), old_label)
+            reader.resize(750, 900)
+            self.app.processEvents()
+            self.assertEqual(reader.canvas.visual_pages, (0,))
+            released.set()
+            self.wait(reader)
+        self.assertEqual(reader.shown_page, 2)
+        before = reader.canvas.visual_pages
+        with patch.object(reader_module, 'read_candidates', side_effect=ValueError('bad image')):
+            reader.go(3)
+            self.wait(reader)
+        self.assertEqual(reader.canvas.visual_pages, before)
+        self.assertEqual(reader.page, reader.shown_page)
+        self.assertIn('bad image', reader.statusBar().currentMessage())
+
     def test_landscape_and_metadata_double_pages_remain_single(self):
         self.assertEqual(visible_pages(0, {0: (1600, 1000), 1: (800, 1200)}, (2000, 800)), (0,))
         self.assertEqual(visible_pages(0, {0: (800, 1200), 1: (1600, 1000)}, (2000, 800)), (0,))
