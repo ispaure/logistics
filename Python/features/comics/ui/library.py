@@ -28,6 +28,7 @@ class ComicLibraryWindow(qt.QMainWindow):
         self.libraries, self.library_config_error = configured_libraries(self.root_path)
         self.metadata_windows = []
         self.reader_busy = False
+        self.reader_connections = []
         self.catalog = LibraryCatalog(root_path)
         self.suggestions = {}
         self.catalog_busy = False
@@ -177,7 +178,10 @@ class ComicLibraryWindow(qt.QMainWindow):
             qt.QMessageBox.warning(self, 'Cannot open reader', error)
         else:
             try:
-                open_reader(result)
+                window = open_reader(result)
+                if isinstance(window, qt.QMainWindow) and window not in self.reader_connections:
+                    window.metadata_saved.connect(self._metadata_saved)
+                    self.reader_connections.append(window)
             except Exception as issue:
                 qt.QMessageBox.warning(self, 'Cannot open reader', str(issue))
 

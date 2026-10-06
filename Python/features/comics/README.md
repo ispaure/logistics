@@ -27,6 +27,7 @@ Provides comic-related integration for Logistics.
 - `ui/file_browser.py` preserves compatibility imports for the reusable commonUtils view component.
 - `pages.py` reads archive pages lazily and renders cover thumbnails without extraction.
 - `reader.py` owns native reader windows; `ui/reader.py` handles page display and navigation.
+- `reading.py` decides page spreads and naturally orders adjacent comic files.
 - `folder_stats.py` and `ui/filesystem_model.py` preserve imports for shared filesystem totals and the object-driven Qt model.
 - `ui/navigation.py` preserves imports for shared root-bounded navigation.
 - `desktop_actions.py` opens the default application and reveals items through the OS file manager.
@@ -57,7 +58,10 @@ Use **Open Comics Library...** in a detected Comics folder. ComicRack-configured
 folders are available on macOS and Linux as well as Windows. The browser starts
 collapsed and offers **List**, **Tiles**, and **Columns** views. List mode keeps
 Name, Date Modified and Size columns; tiles show asynchronously loaded first-page
-covers, and column mode follows folder hierarchies horizontally. Tile covers are
+covers, and column mode follows folder hierarchies horizontally. Three icon buttons
+switch views. Tile cells share the available width evenly, resizing covers before
+adding columns. Covers and selected previews use physical pixels for the display
+scale, keeping them sharp on high-DPI screens. Tile covers are
 loaded for visible items and kept in a bounded 128-entry memory cache; they are
 not added to the metadata JSON. Double-click folders in any mode to enter them.
 Back, Forward and Up navigate previous and parent folders within the selected
@@ -107,17 +111,38 @@ The suggestion cache stays at the original collection root.
 Double-click a CBZ to open a native PySide reader window. Pages are naturally
 sorted and read on demand without extraction or modification; image decoding runs
 in a background worker. PNG, JPEG, WebP, GIF, BMP and TIFF pages are supported.
-The image fits the window, and Full Screen/F11 toggles full-screen display (Escape
-returns to the normal window). The reader shows page/count/percentage and a seek
-slider. Left/Right arrows follow `Manga=YesAndRightToLeft`; absent/other values
-default to left-to-right. For right-to-left comics the slider starts at the right
-end and moves left as pages advance; Next is on the left and Previous on the right.
-Up/Down and Previous/Next navigate sequentially, and Home/End jump to first/last
-page. These shortcuts work while the slider is focused. Rapid navigation loads
-only the latest queued page, and closing during a load safely waits for that worker.
-Changed archives require reopening the reader. Reopening an unchanged comic raises
-its existing reader; reader windows are independent of the library window. Progress
-is displayed for the current session and is not persisted.
+Automatic mode shows two portrait pages when both fit at full canvas height;
+otherwise it shows one. Landscape pages and pages marked `DoublePage` remain
+single. **View** also offers explicit Single Page and Two Pages modes. A spread
+uses the same display height for both pages and reverses its visual order for
+right-to-left reading: page 3 appears left of page 2. The footer shows the visible
+page numbers, total and percentage, such as `2 & 3 / 182`.
+
+Previous/Next page controls sit together at the lower left. Left/Right arrows
+follow `Manga=YesAndRightToLeft`; absent/other values default to left-to-right.
+For right-to-left comics the slider starts at the right end and moves left as pages
+advance; the Next control is left of Previous. Up/Down navigate sequentially;
+Home/End jump to first/last page. Navigation advances past the displayed spread,
+and these shortcuts also work while the slider is focused. Holding a key does not
+trigger repeated navigation.
+
+Separate Previous/Next File buttons are grouped above the canvas. They use naturally
+sorted CBZ files in the same folder, excluding symbolic links, and disable when no
+adjacent file is available. Next File starts at the first page; Previous File opens
+the final page. At either reading boundary, two presses in the same direction within
+0.4 seconds open the adjacent comic. A single boundary press shows a brief hint;
+there is no wraparound. A file that cannot open leaves the current comic available.
+
+The **File** menu provides Open Comic, adjacent-file navigation and Close.
+**Edit > Edit Metadata…** opens the existing metadata dialog for the current comic.
+Saving there refreshes the reader's archive snapshot and reading direction while
+preserving its page position, and refreshes an associated library's preview and
+suggestions. External archive changes still require reopening the reader.
+Full Screen/F11 toggles full-screen display; Escape returns to the normal window.
+Rapid navigation loads only the latest queued page, and closing during a load
+safely waits for that worker. Reopening an unchanged comic raises its existing
+reader; reader windows are independent of the library window. Progress is displayed
+for the current session and is not persisted.
 
 The independent dialog provides **Details** and **Plot & Notes** layouts. The reference images measure 789 x 673/677 pixels including their title
 bars. The default client area is 789 x 635 logical pixels, with 22-pixel inputs,
