@@ -5,90 +5,19 @@ from commonUtils.ui import pyside as qt
 from features.comics.pages import ComicPages
 from features.comics.reading import comic_siblings, visible_pages
 from .operations import Operation
+from .reader_pages import PageCanvas, read_image, read_candidates, read_previous
+from .reader_controls import ReaderControls, ReaderMenus
+from .reader_keys import ReaderKeyHandler
 
-
-class PageCanvas(qt.QWidget):
-    resized = qt.Signal()
-
-    def __init__(self):
-        super().__init__()
-        self.pixmaps = ()
-        self.visual_pages = ()
-        self.message = 'Loading page…'
-        self.setMinimumSize(100, 100)
-        self.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Expanding)
-
-    @property
-    def pixmap(self):
-        return self.pixmaps[0][1] if self.pixmaps else qt.QPixmap()
-
-    def set_pages(self, pages, right_to_left):
-        self.pixmaps = tuple(reversed(pages)) if right_to_left else tuple(pages)
-        self.visual_pages = tuple(index for index, _ in self.pixmaps)
-        self.update()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.resized.emit()
-
-    def paintEvent(self, event):
-        painter = qt.QPainter(self)
-        painter.fillRect(self.rect(), self.palette().brush(qt.QPalette.ColorRole.Base))
-        if not self.pixmaps:
-            painter.setPen(self.palette().color(qt.QPalette.ColorRole.Text))
-            painter.drawText(self.rect().adjusted(20, 20, -20, -20),
-                             qt.Qt.AlignmentFlag.AlignCenter | qt.Qt.TextFlag.TextWordWrap, self.message)
-            return
-        gap = 8 if len(self.pixmaps) == 2 else 0
-        ratios = [pixmap.width() / pixmap.height() for _, pixmap in self.pixmaps]
-        height = min(self.height(), (self.width() - gap) / sum(ratios))
-        width = sum(ratios) * height + gap
-        x, y = (self.width() - width) / 2, (self.height() - height) / 2
-        painter.setRenderHint(qt.QPainter.RenderHint.SmoothPixmapTransform)
-        for ratio, (_, pixmap) in zip(ratios, self.pixmaps):
-            target = qt.QRectF(x, y, ratio * height, height)
-            painter.drawPixmap(target, pixmap, qt.QRectF(pixmap.rect()))
-            x += target.width() + gap
-
-
-def read_image(pages, index):
-    data, _ = pages.read_page(index)
-    buffer = qt.QBuffer()
-    buffer.setData(data)
-    buffer.open(qt.QIODevice.OpenModeFlag.ReadOnly)
-    reader = qt.QImageReader(buffer)
-    reader.setAutoTransform(True)
-    size = reader.size()
-    if size.width() * size.height() > 40_000_000:
-        reader.setScaledSize(size.scaled(6000, 6000, qt.Qt.AspectRatioMode.KeepAspectRatio))
-    image = reader.read()
-    if image.isNull():
-        raise ValueError(reader.errorString() or 'This page could not be displayed')
-    return image
-
-
-def read_candidates(pages, index):
-    images = {index: read_image(pages, index)}
-    if index + 1 < len(pages.pages) and index not in pages.double_pages and images[index].width() < images[index].height():
-        try:
-            images[index + 1] = read_image(pages, index + 1)
-        except Exception:
-            # A damaged following page must not prevent reading this page.
-            pass
-    return images
-
-
-def read_previous(pages, index, viewport, mode):
-    """Choose the previous spread from its actual images after a seek or resize."""
-    if index > 0:
-        images = read_candidates(pages, index - 1)
-        sizes = {page: (image.width(), image.height()) for page, image in images.items()}
-        if visible_pages(index - 1, sizes, viewport, mode, pages.double_pages) == (index - 1, index):
-            return index - 1, images
-    return index, read_candidates(pages, index)
+FILE_SWITCH_INTERVAL = .4
 
 
 class ComicReaderWindow(qt.QMainWindow):
+    """Coordinate asynchronous requests while retaining the last successful display.
+
+    page is the latest requested index; shown_page and images describe what is
+    actually on screen. Worker completions replace them only if still current.
+    """
     metadata_saved = qt.Signal(object)
 
     def __init__(self, pages):
@@ -109,49 +38,27 @@ class ComicReaderWindow(qt.QMainWindow):
         self.previous_starts = []
         self.boundary = None
         self.metadata_windows = []
+        self.reload_metadata_path = None
         self.siblings = []
-        self._menus()
-        container = qt.QWidget()
-        layout = qt.QVBoxLayout(container)
-        header = qt.QHBoxLayout()
-        self.previous_file_button = self._button('Previous file', qt.QStyle.StandardPixmap.SP_MediaSkipBackward)
-        self.next_file_button = self._button('Next file', qt.QStyle.StandardPixmap.SP_MediaSkipForward)
-        self.previous_file_button.clicked.connect(lambda: self.open_adjacent(-1))
-        self.next_file_button.clicked.connect(lambda: self.open_adjacent(1))
-        self.file_controls = qt.QHBoxLayout()
-        header.addLayout(self.file_controls)
-        self.title = qt.QLabel()
-        self.title.setTextFormat(qt.Qt.TextFormat.PlainText)
-        self.title.setWordWrap(True)
-        header.addWidget(self.title, 1)
-        self.direction = qt.QLabel()
-        header.addWidget(self.direction)
-        fullscreen = qt.QToolButton()
-        fullscreen.setDefaultAction(self.fullscreen_action)
-        header.addWidget(fullscreen)
-        layout.addLayout(header)
-        self.canvas = PageCanvas()
-        self.canvas.setFocusPolicy(qt.Qt.FocusPolicy.StrongFocus)
+        self.menus = ReaderMenus(self)
+        self.previous_file_action = self.menus.previous_file_action
+        self.next_file_action = self.menus.next_file_action
+        self.edit_metadata_action = self.menus.edit_metadata_action
+        self.fullscreen_action = self.menus.fullscreen_action
+        self.controls = ReaderControls(self.fullscreen_action, self)
+        self.setCentralWidget(self.controls)
+        # Preserve the widget handles used by callers while keeping construction separate.
+        for name in ('canvas', 'progress', 'progress_label', 'previous_button', 'next_button',
+                     'previous_file_button', 'next_file_button', 'title', 'direction'):
+            setattr(self, name, getattr(self.controls, name))
         self.setFocusProxy(self.canvas)
-        layout.addWidget(self.canvas, 1)
         self.canvas.resized.connect(self._resized)
-        controls = qt.QHBoxLayout()
-        self.previous_button = self._button('Previous page', qt.QStyle.StandardPixmap.SP_ArrowLeft)
-        self.next_button = self._button('Next page', qt.QStyle.StandardPixmap.SP_ArrowRight)
+        self.progress.valueChanged.connect(self.go)
         self.previous_button.clicked.connect(lambda: self.step(-1))
         self.next_button.clicked.connect(lambda: self.step(1))
-        self.page_controls = qt.QHBoxLayout()
-        controls.addLayout(self.page_controls)
-        self.progress = qt.QSlider(qt.Qt.Orientation.Horizontal)
-        self.progress.setAccessibleName('Reading progress')
-        self.progress.setLayoutDirection(qt.Qt.LayoutDirection.LeftToRight)
-        self.progress.valueChanged.connect(self.go)
-        controls.addWidget(self.progress, 1)
-        self.progress_label = qt.QLabel()
-        controls.addWidget(self.progress_label)
-        layout.addLayout(controls)
-        self.setCentralWidget(container)
-        qt.QApplication.instance().installEventFilter(self)
+        self.previous_file_button.clicked.connect(lambda: self.open_adjacent(-1))
+        self.next_file_button.clicked.connect(lambda: self.open_adjacent(1))
+        self.keys = ReaderKeyHandler(self)
         self._configure_file()
         self.go(0)
 
@@ -159,92 +66,10 @@ class ComicReaderWindow(qt.QMainWindow):
         super().showEvent(event)
         self.canvas.setFocus(qt.Qt.FocusReason.OtherFocusReason)
 
-    def eventFilter(self, watched, event):
-        if (not isinstance(watched, qt.QWidget) or watched.window() is not self
-                or event.type() not in (qt.QEvent.Type.ShortcutOverride, qt.QEvent.Type.KeyPress)):
-            return super().eventFilter(watched, event)
-        modifiers = event.modifiers() & ~qt.Qt.KeyboardModifier.KeypadModifier
-        keys = (qt.Qt.Key.Key_Left, qt.Qt.Key.Key_Right, qt.Qt.Key.Key_Up, qt.Qt.Key.Key_Down,
-                qt.Qt.Key.Key_Home, qt.Qt.Key.Key_End, qt.Qt.Key.Key_Escape)
-        if modifiers or event.key() not in keys:
-            return super().eventFilter(watched, event)
-        event.accept()
-        if event.type() == qt.QEvent.Type.KeyPress and not event.isAutoRepeat():
-            key = event.key()
-            if key in (qt.Qt.Key.Key_Left, qt.Qt.Key.Key_Right):
-                forward = (key == qt.Qt.Key.Key_Left) if self.pages.right_to_left else (key == qt.Qt.Key.Key_Right)
-                self.step(1 if forward else -1)
-            elif key in (qt.Qt.Key.Key_Up, qt.Qt.Key.Key_Down):
-                self.step(1 if key == qt.Qt.Key.Key_Down else -1)
-            elif key in (qt.Qt.Key.Key_Home, qt.Qt.Key.Key_End):
-                self.go(0 if key == qt.Qt.Key.Key_Home else len(self.pages.pages) - 1)
-            else:
-                self.leave_fullscreen()
-        return True
-
-    def _button(self, name, icon):
-        button = qt.QToolButton()
-        button.setIcon(self.style().standardIcon(icon))
-        button.setIconSize(qt.QSize(22, 22))
-        button.setAutoRaise(True)
-        button.setToolTip(name)
-        button.setAccessibleName(name)
-        return button
-
-    def _menus(self):
-        file_menu = self.menuBar().addMenu('File')
-        open_action = file_menu.addAction('Open Comic…')
-        open_action.setShortcut(qt.QKeySequence.StandardKey.Open)
-        open_action.triggered.connect(self._choose_file)
-        self.previous_file_action = file_menu.addAction('Previous File')
-        self.previous_file_action.setShortcut('Ctrl+Shift+Left')
-        self.previous_file_action.triggered.connect(lambda: self.open_adjacent(-1))
-        self.next_file_action = file_menu.addAction('Next File')
-        self.next_file_action.setShortcut('Ctrl+Shift+Right')
-        self.next_file_action.triggered.connect(lambda: self.open_adjacent(1))
-        self.previous_file_action.setAutoRepeat(False)
-        self.next_file_action.setAutoRepeat(False)
-        file_menu.addSeparator()
-        close_action = file_menu.addAction('Close')
-        close_action.setShortcut(qt.QKeySequence.StandardKey.Close)
-        close_action.triggered.connect(self.close)
-        edit_menu = self.menuBar().addMenu('Edit')
-        self.edit_metadata_action = edit_menu.addAction('Edit Metadata…')
-        self.edit_metadata_action.setShortcut('Ctrl+I')
-        self.edit_metadata_action.triggered.connect(self.edit_metadata)
-        view_menu = self.menuBar().addMenu('View')
-        group = qt.QActionGroup(self)
-        for mode, label in (('auto', 'Automatic Pages'), ('single', 'Single Page'), ('double', 'Two Pages')):
-            action = view_menu.addAction(label)
-            action.setCheckable(True)
-            action.setChecked(mode == 'auto')
-            group.addAction(action)
-            action.triggered.connect(lambda checked=False, selected=mode: self.set_mode(selected))
-        self.fullscreen_action = view_menu.addAction('Full Screen')
-        self.fullscreen_action.setShortcut('F11')
-        self.fullscreen_action.triggered.connect(self.toggle_fullscreen)
-
     def _configure_file(self):
         self.setWindowTitle(self.pages.path.name)
         self.setWindowFilePath(str(self.pages.path))
-        self.title.setText(self.pages.path.name)
-        rtl = self.pages.right_to_left
-        self.direction.setText('Right to left' if rtl else 'Left to right')
-        blocker = qt.QSignalBlocker(self.progress)
-        self.progress.setInvertedAppearance(rtl)
-        self.progress.setRange(0, max(1, len(self.pages.pages) - 1))
-        self.progress.setEnabled(len(self.pages.pages) > 1)
-        blocker.unblock()
-        for layout, previous, following in ((self.page_controls, self.previous_button, self.next_button),
-                                            (self.file_controls, self.previous_file_button, self.next_file_button)):
-            while layout.count():
-                layout.takeAt(0)
-            layout.addWidget(following if rtl else previous)
-            layout.addWidget(previous if rtl else following)
-        self.previous_button.setIcon(self.style().standardIcon(qt.QStyle.StandardPixmap.SP_ArrowRight if rtl else qt.QStyle.StandardPixmap.SP_ArrowLeft))
-        self.next_button.setIcon(self.style().standardIcon(qt.QStyle.StandardPixmap.SP_ArrowLeft if rtl else qt.QStyle.StandardPixmap.SP_ArrowRight))
-        self.previous_file_button.setIcon(self.style().standardIcon(qt.QStyle.StandardPixmap.SP_MediaSkipForward if rtl else qt.QStyle.StandardPixmap.SP_MediaSkipBackward))
-        self.next_file_button.setIcon(self.style().standardIcon(qt.QStyle.StandardPixmap.SP_MediaSkipBackward if rtl else qt.QStyle.StandardPixmap.SP_MediaSkipForward))
+        self.controls.set_file(self.pages)
         self._refresh_siblings()
 
     def _refresh_siblings(self):
@@ -263,23 +88,24 @@ class ComicReaderWindow(qt.QMainWindow):
     def _update_controls(self):
         if not hasattr(self, 'progress'):
             return
-        end = self.displayed_pages[-1]
-        blocker = qt.QSignalBlocker(self.progress)
-        self.progress.setValue(0 if self.shown_page == 0 else end)
-        blocker.unblock()
-        numbers = ' & '.join(str(index + 1) for index in self.displayed_pages)
-        self.progress_label.setText(f'{numbers} / {len(self.pages.pages)} · {(end + 1) / len(self.pages.pages):.0%}')
-        self.previous_button.setEnabled(not self.file_loading and (self.page > 0 or self.adjacent_path(-1) is not None))
-        self.next_button.setEnabled(not self.file_loading and (end < len(self.pages.pages) - 1 or self.adjacent_path(1) is not None))
+        self.controls.show_progress(self.shown_page, self.displayed_pages, len(self.pages.pages))
+        can_go_back = self.page > 0 or self.adjacent_path(-1) is not None
+        can_go_forward = self.displayed_pages[-1] < len(self.pages.pages) - 1 or self.adjacent_path(1) is not None
+        self.previous_button.setEnabled(not self.file_loading and can_go_back)
+        self.next_button.setEnabled(not self.file_loading and can_go_forward)
         for direction, button, action in ((-1, self.previous_file_button, self.previous_file_action),
                                            (1, self.next_file_button, self.next_file_action)):
             path = self.adjacent_path(direction)
             button.setEnabled(path is not None and not self.file_loading)
             action.setEnabled(button.isEnabled())
-            button.setToolTip(('Previous file' if direction < 0 else 'Next file') + (f': {path.name}' if path else ''))
+            label = 'Previous file' if direction < 0 else 'Next file'
+            button.setToolTip(f'{label}: {path.name}' if path else label)
         self.edit_metadata_action.setEnabled(not self.file_loading)
 
     def set_mode(self, mode):
+        if mode not in self.menus.mode_actions:
+            raise ValueError('Unknown reader page mode')
+        self.menus.mode_actions[mode].setChecked(True)
         self.mode = mode
         self.boundary = None
         self.previous_starts.clear()
@@ -353,12 +179,12 @@ class ComicReaderWindow(qt.QMainWindow):
         if path is None:
             return
         now = time.monotonic()
-        if self.boundary is not None and self.boundary[0] == direction and now - self.boundary[1] <= .4:
+        if self.boundary is not None and self.boundary[0] == direction and now - self.boundary[1] <= FILE_SWITCH_INTERVAL:
             self.boundary = None
             self.open_adjacent(direction)
         else:
             self.boundary = (direction, now)
-            self.statusBar().showMessage(f'Press again within 0.4 s to open {path.name}', 1800)
+            self.statusBar().showMessage(f'Press again within {FILE_SWITCH_INTERVAL:g} s to open {path.name}', 1800)
 
     def _start(self, callback, completed):
         self.busy = True
@@ -449,6 +275,10 @@ class ComicReaderWindow(qt.QMainWindow):
             existing.raise_()
             existing.activateWindow()
             return existing
+        for window in list(self.metadata_windows):
+            if not window.isVisible() and not window.busy:
+                self.metadata_windows.remove(window)
+                window.deleteLater()
         self._refresh_siblings()
         editor = MetadataEditor(self.pages.path, self.siblings, self)
         self.metadata_windows.append(editor)

@@ -4,6 +4,8 @@ from pathlib import Path
 from commonUtils.dirUtils import Directory
 from .pages import natural_key
 
+SPREAD_GAP = 8
+
 
 def comic_siblings(path):
     path = Path(path)
@@ -22,6 +24,6 @@ def visible_pages(start, sizes, viewport, mode='auto', double_pages=()):
     if any(ratio >= 1 for ratio in ratios):
         return (start,)
     width, height = viewport
-    if mode == 'double' or width >= sum(ratios) * max(1, height) + 8:
+    if mode == 'double' or width >= sum(ratios) * max(1, height) + SPREAD_GAP:
         return (start, start + 1)
     return (start,)

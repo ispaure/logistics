@@ -26,7 +26,10 @@ Provides comic-related integration for Logistics.
 - `browser_support.py` contributes CBZ information, thumbnails, actions and activation through file-object hooks.
 - `ui/file_browser.py` preserves compatibility imports for the reusable commonUtils view component.
 - `pages.py` reads archive pages lazily and renders cover thumbnails without extraction.
-- `reader.py` owns native reader windows; `ui/reader.py` handles page display and navigation.
+- `reader.py` owns native reader windows; `ui/reader.py` coordinates navigation, loading and editing.
+- `ui/reader_pages.py` decodes images and paints page spreads.
+- `ui/reader_controls.py` builds menus, direction-aware controls and progress labels.
+- `ui/reader_keys.py` scopes navigation keys to the reader, independently of control focus.
 - `reading.py` decides page spreads and naturally orders adjacent comic files.
 - `folder_stats.py` and `ui/filesystem_model.py` preserve imports for shared filesystem totals and the object-driven Qt model.
 - `ui/navigation.py` preserves imports for shared root-bounded navigation.
@@ -194,7 +197,8 @@ selected values; choosing values explicitly replaces the field for all selected
 comics. Per-field revert still restores individual original values.
 
 Library suggestions are indexed in the background at browser opening and after
-metadata saves. The root contains `LogisticsComicsData/metadata.json`, with unique nonempty suggestions stored once per field. Suggestion whitespace is
+metadata saves. Routine indexing does not add a toolbar banner or comic count;
+indexing failures remain visible, and manual metadata entry stays available. The root contains `LogisticsComicsData/metadata.json`, with unique nonempty suggestions stored once per field. Suggestion whitespace is
 trimmed and collapsed to single spaces, including line breaks in dropdown values.
 Existing cached suggestions are normalized automatically without changing XML;
 untouched source values retain their exact contents. Relative file paths map
