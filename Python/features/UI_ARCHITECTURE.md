@@ -73,3 +73,16 @@ generic `FolderEntry` model and interpreted only by the feature that owns it.
 
 For rclone, the context is the selected credential `.conf` path. The context
 does not become part of logical folder identity or filesystem layout.
+
+
+## Shared file types
+
+Features may expose `register_file_types()` to register their own `File` subclasses
+with `commonUtils.fileTypes.registry.register_file_type`. Logistics calls these
+hooks for available features before running any feature initializer. The registry
+is process-wide: registrations apply to all subsequent `Directory.list_files()`
+and `file_from_path()` calls, including calls in other modules and pre-existing
+Directory instances. Other projects should register their types during startup,
+before their first shared listing/browser use; commonUtils recommends this order
+but does not enforce it. Late registration still affects future resolutions.
+Domain types remain in their owning project; commonUtils owns the mechanism.
