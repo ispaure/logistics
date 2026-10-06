@@ -29,7 +29,8 @@ Provides comic-related integration for Logistics.
 - `ui/metadata_form.py` owns the measured tab layouts and field feedback.
 - `ui/metadata_widgets.py` owns numeric controls, field creation and lossless widget/text conversion.
 - `ui/value_popup.py` provides floating Lists, Check and Text entry for list-valued fields.
-- `catalog.py` builds incremental library suggestions and persists a disposable metadata cache.
+- `catalog.py` builds incremental library suggestions; reusable JSON parsing/atomic writing lives in `commonUtils.fileTypes.jsonType.JSONFile`.
+- `library_config.py` reads configured immediate-child library names from `remoteConfig.ini`.
 - `ui/operations.py` provides the shared background file-operation worker.
 - `__init__.py` exposes the feature to the Logistics feature registry.
 
@@ -47,6 +48,21 @@ Use **Open Comics Library...** in a detected Comics folder. ComicRack-configured
 folders are available on macOS and Linux as well as Windows. The browser starts
 collapsed, shows directories and files, and displays selected CBZ metadata in a
 read-only pane. Right-click a CBZ and choose **Edit Metadata**.
+
+At the collection root, configure the libraries shown in the browser:
+
+```ini
+[LogisticsComics]
+libraries = Artbooks,Comics,Comics [Marvel],Mangas,Manhwa
+```
+
+The Library dropdown preserves this order and shows the selected folder's
+contents in the existing Name/Date Modified/Size tree. Missing folders are disabled;
+empty or invalid settings show a message. Without this setting, the browser keeps
+whole-root browsing for existing collections. This section alone enables the
+Comics library folder action. Switching libraries clears the preview and collapses
+the tree; existing metadata dialogs remain associated with their original files.
+The suggestion cache stays at the original collection root.
 
 The independent dialog provides **Details** and **Plot & Notes** layouts. The reference images measure 789 x 673/677 pixels including their title
 bars. The default client area is 789 x 635 logical pixels, with 22-pixel inputs,
@@ -73,6 +89,10 @@ Only explicit pending fields are applied. The × control explicitly clears a mix
 field even when its display is already blank. Field tooltips show samples of the
 original differing values. Previous/Next
 are disabled for batches. Bulk preflight and archive work run off the UI thread.
+
+Characters displays one name per line in its large text box and accepts pasted
+comma-separated names. Explicit edits save comma-separated XML; opening or
+reverting the field preserves the original XML spelling.
 
 List-valued fields have a diamond button that opens a floating helper. **Lists**
 adds/removes selected suggestions, **Check** toggles values, and **Text** accepts

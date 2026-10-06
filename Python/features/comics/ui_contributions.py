@@ -5,6 +5,7 @@ UI contributions exposed by the Logistics Comics feature.
 from commonUtils.osUtils import OS, get_os
 
 from features.comics import actions, detection
+from features.comics.library_config import has_library_configuration
 from features.contributions import FeatureContributions, FolderFeatureContribution, UIAction, WorkflowContribution
 from models.folder_entry import FolderEntry
 
@@ -14,7 +15,8 @@ def _is_available(entry: FolderEntry) -> bool:
         return False
 
     return (
-        detection.has_comic_rack(entry.local)
+        has_library_configuration(entry.local.path)
+        or detection.has_comic_rack(entry.local)
         or detection.has_yac_reader_library(entry.local)
     )
 

@@ -149,7 +149,7 @@ class CatalogTests(unittest.TestCase):
         self.catalog.path.write_text('invalid JSON')
         broken = self.root / 'broken.cbz'
         broken.write_bytes(b'not a zip')
-        with patch('features.comics.catalog.os.replace', side_effect=PermissionError('read only')):
+        with patch('commonUtils.fileTypes.jsonType.os.replace', side_effect=PermissionError('read only')):
             result = self.catalog.refresh()
         self.assertEqual(result['suggestions']['Writer'], ['Alice', 'Bob'])
         self.assertEqual(result['count'], 1)
@@ -243,6 +243,11 @@ class PopupTests(unittest.TestCase):
         values['Characters'] = 'Pepper,  Carrot'
         form.load_values([values])
         editor = form.editors['Characters']
+        form.resize(770, 550)
+        form.setCurrentIndex(1)
+        form.show()
+        self.app.processEvents()
+        self.assertGreater(editor.height(), 60)
         self.assertEqual(editor.toPlainText(), 'Pepper\nCarrot')
         self.assertEqual(editor_value(editor), values['Characters'])
         self.assertFalse(form.changes())
