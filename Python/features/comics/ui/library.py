@@ -4,12 +4,15 @@ from pathlib import Path
 from commonUtils.ui import pyside as qt
 from features.comics.comicinfo import ComicInfoXML
 from features.comics.library import ComicDocument
+from features.comics.catalog import LibraryCatalog
 from features.comics.selection import normalize_targets
 from .metadata_editor import MetadataEditor
 from .operations import Operation
 
 
 class ComicLibraryWindow(qt.QMainWindow):
+    suggestions_changed = qt.Signal(object)
+
     def __init__(self, root_path, parent=None):
         super().__init__(parent)
         self.setWindowFlag(qt.Qt.WindowType.Window, True)
@@ -19,12 +22,20 @@ class ComicLibraryWindow(qt.QMainWindow):
         self.document = None
         self.busy = False
         self.metadata_windows = []
+        self.catalog = LibraryCatalog(root_path)
+        self.suggestions = {}
+        self.catalog_busy = False
+        self.catalog_pending = False
+        self.close_after_catalog = False
         container = qt.QWidget()
         layout = qt.QVBoxLayout(container)
         location = qt.QLabel(str(root_path))
         location.setTextFormat(qt.Qt.TextFormat.PlainText)
         location.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(location)
+        self.catalog_status = qt.QLabel('Reading library suggestions…')
+        self.catalog_status.setTextFormat(qt.Qt.TextFormat.PlainText)
+        layout.addWidget(self.catalog_status)
         splitter = qt.QSplitter()
         layout.addWidget(splitter, 1)
         self.setCentralWidget(container)
@@ -66,6 +77,41 @@ class ComicLibraryWindow(qt.QMainWindow):
         splitter.addWidget(panel)
         splitter.setSizes([700, 500])
         self.tree.selectionModel().selectionChanged.connect(self._selection_changed)
+        self._refresh_catalog()
+
+    def _refresh_catalog(self):
+        if self.catalog_busy:
+            self.catalog_pending = True
+            return
+        self.catalog_busy = True
+        self.catalog_pending = False
+        self.catalog_status.setText('Updating library suggestions…')
+        self.catalog_operation = Operation(
+            lambda: self.catalog.refresh(self.catalog_operation.isInterruptionRequested), self)
+        self.catalog_operation.completed.connect(self._catalog_loaded)
+        self.catalog_operation.finished.connect(self._catalog_finished)
+        self.catalog_operation.start()
+
+    def _catalog_loaded(self, result, error):
+        if error:
+            self.catalog_status.setText('Library suggestions could not be updated; manual entry is available.')
+            self.catalog_status.setToolTip(error)
+        elif result is not None:
+            self.suggestions = result['suggestions']
+            self.suggestions_changed.emit(self.suggestions)
+            status = f"Suggestions from {result['count']} comics"
+            if result['errors']:
+                status += f" · {len(result['errors'])} indexing issue(s)"
+            self.catalog_status.setText(status)
+            self.catalog_status.setToolTip('\n'.join(result['errors']))
+
+    def _catalog_finished(self):
+        self.catalog_busy = False
+        self.catalog_operation.deleteLater()
+        if self.close_after_catalog:
+            self.close()
+        elif self.catalog_pending:
+            self._refresh_catalog()
 
     def _context_menu(self, point):
         menu = self._context_menu_for(self.tree.indexAt(point))
@@ -109,12 +155,15 @@ class ComicLibraryWindow(qt.QMainWindow):
             if candidate.suffix.lower() == '.cbz' and not self.model.isDir(child):
                 siblings.append(candidate)
         window = MetadataEditor(targets, siblings, self)
+        window.tabs.set_suggestions(self.suggestions)
+        self.suggestions_changed.connect(window.tabs.set_suggestions)
         self.metadata_windows.append(window)
         window.saved.connect(self._metadata_saved)
         window.show()
         return window
 
     def _metadata_saved(self, path):
+        self._refresh_catalog()
         # Reload preview after the save. If a preview load is in progress, queue
         # a refresh rather than starting two threads on the same owner.
         if self.busy:
@@ -195,4 +244,10 @@ class ComicLibraryWindow(qt.QMainWindow):
                 if window.isVisible():
                     event.ignore()
                     return
+        if self.catalog_busy:
+            self.close_after_catalog = True
+            self.catalog_operation.requestInterruption()
+            self.hide()
+            event.ignore()
+            return
         event.accept()

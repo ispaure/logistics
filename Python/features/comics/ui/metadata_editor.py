@@ -58,16 +58,6 @@ class MetadataEditor(qt.QDialog):
         buttons.addWidget(self.previous_button)
         buttons.addWidget(self.next_button)
         buttons.addStretch()
-        self.review_button = qt.QPushButton('Review…')
-        self.reload_button = qt.QPushButton('Reload')
-        self.review_button.setFixedSize(85, 28)
-        self.reload_button.setFixedSize(70, 28)
-        self.review_button.setToolTip('Review selected files and pending changes before applying them')
-        self.reload_button.setToolTip('Reload metadata and re-scan selected folders; asks about pending edits')
-        self.review_button.clicked.connect(self._review)
-        self.reload_button.clicked.connect(lambda: self._leave(lambda: self._load(self.targets)))
-        buttons.addWidget(self.review_button)
-        buttons.addWidget(self.reload_button)
         self.ok_button = qt.QPushButton('OK')
         self.cancel_button = qt.QPushButton('Cancel')
         self.apply_button = qt.QPushButton('Apply')
@@ -91,8 +81,6 @@ class MetadataEditor(qt.QDialog):
         self.ok_button.setEnabled(available)
         changes = self._changes()
         self.apply_button.setEnabled(available and bool(changes))
-        self.review_button.setEnabled(available)
-        self.reload_button.setEnabled(not self.busy)
         if available and self.is_bulk and not self.last_save_error:
             fields = len(changes)
             count = len(self.selection.documents)
@@ -157,30 +145,6 @@ class MetadataEditor(qt.QDialog):
             self.message.setText('Only changed fields are saved; other XML metadata is retained.' if self.document.exists else
                                  'No ComicInfo.xml yet. Apply or OK will create it when fields are changed.')
 
-    def _review(self):
-        if self.selection is None:
-            return
-        review = qt.QDialog(self)
-        review.setWindowTitle('Review metadata changes')
-        review.resize(680, 480)
-        layout = qt.QVBoxLayout(review)
-        text = qt.QPlainTextEdit()
-        text.setReadOnly(True)
-        lines = [f'{len(self.selection.documents)} comics selected', '', 'Pending fields:']
-        changes = self._changes()
-        if not changes:
-            lines.append('None — original values will be kept.')
-        for field, value in sorted(changes.items()):
-            lines.append(f'{field}: {value if value else "(clear/remove field)"}')
-        lines.extend(['', 'Files:'])
-        lines.extend(str(document.path) for document in self.selection.documents)
-        text.setPlainText('\n'.join(lines))
-        layout.addWidget(text)
-        close = qt.QPushButton('Close')
-        close.clicked.connect(review.accept)
-        layout.addWidget(close)
-        review.exec()
-
     def _save(self, after=None):
         if self.busy or self.selection is None:
             return
@@ -201,7 +165,7 @@ class MetadataEditor(qt.QDialog):
         if error:
             self.pending_action = None
             self.message.show()
-            self.last_save_error = f'Could not save: {error}. Use Reload to refresh changed files.'
+            self.last_save_error = f'Could not save: {error}. Close and reopen this editor to refresh changed files.'
             self.message.setText(self.last_save_error)
             qt.QMessageBox.warning(self, 'Metadata was not saved', error)
             return
@@ -244,7 +208,8 @@ class MetadataEditor(qt.QDialog):
             self._leave(lambda: self._load(self.siblings[index]))
 
     def reject(self):
-        self._leave(lambda: super(MetadataEditor, self).reject())
+        if not self.busy:
+            super().reject()
 
     def closeEvent(self, event):
         event.ignore()

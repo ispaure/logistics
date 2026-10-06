@@ -28,6 +28,8 @@ Provides comic-related integration for Logistics.
 - `edit_state.py` owns shared/mixed values and explicit pending patches without Qt dependencies.
 - `ui/metadata_form.py` owns the measured tab layouts and field feedback.
 - `ui/metadata_widgets.py` owns numeric controls, field creation and lossless widget/text conversion.
+- `ui/value_popup.py` provides floating Lists, Check and Text entry for list-valued fields.
+- `catalog.py` builds incremental library suggestions and persists a disposable metadata cache.
 - `ui/operations.py` provides the shared background file-operation worker.
 - `__init__.py` exposes the feature to the Logistics feature registry.
 
@@ -46,15 +48,15 @@ folders are available on macOS and Linux as well as Windows. The browser starts
 collapsed, shows directories and files, and displays selected CBZ metadata in a
 read-only pane. Right-click a CBZ and choose **Edit Metadata**.
 
-The independent dialog follows the ComicRack **Details** and **Plot & Notes**
-layouts. The reference images measure 789 x 673/677 pixels including their title
+The independent dialog provides **Details** and **Plot & Notes** layouts. The reference images measure 789 x 673/677 pixels including their title
 bars. The default client area is 789 x 635 logical pixels, with 22-pixel inputs,
 105 x 28-pixel action buttons, and column proportions of 267:74:74:74:184.
 Volume, counts and dates use blank-capable integer spin controls; invalid
 non-numeric typing is rejected immediately. Number and AlternateNumber provide
 numeric arrows while still accepting suffixes/fractions as the schema requires.
 Absent fields and untouched legacy strings/sentinels retain their original XML. The latter contains Summary, Notes, and Review sub-tabs. **Apply** saves
-without closing, **OK** saves and closes, and **Cancel** asks about unsaved edits.
+without closing, **OK** saves and closes, and **Cancel** immediately discards pending edits and closes without a prompt.
+Apply and OK do not ask for confirmation; already applied changes remain saved.
 Previous/Next navigate the CBZ siblings currently loaded in the browser, with the
 same save/discard/cancel protection. Disk operations run in background threads;
 windows cannot close while their operation is active.
@@ -62,16 +64,38 @@ windows cannot close while their operation is active.
 Bulk editing supports extended selection of CBZ files, folders or both. Folder
 contents are included recursively and overlapping selections are deduplicated.
 The editor works on the resolved file list loaded at opening time; files added later
-are included only after Reload. Symbolic links are excluded from folder scans;
+are included when the editor is reopened. Symbolic links are excluded from folder scans;
 explicit link selections and hard-linked archives are refused before editing. Shared values
 use the normal OS palette; differing values appear as muted “Multiple values —
 unchanged” placeholders. Editing any field restores normal text and marks its
 caption with `*`; the adjacent revert arrow restores its original value(s).
 Only explicit pending fields are applied. The × control explicitly clears a mixed
 field even when its display is already blank. Field tooltips show samples of the
-original differing values. Review lists pending changes and exact target files;
-Reload refreshes the selection after asking about pending edits. Previous/Next
+original differing values. Previous/Next
 are disabled for batches. Bulk preflight and archive work run off the UI thread.
+
+List-valued fields have a diamond button that opens a floating helper. **Lists**
+adds/removes selected suggestions, **Check** toggles values, and **Text** accepts
+one value per line or comma-separated text. A filter and new-value entry support
+large suggestion lists and custom values. Switching modes or opening/closing the
+helper leaves untouched XML unchanged; actual edits update the pending field and
+its `*` marker. Clicking outside closes the popup. A mixed field starts with no
+selected values; choosing values explicitly replaces the field for all selected
+comics. Per-field revert still restores individual original values.
+
+Library suggestions are indexed in the background at browser opening and after
+metadata saves. The root contains `LogisticsComicsData/metadata.json`, with relative
+archive paths, file signatures (size, nanosecond modification/change times and
+file identity), a SHA-256 hash of metadata, and the relevant fields. Unchanged
+archives reuse cached values without opening their XML. New or changed archives
+are read again; removed files and values disappear. Image payloads are never read
+for indexing, so there is no full-archive hashing cost. The cache is disposable:
+invalid records are rebuilt and write failures leave session suggestions usable.
+Errors are shown in the browser status tooltip; unreadable archives are skipped
+and retried on the next refresh. Folder scans exclude symbolic links and data
+folders. Suggestions cover list-valued fields and Publisher, Imprint and Format
+dropdowns, while custom values remain editable. Suggestions updating in the
+background never overwrite pending edits.
 
 All documents are validated and checked for external changes before the first
 write. Each CBZ is replaced independently after verification; the batch is not a

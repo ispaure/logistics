@@ -1,8 +1,10 @@
-"""ComicRack-style tab layout and tracking of changed, visible metadata fields."""
+"""Compact tab layout and tracking of changed, visible metadata fields."""
 
 from commonUtils.ui import pyside as qt
 from features.comics.comicinfo import ComicInfoXML
 from features.comics.edit_state import MetadataEditState
+from features.comics.catalog import LIST_FIELDS, split_values
+from .value_popup import ValuePopup
 from .metadata_widgets import create_editor, editor_value, load_editor
 
 INPUT_HEIGHT = 22
@@ -14,16 +16,54 @@ class MetadataForm(qt.QTabWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.suggestions = {}
+        self.list_buttons = {}
+        self.popup = None
         self.editors = {}
         self.state = MetadataEditState()
         self.captions = {}
         self.revert_buttons = {}
         self.clear_buttons = {}
         self._base_tooltips = {}
+        self._combo_choices = {}
         self._normal_palettes = {}
         self._labels = {}
         self._details_tab()
         self._plot_tab()
+
+    def set_suggestions(self, suggestions):
+        self.suggestions = suggestions
+        # Updating suggestions must never change displayed values or pending edits.
+        for field in ('Publisher', 'Imprint', 'Format'):
+            editor = self.editors[field]
+            value = editor_value(editor)
+            blocker = qt.QSignalBlocker(editor)
+            try:
+                editor.clear()
+                for text, data in self._combo_choices[field]:
+                    editor.addItem(text, data)
+                existing = {editor.itemData(i) for i in range(editor.count())}
+                for suggestion in suggestions.get(field, []):
+                    if suggestion not in existing:
+                        editor.addItem(suggestion, suggestion)
+                load_editor(editor, value)
+            finally:
+                blocker.unblock()
+
+    def open_list(self, field):
+        if field not in self.state.fields:
+            return
+        if self.popup is not None:
+            self.popup.close()
+            self.popup.deleteLater()
+        entry = self.state.fields[field]
+        choices = list(self.suggestions.get(field, []))
+        for original in entry.originals:
+            choices.extend(split_values(original))
+        self.popup = ValuePopup(editor_value(self.editors[field]), choices,
+                                self._labels[field], entry.mixed and not entry.changed, self)
+        self.popup.value_changed.connect(lambda value: self.apply_pending({field: value}))
+        self.popup.show_at(self.list_buttons[field])
 
     def _field_changed(self, field, *args):
         self.state.fields[field].edit(editor_value(self.editors[field]))
@@ -106,6 +146,8 @@ class MetadataForm(qt.QTabWidget):
         self._labels[field] = label
         self._normal_palettes[field] = qt.QPalette(editor.palette())
         self._base_tooltips[field] = editor.toolTip()
+        if isinstance(editor, qt.QComboBox):
+            self._combo_choices[field] = [(editor.itemText(i), editor.itemData(i)) for i in range(editor.count())]
         clear = qt.QToolButton()
         clear.setText('×')
         clear.setToolTip('Clear this field in every selected comic (pending until Apply)')
@@ -153,7 +195,24 @@ class MetadataForm(qt.QTabWidget):
             editor.setFixedHeight(INPUT_HEIGHT)
             editor.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Fixed)
         self._register(field, editor, label, caption, header)
-        layout.addWidget(editor, 1)
+        if field in LIST_FIELDS:
+            row = qt.QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(2)
+            row.addWidget(editor, 1)
+            button = qt.QToolButton()
+            button.setText('◇')
+            button.setAccessibleName(f'Edit {label} list')
+            button.setToolTip('Edit values using Lists, Check or Text')
+            button.setFixedWidth(20)
+            if not multiline:
+                button.setFixedHeight(INPUT_HEIGHT)
+            button.clicked.connect(lambda: self.open_list(field))
+            row.addWidget(button)
+            self.list_buttons[field] = button
+            layout.addLayout(row, 1)
+        else:
+            layout.addWidget(editor, 1)
         return box
 
     def _combo(self, field, label):
@@ -164,11 +223,11 @@ class MetadataForm(qt.QTabWidget):
         box, layout, caption, header = self._field_box(label)
         box.setFixedHeight(caption.sizeHint().height() + 2 + INPUT_HEIGHT)
         editor = qt.QComboBox()
-        editor.addItem('ComicRack library only')
+        editor.addItem('Library-only field')
         editor.setFixedHeight(INPUT_HEIGHT)
         editor.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Fixed)
         editor.setEnabled(False)
-        editor.setToolTip(f'{field} is ComicRack library state, not a standard ComicInfo.xml field. '
+        editor.setToolTip(f'{field} is application library state, not a standard ComicInfo.xml field. '
                           'Existing XML extensions are preserved.')
         layout.addWidget(editor)
         return box

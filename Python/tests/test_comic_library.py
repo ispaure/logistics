@@ -149,6 +149,68 @@ class WindowTests(ComicFixture, unittest.TestCase):
         window.close()
         app.processEvents()
 
+    def test_apply_ok_cancel_and_close_do_not_ask_for_confirmation(self):
+        from commonUtils.ui import pyside as qt
+        from features.comics.ui.metadata_editor import MetadataEditor
+        self.archive()
+        editor = MetadataEditor(self.path)
+        editor.show()
+        self.wait_for(editor)
+        self.assertFalse(hasattr(editor, 'review_button'))
+        self.assertFalse(hasattr(editor, 'reload_button'))
+        with patch.object(qt.QMessageBox, 'question') as confirmation:
+            editor.editors['Writer'].setText('Applied')
+            editor.apply_button.click()
+            self.wait_for(editor)
+            self.assertTrue(editor.isVisible())
+            editor.editors['Writer'].setText('Discard this')
+            editor.cancel_button.click()
+            self.assertFalse(editor.isVisible())
+            self.assertEqual(ComicDocument(self.path).info.writer, 'Applied')
+            editor = MetadataEditor(self.path)
+            editor.show()
+            self.wait_for(editor)
+            editor.editors['Writer'].setText('OK saved')
+            editor.ok_button.click()
+            self.wait_for(editor)
+            self.assertFalse(editor.isVisible())
+            self.assertEqual(ComicDocument(self.path).info.writer, 'OK saved')
+            editor = MetadataEditor(self.path)
+            editor.show()
+            self.wait_for(editor)
+            editor.editors['Writer'].setText('Discard on close')
+            editor.close()
+            self.assertFalse(editor.isVisible())
+            self.assertEqual(ComicDocument(self.path).info.writer, 'OK saved')
+        confirmation.assert_not_called()
+        self.app.processEvents()
+
+    def test_library_catalog_supplies_dropdowns_and_updates_after_save(self):
+        import time
+        from features.comics.ui.library import ComicLibraryWindow
+        self.archive(b'<ComicInfo><Writer>Existing</Writer><Publisher>Library publisher</Publisher></ComicInfo>')
+        window = ComicLibraryWindow(self.path.parent)
+        def wait_catalog():
+            deadline = time.monotonic() + 5
+            while window.catalog_busy and time.monotonic() < deadline:
+                self.app.processEvents()
+                time.sleep(.01)
+            self.assertFalse(window.catalog_busy)
+        wait_catalog()
+        editor = window._open_editor(self.path)
+        self.wait_for(editor)
+        self.assertIn('Existing', editor.tabs.suggestions['Writer'])
+        self.assertGreaterEqual(editor.editors['Publisher'].findData('Library publisher'), 0)
+        editor.editors['Writer'].setText('New name')
+        editor._save()
+        self.wait_for(editor)
+        wait_catalog()
+        self.assertEqual(editor.tabs.suggestions['Writer'], ['New name'])
+        self.assertFalse(editor._changes())
+        editor.reject()
+        window.close()
+        self.app.processEvents()
+
     def test_cancel_apply_navigation_and_ok(self):
         from commonUtils.ui import pyside as qt
         from features.comics.ui.metadata_editor import MetadataEditor
@@ -331,7 +393,7 @@ class WindowTests(ComicFixture, unittest.TestCase):
         editor.reject()
 
 
-    def test_explicit_clear_mixed_field_and_reload_discard_pending_changes(self):
+    def test_explicit_clear_mixed_field_and_cancel_discard_pending_changes(self):
         from commonUtils.ui import pyside as qt
         from features.comics.ui.metadata_editor import MetadataEditor
         self.archive(b'<ComicInfo><Writer>First</Writer></ComicInfo>')
@@ -347,12 +409,11 @@ class WindowTests(ComicFixture, unittest.TestCase):
         self.assertEqual(ComicDocument(self.path).info.writer, '')
         self.assertEqual(ComicDocument(second).info.writer, '')
         editor.editors['Publisher'].setEditText('Pending publisher')
-        with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Discard):
-            editor.reload_button.click()
-        self.wait_for(editor)
-        self.assertFalse(editor._changes())
-        self.assertEqual(editor.editors['Publisher'].currentText(), '')
-        editor.reject()
+        with patch.object(qt.QMessageBox, 'question') as confirmation:
+            editor.reject()
+        confirmation.assert_not_called()
+        self.assertEqual(ComicDocument(self.path).info.publisher, '')
+        self.assertEqual(ComicDocument(second).info.publisher, '')
 
     def test_field_markers_revert_and_mixed_colors_follow_light_and_dark_palettes(self):
         from commonUtils.ui import pyside as qt
