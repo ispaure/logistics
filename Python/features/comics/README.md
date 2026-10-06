@@ -31,12 +31,69 @@ This feature does not require startup initialization.
 
 It is discovered and loaded by the Logistics feature registry, but performs no work until comic functionality is used.
 
+## Comics Library and Metadata Editor
+
+Use **Open Comics Library...** in a detected Comics folder. ComicRack-configured
+folders are available on macOS and Linux as well as Windows. The browser starts
+collapsed, shows directories and files, and displays selected CBZ metadata in a
+read-only pane. Right-click a CBZ and choose **Edit Metadata**.
+
+The independent dialog follows the ComicRack **Details** and **Plot & Notes**
+layouts. The latter contains Summary, Notes, and Review sub-tabs. **Apply** saves
+without closing, **OK** saves and closes, and **Cancel** asks about unsaved edits.
+Previous/Next navigate the CBZ siblings currently loaded in the browser, with the
+same save/discard/cancel protection. Disk operations run in background threads;
+windows cannot close while their operation is active.
+
+Field mappings follow the [Anansi ComicInfo documentation](https://anansi-project.github.io/docs/comicinfo/documentation)
+and [v2.0 schema](https://github.com/anansi-project/comicinfo/blob/main/schema/v2.0/ComicInfo.xsd),
+with Tags and Translator from the [v2.1 draft](https://anansi-project.github.io/docs/comicinfo/schemas/v2.1):
+
+- Number and AlternateNumber are strings; fractional and suffixed issues are accepted.
+- Count, Volume, AlternateCount, Year, Month and Day are integers. Blank removes a
+  field; `-1` is the legacy unknown sentinel. Month and Day reject values above
+  12 and 31 respectively. Existing legacy values remain untouched unless edited.
+- Manga writes Unknown/No/Yes/YesAndRightToLeft, and BlackAndWhite writes
+  Unknown/No/Yes. AgeRating offers the schema choices. An absent value remains
+  absent unless changed. Unknown existing enum values are displayed and retained.
+- Language choices display names but write codes such as `en` or `fr`. Custom
+  tags such as `zh-Hant` remain supported.
+- Creator, Genre, Tags, Characters, Teams and Locations values retain comma-separated
+  text. Web can hold multiple space-separated URLs. No filename inference or
+  automatic splitting/reformatting occurs.
+- Series complete and Proposed Values occupy their screenshot positions but are
+  disabled. These are [ComicRack library fields](https://github.com/maforget/ComicRackCE/blob/master/ComicRack.Engine/ComicBook.cs),
+  not standard ComicInfo fields. The editor does not invent XML tags for them or
+  change a ComicRack database. Existing extensions and ComicBook.xml are retained.
+
+Only changed visible fields are patched. Fields omitted from the editor (including
+GTIN, StoryArcNumber and CommunityRating), arbitrary extension elements/attributes,
+namespace declarations, comments, processing instructions and Pages survive.
+Existing XML formatting may change on a real edit; no-op saves retain the original
+archive bytes. Emptying a visible field intentionally removes that field. New
+known fields are inserted in schema order without reordering existing nodes.
+
+`commonUtils.fileTypes.xmlType.XMLFile` now provides reusable `from_bytes`,
+`read_xml`, `xml_root`, `get_text`, `set_text`, and `to_bytes` methods. Its DOM keeps
+the complete document, including nodes before/after the root and unused namespace
+declarations. Text methods address direct children in the root namespace and
+reject ambiguous duplicates/complex fields. Tree editing is independent of
+`line_lst` and inherited text-file operations. `ComicInfoXML` adds field mappings,
+type checks and properties such as `writer`, `series`, and `language_iso`.
+The compressor's `read_lines` and `update_pages_in_line_lst` are unchanged.
+
+The editor validates metadata before staging, checks original file identity and
+modification timestamps, verifies all output member CRCs, retains permissions,
+and atomically replaces the CBZ. Failed saves retain edits so they can be reviewed;
+external file changes require closing and reopening the editor before retrying.
+ZIP container bytes/compression may change; decompressed image bytes do not.
+
 ## Safety Notes
 
 Several Comics operations modify or replace files.
 
 CBR to CBZ conversion deletes the original CBR only after the CBZ has been built and verified. Existing CBZ destinations are refused. RAR extraction uses patool's platform-specific extractor discovery and requires an installed compatible external extractor.
-ComicInfo metadata operations unpack and rebuild CBZ archives.
+Legacy batch ComicInfo operations unpack and rebuild CBZ archives. The library editor streams ZIP members into a verified replacement without extracting or re-encoding images.
 CBZ organization copies each archive into a new folder and then deletes the original after the copy succeeds.
 CBZ compression and metadata edits use isolated temporary workspaces. A replacement ZIP is staged beside the destination, checked for the exact expected files, fully CRC-checked, and compared with the staged source files before atomic replacement. Existing file permission bits are retained. Source files changed during processing are refused. Other adjacent `.zip` files are untouched.
 
