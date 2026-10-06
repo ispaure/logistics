@@ -6,6 +6,7 @@ from features.comics.comicinfo import ComicInfoXML
 from features.comics.library import ComicDocument
 from features.comics.catalog import LibraryCatalog
 from features.comics.selection import normalize_targets
+from features.comics.library_config import configured_libraries
 from .metadata_editor import MetadataEditor
 from .operations import Operation
 
@@ -19,6 +20,8 @@ class ComicLibraryWindow(qt.QMainWindow):
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle(f'Comics — {Path(root_path).name}')
         self.resize(1200, 800)
+        self.root_path = Path(root_path)
+        self.libraries, self.library_config_error = configured_libraries(self.root_path)
         self.document = None
         self.busy = False
         self.metadata_windows = []
@@ -33,6 +36,15 @@ class ComicLibraryWindow(qt.QMainWindow):
         location.setTextFormat(qt.Qt.TextFormat.PlainText)
         location.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(location)
+        library_row = qt.QHBoxLayout()
+        library_row.addWidget(qt.QLabel('Library:'))
+        self.library_selector = qt.QComboBox()
+        self.library_selector.setAccessibleName('Select comics library')
+        library_row.addWidget(self.library_selector, 1)
+        layout.addLayout(library_row)
+        self.library_status = qt.QLabel()
+        self.library_status.setTextFormat(qt.Qt.TextFormat.PlainText)
+        layout.addWidget(self.library_status)
         self.catalog_status = qt.QLabel('Reading library suggestions…')
         self.catalog_status.setTextFormat(qt.Qt.TextFormat.PlainText)
         layout.addWidget(self.catalog_status)
@@ -77,7 +89,35 @@ class ComicLibraryWindow(qt.QMainWindow):
         splitter.addWidget(panel)
         splitter.setSizes([700, 500])
         self.tree.selectionModel().selectionChanged.connect(self._selection_changed)
+        for name, path in self.libraries:
+            self.library_selector.addItem(name, path)
+            if not path.is_dir():
+                item = self.library_selector.model().item(self.library_selector.count() - 1)
+                item.setEnabled(False)
+                item.setToolTip(f'Folder not found: {path}')
+        initial = next((index for index, (_, path) in enumerate(self.libraries) if path.is_dir()), -1)
+        self.library_selector.setCurrentIndex(initial)
+        self.library_selector.currentIndexChanged.connect(self._library_changed)
+        self._library_changed(initial)
         self._refresh_catalog()
+
+    def _library_changed(self, index):
+        if self.busy:
+            return
+        path = self.library_selector.itemData(index) if index >= 0 else None
+        available = path is not None and path.is_dir()
+        self.tree.setVisible(available)
+        self.library_status.setVisible(not available)
+        if not available:
+            self.library_status.setText(self.library_config_error or 'No configured library folders are available.')
+        else:
+            self.tree.clearSelection()
+            self.tree.setRootIndex(self.model.index(str(path)))
+            self.tree.collapseAll()
+        self.document = None
+        self.preview.clear()
+        self.heading.setText('ComicInfo metadata')
+        self.message.setText('Select a CBZ file. Right-click it and choose Edit Metadata to make changes.')
 
     def _refresh_catalog(self):
         if self.catalog_busy:
@@ -204,6 +244,7 @@ class ComicLibraryWindow(qt.QMainWindow):
         self.busy = True
         self.refresh_pending = False
         self.tree.setEnabled(False)
+        self.library_selector.setEnabled(False)
         self.message.setText('Reading ComicInfo.xml…')
         self.operation = Operation(lambda: ComicDocument(path), self)
         self.operation.completed.connect(self._loaded)
@@ -230,6 +271,7 @@ class ComicLibraryWindow(qt.QMainWindow):
     def _finished(self):
         self.busy = False
         self.tree.setEnabled(True)
+        self.library_selector.setEnabled(True)
         self.operation.deleteLater()
         if self.refresh_pending:
             self._selection_changed()

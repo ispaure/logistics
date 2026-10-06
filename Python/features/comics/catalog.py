@@ -1,10 +1,10 @@
 """Incremental, disposable library metadata suggestions; never changes archives."""
 
 from collections import defaultdict
-import json
 import os
 from pathlib import Path
-from tempfile import NamedTemporaryFile
+
+from commonUtils.fileTypes.jsonType import JSONFile
 
 from .library import ComicDocument
 
@@ -53,7 +53,7 @@ class LibraryCatalog:
 
     def _read(self):
         try:
-            data = json.loads(self.path.read_text(encoding='utf-8'))
+            data = JSONFile(self.path).read_json()
             version = data.get('version')
             if version not in (1, 2, self.VERSION) or not isinstance(data.get('files'), dict):
                 return {}, True
@@ -158,19 +158,7 @@ class LibraryCatalog:
             if current != previous or needs_write:
                 if self.path.parent.is_symlink():
                     raise OSError('Cache directory is a symbolic link')
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-                staged = None
-                try:
-                    with NamedTemporaryFile(mode='w', encoding='utf-8', dir=self.path.parent,
-                                            prefix='.metadata-', suffix='.tmp', delete=False) as stream:
-                        staged = Path(stream.name)
-                        json.dump(payload, stream, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
-                        stream.flush()
-                        os.fsync(stream.fileno())
-                    os.replace(staged, self.path)
-                finally:
-                    if staged is not None:
-                        staged.unlink(missing_ok=True)
+                JSONFile(self.path).write_json(payload, compact=True, sort_keys=True)
         except OSError as error:
             errors.append(f'Suggestions available for this session; cache could not be saved: {error}')
         return {'suggestions': suggestions, 'count': len(current), 'parsed': parsed, 'errors': errors}

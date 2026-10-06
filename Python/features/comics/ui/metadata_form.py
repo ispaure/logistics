@@ -189,7 +189,8 @@ class MetadataForm(qt.QTabWidget):
         editor = create_editor(field, lambda *args: self._field_changed(field), choices, multiline)
         editor.setMinimumWidth(0)
         if multiline:
-            editor.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Ignored)
+            editor.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Expanding)
+            editor.setMinimumHeight(0)
         else:
             box.setFixedHeight(caption.sizeHint().height() + 2 + INPUT_HEIGHT)
             editor.setFixedHeight(INPUT_HEIGHT)
@@ -205,7 +206,9 @@ class MetadataForm(qt.QTabWidget):
             button.setAccessibleName(f'Edit {label} list')
             button.setToolTip('Edit values using Lists, Check or Text')
             button.setFixedWidth(20)
-            if not multiline:
+            if multiline:
+                button.setSizePolicy(qt.QSizePolicy.Policy.Fixed, qt.QSizePolicy.Policy.Expanding)
+            else:
                 button.setFixedHeight(INPUT_HEIGHT)
             button.clicked.connect(lambda: self.open_list(field))
             row.addWidget(button)
