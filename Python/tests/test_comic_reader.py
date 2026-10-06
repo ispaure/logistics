@@ -233,7 +233,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.wait(window)
         window.view_selector.setCurrentIndex(2)
         self.app.processEvents()
-        window.browser.context_requested.disconnect(window._context_menu)
+        window.browser.context_requested.disconnect(window.file_browser._context_menu)
         requested = []
         window.browser.context_requested.connect(requested.append)
         children = [view for view in window.browser.columns.findChildren(qt.QListView)
@@ -264,7 +264,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         def delayed(path):
             released.wait(2)
             return load_preview(path)
-        with patch('features.comics.ui.library.load_preview', delayed), patch('features.comics.ui.library.open_reader') as opened:
+        with patch('features.comics.pages.load_preview', delayed), patch('features.comics.ui.library.open_reader') as opened:
             point = window.tree.visualRect(source).center()
             QTest.mouseClick(window.tree.viewport(), qt.Qt.MouseButton.LeftButton, pos=point)
             self.assertTrue(window.busy)
@@ -367,7 +367,7 @@ class FolderStatsTests(unittest.TestCase):
             totals = scan_folders(root)
             self.assertEqual(totals[root].size, 10)
             self.assertEqual(totals[root].files, 3)
-            self.assertEqual(totals[root].comics, 2)
+            self.assertEqual(totals[root].extension_counts['cbz'], 2)
             self.assertEqual(totals[root].folders, 2)
             self.assertEqual(totals[root].skipped, 1)
             self.assertEqual(totals[nested].size, 3)
@@ -377,7 +377,7 @@ class FolderStatsTests(unittest.TestCase):
 class DesktopActionTests(unittest.TestCase):
     def test_platform_reveal_commands_and_linux_fallback(self):
         from commonUtils.osUtils import OS
-        from features.comics import desktop_actions
+        from commonUtils.ui import desktop_actions
         path = Path('/tmp/test name.cbz')
         with patch.object(desktop_actions, 'get_os', return_value=OS.MAC), patch.object(desktop_actions.subprocess, 'run') as run:
             desktop_actions.reveal(path)

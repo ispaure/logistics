@@ -22,12 +22,13 @@ Provides comic-related integration for Logistics.
 - `conversion.py` contains CBR to CBZ conversion behavior.
 - `metadata.py` contains the legacy author/series batch replacements.
 - `library.py` owns single-CBZ document loading, edit validation and transactional saving.
-- `ui/library.py` coordinates the browser and compact selected-comic preview.
-- `ui/file_browser.py` provides list, tile and column modes with bounded asynchronous cover icons.
+- `ui/library.py` owns library controls and comic editing/reader services around the shared browser.
+- `browser_support.py` contributes CBZ information, thumbnails, actions and activation through file-object hooks.
+- `ui/file_browser.py` preserves compatibility imports for the reusable commonUtils view component.
 - `pages.py` reads archive pages lazily and renders cover thumbnails without extraction.
 - `reader.py` owns native reader windows; `ui/reader.py` handles page display and navigation.
-- `folder_stats.py` calculates recursive folder totals, and `ui/filesystem_model.py` exposes them in the Size column.
-- `ui/navigation.py` provides library-bounded location and back/forward navigation.
+- `folder_stats.py` and `ui/filesystem_model.py` preserve imports for shared filesystem totals and the object-driven Qt model.
+- `ui/navigation.py` preserves imports for shared root-bounded navigation.
 - `desktop_actions.py` opens the default application and reveals items through the OS file manager.
 - `ui/metadata_editor.py` coordinates loading, saving and protected navigation.
 - `selection.py` resolves folder/file selections and coordinates batch validation and saving.
@@ -44,7 +45,9 @@ Provides comic-related integration for Logistics.
 
 Comics has a hard feature dependency on `images`. Reader actions support external applications, and a native Python reader is available for CBZs.
 
-This feature does not require startup initialization.
+The feature exposes `register_file_types()` so startup registers the existing
+`CBZFile` globally before any feature initializer lists files. Standalone comics
+library windows also register it idempotently. Registration does not parse archives.
 
 It is discovered and loaded by the Logistics feature registry, but performs no work until comic functionality is used.
 
@@ -60,6 +63,14 @@ not added to the metadata JSON. Double-click folders in any mode to enter them.
 Back, Forward, Up and the folder-path dropdown reach previous and parent folders
 within the selected library. Changing view modes preserves the current nested
 location and selection; the path dropdown always retains access to its ancestors.
+
+The reusable `commonUtils.ui.file_browser.FileBrowser` owns navigation, selection,
+listing, filesystem actions and information panels. Logistics owns the library
+dropdown and metadata/reader services. Every selected file has a **File Information**
+tab using the File object’s generic metadata. Registered CBZFile objects add a
+default-enabled **Comic Metadata** tab, thumbnails, editing actions and reader
+activation. The shared browser contains no comic-specific type checks. Its **Panels**
+menu can show/hide additional information tabs while retaining generic information.
 
 Selecting a single CBZ shows its first-page thumbnail and key fields (Series,
 Author, Volume, Issue, count, title, publisher, year and description) in the adjacent
