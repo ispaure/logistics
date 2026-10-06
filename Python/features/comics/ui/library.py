@@ -1,8 +1,10 @@
 """Folder browser with read-only metadata and a separate context-menu editor."""
 
 from pathlib import Path
+from datetime import datetime
 from commonUtils.ui import pyside as qt
-from features.comics.pages import load_preview
+from features.comics.pages import ComicPages, load_preview
+from features.comics.folder_stats import scan_folders, format_size
 from features.comics.reader import open_reader
 from features.comics import desktop_actions
 from features.comics.catalog import LibraryCatalog
@@ -11,6 +13,8 @@ from features.comics.library_config import configured_libraries
 from .metadata_editor import MetadataEditor
 from .operations import Operation
 from .file_browser import FileBrowser
+from .filesystem_model import ComicFileSystemModel
+from .navigation import NavigationBar
 
 
 class ComicLibraryWindow(qt.QMainWindow):
@@ -28,6 +32,9 @@ class ComicLibraryWindow(qt.QMainWindow):
         self.busy = False
         self.metadata_windows = []
         self.reader_busy = False
+        self.folder_busy = False
+        self.folder_pending = False
+        self.close_after_folders = False
         self.cover_pixmap = qt.QPixmap()
         self.catalog = LibraryCatalog(root_path)
         self.suggestions = {}
@@ -36,23 +43,23 @@ class ComicLibraryWindow(qt.QMainWindow):
         self.close_after_catalog = False
         container = qt.QWidget()
         layout = qt.QVBoxLayout(container)
-        location = qt.QLabel(str(root_path))
-        location.setTextFormat(qt.Qt.TextFormat.PlainText)
-        location.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(location)
         library_row = qt.QHBoxLayout()
         library_row.addWidget(qt.QLabel('Library:'))
         self.library_selector = qt.QComboBox()
         self.library_selector.setAccessibleName('Select comics library')
         library_row.addWidget(self.library_selector, 1)
-        self.up_button = qt.QPushButton('Up')
-        self.up_button.clicked.connect(self._up)
-        library_row.addWidget(self.up_button)
         self.view_selector = qt.QComboBox()
         self.view_selector.addItems(['List', 'Tiles', 'Columns'])
         self.view_selector.setAccessibleName('Browser view')
         library_row.addWidget(self.view_selector)
         layout.addLayout(library_row)
+        self.navigation = NavigationBar(self)
+        self.up_button = self.navigation.up
+        self.navigation.requested.connect(self._navigate)
+        layout.addWidget(self.navigation)
+        self.refresh_button = qt.QPushButton('Refresh')
+        self.refresh_button.clicked.connect(self._refresh_files)
+        library_row.addWidget(self.refresh_button)
         self.library_status = qt.QLabel()
         self.library_status.setTextFormat(qt.Qt.TextFormat.PlainText)
         layout.addWidget(self.library_status)
@@ -64,7 +71,7 @@ class ComicLibraryWindow(qt.QMainWindow):
         splitter.setChildrenCollapsible(False)
         layout.addWidget(splitter, 1)
         self.setCentralWidget(container)
-        self.model = qt.QFileSystemModel(self)
+        self.model = ComicFileSystemModel(self)
         self.model.setReadOnly(True)
         self.model.setFilter(qt.QDir.Filter.AllDirs | qt.QDir.Filter.Files | qt.QDir.Filter.NoDotAndDotDot)
         self.model.setRootPath(str(root_path))
@@ -88,12 +95,12 @@ class ComicLibraryWindow(qt.QMainWindow):
         self.browser.activated.connect(self._activate)
         self.browser.selection_changed.connect(self._selection_changed)
         self.browser.idle.connect(self.close)
+        self.browser.directory_changed.connect(self.navigation.set_directory)
         self.view_selector.currentIndexChanged.connect(self.browser.set_mode)
         splitter.addWidget(self.browser)
         panel = qt.QWidget()
         self.preview_panel = panel
         panel.setMinimumWidth(280)
-        panel.hide()
         panel_layout = qt.QVBoxLayout(panel)
         self.heading = qt.QLabel('Comic')
         self.heading.setTextFormat(qt.Qt.TextFormat.PlainText)
@@ -127,19 +134,22 @@ class ComicLibraryWindow(qt.QMainWindow):
 
     def _library_changed(self, index):
         if self.busy:
-            return
+            self.refresh_pending = True
         path = self.library_selector.itemData(index) if index >= 0 else None
         available = path is not None and path.is_dir()
         self.browser.setVisible(available)
         self.library_status.setVisible(not available)
+        self.navigation.set_library(path if available else None)
         if not available:
             self.library_status.setText(self.library_config_error or 'No configured library folders are available.')
         else:
             self.browser.set_root(path)
-        self.up_button.setEnabled(False)
+            self._refresh_folder_totals()
+        self.cover.clear()
+        self.cover_pixmap = qt.QPixmap()
         self.document = None
         self.preview.clear()
-        self.preview_panel.hide()
+        self.preview_panel.show()
         self.heading.setText('Comic')
         self.message.setText('Select a CBZ file. Right-click it and choose Edit Metadata to make changes.')
 
@@ -177,23 +187,89 @@ class ComicLibraryWindow(qt.QMainWindow):
         elif self.catalog_pending:
             self._refresh_catalog()
 
-    def _up(self):
+    def _navigate(self, path):
         library = self.library_selector.currentData()
-        if library is not None and self.browser.root != library:
-            parent = self.browser.root.parent
-            if parent == library or library in parent.parents:
-                self.browser.set_root(parent)
-            self.up_button.setEnabled(self.browser.root != library)
+        path = Path(path)
+        if library is not None and path.is_dir() and (path == library or library in path.parents):
+            self.browser.set_root(path)
+        else:
+            self.navigation.set_directory(self.browser.browsing_directory())
+
+    def _up(self):
+        directory = self.browser.browsing_directory()
+        library = self.library_selector.currentData()
+        if directory is not None and directory != library:
+            self._navigate(directory.parent)
+
+    def _refresh_files(self):
+        self._refresh_folder_totals()
+        self._refresh_catalog()
+        for path in list(self.browser.covers.icons):
+            self.browser.covers.invalidate(path)
+        self._selection_changed()
+
+    def _refresh_folder_totals(self):
+        if self.folder_busy:
+            self.folder_pending = True
+            self.folder_operation.requestInterruption()
+            return
+        root = self.library_selector.currentData()
+        self.model.set_folder_totals({})
+        if root is None:
+            return
+        self.folder_busy = True
+        self.folder_pending = False
+        self.folder_operation = Operation(
+            lambda: scan_folders(root, self.folder_operation.isInterruptionRequested), self)
+        self.folder_operation.completed.connect(lambda result, error: self._folders_loaded(root, result, error))
+        self.folder_operation.finished.connect(self._folders_finished)
+        self.folder_operation.start()
+
+    def _folders_loaded(self, root, result, error):
+        if root == self.library_selector.currentData() and result is not None and not self.folder_pending:
+            self.model.set_folder_totals(result)
+            selected = self.browser.selected_rows()
+            if len(selected) == 1 and self.model.isDir(selected[0]):
+                self._folder_details(Path(self.model.filePath(selected[0])))
+
+    def _folders_finished(self):
+        self.folder_busy = False
+        self.folder_operation.deleteLater()
+        if self.close_after_folders:
+            self.close()
+        elif self.folder_pending:
+            self._refresh_folder_totals()
+
+    def _folder_details(self, path):
+        self.heading.setText(path.name)
+        self.message.setText('Folder')
+        self.cover.clear()
+        self.cover_pixmap = qt.QPixmap()
+        icon = self.style().standardIcon(qt.QStyle.StandardPixmap.SP_DirIcon)
+        self.cover.setPixmap(icon.pixmap(96, 96).scaled(96, 96, qt.Qt.AspectRatioMode.KeepAspectRatio,
+                                                        qt.Qt.TransformationMode.SmoothTransformation))
+        values = [f'Path: {path}']
+        try:
+            values.append(f'Modified: {datetime.fromtimestamp(path.stat().st_mtime):%Y-%m-%d %H:%M:%S}')
+        except OSError:
+            values.append('Folder is no longer available.')
+        stats = self.model.folder_totals.get(path)
+        if stats is None:
+            values.append('Total size: Calculating…' if self.folder_busy else 'Total size: Unavailable')
+        else:
+            values.extend([f'Total size: {format_size(stats.size)}', f'Comics: {stats.comics:,}',
+                           f'Files: {stats.files:,}', f'Subfolders: {stats.folders:,}'])
+            if stats.skipped:
+                values.append(f'{stats.skipped:,} unreadable items or symbolic links excluded.')
+        self.preview.setPlainText('\n\n'.join(values))
 
     def _activate(self, index):
         path = Path(self.model.filePath(index))
         if path.is_dir():
-            if self.browser.currentIndex() == 1:
-                self.browser.set_root(path)
-                self.up_button.setEnabled(path != self.library_selector.currentData())
+            self._navigate(path)
         elif path.suffix.lower() == '.cbz' and not self.reader_busy:
             self.reader_busy = True
-            self.reader_operation = Operation(lambda: open_reader(path), self)
+            self.reader_operation = Operation(lambda: ComicPages(path), self)
             self.reader_operation.completed.connect(self._reader_opened)
             self.reader_operation.finished.connect(self._reader_finished)
             self.reader_operation.start()
@@ -201,6 +277,11 @@ class ComicLibraryWindow(qt.QMainWindow):
     def _reader_opened(self, result, error):
         if error:
             qt.QMessageBox.warning(self, 'Cannot open reader', error)
+        else:
+            try:
+                open_reader(result)
+            except Exception as issue:
+                qt.QMessageBox.warning(self, 'Cannot open reader', str(issue))
 
     def _reader_finished(self):
         self.reader_busy = False
@@ -269,6 +350,7 @@ class ComicLibraryWindow(qt.QMainWindow):
 
     def _metadata_saved(self, path):
         self._refresh_catalog()
+        self._refresh_folder_totals()
         self.browser.covers.invalidate(path)
         # Reload preview after the save. If a preview load is in progress, queue
         # a refresh rather than starting two threads on the same owner.
@@ -287,8 +369,10 @@ class ComicLibraryWindow(qt.QMainWindow):
                 self.refresh_pending = True
                 return
             self.document = None
+            self.cover.clear()
+            self.cover_pixmap = qt.QPixmap()
             self.preview.clear()
-            self.preview_panel.hide()
+            self.preview_panel.show()
             self.heading.setText(f'{len(indexes)} items selected')
             self.message.setText('Right-click the selection to edit its CBZ metadata together. Folders include subfolders.')
         else:
@@ -299,21 +383,25 @@ class ComicLibraryWindow(qt.QMainWindow):
         if self.busy:
             self.refresh_pending = True
             return
-        path = Path(self.model.filePath(current))
+        path = Path(self.model.filePath(current)) if current.isValid() else None
+        self.cover.clear()
+        self.cover_pixmap = qt.QPixmap()
+        self.cover.setToolTip('')
         self.document = None
         self.preview.clear()
-        self.preview_panel.hide()
-        self.heading.setText(path.name)
+        self.preview_panel.show()
+        self.heading.setText(path.name if path else 'Library')
         self.message.setText('Select a CBZ file. Right-click it and choose Edit Metadata to make changes.')
-        if path.is_file() and path.suffix.lower() == '.cbz':
+        if path is not None and path.is_dir():
+            self._folder_details(path)
+        elif path is not None and path.is_file() and path.suffix.lower() == '.cbz':
             self._load(path)
+        elif path is not None and path.is_file():
+            self.preview.setPlainText(f'Path: {path}\n\nSize: {format_size(path.stat().st_size)}')
 
     def _load(self, path):
         self.busy = True
         self.refresh_pending = False
-        self.view_selector.setEnabled(False)
-        self.up_button.setEnabled(False)
-        self.library_selector.setEnabled(False)
         self.message.setText('Reading ComicInfo.xml…')
         self.operation = Operation(lambda: load_preview(path), self)
         self.operation.completed.connect(self._loaded)
@@ -333,7 +421,7 @@ class ComicLibraryWindow(qt.QMainWindow):
         values = []
         for field, label in (('Series', 'Series'), ('Writer', 'Author'), ('Volume', 'Volume'),
                              ('Number', 'Issue'), ('Count', 'Issues'), ('Title', 'Title'),
-                             ('Publisher', 'Publisher'), ('Year', 'Year')):
+                             ('Publisher', 'Publisher'), ('Year', 'Year'), ('Summary', 'Description')):
             try:
                 value = document.info.get_field(field)
             except ValueError:
@@ -359,7 +447,7 @@ class ComicLibraryWindow(qt.QMainWindow):
         self.busy = False
         self.browser.setEnabled(True)
         self.view_selector.setEnabled(True)
-        self.up_button.setEnabled(self.browser.root != self.library_selector.currentData())
+        self.navigation.set_directory(self.browser.browsing_directory())
         self.library_selector.setEnabled(True)
         self.operation.deleteLater()
         if self.refresh_pending:
@@ -376,6 +464,12 @@ class ComicLibraryWindow(qt.QMainWindow):
                     event.ignore()
                     return
         if self.browser.stop():
+            self.hide()
+            event.ignore()
+            return
+        if self.folder_busy:
+            self.close_after_folders = True
+            self.folder_operation.requestInterruption()
             self.hide()
             event.ignore()
             return

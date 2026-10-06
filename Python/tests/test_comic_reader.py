@@ -1,4 +1,4 @@
-"""Page ordering, local reader routes, browser views and desktop actions."""
+"""Native reader navigation, archive access, browser views and desktop actions."""
 
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
@@ -8,13 +8,10 @@ from tempfile import TemporaryDirectory
 import time
 import unittest
 from unittest.mock import patch
-from urllib.error import HTTPError
-from urllib.request import urlopen, Request
 import zipfile
 from PIL import Image
 
 from features.comics.pages import ComicPages
-from features.comics.reader import ReaderSession
 
 
 class ReaderFixture:
@@ -52,43 +49,116 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
         with self.assertRaises(RuntimeError):
             pages.read_page(0)
 
-    def test_local_routes_serve_only_selected_archive_pages(self):
-        self.archive('YesAndRightToLeft')
-        reader = ReaderSession(self.path)
-        self.addCleanup(reader.close)
-        with urlopen(reader.url) as response:
-            html = response.read().decode()
-            self.assertIn('rtl=true', html)
-            self.assertIn('ArrowRight', html)
-            self.assertIn('aria-live="polite"', html)
-            self.assertIn('Content-Security-Policy', response.headers)
-        with urlopen(reader.url + 'page/1') as response:
-            self.assertEqual(response.headers['Content-Type'], 'image/png')
-            self.assertEqual(response.read(), self.image)
-        for url in (reader.url + 'page/99', reader.url + '../anything',
-                    reader.url.replace(reader.token, 'invalid')):
-            with self.assertRaises(HTTPError) as error:
-                urlopen(url)
-            self.assertEqual(error.exception.code, 404)
-        with self.assertRaises(HTTPError) as error:
-            urlopen(Request(reader.url, headers={'Host': 'outside.example'}))
-        self.assertEqual(error.exception.code, 403)
+    def native_reader(self, manga=''):
+        from commonUtils.ui import pyside as qt
+        from features.comics.ui.reader import ComicReaderWindow
+        self.app = qt.QApplication.instance() or qt.QApplication([])
+        self.archive(manga)
+        reader = ComicReaderWindow(ComicPages(self.path))
+        reader.show()
+        reader.activateWindow()
+        self.wait_reader(reader)
+        from shiboken6 import isValid
+        def cleanup():
+            if isValid(reader):
+                reader.close()
+                self.app.processEvents()
+        self.addCleanup(cleanup)
+        return reader
 
-    def test_browser_open_reuses_unchanged_sessions_and_replaces_changed_ones(self):
+    def wait_reader(self, reader):
+        deadline = time.monotonic() + 5
+        while reader.busy and time.monotonic() < deadline:
+            self.app.processEvents()
+            time.sleep(.01)
+        self.app.processEvents()
+        self.assertFalse(reader.busy)
+
+    def test_native_reader_direction_keys_progress_slider_and_fit(self):
+        from commonUtils.ui import pyside as qt
+        from PySide6.QtTest import QTest
+        for manga, forward, backward in (('', qt.Qt.Key.Key_Right, qt.Qt.Key.Key_Left),
+                                          ('YesAndRightToLeft', qt.Qt.Key.Key_Left, qt.Qt.Key.Key_Right)):
+            reader = self.native_reader(manga)
+            self.assertFalse(reader.canvas.pixmap.isNull())
+            self.assertEqual(reader.progress.value(), 0)
+            self.assertEqual(reader.progress.invertedAppearance(), bool(manga))
+            def handle_x():
+                option = qt.QStyleOptionSlider()
+                reader.progress.initStyleOption(option)
+                return reader.progress.style().subControlRect(qt.QStyle.ComplexControl.CC_Slider,
+                    option, qt.QStyle.SubControl.SC_SliderHandle, reader.progress).center().x()
+            first_x = handle_x()
+            reader.progress.setFocus()
+            QTest.keyClick(reader.progress, forward)
+            self.wait_reader(reader)
+            self.assertEqual(reader.page, 1)
+            self.assertIn('2 / 3', reader.progress_label.text())
+            QTest.keyClick(reader.progress, backward)
+            self.wait_reader(reader)
+            self.assertEqual(reader.page, 0)
+            QTest.keyClick(reader.progress, qt.Qt.Key.Key_End)
+            self.wait_reader(reader)
+            self.assertIn('100%', reader.progress_label.text())
+            self.assertEqual(reader.page, 2)
+            self.assertTrue(handle_x() < first_x if manga else handle_x() > first_x)
+            reader.progress.setValue(1)
+            self.wait_reader(reader)
+            self.assertEqual(reader.page, 1)
+            QTest.keyClick(reader.progress, qt.Qt.Key.Key_Home)
+            self.wait_reader(reader)
+            reader.previous_button.click()
+            self.assertEqual(reader.page, 0)
+            reader.close()
+            self.app.processEvents()
+
+    def test_native_windows_reused_and_changed_archives_show_errors(self):
+        from commonUtils.ui import pyside as qt
         from features.comics import reader
-        with patch.object(reader.webbrowser, 'open', return_value=True):
-            first = reader.open_reader(self.path)
-            self.addCleanup(reader.close_readers)
-            self.assertIs(reader.open_reader(self.path), first)
-            self.archive('YesAndRightToLeft')
-            updated = reader.open_reader(self.path)
-            self.assertIsNot(first, updated)
-            self.assertTrue(updated.pages.right_to_left)
-        with patch.object(reader.webbrowser, 'open', return_value=False):
-            with self.assertRaisesRegex(RuntimeError, 'could not be opened'):
-                reader.open_reader(self.path)
+        self.app = qt.QApplication.instance() or qt.QApplication([])
+        first = reader.open_reader(self.path)
+        self.wait_reader(first)
+        self.assertIs(reader.open_reader(self.path), first)
+        self.archive('YesAndRightToLeft')
+        first.go(1)
+        self.wait_reader(first)
+        self.assertIn('changed', first.canvas.message)
+        updated = reader.open_reader(self.path)
+        self.wait_reader(updated)
+        self.assertIsNot(first, updated)
+        self.assertTrue(updated.pages.right_to_left)
+        first.close()
+        updated.close()
+        self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+        self.app.processEvents()
+        self.assertFalse(reader._windows)
 
-    def test_tiff_is_converted_for_browser_and_no_pages_reports_error(self):
+    def test_reader_rapid_navigation_and_close_during_page_load(self):
+        from threading import Event
+        from features.comics.ui import reader as ui_reader
+        reader = self.native_reader()
+        released = Event()
+        original = ui_reader.read_image
+        def delayed(pages, index):
+            released.wait(2)
+            return original(pages, index)
+        with patch.object(ui_reader, 'read_image', delayed):
+            reader.go(1)
+            reader.go(2)
+            reader.go(0)
+            released.set()
+            self.wait_reader(reader)
+            self.assertEqual(reader.page, 0)
+            self.assertFalse(reader.canvas.pixmap.isNull())
+            released.clear()
+            reader.go(2)
+            reader.close()
+            self.assertTrue(reader.closing)
+            self.assertFalse(reader.isVisible())
+            released.set()
+            self.wait_reader(reader)
+
+    def test_tiff_is_converted_and_no_pages_reports_error(self):
         stream = BytesIO()
         Image.new('RGB', (20, 30), 'blue').save(stream, format='TIFF')
         with zipfile.ZipFile(self.path, 'w') as archive:
@@ -110,7 +180,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
 
     def wait(self, window):
         deadline = time.monotonic() + 5
-        while (window.busy or window.catalog_busy or window.browser.cover_busy or window.reader_busy) and time.monotonic() < deadline:
+        while (window.busy or window.catalog_busy or window.browser.cover_busy or window.reader_busy or window.folder_busy) and time.monotonic() < deadline:
             self.app.processEvents()
             time.sleep(.01)
         self.app.processEvents()
@@ -122,7 +192,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         window = ComicLibraryWindow(self.root)
         window.show()
         self.wait(window)
-        self.assertTrue(window.preview_panel.isHidden())
+        self.assertFalse(window.preview_panel.isHidden())
         index = window.model.index(str(self.path))
         window.tree.selectionModel().select(index, qt.QItemSelectionModel.SelectionFlag.Select |
                                             qt.QItemSelectionModel.SelectionFlag.Rows)
@@ -150,7 +220,8 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         with patch('features.comics.ui.library.open_reader') as opened:
             window._activate(index)
             self.wait(window)
-            opened.assert_called_once_with(self.path)
+            self.assertEqual(opened.call_count, 1)
+            self.assertEqual(opened.call_args.args[0].path, self.path)
         window.close()
         self.app.processEvents()
 
@@ -201,7 +272,8 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
             QTest.mouseDClick(window.tree.viewport(), qt.Qt.MouseButton.LeftButton, pos=point)
             released.set()
             self.wait(window)
-            opened.assert_called_once_with(self.path)
+            self.assertEqual(opened.call_count, 1)
+            self.assertEqual(opened.call_args.args[0].path, self.path)
         window.close()
         self.app.processEvents()
 
@@ -223,6 +295,83 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.assertEqual(len(window.browser.covers.icons), 128)
         window.close()
         self.app.processEvents()
+
+    def test_nested_modes_history_parent_navigation_and_folder_details(self):
+        from commonUtils.ui import pyside as qt
+        from features.comics.ui.library import ComicLibraryWindow
+        folder = self.root / 'series'
+        nested = folder / 'volume'
+        nested.mkdir(parents=True)
+        comic = nested / 'nested.cbz'
+        comic.write_bytes(self.path.read_bytes())
+        (folder / 'notes.txt').write_bytes(b'abc')
+        window = ComicLibraryWindow(self.root)
+        window.show()
+        self.wait(window)
+        window.tree.expand(window.model.index(str(folder)))
+        window.tree.expand(window.model.index(str(nested)))
+        # Allow QFileSystemModel to populate the descendants asynchronously.
+        self.app.processEvents()
+        index = window.model.index(str(comic))
+        window.tree.selectionModel().setCurrentIndex(index, qt.QItemSelectionModel.SelectionFlag.ClearAndSelect |
+                                                     qt.QItemSelectionModel.SelectionFlag.Rows)
+        self.wait(window)
+        self.assertEqual(window.navigation.directory, nested)
+        for mode in (1, 2, 0, 1):
+            window.view_selector.setCurrentIndex(mode)
+            self.wait(window)
+            self.assertEqual(window.browser.root, nested)
+            self.assertEqual(window.browser.selected_rows(), [index])
+            self.assertEqual(window.navigation.directory, nested)
+            self.assertTrue(window.up_button.isEnabled())
+        window.up_button.click()
+        self.assertEqual(window.browser.root, folder)
+        window.navigation.back.click()
+        self.assertEqual(window.browser.root, nested)
+        window.navigation.forward.click()
+        self.assertEqual(window.browser.root, folder)
+        window.navigation.requested.emit(window.navigation.location.itemData(0))
+        self.assertEqual(window.browser.root, self.root)
+        self.assertFalse(window.up_button.isEnabled())
+        folder_index = window.model.index(str(folder))
+        window.browser.tiles.selectionModel().setCurrentIndex(window.browser.covers.mapFromSource(folder_index),
+            qt.QItemSelectionModel.SelectionFlag.ClearAndSelect)
+        self.wait(window)
+        self.assertFalse(window.preview_panel.isHidden())
+        self.assertIn(f'Path: {folder}', window.preview.toPlainText())
+        self.assertIn('Comics: 1', window.preview.toPlainText())
+        self.assertIn('Subfolders: 1', window.preview.toPlainText())
+        from features.comics.folder_stats import format_size
+        expected = format_size(comic.stat().st_size + 3)
+        self.assertIn(f'Total size: {expected}', window.preview.toPlainText())
+        self.assertEqual(window.model.data(folder_index.siblingAtColumn(1)), expected)
+        window.browser.tiles.clearSelection()
+        self.wait(window)
+        self.assertFalse(window.preview_panel.isHidden())
+        self.assertEqual(window.preview.toPlainText(), '')
+        window.close()
+        self.app.processEvents()
+
+
+class FolderStatsTests(unittest.TestCase):
+    def test_recursive_sizes_counts_links_and_cancellation(self):
+        from features.comics.folder_stats import scan_folders
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            nested = root / 'one' / 'two'
+            nested.mkdir(parents=True)
+            (root / 'a.cbz').write_bytes(b'12345')
+            (nested / 'b.CBZ').write_bytes(b'123')
+            (nested.parent / 'notes.txt').write_bytes(b'12')
+            (nested / 'cycle').symlink_to(root, target_is_directory=True)
+            totals = scan_folders(root)
+            self.assertEqual(totals[root].size, 10)
+            self.assertEqual(totals[root].files, 3)
+            self.assertEqual(totals[root].comics, 2)
+            self.assertEqual(totals[root].folders, 2)
+            self.assertEqual(totals[root].skipped, 1)
+            self.assertEqual(totals[nested].size, 3)
+            self.assertIsNone(scan_folders(root, lambda: True))
 
 
 class DesktopActionTests(unittest.TestCase):
