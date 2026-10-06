@@ -20,7 +20,13 @@ Provides comic-related integration for Logistics.
 - `compression_stats.py` contains compression statistics and text logging.
 - `archive_io.py` builds, verifies, and commits replacement archives.
 - `conversion.py` contains CBR to CBZ conversion behavior.
-- `metadata.py` contains ComicInfo.xml metadata editing behavior.
+- `metadata.py` contains the legacy author/series batch replacements.
+- `library.py` owns single-CBZ document loading, edit validation and transactional saving.
+- `ui/library.py` owns the folder browser and read-only preview.
+- `ui/metadata_editor.py` coordinates loading, saving and protected navigation.
+- `ui/metadata_form.py` owns the measured tab layouts and visible-field change tracking.
+- `ui/metadata_widgets.py` owns numeric controls, field creation and lossless widget/text conversion.
+- `ui/operations.py` provides the shared background file-operation worker.
 - `__init__.py` exposes the feature to the Logistics feature registry.
 
 ## Initialization
@@ -39,7 +45,13 @@ collapsed, shows directories and files, and displays selected CBZ metadata in a
 read-only pane. Right-click a CBZ and choose **Edit Metadata**.
 
 The independent dialog follows the ComicRack **Details** and **Plot & Notes**
-layouts. The latter contains Summary, Notes, and Review sub-tabs. **Apply** saves
+layouts. The reference images measure 789 x 673/677 pixels including their title
+bars. The default client area is 789 x 635 logical pixels, with 22-pixel inputs,
+105 x 28-pixel action buttons, and column proportions of 267:74:74:74:184.
+Volume, counts and dates use blank-capable integer spin controls; invalid
+non-numeric typing is rejected immediately. Number and AlternateNumber provide
+numeric arrows while still accepting suffixes/fractions as the schema requires.
+Absent fields and untouched legacy strings/sentinels retain their original XML. The latter contains Summary, Notes, and Review sub-tabs. **Apply** saves
 without closing, **OK** saves and closes, and **Cancel** asks about unsaved edits.
 Previous/Next navigate the CBZ siblings currently loaded in the browser, with the
 same save/discard/cancel protection. Disk operations run in background threads;

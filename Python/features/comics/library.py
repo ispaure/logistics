@@ -30,15 +30,20 @@ class ComicDocument:
             raise RuntimeError('Comic changed while loading; select it again')
         self.info = ComicInfoXML.from_bytes(data)
 
+    def prepare_metadata(self, changes):
+        """Validate edits on a copy; failures never alter the loaded document."""
+        info = ComicInfoXML.from_bytes(self.info.to_bytes())
+        for field, value in changes.items():
+            info.set_field(field, value)
+        info.to_bytes()  # Validate XML characters before callers stage a save.
+        return info
+
     def save(self, changes):
         if self.path.is_symlink():
             raise ValueError('Cannot replace a symbolic link')
         if not archive_unchanged(self.path, self.snapshot):
             raise RuntimeError('Comic changed since loading; reload before saving')
-        # Work on a copy so a failed save does not alter the loaded document.
-        info = ComicInfoXML.from_bytes(self.info.to_bytes())
-        for field, value in changes.items():
-            info.set_field(field, value)
+        info = self.prepare_metadata(changes)
         data = info.to_bytes()
         if data == self.info.to_bytes():
             return

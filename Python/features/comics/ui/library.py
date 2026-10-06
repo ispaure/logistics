@@ -4,7 +4,8 @@ from pathlib import Path
 from commonUtils.ui import pyside as qt
 from features.comics.comicinfo import ComicInfoXML
 from features.comics.library import ComicDocument
-from .metadata_editor import MetadataEditor, Operation
+from .metadata_editor import MetadataEditor
+from .operations import Operation
 
 
 class ComicLibraryWindow(qt.QMainWindow):

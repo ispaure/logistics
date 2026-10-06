@@ -102,7 +102,9 @@ class ComicInfoXML(xmlType.XMLFile):
     SCHEMA_ORDER = list(FIELDS)
     SCHEMA_ORDER.insert(SCHEMA_ORDER.index('CommunityRating'), 'Pages')
 
-    INTEGER_FIELDS = {'Count', 'Volume', 'AlternateCount', 'Year', 'Month', 'Day'}
+    INTEGER_MAXIMUMS = dict.fromkeys(('Count', 'Volume', 'AlternateCount', 'Year'), 2147483647)
+    INTEGER_MAXIMUMS.update(Month=12, Day=31)
+    INTEGER_FIELDS = frozenset(INTEGER_MAXIMUMS)
     ENUMS = {
         'BlackAndWhite': ('Unknown', 'No', 'Yes'),
         'Manga': ('Unknown', 'No', 'Yes', 'YesAndRightToLeft'),
@@ -129,7 +131,7 @@ class ComicInfoXML(xmlType.XMLFile):
             if not re.fullmatch(r'[+-]?[0-9]+', value):
                 raise ValueError(f'{field} must be an integer or blank')
             number = int(value)
-            upper = {'Month': 12, 'Day': 31}.get(field, 2147483647)
+            upper = self.INTEGER_MAXIMUMS[field]
             if not -1 <= number <= upper:
                 raise ValueError(f'{field} must be between -1 and {upper}, or blank')
         if value and field in self.ENUMS and value not in self.ENUMS[field]:
