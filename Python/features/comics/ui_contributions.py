@@ -14,7 +14,7 @@ def _is_available(entry: FolderEntry) -> bool:
         return False
 
     return (
-        (get_os() == OS.WIN and detection.has_comic_rack(entry.local))
+        detection.has_comic_rack(entry.local)
         or detection.has_yac_reader_library(entry.local)
     )
 
@@ -26,7 +26,12 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
     folder = entry.local
     folder_path = folder.path
 
-    ui_actions = []
+    ui_actions = [UIAction(
+        name='Open Comics Library...',
+        workflow_id='comics_library',
+        workflow_data=folder_path,
+        description='Browse folders and edit CBZ ComicInfo metadata.'
+    )]
 
     if get_os() == OS.WIN and detection.has_comic_rack(folder):
         ui_actions.append(
@@ -105,6 +110,19 @@ def _open_compress_cbz(data=None, parent=None):
     return _open_dialog('CompressCbzDialog', data, parent)
 
 
+def _open_library(data=None, parent=None):
+    from features.comics.ui.library import ComicLibraryWindow
+    window = ComicLibraryWindow(data, parent)
+    # Keep a Python reference for the lifetime of this independent window.
+    _library_windows.append(window)
+    window.destroyed.connect(lambda: _library_windows.remove(window))
+    window.show()
+    return window
+
+
+_library_windows = []
+
+
 def get_contributions() -> FeatureContributions:
     return FeatureContributions(
         folder_features=[
@@ -116,6 +134,7 @@ def get_contributions() -> FeatureContributions:
             )
         ],
         workflows=[
+            WorkflowContribution('comics_library', _open_library),
             WorkflowContribution('debug_comics_convert_cbr', _open_convert_cbr),
             WorkflowContribution('debug_comics_author', _open_author),
             WorkflowContribution('debug_comics_series', _open_series),

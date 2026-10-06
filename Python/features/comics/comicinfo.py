@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from pathlib import Path
+import re
 from xml.etree import ElementTree
 from typing import TYPE_CHECKING, List
 from commonUtils.debugUtils import Severity, log
@@ -78,3 +79,88 @@ class ComicInfoXML(xmlType.XMLFile):
 
         self.line_lst = serialized.split('\n')
         return True
+
+    # Metadata editing deliberately uses its own tree, separate from line_lst.
+    FIELDS = (
+        'Title', 'Series', 'Number', 'Count', 'Volume', 'AlternateSeries',
+        'AlternateNumber', 'AlternateCount', 'Summary', 'Notes', 'Year', 'Month',
+        'Day', 'Writer', 'Penciller', 'Inker', 'Colorist', 'Letterer', 'CoverArtist',
+        'Editor', 'Translator', 'Publisher', 'Imprint', 'Genre', 'Tags', 'Web', 'PageCount',
+        'LanguageISO', 'Format', 'BlackAndWhite', 'Manga', 'Characters', 'Teams',
+        'Locations', 'ScanInformation', 'StoryArc', 'StoryArcNumber', 'SeriesGroup',
+        'AgeRating', 'CommunityRating', 'MainCharacterOrTeam', 'Review', 'GTIN',
+    )
+
+    @classmethod
+    def from_bytes(cls, data: bytes):
+        document = super().from_bytes(data)
+        if document.xml_root.localName != 'ComicInfo':
+            raise ValueError('Expected a ComicInfo root element')
+        return document
+
+    # Sequence follows the Anansi v2.1 draft; existing nodes are never reordered.
+    SCHEMA_ORDER = list(FIELDS)
+    SCHEMA_ORDER.insert(SCHEMA_ORDER.index('CommunityRating'), 'Pages')
+
+    INTEGER_FIELDS = {'Count', 'Volume', 'AlternateCount', 'Year', 'Month', 'Day'}
+    ENUMS = {
+        'BlackAndWhite': ('Unknown', 'No', 'Yes'),
+        'Manga': ('Unknown', 'No', 'Yes', 'YesAndRightToLeft'),
+        'AgeRating': ('Unknown', 'Adults Only 18+', 'Early Childhood', 'Everyone',
+                      'Everyone 10+', 'G', 'Kids to Adults', 'M', 'MA15+',
+                      'Mature 17+', 'PG', 'R18+', 'Rating Pending', 'Teen', 'X18+'),
+    }
+
+    def get_field(self, field: str) -> str:
+        if field not in self.FIELDS:
+            raise ValueError(f'Unsupported ComicInfo field: {field}')
+        return self.get_text(field)
+
+    def set_field(self, field: str, value: str):
+        """Validate changed ComicInfo fields; preserve untouched legacy values."""
+        if field == 'PageCount':
+            raise ValueError('PageCount is maintained by the compression workflow')
+        original = self.get_field(field)
+        if not isinstance(value, str):
+            raise TypeError('ComicInfo field values must be strings')
+        if original == value:
+            return
+        if value and field in self.INTEGER_FIELDS:
+            if not re.fullmatch(r'[+-]?[0-9]+', value):
+                raise ValueError(f'{field} must be an integer or blank')
+            number = int(value)
+            upper = {'Month': 12, 'Day': 31}.get(field, 2147483647)
+            if not -1 <= number <= upper:
+                raise ValueError(f'{field} must be between -1 and {upper}, or blank')
+        if value and field in self.ENUMS and value not in self.ENUMS[field]:
+            raise ValueError(f'Unsupported {field} value: {value}')
+        is_new = self._text_element(field) is None
+        self.set_text(field, value)
+        if is_new and value:
+            # Insert a new known field in schema order without touching extensions.
+            element = self._text_element(field)
+            position = self.SCHEMA_ORDER.index(field)
+            root = self.xml_root
+            for sibling in list(root.childNodes):
+                if (sibling is not element and sibling.nodeType == sibling.ELEMENT_NODE
+                        and sibling.namespaceURI == root.namespaceURI
+                        and sibling.localName in self.SCHEMA_ORDER
+                        and self.SCHEMA_ORDER.index(sibling.localName) > position):
+                    root.insertBefore(element, sibling)
+                    break
+
+    @property
+    def metadata(self) -> dict[str, str]:
+        return {field: self.get_field(field) for field in self.FIELDS}
+
+
+
+def _metadata_property(field):
+    return property(lambda self: self.get_field(field),
+                    lambda self, value: self.set_field(field, value))
+
+
+# Expose Python-style properties such as writer, series and age_rating.
+for _field in ComicInfoXML.FIELDS:
+    _name = re.sub(r'(?<!^)(?=[A-Z][a-z])|(?<=[a-z])(?=[A-Z])', '_', _field).lower()
+    setattr(ComicInfoXML, _name, _metadata_property(_field))
