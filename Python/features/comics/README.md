@@ -24,7 +24,9 @@ Provides comic-related integration for Logistics.
 - `library.py` owns single-CBZ document loading, edit validation and transactional saving.
 - `ui/library.py` owns the folder browser and read-only preview.
 - `ui/metadata_editor.py` coordinates loading, saving and protected navigation.
-- `ui/metadata_form.py` owns the measured tab layouts and visible-field change tracking.
+- `selection.py` resolves folder/file selections and coordinates batch validation and saving.
+- `edit_state.py` owns shared/mixed values and explicit pending patches without Qt dependencies.
+- `ui/metadata_form.py` owns the measured tab layouts and field feedback.
 - `ui/metadata_widgets.py` owns numeric controls, field creation and lossless widget/text conversion.
 - `ui/operations.py` provides the shared background file-operation worker.
 - `__init__.py` exposes the feature to the Logistics feature registry.
@@ -59,7 +61,9 @@ windows cannot close while their operation is active.
 
 Bulk editing supports extended selection of CBZ files, folders or both. Folder
 contents are included recursively and overlapping selections are deduplicated.
-The editor works on the resolved file list loaded at opening time. Shared values
+The editor works on the resolved file list loaded at opening time; files added later
+are included only after Reload. Symbolic links are excluded from folder scans;
+explicit link selections and hard-linked archives are refused before editing. Shared values
 use the normal OS palette; differing values appear as muted “Multiple values —
 unchanged” placeholders. Editing any field restores normal text and marks its
 caption with `*`; the adjacent revert arrow restores its original value(s).
@@ -73,7 +77,9 @@ All documents are validated and checked for external changes before the first
 write. Each CBZ is replaced independently after verification; the batch is not a
 single filesystem transaction. A later I/O failure reports exact file paths and
 keeps pending edits, while successful files retain their updated in-memory state.
-Retrying skips no-op edits on files that already succeeded.
+Retrying skips no-op edits on files that already succeeded. After a partial save,
+field baselines are refreshed from the successful and failed documents so Revert
+accurately reflects their current, potentially mixed values.
 
 Field mappings follow the [Anansi ComicInfo documentation](https://anansi-project.github.io/docs/comicinfo/documentation)
 and [v2.0 schema](https://github.com/anansi-project/comicinfo/blob/main/schema/v2.0/ComicInfo.xsd),

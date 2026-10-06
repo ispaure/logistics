@@ -384,6 +384,59 @@ class WindowTests(ComicFixture, unittest.TestCase):
             finally:
                 self.app.setPalette(original)
 
+    def test_browser_context_menu_keeps_selected_folder_and_files(self):
+        from commonUtils.ui import pyside as qt
+        from features.comics.ui.library import ComicLibraryWindow
+        self.archive()
+        folder = self.path.parent / 'nested'
+        folder.mkdir()
+        window = ComicLibraryWindow(self.path.parent)
+        self.app.processEvents()
+        indexes = [window.model.index(str(path)) for path in (folder, self.path)]
+        for index in indexes:
+            self.assertTrue(index.isValid())
+            window.tree.selectionModel().select(index, qt.QItemSelectionModel.SelectionFlag.Select |
+                                                 qt.QItemSelectionModel.SelectionFlag.Rows)
+        self.wait_for(window)
+        self.assertIn('2 items', window.heading.text())
+        with patch.object(window, '_open_editor') as opened:
+            menu = window._context_menu_for(indexes[1])
+            menu.actions()[0].trigger()
+        self.assertEqual(set(opened.call_args.args[0]), {folder, self.path})
+        menu.deleteLater()
+        window.tree.clearSelection()
+        self.wait_for(window)
+        self.assertEqual(window.preview.toPlainText(), '')
+        window.close()
+        self.app.processEvents()
+
+    def test_partial_save_rebases_revert_and_retains_failure_feedback(self):
+        from commonUtils.ui import pyside as qt
+        from features.comics.ui.metadata_editor import MetadataEditor
+        self.archive()
+        second = self.path.with_name('second.cbz')
+        second.write_bytes(self.path.read_bytes())
+        editor = MetadataEditor([self.path, second])
+        self.wait_for(editor)
+        editor.editors['Writer'].setText('Unified')
+        actual_replace = os.replace
+        def replace(source, destination):
+            if Path(destination) == second:
+                raise OSError('simulated write failure')
+            actual_replace(source, destination)
+        with patch('features.comics.library.os.replace', replace), patch.object(qt.QMessageBox, 'warning'):
+            editor.apply_button.click()
+            self.wait_for(editor)
+        self.assertEqual(editor._changes(), {'Writer': 'Unified'})
+        self.assertIn('1 failed', editor.message.text())
+        editor.tabs.revert_buttons['Writer'].click()
+        self.assertEqual(editor._changes(), {})
+        self.assertEqual(editor.editors['Writer'].text(), '')
+        self.assertTrue(editor.tabs.state.fields['Writer'].mixed)
+        self.assertEqual(ComicDocument(self.path).info.writer, 'Unified')
+        self.assertEqual(ComicDocument(second).info.writer, 'Old')
+        editor.reject()
+
 
 class BulkSelectionTests(ComicFixture, unittest.TestCase):
     def test_folder_file_overlap_case_and_recursive_resolution(self):
@@ -440,6 +493,69 @@ class BulkSelectionTests(ComicFixture, unittest.TestCase):
         retry = selection.save({'Writer': 'New'})
         self.assertFalse(retry.failed)
         self.assertEqual(ComicDocument(second).info.writer, 'New')
+
+
+class EditStateTests(unittest.TestCase):
+    def test_shared_mixed_clear_and_revert_only_patch_explicit_changes(self):
+        from features.comics.edit_state import MetadataEditState
+        state = MetadataEditState()
+        state.reset([{'Writer': 'A', 'Series': 'Shared'},
+                     {'Writer': 'B', 'Series': 'Shared'}], ['Writer', 'Series'])
+        self.assertEqual(state.changes(), {})
+        self.assertTrue(state.fields['Writer'].mixed)
+        state.fields['Writer'].edit('')
+        self.assertEqual(state.changes(), {'Writer': ''})
+        state.revert('Writer')
+        state.fields['Series'].edit('Shared')
+        self.assertEqual(state.changes(), {})
+        state.fields['Series'].edit('New')
+        self.assertEqual(state.changes(), {'Series': 'New'})
+        state.reset([{'Writer': 'A', 'Series': 'New'}], ['Writer', 'Series'])
+        self.assertEqual(state.changes(), {})
+
+
+class SelectionEdgeTests(ComicFixture, unittest.TestCase):
+    def test_save_uses_loaded_folder_snapshot_until_explicit_reload(self):
+        from features.comics.selection import ComicSelection
+        self.archive()
+        selection = ComicSelection(self.path.parent)
+        added = self.path.with_name('added.cbz')
+        added.write_bytes(self.path.read_bytes())
+        selection.save({'Writer': 'New'})
+        self.assertEqual(ComicDocument(added).info.writer, 'Old')
+        self.assertEqual(len(ComicSelection(self.path.parent).documents), 2)
+
+    def test_parent_child_overlap_walks_once_and_normalizes_dot_segments(self):
+        from features.comics.selection import selected_comics
+        self.archive()
+        folder = self.path.parent / 'nested'
+        folder.mkdir()
+        actual_walk = os.walk
+        with patch('features.comics.selection.os.walk', wraps=actual_walk) as walk:
+            paths = selected_comics([folder, self.path, self.path.parent,
+                                     folder / '..' / self.path.name])
+        self.assertEqual(paths, (self.path,))
+        walk.assert_called_once()
+
+    def test_explicit_links_empty_selection_and_invalid_archives_report_errors(self):
+        from features.comics.selection import ComicSelection, selected_comics
+        self.archive()
+        with self.assertRaisesRegex(ValueError, 'at least one'):
+            selected_comics([])
+        link = self.path.with_name('link.cbz')
+        link.symlink_to(self.path)
+        with self.assertRaisesRegex(ValueError, 'Symbolic links'):
+            selected_comics([self.path.parent, link])
+        link.unlink()
+        os.link(self.path, link)
+        before = self.path.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'Hard-linked'):
+            ComicSelection(self.path.parent)
+        self.assertEqual(self.path.read_bytes(), before)
+        link.unlink()
+        self.path.write_bytes(b'not a zip')
+        with self.assertRaisesRegex(ValueError, 'comic.cbz'):
+            ComicSelection(self.path)
 
 
 class GenericXMLTests(unittest.TestCase):
