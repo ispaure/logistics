@@ -19,6 +19,9 @@ class MetadataForm(qt.QTabWidget):
         self.touched = set()
         self.captions = {}
         self.revert_buttons = {}
+        self.clear_buttons = {}
+        self.original_values = {}
+        self._base_tooltips = {}
         self._normal_palettes = {}
         self._labels = {}
         self._details_tab()
@@ -43,6 +46,7 @@ class MetadataForm(qt.QTabWidget):
     def load_values(self, documents):
         if not documents:
             raise ValueError('No comic metadata to edit')
+        self.original_values = {field: tuple(values[field] for values in documents) for field in self.editors}
         self.mixed = {field for field in self.editors
                       if any(values[field] != documents[0][field] for values in documents[1:])}
         self.touched.clear()
@@ -58,6 +62,13 @@ class MetadataForm(qt.QTabWidget):
     def revert_field(self, field):
         load_editor(self.editors[field], self.baseline[field])
         self.touched.discard(field)
+        self._refresh_field(field)
+        self.changed.emit()
+
+    def clear_field(self, field):
+        """An explicit clear is needed when a mixed field already displays blank."""
+        load_editor(self.editors[field], '')
+        self.touched.add(field)
         self._refresh_field(field)
         self.changed.emit()
 
@@ -78,6 +89,17 @@ class MetadataForm(qt.QTabWidget):
         caption = self.captions[field]
         caption.setText(self._labels[field] + (': *' if pending else ':'))
         self.revert_buttons[field].setVisible(pending)
+        self.clear_buttons[field].setVisible(mixed)
+        distinct = list(dict.fromkeys(self.original_values.get(field, ())))
+        if mixed:
+            examples = ', '.join(repr(value[:80]) if value else '(blank)' for value in distinct[:4])
+            suffix = '…' if len(distinct) > 4 else ''
+            hint = f'Multiple values: {examples}{suffix}. Leave untouched to preserve them; × clears this field for all comics.'
+        elif pending:
+            hint = 'Pending: apply this value to every selected comic. Revert restores the original value(s).'
+        else:
+            hint = ''
+        editor.setToolTip(' '.join(part for part in (self._base_tooltips[field], hint) if part))
         editor.setProperty('mixedValue', mixed)
         editor.setProperty('pendingChange', pending)
 
@@ -86,6 +108,16 @@ class MetadataForm(qt.QTabWidget):
         self.captions[field] = caption
         self._labels[field] = label
         self._normal_palettes[field] = qt.QPalette(editor.palette())
+        self._base_tooltips[field] = editor.toolTip()
+        clear = qt.QToolButton()
+        clear.setText('×')
+        clear.setToolTip('Clear this field in every selected comic (pending until Apply)')
+        clear.setAccessibleName(f'Clear {label} in all selected comics')
+        clear.setFixedSize(18, 16)
+        clear.hide()
+        clear.clicked.connect(lambda: self.clear_field(field))
+        header.addWidget(clear)
+        self.clear_buttons[field] = clear
         revert = qt.QToolButton()
         revert.setText('↶')
         revert.setToolTip('Revert this field to its original value(s)')

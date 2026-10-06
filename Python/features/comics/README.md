@@ -63,7 +63,11 @@ The editor works on the resolved file list loaded at opening time. Shared values
 use the normal OS palette; differing values appear as muted “Multiple values —
 unchanged” placeholders. Editing any field restores normal text and marks its
 caption with `*`; the adjacent revert arrow restores its original value(s).
-Only explicit pending fields are applied. Previous/Next are disabled for batches.
+Only explicit pending fields are applied. The × control explicitly clears a mixed
+field even when its display is already blank. Field tooltips show samples of the
+original differing values. Review lists pending changes and exact target files;
+Reload refreshes the selection after asking about pending edits. Previous/Next
+are disabled for batches. Bulk preflight and archive work run off the UI thread.
 
 All documents are validated and checked for external changes before the first
 write. Each CBZ is replaced independently after verification; the batch is not a

@@ -331,6 +331,60 @@ class WindowTests(ComicFixture, unittest.TestCase):
         editor.reject()
 
 
+    def test_explicit_clear_mixed_field_and_reload_discard_pending_changes(self):
+        from commonUtils.ui import pyside as qt
+        from features.comics.ui.metadata_editor import MetadataEditor
+        self.archive(b'<ComicInfo><Writer>First</Writer></ComicInfo>')
+        second = self.path.with_name('second.cbz')
+        with zipfile.ZipFile(second, 'w') as archive:
+            archive.writestr('ComicInfo.xml', '<ComicInfo><Writer>Second</Writer></ComicInfo>')
+        editor = MetadataEditor([self.path, second])
+        self.wait_for(editor)
+        editor.tabs.clear_field('Writer')
+        self.assertEqual(editor._changes(), {'Writer': ''})
+        editor._save()
+        self.wait_for(editor)
+        self.assertEqual(ComicDocument(self.path).info.writer, '')
+        self.assertEqual(ComicDocument(second).info.writer, '')
+        editor.editors['Publisher'].setEditText('Pending publisher')
+        with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Discard):
+            editor.reload_button.click()
+        self.wait_for(editor)
+        self.assertFalse(editor._changes())
+        self.assertEqual(editor.editors['Publisher'].currentText(), '')
+        editor.reject()
+
+    def test_field_markers_revert_and_mixed_colors_follow_light_and_dark_palettes(self):
+        from commonUtils.ui import pyside as qt
+        from features.comics.ui.metadata_form import MetadataForm
+        from features.comics.comicinfo import ComicInfoXML
+        for dark in (False, True):
+            original = self.app.palette()
+            palette = qt.QPalette(original)
+            normal = qt.QColor('white' if dark else 'black')
+            muted = qt.QColor('gray')
+            palette.setColor(qt.QPalette.ColorRole.Text, normal)
+            palette.setColor(qt.QPalette.ColorGroup.Disabled, qt.QPalette.ColorRole.Text, muted)
+            self.app.setPalette(palette)
+            try:
+                form = MetadataForm()
+                first = {name: '' for name in form.editors}
+                second = dict(first, Writer='Another')
+                form.load_values([first, second])
+                self.assertEqual(form.editors['Writer'].palette().color(qt.QPalette.ColorRole.Text), muted)
+                form.editors['Writer'].setText('Unified')
+                self.assertEqual(form.editors['Writer'].palette().color(qt.QPalette.ColorRole.Text), normal)
+                self.assertIn('*', form.captions['Writer'].text())
+                self.assertFalse(form.revert_buttons['Writer'].isHidden())
+                form.revert_buttons['Writer'].click()
+                self.assertEqual(form.editors['Writer'].palette().color(qt.QPalette.ColorRole.Text), muted)
+                self.assertFalse(form.changes())
+                form.deleteLater()
+                self.app.processEvents()
+            finally:
+                self.app.setPalette(original)
+
+
 class BulkSelectionTests(ComicFixture, unittest.TestCase):
     def test_folder_file_overlap_case_and_recursive_resolution(self):
         from features.comics.selection import ComicSelection, selected_comics
