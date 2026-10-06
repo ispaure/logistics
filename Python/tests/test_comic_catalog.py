@@ -45,7 +45,68 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(self.catalog.refresh()['suggestions']['Writer'], ['Dave'])
         data = json.loads(self.catalog.path.read_text())
         self.assertEqual(set(data['files']), {'extra.CBZ'})
-        self.assertEqual(len(data['files']['extra.CBZ']['metadata_sha256']), 64)
+        self.assertEqual(data['files']['extra.CBZ'][:2], [extra.stat().st_mtime_ns, extra.stat().st_size])
+        self.assertEqual(data['suggestions']['Writer'], ['Dave'])
+
+    def test_compact_cache_stores_only_unique_nonempty_autofill_values(self):
+        self.comic(writer='Repeated author')
+        document = ComicDocument(self.path)
+        document.save({'Series': 'Do not cache this series', 'Title': 'Do not cache this title'})
+        extra = self.root / 'extra.cbz'
+        extra.write_bytes(self.path.read_bytes())
+        self.catalog.refresh()
+        data = json.loads(self.catalog.path.read_text())
+        self.assertEqual(set(data['suggestions']), {'Writer', 'Publisher'})
+        self.assertEqual(data['suggestions']['Writer'], ['Repeated author'])
+        self.assertEqual(data['files']['comic.cbz'][2], {'Writer': [0], 'Publisher': [0]})
+        text = self.catalog.path.read_text()
+        self.assertEqual(text.count('Repeated author'), 1)
+        self.assertNotIn('Do not cache', text)
+        self.assertNotIn('metadata_sha256', text)
+        self.assertNotIn('Inker', text)
+        self.assertNotIn(': ', text)
+
+    def test_existing_cache_migrates_without_reopening_unchanged_archives(self):
+        self.comic()
+        signature = self.path.stat()
+        self.catalog.path.parent.mkdir()
+        self.catalog.path.write_text(json.dumps({'version': 1, 'files': {'comic.cbz': {
+            'signature': [signature.st_size, signature.st_mtime_ns, signature.st_ctime_ns,
+                          signature.st_dev, signature.st_ino],
+            'metadata_sha256': 'obsolete hash',
+            'fields': {'Writer': 'Alice, Bob', 'Publisher': 'Publisher', 'Inker': '', 'Series': 'Unused'}
+        }}}))
+        with patch('features.comics.catalog.ComicDocument', side_effect=AssertionError('Migration reopened XML')):
+            result = self.catalog.refresh()
+        self.assertEqual(result['parsed'], 0)
+        self.assertEqual(result['suggestions'], {'Writer': ['Alice', 'Bob'], 'Publisher': ['Publisher']})
+        data = json.loads(self.catalog.path.read_text())
+        self.assertEqual(data['version'], 2)
+        self.assertNotIn('Unused', self.catalog.path.read_text())
+
+    def test_empty_metadata_keeps_only_change_tracking_and_is_reused(self):
+        with zipfile.ZipFile(self.path, 'w') as archive:
+            archive.writestr('01.png', b'original pages')
+        self.catalog.refresh()
+        data = json.loads(self.catalog.path.read_text())
+        self.assertEqual(data['suggestions'], {})
+        self.assertEqual(data['files']['comic.cbz'][2], {})
+        with patch('features.comics.catalog.ComicDocument', side_effect=AssertionError('Empty archive reopened')):
+            self.assertEqual(self.catalog.refresh()['parsed'], 0)
+
+    def test_bad_pooled_reference_rebuilds_only_the_affected_file(self):
+        self.comic()
+        extra = self.root / 'extra.cbz'
+        self.comic(extra, 'Carol')
+        self.catalog.refresh()
+        data = json.loads(self.catalog.path.read_text())
+        data['files']['comic.cbz'][2]['Writer'] = [-1]
+        self.catalog.path.write_text(json.dumps(data))
+        with patch('features.comics.catalog.ComicDocument', wraps=ComicDocument) as loaded:
+            result = self.catalog.refresh()
+        self.assertEqual(result['parsed'], 1)
+        loaded.assert_called_once_with(self.path)
+        self.assertEqual(result['suggestions']['Writer'], ['Alice', 'Bob', 'Carol'])
 
     def test_index_reads_only_metadata_and_preserves_archive_bytes(self):
         self.comic()
