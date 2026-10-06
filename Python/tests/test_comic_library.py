@@ -290,6 +290,104 @@ class WindowTests(ComicFixture, unittest.TestCase):
         app.processEvents()
 
 
+    def test_bulk_mixed_shared_and_reverted_fields_apply_only_explicit_changes(self):
+        from commonUtils.ui import pyside as qt
+        from features.comics.ui.metadata_editor import MetadataEditor
+        from features.comics.ui.metadata_widgets import editor_value
+        self.archive(b'<ComicInfo><Writer>Shared</Writer><Series>First</Series><Count>2</Count><GTIN>one</GTIN></ComicInfo>')
+        second = self.path.with_name('second.cbz')
+        with zipfile.ZipFile(second, 'w') as archive:
+            archive.writestr('ComicInfo.xml', '<ComicInfo><Writer>Shared</Writer><Series>Second</Series><Count>3</Count><GTIN>two</GTIN></ComicInfo>')
+            archive.writestr('01.png', b'second image')
+        before = [path.read_bytes() for path in (self.path, second)]
+        editor = MetadataEditor([self.path, second])
+        self.wait_for(editor)
+        self.assertEqual(len(editor.selection.documents), 2)
+        self.assertTrue(editor.is_bulk)
+        self.assertFalse(editor.next_button.isEnabled())
+        self.assertFalse(editor._changes())
+        self.assertEqual(editor_value(editor.editors['Writer']), 'Shared')
+        self.assertTrue(editor.editors['Series'].property('mixedValue'))
+        self.assertFalse(editor.editors['Writer'].property('mixedValue'))
+        editor.editors['Series'].setText('Unified')
+        self.assertFalse(editor.editors['Series'].property('mixedValue'))
+        self.assertTrue(editor.editors['Series'].property('pendingChange'))
+        self.assertIn('*', editor.tabs.captions['Series'].text())
+        editor.tabs.revert_field('Series')
+        self.assertTrue(editor.editors['Series'].property('mixedValue'))
+        self.assertFalse(editor._changes())
+        self.assertEqual(before, [path.read_bytes() for path in (self.path, second)])
+        editor.editors['Writer'].setText('New writer')
+        editor._save()
+        self.wait_for(editor)
+        for path, series, gtin in ((self.path, 'First', 'one'), (second, 'Second', 'two')):
+            info = ComicDocument(path).info
+            self.assertEqual(info.writer, 'New writer')
+            self.assertEqual(info.series, series)
+            self.assertEqual(info.gtin, gtin)
+        self.assertFalse(editor._changes())
+        self.assertTrue(editor.editors['Series'].property('mixedValue'))
+        self.assertFalse(editor.editors['Writer'].property('mixedValue'))
+        editor.reject()
+
+
+class BulkSelectionTests(ComicFixture, unittest.TestCase):
+    def test_folder_file_overlap_case_and_recursive_resolution(self):
+        from features.comics.selection import ComicSelection, selected_comics
+        self.archive()
+        folder = self.path.parent / 'nested'
+        folder.mkdir()
+        for index in range(9):
+            (folder / f'{index}.CBZ').write_bytes(self.path.read_bytes())
+        (folder / 'notes.txt').write_text('not a comic')
+        targets = [self.path.parent, self.path, folder]
+        self.assertEqual(len(selected_comics(targets)), 10)
+        selection = ComicSelection(targets)
+        result = selection.save({'Writer': 'All ten'})
+        self.assertEqual(len(result.saved), 10)
+        self.assertFalse(result.failed)
+        for document in selection.documents:
+            self.assertEqual(ComicDocument(document.path).info.writer, 'All ten')
+
+    def test_preflight_rejects_invalid_or_changed_archive_before_any_write(self):
+        from features.comics.selection import ComicSelection
+        self.archive()
+        second = self.path.with_name('second.cbz')
+        second.write_bytes(self.path.read_bytes())
+        selection = ComicSelection([self.path, second])
+        before = self.path.read_bytes()
+        with self.assertRaises(ValueError):
+            selection.save({'Month': '13'})
+        self.assertEqual(self.path.read_bytes(), before)
+        second.write_bytes(b'an external change')
+        with self.assertRaises(RuntimeError):
+            selection.save({'Writer': 'New'})
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_partial_io_failure_reports_paths_without_losing_successful_state(self):
+        from features.comics.selection import ComicSelection
+        self.archive()
+        second = self.path.with_name('second.cbz')
+        second.write_bytes(self.path.read_bytes())
+        selection = ComicSelection([self.path, second])
+        before = second.read_bytes()
+        actual_replace = os.replace
+        def replace(source, destination):
+            if Path(destination) == second:
+                raise OSError('simulated write failure')
+            actual_replace(source, destination)
+        with patch('features.comics.library.os.replace', replace):
+            result = selection.save({'Writer': 'New'})
+        self.assertEqual(result.saved, [self.path])
+        self.assertIn(second, result.failed)
+        self.assertEqual(second.read_bytes(), before)
+        self.assertEqual(selection.documents[0].info.writer, 'New')
+        self.assertEqual(selection.documents[1].info.writer, 'Old')
+        retry = selection.save({'Writer': 'New'})
+        self.assertFalse(retry.failed)
+        self.assertEqual(ComicDocument(second).info.writer, 'New')
+
+
 class GenericXMLTests(unittest.TestCase):
     def test_full_document_and_namespace_extensions_are_preserved(self):
         from commonUtils.fileTypes.xmlType import XMLFile

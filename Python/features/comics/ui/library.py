@@ -4,6 +4,7 @@ from pathlib import Path
 from commonUtils.ui import pyside as qt
 from features.comics.comicinfo import ComicInfoXML
 from features.comics.library import ComicDocument
+from features.comics.selection import normalize_targets
 from .metadata_editor import MetadataEditor
 from .operations import Operation
 
@@ -38,7 +39,7 @@ class ComicLibraryWindow(qt.QMainWindow):
         self.tree.setUniformRowHeights(True)
         self.tree.setSortingEnabled(True)
         self.tree.sortByColumn(0, qt.Qt.SortOrder.AscendingOrder)
-        self.tree.setSelectionMode(qt.QAbstractItemView.SelectionMode.SingleSelection)
+        self.tree.setSelectionMode(qt.QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tree.setEditTriggers(qt.QAbstractItemView.EditTrigger.NoEditTriggers)
         self.tree.setColumnWidth(0, 400)
         self.tree.setColumnWidth(3, 180)
@@ -64,7 +65,7 @@ class ComicLibraryWindow(qt.QMainWindow):
         panel_layout.addWidget(self.preview, 1)
         splitter.addWidget(panel)
         splitter.setSizes([700, 500])
-        self.tree.selectionModel().currentChanged.connect(self._selected)
+        self.tree.selectionModel().selectionChanged.connect(self._selection_changed)
 
     def _context_menu(self, point):
         menu = self._context_menu_for(self.tree.indexAt(point))
@@ -73,17 +74,23 @@ class ComicLibraryWindow(qt.QMainWindow):
 
     def _context_menu_for(self, index):
         path = Path(self.model.filePath(index)) if index.isValid() else None
-        if path is None or not path.is_file() or path.suffix.lower() != '.cbz':
+        if path is None or not (path.is_dir() or (path.is_file() and path.suffix.lower() == '.cbz')):
             return
+        selected = self.tree.selectionModel().selectedRows(0)
+        if not any(item == index.siblingAtColumn(0) for item in selected):
+            selected = [index.siblingAtColumn(0)]
+        targets = [Path(self.model.filePath(item)) for item in selected
+                   if self.model.isDir(item) or self.model.filePath(item).lower().endswith('.cbz')]
         menu = qt.QMenu(self)
         action = menu.addAction('Edit Metadata')
-        action.triggered.connect(lambda: self._open_editor(path, index))
+        action.triggered.connect(lambda: self._open_editor(targets, index))
         return menu
 
     def _open_editor(self, path, index=None):
-        path = Path(path)
+        targets = normalize_targets(path)
+        path = targets[0]
         existing = next((window for window in self.metadata_windows
-                         if window.path == path and window.isVisible()), None)
+                         if set(window.targets) == set(targets) and window.isVisible()), None)
         if existing is not None:
             existing.raise_()
             existing.activateWindow()
@@ -100,7 +107,7 @@ class ComicLibraryWindow(qt.QMainWindow):
             candidate = Path(self.model.filePath(child))
             if candidate.suffix.lower() == '.cbz' and not self.model.isDir(child):
                 siblings.append(candidate)
-        window = MetadataEditor(path, siblings, self)
+        window = MetadataEditor(targets, siblings, self)
         self.metadata_windows.append(window)
         window.saved.connect(self._metadata_saved)
         window.show()
@@ -113,6 +120,20 @@ class ComicLibraryWindow(qt.QMainWindow):
             self.refresh_pending = True
         elif self.model.filePath(self.tree.currentIndex()) == str(path):
             self._load(path)
+
+    def _selection_changed(self, selected=None, deselected=None):
+        indexes = self.tree.selectionModel().selectedRows(0)
+        if len(indexes) > 1:
+            if self.busy:
+                self.refresh_pending = True
+                return
+            self.document = None
+            self.preview.clear()
+            self.heading.setText(f'{len(indexes)} items selected')
+            self.message.setText('Right-click the selection to edit its CBZ metadata together. Folders include subfolders.')
+        else:
+            index = indexes[0] if indexes else self.tree.currentIndex()
+            self._selected(index, qt.QModelIndex())
 
     def _selected(self, current, previous):
         if self.busy:
@@ -158,7 +179,7 @@ class ComicLibraryWindow(qt.QMainWindow):
         self.tree.setEnabled(True)
         self.operation.deleteLater()
         if self.refresh_pending:
-            self._selected(self.tree.currentIndex(), qt.QModelIndex())
+            self._selection_changed()
 
     def closeEvent(self, event):
         if self.busy or any(window.busy for window in self.metadata_windows):
