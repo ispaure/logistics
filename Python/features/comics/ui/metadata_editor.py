@@ -57,6 +57,16 @@ class MetadataEditor(qt.QDialog):
         buttons.addWidget(self.previous_button)
         buttons.addWidget(self.next_button)
         buttons.addStretch()
+        self.review_button = qt.QPushButton('Review…')
+        self.reload_button = qt.QPushButton('Reload')
+        self.review_button.setFixedSize(85, 28)
+        self.reload_button.setFixedSize(70, 28)
+        self.review_button.setToolTip('Review selected files and pending changes before applying them')
+        self.reload_button.setToolTip('Reload metadata and re-scan selected folders; asks about pending edits')
+        self.review_button.clicked.connect(self._review)
+        self.reload_button.clicked.connect(lambda: self._leave(lambda: self._load(self.targets)))
+        buttons.addWidget(self.review_button)
+        buttons.addWidget(self.reload_button)
         self.ok_button = qt.QPushButton('OK')
         self.cancel_button = qt.QPushButton('Cancel')
         self.apply_button = qt.QPushButton('Apply')
@@ -78,7 +88,14 @@ class MetadataEditor(qt.QDialog):
         available = self.selection is not None and not self.busy
         self.tabs.setEnabled(available)
         self.ok_button.setEnabled(available)
-        self.apply_button.setEnabled(available and bool(self._changes()))
+        changes = self._changes()
+        self.apply_button.setEnabled(available and bool(changes))
+        self.review_button.setEnabled(available)
+        self.reload_button.setEnabled(not self.busy)
+        if available and self.is_bulk:
+            fields = len(changes)
+            count = len(self.selection.documents)
+            self.message.setText(f'{count} comics · {fields} pending field(s). * = changed, ↶ = revert, × = clear mixed values.')
         self.cancel_button.setEnabled(not self.busy)
         index = self.siblings.index(self.path)
         self.previous_button.setEnabled(available and not self.is_bulk and index > 0)
@@ -108,6 +125,7 @@ class MetadataEditor(qt.QDialog):
         self.is_bulk = len(self.targets) > 1 or self.path.is_dir()
         title = f'{len(self.targets)} selected items' if self.is_bulk else self.path.name
         self.setWindowTitle(f'Edit Metadata — {title}')
+        self.message.setVisible(self.is_bulk)
         self.message.setText('Reading selected comics…')
         self._operate(lambda: ComicSelection(self.targets), self._loaded)
 
@@ -127,12 +145,39 @@ class MetadataEditor(qt.QDialog):
         count = len(selection.documents)
         self.is_bulk = self.is_bulk or count > 1
         if self.is_bulk:
+            # Batch status and field actions need extra room while preserving
+            # the compact single-file proportions.
+            self.resize(self.width(), max(self.height(), WINDOW_SIZE[1] + 48))
             self.setWindowTitle(f'Edit Metadata — {count} comics')
             self.message.show()
             self.message.setText(f'{count} comics. Muted fields have multiple values. Only fields marked * will change.')
         else:
             self.message.setText('Only changed fields are saved; other XML metadata is retained.' if self.document.exists else
                                  'No ComicInfo.xml yet. Apply or OK will create it when fields are changed.')
+
+    def _review(self):
+        if self.selection is None:
+            return
+        review = qt.QDialog(self)
+        review.setWindowTitle('Review metadata changes')
+        review.resize(680, 480)
+        layout = qt.QVBoxLayout(review)
+        text = qt.QPlainTextEdit()
+        text.setReadOnly(True)
+        lines = [f'{len(self.selection.documents)} comics selected', '', 'Pending fields:']
+        changes = self._changes()
+        if not changes:
+            lines.append('None — original values will be kept.')
+        for field, value in sorted(changes.items()):
+            lines.append(f'{field}: {value if value else "(clear/remove field)"}')
+        lines.extend(['', 'Files:'])
+        lines.extend(str(document.path) for document in self.selection.documents)
+        text.setPlainText('\n'.join(lines))
+        layout.addWidget(text)
+        close = qt.QPushButton('Close')
+        close.clicked.connect(review.accept)
+        layout.addWidget(close)
+        review.exec()
 
     def _save(self, after=None):
         if self.busy or self.selection is None:
@@ -141,11 +186,6 @@ class MetadataEditor(qt.QDialog):
         if not changes:
             if after:
                 after()
-            return
-        try:
-            self.selection.validate_changes(changes)
-        except Exception as error:
-            qt.QMessageBox.warning(self, 'Check metadata', str(error))
             return
         selection = self.selection
         self.pending_action = after
