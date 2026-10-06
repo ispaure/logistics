@@ -210,6 +210,16 @@ def initialize_features() -> list[ModuleType]:
     _log_unavailable_features()
     features = get_available_features()
 
+    # Register types before any feature initialization can list files.
+    from commonUtils.fileTypes.registry import register_builtin_file_types
+    register_builtin_file_types()
+    for feature in features:
+        register_types = getattr(feature, 'register_file_types', None)
+        if register_types is not None:
+            if not callable(register_types):
+                raise TypeError(f"Feature '{feature.__name__}' register_file_types must be callable.")
+            register_types()
+
     for feature in features:
         initialize = getattr(feature, 'initialize', None)
 
