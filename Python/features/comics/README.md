@@ -25,7 +25,9 @@ Provides comic-related integration for Logistics.
 - `ui/library.py` coordinates the browser and compact selected-comic preview.
 - `ui/file_browser.py` provides list, tile and column modes with bounded asynchronous cover icons.
 - `pages.py` reads archive pages lazily and renders cover thumbnails without extraction.
-- `reader.py` and `reader.html` provide the local browser reader.
+- `reader.py` owns native reader windows; `ui/reader.py` handles page display and navigation.
+- `folder_stats.py` calculates recursive folder totals, and `ui/filesystem_model.py` exposes them in the Size column.
+- `ui/navigation.py` provides library-bounded location and back/forward navigation.
 - `desktop_actions.py` opens the default application and reveals items through the OS file manager.
 - `ui/metadata_editor.py` coordinates loading, saving and protected navigation.
 - `selection.py` resolves folder/file selections and coordinates batch validation and saving.
@@ -40,7 +42,7 @@ Provides comic-related integration for Logistics.
 
 ## Initialization
 
-Comics has a hard feature dependency on `images`. Reader actions support external applications, and a basic browser reader is available for CBZs.
+Comics has a hard feature dependency on `images`. Reader actions support external applications, and a native Python reader is available for CBZs.
 
 This feature does not require startup initialization.
 
@@ -54,12 +56,19 @@ collapsed and offers **List**, **Tiles**, and **Columns** views. List mode keeps
 Name, Date Modified and Size columns; tiles show asynchronously loaded first-page
 covers, and column mode follows folder hierarchies horizontally. Tile covers are
 loaded for visible items and kept in a bounded 128-entry memory cache; they are
-not added to the metadata JSON. Double-click folders in tile mode to enter them;
-Up returns toward the selected library root.
+not added to the metadata JSON. Double-click folders in any mode to enter them.
+Back, Forward, Up and the folder-path dropdown reach previous and parent folders
+within the selected library. Changing view modes preserves the current nested
+location and selection; the path dropdown always retains access to its ancestors.
 
 Selecting a single CBZ shows its first-page thumbnail and key fields (Series,
-Author, Volume, Issue, count, title, publisher and year) in the adjacent panel.
-Folder-only, empty and multiple selections hide that panel. Right-click items for
+Author, Volume, Issue, count, title, publisher, year and description) in the adjacent
+panel. The panel remains visible for empty and multiple selections. Selecting a
+folder shows its path, modification time, recursive file size, and comic/file/folder
+counts. Folder totals also appear in the Size column and are calculated in a
+cancellable background scan without opening archives. Symbolic links and unreadable
+items are excluded and reported; these totals stay in memory, outside the suggestion
+JSON. Refresh updates totals, suggestions and selected-comic previews. Right-click items for
 **Open in Default App**, an OS-specific **Reveal** action, and **Edit Metadata**
 (for CBZ files/folders). Linux reveal uses the standard file-manager service when
 available, with a containing-folder fallback.
@@ -79,18 +88,20 @@ Comics library folder action. Switching libraries clears the preview and collaps
 the tree; existing metadata dialogs remain associated with their original files.
 The suggestion cache stays at the original collection root.
 
-Double-click a CBZ to open a basic reader in a new default-browser window (the
-browser may choose a tab according to its preferences). A local server bound to
-127.0.0.1 serves that archive's naturally sorted image pages through an opaque
-session URL. Pages are read on demand, never extracted or modified. PNG, JPEG,
-WebP, GIF and BMP are served directly; TIFF pages are converted for browser display.
-The reader shows page/count/percentage and a seek slider. Left/Right arrows follow
-`Manga=YesAndRightToLeft`; absent/other values default to left-to-right. Up/Down and
-Previous/Next navigate sequentially, and Home/End jump to the first/last page.
-Changed archives require reopening the reader. Reader sessions remain available
-while Logistics runs, even after closing the library window; repeated openings of
-an unchanged comic reuse its server. Reader progress is displayed for the current
-session and is not persisted.
+Double-click a CBZ to open a native PySide reader window. Pages are naturally
+sorted and read on demand without extraction or modification; image decoding runs
+in a background worker. PNG, JPEG, WebP, GIF, BMP and TIFF pages are supported.
+The image fits the window, and Full Screen/F11 toggles full-screen display (Escape
+returns to the normal window). The reader shows page/count/percentage and a seek
+slider. Left/Right arrows follow `Manga=YesAndRightToLeft`; absent/other values
+default to left-to-right. For right-to-left comics the slider starts at the right
+end and moves left as pages advance; Next is on the left and Previous on the right.
+Up/Down and Previous/Next navigate sequentially, and Home/End jump to first/last
+page. These shortcuts work while the slider is focused. Rapid navigation loads
+only the latest queued page, and closing during a load safely waits for that worker.
+Changed archives require reopening the reader. Reopening an unchanged comic raises
+its existing reader; reader windows are independent of the library window. Progress
+is displayed for the current session and is not persisted.
 
 The independent dialog provides **Details** and **Plot & Notes** layouts. The reference images measure 789 x 673/677 pixels including their title
 bars. The default client area is 789 x 635 logical pixels, with 22-pixel inputs,

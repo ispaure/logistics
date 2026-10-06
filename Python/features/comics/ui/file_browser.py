@@ -66,6 +66,7 @@ class FileBrowser(qt.QStackedWidget):
     context_requested = qt.Signal(object)
     activated = qt.Signal(object)
     idle = qt.Signal()
+    directory_changed = qt.Signal(object)
 
     def __init__(self, model, tree, parent=None):
         super().__init__(parent)
@@ -108,8 +109,21 @@ class FileBrowser(qt.QStackedWidget):
     def current_index(self):
         return self.source_index(self.currentWidget().currentIndex())
 
+    def browsing_directory(self):
+        selected = self.selected_rows()
+        index = self.current_index()
+        if not any(index == item for item in selected):
+            index = selected[-1] if selected else qt.QModelIndex()
+        if index.isValid():
+            path = Path(self.model.filePath(index))
+            directory = path if self.currentIndex() == 2 and self.model.isDir(index) else path.parent
+            if directory == self.root or self.root in directory.parents:
+                return directory
+        return self.root
+
     def _selection(self, view):
         if view is self.currentWidget():
+            self.directory_changed.emit(self.browsing_directory())
             self.selection_changed.emit()
 
     def _context(self, view, point):
@@ -123,13 +137,18 @@ class FileBrowser(qt.QStackedWidget):
         for view in (self.tree, self.tiles, self.columns):
             blocker = qt.QSignalBlocker(view.selectionModel())
             view.clearSelection()
+            view.setCurrentIndex(qt.QModelIndex())
             view.setRootIndex(self.covers.mapFromSource(index) if view is self.tiles else index)
             blocker.unblock()
         self.tree.collapseAll()
+        self.directory_changed.emit(self.root)
         self.selection_changed.emit()
 
     def set_mode(self, mode):
         selected = self.selected_rows()
+        directory = self.browsing_directory()
+        if directory != self.root:
+            self.set_root(directory)
         self.setCurrentIndex(mode)
         selection = self.currentWidget().selectionModel()
         blocker = qt.QSignalBlocker(selection)
@@ -139,6 +158,7 @@ class FileBrowser(qt.QStackedWidget):
             selection.select(index, qt.QItemSelectionModel.SelectionFlag.Select | qt.QItemSelectionModel.SelectionFlag.Rows)
             selection.setCurrentIndex(index, qt.QItemSelectionModel.SelectionFlag.NoUpdate)
         blocker.unblock()
+        self.directory_changed.emit(self.browsing_directory())
         self.selection_changed.emit()
 
     def _request_cover(self, path):
