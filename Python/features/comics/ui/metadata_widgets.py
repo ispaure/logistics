@@ -3,7 +3,21 @@
 from decimal import Decimal, InvalidOperation
 from commonUtils.ui import pyside as qt
 from features.comics.comicinfo import ComicInfoXML
-from features.comics.catalog import VALUE_FIELDS, normalize_value
+from features.comics.catalog import VALUE_FIELDS, normalize_value, split_values
+
+
+class CharacterListEdit(qt.QPlainTextEdit):
+    """Show one name per line while retaining untouched XML spelling."""
+
+    def load_text(self, value):
+        self._original = value
+        self._display = '\n'.join(split_values(value))
+        self.setPlainText(self._display)
+
+    def metadata_value(self):
+        if self.toPlainText() == self._display:
+            return self._original
+        return ', '.join(split_values(self.toPlainText()))
 
 
 class OptionalIntegerSpinBox(qt.QSpinBox):
@@ -92,6 +106,9 @@ def create_editor(field, changed, choices=None, multiline=False):
     elif field in ('Number', 'AlternateNumber'):
         editor = IssueNumberSpinBox()
         editor.lineEdit().textEdited.connect(changed)
+    elif field == 'Characters':
+        editor = CharacterListEdit()
+        editor.textChanged.connect(changed)
     elif multiline:
         editor = qt.QPlainTextEdit()
         editor.textChanged.connect(changed)
@@ -105,6 +122,8 @@ def create_editor(field, changed, choices=None, multiline=False):
     elif field in ('Writer', 'Penciller', 'Inker', 'Colorist', 'Letterer', 'CoverArtist',
                    'Editor', 'Translator', 'Genre', 'Tags', 'Characters', 'Teams', 'Locations'):
         editor.setToolTip('Separate multiple values with commas.')
+    if field == 'Characters':
+        editor.setToolTip('One character per line; pasted comma-separated names are also accepted.')
     elif field == 'LanguageISO':
         editor.setToolTip('Stored as a language tag, e.g. en, fr or zh-Hant. Custom tags are accepted.')
     return editor
@@ -113,6 +132,8 @@ def create_editor(field, changed, choices=None, multiline=False):
 def editor_value(editor):
     """Read displayed text without normalizing an untouched integer sentinel."""
     if isinstance(editor, OptionalIntegerSpinBox):
+        return editor.metadata_value()
+    if isinstance(editor, CharacterListEdit):
         return editor.metadata_value()
     if isinstance(editor, qt.QPlainTextEdit):
         return editor.toPlainText()
@@ -129,6 +150,8 @@ def load_editor(editor, value):
     blocker = qt.QSignalBlocker(editor)
     try:
         if isinstance(editor, OptionalIntegerSpinBox):
+            editor.load_text(value)
+        elif isinstance(editor, CharacterListEdit):
             editor.load_text(value)
         elif isinstance(editor, qt.QPlainTextEdit):
             editor.setPlainText(value)

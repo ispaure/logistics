@@ -236,6 +236,23 @@ class PopupTests(unittest.TestCase):
         self.assertEqual(editor_value(form.editors['Publisher']), values['Publisher'])
         self.assertFalse(form.changes())
 
+    def test_characters_display_lines_preserve_original_and_save_comma_separated_edits(self):
+        from features.comics.ui.metadata_widgets import editor_value
+        form = self.form()
+        values = {field: '' for field in form.editors}
+        values['Characters'] = 'Pepper,  Carrot'
+        form.load_values([values])
+        editor = form.editors['Characters']
+        self.assertEqual(editor.toPlainText(), 'Pepper\nCarrot')
+        self.assertEqual(editor_value(editor), values['Characters'])
+        self.assertFalse(form.changes())
+        editor.setPlainText('Pepper\nCarrot, New character')
+        self.assertEqual(form.changes(), {'Characters': 'Pepper, Carrot, New character'})
+        form.revert_field('Characters')
+        self.assertEqual(editor.toPlainText(), 'Pepper\nCarrot')
+        self.assertEqual(editor_value(editor), values['Characters'])
+        self.assertFalse(form.changes())
+
     def test_mixed_popup_open_is_noop_new_values_and_clear_are_explicit(self):
         form = self.form()
         first = {field: '' for field in form.editors}
