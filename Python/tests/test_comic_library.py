@@ -11,7 +11,7 @@ from features.comics.comicinfo import ComicInfoXML
 from features.comics.library import ComicDocument
 
 
-class MetadataTests(unittest.TestCase):
+class ComicFixture:
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -25,6 +25,9 @@ class MetadataTests(unittest.TestCase):
             if xml is not None:
                 archive.writestr('ComicInfo.xml', xml)
 
+
+
+class MetadataTests(ComicFixture, unittest.TestCase):
     def test_metadata_round_trip_preserves_unknowns_comments_pages_and_unicode(self):
         xml = ('<ComicInfo xmlns="urn:comic"><!--keep--><?keep yes?>'
                '<Custom flag="yes">extra</Custom><Notes>a&#13;b\u2028c</Notes>'
@@ -101,22 +104,28 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), before)
 
 
-class WindowTests(MetadataTests):
+class WindowTests(ComicFixture, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        from commonUtils.ui import pyside as qt
+        self.app = qt.QApplication.instance() or qt.QApplication([])
+
+    def wait_for(self, target):
+        import time
+        deadline = time.monotonic() + 5
+        while target.busy and time.monotonic() < deadline:
+            self.app.processEvents()
+            time.sleep(.01)
+        self.assertFalse(target.busy, 'Background operation did not finish')
+
     def test_window_load_edit_save(self):
         from commonUtils.ui import pyside as qt
         from features.comics.ui.library import ComicLibraryWindow
-        import time
-        app = qt.QApplication.instance() or qt.QApplication([])
+        app = self.app
         self.archive()
         window = ComicLibraryWindow(self.path.parent)
-        def wait(target):
-            deadline = time.monotonic() + 5
-            while target.busy and time.monotonic() < deadline:
-                app.processEvents()
-                time.sleep(.01)
-            self.assertFalse(target.busy)
         window._load(self.path)
-        wait(window)
+        self.wait_for(window)
         self.assertTrue(window.preview.isReadOnly())
         self.assertIn('Writer: Old', window.preview.toPlainText())
         index = window.model.index(str(self.path))
@@ -124,7 +133,7 @@ class WindowTests(MetadataTests):
         self.assertEqual(menu.actions()[0].text(), 'Edit Metadata')
         menu.actions()[0].trigger()
         editor = window.metadata_windows[0]
-        wait(editor)
+        self.wait_for(editor)
         self.assertEqual(editor.tabs.count(), 2)
         self.assertEqual(editor.tabs.tabText(0), 'Details')
         self.assertEqual(editor.tabs.tabText(1), 'Plot && Notes')
@@ -132,8 +141,8 @@ class WindowTests(MetadataTests):
         editor.editors['Writer'].setText('New & writer')
         self.assertTrue(editor.apply_button.isEnabled())
         editor._save()
-        wait(editor)
-        wait(window)
+        self.wait_for(editor)
+        self.wait_for(window)
         self.assertEqual(ComicDocument(self.path).info.writer, 'New & writer')
         self.assertFalse(editor.apply_button.isEnabled())
         editor.reject()
@@ -143,20 +152,13 @@ class WindowTests(MetadataTests):
     def test_cancel_apply_navigation_and_ok(self):
         from commonUtils.ui import pyside as qt
         from features.comics.ui.metadata_editor import MetadataEditor
-        import time
-        app = qt.QApplication.instance() or qt.QApplication([])
+        app = self.app
         self.archive()
         second = self.path.with_name('second.cbz')
         second.write_bytes(self.path.read_bytes())
         editor = MetadataEditor(self.path, [self.path, second])
         editor.show()
-        def wait():
-            deadline = time.monotonic() + 5
-            while editor.busy and time.monotonic() < deadline:
-                app.processEvents()
-                time.sleep(.01)
-            self.assertFalse(editor.busy)
-        wait()
+        self.wait_for(editor)
         before = self.path.read_bytes()
         editor.editors['Writer'].setText('Unsaved')
         with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Cancel):
@@ -164,49 +166,43 @@ class WindowTests(MetadataTests):
         self.assertEqual(editor.path, self.path)
         with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Discard):
             editor._navigate(1)
-        wait()
+        self.wait_for(editor)
         self.assertEqual(editor.path, second)
         self.assertEqual(self.path.read_bytes(), before)
         editor.editors['Writer'].setText('Saved')
         with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Save):
             editor._navigate(-1)
-        wait()
+        self.wait_for(editor)
         self.assertEqual(editor.path, self.path)
         self.assertEqual(ComicDocument(second).info.writer, 'Saved')
         editor.editors['Writer'].setText('OK saved')
         editor._ok()
-        wait()
+        self.wait_for(editor)
         self.assertEqual(ComicDocument(self.path).info.writer, 'OK saved')
         self.assertFalse(editor.isVisible())
         app.processEvents()
 
     def test_combo_mapping_unknown_values_and_hidden_fields(self):
+        from features.comics.ui.metadata_widgets import editor_value
         from commonUtils.ui import pyside as qt
         from features.comics.ui.metadata_editor import MetadataEditor
-        import time
-        app = qt.QApplication.instance() or qt.QApplication([])
+        app = self.app
         xml = ('<ComicInfo><LanguageISO>zh-Hant</LanguageISO><Manga>legacy</Manga>'
                '<Summary>a&#13;b\u2028c</Summary><GTIN>123456</GTIN>'
                '<Translator>Hidden translator</Translator><Future><Nested x="1"/></Future>'
                '<SeriesComplete>Yes</SeriesComplete><EnableProposed>true</EnableProposed></ComicInfo>').encode()
         self.archive(xml)
         editor = MetadataEditor(self.path)
-        def wait():
-            deadline = time.monotonic() + 5
-            while editor.busy and time.monotonic() < deadline:
-                app.processEvents()
-                time.sleep(.01)
-            self.assertFalse(editor.busy)
-        wait()
+        self.wait_for(editor)
         self.assertFalse(editor._changes())
-        self.assertEqual(editor._value(editor.editors['LanguageISO']), 'zh-Hant')
+        self.assertEqual(editor_value(editor.editors['LanguageISO']), 'zh-Hant')
         language = editor.editors['LanguageISO']
         language.setCurrentIndex(language.findData('fr'))
         manga = editor.editors['Manga']
         manga.setCurrentIndex(manga.findData('YesAndRightToLeft'))
         editor.editors['Writer'].setText('Author')
         editor._save()
-        wait()
+        self.wait_for(editor)
         doc = ComicDocument(self.path)
         self.assertEqual(doc.info.language_iso, 'fr')
         self.assertEqual(doc.info.manga, 'YesAndRightToLeft')
@@ -219,28 +215,20 @@ class WindowTests(MetadataTests):
         editor.reject()
         app.processEvents()
 
-
     def test_failed_ok_save_keeps_dialog_and_edits(self):
         from commonUtils.ui import pyside as qt
         from features.comics.ui.metadata_editor import MetadataEditor
-        import time
-        app = qt.QApplication.instance() or qt.QApplication([])
+        app = self.app
         self.archive()
         before = self.path.read_bytes()
         editor = MetadataEditor(self.path)
         editor.show()
-        def wait():
-            deadline = time.monotonic() + 5
-            while editor.busy and time.monotonic() < deadline:
-                app.processEvents()
-                time.sleep(.01)
-            self.assertFalse(editor.busy)
-        wait()
+        self.wait_for(editor)
         editor.editors['Writer'].setText('Keep unsaved')
         with patch('features.comics.library.os.replace', side_effect=OSError('simulated failure')), \
                 patch.object(qt.QMessageBox, 'warning') as warning:
             editor._ok()
-            wait()
+            self.wait_for(editor)
             warning.assert_called_once()
         self.assertEqual(self.path.read_bytes(), before)
         self.assertTrue(editor.isVisible())
@@ -249,6 +237,56 @@ class WindowTests(MetadataTests):
         self.assertIsNone(editor.pending_action)
         with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Discard):
             editor.reject()
+        app.processEvents()
+
+    def test_numeric_controls_reject_text_and_preserve_missing_and_legacy_values(self):
+        from features.comics.ui.metadata_widgets import editor_value
+        from commonUtils.ui import pyside as qt
+        from PySide6.QtTest import QTest
+        from features.comics.ui.metadata_editor import MetadataEditor
+        from features.comics.ui.metadata_widgets import OptionalIntegerSpinBox, IssueNumberSpinBox
+        app = self.app
+        self.archive(b'<ComicInfo><Volume>-1</Volume><Month>legacy</Month><Number>1A</Number></ComicInfo>')
+        editor = MetadataEditor(self.path)
+        self.wait_for(editor)
+        self.assertEqual(editor.size(), qt.QSize(789, 635))
+        self.assertEqual(editor.ok_button.size(), qt.QSize(105, 28))
+        self.assertFalse(editor._changes())
+        for field in ComicInfoXML.INTEGER_FIELDS:
+            self.assertIsInstance(editor.editors[field], OptionalIntegerSpinBox)
+            state, _, _ = editor.editors[field].validate('letters', 7)
+            self.assertEqual(state, qt.QValidator.State.Invalid)
+        count = editor.editors['Count']
+        self.assertEqual(count.metadata_value(), '')
+        count.stepUp()
+        self.assertEqual(count.metadata_value(), '1')
+        self.assertTrue(editor.apply_button.isEnabled())
+        self.assertIsInstance(editor.editors['Number'], IssueNumberSpinBox)
+        self.assertEqual(editor_value(editor.editors['Number']), '1A')
+        issue = editor.editors['AlternateNumber']
+        issue.setText('0.5')
+        issue.stepUp()
+        self.assertEqual(issue.text(), '1.5')
+        count.lineEdit().selectAll()
+        QTest.keyClick(count.lineEdit(), qt.Qt.Key.Key_Backspace)
+        QTest.keyClicks(count.lineEdit(), 'abc')
+        self.assertEqual(count.metadata_value(), '')
+        QTest.keyClicks(count.lineEdit(), '23')
+        self.assertEqual(count.metadata_value(), '23')
+        editor._save()
+        self.wait_for(editor)
+        info = ComicDocument(self.path).info
+        self.assertEqual(info.count, '23')
+        self.assertEqual(info.volume, '-1')
+        self.assertEqual(info.month, 'legacy')
+        self.assertEqual(info.number, '1A')
+        self.assertEqual(info.alternate_number, '1.5')
+        count.lineEdit().selectAll()
+        QTest.keyClick(count.lineEdit(), qt.Qt.Key.Key_Backspace)
+        editor._save()
+        self.wait_for(editor)
+        self.assertEqual(ComicDocument(self.path).info.count, '')
+        editor.reject()
         app.processEvents()
 
 
@@ -300,7 +338,6 @@ class GenericXMLTests(unittest.TestCase):
                 document.set_field(field, value)
         document.month = ''
         self.assertEqual(document.month, '')
-
 
     def test_direct_dom_changes_are_serialized(self):
         from commonUtils.fileTypes.xmlType import XMLFile
