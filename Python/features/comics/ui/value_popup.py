@@ -72,9 +72,6 @@ class ValuePopup(qt.QFrame):
         entry.addWidget(self.new_value, 1)
         entry.addWidget(add)
         layout.addLayout(entry)
-        footer = qt.QLabel('Changes stay pending until Apply or OK. Click outside to close.')
-        footer.setWordWrap(True)
-        layout.addWidget(footer)
         self._sync()
 
     def show_at(self, anchor):

@@ -127,11 +127,11 @@ class WindowTests(ComicFixture, unittest.TestCase):
         window._load(self.path)
         self.wait_for(window)
         self.assertTrue(window.preview.isReadOnly())
-        self.assertIn('Writer: Old', window.preview.toPlainText())
+        self.assertIn('Author: Old', window.preview.toPlainText())
         index = window.model.index(str(self.path))
         menu = window._context_menu_for(index)
-        self.assertEqual(menu.actions()[0].text(), 'Edit Metadata')
-        menu.actions()[0].trigger()
+        self.assertEqual(menu.actions()[0].text(), 'Open in Default App')
+        next(action for action in menu.actions() if action.text() == 'Edit Metadata').trigger()
         editor = window.metadata_windows[0]
         self.wait_for(editor)
         self.assertEqual(editor.tabs.count(), 2)
@@ -462,7 +462,7 @@ class WindowTests(ComicFixture, unittest.TestCase):
         self.assertIn('2 items', window.heading.text())
         with patch.object(window, '_open_editor') as opened:
             menu = window._context_menu_for(indexes[1])
-            menu.actions()[0].trigger()
+            next(action for action in menu.actions() if action.text() == 'Edit Metadata').trigger()
         self.assertEqual(set(opened.call_args.args[0]), {folder, self.path})
         menu.deleteLater()
         window.tree.clearSelection()

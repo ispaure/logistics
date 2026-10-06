@@ -22,7 +22,11 @@ Provides comic-related integration for Logistics.
 - `conversion.py` contains CBR to CBZ conversion behavior.
 - `metadata.py` contains the legacy author/series batch replacements.
 - `library.py` owns single-CBZ document loading, edit validation and transactional saving.
-- `ui/library.py` owns the folder browser and read-only preview.
+- `ui/library.py` coordinates the browser and compact selected-comic preview.
+- `ui/file_browser.py` provides list, tile and column modes with bounded asynchronous cover icons.
+- `pages.py` reads archive pages lazily and renders cover thumbnails without extraction.
+- `reader.py` and `reader.html` provide the local browser reader.
+- `desktop_actions.py` opens the default application and reveals items through the OS file manager.
 - `ui/metadata_editor.py` coordinates loading, saving and protected navigation.
 - `selection.py` resolves folder/file selections and coordinates batch validation and saving.
 - `edit_state.py` owns shared/mixed values and explicit pending patches without Qt dependencies.
@@ -36,7 +40,7 @@ Provides comic-related integration for Logistics.
 
 ## Initialization
 
-Comics has a hard feature dependency on `images`. Reader actions launch external ComicRack or YACReader integrations; Logistics does not currently provide an embedded comic-reading interface.
+Comics has a hard feature dependency on `images`. Reader actions support external applications, and a basic browser reader is available for CBZs.
 
 This feature does not require startup initialization.
 
@@ -46,8 +50,19 @@ It is discovered and loaded by the Logistics feature registry, but performs no w
 
 Use **Open Comics Library...** in a detected Comics folder. ComicRack-configured
 folders are available on macOS and Linux as well as Windows. The browser starts
-collapsed, shows directories and files, and displays selected CBZ metadata in a
-read-only pane. Right-click a CBZ and choose **Edit Metadata**.
+collapsed and offers **List**, **Tiles**, and **Columns** views. List mode keeps
+Name, Date Modified and Size columns; tiles show asynchronously loaded first-page
+covers, and column mode follows folder hierarchies horizontally. Tile covers are
+loaded for visible items and kept in a bounded 128-entry memory cache; they are
+not added to the metadata JSON. Double-click folders in tile mode to enter them;
+Up returns toward the selected library root.
+
+Selecting a single CBZ shows its first-page thumbnail and key fields (Series,
+Author, Volume, Issue, count, title, publisher and year) in the adjacent panel.
+Folder-only, empty and multiple selections hide that panel. Right-click items for
+**Open in Default App**, an OS-specific **Reveal** action, and **Edit Metadata**
+(for CBZ files/folders). Linux reveal uses the standard file-manager service when
+available, with a containing-folder fallback.
 
 At the collection root, configure the libraries shown in the browser:
 
@@ -63,6 +78,19 @@ whole-root browsing for existing collections. This section alone enables the
 Comics library folder action. Switching libraries clears the preview and collapses
 the tree; existing metadata dialogs remain associated with their original files.
 The suggestion cache stays at the original collection root.
+
+Double-click a CBZ to open a basic reader in a new default-browser window (the
+browser may choose a tab according to its preferences). A local server bound to
+127.0.0.1 serves that archive's naturally sorted image pages through an opaque
+session URL. Pages are read on demand, never extracted or modified. PNG, JPEG,
+WebP, GIF and BMP are served directly; TIFF pages are converted for browser display.
+The reader shows page/count/percentage and a seek slider. Left/Right arrows follow
+`Manga=YesAndRightToLeft`; absent/other values default to left-to-right. Up/Down and
+Previous/Next navigate sequentially, and Home/End jump to the first/last page.
+Changed archives require reopening the reader. Reader sessions remain available
+while Logistics runs, even after closing the library window; repeated openings of
+an unchanged comic reuse its server. Reader progress is displayed for the current
+session and is not persisted.
 
 The independent dialog provides **Details** and **Plot & Notes** layouts. The reference images measure 789 x 673/677 pixels including their title
 bars. The default client area is 789 x 635 logical pixels, with 22-pixel inputs,
