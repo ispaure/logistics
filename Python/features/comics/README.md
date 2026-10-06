@@ -60,9 +60,11 @@ Name, Date Modified and Size columns; tiles show asynchronously loaded first-pag
 covers, and column mode follows folder hierarchies horizontally. Tile covers are
 loaded for visible items and kept in a bounded 128-entry memory cache; they are
 not added to the metadata JSON. Double-click folders in any mode to enter them.
-Back, Forward, Up and the folder-path dropdown reach previous and parent folders
-within the selected library. Changing view modes preserves the current nested
-location and selection; the path dropdown always retains access to its ancestors.
+Back, Forward and Up navigate previous and parent folders within the selected
+library. A clickable breadcrumb path starts with the selected library root and
+continues through descendant folders; selected files never appear in it. The root
+stays visible on the left, and each folder can be clicked to navigate there.
+Changing view modes preserves the current nested location and selection.
 
 The reusable `commonUtils.ui.file_browser.FileBrowser` owns navigation, selection,
 listing, filesystem actions and information panels. Logistics owns the library
@@ -71,6 +73,8 @@ tab using the File object’s generic metadata. Registered CBZFile objects add a
 default-enabled **Comic Metadata** tab, thumbnails, editing actions and reader
 activation. The shared browser contains no comic-specific type checks. Its **Panels**
 menu can show/hide additional information tabs while retaining generic information.
+Panel fields use compact aligned labels and selectable wrapped values. Folder
+previews use the same system icon as the listing and a smaller preview area.
 
 Selecting a single CBZ shows its first-page thumbnail and key fields (Series,
 Author, Volume, Issue, count, title, publisher, year and description) in the adjacent
@@ -79,9 +83,10 @@ folder shows its path, modification time, recursive file size, and comic/file/fo
 counts. Folder totals also appear in the Size column and are calculated in a
 cancellable background scan without opening archives. Symbolic links and unreadable
 items are excluded and reported; these totals stay in memory, outside the suggestion
-JSON. Refresh updates totals, suggestions and selected-comic previews. Right-click items for
-**Open in Default App**, an OS-specific **Reveal** action, and **Edit Metadata**
-(for CBZ files/folders). Linux reveal uses the standard file-manager service when
+JSON. Refresh updates totals, suggestions and selected-comic previews. File menus
+include **Open in Default App** and an OS-specific **Reveal** action; folder menus
+start with Reveal and omit Open in Default App. **Edit Metadata** is contributed
+for CBZ files and folders. Linux reveal uses the standard file-manager service when
 available, with a containing-folder fallback.
 
 At the collection root, configure the libraries shown in the browser:

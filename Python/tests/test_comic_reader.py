@@ -330,7 +330,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.assertEqual(window.browser.root, nested)
         window.navigation.forward.click()
         self.assertEqual(window.browser.root, folder)
-        window.navigation.requested.emit(window.navigation.location.itemData(0))
+        window.navigation.breadcrumbs.buttons[0].click()
         self.assertEqual(window.browser.root, self.root)
         self.assertFalse(window.up_button.isEnabled())
         folder_index = window.model.index(str(folder))
