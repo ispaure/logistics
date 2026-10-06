@@ -81,7 +81,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(result['parsed'], 0)
         self.assertEqual(result['suggestions'], {'Writer': ['Alice', 'Bob'], 'Publisher': ['Publisher']})
         data = json.loads(self.catalog.path.read_text())
-        self.assertEqual(data['version'], 2)
+        self.assertEqual(data['version'], self.catalog.VERSION)
         self.assertNotIn('Unused', self.catalog.path.read_text())
 
     def test_empty_metadata_keeps_only_change_tracking_and_is_reused(self):
@@ -107,6 +107,28 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(result['parsed'], 1)
         loaded.assert_called_once_with(self.path)
         self.assertEqual(result['suggestions']['Writer'], ['Alice', 'Bob', 'Carol'])
+
+    def test_whitespace_normalizes_new_and_cached_suggestions_without_changing_xml(self):
+        self.comic(writer='Alice  Writer, Bob', publisher='Publisher&#10;')
+        before = self.path.read_bytes()
+        result = self.catalog.refresh()
+        self.assertEqual(result['suggestions']['Publisher'], ['Publisher'])
+        self.assertEqual(result['suggestions']['Writer'], ['Alice Writer', 'Bob'])
+        data = json.loads(self.catalog.path.read_text())
+        data['version'] = 2
+        data['suggestions']['Publisher'] = ['  Publisher\r\n', 'Publisher']
+        data['files']['comic.cbz'][2]['Publisher'] = [0, 1]
+        self.catalog.path.write_text(json.dumps(data))
+        with patch('features.comics.catalog.ComicDocument', side_effect=AssertionError('Unchanged archive reopened')):
+            migrated = self.catalog.refresh()
+        self.assertEqual(migrated['suggestions']['Publisher'], ['Publisher'])
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(json.loads(self.catalog.path.read_text())['version'], self.catalog.VERSION)
+
+    def test_tags_are_indexed_from_standard_xml_field(self):
+        self.comic()
+        ComicDocument(self.path).save({'Tags': 'One tag, Second tag'})
+        self.assertEqual(self.catalog.refresh()['suggestions']['Tags'], ['One tag', 'Second tag'])
 
     def test_index_reads_only_metadata_and_preserves_archive_bytes(self):
         self.comic()
@@ -202,6 +224,17 @@ class PopupTests(unittest.TestCase):
         self.assertEqual(form.editors['Publisher'].findData('Old'), -1)
         self.assertGreaterEqual(form.editors['Publisher'].findData('New'), 0)
         self.assertEqual(form.changes(), {'Publisher': 'Pending'})
+
+    def test_publisher_display_is_normalized_while_original_xml_value_is_retained(self):
+        from features.comics.ui.metadata_widgets import editor_value
+        form = self.form()
+        values = {field: '' for field in form.editors}
+        values['Publisher'] = '  Publisher\n'
+        form.load_values([values])
+        form.set_suggestions({'Publisher': ['Publisher']})
+        self.assertEqual(form.editors['Publisher'].currentText(), 'Publisher')
+        self.assertEqual(editor_value(form.editors['Publisher']), values['Publisher'])
+        self.assertFalse(form.changes())
 
     def test_mixed_popup_open_is_noop_new_values_and_clear_are_explicit(self):
         form = self.form()

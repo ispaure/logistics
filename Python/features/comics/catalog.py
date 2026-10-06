@@ -16,10 +16,15 @@ CATALOG_FIELDS = LIST_FIELDS | VALUE_FIELDS
 DATA_DIRECTORY = 'LogisticsComicsData'
 
 
+def normalize_value(text):
+    """Suggestions are single-line text with consistent Unicode whitespace."""
+    return ' '.join(text.split())
+
+
 def split_values(text):
     """Comma-separated XML values; text-entry mode also accepts one per line."""
-    return list(dict.fromkeys(value.strip() for value in text.replace('\r', '\n').replace('\n', ',').split(',')
-                             if value.strip()))
+    return list(dict.fromkeys(normalize_value(value) for value in text.replace('\r', '\n').replace('\n', ',').split(',')
+                             if normalize_value(value)))
 
 
 def file_signature(path):
@@ -28,7 +33,7 @@ def file_signature(path):
 
 
 class LibraryCatalog:
-    VERSION = 2
+    VERSION = 3
 
     def __init__(self, root):
         self.root = Path(root).absolute()
@@ -39,6 +44,8 @@ class LibraryCatalog:
         result = {}
         for field in CATALOG_FIELDS:
             value = fields.get(field, '')
+            if field in VALUE_FIELDS:
+                value = normalize_value(value)
             items = split_values(value) if field in LIST_FIELDS else ([value] if value else [])
             if items:
                 result[field] = items
@@ -48,7 +55,7 @@ class LibraryCatalog:
         try:
             data = json.loads(self.path.read_text(encoding='utf-8'))
             version = data.get('version')
-            if version not in (1, self.VERSION) or not isinstance(data.get('files'), dict):
+            if version not in (1, 2, self.VERSION) or not isinstance(data.get('files'), dict):
                 return {}, True
             previous = {}
             for name, entry in data['files'].items():
@@ -76,6 +83,8 @@ class LibraryCatalog:
                             items = [pool[index] for index in indices]
                             if any(not isinstance(value, str) or not value for value in items):
                                 raise ValueError('Invalid suggestion value')
+                            items = list(dict.fromkeys(normalize_value(value) for value in items
+                                                        if normalize_value(value)))
                             if items:
                                 fields[field] = items
                         previous[name] = {'signature': [modified, size], 'fields': fields}

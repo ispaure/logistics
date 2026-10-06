@@ -3,6 +3,7 @@
 from decimal import Decimal, InvalidOperation
 from commonUtils.ui import pyside as qt
 from features.comics.comicinfo import ComicInfoXML
+from features.comics.catalog import VALUE_FIELDS, normalize_value
 
 
 class OptionalIntegerSpinBox(qt.QSpinBox):
@@ -79,6 +80,7 @@ def create_editor(field, changed, choices=None, multiline=False):
     if choices is not None:
         editor = qt.QComboBox()
         editor.setEditable(True)
+        editor.setProperty('singleLineSuggestions', field in VALUE_FIELDS)
         editor.addItem('', '')
         for text, value in choices:
             editor.addItem(text, value)
@@ -133,7 +135,8 @@ def load_editor(editor, value):
         elif isinstance(editor, qt.QComboBox):
             index = editor.findData(value)
             if index < 0:
-                editor.addItem(value, value)
+                label = normalize_value(value) if editor.property('singleLineSuggestions') else value
+                editor.addItem(label, value)
                 index = editor.count() - 1
             editor.setCurrentIndex(index)
         else:

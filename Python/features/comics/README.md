@@ -84,7 +84,10 @@ selected values; choosing values explicitly replaces the field for all selected
 comics. Per-field revert still restores individual original values.
 
 Library suggestions are indexed in the background at browser opening and after
-metadata saves. The root contains `LogisticsComicsData/metadata.json`, with unique nonempty suggestions stored once per field. Relative file paths map
+metadata saves. The root contains `LogisticsComicsData/metadata.json`, with unique nonempty suggestions stored once per field. Suggestion whitespace is
+trimmed and collapsed to single spaces, including line breaks in dropdown values.
+Existing cached suggestions are normalized automatically without changing XML;
+untouched source values retain their exact contents. Relative file paths map
 to compact `[modification_time_ns, size, suggestion_references]` records, allowing
 changed/deleted files to remove obsolete suggestions without reparsing unchanged
 archives. Only list fields and Publisher, Imprint and Format are indexed; Series,
