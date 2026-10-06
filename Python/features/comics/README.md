@@ -84,13 +84,15 @@ selected values; choosing values explicitly replaces the field for all selected
 comics. Per-field revert still restores individual original values.
 
 Library suggestions are indexed in the background at browser opening and after
-metadata saves. The root contains `LogisticsComicsData/metadata.json`, with relative
-archive paths, file signatures (size, nanosecond modification/change times and
-file identity), a SHA-256 hash of metadata, and the relevant fields. Unchanged
-archives reuse cached values without opening their XML. New or changed archives
-are read again; removed files and values disappear. Image payloads are never read
-for indexing, so there is no full-archive hashing cost. The cache is disposable:
-invalid records are rebuilt and write failures leave session suggestions usable.
+metadata saves. The root contains `LogisticsComicsData/metadata.json`, with unique nonempty suggestions stored once per field. Relative file paths map
+to compact `[modification_time_ns, size, suggestion_references]` records, allowing
+changed/deleted files to remove obsolete suggestions without reparsing unchanged
+archives. Only list fields and Publisher, Imprint and Format are indexed; Series,
+titles, plot text, empty fields and metadata hashes are excluded. Existing caches
+migrate automatically on opening without rereading unchanged archives. New or
+changed archives are read again; removed files and values disappear. Image
+payloads are never read for indexing. The cache is disposable: invalid records
+are rebuilt and write failures leave session suggestions usable.
 Errors are shown in the browser status tooltip; unreadable archives are skipped
 and retried on the next refresh. Folder scans exclude symbolic links and data
 folders. Suggestions cover list-valued fields and Publisher, Imprint and Format

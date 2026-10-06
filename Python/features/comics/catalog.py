@@ -1,7 +1,6 @@
 """Incremental, disposable library metadata suggestions; never changes archives."""
 
 from collections import defaultdict
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,8 +11,7 @@ from .library import ComicDocument
 LIST_FIELDS = frozenset(('Writer', 'Penciller', 'Inker', 'Colorist', 'Letterer',
                          'CoverArtist', 'Editor', 'Translator', 'Genre', 'Tags',
                          'Characters', 'Teams', 'Locations', 'StoryArc', 'SeriesGroup'))
-VALUE_FIELDS = frozenset(('Publisher', 'Imprint', 'Format', 'Series', 'AlternateSeries',
-                          'MainCharacterOrTeam'))
+VALUE_FIELDS = frozenset(('Publisher', 'Imprint', 'Format'))
 CATALOG_FIELDS = LIST_FIELDS | VALUE_FIELDS
 DATA_DIRECTORY = 'LogisticsComicsData'
 
@@ -26,31 +24,86 @@ def split_values(text):
 
 def file_signature(path):
     stat = path.stat()
-    return [stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_dev, stat.st_ino]
+    return [stat.st_mtime_ns, stat.st_size]
 
 
 class LibraryCatalog:
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self, root):
         self.root = Path(root).absolute()
         self.path = self.root / DATA_DIRECTORY / 'metadata.json'
 
+    @staticmethod
+    def _field_values(fields):
+        result = {}
+        for field in CATALOG_FIELDS:
+            value = fields.get(field, '')
+            items = split_values(value) if field in LIST_FIELDS else ([value] if value else [])
+            if items:
+                result[field] = items
+        return result
+
     def _read(self):
         try:
             data = json.loads(self.path.read_text(encoding='utf-8'))
-            if data.get('version') != self.VERSION or not isinstance(data.get('files'), dict):
-                return {}
-            # Cache corruption is recoverable. Ignore invalid records individually.
-            return {name: entry for name, entry in data['files'].items()
-                    if isinstance(entry, dict) and isinstance(entry.get('signature'), list)
-                    and isinstance(entry.get('fields'), dict)
-                    and all(isinstance(value, str) for value in entry['fields'].values())}
+            version = data.get('version')
+            if version not in (1, self.VERSION) or not isinstance(data.get('files'), dict):
+                return {}, True
+            previous = {}
+            for name, entry in data['files'].items():
+                try:
+                    if version == 1:
+                        signature = entry['signature']
+                        fields = entry['fields']
+                        if not all(isinstance(value, str) for value in fields.values()):
+                            continue
+                        previous[name] = {'signature': [signature[1], signature[0]],
+                                          'fields': self._field_values(fields)}
+                    else:
+                        modified, size, references = entry
+                        if type(modified) is not int or type(size) is not int or not isinstance(references, dict):
+                            continue
+                        fields = {}
+                        for field, indices in references.items():
+                            if field not in CATALOG_FIELDS:
+                                continue
+                            pool = data['suggestions'][field]
+                            if not isinstance(indices, list) or not isinstance(pool, list):
+                                raise ValueError('Invalid suggestion references')
+                            if any(type(index) is not int or index < 0 or index >= len(pool) for index in indices):
+                                raise ValueError('Invalid suggestion index')
+                            items = [pool[index] for index in indices]
+                            if any(not isinstance(value, str) or not value for value in items):
+                                raise ValueError('Invalid suggestion value')
+                            if items:
+                                fields[field] = items
+                        previous[name] = {'signature': [modified, size], 'fields': fields}
+                except (KeyError, IndexError, TypeError, ValueError, AttributeError):
+                    continue  # Invalid records are rebuilt independently.
+            return previous, version != self.VERSION or len(previous) != len(data['files'])
         except (OSError, ValueError, AttributeError):
-            return {}
+            return {}, True
+
+    def _encode(self, files):
+        values = defaultdict(set)
+        for entry in files.values():
+            for field, items in entry['fields'].items():
+                values[field].update(items)
+        suggestions = {field: sorted(items, key=lambda text: (text.casefold(), text))
+                       for field, items in values.items()}
+        indices = {field: {value: index for index, value in enumerate(items)}
+                   for field, items in suggestions.items()}
+        # Each suggestion is stored once. Files only retain modification time,
+        # size and references needed to remove obsolete values on later refreshes.
+        encoded = {name: [*entry['signature'],
+                          {field: [indices[field][value] for value in items]
+                           for field, items in entry['fields'].items()}]
+                   for name, entry in files.items()}
+        return {'version': self.VERSION, 'suggestions': suggestions, 'files': encoded}
 
     def refresh(self, cancelled=lambda: False):
-        previous = self._read()
+        previous, needs_write = self._read()
         current = {}
         errors = []
         parsed = 0
@@ -84,23 +137,16 @@ class LibraryCatalog:
                             continue  # Complex extension values remain in their original XML.
                     if signature != file_signature(path):
                         raise RuntimeError('Archive changed during indexing')
-                    current[key] = {'signature': signature, 'metadata_sha256': hashlib.sha256(
-                        document.info.to_bytes()).hexdigest(), 'fields': fields}
+                    current[key] = {'signature': signature, 'fields': self._field_values(fields)}
                     parsed += 1
                 except Exception as error:
                     errors.append(f'{path}: {error}')
         if cancelled():
             return None
-        values = defaultdict(set)
-        for entry in current.values():
-            for field, value in entry['fields'].items():
-                if field in CATALOG_FIELDS:
-                    values[field].update(split_values(value) if field in LIST_FIELDS else ([value] if value else []))
-        suggestions = {field: sorted(items, key=lambda text: (text.casefold(), text))
-                       for field, items in values.items()}
-        payload = {'version': self.VERSION, 'files': current}
+        payload = self._encode(current)
+        suggestions = payload['suggestions']
         try:
-            if current != previous or not self.path.exists():
+            if current != previous or needs_write:
                 if self.path.parent.is_symlink():
                     raise OSError('Cache directory is a symbolic link')
                 self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -109,7 +155,7 @@ class LibraryCatalog:
                     with NamedTemporaryFile(mode='w', encoding='utf-8', dir=self.path.parent,
                                             prefix='.metadata-', suffix='.tmp', delete=False) as stream:
                         staged = Path(stream.name)
-                        json.dump(payload, stream, ensure_ascii=False, sort_keys=True)
+                        json.dump(payload, stream, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
                         stream.flush()
                         os.fsync(stream.fileno())
                     os.replace(staged, self.path)
