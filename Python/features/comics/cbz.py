@@ -28,6 +28,7 @@ from commonUtils.fileTypes import zipType
 from .comicinfo import ComicInfoXML
 from .compression_stats import CompressionStats, CompressionLog
 from .sanitization import CBZSanitizationMixin
+from .browser_support import ComicBrowserMixin
 from .archive_io import replace_archive, validate_archive_members
 
 
@@ -88,7 +89,7 @@ class CBZImageFile(imageUtils.ImageFile):
             return f'    <Page Image="{page_num}" ImageSize="{self.size}" ImageWidth="{self.width}" ImageHeight="{self.height}" />'
 
 
-class CBZFile(CBZSanitizationMixin, zipType.ZIPFile):
+class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
     def __init__(self, path: Path):
         super().__init__(path)
 

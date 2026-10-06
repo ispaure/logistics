@@ -86,3 +86,15 @@ Directory instances. Other projects should register their types during startup,
 before their first shared listing/browser use; commonUtils recommends this order
 but does not enforce it. Late registration still affects future resolutions.
 Domain types remain in their owning project; commonUtils owns the mechanism.
+
+
+## Reusable filesystem browsing
+
+`commonUtils.ui.file_browser.FileBrowser` owns file/folder views, navigation,
+selection, generic details and filesystem actions. Its model resolves shared
+File/Directory objects through the process-wide registry. Specialized File classes
+contribute BrowserPanel/BrowserAction descriptors, thumbnail hooks and activation;
+shared UI never imports project types. Applications embed the widget, retain their
+surrounding controls, and supply action services or directory action providers.
+Panel/thumbnail loaders run in workers; actions and activation run on the GUI
+thread. Project constructors/detectors should not parse metadata during listing.
