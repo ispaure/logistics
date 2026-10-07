@@ -46,3 +46,6 @@ Desktop.ini
 # IDE
 
 .idea/
+
+# Local cross-platform validation reports and disposable comic fixtures
+/test-results/
