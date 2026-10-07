@@ -30,11 +30,11 @@ class PlexManagePMSDialog(pyside.QDialog):
         self.entry = entry
         self.folder = entry.local
         self.config_path = Path(entry.remote_context)
-        self.local_pmsdata = actions.get_local_cls_pmsdata(folder)
-        self.remote_pmsdata = actions.get_remote_cls_pmsdata(folder)
+        self.local_pmsdata = actions.get_local_cls_pmsdata(self.folder)
+        self.remote_pmsdata = actions.get_remote_cls_pmsdata(self.folder)
         self.pms_data_path = detection.get_pms_data_path()
 
-        self.setWindowTitle(f'Manage PMS - {folder.name}')
+        self.setWindowTitle(f'Manage PMS - {self.folder.name}')
         self.resize(760, 620)
         self.setMinimumSize(680, 560)
 
@@ -170,6 +170,7 @@ class PlexManagePMSDialog(pyside.QDialog):
 
     def _selectable_label(self, text: str):
         label = pyside.QLabel(text)
+        label.setTextFormat(pyside.Qt.TextFormat.PlainText)
         label.setWordWrap(True)
         label.setTextInteractionFlags(pyside.Qt.TextInteractionFlag.TextSelectableByMouse)
         return label
@@ -180,6 +181,8 @@ class PlexManagePMSDialog(pyside.QDialog):
                 return 'AppData'
             case OS.MAC:
                 return 'Application Support'
+            case OS.LINUX:
+                return 'Linux'
             case _:
                 return 'Platform'
 
@@ -205,7 +208,8 @@ class PlexManagePMSDialog(pyside.QDialog):
     def _unpackage_pms(self):
         confirmed = ui.display_msg_box_ok_cancel(
             'Restore Plex Media Server Data',
-            f'Replace the current Plex Media Server data with the contents of:\n\n'
+            'Stop Plex Media Server before restoring. Previous data will be retained for recovery.\n\n'
+            f'Restore the package from:\n\n'
             f'{self.local_pmsdata.path}'
         )
 
@@ -215,7 +219,8 @@ class PlexManagePMSDialog(pyside.QDialog):
     def _package_pms(self):
         confirmed = ui.display_msg_box_ok_cancel(
             'Package Plex Media Server Data',
-            f'Rebuild the local Plex package from the current Plex Media Server data?\n\n'
+            'Stop Plex Media Server before packaging to get consistent database files.\n\n'
+            f'Rebuild the local package?\n\n'
             f'Package: {self.local_pmsdata.path}'
         )
 
