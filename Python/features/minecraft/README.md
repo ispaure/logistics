@@ -23,7 +23,7 @@ Provides Minecraft server integration for Logistics.
 
 Servers are discovered one to three directory levels below the selected local folder. Any directory containing `server.properties` is included; discovery does not use fixed Dropbox roots or exclude directories by a `Backups` suffix.
 
-A server containing `bedrock_server.exe` is classified as Bedrock and can be launched on Windows. Other detected servers are classified as Java.
+A server containing `bedrock_server.exe` (Windows) or `bedrock_server` (Linux) is classified as Bedrock. Launching requires the matching platform executable; the Linux binary must have execute permission. Other detected servers are classified as Java.
 
 ## Launch configuration
 
