@@ -12,7 +12,6 @@ from commonUtils.fileUtils import File
 from commonUtils.fileTypes.registry import file_from_path
 from features.comics import register_file_types
 from features.comics.cbz import CBZFile
-from features.comics.browser_support import directory_actions
 
 
 class ComicFileTypeTests(unittest.TestCase):
@@ -27,7 +26,7 @@ class ComicFileTypeTests(unittest.TestCase):
                 self.assertIsInstance(file_from_path(root / 'example.CBZ'), CBZFile)
                 self.assertIs(type(File(root / 'example.CBZ')), File)
 
-    def test_cbz_contributes_metadata_and_selection_actions(self):
+    def test_cbz_contributes_metadata_and_declares_ui_elsewhere(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             path = root / 'comic.cbz'
@@ -41,17 +40,14 @@ class ComicFileTypeTests(unittest.TestCase):
             self.assertIn(('Series', 'Example'), details.fields)
             self.assertIn(('Author', 'Author'), details.fields)
             self.assertIsNotNone(details.payload)
-            calls = []
-            directory = Directory(root)
-            context = SimpleNamespace(selection=(comic, directory, File(root / 'other.txt')),
-                                      invoke=lambda *args: calls.append(args))
-            comic.browser_actions(context)[0].run(context)
-            self.assertEqual(calls[-1], ('comics.edit_metadata', [path, root]))
-            self.assertTrue(comic.browser_activate(context))
-            self.assertEqual(calls[-1], ('comics.read', path))
-            directory_actions(directory, context)[0].run(context)
-            self.assertEqual(calls[-1], ('comics.edit_metadata', [path, root]))
-            self.assertFalse(directory_actions(File(root / 'other.txt'), context))
+            # Browser actions/activation now live in the unified declaration;
+            # a plain commonUtils browser can use CBZ panels without UI handlers.
+            self.assertFalse(comic.browser_actions(None))
+            self.assertFalse(comic.browser_activate(None))
+            from features.registry import get_feature_definition
+            definition = get_feature_definition('comics')
+            self.assertEqual([action.id for action in definition.browser.actions], ['edit_metadata', 'compress'])
+            self.assertEqual(len(definition.browser.activation), 1)
 
     def test_feature_file_registration_precedes_all_initializers(self):
         from features import registry

@@ -114,6 +114,28 @@ class ComicsTests(unittest.TestCase):
         with zipfile.ZipFile(path) as archive:
             self.assertEqual(archive.read('01.webp'), original)
 
+    def test_compress_selection_deduplicates_and_preserves_batch_failure_policy(self):
+        good = self.archive(name='good.cbz')
+        marked = self.archive({'CompressionLog.txt': b'done'}, 'marked.cbz')
+        bad = self.root / 'bad.cbz'
+        bad.write_bytes(b'not a zip')
+        original = marked.read_bytes()
+        stats = cbz.compress_selected_cbz([good, self.root, good])
+        self.assertEqual((stats.total_file_count, stats.compressed_file_count,
+                          stats.already_compressed_file_count, stats.error_during_compression), (3, 1, 1, 1))
+        self.assertEqual(marked.read_bytes(), original)
+        self.assertEqual(bad.read_bytes(), b'not a zip')
+
+    def test_nonrecursive_selection_includes_explicit_nested_files(self):
+        from features.comics.selection import selected_comics
+        top = self.archive(name='top.cbz')
+        (self.root / 'nested').mkdir()
+        nested = self.archive(name='nested/child.cbz')
+        sibling = self.archive(name='nested/other.cbz')
+        self.assertEqual(selected_comics([self.root], recursive=False), (top,))
+        self.assertEqual(set(selected_comics([self.root, nested], recursive=False)), {top, nested})
+        self.assertEqual(set(selected_comics([self.root, nested])), {top, nested, sibling})
+
     def test_empty_batch(self):
         stats = cbz.batch_compress_cbz(self.root)
         self.assertEqual(stats.total_file_count, 0)

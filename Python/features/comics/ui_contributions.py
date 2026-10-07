@@ -6,7 +6,9 @@ from commonUtils.osUtils import OS, get_os
 
 from features.comics import actions, detection
 from features.comics.library_config import has_library_configuration
-from features.contributions import FeatureContributions, FolderFeatureContribution, UIAction, WorkflowContribution
+from commonUtils.dirUtils import Directory
+from commonUtils.features import FileType, BrowserExtension, SelectionAction, FileActivation
+from features.contributions import Feature, FolderFeatureContribution, UIAction, WorkflowContribution
 from models.folder_entry import FolderEntry
 
 
@@ -125,8 +127,35 @@ def _open_library(data=None, parent=None):
 _library_windows = []
 
 
-def get_contributions() -> FeatureContributions:
-    return FeatureContributions(
+def _create_browser_controller(host):
+    from features.comics.ui.browser_extension import ComicBrowserExtension
+    return ComicBrowserExtension(host)
+
+
+def _edit_metadata(context):
+    return context.controller._open_editor(context.paths)
+
+
+def _compress(context):
+    return context.controller._compress(context.paths)
+
+
+def _read(context):
+    return context.controller._read(context.path)
+
+
+def register() -> Feature:
+    # Deferred class references keep discovery independent of Images/UI imports.
+    comic_type = 'features.comics.cbz:CBZFile'
+    from features.comics.browser_support import folder_fields
+    return Feature(
+        id='comics', label='Comics', requires=('images',),
+        file_types=[FileType(comic_type, extensions=('cbz',))],
+        browser=BrowserExtension(
+            actions=[SelectionAction('edit_metadata', 'Edit Metadata', (comic_type, Directory), _edit_metadata),
+                     SelectionAction('compress', 'Compress Comics…', (comic_type, Directory), _compress)],
+            activation=[FileActivation(comic_type, _read)],
+            folder_fields=folder_fields, create_controller=_create_browser_controller),
         folder_features=[
             FolderFeatureContribution(
                 name='Comics',

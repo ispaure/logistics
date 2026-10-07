@@ -1,13 +1,12 @@
 """
-Servers page for the replacement Logistics UI.
+Generic server discovery, selection, and feature actions.
 """
 
-from commonUtils import ui
 from commonUtils.ui import pyside
 
 from features import registry
 from features.contributions import UIAction
-from ui_new import workflows
+from ui_new.actions import execute_action
 
 
 class ServersPage(pyside.QWidget):
@@ -195,6 +194,7 @@ class ServersPage(pyside.QWidget):
         layout.setSpacing(14)
 
         title_label = pyside.QLabel(display_name)
+        title_label.setTextFormat(pyside.Qt.TextFormat.PlainText)
         title_font = title_label.font()
         title_font.setPointSize(title_font.pointSize() + 7)
         title_font.setBold(True)
@@ -218,6 +218,7 @@ class ServersPage(pyside.QWidget):
         layout = pyside.QFormLayout(group)
 
         provider_label = pyside.QLabel(provider.name)
+        provider_label.setTextFormat(pyside.Qt.TextFormat.PlainText)
         provider_label.setTextInteractionFlags(pyside.Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addRow('Provider:', provider_label)
 
@@ -226,12 +227,14 @@ class ServersPage(pyside.QWidget):
 
             if group_name:
                 group_label = pyside.QLabel(group_name)
+                group_label.setTextFormat(pyside.Qt.TextFormat.PlainText)
                 group_label.setTextInteractionFlags(pyside.Qt.TextInteractionFlag.TextSelectableByMouse)
                 layout.addRow('Group:', group_label)
 
         if provider.get_details is not None:
             for label, value in provider.get_details(server):
                 value_label = pyside.QLabel(str(value))
+                value_label.setTextFormat(pyside.Qt.TextFormat.PlainText)
                 value_label.setWordWrap(True)
                 value_label.setTextInteractionFlags(pyside.Qt.TextInteractionFlag.TextSelectableByMouse)
                 layout.addRow(f'{label}:', value_label)
@@ -259,24 +262,4 @@ class ServersPage(pyside.QWidget):
         return group
 
     def _execute_action(self, action: UIAction, server_name: str):
-        if action.workflow_id is not None:
-            workflows.open_workflow(
-                action.workflow_id,
-                data=action.workflow_data,
-                parent=self
-            )
-            return
-
-        if action.destructive:
-            confirmed = ui.display_msg_box_ok_cancel(
-                'Confirm Action',
-                f'Run "{action.name}" for "{server_name}"?\n\nThis action may modify files.'
-            )
-
-            if not confirmed:
-                return
-
-        action.callback()
-
-        if action.destructive:
-            self.refresh()
+        return execute_action(action, self, subject=server_name, refresh=self.refresh)

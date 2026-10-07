@@ -330,21 +330,36 @@ def batch_compress_cbz(target_dir: Union[str, Path], recursive: bool = True, alw
         log_message += '(Not Recursive)'
     log(Severity.INFO, tool_name, log_message)
 
-    # Stats
-    compression_stats = CompressionStats()
-
     # Get list of .CBZ files
     target_dir = dirUtils.Directory(Path(target_dir) if isinstance(target_dir, str) else target_dir)
     cbz_file_lst: List[fileUtils.File] = target_dir.list_files(recursive=recursive, filter_extension='cbz')
 
+    return _compress_cbz_paths([file.path for file in cbz_file_lst], always_keep_compressed,
+                               preserve_animated_and_multipage_originals)
+
+
+def compress_selected_cbz(targets, recursive=True, always_keep_compressed=False,
+                          preserve_animated_and_multipage_originals=None):
+    """Compress a file/folder selection once per CBZ using the batch skip policy."""
+    from .selection import selected_comics
+    if preserve_animated_and_multipage_originals is None:
+        preserve_animated_and_multipage_originals = not always_keep_compressed
+    if not validate_compression_options(always_keep_compressed, preserve_animated_and_multipage_originals):
+        return None
+    paths = selected_comics(targets, recursive=recursive)
+    return _compress_cbz_paths(paths, always_keep_compressed, preserve_animated_and_multipage_originals)
+
+
+def _compress_cbz_paths(paths, always_keep_compressed, preserve_animated_and_multipage_originals):
+    compression_stats = CompressionStats()
     # Build list of CBZFile
     cbz_file_cls_lst: List[CBZFile] = []
-    for cbz_file in cbz_file_lst:
+    for path in paths:
+        cbz_file = CBZFile(path)
         if cbz_file.file_name.startswith('._'):
             log(Severity.WARNING, tool_name, f'Skipping file {cbz_file.path} because it is a macOS metadata file!')
             continue
-        cbz_file_cls = CBZFile(cbz_file.path)
-        cbz_file_cls_lst.append(cbz_file_cls)
+        cbz_file_cls_lst.append(cbz_file)
 
     # Filter for cbz files which need conversion
     cbz_file_cls_to_compress_lst: List[CBZFile] = []

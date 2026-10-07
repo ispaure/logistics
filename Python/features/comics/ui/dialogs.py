@@ -131,7 +131,7 @@ class CbzIndividualFoldersDialog(ComicsToolDialog):
         self.accept()
 
 class CompressCbzDialog(ComicsToolDialog):
-    def __init__(self, initial_path=None, parent=None):
+    def __init__(self, initial_path=None, parent=None, *, targets=None):
         super().__init__(
             'Batch Compress CBZ',
             'Compress images inside CBZ archives using the existing Comics compression pipeline.',
@@ -140,12 +140,20 @@ class CompressCbzDialog(ComicsToolDialog):
             parent
         )
 
-        default_path = coerce_initial_path(initial_path)
-
-        if default_path == '':
-            default_path = str(cbz.default_path_to_convert_cbz)
-
-        self.target_dir = self._add_directory_field('Target folder:', default_path)
+        from features.comics.selection import normalize_targets
+        self.targets = normalize_targets(targets) if targets is not None else None
+        self.target_dir = None
+        if self.targets is None:
+            default_path = coerce_initial_path(initial_path) or str(cbz.default_path_to_convert_cbz)
+            self.target_dir = self._add_directory_field('Target folder:', default_path)
+        else:
+            summary = pyside.QLabel(f'{len(self.targets)} selected file(s)/folder(s)')
+            summary.setToolTip('\n'.join(str(path) for path in self.targets))
+            if len(self.targets) == 1:
+                summary.setText(str(self.targets[0]))
+            summary.setWordWrap(True)
+            summary.setTextFormat(pyside.Qt.TextFormat.PlainText)
+            self.form.addRow('Selection:', summary)
 
         self.recursive = pyside.QCheckBox('Include subfolders')
         self.recursive.setChecked(True)
@@ -169,17 +177,19 @@ class CompressCbzDialog(ComicsToolDialog):
                 self.always_keep.isChecked(), self.preserve_originals.isChecked()):
             ui.display_msg_box_ok(self.windowTitle(), self.preserve_originals.toolTip())
             return
-        target = self._require_directory(self.target_dir)
-
+        target = self._require_directory(self.target_dir) if self.targets is None else self.targets
         if target is None or not self._confirm():
             return
 
-        stats = cbz.batch_compress_cbz(
-            target_dir=target,
-            recursive=self.recursive.isChecked(),
-            always_keep_compressed=self.always_keep.isChecked(),
-            preserve_animated_and_multipage_originals=self.preserve_originals.isChecked()
-        )
+        options = dict(recursive=self.recursive.isChecked(),
+                       always_keep_compressed=self.always_keep.isChecked(),
+                       preserve_animated_and_multipage_originals=self.preserve_originals.isChecked())
+        try:
+            stats = (cbz.batch_compress_cbz(target_dir=target, **options) if self.targets is None
+                     else cbz.compress_selected_cbz(target, **options))
+        except (OSError, ValueError) as error:
+            ui.display_msg_box_ok(self.windowTitle(), str(error))
+            return
         if stats is None:
             return
         if stats.error_during_compression:

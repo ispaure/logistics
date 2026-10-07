@@ -1,22 +1,12 @@
-"""
-Comics feature integration for Logistics.
-"""
+"""Comics has one unified declaration consumed by the Logistics feature registry."""
 
 
-FEATURE_NAME = "comics"
-FEATURE_LABEL = "Comics"
-FEATURE_DEPENDENCIES = ("images",)
-
-
-def get_contributions():
-    """Return UI contributions provided by this feature."""
-
-    from features.comics.ui_contributions import get_contributions as _get_contributions
-    return _get_contributions()
+def register():
+    from .ui_contributions import register as declaration
+    return declaration()
 
 
 def register_file_types():
-    """Make the project's CBZ type available to all later shared file listings."""
-    from commonUtils.fileTypes.registry import register_file_type
-    from .cbz import CBZFile
-    register_file_type(CBZFile, 'cbz')
+    """Compatibility helper; new integrations consume register() as a whole."""
+    from features.registry import get_feature_definition
+    return get_feature_definition('comics').register_types()

@@ -6,10 +6,12 @@ from commonUtils.ui import pyside
 from features import registry
 from ui_new.pages.debug import DebugPage
 from ui_new.pages.folders import FoldersPage
+from ui_new.pages.features import FeaturesPage
 
 
 CORE_TABS = (
     (0, 'Folders', FoldersPage),
+    (90, 'Features', FeaturesPage),
     (100, 'Debug', DebugPage),
 )
 
@@ -26,7 +28,12 @@ class MainWindow(pyside.Window):
         self.tabs = pyside.QTabWidget()
 
         self._build_layout()
+        self._core_pages = []
+        self._feature_pages = {}
         self._populate_tabs()
+        self._unsubscribe = registry.subscribe(self._features_changed)
+        self.dlg.destroyed.connect(self._unsubscribe)
+        self.tabs.currentChanged.connect(self._tab_changed)
 
     def _build_layout(self):
         central_widget = pyside.QWidget()
@@ -36,19 +43,12 @@ class MainWindow(pyside.Window):
 
         self.dlg.setCentralWidget(central_widget)
 
-        self.tabs.currentChanged.connect(self._tab_changed)
-
     def _populate_tabs(self):
         """Build core and feature-contributed tabs in one ordered list."""
 
-        tabs = [
-            (order, name, page_type(parent=self.dlg))
-            for order, name, page_type in CORE_TABS
-        ]
-
+        pages = registry.get_pages()
         seen_page_ids = set()
-
-        for registered in registry.get_pages():
+        for registered in pages:
             contribution = registered.contribution
 
             if contribution.page_id in seen_page_ids:
@@ -58,11 +58,20 @@ class MainWindow(pyside.Window):
 
             seen_page_ids.add(contribution.page_id)
 
+        tabs = [
+            (order, name, page_type(parent=self.dlg))
+            for order, name, page_type in CORE_TABS
+        ]
+        self._core_pages = list(tabs)
+        for registered in pages:
+            contribution = registered.contribution
+            page = contribution.create_page(self.dlg)
+            self._feature_pages[(registered.feature_name, contribution.page_id)] = page
             tabs.append(
                 (
                     contribution.order,
                     contribution.name,
-                    contribution.create_page(self.dlg)
+                    page
                 )
             )
 
@@ -71,6 +80,38 @@ class MainWindow(pyside.Window):
             key=lambda item: (item[0], item[1].casefold())
         ):
             self.tabs.addTab(page, name)
+
+    def _features_changed(self):
+        pyside.QTimer.singleShot(0, self._sync_feature_pages)
+
+    def _sync_feature_pages(self):
+        from shiboken6 import isValid
+        if not isValid(self.dlg):
+            return
+        current = self.tabs.currentWidget()
+        pages = registry.get_pages()
+        seen = set()
+        entries = list(self._core_pages)
+        for registered in pages:
+            contribution = registered.contribution
+            if contribution.page_id in seen:
+                raise ValueError(f'Duplicate contributed page ID: {contribution.page_id}')
+            seen.add(contribution.page_id)
+            key = (registered.feature_name, contribution.page_id)
+            if key not in self._feature_pages:
+                self._feature_pages[key] = contribution.create_page(self.dlg)
+            entries.append((contribution.order, contribution.name, self._feature_pages[key]))
+        with pyside.QSignalBlocker(self.tabs):
+            while self.tabs.count():
+                page = self.tabs.widget(0)
+                self.tabs.removeTab(0)
+                page.hide()
+            for _, name, page in sorted(entries, key=lambda entry: (entry[0], entry[1].casefold())):
+                self.tabs.addTab(page, name)
+            index = self.tabs.indexOf(current)
+            if index >= 0:
+                self.tabs.setCurrentIndex(index)
+        self._tab_changed(self.tabs.currentIndex())
 
     def _tab_changed(self, _index):
         """Refresh the active page when that page exposes a refresh method."""
