@@ -58,6 +58,8 @@ class FeaturesPage(qt.QWidget):
             registry.set_feature_enabled(name, enabled)
         except Exception as error:
             self.status.setText(str(error))
-            self.refresh()
+            # The signal came from this item: clearing it before setCheckState
+            # unwinds can crash native Qt. Rebuild after signal delivery ends.
+            self._features_changed()
         else:
             self.status.setText(f'{item.text(0)} {"enabled" if enabled else "disabled"} for this session.')

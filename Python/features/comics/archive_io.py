@@ -70,10 +70,10 @@ def replace_archive(source_dir: Path, destination: Path, *, overwrite: bool = Tr
         # Do not overwrite changes made by another operation during the build.
         if not archive_unchanged(destination, original_stat):
             raise RuntimeError(f'Archive changed while processing: {destination}')
+        with staged_archive.open('r+b') as archive_file:
+            os.fsync(archive_file.fileno())
         if original_stat is not None:
             staged_archive.chmod(stat.S_IMODE(original_stat.st_mode))
-        with staged_archive.open('rb') as archive_file:
-            os.fsync(archive_file.fileno())
         if overwrite:
             os.replace(staged_archive, destination)
         else:

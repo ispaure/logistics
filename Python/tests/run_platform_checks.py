@@ -8,6 +8,7 @@ from pathlib import Path
 import platform
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 
@@ -28,6 +29,9 @@ def main():
     report = {'platform': platform.platform(), 'python': sys.version,
               'dependencies': {name: version(name) for name in ('Pillow', 'PySide6', 'pyzipper')}, 'checks': []}
     env = dict(os.environ, PYTHONPATH=str(REPO / 'Python'), QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1', PYTHONUTF8='1')
+    # Qt expands Windows 8.3 aliases; give fixtures matching native long paths.
+    native_temp = str(Path(tempfile.gettempdir()).resolve())
+    env.update(TEMP=native_temp, TMP=native_temp, TMPDIR=native_temp)
     checks = [
         ('commonutils', ['-X', 'faulthandler', '-m', 'unittest', 'discover', '-s', 'Python/commonUtils/tests', '-v'], 300),
         ('logistics', ['-X', 'faulthandler', '-m', 'unittest', 'discover', '-s', 'Python/tests', '-v'], 300),
