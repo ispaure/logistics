@@ -24,7 +24,7 @@ def _has_manage_pms(entry: FolderEntry) -> bool:
     if entry.local is None:
         return False
 
-    if get_os() not in (OS.WIN, OS.MAC):
+    if get_os() not in (OS.WIN, OS.MAC, OS.LINUX):
         return False
 
     if entry.remote_source != 'rclone' or entry.remote_context is None:
@@ -77,9 +77,9 @@ def get_contributions() -> FeatureContributions:
         ],
         debug_actions=[
             DebugActionContribution(
-                name='PLEXDB - Parse Database Test',
+                name='Plex - Compare Databases...',
                 callback=database.test_script,
-                description='Run the existing Plex database comparison/test script.'
+                description='Select two Plex database copies and compare movies and episodes.'
             )
         ]
     )

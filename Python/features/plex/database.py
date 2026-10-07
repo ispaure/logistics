@@ -1,4 +1,42 @@
-import commonUtils.wrappers.sqlWrapper as sql_wrapper
+"""Read-only Plex database inspection, with optional columns across schema versions."""
+
+from contextlib import closing
+from pathlib import Path
+import sqlite3
+
+from .comparison import diff_metadata_item_cls_lsts_by_guid, diff_metadata_item_cls_lsts_by_info
+
+
+def _connect(db_file):
+    path = Path(db_file).resolve(strict=True)
+    if not path.is_file():
+        raise ValueError(f'Not a database file: {path}')
+    return sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)
+
+
+def _query(db_file, statement):
+    with closing(_connect(db_file)) as connection:
+        return connection.execute(statement).fetchall()
+
+
+def _table(db_file, name, columns):
+    # Table and column names come only from the fixed selectors in this module.
+    with closing(_connect(db_file)) as connection:
+        available = {row[1] for row in connection.execute(f'PRAGMA table_info("{name}")')}
+        if not available:
+            raise ValueError(f'Plex database has no {name} table.')
+        required = {
+            'metadata_items': {'id', 'metadata_type', 'parent_id', 'library_section_id'},
+            'media_items': {'id', 'metadata_item_id', 'duration'},
+            'media_parts': {'media_item_id', 'file'},
+            'library_sections': {'id', 'section_type'},
+        }[name]
+        if missing := required - available:
+            raise ValueError(f'Plex {name} is missing required columns: {sorted(missing)}')
+        projection = ', '.join(f'"{column}"' if column in available else f'NULL AS "{column}"'
+                               for column in columns)
+        rows = connection.execute(f'SELECT {projection} FROM "{name}"').fetchall()
+    return [dict(zip(columns, row), row_number=index) for index, row in enumerate(rows, 1)]
 
 
 def get_plex_db_table_media_items(db_file):
@@ -44,7 +82,7 @@ def get_plex_db_table_media_items(db_file):
         'color_trc'
     ]
 
-    return sql_wrapper.fetch_sql_table(db_file, 'media_items', media_items_column_lst)
+    return _table(db_file, 'media_items', media_items_column_lst)
 
 
 def get_plex_db_table_metadata_items(db_file, filter_type=None):
@@ -107,55 +145,24 @@ def get_plex_db_table_metadata_items(db_file, filter_type=None):
         'edition_title'
     ]
 
-    row_lst = sql_wrapper.fetch_sql_table(db_file, 'metadata_items', metadata_items_column_lst)
+    row_lst = _table(db_file, 'metadata_items', metadata_items_column_lst)
 
     if filter_type is None:
         return row_lst
 
-    filtered_row_lst = []
-
+    types = {'Movies': 1, 'TV Series': 2, 'Seasons': 3, 'Episodes': 4, 'Music': 10}
+    if filter_type == 'Other Videos':
+        sections = {row['id'] for row in get_plex_db_table_library_sections(db_file, 'Other Videos')}
+        return [row for row in row_lst if row['metadata_type'] == 1 and row['library_section_id'] in sections]
+    if filter_type == 'Photo':
+        raise NotImplementedError('Photo metadata filtering is not supported.')
+    if filter_type not in types:
+        raise ValueError(f'Unknown metadata filter: {filter_type}')
+    rows = [row for row in row_lst if row['metadata_type'] == types[filter_type]]
     if filter_type == 'Movies':
-        movie_section_ids = get_movies_library_section_ids(db_file)
-
-        for row in row_lst:
-            if row['metadata_type'] == 1 and row['library_section_id'] in movie_section_ids:
-                filtered_row_lst.append(row)
-
-    elif filter_type == 'Episodes':
-        for row in row_lst:
-            if row['metadata_type'] == 4:
-                filtered_row_lst.append(row)
-
-    elif filter_type == 'TV Series':
-        for row in row_lst:
-            if row['metadata_type'] == 2:
-                filtered_row_lst.append(row)
-
-    elif filter_type == 'Seasons':
-        for row in row_lst:
-            if row['metadata_type'] == 3:
-                filtered_row_lst.append(row)
-
-    elif filter_type == 'Other Videos':
-        for row in row_lst:
-            # TODO: Figure out filter
-            pass
-
-    elif filter_type == 'Photo':
-        for row in row_lst:
-            # TODO: Figure out filter
-            pass
-
-    elif filter_type == 'Music':
-        for row in row_lst:
-            if row['metadata_type'] == 10:
-                filtered_row_lst.append(row)
-
-    else:
-        print('Wrong Filter Type, Aborting!')
-        return False
-
-    return filtered_row_lst
+        sections = set(get_movies_library_section_ids(db_file))
+        rows = [row for row in rows if row['library_section_id'] in sections]
+    return rows
 
 
 def get_plex_db_table_library_sections(db_file, filter_type=None):
@@ -192,44 +199,20 @@ def get_plex_db_table_library_sections(db_file, filter_type=None):
         'content_changed_at'
     ]
 
-    row_lst = sql_wrapper.fetch_sql_table(db_file, 'library_sections', library_sections_column_lst)
+    row_lst = _table(db_file, 'library_sections', library_sections_column_lst)
 
     if filter_type is None:
         return row_lst
 
-    filtered_row_lst = []
-
-    if filter_type == 'Movies':
-        for row in row_lst:
-            if row['section_type'] == 1 and row['language'] != 'xn':
-                filtered_row_lst.append(row)
-
-    elif filter_type == 'Episodes':
-        for row in row_lst:
-            if row['section_type'] == 2:
-                filtered_row_lst.append(row)
-
-    elif filter_type == 'Other Videos':
-        for row in row_lst:
-            if row['section_type'] == 1 and row['language'] == 'xn':
-                filtered_row_lst.append(row)
-
-    elif filter_type == 'Photo':
-        for row in row_lst:
-            # TODO: Figure out the section type for photos
-            if row['section_type'] == '?':
-                filtered_row_lst.append(row)
-
-    elif filter_type == 'Music':
-        for row in row_lst:
-            if row['section_type'] == 8:
-                filtered_row_lst.append(row)
-
-    else:
-        print('Wrong Filter Type, Aborting!')
-        return False
-
-    return filtered_row_lst
+    if filter_type in ('Movies', 'Other Videos'):
+        other = filter_type == 'Other Videos'
+        return [row for row in row_lst if row['section_type'] == 1 and (row['language'] == 'xn') == other]
+    types = {'Episodes': 2, 'TV Series': 2, 'Music': 8}
+    if filter_type == 'Photo':
+        raise NotImplementedError('Photo library filtering is not supported.')
+    if filter_type not in types:
+        raise ValueError(f'Unknown library filter: {filter_type}')
+    return [row for row in row_lst if row['section_type'] == types[filter_type]]
 
 
 def get_plex_db_table_media_parts(db_file):
@@ -254,51 +237,31 @@ def get_plex_db_table_media_parts(db_file):
         'extra_data'
     ]
 
-    return sql_wrapper.fetch_sql_table(db_file, 'media_parts', media_parts_column_lst)
+    return _table(db_file, 'media_parts', media_parts_column_lst)
+
+
+def _parts_by_metadata_id(db_file):
+    parts = {}
+    for row in get_plex_db_table_media_parts(db_file):
+        if row['deleted_at'] is None:
+            parts.setdefault(row['media_item_id'], []).append({
+                'File Location': row['file'], 'Size': row['size'],
+                'Duration': row['duration'], 'Hash': row['hash']})
+    result = {}
+    for row in get_plex_db_table_media_items(db_file):
+        if row['deleted_at'] is None:
+            result.setdefault(row['metadata_item_id'], []).extend(parts.get(row['id'], []))
+    return result
 
 
 def get_plex_db_table_media_parts_with_guid(db_file):
-    """
-    Return media part information grouped by metadata item GUID.
-    """
-    sql_cmd = (
-        'SELECT '
-        '\nmetadata_items.guid as "GUID",'
-        '\nmedia_parts.file as "File Location",'
-        '\nmedia_parts.size as "Size",'
-        '\nmedia_parts.duration as "Duration",'
-        '\nmedia_parts.hash as "Hash"'
-        '\nFROM media_items'
-        '\nINNER JOIN metadata_items ON media_items.metadata_item_id=metadata_items.id'
-        '\nINNER JOIN media_parts ON media_parts.media_item_id=media_items.id'
-        '\nINNER JOIN section_locations ON media_items.section_location_id = section_locations.id'
-    )
-
-    output_line_lst = sql_wrapper.exec_sql_command(db_file, sql_cmd)
-    guid_dict = {}
-
-    for line in output_line_lst:
-        if line[0] is None:
-            continue
-
-        media_part = {
-            'File Location': line[1],
-            'Size': line[2],
-            'Duration': line[3],
-            'Hash': line[4]
-        }
-
-        if line[0] not in guid_dict:
-            guid_dict[line[0]] = [media_part]
-        else:
-            guid_dict[line[0]].append(media_part)
-
-    return guid_dict
-
-
-class TVSeries:
-    def __init__(self, id):
-        pass
+    """Group active media parts by nonempty metadata GUID."""
+    parts = _parts_by_metadata_id(db_file)
+    result = {}
+    for row in get_plex_db_table_metadata_items(db_file):
+        if row['guid'] and row['deleted_at'] is None:
+            result.setdefault(row['guid'], []).extend(parts.get(row['id'], []))
+    return result
 
 
 class MetadataItem:
@@ -308,7 +271,7 @@ class MetadataItem:
         self.library_section_id = metadata_item['library_section_id']
         self.hash = metadata_item['hash']
         self.guid = metadata_item['guid']
-        self.media_part = None
+        self.media_part = []
         self.tv_series_title = None
         self.tv_series_guid = None
         self.tv_series_season_int = None
@@ -316,150 +279,37 @@ class MetadataItem:
 
 
 def get_plex_db_total_duration_days(db_file):
-    sql_cmd = 'SELECT SUM(duration)/1000/60/60/24 from media_items;'
-    result = sql_wrapper.exec_sql_command(db_file, sql_cmd)
-    return result[0][0]
+    """Return fractional days, including zero for an empty database."""
+    return _query(db_file, 'SELECT COALESCE(SUM(duration), 0)/86400000.0 FROM media_items')[0][0]
 
 
 def get_movies_library_section_ids(db_file):
-    # Get library sections which are movie libraries
-    library_section_movies_lst = get_plex_db_table_library_sections(db_file, 'Movies')
-
-    # Get IDs for those sections
-    movie_section_id_lst = []
-
-    for lib_section in library_section_movies_lst:
-        movie_section_id_lst.append(lib_section['id'])
-
-    return movie_section_id_lst
+    return [row['id'] for row in get_plex_db_table_library_sections(db_file, 'Movies')]
 
 
 def get_metadata_item_cls_lst(db_file, filter_type=None):
-    # List that will get populated with metadata classes
-    metadata_cls_lst = []
-
-    # Get list of metadata items
-    metadata_lst = get_plex_db_table_metadata_items(db_file, filter_type)
-
-    # Episodes require additional information from TV series and seasons
-    if filter_type == 'Episodes':
-        metadata_seasons_lst = get_plex_db_table_metadata_items(db_file, 'Seasons')
-        metadata_seasons_dict = {}
-
-        for item in metadata_seasons_lst:
-            metadata_seasons_dict[item['id']] = item
-
-        metadata_series_lst = get_plex_db_table_metadata_items(db_file, 'TV Series')
-        metadata_series_dict = {}
-
-        for item in metadata_series_lst:
-            metadata_series_dict[item['id']] = item
-
-    # Get media parts so they can be assigned to metadata
-    guid_media_part_dict = get_plex_db_table_media_parts_with_guid(db_file)
-
-    # Create metadata classes for rows
-    for row in metadata_lst:
-        metadata_cls = MetadataItem(row)
-        metadata_cls.media_part = guid_media_part_dict[metadata_cls.guid]
-
+    rows = get_plex_db_table_metadata_items(db_file)
+    active = {row['id']: row for row in rows if row['deleted_at'] is None}
+    selected = rows if filter_type is None else get_plex_db_table_metadata_items(db_file, filter_type)
+    parts = _parts_by_metadata_id(db_file)
+    result = []
+    # Plex stores season/episode numbering in the column named index.
+    indices = {row['id']: row['index'] for row in _table(db_file, 'metadata_items', ['id', 'index'])} if filter_type == 'Episodes' else {}
+    for row in selected:
+        if row['deleted_at'] is not None:
+            continue
+        item = MetadataItem(row)
+        item.media_part = parts.get(row['id'], [])
         if filter_type == 'Episodes':
-            # TODO: Complete episode metadata extraction.
-            season_user_thumb_url = metadata_seasons_dict[row['parent_id']]['user_thumb_url']
-            show_id = metadata_seasons_dict[row['parent_id']]['parent_id']
-            tv_series_title = metadata_series_dict[show_id]['title']
-            tv_series_guid = metadata_series_dict[show_id]['guid']
-            episode_count = row['user_thumb_url']
-
-            metadata_cls.tv_series_title = None
-            metadata_cls.tv_series_guid = None
-            metadata_cls.tv_series_season_int = None
-            metadata_cls.tv_series_episode_int = None
-
-        metadata_cls_lst.append(metadata_cls)
-
-    return metadata_cls_lst
-
-
-def diff_metadata_item_cls_lsts_by_guid(metadata_item_cls_lst_01, metadata_item_cls_lst_02, hash_check=False):
-    """
-    Returns a dictionary with differences between two metadata item class lists.
-
-    Return dict has three keys:
-        Match: [[x_cls in 1, x_cls in 2], [..., ...], ...]
-        Only in 1: [x_cls_01, x_cls_02, x_cls_03, ...]
-        Only in 2: [x_cls_01, x_cls_02, x_cls_03, ...]
-    """
-    match_cls_lst = []
-    only_in_01_cls_lst = []
-    only_in_02_cls_lst = []
-
-    # Gather GUIDs to compare
-    md_items_02_guid_dict = {}
-
-    for metadata_item_cls in metadata_item_cls_lst_02:
-        md_items_02_guid_dict[metadata_item_cls.guid] = metadata_item_cls
-
-    md_items_02_matched_lst = []
-
-    # Use GUID to compare
-    for metadata_item_cls in metadata_item_cls_lst_01:
-        if metadata_item_cls.guid not in md_items_02_guid_dict:
-            only_in_01_cls_lst.append(metadata_item_cls)
-            continue
-
-        matched_item = md_items_02_guid_dict[metadata_item_cls.guid]
-
-        if not hash_check:
-            match_cls_lst.append([metadata_item_cls, matched_item])
-            md_items_02_matched_lst.append(matched_item)
-            continue
-
-        metadata_item_hash_lst_01 = []
-
-        for item in metadata_item_cls.media_part:
-            metadata_item_hash_lst_01.append(item['Hash'])
-
-        hash_check_succeed = False
-
-        for item in matched_item.media_part:
-            if item['Hash'] in metadata_item_hash_lst_01:
-                hash_check_succeed = True
-
-        if hash_check_succeed:
-            match_cls_lst.append([metadata_item_cls, matched_item])
-            md_items_02_matched_lst.append(matched_item)
-        else:
-            only_in_01_cls_lst.append(metadata_item_cls)
-
-    for metadata_item_cls in metadata_item_cls_lst_02:
-        if metadata_item_cls not in md_items_02_matched_lst:
-            only_in_02_cls_lst.append(metadata_item_cls)
-
-    return {
-        'Match': match_cls_lst,
-        'Only in 1': only_in_01_cls_lst,
-        'Only in 2': only_in_02_cls_lst
-    }
-
-
-def diff_metadata_item_cls_lsts_by_info(metadata_item_cls_lst_01, metadata_item_cls_lst_02, hash_check=False):
-    """
-    Returns a dictionary with differences between two metadata item class lists.
-
-    TODO: Implement information-based comparison.
-    """
-    match_cls_lst = []
-    only_in_01_cls_lst = []
-    only_in_02_cls_lst = []
-
-    # TODO: Figure out match
-
-    return {
-        'Match': match_cls_lst,
-        'Only in 1': only_in_01_cls_lst,
-        'Only in 2': only_in_02_cls_lst
-    }
+            season = active.get(row['parent_id'])
+            show = active.get(season['parent_id']) if season else None
+            if season and show and season['metadata_type'] == 3 and show['metadata_type'] == 2:
+                item.tv_series_title = show['title']
+                item.tv_series_guid = show['guid']
+                item.tv_series_season_int = indices.get(season['id'])
+                item.tv_series_episode_int = indices.get(row['id'])
+        result.append(item)
+    return result
 
 
 def diff_media_type(db_file_01, db_file_02, filter_type, hash_check=False, print_result=False, print_detailed=False):
@@ -476,8 +326,8 @@ def diff_media_type(db_file_01, db_file_02, filter_type, hash_check=False, print
     :type print_result: bool
     """
     print(f'\nDiff media items of type {filter_type} between PLEX database files')
-    print('Database File #01: ' + db_file_01)
-    print('Database File #02: ' + db_file_02)
+    print('Database File #01: ' + str(db_file_01))
+    print('Database File #02: ' + str(db_file_02))
 
     metadata_items_cls_lst_db_01 = get_metadata_item_cls_lst(db_file_01, filter_type)
     metadata_items_cls_lst_db_02 = get_metadata_item_cls_lst(db_file_02, filter_type)
@@ -496,8 +346,7 @@ def diff_media_type(db_file_01, db_file_02, filter_type, hash_check=False, print
             hash_check=hash_check
         )
     else:
-        # TODO: Account for other media types
-        return None
+        raise NotImplementedError(f'Comparison is not supported for {filter_type}.')
 
     match_count = len(diff_results['Match'])
     only_left_count = len(diff_results['Only in 1'])
@@ -528,14 +377,15 @@ def diff_media_type(db_file_01, db_file_02, filter_type, hash_check=False, print
     return diff_results
 
 
-def test_script():
-    db_file_01 = '/Users/marca/Yagi Dropbox/Marc-Andre Voyer/PLEX-LibraryDatabase/com.plexapp.plugins.library-marc.db'
-    db_file_02 = '/Users/marca/Yagi Dropbox/Marc-Andre Voyer/PLEX-LibraryDatabase/com.plexapp.plugins.library-phil.db'
-
-    print('Analyzing PLEX Database File: ' + db_file_01)
-    print('Total days of playtime = ' + str(get_plex_db_total_duration_days(db_file_01)))
-
-    diff_media_type(db_file_01, db_file_02, filter_type='Movies', hash_check=False, print_result=True, print_detailed=False)
-    diff_media_type(db_file_01, db_file_02, filter_type='Episodes', hash_check=False, print_result=True, print_detailed=False)
-
-    print('CALCULATING SERIES HASH LIST')
+def test_script(db_file_01=None, db_file_02=None):
+    """Compare selected database copies; no personal platform paths are assumed."""
+    if db_file_01 is None or db_file_02 is None:
+        from commonUtils.ui import pyside
+        db_file_01, _ = pyside.QFileDialog.getOpenFileName(None, 'Select first Plex database')
+        if not db_file_01:
+            return None
+        db_file_02, _ = pyside.QFileDialog.getOpenFileName(None, 'Select second Plex database')
+        if not db_file_02:
+            return None
+    return {kind: diff_media_type(db_file_01, db_file_02, kind, print_result=True)
+            for kind in ('Movies', 'Episodes')}

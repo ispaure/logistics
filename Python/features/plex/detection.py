@@ -6,7 +6,6 @@ import os
 from collections.abc import Collection
 from pathlib import Path
 
-from commonUtils import fileUtils
 from commonUtils.osUtils import OS, get_os
 
 from models.logistics_folder import LogisticsFolder
@@ -30,11 +29,14 @@ def has_pms_data_remote(folder: LogisticsFolder, remote_names: Collection[str]) 
 def get_pms_data_path() -> Path | None:
     """Return the Plex Media Server data directory for the current platform."""
 
-    user_home_dir = fileUtils.get_user_home_dir()
+    override = os.environ.get('PLEX_MEDIA_SERVER_APPLICATION_SUPPORT_DIR')
+    if override:
+        return Path(override).expanduser() / 'Plex Media Server'
+    user_home_dir = Path.home()
 
     match get_os():
         case OS.WIN:
-            return Path(os.environ['LOCALAPPDATA'], 'Plex Media Server')
+            return Path(os.environ.get('LOCALAPPDATA', user_home_dir / 'AppData/Local'), 'Plex Media Server')
 
         case OS.MAC:
             return Path(user_home_dir, 'Library', 'Application Support', 'Plex Media Server')
