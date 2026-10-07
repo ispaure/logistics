@@ -1,5 +1,6 @@
 """Verify Perforce console connection and interactive command forwarding."""
 
+import os
 from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
@@ -13,6 +14,7 @@ from models.local_folder import LocalFolder
 
 
 class PerforceConsoleTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'posix', 'POSIX shell integration requires a POSIX host')
     def test_console_forwards_arguments_and_keeps_connection_in_interactive_shell(self):
         with TemporaryDirectory(prefix="p4 console ' ") as tmp:
             root = Path(tmp)

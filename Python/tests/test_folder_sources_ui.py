@@ -193,7 +193,10 @@ class FolderSourceTests(unittest.TestCase):
         page.credential_combo.blockSignals(False)
 
     def test_folder_names_are_plain_text_in_the_details(self):
-        self.local_folders = [self.folder('<b>Folder</b>'.replace('/', '_'))]
+        name = '<b>Folder</b>'.replace('/', '_')
+        if os.name == 'nt':
+            name = name.replace('<', '&lt;').replace('>', '&gt;')
+        self.local_folders = [self.folder(name)]
         page = self.page()
         titles = [label for label in page.detail_scroll.widget().findChildren(qt.QLabel)
                   if label.text() == self.local_folders[0].name]

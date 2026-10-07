@@ -1,5 +1,6 @@
 """Calibre naming and export planning with disposable library/device fixtures."""
 
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -143,7 +144,7 @@ class CalibreExportTests(unittest.TestCase):
             self.assertEqual(metadata.get_metadata_book_name(Directory(file.parent)), expected)
 
     def test_malformed_metadata_uses_sanitized_folder_name(self):
-        file = self.book('Title: Name (7)')
+        file = self.book('Title: Name (7)' if os.name != 'nt' else 'Title - Name (7)')
         (file.parent / 'metadata.opf').write_text('<broken')
         plan = build_export_plan(self.library, self.destination, ['epub'])
         self.assertEqual(plan.files[0].destination.name, 'Title - Name.epub')
@@ -213,7 +214,7 @@ class CalibreLaunchTests(unittest.TestCase):
                 Path, 'is_file', return_value=True), patch.object(launching.subprocess, 'Popen') as start:
             launching.launch_library(Path('/books'))
         self.assertEqual(start.call_args.args[0],
-                         [str(root / 'Calibre2/calibre.exe'), '--with-library', '/books'])
+                         [str(root / 'Calibre2/calibre.exe'), '--with-library', str(Path('/books'))])
 
     def test_mac_installation_is_checked_before_launch(self):
         with patch.object(launching, 'get_os', return_value=OS.MAC), patch.object(
@@ -223,7 +224,7 @@ class CalibreLaunchTests(unittest.TestCase):
                 launching.subprocess, 'Popen') as start:
             launching.launch_library(Path('/books'))
         extract.assert_called_once_with(Path('/software/calibre.app.zip'), Path('/Applications'))
-        self.assertEqual(start.call_args.args[0][0], '/Applications/calibre.app/Contents/MacOS/calibre')
+        self.assertEqual(start.call_args.args[0][0], str(Path('/Applications/calibre.app/Contents/MacOS/calibre')))
 
     def test_failed_mac_extraction_does_not_launch(self):
         with patch.object(launching, 'get_os', return_value=OS.MAC), patch.object(

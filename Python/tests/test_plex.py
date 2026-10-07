@@ -2,6 +2,7 @@
 
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+from contextlib import closing
 from pathlib import Path
 import sqlite3
 import subprocess
@@ -20,7 +21,7 @@ class PlexDatabaseTests(unittest.TestCase):
         temporary = TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.path = Path(temporary.name).resolve() / 'library.db'
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection, connection:
             connection.executescript('''
                 CREATE TABLE metadata_items (id INTEGER, metadata_type INTEGER, library_section_id INTEGER,
                     parent_id INTEGER, guid TEXT, title TEXT, year INTEGER, hash TEXT, "index" INTEGER, deleted_at INTEGER);
@@ -54,14 +55,14 @@ class PlexDatabaseTests(unittest.TestCase):
 
     def test_optional_columns_are_none_and_required_columns_fail(self):
         self.assertIsNone(database.get_plex_db_table_metadata_items(self.path)[0]['edition_title'])
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection, connection:
             connection.execute('ALTER TABLE media_items RENAME COLUMN metadata_item_id TO broken')
         with self.assertRaisesRegex(ValueError, 'missing required columns'):
             database.get_plex_db_table_media_items(self.path)
 
     def test_fractional_duration_and_empty_database(self):
         self.assertAlmostEqual(database.get_plex_db_total_duration_days(self.path), 0.5 + 1000 / 86400000)
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection, connection:
             connection.execute('DELETE FROM media_items')
         self.assertEqual(database.get_plex_db_total_duration_days(self.path), 0)
 
@@ -234,7 +235,7 @@ class PlexPackageTests(unittest.TestCase):
         # Optional index columns on incomplete/older copies must remain unknown.
         with TemporaryDirectory() as temporary:
             path = Path(temporary) / 'database.db'
-            with sqlite3.connect(path) as connection:
+            with closing(sqlite3.connect(path)) as connection, connection:
                 connection.execute('CREATE TABLE metadata_items (id, metadata_type, parent_id, library_section_id)')
                 connection.execute('INSERT INTO metadata_items VALUES (1, 4, NULL, 1)')
             self.assertIsNone(database._table(path, 'metadata_items', ['id', 'index'])[0]['index'])
@@ -284,6 +285,6 @@ class PlexDialogTests(unittest.TestCase):
             dialog = PlexManagePMSDialog(entry)
         self.assertEqual(dialog.windowTitle(), 'Manage PMS - Library')
         self.assertIs(dialog.folder, folder)
-        self.assertTrue(any(label.text() == '/local/Library-PMSDATA' for label in dialog.findChildren(qt.QLabel)))
+        self.assertTrue(any(label.text() == str(Path('/local/Library-PMSDATA')) for label in dialog.findChildren(qt.QLabel)))
         dialog.deleteLater()
         app.processEvents()

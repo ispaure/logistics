@@ -1,5 +1,6 @@
 """Bedrock platform executable discovery without starting a server."""
 
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -10,6 +11,7 @@ from features.minecraft import server
 
 
 class BedrockPlatformTests(unittest.TestCase):
+    @unittest.skipIf(os.name == 'nt', 'POSIX execute permissions require a POSIX host')
     def test_linux_binary_is_bedrock_and_requires_execute_permission(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
