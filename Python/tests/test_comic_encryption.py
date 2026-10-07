@@ -77,6 +77,42 @@ class ComicEncryptionTests(unittest.TestCase):
         self.assertIn(path, result['failed'])
         self.assertEqual(path.read_bytes(), before)
 
+    def test_cancellation_finishes_current_and_leaves_remaining_unchanged(self):
+        from threading import Event
+        first, second = self.comic('one.cbz'), self.comic('two.cbz')
+        before = second.read_bytes()
+        plan = plan_encryption([first, second])
+        cancel = Event()
+        updates = []
+        def encrypt(path, password):
+            cancel.set()  # User cancellation arriving during the first archive.
+            return encrypt_comic(path, password)
+        with patch('features.comics.encryption.encrypt_comic', side_effect=encrypt):
+            result = execute_encryption(plan, 'shared', cancelled=cancel.is_set,
+                                        progress=lambda *args: updates.append(args))
+        self.assertTrue(result['cancelled'])
+        self.assertEqual(result['encrypted'], [first])
+        self.assertEqual(result['remaining'], [second])
+        self.assertEqual(second.read_bytes(), before)
+        self.contents(first, 'shared')
+        self.assertEqual(updates[-1], (1, 2, None))
+
+    def test_cancel_before_start_touches_no_comics(self):
+        path = self.comic('one.cbz')
+        original = path.read_bytes()
+        result = execute_encryption(plan_encryption([path]), 'shared', cancelled=lambda: True)
+        self.assertTrue(result['cancelled'])
+        self.assertEqual(result['remaining'], [path])
+        self.assertEqual(path.read_bytes(), original)
+
+    def test_progress_counts_failures_as_processed(self):
+        path = self.comic('one.cbz')
+        updates = []
+        result = execute_encryption(plan_encryption([path]), progress=lambda *args: updates.append(args))
+        self.assertIn(path, result['failed'])
+        self.assertEqual(updates[-1], (1, 1, None))
+        self.assertFalse(result['cancelled'])
+
 
 class EncryptionDialogTests(ComicEncryptionTests):
     def setUp(self):
@@ -161,3 +197,46 @@ class EncryptionDialogTests(ComicEncryptionTests):
             return dialog.result()
         with patch.object(qt.QDialog, 'exec', interact):
             self.assertEqual(confirmed_password(None, 'Shared batch password'), 'one')
+
+    def test_background_dialog_cancel_waits_for_current_comic(self):
+        from threading import Event
+        import time
+        from features.comics.ui.encryption import EncryptComicsDialog
+        first, second = self.comic('one.cbz'), self.comic('two.cbz')
+        original = second.read_bytes()
+        entered, release = Event(), Event()
+        dialog = EncryptComicsDialog([first, second])
+        dialog.plan = plan_encryption([first, second])
+        self.addCleanup(dialog.deleteLater)
+        def encrypt(path, password):
+            entered.set()
+            if not release.wait(5):
+                raise RuntimeError('Test did not release encryption')
+            return encrypt_comic(path, password)
+        with patch('features.comics.ui.encryption.confirmed_password', return_value='shared'), \
+                patch('features.comics.encryption.encrypt_comic', side_effect=encrypt):
+            dialog._start()
+            try:
+                deadline = time.monotonic() + 5
+                while not entered.is_set():
+                    self.assertLess(time.monotonic(), deadline)
+                    self.app.processEvents()
+                    time.sleep(.005)
+                self.app.processEvents()
+                self.assertTrue(dialog.cancel_button.isEnabled())
+                dialog.cancel_button.click()
+                self.assertTrue(dialog.busy)
+                self.assertFalse(dialog.cancel_button.isEnabled())
+            finally:
+                release.set()
+                deadline = time.monotonic() + 5
+                while dialog.busy:
+                    self.assertLess(time.monotonic(), deadline)
+                    self.app.processEvents()
+                    time.sleep(.005)
+        self.assertEqual(dialog.progress_bar.value(), 1)
+        self.assertEqual(dialog.progress_bar.maximum(), 2)
+        self.assertIn('Cancelled.', dialog.message.text())
+        self.assertIn('not processed: 1', dialog.message.text())
+        self.assertEqual(second.read_bytes(), original)
+        self.contents(first, 'shared')
