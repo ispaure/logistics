@@ -427,3 +427,7 @@ but external applications must support WinZip AES to read protected output.
 A separate [before/after full-run comparison](ZIP_COMPRESSION_PARITY.md) against
 the pristine pre-password commits passed 24 full compression runs across four
 folder layouts and two retention modes, checking extraction through final output.
+
+[Cross-platform checks](../../tests/PLATFORM_CHECKS.md) run all shared/application
+tests plus the historical compression comparison on macOS, Windows, Ubuntu and a
+Fedora 43 container; the same runner can be used locally on another machine.

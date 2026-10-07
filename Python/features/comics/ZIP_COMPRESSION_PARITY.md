@@ -51,3 +51,8 @@ This establishes before/after behavior on macOS with generated fixtures. It does
 not claim that real Windows/Linux machines or external RAR extractors were tested.
 The current plain/AES extraction shares one filesystem-layout implementation;
 RAR/CBR uses a separate external-extractor flow.
+
+The comparison is now reproducible through
+[`compare_comic_zip_versions.py`](../../tests/compare_comic_zip_versions.py), and
+runs on each CI platform. See [platform checks](../../tests/PLATFORM_CHECKS.md) for
+local commands, prerequisites, artifacts and coverage boundaries.
