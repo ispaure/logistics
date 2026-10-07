@@ -89,8 +89,8 @@ class BrowserWindowTests(unittest.TestCase):
         index = window.file_browser.model.index(str(self.path))
         menu = window.file_browser.context_menu_for(index)
         self.assertEqual([action.text() for action in menu.actions()][2:],
-                         ['Comics', 'Edit Metadata', 'Compress Comics…'])
-        menu.actions()[-2].trigger()
+                         ['Comics', 'Edit Metadata', 'Compress Comics…', 'Encrypt unencrypted comics…'])
+        next(action for action in menu.actions() if action.text() == 'Edit Metadata').trigger()
         controller = window.extensions[0].controller
         editor = controller.metadata_windows[0]
         deadline = time.monotonic() + 5
@@ -101,7 +101,7 @@ class BrowserWindowTests(unittest.TestCase):
         self.assertEqual(editor.editors['Writer'].text(), 'Old')
         editor.reject()
         with patch('features.comics.ui.dialogs.CompressCbzDialog') as dialog:
-            menu.actions()[-1].trigger()
+            next(action for action in menu.actions() if action.text() == 'Compress Comics…').trigger()
             self.assertEqual(dialog.call_args.kwargs['targets'], (self.path,))
         self.wait(window)
         menu.deleteLater()

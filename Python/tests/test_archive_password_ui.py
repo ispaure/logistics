@@ -1,4 +1,4 @@
-"""Password prompts stay interactive; archive creation uses configuration only."""
+"""Password prompts stay interactive; configured archive creation avoids prompts."""
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
