@@ -2,13 +2,12 @@
 User-facing FUSE actions for rclone remotes.
 """
 
-import shlex
+import subprocess
 from pathlib import Path
 
 from commonUtils import ui
 from commonUtils.debugUtils import Severity, log
 from commonUtils.osUtils import OS, get_os
-from commonUtils.wrappers import cmdShellWrapper
 from models.remote_folder import RemoteFolder
 
 from features.fuse import detection, mounts
@@ -43,13 +42,17 @@ def launch_installer() -> bool:
 
     match get_os():
         case OS.MAC:
-            command = f'open {shlex.quote(str(installer_path))}'
+            arguments = ['open', str(installer_path)]
         case OS.WIN:
-            command = f'msiexec.exe /i "{installer_path}"'
+            arguments = ['msiexec.exe', '/i', str(installer_path)]
         case _:
             return False
 
-    cmdShellWrapper.exec_cmd(command, wait_for_output=False)
+    try:
+        subprocess.Popen(arguments)
+    except OSError as error:
+        ui.display_msg_box_ok(f'{dependency_name} Installer Failed', str(error))
+        return False
     return True
 
 
@@ -63,12 +66,16 @@ def mount_and_open_remote(
         launch_installer()
         return False
 
-    mount_path = mounts.ensure_remote_mounted(
-        remote_name,
-        config_path,
-        attr_timeout=2,
-        wait_timeout=10
-    )
+    try:
+        mount_path = mounts.ensure_remote_mounted(
+            remote_name,
+            config_path,
+            attr_timeout=2,
+            wait_timeout=10
+        )
+    except (OSError, ValueError) as error:
+        ui.display_msg_box_ok('Remote Mount Failed', str(error))
+        return False
 
     if mount_path is None:
         ui.display_msg_box_ok(

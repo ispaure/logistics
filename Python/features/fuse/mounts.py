@@ -3,22 +3,20 @@ Mount management for the Logistics rclone feature.
 """
 
 import os
-import shlex
 import shutil
 import time
+import subprocess
 from pathlib import Path
 
 import config
 
-from commonUtils import dirUtils, linkUtils
 from commonUtils.debugUtils import Severity, log
 from commonUtils.osUtils import OS, get_os
-from commonUtils.wrappers import cmdShellWrapper
 
 from features.rclone import configuration, executable
-
-
-READY_MARKER = '__LOGISTICS_RCLONE_MOUNT_READY__'
+from .commands import (
+    READY_MARKER, mount_arguments, probe_arguments, timeout_seconds, validate_remote_name,
+)
 
 
 def clear_mounts() -> None:
@@ -34,24 +32,25 @@ def clear_mounts() -> None:
         return
 
     logistics_cfg = config.LogisticsConfig()
-    mount_directory = dirUtils.Directory(logistics_cfg.path_remote_network_mount)
+    mount_directory = Path(logistics_cfg.path_remote_network_mount)
 
-    if not mount_directory.is_dir():
+    if mount_directory.is_symlink() or mount_directory.is_junction() or not mount_directory.is_dir():
         return
 
-    directories = mount_directory.list_directories()
-
-    for directory in directories:
-        if directory.path.is_symlink():
-            linkUtils.delete_symbolic_link(directory.path)
-
-        elif not directory.path.is_junction() and directory.is_dir_empty():
-            directory.delete()
+    for path in mount_directory.iterdir():
+        if path.is_symlink() or path.is_junction() or os.path.ismount(path):
+            continue
+        if path.is_dir():
+            try:
+                path.rmdir()
+            except OSError:
+                continue  # Nonempty or unavailable directories remain untouched.
 
 
 def get_remote_mount_path(remote_name: str) -> Path:
     """Return the expected local mount path for one rclone remote."""
 
+    validate_remote_name(remote_name)
     return config.LogisticsConfig().path_remote_network_mount / remote_name
 
 
@@ -64,7 +63,7 @@ def is_mount_path_mounted(mount_path: Path) -> bool:
     if os.path.ismount(mount_path):
         return True
 
-    if get_os() == OS.WIN and linkUtils.is_junction(mount_path):
+    if get_os() == OS.WIN and mount_path.is_junction():
         return True
 
     return False
@@ -91,29 +90,14 @@ def is_mount_path_ready(mount_path: Path, probe_timeout: float = 2) -> bool:
     if not is_mount_path_mounted(mount_path):
         return False
 
-    match get_os():
-        case OS.MAC | OS.LINUX:
-            command = (
-                f'ls -A {_quote_shell_arg(mount_path)} >/dev/null '
-                f'&& printf "{READY_MARKER}\\n"'
-            )
-
-        case OS.WIN:
-            command = (
-                f'dir /b {_quote_shell_arg(mount_path)} >NUL 2>NUL '
-                f'&& echo {READY_MARKER}'
-            )
-
-        case _:
-            return False
-
-    output = cmdShellWrapper.exec_cmd(
-        command,
-        wait_for_output=True,
-        time_out=probe_timeout
-    )
-
-    return READY_MARKER in output
+    if probe_timeout <= 0:
+        return False
+    try:
+        result = subprocess.run(probe_arguments(mount_path), capture_output=True,
+                                text=True, timeout=probe_timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and READY_MARKER in result.stdout.splitlines()
 
 
 def is_remote_ready(remote_name: str, probe_timeout: float = 2) -> bool:
@@ -133,6 +117,9 @@ def mount_remote(
 ) -> bool:
     """Start mounting a specific rclone remote at the given path."""
 
+    validate_remote_name(remote_name)
+    if get_os() not in (OS.WIN, OS.MAC, OS.LINUX):
+        return False
     if is_mount_path_mounted(mount_path):
         if is_mount_path_ready(mount_path):
             log(
@@ -161,43 +148,31 @@ def mount_remote(
         log(Severity.ERROR, 'mount_remote', f'rclone executable does not exist: "{rclone_path}"')
         return False
 
+    arguments = mount_arguments(rclone_path, remote_name, Path(config_path),
+                                mount_path, get_os(), timeout)
+    if mount_path.is_symlink() or mount_path.is_junction():
+        log(Severity.ERROR, 'mount_remote', f'Mount path is a link: {mount_path}')
+        return False
+    if mount_path.exists() and (not mount_path.is_dir() or any(mount_path.iterdir())):
+        log(Severity.ERROR, 'mount_remote', f'Mount path is not an empty directory: {mount_path}')
+        return False
     mount_path.parent.mkdir(parents=True, exist_ok=True)
-
     if get_os() in (OS.MAC, OS.LINUX):
         mount_path.mkdir(parents=True, exist_ok=True)
-
-    command_parts = [
-        _quote_shell_arg(rclone_path),
-        '--config',
-        _quote_shell_arg(config_path),
-        'mount',
-    ]
-
-    if timeout is not None:
-        command_parts.append(f'--attr-timeout={timeout}s')
-
-    command_parts.extend([
-        _quote_shell_arg(f'{remote_name}:'),
-        _quote_shell_arg(mount_path),
-    ])
-
-    if get_os() in (OS.MAC, OS.LINUX):
-        # rclone's daemon mode waits for the background mount to complete its
-        # startup before the launcher exits. This avoids opening Finder against
-        # a mount point that has merely appeared but is not ready yet.
-        command_parts.append('--daemon')
-
-    command = ' '.join(command_parts)
-
-    if get_os() in (OS.MAC, OS.LINUX):
-        cmdShellWrapper.exec_cmd(
-            command,
-            wait_for_output=True,
-            time_out=15
-        )
-    else:
-        cmdShellWrapper.exec_cmd(command, wait_for_output=False)
-
+    try:
+        if get_os() in (OS.MAC, OS.LINUX):
+            result = subprocess.run(arguments, capture_output=True, text=True, timeout=15)
+            if result.returncode:
+                log(Severity.ERROR, 'mount_remote', f'rclone mount failed: {result.stderr.strip()}')
+                _remove_empty_mount_path(mount_path)
+                return False
+        else:
+            subprocess.Popen(arguments, stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        log(Severity.ERROR, 'mount_remote', str(error))
+        _remove_empty_mount_path(mount_path)
+        return False
     return True
 
 
@@ -209,6 +184,7 @@ def unmount_remote(remote_name: str, wait_timeout: float = 5) -> bool:
     before attempting a fresh mount.
     """
 
+    wait_timeout = timeout_seconds(wait_timeout)
     mount_path = get_remote_mount_path(remote_name)
 
     if not is_mount_path_mounted(mount_path):
@@ -217,7 +193,7 @@ def unmount_remote(remote_name: str, wait_timeout: float = 5) -> bool:
 
     match get_os():
         case OS.MAC:
-            command = f'umount {_quote_shell_arg(mount_path)}'
+            arguments = ['umount', str(mount_path)]
 
         case OS.LINUX:
             fusermount = shutil.which('fusermount3') or shutil.which('fusermount')
@@ -230,7 +206,7 @@ def unmount_remote(remote_name: str, wait_timeout: float = 5) -> bool:
                 )
                 return False
 
-            command = f'{_quote_shell_arg(fusermount)} -u {_quote_shell_arg(mount_path)}'
+            arguments = [fusermount, '-u', str(mount_path)]
 
         case OS.WIN:
             log(
@@ -245,41 +221,38 @@ def unmount_remote(remote_name: str, wait_timeout: float = 5) -> bool:
 
     log(Severity.INFO, 'unmount_remote', f'Unmounting stale remote "{remote_name}" from "{mount_path}"')
 
-    output = cmdShellWrapper.exec_cmd(
-        command,
-        wait_for_output=True,
-        time_out=wait_timeout
-    )
-
+    if wait_timeout <= 0:
+        return False
     deadline = time.monotonic() + wait_timeout
-
-    while time.monotonic() < deadline:
+    try:
+        result = subprocess.run(arguments, capture_output=True, text=True, timeout=wait_timeout)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        log(Severity.ERROR, 'unmount_remote', str(error))
+        return False
+    if result.returncode:
+        log(Severity.ERROR, 'unmount_remote', f'Unmount failed: {result.stderr.strip()}')
+        return False
+    while True:
         if not is_mount_path_mounted(mount_path):
             _remove_empty_mount_path(mount_path)
             return True
-
-        time.sleep(0.1)
-
-    log(
-        Severity.ERROR,
-        'unmount_remote',
-        f'Unable to unmount "{remote_name}" from "{mount_path}". Output: {output}'
-    )
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(0.1, remaining))
+    log(Severity.ERROR, 'unmount_remote', f'Timed out unmounting {remote_name}')
     return False
 
 
 def wait_until_remote_ready(remote_name: str, timeout: float = 15) -> bool:
     """Wait until one remote is both mounted and able to service a root directory read."""
 
-    deadline = time.monotonic() + timeout
-
-    while time.monotonic() < deadline:
-        if is_remote_ready(remote_name):
+    deadline = time.monotonic() + timeout_seconds(timeout)
+    while (remaining := deadline - time.monotonic()) > 0:
+        if is_remote_ready(remote_name, probe_timeout=min(2, remaining)):
             return True
-
-        time.sleep(0.25)
-
-    return is_remote_ready(remote_name)
+        time.sleep(min(0.25, max(0, deadline - time.monotonic())))
+    return False
 
 
 def ensure_remote_mounted(
@@ -290,6 +263,7 @@ def ensure_remote_mounted(
 ) -> Path | None:
     """Ensure one rclone remote is mounted, responsive, and ready to open."""
 
+    wait_timeout = timeout_seconds(wait_timeout)
     mount_path = get_remote_mount_path(remote_name)
 
     if is_remote_ready(remote_name):
@@ -341,6 +315,7 @@ def get_rclone_remote_mount_paths(config_path: str | Path) -> list[str]:
         if 'Dropbox' in remote_name or 'gdrive' in remote_name:
             continue
 
+        validate_remote_name(remote_name)
         mount_paths.append(str(network_remote_mount_path / remote_name))
 
     return mount_paths
@@ -349,34 +324,39 @@ def get_rclone_remote_mount_paths(config_path: str | Path) -> list[str]:
 def mount_all_rclone_conf_remotes(
     config_path: str | Path,
     timeout=None,
-    wait_until_mounted=False
-) -> None:
+    wait_until_mounted=False,
+    wait_timeout: float = 15
+) -> bool:
     """
     Mount all supported remotes from one explicit rclone config.
 
     Retained as an explicit utility. Logistics no longer calls this automatically at startup.
     """
 
+    wait_timeout = timeout_seconds(wait_timeout)
     mount_paths = get_rclone_remote_mount_paths(config_path)
 
     if not mount_paths:
         log(Severity.WARNING, 'mount_all_rclone_conf_remotes', 'No rclone remotes found to mount')
-        return
+        return True
 
     for mount_path_str in mount_paths:
         mount_path = Path(mount_path_str)
-        mount_remote(mount_path.name, config_path, mount_path, timeout)
+        if not mount_remote(mount_path.name, config_path, mount_path, timeout):
+            return False
 
     if not wait_until_mounted:
         log(Severity.DEBUG, 'mount_all_rclone_conf_remotes', 'Mount commands started, proceeding without waiting')
-        return
+        return True
 
     log(Severity.INFO, 'mount_all_rclone_conf_remotes', 'Waiting for all rclone remotes to become ready')
 
-    while not all(is_remote_ready(Path(path).name) for path in mount_paths):
-        time.sleep(0.25)
-
+    deadline = time.monotonic() + wait_timeout
+    for path in mount_paths:
+        if not wait_until_remote_ready(Path(path).name, timeout=max(0, deadline - time.monotonic())):
+            return False
     log(Severity.INFO, 'mount_all_rclone_conf_remotes', 'All rclone remotes successfully mounted')
+    return True
 
 
 def initialize() -> None:
@@ -390,21 +370,11 @@ def initialize() -> None:
     clear_mounts()
 
 
-def _quote_shell_arg(value: str | Path) -> str:
-    """Quote one shell argument for the current platform."""
-
-    value_str = str(value)
-
-    if get_os() == OS.WIN:
-        return f'"{value_str}"'
-
-    return shlex.quote(value_str)
-
-
 def _remove_empty_mount_path(mount_path: Path) -> None:
     """Remove a failed Unix mount directory when it is still an ordinary empty directory."""
 
-    if get_os() == OS.WIN or not mount_path.is_dir() or os.path.ismount(mount_path):
+    if (get_os() == OS.WIN or mount_path.is_symlink() or mount_path.is_junction()
+            or not mount_path.is_dir() or os.path.ismount(mount_path)):
         return
 
     try:

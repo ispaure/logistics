@@ -67,3 +67,30 @@ The feature expects the system FUSE device and helper to already be available.
 
 Initialization only performs local stale-mount housekeeping where required.
 It never mounts all remotes at application startup.
+
+Windows cleanup removes only empty ordinary directories. Symbolic links,
+junctions, mount points and nonempty folders are preserved.
+
+## Commands and recovery
+
+Mount, unmount and installer commands use argument lists. Remote names cannot
+escape their mount directory or be interpreted as command options. New mounts
+refuse linked or nonempty mount locations. Unix daemon startup checks the command
+exit status; Windows starts the long-running mount process and readiness is
+checked separately.
+
+Directory-read probes run in a child Python process with a timeout, preventing
+normal stale-filesystem probe failures from blocking the polling loop indefinitely.
+Readiness probes use the remaining wait budget. The explicit bulk-mount helper
+returns success/failure and has a shared bounded readiness wait rather than an
+unlimited loop. Command timeouts are separate from that readiness budget.
+
+An unresponsive Unix mount is unmounted before retrying. A failed unmount stops
+recovery; failed startup reports failure and removes only an ordinary empty mount
+directory. Automatic recovery of an unresponsive Windows mount remains unsupported.
+Linux dependency/installer checks do not require private Software resources.
+
+`Python/tests/test_fuse.py` simulates mount states and process outcomes, including
+deadline handling, recovery failures and link preservation. It also runs the
+directory probe against a temporary local folder. These tests do not mount real
+remotes or validate macFUSE/WinFsp/Linux drivers.

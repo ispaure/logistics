@@ -46,13 +46,11 @@ def is_installed() -> bool:
 def get_installer_path() -> Path | None:
     """Return the bundled platform installer path, when Logistics provides one."""
 
-    logistics_cfg = config.LogisticsConfig()
-
     match get_os():
         case OS.MAC:
-            return logistics_cfg.path_logistics_software_mac / MACFUSE_INSTALLER_NAME
+            return config.LogisticsConfig().path_logistics_software_mac / MACFUSE_INSTALLER_NAME
         case OS.WIN:
-            return logistics_cfg.path_logistics_software_win / WINFSP_INSTALLER_NAME
+            return config.LogisticsConfig().path_logistics_software_win / WINFSP_INSTALLER_NAME
         case OS.LINUX:
             return None
         case _:
