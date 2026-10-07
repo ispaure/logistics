@@ -35,39 +35,31 @@ every `.conf` directly inside the rclone config directory, including a legacy
 
 ## Folders UI
 
-The generic Folders page always provides:
+The **Local** source shows managed local folders that are not represented by an
+active remote or a dedicated local source. It is hidden when there are no such
+folders. Excluding a remote name does not exclude its local folder.
 
-```text
-Local
-```
+Loaded rclone configs appear together under the **rclone** source tab. The
+**Credential** dropdown selects **All** configs or a specific config such as
+Personal or Work. Switching back to Folders refreshes the available configs and
+folder lists; changing the credential uses the current refresh's snapshot.
 
-When credential configs are loaded, rclone contributes additional sources:
-
-```text
-rclone [Personal]
-rclone [Work]
-```
-
-Local-only folders are shown under `Local`.
-
-An rclone source shows remotes available through that config and associates an
-exact case-sensitive local folder when one has the same name.
-
-The config name is execution context only. It is not part of folder identity.
-If two configs both define `Media`, Logistics still treats the remote as
-`Media`.
+An rclone source associates an exact case-sensitive local folder when a remote
+has the same name. If two configs both define `Media`, the All view shows separate
+entries labelled with the config names and preserves the selected credential
+through a refresh. Actions use the context belonging to the selected entry.
+The remote's name remains `Media`; the credential label does not change its
+filesystem paths.
 
 ## Filesystem paths
 
-This change does not alter Logistics folder locations.
-
-Local folders remain directly under:
+Local folders live directly under:
 
 ```text
 Local/<folder>
 ```
 
-FUSE mounts remain directly under:
+FUSE mounts live directly under:
 
 ```text
 NetworkMount/<remote>

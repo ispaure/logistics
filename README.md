@@ -27,7 +27,7 @@ Each feature README describes its behavior, configuration, and limitations.
 | --- | --- |
 | [rclone](Python/features/rclone/README.md) | Credential configs and remote push/pull |
 | [FUSE](Python/features/fuse/README.md) | Mount and open remotes on demand |
-| [Comics](Python/features/comics/README.md) | CBZ compression, ComicInfo editing, CBR conversion, and external reader integration |
+| [Comics](Python/features/comics/README.md) | Library browsing, native reader, metadata editing, and CBZ/CBR tools |
 | [Images](Python/features/images/README.md) | Image compression and JPG EXIF tools |
 | [Calibre](Python/features/calibre/README.md) | Library launching and book export |
 | [Plex](Python/features/plex/README.md) | Media Server data backup and restore |
@@ -47,7 +47,7 @@ Each feature README describes its behavior, configuration, and limitations.
 
 `Python/features/` owns feature logic and feature-specific UI; `Python/ui_new/` hosts the generic interface; `Python/models/` and `Python/services/` provide folder models and discovery support. `Python/commonUtils/` is a Git submodule. See [UI architecture](Python/features/UI_ARCHITECTURE.md) for contribution and configuration conventions. `Scripts/` contains standalone scripts.
 
-Run the comics/image regression suite from the repository root:
+Run the regression suite from the repository root:
 
 ```sh
 # macOS / Linux
@@ -57,3 +57,14 @@ PYTHONPATH=Python .venv/bin/python -m unittest discover -s Python/tests -v
 On Windows PowerShell, set `$env:PYTHONPATH = "Python"` and run `.venv/Scripts/python.exe -m unittest discover -s Python/tests -v`.
 
 Tests use disposable fixtures. Desktop dialogs and external integrations require separate platform validation.
+
+The suite covers feature startup ordering, folder-source refresh and selection,
+generic action dispatch, main navigation, comics, images, Calibre exports, simulated
+FUSE recovery, and Perforce command forwarding. Core UI tests supply mock feature contributions and use Qt's offscreen
+platform; they do not mount remotes or launch external applications. See the
+[maintenance notes](Python/MAINTENANCE.md) for the main remaining gaps.
+
+Plex package/database maintenance and downloader command construction are covered
+by temporary fixtures and mocked processes in `Python/tests/test_plex.py` and
+`Python/tests/test_youtube_downloader.py`. These checks do not run a server,
+download media, update packages or perform remote transfers.
