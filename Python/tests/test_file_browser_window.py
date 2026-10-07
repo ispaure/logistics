@@ -190,7 +190,8 @@ class BrowserWindowTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'disabled'):
             action.run(captured)
         self.assertFalse(window.file_browser.activation_handlers)
-        self.assertEqual(len(window.file_browser.context_menu_for(index).actions()), 2)
+        self.assertEqual([action.text() for action in window.file_browser.context_menu_for(index).actions()][2:],
+                         ['Archives', 'Create encrypted ZIP…'])
         self.assertEqual(window.file_browser.tabs.count(), 1)
         registry.set_feature_enabled('comics', True)
         self.wait(window)
@@ -221,3 +222,33 @@ class BrowserWindowTests(unittest.TestCase):
         editor.reject()
         registry.set_feature_enabled('comics', True)
         self.wait(window)
+
+    def test_archives_action_is_session_wide_and_toggles_independently(self):
+        window = FileBrowserWindow(self.root)
+        window.show()
+        self.addCleanup(self.close_window, window)
+        self.wait(window)
+        index = window.file_browser.model.index(str(self.path))
+        def archive_actions():
+            menu = window.file_browser.context_menu_for(index)
+            actions = [action for action in menu.actions() if action.property('source') == 'Archives']
+            return menu, actions
+        menu, actions = archive_actions()
+        self.assertEqual([action.text() for action in actions], ['Create encrypted ZIP…'])
+        with patch('features.archives.ui.create_zip.CreateZipDialog') as dialog:
+            actions[0].trigger()
+            self.assertEqual(dialog.call_args.args[0], (self.path,))
+            dialog.return_value.exec.assert_called_once()
+        menu.deleteLater()
+        registry.set_feature_enabled('archives', False)
+        self.addCleanup(registry.set_feature_enabled, 'archives', True)
+        self.wait(window)
+        menu, actions = archive_actions()
+        self.assertEqual(actions, [])
+        menu.deleteLater()
+        self.assertIn('Edit Metadata', [action.text() for action in window.file_browser.context_menu_for(index).actions()])
+        registry.set_feature_enabled('archives', True)
+        self.wait(window)
+        menu, actions = archive_actions()
+        self.assertEqual(len(actions), 1)
+        menu.deleteLater()

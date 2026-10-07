@@ -5,6 +5,8 @@ from commonUtils.ui import pyside as qt
 from features.comics.selection import ComicSelection, normalize_targets
 from .metadata_form import MetadataForm
 from .operations import Operation
+from services.zip_passwords import is_password_error
+from ui_new.dialogs.archive_password import ask_password
 
 WINDOW_SIZE = (789, 635)
 BUTTON_SIZE = (105, 28)
@@ -106,7 +108,7 @@ class MetadataEditor(qt.QDialog):
         if action:
             action()
 
-    def _load(self, targets):
+    def _load(self, targets, *, password=None):
         self.targets = normalize_targets(targets)
         self.path = self.targets[0]
         self.document = None
@@ -117,12 +119,17 @@ class MetadataEditor(qt.QDialog):
         self.setWindowTitle(f'Edit Metadata — {title}')
         self.message.setVisible(self.is_bulk)
         self.message.setText('Reading selected comics…')
-        self._operate(lambda: ComicSelection(self.targets), self._loaded)
+        self._operate(lambda: ComicSelection(self.targets, password=password), self._loaded)
 
     def _loaded(self, selection, error):
         if error:
             self.message.show()
             self.message.setText(f'Cannot read metadata: {error}')
+            if not self.is_bulk and is_password_error(error):
+                password = ask_password(self.path, error, self)
+                if password is not None:
+                    targets = self.targets
+                    self.pending_action = lambda: self._load(targets, password=password)
             return
         try:
             self.tabs.load_values(selection.field_values(self.editors))
@@ -141,6 +148,10 @@ class MetadataEditor(qt.QDialog):
             self.setWindowTitle(f'Edit Metadata — {count} comics')
             self.message.show()
             self.message.setText(f'{count} comics. Muted fields have multiple values. Only fields marked * will change.')
+            if selection.load_failures:
+                details = '\n'.join(f'{path}: {message}' for path, message in selection.load_failures.items())
+                self.message.setText(f'{count} editable comics; {len(selection.load_failures)} locked comics will be skipped. Only fields marked * will change.')
+                qt.QMessageBox.warning(self, 'Locked comics were skipped', details)
         else:
             self.message.setText('Only changed fields are saved; other XML metadata is retained.' if self.document.exists else
                                  'No ComicInfo.xml yet. Apply or OK will create it when fields are changed.')

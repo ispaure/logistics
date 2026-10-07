@@ -10,6 +10,8 @@ from commonUtils import dirUtils, zipUtils
 from commonUtils.debugUtils import Severity, log
 from commonUtils.fileTypes import txtType
 from .archive_io import replace_archive, validate_archive_members
+from services.zip_passwords import resolve_password
+from commonUtils.zip_access import authenticate
 
 
 def get_temp_loc_edit_comicinfoxml() -> Path:
@@ -22,9 +24,12 @@ def _replace_tag(file_path: Path, tag: str, search: str, replacement: str) -> bo
     try:
         original_stat = file_path.stat()
         validate_archive_members(file_path)
+        password = resolve_password(file_path, configured_only=True)
+        if password is not None:
+            authenticate(file_path, password, all_members=True, for_rewrite=True)
         with TemporaryDirectory(prefix='logistics-comicinfo-', ignore_cleanup_errors=True) as workspace:
             extracted = Path(workspace)
-            if not zipUtils.unzip_file(file_path, extracted):
+            if not zipUtils.unzip_file(file_path, extracted, pwd=password):
                 raise OSError(f'Could not extract {file_path}')
             xml_file = txtType.TXTFile(extracted / 'ComicInfo.xml')
             xml_file.read_lines()
@@ -37,7 +42,7 @@ def _replace_tag(file_path: Path, tag: str, search: str, replacement: str) -> bo
             ElementTree.fromstring('\n'.join(updated_lines))
             xml_file.line_lst = updated_lines
             xml_file.write_lines()
-            replace_archive(extracted, file_path, expected_stat=original_stat)
+            replace_archive(extracted, file_path, expected_stat=original_stat, password=password)
         return True
     except Exception as error:
         log(Severity.ERROR, 'ComicInfo edit', f'Could not update "{file_path}": {error}')

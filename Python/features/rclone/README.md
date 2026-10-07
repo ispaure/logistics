@@ -111,3 +111,10 @@ Credential ZIPs contain `.txt` files whose first line is a rclone section header
 
 Logistics core does not depend on rclone. Local folders continue to work when
 the rclone feature is not distributed with the application.
+
+Credential ZIP loading uses the shared `commonUtils.zip_access` extraction through
+`zipUtils.unzip_file`, with the explicitly supplied credential password. Plain,
+ZipCrypto and AES ZIPs retain the same extraction layout. Each load has its own
+private temporary directory, removed after success or failure; failed extraction
+never writes/replaces the generated `.conf`. This flow does not inherit Comics'
+`remoteConfig.ini` password or prompt/cache policy.

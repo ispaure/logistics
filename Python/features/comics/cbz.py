@@ -30,6 +30,8 @@ from .compression_stats import CompressionStats, CompressionLog
 from .sanitization import CBZSanitizationMixin
 from .browser_support import ComicBrowserMixin
 from .archive_io import replace_archive, validate_archive_members
+from services.zip_passwords import resolve_password
+from commonUtils.zip_access import open_archive, authenticate
 
 
 # User Defined Settings
@@ -104,7 +106,8 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
         self.compression_log: CompressionLog = CompressionLog(self.file_name)
 
     def is_already_compressed(self):
-        with zipfile.ZipFile(self.path) as archive:
+        password = resolve_password(self.path, configured_only=True)
+        with open_archive(self.path, password=password) as archive:
             return 'CompressionLog.txt' in archive.namelist()
 
     def export_comicinfo_xml_with_updated_pages(self, cbz_img_cls_lst: List[CBZImageFile], export_path: Path, extracted_dir: Path | None = None):
@@ -165,7 +168,10 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
         temp_dir_extracted_cbz.mkdir()
 
         validate_archive_members(self.path)
-        result = self.extract(temp_dir_extracted_cbz)
+        password = resolve_password(self.path, configured_only=True)
+        if password is not None:
+            authenticate(self.path, password, all_members=True, for_rewrite=True)
+        result = self.extract(temp_dir_extracted_cbz, password=password)
         if not result:
             msg = f'Unable to extract "{self.path}" properly!'
             log(Severity.ERROR, tool_name, msg)
@@ -298,7 +304,7 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP EIGHT: FROM CONTENTS OF THE RESULT DIRECTORY, BUILD ARCHIVE OVERWRITING THE ORIGINAL .CBZ
-        replace_archive(temp_dir_result, self.path, expected_stat=original_stat)
+        replace_archive(temp_dir_result, self.path, expected_stat=original_stat, password=password)
 
         # --------------------------------------------------------------------------------------------------------------
         # END LOGS
@@ -366,7 +372,7 @@ def _compress_cbz_paths(paths, always_keep_compressed, preserve_animated_and_mul
     for cbz_file_cls in cbz_file_cls_lst:
         try:
             already_compressed = cbz_file_cls.is_already_compressed()
-        except (OSError, zipfile.BadZipFile) as error:
+        except (OSError, ValueError, RuntimeError, zipfile.BadZipFile) as error:
             compression_stats.error_during_compression += 1
             log(Severity.ERROR, tool_name, f'Cannot read "{cbz_file_cls.path}": {error}')
             continue

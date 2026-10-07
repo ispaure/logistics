@@ -4,6 +4,7 @@ Credential management for the Logistics rclone feature.
 
 from pathlib import Path
 from typing import cast
+from tempfile import TemporaryDirectory
 
 import config
 
@@ -108,39 +109,18 @@ def load_remote_from_zip_to_config(zip_path: str | Path, zip_pw: str) -> bool:
 
     logistics_cfg = config.LogisticsConfig()
     zip_path = Path(zip_path)
-    extract_dir = Path(logistics_cfg.temp_path, 'UnpackCredentials')
     config_path = configuration.get_credential_config_path(zip_path)
-
-    extract_directory = dirUtils.Directory(extract_dir)
-
-    if extract_directory.is_dir():
-        extract_directory.delete_contents()
-
-    try:
-        try:
-            extracted = zipUtils.unzip_file(zip_path, extract_dir, zip_pw)
-        except Exception:
-            ui.display_msg_box_ok(
-                'Load Remote Credential',
-                'Password is invalid or the credential archive could not be opened.'
-            )
+    workspace_root = Path(logistics_cfg.temp_path)
+    workspace_root.mkdir(parents=True, exist_ok=True)
+    # Per-operation private workspaces avoid mixing concurrent credential sets.
+    with TemporaryDirectory(prefix='logistics-credentials-', dir=workspace_root,
+                            ignore_cleanup_errors=True) as workspace:
+        extract_dir = Path(workspace)
+        if not zipUtils.unzip_file(zip_path, extract_dir, zip_pw):
+            ui.display_msg_box_ok('Load Remote Credential',
+                'Password is invalid or the credential archive could not be extracted.')
             return False
-
-        if not extracted:
-            ui.display_msg_box_ok(
-                'Load Remote Credential',
-                'The credential archive could not be extracted.'
-            )
-            return False
-
         if not write_remote_credentials_to_config(extract_dir, config_path):
             return False
-
-        print_debug_msg(
-            f'Successfully loaded remote credentials to "{config_path.name}"!',
-            True
-        )
+        print_debug_msg(f'Successfully loaded remote credentials to "{config_path.name}"!', True)
         return True
-    finally:
-        if extract_directory.is_dir():
-            extract_directory.delete_contents()

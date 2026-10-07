@@ -7,6 +7,7 @@ from pathlib import Path
 from commonUtils.fileTypes.jsonType import JSONFile
 
 from .library import ComicDocument
+from commonUtils.zip_access import is_encrypted
 
 LIST_FIELDS = frozenset(('Writer', 'Penciller', 'Inker', 'Colorist', 'Letterer',
                          'CoverArtist', 'Editor', 'Translator', 'Genre', 'Tags',
@@ -132,6 +133,9 @@ class LibraryCatalog:
                     continue
                 key = path.relative_to(self.root).as_posix()
                 try:
+                    # Never persist decrypted metadata from protected comics.
+                    if is_encrypted(path):
+                        continue
                     signature = file_signature(path)
                     old = previous.get(key)
                     if old and old['signature'] == signature:
