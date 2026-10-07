@@ -95,7 +95,7 @@ class YouTubeDownloaderDialog(pyside.QDialog):
 
         explanation = pyside.QLabel(
             'Download all missing videos described by the INI files in the configured YouTube directory. '
-            'The existing downloader updates yt-dlp before processing the configs.'
+            'Logistics attempts to update yt-dlp before processing the configs.'
         )
         explanation.setWordWrap(True)
 
@@ -124,7 +124,7 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         push_config_button = pyside.QPushButton('Push Local Config')
         pull_config_button = pyside.QPushButton('Pull Remote Config')
 
-        rclone_available = registry.is_feature_available('rclone')
+        rclone_available = registry.is_feature_enabled('rclone')
         remote_enabled = (
             self.entry.remote_name is not None
             and self.rclone_config_path is not None
@@ -133,7 +133,7 @@ class YouTubeDownloaderDialog(pyside.QDialog):
 
         if not rclone_available:
             explanation = pyside.QLabel(
-                'The optional rclone feature is not installed. '
+                'The optional rclone feature is unavailable or disabled. '
                 'Downloads remain available, but remote sync actions are disabled.'
             )
             explanation.setWordWrap(True)
@@ -165,6 +165,7 @@ class YouTubeDownloaderDialog(pyside.QDialog):
 
     def _selectable_label(self, text: str):
         label = pyside.QLabel(text)
+        label.setTextFormat(pyside.Qt.TextFormat.PlainText)
         label.setWordWrap(True)
         label.setTextInteractionFlags(pyside.Qt.TextInteractionFlag.TextSelectableByMouse)
         return label

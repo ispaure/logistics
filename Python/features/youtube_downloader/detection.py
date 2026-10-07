@@ -2,7 +2,7 @@
 Detection helpers for the Logistics YouTube downloader feature.
 """
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from commonUtils import configUtils
 
@@ -23,7 +23,16 @@ def get_config_sub_path(folder: LocalFolder) -> str | None:
     if not config_path.is_file():
         return None
 
-    return configUtils.config_section_map(config_path, YOUTUBE_DOWNLOAD_SECTION, CONFIG_SUB_PATH_KEY)
+    value = configUtils.config_section_map(config_path, YOUTUBE_DOWNLOAD_SECTION, CONFIG_SUB_PATH_KEY)
+    if not value:
+        return None
+    path = Path(value.replace('\\', '/'))
+    if path.is_absolute() or PureWindowsPath(value).drive or '..' in path.parts or path == Path('.'):
+        return None
+    root = Path(folder.path).resolve()
+    if not (root / path).resolve().is_relative_to(root):
+        return None
+    return path.as_posix()
 
 
 def get_config_path(folder: LocalFolder) -> Path | None:
