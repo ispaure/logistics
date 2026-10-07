@@ -40,11 +40,19 @@ import pyzipper
 from commonUtils import zipUtils
 from features.comics import cbz
 
-path, output, password, keep = sys.argv[1:]
+path, output, password, keep, baseline = sys.argv[1:]
 path, output = Path(path), Path(output)
 password = None if password == '-' else password
 keep = keep == '1'
-records = {}
+records = {'windows_baseline_flush_adjustment': baseline == '1' and sys.platform == 'win32'}
+real_path_open = Path.open
+def writable_flush_open(self, mode='r', *args, **kwargs):
+    # The pristine Windows baseline fails _commit on its read-only staged ZIP.
+    # Only repair the flush descriptor; no entry, encoding or policy changes.
+    if (records['windows_baseline_flush_adjustment'] and mode == 'rb'
+            and self.name == 'result.zip' and self.parent.name.startswith('.logistics-comic-')):
+        mode = 'r+b'
+    return real_path_open(self, mode, *args, **kwargs)
 def tree(root):
     return {item.relative_to(root).as_posix() + ('/' if item.is_dir() else ''):
             None if item.is_dir() else [item.stat().st_size, sha256(item.read_bytes()).hexdigest()]
@@ -69,7 +77,7 @@ def replace(source, *args, **kwargs):
     records['staged_result'] = tree(Path(source))
     return real_replace(source, *args, **kwargs)
 before = path.read_bytes()
-with patch.object(zipUtils, 'unzip_file', side_effect=unzip), patch.object(cbz.CBZFile, 'sanitize_extracted_cbz', sanitize), patch.object(cbz, 'replace_archive', side_effect=replace), patch('features.comics.compression_stats.datetime') as clock:
+with patch.object(Path, 'open', writable_flush_open), patch.object(zipUtils, 'unzip_file', side_effect=unzip), patch.object(cbz.CBZFile, 'sanitize_extracted_cbz', sanitize), patch.object(cbz, 'replace_archive', side_effect=replace), patch('features.comics.compression_stats.datetime') as clock:
     clock.now.return_value = datetime(2020, 1, 2, 3, 4, 5)
     records['compression_success'] = cbz.CBZFile(path).compress_to_webp(keep, not keep)
 records['original_unchanged'] = path.read_bytes() == before
@@ -130,12 +138,12 @@ for layout, entries in layouts.items():
             (folder / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password = test-only-comic-password\n')
             output = folder / 'trace.json'
             env = dict(os.environ, PYTHONPATH=str(source / 'Python'), QT_QPA_PLATFORM='offscreen')
-            completed = subprocess.run([sys.executable, str(CHILD), str(path), str(output), password or '-', str(int(keep))], cwd=source, env=env, capture_output=True, text=True)
+            completed = subprocess.run([sys.executable, str(CHILD), str(path), str(output), password or '-', str(int(keep)), '1' if version == 'before-plain' else '0'], cwd=source, env=env, capture_output=True, text=True)
             (folder / 'run.log').write_text(completed.stdout + completed.stderr)
             if completed.returncode:
                 raise RuntimeError(f'Run failed: {name}, see {folder / "run.log"}\n' + completed.stdout[-3000:] + completed.stderr[-3000:])
             records = json.loads(output.read_text())
-            assert records['compression_success'], name
+            assert records['compression_success'], f'{name}: see {folder / "run.log"}'
             assert records['explicit_extract_success'], name
             assert records['encrypted'] == bool(password), name
             if password:
@@ -156,14 +164,31 @@ with pyzipper.AESZipFile(path, 'w', compression=zipfile.ZIP_DEFLATED) as archive
     for filename, data in layouts['root'].items():
         archive.writestr(filename, data)
 output = folder / 'trace.json'
-completed = subprocess.run([sys.executable, str(CHILD), str(path), str(output), 'test-only-comic-password', '0'], cwd=OLD, env=dict(os.environ, PYTHONPATH=str(OLD / 'Python'), QT_QPA_PLATFORM='offscreen'), capture_output=True, text=True)
+completed = subprocess.run([sys.executable, str(CHILD), str(path), str(output), 'test-only-comic-password', '0', '0'], cwd=OLD, env=dict(os.environ, PYTHONPATH=str(OLD / 'Python'), QT_QPA_PLATFORM='offscreen'), capture_output=True, text=True)
 (folder / 'run.log').write_text(completed.stdout + completed.stderr)
 assert completed.returncode == 0, folder / 'run.log'
 legacy = json.loads(output.read_text())
 assert legacy['explicit_extract_success']
 assert legacy['explicit_extraction'] == results['root-keep0-before-plain']['explicit_extraction']
 assert not legacy['compression_success'] and legacy['original_unchanged']
-summary = {'platform': platform.platform(), 'python': sys.version, 'baseline_logistics': ref, 'baseline_commonutils': shared_ref, 'successful_full_runs': 24, 'legacy_password_extraction_same_layout': True, 'legacy_encrypted_full_compression_unsupported_original_preserved': True, 'compared_stages': ['explicit extraction', 'compression extraction', 'sanitized', 'staged result', 'final archive'], 'results': results, 'legacy_encrypted': legacy}
+windows_original_flush_failure = None
+if sys.platform == 'win32':
+    folder = ROOT / 'runs' / 'before-plain-pristine-windows'
+    folder.mkdir(parents=True)
+    path, output = folder / 'comic.cbz', folder / 'trace.json'
+    with zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+        for filename, data in layouts['root'].items():
+            archive.writestr(filename, data)
+    completed = subprocess.run([sys.executable, str(CHILD), str(path), str(output), '-', '0', '0'], cwd=OLD,
+                              env=dict(os.environ, PYTHONPATH=str(OLD / 'Python'), QT_QPA_PLATFORM='offscreen'), capture_output=True, text=True)
+    (folder / 'run.log').write_text(completed.stdout + completed.stderr)
+    assert completed.returncode == 0, folder / 'run.log'
+    pristine = json.loads(output.read_text())
+    assert not pristine['compression_success'] and pristine['original_unchanged']
+    assert 'Bad file descriptor' in completed.stdout + completed.stderr
+    assert pristine['staged_result'] == results['root-keep0-before-plain']['staged_result']
+    windows_original_flush_failure = pristine
+summary = {'windows_pristine_baseline_flush_failure': windows_original_flush_failure, 'windows_baseline_flush_adjustment': sys.platform == 'win32', 'platform': platform.platform(), 'python': sys.version, 'baseline_logistics': ref, 'baseline_commonutils': shared_ref, 'successful_full_runs': 24, 'legacy_password_extraction_same_layout': True, 'legacy_encrypted_full_compression_unsupported_original_preserved': True, 'compared_stages': ['explicit extraction', 'compression extraction', 'sanitized', 'staged result', 'final archive'], 'results': results, 'legacy_encrypted': legacy}
 (ROOT / 'comparison.json').write_text(json.dumps(summary, indent=2))
 print('RESULT_ROOT=' + str(ROOT), flush=True)
 print('All 24 full compression runs passed; old AES extraction matched, old encrypted compression safely failed.', flush=True)

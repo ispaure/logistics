@@ -60,3 +60,12 @@ class FeaturesPageTests(unittest.TestCase):
         item = self.item('test_missing')
         self.assertEqual(item.text(1), 'Missing dependency')
         self.assertFalse(item.flags() & qt.Qt.ItemFlag.ItemIsUserCheckable)
+
+    def test_rejected_toggle_keeps_emitting_item_alive_until_signal_returns(self):
+        from shiboken6 import isValid
+        item = self.item('test_base')
+        item.setCheckState(0, qt.Qt.CheckState.Unchecked)
+        self.assertTrue(isValid(item))
+        self.assertTrue(registry.is_feature_enabled('test_base'))
+        self.app.processEvents()
+        self.assertEqual(self.item('test_base').checkState(0), qt.Qt.CheckState.Checked)

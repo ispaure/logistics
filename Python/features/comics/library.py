@@ -79,9 +79,9 @@ class ComicDocument:
                     expected[self.member] = (len(data), sha256(data).hexdigest())
             if archive_manifest(staged, password=self.password) != expected:
                 raise ValueError('Archive content verification failed; original was kept')
-            staged.chmod(stat.S_IMODE(self.snapshot.st_mode))
-            with staged.open('rb') as stream:
+            with staged.open('r+b') as stream:
                 os.fsync(stream.fileno())
+            staged.chmod(stat.S_IMODE(self.snapshot.st_mode))
             if not archive_unchanged(self.path, self.snapshot):
                 raise RuntimeError('Comic changed while saving; original was kept')
             os.replace(staged, self.path)

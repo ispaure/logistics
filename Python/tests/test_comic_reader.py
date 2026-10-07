@@ -243,7 +243,9 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         for mode in (1, 2, 0):
             window.view_selector.setCurrentIndex(mode)
             self.wait(window)
-            self.assertEqual(window.browser.selected_rows(), [index])
+            self.assertEqual([Path(window.model.filePath(row)) for row in window.browser.selected_rows()], [self.path])
+            # Catalog creation can insert a folder and move filesystem rows.
+            index = window.model.index(str(self.path))
             view = window.browser.currentWidget()
             selected = window.browser.covers.mapFromSource(index) if mode == 1 else index
             # Tile/column clicks select an item, rather than every model column.

@@ -56,3 +56,10 @@ The comparison is now reproducible through
 [`compare_comic_zip_versions.py`](../../tests/compare_comic_zip_versions.py), and
 runs on each CI platform. See [platform checks](../../tests/PLATFORM_CHECKS.md) for
 local commands, prerequisites, artifacts and coverage boundaries.
+
+On Windows, subsequent CI exposed the pristine baseline's read-only `fsync`
+failure. Historical Windows comparisons use only the explicitly recorded writable
+flush-handle adjustment described in the platform guide, with a separate pristine
+failure/preservation check. The earlier 24-run macOS comparison above used no such
+adjustment. Current code uses a Windows-compatible writable flush handle for ZIP
+creation, metadata saves and recompression.
