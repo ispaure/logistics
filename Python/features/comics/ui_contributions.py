@@ -140,6 +140,16 @@ def _compress(context):
     return context.controller._compress(context.paths)
 
 
+def _encrypt(context):
+    from features.comics.ui.encryption import EncryptComicsDialog
+    dialog = EncryptComicsDialog(context.paths, parent=context.host or context.browser)
+    try:
+        return dialog.exec()
+    finally:
+        dialog.deleteLater()
+        context.browser.refresh()
+
+
 def _read(context):
     return context.controller._read(context.path)
 
@@ -153,7 +163,8 @@ def register() -> Feature:
         file_types=[FileType(comic_type, extensions=('cbz',))],
         browser=BrowserExtension(
             actions=[SelectionAction('edit_metadata', 'Edit Metadata', (comic_type, Directory), _edit_metadata),
-                     SelectionAction('compress', 'Compress Comics…', (comic_type, Directory), _compress)],
+                     SelectionAction('compress', 'Compress Comics…', (comic_type, Directory), _compress),
+                     SelectionAction('encrypt', 'Encrypt unencrypted comics…', (comic_type, Directory), _encrypt)],
             activation=[FileActivation(comic_type, _read)],
             folder_fields=folder_fields, create_controller=_create_browser_controller),
         folder_features=[

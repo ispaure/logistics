@@ -431,3 +431,29 @@ folder layouts and two retention modes, checking extraction through final output
 [Cross-platform checks](../../tests/PLATFORM_CHECKS.md) run all shared/application
 tests plus the historical compression comparison on macOS, Windows, Ubuntu and a
 Fedora 43 container; the same runner can be used locally on another machine.
+
+### Encrypt existing comics
+
+With Comics enabled, **Comics → Encrypt unencrypted comics…** is available in
+all file browser windows. Selected folders are scanned recursively once; overlapping
+selections are deduplicated and symlinks are not followed. The dialog reports the
+number to encrypt, already encrypted comics to skip, and per-file planning failures
+before you start encryption.
+
+Each plain CBZ uses its nearest configured `[LogisticsZIP] archive_password`.
+**One password-and-confirmation prompt covers all comics without a configured
+password in that operation**, not one prompt per file. Canceling that prompt starts
+no encryption. Entered passwords are not written to the INI. Already encrypted
+comics retain their existing password and bytes.
+
+Encryption streams entries directly into an AES-256 staged CBZ beside the original,
+preserving entry order, names, empty folders, comments and decrypted file contents.
+There is no image conversion, extraction or sanitization. Every entry is verified
+before atomic replacement, with a final check that the original has not changed.
+Hard-linked inputs require independent copies. Failures preserve that comic's
+original; other comics can succeed, and the dialog reports encrypted/skipped/failed
+counts. ZIP filenames remain visible without a password.
+
+This differs from **Archives → Create encrypted ZIP…**, which packages the CBZ file
+inside a separate outer ZIP. It does not change library catalog behavior: indexing
+remains attached to the dedicated Comics library view.

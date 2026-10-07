@@ -6,6 +6,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.file_browser.operations import Operation
 from commonUtils.zip_access import create_archive, password_bytes
 from services.zip_passwords import configured_password
+from services.password_prompt import confirmed_password
 
 
 class CreateZipDialog(qt.QDialog):
@@ -13,6 +14,7 @@ class CreateZipDialog(qt.QDialog):
         super().__init__(parent)
         self.targets = tuple(dict.fromkeys(Path(path).absolute() for path in targets))
         self.busy = False
+        self.succeeded = False
         self.operation = None
         self.setWindowTitle('Create encrypted ZIP')
         layout = qt.QVBoxLayout(self)
@@ -25,7 +27,7 @@ class CreateZipDialog(qt.QDialog):
         description.setWordWrap(True)
         layout.addWidget(description)
         folder = Path(os.path.commonpath([str(path.parent) for path in self.targets]))
-        name = self.targets[0].name if len(self.targets) == 1 else 'Selection'
+        name = (self.targets[0].name if self.targets[0].is_dir() else self.targets[0].stem) if len(self.targets) == 1 else 'Selection'
         self.output = qt.QLineEdit(str(folder / (name + '.zip')))
         row = qt.QHBoxLayout()
         row.addWidget(self.output)
@@ -56,13 +58,23 @@ class CreateZipDialog(qt.QDialog):
         if self.busy:
             return
         destination = Path(self.output.text())
-        def create():
+        try:
             passwords = [configured_password(path) for path in self.targets]
-            if any(not password for password in passwords):
-                raise ValueError('Every selected item needs a nonempty [LogisticsZIP] archive_password in its configuration.')
-            if len({password_bytes(password) for password in passwords}) != 1:
+            configured = {password_bytes(password) for password in passwords if password}
+            if len(configured) > 1:
                 raise ValueError('Selected items use different configured passwords; create separate ZIPs.')
-            return create_archive(self.targets, destination, password=passwords[0])
+            password = next(iter(configured), None)
+            if any(not value for value in passwords):
+                password = confirmed_password(self, 'This password will protect the new ZIP. It is not saved to remoteConfig.ini.')
+                if password is None:
+                    return
+                if configured and password_bytes(password) not in configured:
+                    raise ValueError('The entered password differs from the configured password; create separate ZIPs.')
+        except (OSError, ValueError) as error:
+            self.message.setText(f'ZIP was not created: {error}')
+            return
+        def create():
+            return create_archive(self.targets, destination, password=password)
         self.busy = True
         self.message.setText('Creating and verifying encrypted ZIP…')
         for widget in (self.create_button, self.cancel_button, self.output, self.browse):

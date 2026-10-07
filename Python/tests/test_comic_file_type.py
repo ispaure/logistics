@@ -46,7 +46,7 @@ class ComicFileTypeTests(unittest.TestCase):
             self.assertFalse(comic.browser_activate(None))
             from features.registry import get_feature_definition
             definition = get_feature_definition('comics')
-            self.assertEqual([action.id for action in definition.browser.actions], ['edit_metadata', 'compress'])
+            self.assertEqual([action.id for action in definition.browser.actions], ['edit_metadata', 'compress', 'encrypt'])
             self.assertEqual(len(definition.browser.activation), 1)
 
     def test_feature_file_registration_precedes_all_initializers(self):

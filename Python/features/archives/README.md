@@ -20,8 +20,14 @@ must be an explicit key in `[LogisticsZIP]`. INI syntax trims surrounding whites
 password without leading/trailing whitespace. The INI stores plaintext: keep real
 passwords out of Git and limit access to the configuration.
 
-Creation requires every selected item to resolve to the same nonempty configured
-password. It never prompts, never deletes sources and never overwrites an output.
+Creation uses the configured password, or asks for a nonempty password and matching
+confirmation when any selected item has no configured password. The entered password
+is not saved to the INI. A ZIP has one password: conflicting configured passwords,
+or an entered fallback different from a selected item's configured password, require
+separate ZIPs. Sources are never deleted and existing outputs are never overwritten.
+A single file `Comic.cbz` suggests `Comic.zip` beside the source, containing the
+original `Comic.cbz`; a folder `Books` suggests `Books.zip` beside that folder.
+Multiple selections suggest `Selection.zip`.
 Selected folders keep their own root directories. Unsafe paths, symbolic links,
 colliding names and outputs inside sources are rejected. Files are AES-256 encrypted,
 verified by decrypted hashes before publication. Filenames are visible without a
