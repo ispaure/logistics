@@ -59,3 +59,7 @@ Fixtures use the native long form of the OS temporary directory, because Qt
 expands Windows 8.3 aliases. Permission-preservation tests compare against the
 mode actually supported by the host filesystem rather than requiring POSIX bits
 on Windows.
+
+Fixtures close SQLite connections explicitly and use legal native filenames and
+paths. Tests that execute a POSIX shell or require POSIX executable permission
+bits run only on POSIX hosts; archive and password checks run on every platform.

@@ -344,8 +344,9 @@ class ComicsTests(unittest.TestCase):
     def test_destination_mode_is_preserved(self):
         path = self.archive()
         path.chmod(0o640)
+        expected_mode = stat.S_IMODE(path.stat().st_mode)
         self.assertTrue(cbz.CBZFile(path).compress_to_webp(True))
-        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o640)
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), expected_mode)
 
     def test_changed_original_is_not_overwritten(self):
         path = self.archive()

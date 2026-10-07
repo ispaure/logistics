@@ -50,15 +50,15 @@ class LibraryConfigurationTests(unittest.TestCase):
         self.assertEqual([window.library_tabs.tabText(i) for i in range(window.library_tabs.count())],
                          ['All', 'Missing', 'Artbooks', 'Comics [Marvel]'])
         self.assertFalse(window.library_tabs.isTabEnabled(1))
-        self.assertEqual(window.model.filePath(window.tree.rootIndex()), str(self.root))
+        self.assertEqual(Path(window.model.filePath(window.tree.rootIndex())), self.root)
         window._navigate(self.root / 'Artbooks')
         self.assertEqual(window.navigation.library, self.root)
         window._up()
         self.assertEqual(window.browser.browsing_directory(), self.root)
         window.library_tabs.setCurrentIndex(2)
-        self.assertEqual(window.model.filePath(window.tree.rootIndex()), str(self.root / 'Artbooks'))
+        self.assertEqual(Path(window.model.filePath(window.tree.rootIndex())), self.root / 'Artbooks')
         window.library_tabs.setCurrentIndex(3)
-        self.assertEqual(window.model.filePath(window.tree.rootIndex()), str(self.root / 'Comics [Marvel]'))
+        self.assertEqual(Path(window.model.filePath(window.tree.rootIndex())), self.root / 'Comics [Marvel]')
         self.assertEqual(window.catalog.root, self.root)
         self.assertEqual(window.tree.header().visualIndex(3), 1)
         deadline = time.monotonic() + 5

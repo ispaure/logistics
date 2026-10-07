@@ -306,7 +306,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         window.browser.context_requested.connect(requested.append)
         children = [view for view in window.browser.columns.findChildren(qt.QListView)
                     if view.isVisible() and view.model() is window.model
-                    and window.model.filePath(view.rootIndex()) == str(self.root)]
+                    and Path(window.model.filePath(view.rootIndex())) == self.root]
         self.assertTrue(children)
         child = children[0]
         index = window.model.index(str(self.path))
@@ -446,7 +446,7 @@ class DesktopActionTests(unittest.TestCase):
     def test_platform_reveal_commands_and_linux_fallback(self):
         from commonUtils.osUtils import OS
         from commonUtils.ui import desktop_actions
-        path = Path('/tmp/test name.cbz')
+        path = Path('/tmp/test name.cbz').absolute()
         with patch.object(desktop_actions, 'get_os', return_value=OS.MAC), patch.object(desktop_actions.subprocess, 'run') as run:
             desktop_actions.reveal(path)
             run.assert_called_once_with(['open', '-R', str(path)], check=True)
