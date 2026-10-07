@@ -134,6 +134,14 @@ The suggestion cache stays at the original collection root.
 Double-click a CBZ to open a native PySide reader window. Pages are naturally
 sorted and read on demand without extraction or modification; image decoding runs
 in a background worker. PNG, JPEG, WebP, GIF, BMP and TIFF pages are supported.
+The reader tries Qt first, then decodes through Pillow into raw display pixels
+if Qt cannot read the image. This avoids relying on platform-specific Qt WebP
+plugins. The fallback preserves transparency and EXIF orientation, retains valid
+RGB ICC profiles, and bounds large display images without changing archive files.
+If both decoders fail, the message identifies the archive entry and page number,
+bytes read, both decoder errors, Qt's supported formats and Pillow's WebP support.
+Archive-access errors are reported separately. Errors remain in the status bar
+and canvas tooltip until a page loads successfully, and are logged to the console.
 Automatic mode shows two portrait pages when both fit at full canvas height;
 otherwise it shows one. Landscape pages and pages marked `DoublePage` remain
 single. **View** also offers explicit Single Page and Two Pages modes. A spread

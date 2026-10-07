@@ -1,6 +1,7 @@
 """Native adaptive-spread reader with deliberate adjacent-file navigation."""
 
 import time
+from commonUtils.debugUtils import Severity, log
 from commonUtils.ui import pyside as qt
 from features.comics.pages import ComicPages
 from features.comics.reading import comic_siblings, visible_pages
@@ -199,11 +200,16 @@ class ComicReaderWindow(qt.QMainWindow):
             return
         if error:
             self.canvas.message = f'Cannot read page: {error}'
-            self.statusBar().showMessage(self.canvas.message, 8000)
+            self.statusBar().showMessage(self.canvas.message)
+            self.canvas.setToolTip(self.canvas.message)
+            log(Severity.ERROR, 'Comic Reader', self.canvas.message)
             self.page = self.shown_page
             self.canvas.update()
             self._update_controls()
         else:
+            self.statusBar().clearMessage()
+            self.canvas.setToolTip('')
+            self.canvas.message = ''
             self.shown_page = index
             self.images = images
             self._update_spread()

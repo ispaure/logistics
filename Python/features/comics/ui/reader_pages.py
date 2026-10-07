@@ -1,7 +1,13 @@
 """Page decoding and spread painting, independent of reader window controls."""
 
+from io import BytesIO
+from PIL import Image, ImageOps, features as pillow_features
+
 from commonUtils.ui import pyside as qt
 from features.comics.reading import visible_pages, SPREAD_GAP
+
+MAX_DISPLAY_PIXELS = 40_000_000
+MAX_DISPLAY_SIDE = 6000
 
 
 class PageCanvas(qt.QWidget):
@@ -48,20 +54,61 @@ class PageCanvas(qt.QWidget):
             x += target.width() + gap
 
 
+def _pillow_image(data):
+    """Decode to owned pixels without requiring any Qt image-format plugin."""
+    with Image.open(BytesIO(data)) as source:
+        rgb_profile = source.info.get('icc_profile') if source.mode in ('RGB', 'RGBA') else None
+        if source.width * source.height > MAX_DISPLAY_PIXELS:
+            # JPEG can reduce during decoding; other formats still retain Pillow's
+            # decompression-bomb safeguards. Resize before copying/rotating pixels.
+            source.draft(source.mode, (MAX_DISPLAY_SIDE, MAX_DISPLAY_SIDE))
+            source.thumbnail((MAX_DISPLAY_SIDE, MAX_DISPLAY_SIDE), Image.Resampling.LANCZOS)
+        oriented = ImageOps.exif_transpose(source)
+        rgba = oriented.convert('RGBA')
+        pixels = rgba.tobytes()
+        image = qt.QImage(pixels, rgba.width, rgba.height, rgba.width * 4,
+                          qt.QImage.Format.Format_RGBA8888).copy()
+        if image.isNull():
+            raise ValueError('Could not allocate the decoded page image')
+        if rgb_profile:
+            color_space = qt.QColorSpace.fromIccProfile(rgb_profile)
+            if color_space.isValid():
+                image.setColorSpace(color_space)
+        return image
+
+
 def read_image(pages, index):
-    data, _ = pages.read_page(index)
+    entry = pages.pages[index]
+    location = f'page {index + 1} ({entry}) in {pages.path.name}'
+    try:
+        data, mime = pages.read_page(index)
+    except Exception as error:
+        raise ValueError(f'Could not load {location} from the archive: {error}') from error
     buffer = qt.QBuffer()
     buffer.setData(data)
     buffer.open(qt.QIODevice.OpenModeFlag.ReadOnly)
     reader = qt.QImageReader(buffer)
     reader.setAutoTransform(True)
     size = reader.size()
-    if size.width() * size.height() > 40_000_000:
-        reader.setScaledSize(size.scaled(6000, 6000, qt.Qt.AspectRatioMode.KeepAspectRatio))
+    if size.width() * size.height() > MAX_DISPLAY_PIXELS:
+        reader.setScaledSize(size.scaled(MAX_DISPLAY_SIDE, MAX_DISPLAY_SIDE,
+                                        qt.Qt.AspectRatioMode.KeepAspectRatio))
     image = reader.read()
-    if image.isNull():
-        raise ValueError(reader.errorString() or 'This page could not be displayed')
-    return image
+    if not image.isNull():
+        return image
+    qt_error = reader.errorString() or 'This page could not be displayed'
+    try:
+        return _pillow_image(data)
+    except Exception as error:
+        formats = ', '.join(sorted(bytes(fmt).decode('ascii', errors='replace')
+                                   for fmt in qt.QImageReader.supportedImageFormats())) or 'none'
+        webp = 'available' if pillow_features.check('webp') else 'unavailable'
+        raise ValueError(
+            f'Could not decode {location}. Archive entry read: {len(data):,} bytes ({mime}). '
+            f'Qt: {qt_error}. Pillow: {error}. '
+            f'Qt image formats: {formats}. Pillow WebP support: {webp}. '
+            'The page may be damaged or a required image decoder may be unavailable.'
+        ) from error
 
 
 def read_candidates(pages, index):

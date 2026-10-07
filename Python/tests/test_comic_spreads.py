@@ -141,6 +141,12 @@ class SpreadTests(unittest.TestCase):
         self.assertEqual(reader.canvas.visual_pages, before)
         self.assertEqual(reader.page, reader.shown_page)
         self.assertIn('bad image', reader.statusBar().currentMessage())
+        self.assertIn('bad image', reader.canvas.toolTip())
+        reader.go(3)
+        self.wait(reader)
+        self.assertEqual(reader.shown_page, 3)
+        self.assertEqual(reader.statusBar().currentMessage(), '')
+        self.assertEqual(reader.canvas.toolTip(), '')
 
     def test_landscape_and_metadata_double_pages_remain_single(self):
         self.assertEqual(visible_pages(0, {0: (1600, 1000), 1: (800, 1200)}, (2000, 800)), (0,))
