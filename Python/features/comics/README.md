@@ -457,3 +457,12 @@ counts. ZIP filenames remain visible without a password.
 This differs from **Archives → Create encrypted ZIP…**, which packages the CBZ file
 inside a separate outer ZIP. It does not change library catalog behavior: indexing
 remains attached to the dedicated Comics library view.
+
+The encryption dialog shows progress by processed comic count and the current file.
+**Cancel after current comic** finishes and verifies the current archive, then stops
+before starting another. Closing the dialog or pressing Escape while encrypting
+requests the same cancellation and keeps the dialog alive until the worker finishes.
+Completed comics stay encrypted; unprocessed comics stay untouched. The final
+summary distinguishes cancellation and reports the number not processed. Folder
+scanning uses an indeterminate progress bar; cancellation is available during the
+encryption phase, after the scan and password confirmation.

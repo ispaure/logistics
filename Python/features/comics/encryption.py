@@ -82,9 +82,21 @@ def encrypt_comic(path, password):
     return True
 
 
-def execute_encryption(plan, fallback=None):
-    result = {'encrypted': [], 'skipped': list(plan.skipped), 'failed': dict(plan.failed)}
-    for path, password in plan.passwords.items():
+def execute_encryption(plan, fallback=None, *, progress=None, cancelled=None):
+    """Report completed comics; honor cancellation only between whole archives."""
+    result = {'encrypted': [], 'skipped': list(plan.skipped), 'failed': dict(plan.failed),
+              'cancelled': False, 'remaining': []}
+    items = list(plan.passwords.items())
+    total = len(items)
+    if progress:
+        progress(0, total, None)
+    for index, (path, password) in enumerate(items):
+        if cancelled and cancelled():
+            result['cancelled'] = True
+            result['remaining'] = [path for path, _ in items[index:]]
+            break
+        if progress:
+            progress(index, total, path)
         try:
             if encrypt_comic(path, password or fallback):
                 result['encrypted'].append(path)
@@ -92,4 +104,6 @@ def execute_encryption(plan, fallback=None):
                 result['skipped'].append(path)
         except Exception as error:
             result['failed'][path] = str(error)
+        if progress:
+            progress(index + 1, total, None)
     return result

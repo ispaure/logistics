@@ -1,4 +1,5 @@
 """Plan once, prompt once for missing passwords, then encrypt a fixed selection."""
+from threading import Event
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.file_browser.operations import Operation
 from services.password_prompt import confirmed_password
@@ -6,12 +7,16 @@ from features.comics.encryption import plan_encryption, execute_encryption
 
 
 class EncryptComicsDialog(qt.QDialog):
+    progress_changed = qt.Signal(int, int, object)
     def __init__(self, targets, parent=None):
         super().__init__(parent)
         self.targets = tuple(targets)
         self.busy = False
         self.plan = None
         self.completed = False
+        self.encrypting = False
+        self.cancel_requested = Event()
+        self.progress_changed.connect(self._progress)
         self.setWindowTitle('Encrypt unencrypted comics')
         layout = qt.QVBoxLayout(self)
         description = qt.QLabel('Encrypt unencrypted CBZ files in the selection, including nested folders. '
@@ -23,6 +28,14 @@ class EncryptComicsDialog(qt.QDialog):
         self.message.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
+        self.progress_bar = qt.QProgressBar()
+        self.progress_bar.setRange(0, 1)
+        self.progress_bar.setValue(0)
+        layout.addWidget(self.progress_bar)
+        self.cancel_button = qt.QPushButton('Cancel after current comic')
+        self.cancel_button.setEnabled(False)
+        self.cancel_button.clicked.connect(self._cancel)
+        layout.addWidget(self.cancel_button)
         self.start_button = qt.QPushButton('Check selected comics')
         self.start_button.clicked.connect(self._start)
         layout.addWidget(self.start_button)
@@ -31,6 +44,8 @@ class EncryptComicsDialog(qt.QDialog):
     def _run(self, work, completed):
         self.busy = True
         self.start_button.setEnabled(False)
+        self.cancel_requested.clear()
+        self.cancel_button.setEnabled(self.encrypting)
         operation = Operation(work, self)
         self.operation = operation
         operation.completed.connect(completed)
@@ -39,6 +54,8 @@ class EncryptComicsDialog(qt.QDialog):
 
     def _finished(self, operation):
         self.busy = False
+        self.encrypting = False
+        self.cancel_button.setEnabled(False)
         operation.deleteLater()
         if not self.completed:
             self.start_button.setText('Encrypt comics' if self.plan is not None else 'Check selected comics')
@@ -48,6 +65,7 @@ class EncryptComicsDialog(qt.QDialog):
         if self.busy or self.completed:
             return
         if self.plan is None:
+            self.progress_bar.setRange(0, 0)
             self.message.setText('Checking selected comics…')
             self._run(lambda: plan_encryption(self.targets), self._planned)
         else:
@@ -61,9 +79,28 @@ class EncryptComicsDialog(qt.QDialog):
             plan = self.plan
             self.plan = None
             self.message.setText('Encrypting and verifying comics…')
-            self._run(lambda: execute_encryption(plan, fallback), self._completed)
+            self.encrypting = True
+            self.progress_bar.setRange(0, max(1, len(plan.passwords)))
+            self.progress_bar.setValue(0)
+            self._run(lambda: execute_encryption(plan, fallback, progress=self.progress_changed.emit,
+                                                 cancelled=self.cancel_requested.is_set), self._completed)
+
+    def _cancel(self):
+        if self.busy and self.encrypting:
+            self.cancel_requested.set()
+            self.cancel_button.setEnabled(False)
+            self.message.setText('Cancellation requested. Finishing and verifying the current comic…')
+
+    def _progress(self, completed, total, path):
+        self.progress_bar.setRange(0, max(1, total))
+        self.progress_bar.setValue(completed)
+        self.progress_bar.setFormat(f'{completed} / {total} comics completed')
+        if not self.cancel_requested.is_set():
+            self.message.setText(f'Encrypting and verifying {path}' if path else f'{completed} / {total} comics completed')
 
     def _planned(self, plan, error):
+        self.progress_bar.setRange(0, 1)
+        self.progress_bar.setValue(0)
         if error:
             self.message.setText(f'Cannot scan selection: {error}')
             self.start_button.setEnabled(True)
@@ -76,17 +113,21 @@ class EncryptComicsDialog(qt.QDialog):
         if error:
             self.message.setText(f'Encryption failed: {error}')
             return
-        self.message.setText(f"Encrypted: {len(result['encrypted'])}; skipped: {len(result['skipped'])}; failed: {len(result['failed'])}."
+        prefix = 'Cancelled. ' if result['cancelled'] else ''
+        self.message.setText(prefix + f"Encrypted: {len(result['encrypted'])}; skipped: {len(result['skipped'])}; failed: {len(result['failed'])}; not processed: {len(result['remaining'])}."
                              + ''.join(f'\n{path}: {message}' for path, message in result['failed'].items()))
         self.completed = True
-        self.start_button.setText('Completed')
+        self.start_button.setText('Cancelled' if result['cancelled'] else 'Completed')
 
     def reject(self):
-        if not self.busy:
+        if self.busy:
+            self._cancel()
+        else:
             super().reject()
 
     def closeEvent(self, event):
         if self.busy:
+            self._cancel()
             event.ignore()
         else:
             super().closeEvent(event)
