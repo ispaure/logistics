@@ -77,12 +77,14 @@ class CalibreFolderWidget(pyside.QGroupBox):
 
     def _show_library(self, library):
         title = pyside.QLabel(library.name)
+        title.setTextFormat(pyside.Qt.TextFormat.PlainText)
         title_font = title.font()
         title_font.setBold(True)
         title.setFont(title_font)
         self.details_layout.addWidget(title)
 
         path_label = pyside.QLabel(str(library.path))
+        path_label.setTextFormat(pyside.Qt.TextFormat.PlainText)
         path_label.setWordWrap(True)
         path_label.setTextInteractionFlags(pyside.Qt.TextInteractionFlag.TextSelectableByMouse)
         self.details_layout.addWidget(path_label)
@@ -124,7 +126,10 @@ class CalibreFolderWidget(pyside.QGroupBox):
         )
 
         if confirmed:
-            actions.echo_epubs_to_boox_sd(library)
+            try:
+                actions.echo_epubs_to_boox_sd(library)
+            except (OSError, ValueError, RuntimeError) as error:
+                ui.display_msg_box_ok('Calibre Export Failed', str(error))
 
     def _add_action_button(self, name, callback, enabled: bool, tooltip: str):
         button = pyside.QPushButton(name)

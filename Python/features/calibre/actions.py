@@ -39,5 +39,8 @@ def launch_calibre(calibre_library: CalibreLibrary) -> None:
 def echo_epubs_to_boox_sd(calibre_library: CalibreLibrary) -> None:
     """Echo EPUB files from a Calibre library to the BOOX SD card."""
 
-    destination_path = Path('/Volumes', 'BOOX-SD', 'Calibre [EPUBs]', calibre_library.name)
+    volume = Path('/Volumes/BOOX-SD')
+    if not volume.is_mount():
+        raise OSError('BOOX-SD is not mounted')
+    destination_path = volume / 'Calibre [EPUBs]' / calibre_library.name
     calibre_library.echo_book_formats(destination_path, ['epub'])
