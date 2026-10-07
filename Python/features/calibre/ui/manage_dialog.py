@@ -213,4 +213,7 @@ class CalibreManageDialog(pyside.QDialog):
         if not confirmed:
             return
 
-        actions.echo_epubs_to_boox_sd(library)
+        try:
+            actions.echo_epubs_to_boox_sd(library)
+        except (OSError, ValueError, RuntimeError) as error:
+            ui.display_msg_box_ok('Calibre Export Failed', str(error))
