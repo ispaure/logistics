@@ -1,11 +1,14 @@
 """Native adaptive-spread reader with deliberate adjacent-file navigation."""
 
 import time
+from pathlib import Path
 from commonUtils.debugUtils import Severity, log
 from commonUtils.ui import pyside as qt
 from features.comics.pages import ComicPages
 from features.comics.reading import comic_siblings, visible_pages
 from .operations import Operation
+from services.zip_passwords import is_password_error
+from ui_new.dialogs.archive_password import ask_password
 from .reader_pages import PageCanvas, read_image, read_candidates, read_previous
 from .reader_controls import ReaderControls, ReaderMenus
 from .reader_keys import ReaderKeyHandler
@@ -220,9 +223,9 @@ class ComicReaderWindow(qt.QMainWindow):
         if self.closing:
             self.close()
         elif self.pending_file is not None:
-            path, from_end, page = self.pending_file
+            path, from_end, page, password = self.pending_file
             self.pending_file = None
-            self._request_file(path, from_end, page)
+            self._request_file(path, from_end, page, password=password)
         elif self.pending_page is not None:
             index, previous = self.pending_page
             self.pending_page = None
@@ -234,21 +237,22 @@ class ComicReaderWindow(qt.QMainWindow):
         if path is not None:
             self._request_file(path, direction < 0)
 
-    def _request_file(self, path, from_end=False, page=0):
+    def _request_file(self, path, from_end=False, page=0, *, password=None):
         if self.closing:
             return
         if any(window.busy for window in self.metadata_windows):
             self.statusBar().showMessage('Finishing metadata save…', 1800)
             return
         if self.busy:
-            self.pending_file = (path, from_end, page)
+            self.pending_file = (path, from_end, page, password)
             return
         self.file_loading = True
+        self.loading_request = (Path(path), from_end, page)
         self.pending_page = None
         self.boundary = None
         self._update_controls()
         def read():
-            pages = ComicPages(path)
+            pages = ComicPages(path, password=password)
             start = len(pages.pages) - 1 if from_end else min(page, len(pages.pages) - 1)
             return pages, start, read_candidates(pages, start)
         self._start(read, self._file_loaded)
@@ -258,7 +262,12 @@ class ComicReaderWindow(qt.QMainWindow):
         if self.closing:
             return
         if error:
-            self.statusBar().showMessage(f'Cannot open comic: {error}', 8000)
+            self.statusBar().showMessage(f'Cannot open comic: {error}')
+            if is_password_error(error):
+                path, from_end, page = self.loading_request
+                password = ask_password(path, error, self)
+                if password is not None:
+                    self.pending_file = (path, from_end, page, password)
             self._refresh_siblings()
             return
         self.pages, self.page, self.images = result

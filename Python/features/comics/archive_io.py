@@ -5,9 +5,9 @@ from pathlib import Path
 import stat
 from tempfile import TemporaryDirectory
 import zipfile
-import zlib
 
 from commonUtils import zipUtils
+from commonUtils.zip_access import validate_members, open_archive, stream_signature
 
 
 def _file_signature(snapshot):
@@ -24,22 +24,12 @@ def archive_unchanged(path: Path, snapshot) -> bool:
 
 def validate_archive_members(path: Path):
     """Reject member paths that extraction would merge or place outside its workspace."""
-    seen = set()
     with zipfile.ZipFile(path) as archive:
-        for member in archive.infolist():
-            if stat.S_ISLNK(member.external_attr >> 16):
-                raise ValueError(f'Archive contains a symbolic link: {member.filename}')
-            member_path = Path(member.filename.replace('\\', '/'))
-            if member_path.is_absolute() or '..' in member_path.parts or ':' in member.filename:
-                raise ValueError(f'Unsafe archive member: {member.filename}')
-            key = member_path.as_posix().casefold()
-            if key in seen:
-                raise ValueError(f'Duplicate archive member: {member.filename}')
-            seen.add(key)
+        validate_members(archive)
 
 
 def replace_archive(source_dir: Path, destination: Path, *, overwrite: bool = True,
-                    expected_stat=None):
+                    expected_stat=None, password=None):
     """Keep the original intact until a complete, verified ZIP is ready beside it."""
     source_dir, destination = Path(source_dir), Path(destination)
     if destination.is_symlink():
@@ -55,14 +45,17 @@ def replace_archive(source_dir: Path, destination: Path, *, overwrite: bool = Tr
         staged_archive = Path(staging) / 'result.zip'
         if any(path.is_symlink() for path in source_dir.rglob('*')):
             raise ValueError('Cannot build a comic archive from symbolic links')
-        zipUtils.zip_file(source_dir, staged_archive, keep_root=False)
+        if password is None:
+            zipUtils.zip_file(source_dir, staged_archive, keep_root=False)
+        else:
+            zipUtils.zip_file(source_dir, staged_archive, keep_root=False, password=password)
         expected = {
             path.relative_to(source_dir).as_posix(): path
             for path in source_dir.rglob('*') if path.is_file()
         }
         if not expected:
             raise ValueError('Cannot build an empty comic archive')
-        with zipfile.ZipFile(staged_archive) as archive:
+        with open_archive(staged_archive, password=password) as archive:
             members = [info for info in archive.infolist() if not info.is_dir()]
             if len(members) != len(expected) or {info.filename for info in members} != set(expected):
                 raise ValueError('Archive contents do not match the result directory')
@@ -70,12 +63,9 @@ def replace_archive(source_dir: Path, destination: Path, *, overwrite: bool = Tr
             if bad_member is not None:
                 raise ValueError(f'Archive CRC verification failed: {bad_member}')
             for info in members:
-                crc = 0
-                with expected[info.filename].open('rb') as page:
-                    while chunk := page.read(1024 * 1024):
-                        crc = zlib.crc32(chunk, crc)
-                if info.file_size != expected[info.filename].stat().st_size or info.CRC != crc:
-                    raise ValueError(f'Archive member differs from result: {info.filename}')
+                with expected[info.filename].open('rb') as source, archive.open(info) as result:
+                    if stream_signature(source) != stream_signature(result):
+                        raise ValueError(f'Archive member differs from result: {info.filename}')
 
         # Do not overwrite changes made by another operation during the build.
         if not archive_unchanged(destination, original_stat):

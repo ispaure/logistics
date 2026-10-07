@@ -377,3 +377,53 @@ controller directly, without duplicated service strings. `FileActivation` declar
 reader opening separately from CBZ metadata/thumbnail loading. The CBZ file class
 has no UI action/activation override, so standalone generic browsers remain usable
 without installing Comics actions. See [the commonUtils guide](../../commonUtils/FEATURES.md).
+
+## Password-protected CBZs
+
+Comics reads `[LogisticsZIP] archive_password` from an ancestor `remoteConfig.ini`;
+see [Archives configuration](../archives/README.md) for inheritance. Ordinary CBZs
+stay ordinary, even when a password is configured. Protected archives use that
+password seamlessly for reader pages, metadata and thumbnails. Reader opening and
+single-file metadata editing prompt on a missing/incorrect password. Successfully
+entered passwords are cached per archive in memory only, including after metadata
+replacement, and are invalidated by external file/configuration changes.
+
+Background previews never prompt: locked archives show a lock placeholder. Batch
+metadata editing reports locked files and permits edits to accessible files;
+compression reports individual failures and continues. Compression accepts only
+the configured password, even if a reader has cached a different valid password.
+It never prompts. Encrypted metadata is excluded from the persistent catalog cache
+so decrypted metadata is not written to that cache.
+
+Metadata edits and recompression retain the successful input password and always
+write AES-256 encryption. Reading legacy ZipCrypto is supported and a rewrite
+upgrades it. Mixed encrypted/plain file entries are readable but cannot be rewritten;
+multiple passwords within one archive fail full authentication before replacement.
+ZIP filenames remain visible. Comic compression's extraction root, sanitization,
+page names/encoding/retention, XML and log behavior are identical with and without
+encryption. Tests compare complete decrypted manifests (names, sizes and hashes),
+with log time frozen. Output is fully verified before replacing the original; wrong
+passwords, failed verification and concurrent changes retain the original.
+
+Compression temporarily extracts plaintext pages in its isolated workspace, which
+is removed after the operation. This is normal deletion, not secure erasure.
+
+Password regressions cover inherited/empty/DEFAULT configuration, Unicode and
+percent-sign passwords, memory-only unlock reuse, canceled and incorrect prompts,
+adjacent reader navigation, closing with a queued unlock retry, locked background
+previews, encrypted metadata edits,
+legacy ZipCrypto upgrades and header false positives, mixed/multiple-password
+archives, failed verification,
+and exact decrypted compression parity. For shared ZIP tests, also run:
+
+```sh
+QT_QPA_PLATFORM=offscreen PYTHONPATH=Python:Python/commonUtils/tests python3 -m unittest test_zip_access test_zip_paths test_file_registry test_features test_file_browser
+```
+
+These tests use temporary local fixtures. They do not replace manual validation
+on Fedora/Windows or real remote mounts. Encryption does not alter the file layout,
+but external applications must support WinZip AES to read protected output.
+
+A separate [before/after full-run comparison](ZIP_COMPRESSION_PARITY.md) against
+the pristine pre-password commits passed 24 full compression runs across four
+folder layouts and two retention modes, checking extraction through final output.

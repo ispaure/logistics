@@ -8,6 +8,8 @@ from features.comics.reader import open_reader
 from features.comics.selection import normalize_targets
 from .metadata_editor import MetadataEditor
 from .operations import Operation
+from services.zip_passwords import is_password_error
+from ui_new.dialogs.archive_password import ask_password
 
 
 class ComicBrowserServices:
@@ -22,21 +24,32 @@ class ComicBrowserServices:
             dialog.deleteLater()
             self.file_browser.refresh()
 
-    def _read(self, path):
-        if self.reader_busy:
+    def _read(self, path, *, password=None):
+        if self.reader_busy or self.close_after_catalog:
             return
         self.reader_busy = True
-        self.reader_operation = Operation(lambda: ComicPages(path), self)
+        self._reading_path = Path(path)
+        self._reader_password_retry = None
+        self.reader_operation = Operation(lambda: ComicPages(path) if password is None else ComicPages(path, password=password), self)
         self.reader_operation.completed.connect(self._reader_opened)
         self.reader_operation.finished.connect(self._reader_finished)
         self.reader_operation.start()
 
     def _reader_opened(self, result, error):
         if error:
-            qt.QMessageBox.warning(self.browser_host, 'Cannot open reader', error)
+            if self.close_after_catalog:
+                return
+            if is_password_error(error) and not self.close_after_catalog:
+                password = ask_password(self._reading_path, error, self.browser_host)
+                if password is not None:
+                    self._reader_password_retry = (self._reading_path, password)
+            else:
+                qt.QMessageBox.warning(self.browser_host, 'Cannot open reader', error)
         else:
             try:
                 window = open_reader(result)
+                if not self.close_after_catalog and getattr(getattr(result, 'document', None), 'password', None) is not None:
+                    self.file_browser.refresh_item(result.path)
                 if isinstance(window, qt.QMainWindow) and window not in self.reader_connections:
                     window.metadata_saved.connect(self._metadata_saved)
                     window.closed.connect(self._return_to_library)
@@ -61,6 +74,11 @@ class ComicBrowserServices:
     def _reader_finished(self):
         self.reader_busy = False
         self.reader_operation.deleteLater()
+        retry = getattr(self, '_reader_password_retry', None)
+        self._reader_password_retry = None
+        if retry is not None and not self.close_after_catalog:
+            path, password = retry
+            qt.QTimer.singleShot(0, lambda: self._read(path, password=password))
 
     def _open_editor(self, path, index=None):
         targets = normalize_targets(path)

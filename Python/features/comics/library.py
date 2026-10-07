@@ -2,21 +2,24 @@
 
 import os
 from pathlib import Path
-import shutil
+from hashlib import sha256
 import stat
 from tempfile import TemporaryDirectory
 import zipfile
 
 from .archive_io import archive_unchanged, validate_archive_members
 from .comicinfo import ComicInfoXML
+from commonUtils.zip_access import open_archive, authenticate, copy_member_info, archive_manifest
+from services.zip_passwords import resolve_password, remember_verified_password
 
 
 class ComicDocument:
-    def __init__(self, path):
+    def __init__(self, path, *, password=None):
         self.path = Path(path)
         self.snapshot = self.path.stat()
         validate_archive_members(self.path)
-        with zipfile.ZipFile(self.path) as archive:
+        self.password = resolve_password(self.path, password=password)
+        with open_archive(self.path, password=self.password) as archive:
             matches = [info for info in archive.infolist()
                        if Path(info.filename).name.casefold() == 'comicinfo.xml']
             if len(matches) > 1:
@@ -47,29 +50,35 @@ class ComicDocument:
         data = info.to_bytes()
         if data == self.info.to_bytes():
             return
+        if self.password is not None:
+            authenticate(self.path, self.password, all_members=True, for_rewrite=True)
         with TemporaryDirectory(prefix='.logistics-comic-', dir=self.path.parent) as temp:
             staged = Path(temp) / 'edited.cbz'
-            with zipfile.ZipFile(self.path) as source, zipfile.ZipFile(staged, 'w') as target:
+            expected = {}
+            with open_archive(self.path, password=self.password) as source, open_archive(
+                    staged, 'w', password=self.password) as target:
                 target.comment = source.comment
-                expected = {}
                 for member in source.infolist():
+                    output_info = copy_member_info(member, target)
                     if member.filename == self.member:
-                        target.writestr(member, data)
+                        target.writestr(output_info, data)
+                        expected[member.filename] = (len(data), sha256(data).hexdigest())
+                    elif member.is_dir():
+                        target.writestr(output_info, b'')
+                        expected[member.filename] = None
                     else:
-                        expected[member.filename] = (member.file_size, member.CRC)
-                        with source.open(member) as incoming, target.open(member, 'w') as outgoing:
-                            shutil.copyfileobj(incoming, outgoing, 1024 * 1024)
+                        digest, length = sha256(), 0
+                        with source.open(member) as incoming, target.open(output_info, 'w') as outgoing:
+                            while chunk := incoming.read(1024 * 1024):
+                                outgoing.write(chunk)
+                                digest.update(chunk)
+                                length += len(chunk)
+                        expected[member.filename] = (length, digest.hexdigest())
                 if not self.exists:
                     target.writestr(self.member, data, compress_type=zipfile.ZIP_DEFLATED)
-            with zipfile.ZipFile(staged) as verified:
-                if verified.testzip() is not None:
-                    raise ValueError('Archive verification failed')
-                if verified.read(self.member) != data:
-                    raise ValueError('Metadata verification failed')
-                for name, signature in expected.items():
-                    member = verified.getinfo(name)
-                    if (member.file_size, member.CRC) != signature:
-                        raise ValueError(f'Archive member changed: {name}')
+                    expected[self.member] = (len(data), sha256(data).hexdigest())
+            if archive_manifest(staged, password=self.password) != expected:
+                raise ValueError('Archive content verification failed; original was kept')
             staged.chmod(stat.S_IMODE(self.snapshot.st_mode))
             with staged.open('rb') as stream:
                 os.fsync(stream.fileno())
@@ -79,3 +88,4 @@ class ComicDocument:
         self.snapshot = self.path.stat()
         self.info = info
         self.exists = True
+        remember_verified_password(self.path, self.password)

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .archive_io import archive_unchanged
 from .library import ComicDocument
+from commonUtils.zip_access import ArchivePasswordError
 
 
 def normalize_targets(targets):
@@ -61,18 +62,25 @@ class SaveResult:
 class ComicSelection:
     """A fixed snapshot of the selected comics, never silently expanded on save."""
 
-    def __init__(self, targets):
+    def __init__(self, targets, *, password=None):
         self.targets = normalize_targets(targets)
         paths = selected_comics(self.targets)
         for path in paths:
             if path.stat().st_nlink > 1:
                 raise ValueError(f'Hard-linked CBZs need independent copies before editing: {path}')
         self.documents = []
+        self.load_failures = {}
         for path in paths:
             try:
-                self.documents.append(ComicDocument(path))
+                self.documents.append(ComicDocument(path, password=password))
             except Exception as error:
+                if isinstance(error, ArchivePasswordError) and (len(paths) > 1 or any(target.is_dir() for target in self.targets)):
+                    self.load_failures[path] = str(error)
+                    continue
                 raise ValueError(f'Cannot load {path}: {error}') from error
+        if not self.documents:
+            details = '\n'.join(f'{path}: {message}' for path, message in self.load_failures.items())
+            raise ValueError(f'No selected comics could be unlocked:\n{details}')
 
     def field_values(self, fields):
         return [{name: document.info.get_field(name) for name in fields}
@@ -88,7 +96,7 @@ class ComicSelection:
 
     def save(self, changes):
         self.validate_changes(changes)
-        result = SaveResult()
+        result = SaveResult(failed=dict(self.load_failures))
         for document in self.documents:
             try:
                 document.save(changes)

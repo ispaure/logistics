@@ -8,6 +8,7 @@ from PIL import Image, ImageOps
 
 from .archive_io import archive_unchanged
 from .library import ComicDocument
+from commonUtils.zip_access import open_archive
 
 IMAGE_TYPES = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
                '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp',
@@ -21,10 +22,10 @@ def natural_key(name):
 
 
 class ComicPages:
-    def __init__(self, path, document=None):
-        self.document = document or ComicDocument(path)
+    def __init__(self, path, document=None, *, password=None):
+        self.document = document or ComicDocument(path, password=password)
         self.path = self.document.path
-        with zipfile.ZipFile(self.path) as archive:
+        with open_archive(self.path, password=self.document.password) as archive:
             self.pages = sorted((info.filename for info in archive.infolist()
                                  if not info.is_dir() and Path(info.filename).suffix.lower() in IMAGE_TYPES
                                  and '__MACOSX' not in Path(info.filename).parts
@@ -57,7 +58,7 @@ class ComicPages:
         if not archive_unchanged(self.path, self.document.snapshot):
             raise RuntimeError('The comic changed. Reopen the reader to load the updated archive.')
         name = self.pages[index]
-        with zipfile.ZipFile(self.path) as archive:
+        with open_archive(self.path, password=self.document.password) as archive:
             if archive.getinfo(name).file_size > MAX_PAGE_BYTES:
                 raise ValueError('Page exceeds the supported image size')
             data = archive.read(name)

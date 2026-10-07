@@ -48,6 +48,8 @@ class ComicLibraryWindow(qt.QMainWindow, ComicBrowserServices):
         definition = registry.get_feature_definition('comics')
         self.feature_binding = definition.install_browser(self.file_browser, host=self, controller=self)
         self.feature_binding.set_enabled(registry.is_feature_enabled('comics'))
+        self.archive_binding = registry.get_feature_definition('archives').install_browser(self.file_browser, host=self)
+        self.archive_binding.set_enabled(registry.is_feature_enabled('archives'))
         self._unsubscribe = registry.subscribe(self._features_changed)
         self.destroyed.connect(self._unsubscribe)
         self.file_browser.idle.connect(self.close)
@@ -85,6 +87,7 @@ class ComicLibraryWindow(qt.QMainWindow, ComicBrowserServices):
             return
         enabled = registry.is_feature_enabled('comics')
         self.feature_binding.set_enabled(enabled)
+        self.archive_binding.set_enabled(registry.is_feature_enabled('archives'))
         self.file_browser.refresh()
         self.setWindowTitle(f'Comics — {self.root_path.name}' + ('' if enabled else ' (disabled)'))
 

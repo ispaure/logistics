@@ -1,6 +1,8 @@
 """Project-owned browser behavior contributed by CBZFile objects."""
 
 from commonUtils.filesystem import BrowserPanel, BrowserDetails
+from commonUtils.zip_access import ArchivePasswordError
+from features.comics.locked_preview import locked_preview
 
 
 def folder_fields(item, stats):
@@ -15,7 +17,11 @@ class ComicBrowserMixin:
 
     def _comic_details(self):
         from .pages import load_preview
-        document, cover, error = load_preview(self.path)
+        try:
+            document, cover, error = load_preview(self.path)
+        except ArchivePasswordError:
+            return BrowserDetails((('Archive', 'Locked'),), locked_preview((360, 500)),
+                                  'Encrypted comic. Open the reader or Edit Metadata to enter its password.')
         values = []
         for field, label in (('Series', 'Series'), ('Writer', 'Author'), ('Volume', 'Volume'),
                              ('Number', 'Issue'), ('Count', 'Issues'), ('Title', 'Title'),
@@ -30,4 +36,7 @@ class ComicBrowserMixin:
 
     def browser_thumbnail(self, size):
         from .pages import ComicPages
-        return ComicPages(self.path).cover(size)
+        try:
+            return ComicPages(self.path).cover(size)
+        except ArchivePasswordError:
+            return locked_preview(size)
