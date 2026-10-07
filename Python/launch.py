@@ -7,13 +7,12 @@ from ui_new.main_window import MainWindow
 def main() -> int:
     log(Severity.INFO, 'Logistics', 'Executing launch.py')
 
-    # Initialize Features
-    log(Severity.DEBUG, 'Logistics', 'Initialize Features')
-    registry.initialize_features()
-
-    # Create QApplication
+    # Startup errors may show a dialog, so Qt must exist before feature hooks run.
     log(Severity.DEBUG, 'PySide6', 'Create QApplication')
     app = pyside.initialize_q_app()
+
+    log(Severity.DEBUG, 'Logistics', 'Initialize Features')
+    registry.initialize_features()
 
     # Display UI
     log(Severity.DEBUG, 'PySide6', 'Display Main UI Window')

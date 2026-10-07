@@ -17,8 +17,8 @@ def normalize_targets(targets):
     return normalized
 
 
-def selected_comics(targets):
-    """Include folders recursively, without following links or editing a CBZ twice."""
+def selected_comics(targets, recursive=True):
+    """Resolve CBZs once without following links; optionally scan nested folders."""
     found = {}
     def add(path):
         if path.suffix.lower() == '.cbz' and not path.is_symlink() and path.is_file():
@@ -30,16 +30,17 @@ def selected_comics(targets):
     for path in targets:
         if path.is_symlink():
             raise ValueError(f'Symbolic links cannot be edited: {path}')
-    # Drop covered children before walking, even if selected before the parent.
+    # Recursive roots cover children; shallow scans must retain explicit children.
     folders = [path for path in targets if path.is_dir() and not path.is_symlink()]
     roots = [path for path in targets
-             if not any(parent != path and parent in path.parents for parent in folders)]
+             if not recursive or not any(parent != path and parent in path.parents for parent in folders)]
     for path in roots:
         if path.is_symlink():
             raise ValueError(f'Symbolic links cannot be edited: {path}')
         if path.is_dir():
             for root, directories, files in os.walk(path, followlinks=False, onerror=scan_error):
-                directories[:] = sorted(name for name in directories if not (Path(root) / name).is_symlink())
+                directories[:] = (sorted(name for name in directories if not (Path(root) / name).is_symlink())
+                                  if recursive else [])
                 for name in sorted(files):
                     add(Path(root) / name)
         elif path.is_file() and path.suffix.lower() == '.cbz':

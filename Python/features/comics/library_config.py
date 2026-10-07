@@ -24,7 +24,7 @@ def configured_libraries(root):
     """Return configured names/paths in order, plus an optional configuration error.
 
     An absent setting retains whole-root browsing. Configured missing folders
-    remain in the dropdown and are disabled by the UI.
+    remain in the library tabs and are disabled by the UI.
     """
     root = Path(root)
     try:

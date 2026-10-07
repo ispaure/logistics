@@ -186,6 +186,45 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.app.processEvents()
         self.assertFalse(window.busy or window.catalog_busy or window.reader_busy)
 
+    def test_closing_reader_restores_library_without_changing_location(self):
+        from features.comics.ui.library import ComicLibraryWindow
+        window = ComicLibraryWindow(self.root)
+        window.show()
+        self.wait(window)
+        folder = self.root / 'Nested'
+        folder.mkdir()
+        window._navigate(folder)
+        window._reader_opened(ComicPages(self.path), '')
+        reader = window.reader_connections[0]
+        deadline = time.monotonic() + 5
+        while reader.busy and time.monotonic() < deadline:
+            self.app.processEvents()
+            time.sleep(.01)
+        self.assertFalse(reader.busy)
+        with patch.object(window, 'raise_') as raised, patch.object(window, 'activateWindow') as activated:
+            reader.close()
+            self.app.processEvents()
+            raised.assert_called_once()
+            activated.assert_called_once()
+        self.assertEqual(window.browser.browsing_directory(), folder)
+        self.assertTrue(window.isVisible())
+        window.close()
+        self.app.processEvents()
+
+    def test_reader_close_does_not_reopen_hidden_library(self):
+        from features.comics.ui.library import ComicLibraryWindow
+        window = ComicLibraryWindow(self.root)
+        window.show()
+        self.wait(window)
+        window.hide()
+        with patch.object(window, 'raise_') as raised, patch.object(window, 'activateWindow') as activated:
+            window._return_to_library()
+            self.app.processEvents()
+            raised.assert_not_called()
+            activated.assert_not_called()
+        window.close()
+        self.app.processEvents()
+
     def test_modes_selection_preview_context_and_reader_activation(self):
         from commonUtils.ui import pyside as qt
         from features.comics.ui.library import ComicLibraryWindow
@@ -217,11 +256,38 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
             self.assertTrue(labels[1].startswith('Reveal in '))
             self.assertIn('Edit Metadata', labels)
             menu.deleteLater()
-        with patch('features.comics.ui.library.open_reader') as opened:
+        with patch('features.comics.ui.browser_services.open_reader') as opened:
             window._activate(index)
             self.wait(window)
             self.assertEqual(opened.call_count, 1)
             self.assertEqual(opened.call_args.args[0].path, self.path)
+        window.close()
+        self.app.processEvents()
+
+    def test_compression_menu_uses_whole_mixed_selection_and_labels_comics(self):
+        from commonUtils.ui import pyside as qt
+        from features.comics.ui.library import ComicLibraryWindow
+        folder = self.root / 'nested'
+        folder.mkdir()
+        other = self.root / 'notes.txt'
+        other.write_text('notes')
+        window = ComicLibraryWindow(self.root)
+        window.show()
+        self.wait(window)
+        for path in (self.path, folder, other):
+            window.tree.selectionModel().select(window.model.index(str(path)),
+                qt.QItemSelectionModel.SelectionFlag.Select | qt.QItemSelectionModel.SelectionFlag.Rows)
+        menu = window._context_menu_for(window.model.index(str(other)))
+        labels = [action.text() for action in menu.actions()]
+        self.assertEqual(labels[2:], ['Comics', 'Edit Metadata', 'Compress Comics…'])
+        compress = menu.actions()[-1]
+        self.assertEqual(compress.property('source'), 'Comics')
+        with patch('features.comics.ui.dialogs.CompressCbzDialog') as dialog:
+            compress.trigger()
+            self.assertEqual(set(dialog.call_args.kwargs['targets']), {self.path, folder})
+            dialog.return_value.exec.assert_called_once()
+        menu.deleteLater()
+        self.wait(window)
         window.close()
         self.app.processEvents()
 
@@ -264,7 +330,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         def delayed(path):
             released.wait(2)
             return load_preview(path)
-        with patch('features.comics.pages.load_preview', delayed), patch('features.comics.ui.library.open_reader') as opened:
+        with patch('features.comics.pages.load_preview', delayed), patch('features.comics.ui.browser_services.open_reader') as opened:
             point = window.tree.visualRect(source).center()
             QTest.mouseClick(window.tree.viewport(), qt.Qt.MouseButton.LeftButton, pos=point)
             self.assertTrue(window.busy)

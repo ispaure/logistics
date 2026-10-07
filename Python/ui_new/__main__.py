@@ -1,22 +1,8 @@
 """
-Alternative module launcher for the Logistics UI.
-
-The normal application entry point remains ``launch.py``.
+Module launcher using the same startup sequence as ``launch.py``.
 """
 
-from commonUtils.ui import pyside
-from features import registry
-from ui_new.main_window import MainWindow
-
-
-def main() -> int:
-    registry.initialize_features()
-
-    app = pyside.initialize_q_app()
-    window = MainWindow()
-    window.display_ui()
-
-    return app.exec()
+from launch import main
 
 
 if __name__ == '__main__':

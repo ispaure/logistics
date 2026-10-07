@@ -19,6 +19,7 @@ class ComicReaderWindow(qt.QMainWindow):
     actually on screen. Worker completions replace them only if still current.
     """
     metadata_saved = qt.Signal(object)
+    closed = qt.Signal()
 
     def __init__(self, pages):
         super().__init__()
@@ -328,3 +329,4 @@ class ComicReaderWindow(qt.QMainWindow):
             event.ignore()
         else:
             event.accept()
+            self.closed.emit()

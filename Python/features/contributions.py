@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Generic, TypeVar
 
 from models.folder_entry import FolderEntry
+from commonUtils.features import Feature as CommonFeature
 
 
 @dataclass(frozen=True)
@@ -149,6 +150,17 @@ class PageContribution:
     order: int = 0
 
 
+@dataclass(frozen=True)
+class BrowserExtensionContribution:
+    """Install feature services into a Logistics file-browser window lazily.
+
+    The returned controller has prepare_close() -> bool and an idle Qt signal.
+    False defers closure until idle; controllers stay owned by the host window.
+    """
+
+    install: Callable[[Any], Any]
+
+
 @dataclass
 class FeatureContributions:
     """All optional contribution types exposed by one feature."""
@@ -160,6 +172,17 @@ class FeatureContributions:
     debug_actions: list[DebugActionContribution] = field(default_factory=list)
     workflows: list[WorkflowContribution] = field(default_factory=list)
     pages: list[PageContribution] = field(default_factory=list)
+    browser_extensions: list[BrowserExtensionContribution] = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
+class Feature(CommonFeature, FeatureContributions):
+    """Unified commonUtils feature declaration plus Logistics UI contributions."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.browser is not None and self.browser_extensions:
+            raise ValueError('Use browser or legacy browser_extensions, not both')
 
 
 T = TypeVar('T')

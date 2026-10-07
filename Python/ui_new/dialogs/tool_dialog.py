@@ -9,13 +9,13 @@ from commonUtils.ui import pyside
 
 
 def coerce_initial_path(initial_path) -> str:
+    """Convert an optional path for a text field without changing its contents."""
+
     if initial_path is None:
         return ''
 
-    if isinstance(initial_path, Path):
-        return str(initial_path)
-
     return str(initial_path)
+
 
 class ToolDialog(pyside.QDialog):
     def __init__(self, title: str, description: str, action_text: str, destructive: bool, parent=None):

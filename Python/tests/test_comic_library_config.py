@@ -39,7 +39,7 @@ class LibraryConfigurationTests(unittest.TestCase):
         self.assertTrue(configured_libraries(self.root)[1])
         self.assertFalse(has_library_configuration(self.root))
 
-    def test_dropdown_switches_tree_and_keeps_catalog_at_collection_root(self):
+    def test_tabs_include_all_and_keep_catalog_at_collection_root(self):
         from commonUtils.ui import pyside as qt
         from features.comics.ui.library import ComicLibraryWindow
         app = qt.QApplication.instance() or qt.QApplication([])
@@ -47,10 +47,17 @@ class LibraryConfigurationTests(unittest.TestCase):
         for name in ('Artbooks', 'Comics [Marvel]'):
             (self.root / name).mkdir()
         window = ComicLibraryWindow(self.root)
-        self.assertEqual(window.library_selector.currentText(), 'Artbooks')
-        self.assertFalse(window.library_selector.model().item(0).isEnabled())
+        self.assertEqual([window.library_tabs.tabText(i) for i in range(window.library_tabs.count())],
+                         ['All', 'Missing', 'Artbooks', 'Comics [Marvel]'])
+        self.assertFalse(window.library_tabs.isTabEnabled(1))
+        self.assertEqual(window.model.filePath(window.tree.rootIndex()), str(self.root))
+        window._navigate(self.root / 'Artbooks')
+        self.assertEqual(window.navigation.library, self.root)
+        window._up()
+        self.assertEqual(window.browser.browsing_directory(), self.root)
+        window.library_tabs.setCurrentIndex(2)
         self.assertEqual(window.model.filePath(window.tree.rootIndex()), str(self.root / 'Artbooks'))
-        window.library_selector.setCurrentIndex(2)
+        window.library_tabs.setCurrentIndex(3)
         self.assertEqual(window.model.filePath(window.tree.rootIndex()), str(self.root / 'Comics [Marvel]'))
         self.assertEqual(window.catalog.root, self.root)
         self.assertEqual(window.tree.header().visualIndex(3), 1)

@@ -1,13 +1,12 @@
 """
-Dynamic Debug page for the replacement Logistics UI.
+Feature-contributed maintenance actions.
 """
 
-from commonUtils import ui
 from commonUtils.ui import pyside
 
 from features import registry
 from features.contributions import DebugActionContribution
-from ui_new import workflows
+from ui_new.actions import execute_action
 
 
 class DebugPage(pyside.QWidget):
@@ -39,7 +38,15 @@ class DebugPage(pyside.QWidget):
 
         root_layout.addWidget(title)
         root_layout.addWidget(description)
+        self.open_browser_button = pyside.QPushButton('Open File Browser…')
+        self.open_browser_button.setToolTip('Choose a folder and browse with available Logistics features.')
+        self.open_browser_button.clicked.connect(self._open_file_browser)
+        root_layout.addWidget(self.open_browser_button)
         root_layout.addWidget(self.scroll, 1)
+
+    def _open_file_browser(self):
+        from ui_new.file_browser import open_file_browser
+        return open_file_browser(self.window())
 
     def refresh(self):
         """Rebuild the page from all enabled feature Debug contributions."""
@@ -108,21 +115,4 @@ class DebugPage(pyside.QWidget):
         return group
 
     def _execute_action(self, action: DebugActionContribution):
-        if action.workflow_id is not None:
-            workflows.open_workflow(
-                action.workflow_id,
-                data=action.workflow_data,
-                parent=self
-            )
-            return
-
-        if action.destructive:
-            confirmed = ui.display_msg_box_ok_cancel(
-                'Confirm Debug Action',
-                f'Run "{action.name}"?\n\nThis action may modify files or system configuration.'
-            )
-
-            if not confirmed:
-                return
-
-        action.callback()
+        return execute_action(action, self)

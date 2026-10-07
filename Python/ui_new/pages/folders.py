@@ -1,16 +1,16 @@
 """
-Folders page for the replacement Logistics UI.
+Generic folder sources, selection, and feature actions.
 """
 
 from collections import Counter
 
-from commonUtils import ui
 from commonUtils.ui import pyside
 
 from features import registry
 from features.contributions import UIAction
 from services.folder_entries import get_folder_entries
-from ui_new import workflows
+from services.folder_sources import discover_folder_sources
+from ui_new.actions import execute_action
 
 
 LOCAL_SOURCE_NAME = 'Local'
@@ -30,7 +30,7 @@ class FoldersPage(pyside.QWidget):
         self._local_folders = []
         self._remote_names = set()
         self._selected_entry_key = None
-        self._initial_show_pending = True
+        self._folder_features = []
 
         self.folder_tree = pyside.QTreeWidget()
         self.folder_tree.setHeaderHidden(True)
@@ -47,12 +47,6 @@ class FoldersPage(pyside.QWidget):
         self._build_layout()
         self._connect_signals()
         self.refresh()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        if self._initial_show_pending:
-            self._initial_show_pending = False
-            self.refresh()
 
     def _build_layout(self):
         root_layout = pyside.QHBoxLayout(self)
@@ -97,27 +91,32 @@ class FoldersPage(pyside.QWidget):
     def refresh(self):
         """Refresh source groups while preserving the selected credential and folder."""
 
-        selected_source_name = self.source_tabs.tabText(self.source_tabs.currentIndex()) or LOCAL_SOURCE_NAME
+        selected_source_key = self._source_key(self.source_tabs.currentIndex())
         selected_credential = self.credential_combo.currentData()
-        self._remote_sources = [
-            (registered.feature_name, registered.contribution.name, source)
-            for registered in registry.get_remote_folder_sources()
-            for source in registered.contribution.get_sources()
-        ]
-        self._remote_names = {
-            name
-            for feature_name, _label, source in self._remote_sources
-            for name in source.get_remote_names()
-        }
-        self._local_sources = [
-            (registered.feature_name, registered.contribution.name,
-             source, list(source.get_local_folders()))
-            for registered in registry.get_local_folder_sources()
-            for source in registered.contribution.get_sources()
-        ]
-        local_entries = get_folder_entries()
-        self._local_folders = [entry.local for entry in local_entries if entry.local is not None]
-        self.source_tabs.blockSignals(True)
+        sources = discover_folder_sources()
+        self._remote_sources = sources.remote_sources
+        self._local_sources = sources.local_sources
+        self._remote_names = sources.represented_remote_names
+        self._local_folders = sources.local_folders
+        self._folder_features = sorted(
+            registry.get_folder_features(),
+            key=lambda registered: (
+                registered.contribution.order,
+                registered.contribution.name.casefold()
+            )
+        )
+        with pyside.QSignalBlocker(self.source_tabs):
+            self._rebuild_source_tabs(selected_source_key)
+        self.source_tabs.setVisible(self.source_tabs.count() > 0)
+        self.source_tabs.updateGeometry()
+        if self._source_key(self.source_tabs.currentIndex()) != selected_source_key:
+            selected_credential = None
+        self._refresh_credentials(selected_credential)
+        self._refresh_folder_tree()
+
+    def _rebuild_source_tabs(self, selected_source_key):
+        """Group the current snapshot by feature and source label."""
+
         while self.source_tabs.count():
             self.source_tabs.removeTab(0)
         if self._get_local_only_entries():
@@ -125,30 +124,32 @@ class FoldersPage(pyside.QWidget):
             self.source_tabs.setTabData(index, ('local', None))
 
         groups = {}
-        for feature, label, source, folders in self._local_sources:
-            entries = self._get_unresolved_local_entries(folders)
+        for source in self._local_sources:
+            entries = self._get_unresolved_local_entries(source.folders)
             if entries:
-                groups.setdefault((feature, label), []).extend(entries)
+                groups.setdefault((source.feature_name, source.label), []).extend(entries)
         for (feature, label), entries in groups.items():
             index = self.source_tabs.addTab(label)
             self.source_tabs.setTabData(index, ('local_source', feature, entries))
 
         groups = {}
-        for feature, label, source in self._remote_sources:
-            groups.setdefault((feature, label), []).append(source)
+        for source in self._remote_sources:
+            groups.setdefault((source.feature_name, source.label), []).append(source)
         for (feature, label), sources in groups.items():
             index = self.source_tabs.addTab(label)
             self.source_tabs.setTabData(index, ('remote', feature, sources))
 
-        self.source_tabs.setCurrentIndex(self._find_source_index(selected_source_name))
-        self.source_tabs.blockSignals(False)
-        self.source_tabs.setVisible(self.source_tabs.count() > 0)
-        self._refresh_credentials(selected_credential)
-        self._refresh_folder_tree()
+        self.source_tabs.setCurrentIndex(self._find_source_index(selected_source_key))
 
-    def _find_source_index(self, source_name: str) -> int:
+    def _source_key(self, index):
+        data = self.source_tabs.tabData(index)
+        if data is None:
+            return ('local', None, LOCAL_SOURCE_NAME)
+        return (data[0], data[1], self.source_tabs.tabText(index))
+
+    def _find_source_index(self, source_key) -> int:
         for index in range(self.source_tabs.count()):
-            if self.source_tabs.tabText(index) == source_name:
+            if self._source_key(index) == source_key:
                 return index
         return 0
 
@@ -167,18 +168,17 @@ class FoldersPage(pyside.QWidget):
 
         selected_source = self._get_selected_source()
         is_remote = selected_source is not None and selected_source[0] == 'remote'
-        self.credential_combo.blockSignals(True)
-        self.credential_combo.clear()
-        if is_remote:
-            self.credential_combo.addItem('All', None)
-            for source in selected_source[2]:
-                self.credential_combo.addItem(source.name, source.context)
-            if selected_credential is not None:
-                for index in range(1, self.credential_combo.count()):
-                    if self.credential_combo.itemData(index) == selected_credential:
-                        self.credential_combo.setCurrentIndex(index)
-                        break
-        self.credential_combo.blockSignals(False)
+        with pyside.QSignalBlocker(self.credential_combo):
+            self.credential_combo.clear()
+            if is_remote:
+                self.credential_combo.addItem('All', None)
+                for source in selected_source[2]:
+                    self.credential_combo.addItem(source.source.name, source.source.context)
+                if selected_credential is not None:
+                    for index in range(1, self.credential_combo.count()):
+                        if self.credential_combo.itemData(index) == selected_credential:
+                            self.credential_combo.setCurrentIndex(index)
+                            break
         self.credential_label.setVisible(is_remote)
         self.credential_combo.setVisible(is_remote)
 
@@ -193,8 +193,8 @@ class FoldersPage(pyside.QWidget):
 
         source_paths = {
             folder.path
-            for _feature, _label, _source, folders in self._local_sources
-            for folder in folders
+            for source in self._local_sources
+            for folder in source.folders
         }
         return self._get_unresolved_local_entries([
             folder for folder in self._local_folders if folder.path not in source_paths
@@ -223,18 +223,18 @@ class FoldersPage(pyside.QWidget):
             selected_credential = self.credential_combo.currentData()
             entries = []
             for source in sources:
-                if selected_credential is not None and source.context != selected_credential:
+                if selected_credential is not None and source.source.context != selected_credential:
                     continue
                 source_entries = get_folder_entries(
-                    source.get_remote_names(),
+                    source.remote_names,
                     remote_source=feature_name,
-                    remote_context=source.context,
+                    remote_context=source.source.context,
                     include_local_only=False,
                     local_folders=self._local_folders
                 )
                 entries.extend(source_entries)
                 for entry in source_entries:
-                    entry_labels[self._entry_key(entry)] = source.name
+                    entry_labels[self._entry_key(entry)] = source.source.name
 
         entries.sort(key=lambda entry: (entry.name, str(entry.remote_context)))
         name_counts = Counter(entry.name for entry in entries)
@@ -344,6 +344,7 @@ class FoldersPage(pyside.QWidget):
         layout.setSpacing(14)
 
         title_label = pyside.QLabel(entry.name)
+        title_label.setTextFormat(pyside.Qt.TextFormat.PlainText)
         title_font = title_label.font()
         title_font.setPointSize(title_font.pointSize() + 7)
         title_font.setBold(True)
@@ -352,15 +353,7 @@ class FoldersPage(pyside.QWidget):
         layout.addWidget(title_label)
         layout.addWidget(self._create_general_section(entry))
 
-        contributions = sorted(
-            registry.get_folder_features(),
-            key=lambda registered: (
-                registered.contribution.order,
-                registered.contribution.name.casefold()
-            )
-        )
-
-        for registered in contributions:
+        for registered in self._folder_features:
             contribution = registered.contribution
 
             if not contribution.is_available(entry):
@@ -418,6 +411,7 @@ class FoldersPage(pyside.QWidget):
             status_layout.addWidget(pyside.QLabel('Local path:'), next_row, 0)
 
             path_label = pyside.QLabel(str(entry.local.path))
+            path_label.setTextFormat(pyside.Qt.TextFormat.PlainText)
             path_label.setTextInteractionFlags(
                 pyside.Qt.TextInteractionFlag.TextSelectableByMouse
             )
@@ -430,6 +424,7 @@ class FoldersPage(pyside.QWidget):
             status_layout.addWidget(pyside.QLabel('Remote name:'), next_row, 0)
 
             remote_label = pyside.QLabel(entry.remote_name)
+            remote_label.setTextFormat(pyside.Qt.TextFormat.PlainText)
             remote_label.setTextInteractionFlags(
                 pyside.Qt.TextInteractionFlag.TextSelectableByMouse
             )
@@ -475,25 +470,4 @@ class FoldersPage(pyside.QWidget):
         return group
 
     def _execute_action(self, action: UIAction, entry_name: str):
-        if action.workflow_id is not None:
-            workflows.open_workflow(
-                action.workflow_id,
-                data=action.workflow_data,
-                parent=self
-            )
-            return
-
-        if action.destructive:
-            confirmed = ui.display_msg_box_ok_cancel(
-                'Confirm Action',
-                f'Run "{action.name}" for "{entry_name}"?\n\n'
-                'This action may modify files.'
-            )
-
-            if not confirmed:
-                return
-
-        action.callback()
-
-        if action.destructive:
-            self.refresh()
+        return execute_action(action, self, subject=entry_name, refresh=self.refresh)

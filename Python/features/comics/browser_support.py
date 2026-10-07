@@ -1,19 +1,6 @@
 """Project-owned browser behavior contributed by CBZFile objects."""
 
-from commonUtils.dirUtils import Directory
-from commonUtils.filesystem import BrowserAction, BrowserPanel, BrowserDetails
-
-
-def comic_targets(context):
-    from .cbz import CBZFile
-    return [item.path for item in context.selection if isinstance(item, (CBZFile, Directory))]
-
-
-def directory_actions(item, context):
-    if isinstance(item, Directory):
-        return (BrowserAction('comics.edit_metadata', 'Edit Metadata',
-                              lambda context: context.invoke('comics.edit_metadata', comic_targets(context))),)
-    return ()
+from commonUtils.filesystem import BrowserPanel, BrowserDetails
 
 
 def folder_fields(item, stats):
@@ -44,11 +31,3 @@ class ComicBrowserMixin:
     def browser_thumbnail(self, size):
         from .pages import ComicPages
         return ComicPages(self.path).cover(size)
-
-    def browser_actions(self, context):
-        return (BrowserAction('comics.edit_metadata', 'Edit Metadata',
-                              lambda context: context.invoke('comics.edit_metadata', comic_targets(context))),)
-
-    def browser_activate(self, context):
-        context.invoke('comics.read', self.path)
-        return True

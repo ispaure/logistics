@@ -22,7 +22,10 @@ Provides comic-related integration for Logistics.
 - `conversion.py` contains CBR to CBZ conversion behavior.
 - `metadata.py` contains the legacy author/series batch replacements.
 - `library.py` owns single-CBZ document loading, edit validation and transactional saving.
-- `ui/library.py` owns library controls and comic editing/reader services around the shared browser.
+- `ui/library.py` owns library controls around the shared browser.
+- `ui/browser_services.py` shares metadata, reader and compression handlers across browser hosts.
+- `ui/browser_extension.py` provides per-window Comics controller state.
+- `ui_contributions.py:register()` declares identity, dependencies, file types, browser operations and Logistics UI contributions together.
 - `browser_support.py` contributes CBZ information, thumbnails, actions and activation through file-object hooks.
 - `ui/file_browser.py` preserves compatibility imports for the reusable commonUtils view component.
 - `pages.py` reads archive pages lazily and renders cover thumbnails without extraction.
@@ -49,9 +52,11 @@ Provides comic-related integration for Logistics.
 
 Comics has a hard feature dependency on `images`. Reader actions support external applications, and a native Python reader is available for CBZs.
 
-The feature exposes `register_file_types()` so startup registers the existing
-`CBZFile` globally before any feature initializer lists files. Standalone comics
-library windows also register it idempotently. Registration does not parse archives.
+The feature exposes `register() -> Feature(...)`. Its declaration includes the
+owned CBZ type rule, browser operations, activation, folder counts and controller
+factory. Logistics registers the rule before initialization; browser installation
+is also idempotent. The old `register_file_types()` helper delegates to this
+declaration for compatibility. Registration does not parse archives.
 
 It is discovered and loaded by the Logistics feature registry, but performs no work until comic functionality is used.
 
@@ -80,7 +85,7 @@ Changing view modes preserves the current nested location and selection.
 
 The reusable `commonUtils.ui.file_browser.FileBrowser` owns navigation, selection,
 listing, filesystem actions and information panels. Logistics owns the library
-dropdown and metadata/reader services. Every selected file has a **File Information**
+tabs and metadata/reader services. Every selected file has a **File Information**
 tab using the File object’s generic metadata. Registered CBZFile objects add a
 default-enabled **Comic Metadata** tab, thumbnails, editing actions and reader
 activation. The shared browser contains no comic-specific type checks. Its **Panels**
@@ -97,8 +102,17 @@ cancellable background scan without opening archives. Symbolic links and unreada
 items are excluded and reported; these totals stay in memory, outside the suggestion
 JSON. Refresh updates totals, suggestions and selected-comic previews. File menus
 include **Open in Default App** and an OS-specific **Reveal** action; folder menus
-start with Reveal and omit Open in Default App. **Edit Metadata** is contributed
-for CBZ files and folders. Linux reveal uses the standard file-manager service when
+start with Reveal and omit Open in Default App. A **Comics** section follows the
+built-in actions, with **Edit Metadata** first and **Compress Comics…** second.
+Both work with selected CBZ files, folders, and mixed selections; unrelated files
+are ignored. Right-clicking an unselected item targets only that item.
+Compression opens the usual options dialog with a fixed selection summary instead
+of a folder picker. Include subfolders, Always keep compressed images, and Preserve
+animated and multipage originals retain their normal defaults and validation.
+Folders expand according to Include subfolders, explicitly selected files always
+remain included, and overlapping selections process each CBZ once. Compression
+uses the batch marker/skip policy and reports partial failures. The browser refreshes
+previews, folder totals, and catalog suggestions when the dialog closes. Linux reveal uses the standard file-manager service when
 available, with a containing-folder fallback.
 
 At the collection root, configure the libraries shown in the browser:
@@ -108,8 +122,9 @@ At the collection root, configure the libraries shown in the browser:
 libraries = Artbooks,Comics,Comics [Marvel],Mangas,Manhwa
 ```
 
-The Library dropdown preserves this order and shows the selected folder's
-contents in the existing Name/Date Modified/Size tree. Missing folders are disabled;
+Library tabs at the top preserve this order. The first tab, **All**, browses the
+collection root with every library in one folder tree. Each library tab shows that
+folder's contents in the existing Name/Date Modified/Size tree. Missing folders are disabled;
 empty or invalid settings show a message. Without this setting, the browser keeps
 whole-root browsing for existing collections. This section alone enables the
 Comics library folder action. Switching libraries clears the preview and collapses
@@ -154,7 +169,9 @@ and page labels switch together after a successful load; failures keep the curre
 image visible and report the error in the status bar. Initial opening alone uses a
 loading placeholder. Rapid navigation loads only the latest queued page, and closing during a load
 safely waits for that worker. Reopening an unchanged comic raises its existing
-reader; reader windows are independent of the library window. Progress is displayed
+reader; closing a reader opened from a visible library brings that library back
+to the front, preserving its folder and selection. Reader windows remain independent
+and can stay open after the library closes. Progress is displayed
 for the current session and is not persisted.
 
 The independent dialog provides **Details** and **Plot & Notes** layouts. The reference images measure 789 x 673/677 pixels including their title
@@ -327,3 +344,28 @@ A comparison before the structural XML update covered six fixture/override combi
 EPUB support is not currently implemented in this feature.
 
 Image utilities remain separate because they are also used outside the Comics feature.
+
+
+## General file browser
+
+The Debug tab's **Open File Browser…** button opens a chosen folder using the shared
+browser with available Logistics browser extensions. The unified Comics declaration supplies its
+metadata, compression and reader operations there as well as in its library window.
+Its handlers and folder providers are installed per browser window. The Features
+tab toggles them and CBZ file-type resolution live in existing browsers. Open readers,
+editors and jobs continue; new CBZ resolution becomes generic while Comics is disabled. General browsing omits library tabs and automatic
+collection catalog indexing; metadata suggestions continue to use the catalog in
+the dedicated comic library. Closing a reader brings its originating browser forward.
+
+
+### Declaring Comics capabilities
+
+`features/comics/ui_contributions.py:register()` is the single author-facing entry:
+`Feature(id='comics', requires=('images',), file_types=[...], browser=...,
+folder_features=[...], workflows=[...])`. `SelectionAction` declarations accept
+CBZFile/Directory objects; the framework filters mixed selections, namespaces keys
+and groups entries under Comics. Their context handlers call the current window's
+controller directly, without duplicated service strings. `FileActivation` declares
+reader opening separately from CBZ metadata/thumbnail loading. The CBZ file class
+has no UI action/activation override, so standalone generic browsers remain usable
+without installing Comics actions. See [the commonUtils guide](../../commonUtils/FEATURES.md).
