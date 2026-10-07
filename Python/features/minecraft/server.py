@@ -1,3 +1,4 @@
+import os
 from enum import Enum
 from pathlib import Path
 import webbrowser
@@ -58,10 +59,14 @@ class MinecraftServer:
 
             case MinecraftServerType.BEDROCK:
 
-                if get_os() == OS.WIN:
-                    return appUtils.DiskApp(self.name, self.path / 'bedrock_server.exe', self.path)
-                else:
+                executable_names = {OS.WIN: 'bedrock_server.exe', OS.LINUX: 'bedrock_server'}
+                name = executable_names.get(get_os())
+                if name is None:
                     return None
+                executable = self.path / name
+                if not executable.is_file() or (get_os() == OS.LINUX and not os.access(executable, os.X_OK)):
+                    return None
+                return appUtils.DiskApp(self.name, executable, self.path)
 
     def __get_wiki_url(self) -> str | None:
         return self.__get_cfg_value('Documentation', 'wiki')
@@ -73,9 +78,9 @@ class MinecraftServer:
         if not file_lst:
             return MinecraftServerType.UNKNOWN
 
-        # If bedrock_server.exe exists, it is Bedrock
+        # Bedrock distributions use different executable names on Windows and Linux.
         for file in file_lst:
-            if file.file_name == 'bedrock_server.exe':
+            if file.file_name in ('bedrock_server.exe', 'bedrock_server'):
                 return MinecraftServerType.BEDROCK
 
         # Else Java
