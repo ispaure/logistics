@@ -86,7 +86,7 @@ def bulk_rename_actions(selected, context):
         window = open_bulk_rename(paths=[item.path for item in ctx.selection], parent=ctx.widget.window())
         window.renamer.renamed.connect(lambda receipt: ctx.browser.refresh())
         return window
-    return (BrowserAction('bulk.rename', 'Bulk rename…', run, source='Files'),)
+    return (BrowserAction('bulk.rename', 'Bulk Rename…', run, source='Files', category='rename', order=10),)
 
 
 __all__ = ['BulkRenameWidget', 'BulkRenameWindow', 'open_bulk_rename', 'bulk_rename_actions']

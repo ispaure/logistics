@@ -167,9 +167,9 @@ def register() -> Feature:
         id='comics', label='Comics', requires=('images',),
         file_types=[FileType(comic_type, extensions=('cbz',))],
         browser=BrowserExtension(
-            actions=[SelectionAction('edit_metadata', 'Edit Metadata', (comic_type, Directory), _edit_metadata),
-                     SelectionAction('compress', 'Compress Comics…', (comic_type, Directory), _compress),
-                     SelectionAction('encrypt', 'Encrypt unencrypted comics…', (comic_type, Directory), _encrypt, is_available=_can_encrypt)],
+            actions=[SelectionAction('edit_metadata', 'Edit Metadata', (comic_type, Directory), _edit_metadata, order=10),
+                     SelectionAction('compress', 'Compress Comics…', (comic_type, Directory), _compress, order=20),
+                     SelectionAction('encrypt', 'Encrypt unencrypted comics…', (comic_type, Directory), _encrypt, is_available=_can_encrypt, order=30)],
             activation=[FileActivation(comic_type, _read)],
             folder_fields=folder_fields, create_controller=_create_browser_controller),
         folder_features=[

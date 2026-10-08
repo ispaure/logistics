@@ -26,7 +26,7 @@ def _open_delete_pyc(context):
 def get_contributions():
     return Feature(id='file_tools', label='File Tools', browser=BrowserExtension(actions=[
         SelectionAction('weird_characters', 'List Weird Characters…', Directory,
-                        _open_weird_characters),
+                        _open_weird_characters, order=90),
         SelectionAction('delete_pyc', 'Bulk Delete PYC…', Directory,
-                        _open_delete_pyc),
+                        _open_delete_pyc, order=100),
     ]))
