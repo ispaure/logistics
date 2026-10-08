@@ -66,3 +66,26 @@ class SettingsPageTests(unittest.TestCase):
         with patch.object(registry, '_collect_contributions', return_value=[contribution, contribution]):
             with self.assertRaisesRegex(ValueError, 'Duplicate settings ID'):
                 registry.get_settings()
+
+    def test_config_addition_keeps_existing_dirty_editor(self):
+        with TemporaryDirectory() as temporary:
+            first, second = [Path(temporary) / name for name in ('one.ini', 'two.ini')]
+            first.write_text('one'); second.write_text('two')
+            panel = ConfigurationPanel([first]); self.addCleanup(panel.deleteLater)
+            editor = panel.editors[first]
+            editor.text.insertPlainText('pending')
+            panel.add_paths([first, second])
+            self.assertEqual(panel.files.count(), 2)
+            self.assertIs(panel.editors[first], editor)
+            self.assertTrue(editor.is_modified)
+            editor.text.document().setModified(False)
+
+    def test_dependency_toggle_error_stays_visible_after_refresh(self):
+        from ui_new.pages.settings import FeatureSettingsPanel
+        state = self.state()
+        with patch.object(registry, 'get_feature_states', return_value=[state]), patch.object(registry, 'get_settings', return_value=[]), patch.object(registry, 'set_feature_enabled', side_effect=ValueError('Required by another feature')):
+            panel = FeatureSettingsPanel(state); self.addCleanup(panel.deleteLater)
+            panel.enabled.setChecked(False)
+            self.app.processEvents()
+            self.assertIn('Required by', panel.status.text())
+            self.assertTrue(panel.enabled.isChecked())
