@@ -5,7 +5,7 @@ Logistics is a personal Python/PySide6 desktop toolbox for managing local and re
 ## Getting started
 
 1. Clone with shared utilities: `git clone --recurse-submodules <repository-url>`. For an existing checkout, run `git submodule update --init --recursive`.
-2. Supply the private `Software/` and `RemoteCredentials/` directories separately; they are ignored by Git. Resource discovery prefers the configured Marc Dropbox location (`Software/GIT/logistics`) when both directories exist there, then falls back to the repository root. See [resource resolution](Python/config.py).
+2. `Software/` and `RemoteCredentials/` are created at the repository root when needed and are ignored by Git, as are `.conf` files. Supply credential ZIPs separately. rclone and macOS/Windows FUSE installers offer verified downloads on first use; no Dropbox installation is required. See [resource resolution](Python/config.py) and the [pinned software manifest](Python/software_manifest.json).
 3. Review [application paths](Python/configFile.ini) and [launcher settings](launch_config.ini). Feature-specific configuration is described in the docs below.
 4. Run the launcher for your platform:
 

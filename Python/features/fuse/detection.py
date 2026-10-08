@@ -6,13 +6,10 @@ import os
 import shutil
 from pathlib import Path
 
-import config
+from services import software
 
 from commonUtils.osUtils import OS, get_os
 
-
-MACFUSE_INSTALLER_NAME = 'macfuse-5.0.5.dmg'
-WINFSP_INSTALLER_NAME = 'winfsp-1.11.22176.msi'
 
 
 def get_dependency_name() -> str:
@@ -48,9 +45,9 @@ def get_installer_path() -> Path | None:
 
     match get_os():
         case OS.MAC:
-            return config.LogisticsConfig().path_logistics_software_mac / MACFUSE_INSTALLER_NAME
+            return software.get_software('macfuse')[1]
         case OS.WIN:
-            return config.LogisticsConfig().path_logistics_software_win / WINFSP_INSTALLER_NAME
+            return software.get_software('winfsp')[1]
         case OS.LINUX:
             return None
         case _:

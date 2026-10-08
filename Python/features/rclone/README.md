@@ -98,14 +98,33 @@ Other features may explicitly depend on it when they use rclone behavior:
 
 ## Notes
 
-The executable resolver uses the private `Software/` directory, rather than searching PATH:
+The executable resolver uses the checkout's ignored `Software/` directory.
+`Python/software_manifest.json` pins rclone 1.73.1, official HTTPS URLs, archive
+SHA-256 hashes, extracted executable hashes, and installation paths. Builds cover
+Windows, macOS, and Linux on both x86_64 and ARM64:
 
-| Platform | Relative executable path |
-| --- | --- |
-| Windows | `Windows/rclone-2026/rclone.exe` |
-| macOS | `macOS/rclone/rclone` |
-| Linux x86_64 | `Linux/rclone-v1.73.0-linux-amd64/rclone` |
-| Linux ARM64 | `Linux/rclone-v1.73.1-linux-arm64/rclone` |
+| Platform | Path beneath `Software/` |
+|----------|---------------------------|
+| Windows x86_64 / ARM64 | `Windows/rclone-v1.73.1-windows-{amd64,arm64}/rclone.exe` |
+| macOS Intel / Apple Silicon | `macOS/rclone-v1.73.1-osx-{amd64,arm64}/rclone` |
+| Linux x86_64 / ARM64 | `Linux/rclone-v1.73.1-linux-{amd64,arm64}/rclone` |
+
+Startup and source discovery never download software. Immediately before sync or
+mount, a missing or mismatched executable offers a download. Declining, cancelling,
+or failing verification stops the command. Downloads run in a background worker,
+verify both hashes, set Unix execute permission, and replace files atomically.
+Existing legacy rclone paths are left alone; the manifest's architecture-specific
+path is now authoritative. Versions are pinned rather than automatically upgraded.
+
+Archive hashes were checked against the official
+[rclone 1.73.1 SHA256SUMS](https://downloads.rclone.org/v1.73.1/SHA256SUMS).
+Executable hashes were computed from those verified archives. The macFUSE digest
+matches its published release digest; the WinFsp digest was computed from the
+pinned official release MSI.
+
+All `.conf` files in `~/.config/rclone` are available as sources, including the
+legacy default config and configs whose original credential ZIP is no longer
+present. The ignored root `RemoteCredentials/` directory can start empty.
 
 Credential ZIPs contain `.txt` files whose first line is a rclone section header (such as `[Media]`), followed by that remote's configuration lines. Loading combines the entries into the package's dedicated `.conf`.
 

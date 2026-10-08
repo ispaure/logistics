@@ -1,32 +1,12 @@
-"""
-rclone executable resolution for the Logistics rclone feature.
-"""
-
+"""Resolve pinned rclone builds without downloading during discovery/startup."""
 from pathlib import Path
-
-import config
-
-from commonUtils.osUtils import Arch, OS, get_arch, get_os
+from services import software
 
 
 def get_rclone_path() -> Path:
-    """Return the platform-specific rclone executable path used by Logistics."""
+    return software.get_software('rclone')[1]
 
-    logistics_cfg = config.LogisticsConfig()
 
-    match get_os():
-        case OS.WIN:
-            return Path(logistics_cfg.path_logistics_software_win, "rclone-2026", "rclone.exe")
-
-        case OS.MAC:
-            return Path(logistics_cfg.path_logistics_software_mac, "rclone", "rclone")
-
-        case OS.LINUX:
-            match get_arch():
-                case Arch.X86_64:
-                    return Path(logistics_cfg.path_logistics_software_linux, "rclone-v1.73.0-linux-amd64", "rclone")
-
-                case Arch.ARM_64:
-                    return Path(logistics_cfg.path_logistics_software_linux, "rclone-v1.73.1-linux-arm64", "rclone")
-
-    raise RuntimeError(f"Unsupported platform for rclone: OS={get_os()}, architecture={get_arch()}")
+def ensure_rclone() -> Path | None:
+    """Offer the verified download immediately before a command needs rclone."""
+    return software.ensure_software('rclone')

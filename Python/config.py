@@ -1,6 +1,6 @@
+from configparser import ConfigParser
 from pathlib import Path
-from commonUtils import configUtils, fileUtils, marcUtils
-from commonUtils.debugUtils import Severity, log
+from commonUtils import configUtils, fileUtils
 from commonUtils.osUtils import OS, get_os
 
 
@@ -40,46 +40,21 @@ class LogisticsConfig:
 
         self.server_path: Path = Path(user_home_dir, server_sub_path)
 
-        # External Logistics resources
-        marc_dropbox_path = marcUtils.get_marc_dropbox_root()
+        # Local/private resources default to the checkout and are independent.
+        # Explicit overrides can still point either directory at Dropbox.
+        resources = ConfigParser(interpolation=None)
+        resources.read(config_file_path, encoding='utf-8-sig')
 
-        dropbox_software_path = None
-        dropbox_credentials_path = None
+        def resource_path(key, default):
+            value = resources.get('Resources', key, fallback=default).strip() or default
+            path = Path(value).expanduser()
+            if not path.is_absolute():
+                path = self.path_logistics / path
+            path.mkdir(parents=True, exist_ok=True)
+            return path
 
-        if marc_dropbox_path is not None:
-            dropbox_logistics_path = Path(marc_dropbox_path, 'Software', 'GIT', 'logistics')
-            dropbox_software_path = dropbox_logistics_path / 'Software'
-            dropbox_credentials_path = dropbox_logistics_path / 'RemoteCredentials'
-
-        project_software_path = self.path_logistics / 'Software'
-        project_credentials_path = self.path_logistics / 'RemoteCredentials'
-
-        if (
-            dropbox_software_path is not None
-            and dropbox_credentials_path is not None
-            and dropbox_software_path.is_dir()
-            and dropbox_credentials_path.is_dir()
-        ):
-            self.path_logistics_software: Path = dropbox_software_path
-            self.path_logistics_remote_cred: Path = dropbox_credentials_path
-        elif project_software_path.is_dir() and project_credentials_path.is_dir():
-            self.path_logistics_software: Path = project_software_path
-            self.path_logistics_remote_cred: Path = project_credentials_path
-        else:
-            dropbox_location = (
-                str(dropbox_software_path.parent)
-                if dropbox_software_path is not None
-                else 'Unavailable'
-            )
-
-            log(
-                Severity.CRITICAL,
-                'Logistics Resources',
-                'Could not resolve required Software and RemoteCredentials folders.\n'
-                f'Dropbox location: {dropbox_location}\n'
-                f'Project location: {self.path_logistics}',
-                popup=True
-            )
+        self.path_logistics_software = resource_path('software_path', 'Software')
+        self.path_logistics_remote_cred = resource_path('credentials_path', 'RemoteCredentials')
 
         # Platform-specific software directories
         self.path_logistics_software_win: Path = self.path_logistics_software / 'Windows'

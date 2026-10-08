@@ -50,22 +50,10 @@ def get_logistics_remote_credentials_zip_lst() -> list[fileUtils.File]:
 
 
 def get_loaded_credential_config_paths() -> list[Path]:
-    """
-    Return generated configs for currently available credential ZIP packages.
+    """Return available rclone configs independently of original ZIP packages."""
 
-    A credential package is considered loaded when the same-named .conf exists
-    in the rclone configuration directory.
-    """
-
-    loaded_configs = []
-
-    for package in get_logistics_remote_credentials_zip_lst():
-        config_path = configuration.get_credential_config_path(package.path)
-
-        if config_path.is_file():
-            loaded_configs.append(config_path)
-
-    return sorted(loaded_configs, key=lambda path: path.name.casefold())
+    # Generated configs remain usable after the original ZIP is moved away.
+    return configuration.get_all_conf_paths()
 
 
 def write_remote_credentials_to_config(

@@ -23,12 +23,16 @@ def rclone_sync(
 ):
     """Synchronize using one explicit rclone config file."""
 
+    rclone_path = executable.ensure_rclone()
+    if rclone_path is None:
+        return False
+
     source_path_str = str(source_path)
     destination_path_str = str(destination_path)
     config_path_str = str(config_path)
 
     baseline = (
-        f'"{executable.get_rclone_path()}" '
+        f'"{rclone_path}" '
         f'--config "{config_path_str}" sync --progress --copy-links '
     )
 
@@ -74,7 +78,7 @@ def rclone_sync(
         wait_for_output=wait_for_output,
         in_new_window=True
     )
-    return None
+    return True
 
 
 def rclone_sync_process_query(

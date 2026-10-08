@@ -216,12 +216,13 @@ class RclonePushDialog(pyside.QDialog):
 
     def _push(self):
         if self.regular_radio.isChecked():
-            actions.push_to_cloud(
+            started = actions.push_to_cloud(
                 self.entry.local,
                 self.config_path,
                 track_renames=self.track_renames.isChecked()
             )
-            self.accept()
+            if started:
+                self.accept()
             return
 
         directory_path = self.specific_path.text().strip()
