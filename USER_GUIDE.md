@@ -136,7 +136,8 @@ Unsaved edits are retained when switching categories and checked before closing.
 
 Logistics opens in **File Browser**, rooted at your home folder. **Open folder…**
 changes the browser root to another existing folder or external drive. **Home**
-returns to your home folder. Switching pages retains browser navigation and
+returns to your home folder. **Calculate folder sizes** opts into recursive totals
+for the current root; it starts unchecked to keep Home startup light. Switching pages retains browser navigation and
 selection. Enabled features contribute previews and right-click actions here.
 The Debug button can still open a separate File Browser window.
 
