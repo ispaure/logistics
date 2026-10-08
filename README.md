@@ -37,7 +37,8 @@ retained when several configs define the same remote name.
 Transfers use the selected config; **FUSE** adds an on-demand mount action where
 supported. Ordinary transfers do not require a filesystem driver.
 
-**Debug** hosts standalone maintenance workflows and **Open File Browser…**.
+**Debug** hosts standalone maintenance workflows, **Open File Browser…** and
+**Bulk Rename…** for previewing and applying filename rules.
 The browser navigates any selected root with list, tile and column views, file
 information, previews and enabled features' selection actions. Dedicated feature
 pages provide other controls, such as Links and Smart Home. Minecraft server

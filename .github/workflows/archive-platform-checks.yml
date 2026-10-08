@@ -1,11 +1,6 @@
 name: Archive platform checks
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'Python/**'
-      - '.github/workflows/archive-platform-checks.yml'
   pull_request:
     paths:
       - 'Python/**'

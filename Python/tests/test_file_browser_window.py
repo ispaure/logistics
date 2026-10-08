@@ -67,6 +67,20 @@ class BrowserWindowTests(unittest.TestCase):
             opened.assert_called_once_with(page.window())
         page.deleteLater()
 
+    def test_debug_bulk_rename_opens_logistics_tool_and_cancel_opens_nothing(self):
+        with patch.object(registry, 'get_debug_actions', return_value=[]):
+            page = DebugPage()
+            page.refresh()
+        self.addCleanup(page.deleteLater)
+        with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=str(self.root)), \
+                patch('ui_new.bulk_rename.open_bulk_rename') as opened:
+            page.bulk_rename_button.click()
+            opened.assert_called_once_with(str(self.root), parent=page.window())
+        with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=''), \
+                patch('ui_new.bulk_rename.open_bulk_rename') as opened:
+            page.bulk_rename_button.click()
+            opened.assert_not_called()
+
     def test_choose_folder_cancel_and_window_retention(self):
         from ui_new import file_browser
         with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=''):
