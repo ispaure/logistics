@@ -16,6 +16,7 @@ from commonUtils.debugUtils import Severity, log
 from commonUtils.wrappers import cmdShellWrapper
 
 from features.comics import detection
+from commonUtils.operations import run_batch
 from models.local_folder import LocalFolder
 
 
@@ -91,7 +92,8 @@ def open_yac_reader_library(folder: LocalFolder) -> bool:
 # ----------------------------------------------------------------------------------------------------------------------
 # CBZ ACTIONS
 
-def move_cbz_to_individual_folders(target_dir) -> bool:
+def move_cbz_to_individual_folders(target_dir, *, progress=lambda done, total, message: None,
+                                   cancelled=lambda: False, report=False):
     """
     Put each top-level CBZ file in a folder with the same name as the CBZ.
 
@@ -113,37 +115,21 @@ def move_cbz_to_individual_folders(target_dir) -> bool:
         filter_extension='cbz'
     )
 
-    if not file_lst:
-        log(Severity.WARNING, tool_name, 'Did not find a .CBZ file.')
-        return False
-
-    log(Severity.INFO, tool_name, f'Found {len(file_lst)} files to put in new folders:')
-    for file in file_lst:
-        log(Severity.INFO, tool_name, f' - "{file.path}"')
-
-    for file in file_lst:
+    def move(path):
+        file = fileUtils.File(path)
         dir_path = file.path.parent / file.name_without_ext
         new_path = dir_path / file.file_name
-
-        log(Severity.INFO, tool_name, f'Make new directory: "{dir_path}"')
-        log(Severity.INFO, tool_name, f'Move file to new location: "{new_path}"')
-
         if new_path.exists() or new_path.is_symlink():
-            log(Severity.ERROR, tool_name, f'Destination already exists: "{new_path}". Original kept.')
-            return False
+            raise FileExistsError(f'Destination already exists: {new_path}. Original kept.')
         fileUtils.make_dir(dir_path)
-
         if not fileUtils.copy_file(file.path, new_path):
-            log(Severity.ERROR, tool_name, f'Failed to copy "{file.path}". The original was not deleted.')
-            return False
-
+            raise OSError(f'Failed to copy {file.path}. Original kept.')
         if not file.delete_file():
-            log(
-                Severity.ERROR,
-                tool_name,
-                f'Copied "{file.path}" successfully, but failed to delete the original file.'
-            )
-            return False
+            raise OSError(f'Copied {file.path}, but failed to delete the original.')
+        return True
 
-    log(Severity.INFO, tool_name, 'Finished moving all .CBZ files into individual folders.')
-    return True
+    result = run_batch([file.path for file in file_lst], move, progress=progress,
+                       cancelled=cancelled, stop_on_error=True)
+    for path, message in result.failed.items():
+        log(Severity.ERROR, tool_name, f'{path}: {message}')
+    return result if report else bool(result)

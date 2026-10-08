@@ -3,7 +3,8 @@
 import os
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.file_browser.operations import Operation
+from commonUtils.ui.operation_progress import OperationProgress
+from commonUtils.operations import OperationCancelled
 from commonUtils.zip_access import create_archive, password_bytes
 from services.zip_passwords import configured_password
 from services.password_prompt import confirmed_password
@@ -15,7 +16,9 @@ class CreateZipDialog(qt.QDialog):
         self.targets = tuple(dict.fromkeys(Path(path).absolute() for path in targets))
         self.busy = False
         self.succeeded = False
-        self.operation = None
+        self.task = OperationProgress(self)
+        self.task.cancel_button.hide()
+        self.task.completed.connect(self._completed)
         self.setWindowTitle('Create encrypted ZIP')
         layout = qt.QVBoxLayout(self)
         self.summary = qt.QLabel('\n'.join(str(path) for path in self.targets))
@@ -39,6 +42,7 @@ class CreateZipDialog(qt.QDialog):
         self.message.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
+        layout.addWidget(self.task)
         buttons = qt.QHBoxLayout()
         self.create_button = qt.QPushButton('Create encrypted ZIP')
         self.cancel_button = qt.QPushButton('Cancel')
@@ -73,35 +77,46 @@ class CreateZipDialog(qt.QDialog):
         except (OSError, ValueError) as error:
             self.message.setText(f'ZIP was not created: {error}')
             return
-        def create():
-            return create_archive(self.targets, destination, password=password)
+        targets = self.targets
+        def create(progress, cancelled):
+            try:
+                return create_archive(targets, destination, password=password,
+                                      progress=progress, cancelled=cancelled)
+            except OperationCancelled:
+                return None
         self.busy = True
         self.message.setText('Creating and verifying encrypted ZIP…')
-        for widget in (self.create_button, self.cancel_button, self.output, self.browse):
+        for widget in (self.create_button, self.output, self.browse):
             widget.setEnabled(False)
-        self.operation = Operation(create, self)
-        self.operation.completed.connect(self._completed)
-        self.operation.finished.connect(self._finished)
-        self.operation.start()
+        self.cancel_button.setText('Cancel ZIP creation')
+        self.task.start(create, message='Assessing selected files…',
+                        cancel_message='Cancelling ZIP creation and discarding temporary output…')
 
     def _completed(self, result, error):
-        self.message.setText(f'ZIP was not created: {error}' if error else f'Created {result}')
-        self.succeeded = not error
-
-    def _finished(self):
         self.busy = False
-        self.operation.deleteLater()
+        self.succeeded = not error and result is not None
+        if error:
+            self.message.setText(f'ZIP was not created: {error}')
+        elif result is None:
+            self.message.setText('Cancelled. ZIP was not created; sources are unchanged.')
+        else:
+            self.message.setText(f'Created {result}')
         for widget in (self.create_button, self.cancel_button, self.output, self.browse):
             widget.setEnabled(True)
+        self.cancel_button.setText('Close')
         if self.succeeded:
             self.accept()
 
     def reject(self):
-        if not self.busy:
+        if self.busy:
+            self.task.request_cancel()
+            self.cancel_button.setEnabled(False)
+        else:
             super().reject()
 
     def closeEvent(self, event):
         if self.busy:
+            self.reject()
             event.ignore()
         else:
             super().closeEvent(event)

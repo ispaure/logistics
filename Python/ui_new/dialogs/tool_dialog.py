@@ -6,6 +6,7 @@ from pathlib import Path
 
 from commonUtils import ui
 from commonUtils.ui import pyside
+from commonUtils.ui.operation_progress import OperationProgress
 
 
 def coerce_initial_path(initial_path) -> str:
@@ -21,6 +22,10 @@ class ToolDialog(pyside.QDialog):
     def __init__(self, title: str, description: str, action_text: str, destructive: bool, parent=None):
         super().__init__(parent)
 
+        self.task = OperationProgress(self)
+        self.task.cancel_button.hide()
+        self.task.completed.connect(self._background_completed)
+        self._background_callback = None
         self.action_text = action_text
         self.destructive = destructive
 
@@ -50,6 +55,7 @@ class ToolDialog(pyside.QDialog):
         self.root_layout.addWidget(title_label)
         self.root_layout.addWidget(description_label)
         self.root_layout.addLayout(self.form)
+        self.root_layout.addWidget(self.task)
 
         button_layout = pyside.QHBoxLayout()
         button_layout.addStretch()
@@ -60,6 +66,51 @@ class ToolDialog(pyside.QDialog):
         self.cancel_button.clicked.connect(self.reject)
         self.action_button.clicked.connect(self._execute)
         self.action_button.setDefault(True)
+
+    @property
+    def busy(self):
+        return self.task.busy
+
+    def _run_background(self, work, completed, *, cancel_text='Cancel after current item',
+                        cancel_message='Cancellation requested. Finishing the current item…'):
+        if self.busy:
+            return
+        self._background_callback = completed
+        self._disabled_widgets = []
+        for row in range(self.form.count()):
+            widget = self.form.itemAt(row).widget()
+            if widget is not None:
+                self._disabled_widgets.append((widget, widget.isEnabled()))
+                widget.setEnabled(False)
+        self.action_button.setEnabled(False)
+        self.cancel_button.setText(cancel_text)
+        self.task.start(work, cancel_text=cancel_text, cancel_message=cancel_message)
+
+    def _background_completed(self, result, error):
+        for widget, was_enabled in self._disabled_widgets:
+            widget.setEnabled(was_enabled)
+        self._disabled_widgets = []
+        self.action_button.setEnabled(True)
+        self.cancel_button.setText('Close')
+        self.cancel_button.setEnabled(True)
+        if error:
+            self.task.message.setText(f'Operation failed: {error}')
+            return
+        self._background_callback(result)
+
+    def reject(self):
+        if self.busy:
+            self.task.request_cancel()
+            self.cancel_button.setEnabled(False)
+        else:
+            super().reject()
+
+    def closeEvent(self, event):
+        if self.busy:
+            self.reject()
+            event.ignore()
+        else:
+            super().closeEvent(event)
 
     def _add_directory_field(self, label: str, default: str = '') -> pyside.QLineEdit:
         line_edit = pyside.QLineEdit(default)

@@ -14,6 +14,7 @@ import config
 from commonUtils import dirUtils, fileUtils, zipUtils
 from commonUtils.debugUtils import Severity, log
 from .archive_io import replace_archive, archive_unchanged
+from commonUtils.operations import run_batch
 
 
 show_verbose = True
@@ -60,7 +61,8 @@ def convert_cbr_to_cbz(target_file_path: Path) -> bool:
         return False
 
 
-def dir_batch_convert_cbr_to_cbz(target_dir, recursive):
+def dir_batch_convert_cbr_to_cbz(target_dir, recursive, *, progress=lambda done, total, message: None,
+                                cancelled=lambda: False, report=False):
     """Convert all CBR files in a directory to CBZ."""
 
     print('Batch Convert .CBR to .CBZ in directory "{}" [Recursive]...'.format(target_dir))
@@ -73,16 +75,12 @@ def dir_batch_convert_cbr_to_cbz(target_dir, recursive):
 
     if len(cbr_file_lst) == 0:
         print('Did not find a .CBR file to convert')
-        return False
+        return run_batch([], convert_cbr_to_cbz) if report else False
 
     print('Found {} files to convert:'.format(str(len(cbr_file_lst))))
     for file in cbr_file_lst:
         print(f' - {file.path}')
 
-    successful = True
-    for file in cbr_file_lst:
-        if not convert_cbr_to_cbz(file.path):
-            successful = False
-
-    print('Conversion of {} files completed (as much as possible)!'.format(str(len(cbr_file_lst))))
-    return successful
+    result = run_batch([file.path for file in cbr_file_lst], convert_cbr_to_cbz,
+                       progress=progress, cancelled=cancelled)
+    return result if report else bool(result)

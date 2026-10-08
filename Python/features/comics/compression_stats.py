@@ -19,6 +19,10 @@ class CompressionStats:
         self.compressed_file_count = 0
         self.already_compressed_file_count = 0
         self.error_during_compression = 0
+        self.processed_file_count = 0
+        self.cancelled = False
+        self.remaining = []
+        self.failed = {}
 
     def reset(self):
         for key in (
@@ -30,6 +34,10 @@ class CompressionStats:
         ):
             setattr(self, key, 0)
         self.has_comicinfo_xml = None
+        self.processed_file_count = 0
+        self.cancelled = False
+        self.remaining = []
+        self.failed = {}
 
     def __add__(self, other: CompressionStats) -> CompressionStats:
         new = CompressionStats()

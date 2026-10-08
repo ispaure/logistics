@@ -41,3 +41,11 @@ symbolic-link alias. Existing destinations created by another operation during
 verification are retained, and source changes abort publication. Ordinary empty
 directories have no secret payload and may have unencrypted directory headers;
 their names are visible like all ZIP member names.
+
+ZIP creation uses the shared background progress widget. The dialog reports
+assessment, source hashing, streaming creation and verification. **Cancel ZIP
+creation**, Escape or closing the dialog requests cancellation between chunks,
+including while verifying. Temporary archives are discarded; sources and existing
+destinations are retained. Cancellation is checked once more before publication.
+The dialog stays alive until its worker has stopped; failures and cancellation
+leave it open with an explanation. Completion after publication remains success.

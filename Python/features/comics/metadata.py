@@ -12,6 +12,7 @@ from commonUtils.fileTypes import txtType
 from .archive_io import replace_archive, validate_archive_members
 from services.zip_passwords import resolve_password
 from commonUtils.zip_access import authenticate
+from commonUtils.operations import BatchResult, run_batch
 
 
 def get_temp_loc_edit_comicinfoxml() -> Path:
@@ -61,21 +62,18 @@ def comic_info_xml_replace_series(file_path: Path, search: str, suffix: str) -> 
     return _replace_tag(file_path, 'Series', search, suffix + file_path.parent.name)
 
 
-def _batch_replace(target_dir, operation) -> bool:
+def _batch_replace(target_dir, operation, *, progress=lambda done, total, message: None,
+                   cancelled=lambda: False, report=False):
     files = dirUtils.Directory(Path(target_dir)).list_files(recursive=True, filter_extension='cbz')
     if not files:
         log(Severity.WARNING, 'ComicInfo batch edit', 'Did not find a .CBZ file')
-        return False
-    successful = True
-    for file in files:
-        if not operation(file.path):
-            successful = False
-    return successful
+    result = run_batch([file.path for file in files], operation, progress=progress, cancelled=cancelled)
+    return result if report else bool(result)
 
 
-def batch_rename_author_to_dir_name(target_dir, author_tag_to_replace: str) -> bool:
-    return _batch_replace(target_dir, lambda path: comic_info_xml_replace_author(path, author_tag_to_replace))
+def batch_rename_author_to_dir_name(target_dir, author_tag_to_replace: str, **feedback) -> bool | BatchResult:
+    return _batch_replace(target_dir, lambda path: comic_info_xml_replace_author(path, author_tag_to_replace), **feedback)
 
 
-def batch_rename_series_to_dir_name(target_dir, series_tag_to_replace: str, suffix: str) -> bool:
-    return _batch_replace(target_dir, lambda path: comic_info_xml_replace_series(path, series_tag_to_replace, suffix))
+def batch_rename_series_to_dir_name(target_dir, series_tag_to_replace: str, suffix: str, **feedback) -> bool | BatchResult:
+    return _batch_replace(target_dir, lambda path: comic_info_xml_replace_series(path, series_tag_to_replace, suffix), **feedback)
