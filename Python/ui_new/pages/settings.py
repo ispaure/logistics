@@ -20,11 +20,16 @@ class ConfigurationPanel(qt.QWidget):
         note.setWordWrap(True)
         layout.addWidget(note)
         layout.addWidget(self.stack, 1)
-        for path in dict.fromkeys(Path(path) for path in paths):
-            self.files.addItem(path.name, path)
+        self.add_paths(paths)
         self.files.currentIndexChanged.connect(self._select)
         if self.files.count():
             self._select(0)
+
+    def add_paths(self, paths):
+        known = {self.files.itemData(index) for index in range(self.files.count())}
+        for path in dict.fromkeys(Path(path) for path in paths):
+            if path not in known:
+                self.files.addItem(path.name, path)
 
     def _select(self, index):
         path = self.files.itemData(index)
@@ -45,6 +50,7 @@ class FeatureSettingsPanel(qt.QWidget):
         self.feature_name = state.name
         self.custom = {}
         self.config = None
+        self._toggle_error = ''
         self.layout = qt.QVBoxLayout(self)
         self.title = qt.QLabel(state.label)
         font = self.title.font(); font.setPointSize(font.pointSize() + 5); font.setBold(True)
@@ -62,10 +68,12 @@ class FeatureSettingsPanel(qt.QWidget):
         self.refresh(state)
 
     def _toggle(self, enabled):
+        self._toggle_error = ''
         try:
             registry.set_feature_enabled(self.feature_name, enabled)
         except Exception as error:
-            self.status.setText(str(error))
+            self._toggle_error = str(error)
+            self.status.setText(self._toggle_error)
             qt.QTimer.singleShot(0, lambda: self.refresh(self._state()))
 
     def _state(self):
@@ -99,7 +107,11 @@ class FeatureSettingsPanel(qt.QWidget):
         if self.config is None and paths:
             self.config = ConfigurationPanel(paths, self)
             self.content.addWidget(self.config, 1)
-        if not state.available:
+        elif self.config is not None:
+            self.config.add_paths(paths)
+        if self._toggle_error:
+            self.status.setText(self._toggle_error)
+        elif not state.available:
             self.status.setText('Required feature dependencies are unavailable.')
         elif not state.enabled:
             self.status.setText('Enable this feature to show its custom settings. Existing edits are retained.')
