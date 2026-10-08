@@ -1,7 +1,7 @@
 """Assess on opening, then encrypt a fixed selection with configured passwords."""
 from threading import Event
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.file_browser.operations import Operation
+from commonUtils.ui.operations import Operation
 from features.comics.encryption import plan_encryption, execute_encryption
 
 

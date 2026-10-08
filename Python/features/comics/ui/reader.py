@@ -6,7 +6,7 @@ from commonUtils.debugUtils import Severity, log
 from commonUtils.ui import pyside as qt
 from features.comics.pages import ComicPages
 from features.comics.reading import comic_siblings, visible_pages
-from .operations import Operation
+from commonUtils.ui.operations import Operation
 from services.zip_passwords import is_password_error
 from ui_new.dialogs.archive_password import ask_password
 from .reader_pages import PageCanvas, read_image, read_candidates, read_previous

@@ -45,7 +45,8 @@ Provides comic-related integration for Logistics.
 - `ui/value_popup.py` provides floating Lists, Check and Text entry for list-valued fields.
 - `catalog.py` builds incremental library suggestions; reusable JSON parsing/atomic writing lives in `commonUtils.fileTypes.jsonType.JSONFile`.
 - `library_config.py` reads configured immediate-child library names from `remoteConfig.ini`.
-- `ui/operations.py` provides the shared background file-operation worker.
+- Background callbacks use `commonUtils.ui.operations.Operation`; progress and
+  cooperative cancellation use `commonUtils.ui.operation_progress.OperationProgress`.
 - `__init__.py` exposes the feature to the Logistics feature registry.
 
 ## Initialization

@@ -7,7 +7,8 @@ from tempfile import TemporaryDirectory
 import zipfile
 
 from commonUtils import zipUtils
-from commonUtils.zip_access import validate_members, open_archive, stream_signature
+from commonUtils.zip_access import validate_members, open_archive
+from commonUtils.streams import stream_signature
 
 
 def _file_signature(snapshot):

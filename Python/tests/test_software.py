@@ -112,3 +112,20 @@ class SoftwareTests(unittest.TestCase):
             self.assertFalse(dialog.running)
             self.assertIsNone(dialog.result_path)
             dialog.deleteLater()
+
+    def test_download_failure_is_not_hidden_by_a_late_cancel_request(self):
+        from commonUtils.ui import pyside as qt
+        from commonUtils.ui import download
+        self.app = qt.QApplication.instance() or qt.QApplication([])
+        spec = DownloadSpec('Tool','1','https://example.test/tool','0'*64,'0'*64)
+        with patch.object(download, 'provision', side_effect=ValueError('SHA-256 verification failed')):
+            dialog = download._DownloadDialog(spec, Path('/tool'))
+            # Request cancellation before queued worker completion is processed.
+            dialog.task.cancelled.set()
+            with patch.object(download, 'is_ready', return_value=False), \
+                    patch.object(qt, 'display_msg_box_yes_no', return_value=True), \
+                    patch.object(download, '_DownloadDialog', return_value=dialog), \
+                    patch.object(qt, 'display_msg_box_ok') as message:
+                self.assertIsNone(download.ensure_download(spec, Path('/tool')))
+                message.assert_called_once()
+                self.assertIn('SHA-256 verification failed', message.call_args.args[1])

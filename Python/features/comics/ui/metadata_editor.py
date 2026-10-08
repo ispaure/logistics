@@ -4,7 +4,7 @@ from pathlib import Path
 from commonUtils.ui import pyside as qt
 from features.comics.selection import ComicSelection, normalize_targets
 from .metadata_form import MetadataForm
-from .operations import Operation
+from commonUtils.ui.operations import Operation
 from services.zip_passwords import is_password_error
 from ui_new.dialogs.archive_password import ask_password
 
