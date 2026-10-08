@@ -3,7 +3,7 @@
 Logistics is a personal Python/PySide6 desktop toolbox for managing local and remote folders, media libraries, servers, and maintenance tasks. Launchers support macOS, Windows, and Linux; individual integrations may support fewer platforms.
 
 Read [Using Logistics](USER_GUIDE.md) for user instructions, or choose **User guide**
-beside a feature on the Features tab.
+beside a feature in Settings → Features.
 
 ## Getting started
 
@@ -33,7 +33,7 @@ relevant controls for detected libraries, servers and folder configuration. A
 remote and its same-named local folder can share one entry; credential context is
 retained when several configs define the same remote name.
 
-**rclone** loads credential packages and manages the resulting remote configs.
+**Settings → rclone** loads credential packages and manages the resulting remote configs.
 Transfers use the selected config; **FUSE** adds an on-demand mount action where
 supported. Ordinary transfers do not require a filesystem driver.
 
@@ -44,7 +44,7 @@ information, previews and enabled features' selection actions. Dedicated feature
 pages provide other controls, such as Links and Smart Home. Minecraft server
 controls appear within the selected folder’s section.
 
-**Features** enables or disables integrations for the current session and opens
+**Settings → Features** enables or disables integrations for the current session and opens
 per-feature user guides in the built-in Markdown reader. Hard
 dependencies determine availability, and disabling a feature removes its browser
 contributions and owned file-type rules. Existing operations and windows keep

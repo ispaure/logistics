@@ -228,3 +228,33 @@ The shared `commonUtils.ui.markdown` viewer owns rendering, local link history a
 Back/Forward. Normal guide clicks open preview-only windows; Alt-click opts into
 editing. Editing-enabled windows start in Formatted mode, including general
 file-browser Markdown activation.
+
+## Feature settings
+
+Features contribute settings independently of navigation/action pages. Settings
+uses a category sidebar and preserves each feature’s widget layout. Factories
+are lazy; enabled features can supply `refresh()` and `can_close()` on the widget.
+Disabled widgets remain owned so edits and active windows are not discarded.
+
+```python
+from pathlib import Path
+from features.contributions import FeatureContributions, SettingsContribution
+
+def create_settings(parent):
+    from .ui.settings import MySettingsWidget
+    return MySettingsWidget(parent)
+
+def get_contributions():
+    return FeatureContributions(settings=[
+        SettingsContribution('My settings', 'preferences', create_settings,
+                             config_files=(Path(__file__).with_name('config.ini'),))
+    ])
+```
+
+The same `settings` field is supported by unified `Feature` declarations.
+`settings_id` must be unique within its feature. `config_files` adds plain-text
+editors below the custom layout. Conventional feature `config.ini` files are
+available even while a feature is disabled. Application INI files are in
+**Settings → Configuration**. Editors preserve UTF-8 BOM/newlines, save atomically,
+and refuse to overwrite changes made outside the editor. Settings is distinct
+from feature action pages such as Links or Smart Home.

@@ -157,3 +157,12 @@ paths may be absolute, `~`-relative or relative to the checkout root. Changes ap
 on the next operation. A missing policy file blocks these operations. Disabling
 `protect_system_folders` is an explicit override; additional protected paths still
 apply. Background folder tools skip directory links and preserve file links.
+
+## Editing in the application
+
+**Settings → Configuration** offers plain-text editing of `launch_config.ini`,
+`Python/configFile.ini` and `Python/maintenance.ini`. Each feature can also provide
+its own settings layout and INI editors. **Settings → rclone** manages credential
+packages and generated configs. Save explicitly; shared configuration changes may
+require restarting Logistics. Generated `.conf` credentials are managed by rclone’s
+existing controls rather than the general INI editor.

@@ -9,9 +9,9 @@ folder's contents or configuration.
 | Page | Use it for |
 | --- | --- |
 | Folders | Choose a source/folder and use detected library, server or remote actions |
-| rclone | Load credential packages and manage remote configs |
+| Settings | Enable features, manage credential packages and edit configuration |
 | Debug | Standalone file/media/maintenance tools, Open File Browser and Bulk Rename |
-| Features | Enable/disable integrations and open each feature's User guide |
+| Settings → Features | Enable/disable integrations and open each feature’s User guide |
 | Links / Smart Home | Controls provided by those enabled features |
 
 Disabling a feature removes its new actions; existing windows/jobs can finish.
@@ -27,7 +27,7 @@ or a heading, and use Back/Forward to retrace your steps. Website links open in
 your default browser. Unsupported or missing documents show an explanation while
 keeping the current page available.
 
-Guides opened normally from Features are preview-only: they offer no editing or saving.
+Guides opened normally from Settings → Features are preview-only: they offer no editing or saving.
 Links followed inside a preview-only window remain preview-only.
 
 Double-click `.md` or `.markdown` files in the file browser to open a window that
@@ -120,3 +120,13 @@ selected**. Scanning and previews do not change files. **Undo last rename** rest
 the last batch's names if the files and original destinations are unchanged.
 See the [bulk rename guide](Python/ui_new/bulk_rename/README.md)
 for filters, numbering, presets, cancellation and recovery details.
+
+## Settings
+
+Select a category on the left to see its settings on the right. **Features**
+controls session enablement. Each feature has its own settings category and can
+retain a custom layout. **rclone** holds credential packages and generated configs;
+it no longer has a separate top-level tab. **Configuration** edits the launcher,
+shared app settings and folder-protection INI files as plain text. Feature INI files
+appear with their feature settings. Save explicitly; some changes require restart.
+Unsaved edits are retained when switching categories and checked before closing.

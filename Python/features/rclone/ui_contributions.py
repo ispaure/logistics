@@ -7,7 +7,7 @@ from pathlib import Path
 from features.contributions import (
     FeatureContributions,
     FolderFeatureContribution,
-    PageContribution,
+    SettingsContribution,
     RemoteFolderSource,
     RemoteFolderSourceContribution,
     UIAction,
@@ -130,11 +130,11 @@ def get_contributions() -> FeatureContributions:
                 handler=_open_push_workflow
             )
         ],
-        pages=[
-            PageContribution(
-                name='rclone',
-                page_id='rclone',
-                create_page=_create_page,
+        settings=[
+            SettingsContribution(
+                name='Credential packages',
+                settings_id='credentials',
+                create_widget=_create_page,
                 order=10
             )
         ]

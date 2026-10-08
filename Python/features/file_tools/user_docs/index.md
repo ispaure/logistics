@@ -2,7 +2,7 @@
 
 Open **Debug → Open File Browser…**, then right-click a folder. The **File Tools**
 actions open dedicated windows for the selected folders. Enable File Tools in
-**Features** if these actions are missing. These tools no longer appear as Debug
+**Settings → Features** if these actions are missing. These tools no longer appear as Debug
 maintenance actions.
 
 ## Inspect unusual characters
