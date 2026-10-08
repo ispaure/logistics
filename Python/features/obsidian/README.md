@@ -1,5 +1,9 @@
 # Obsidian Feature
 
+For usage instructions, see the [user guide](user_docs/index.md). This README
+covers development, implementation details and validation.
+
+
 Finds Obsidian vaults in a selected local folder and offers an Open Vault action for each on the Folders page.
 
 ## Using this feature

@@ -1,5 +1,9 @@
 # Dropbox Feature
 
+For usage instructions, see the [user guide](user_docs/index.md). This README
+covers development, implementation details and validation.
+
+
 Provides Dropbox-specific maintenance tools for Logistics.
 
 ## Using this feature

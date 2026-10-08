@@ -1,6 +1,9 @@
 """Session feature controls with dependency-aware enable/disable behavior."""
 
+from pathlib import Path
+
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.markdown import open_markdown
 from features import registry
 
 
@@ -13,10 +16,12 @@ class FeaturesPage(qt.QWidget):
         description.setWordWrap(True)
         layout.addWidget(description)
         self.tree = qt.QTreeWidget()
-        self.tree.setHeaderLabels(['Feature', 'State', 'Requires', 'Required by enabled features'])
+        self.tree.setHeaderLabels(['Feature', 'State', 'Requires', 'Required by enabled features', 'Help'])
         self.tree.setRootIsDecorated(False)
         self.tree.setAccessibleName('Enabled Logistics features')
         self.tree.header().setSectionResizeMode(qt.QHeaderView.ResizeMode.ResizeToContents)
+        self.tree.header().setStretchLastSection(False)
+        self.tree.header().setSectionResizeMode(3, qt.QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.tree, 1)
         self.status = qt.QLabel()
         self.status.setWordWrap(True)
@@ -48,6 +53,13 @@ class FeaturesPage(qt.QWidget):
                     item.setFlags(item.flags() & ~qt.Qt.ItemFlag.ItemIsUserCheckable)
                     item.setToolTip(0, 'Required feature packages are missing.')
                 self.tree.addTopLevelItem(item)
+                guide = Path(registry.__file__).parent / state.name / 'user_docs' / 'index.md'
+                help_button = qt.QPushButton('User guide')
+                help_button.setAccessibleName(f'{state.label} user guide')
+                help_button.setEnabled(guide.is_file())
+                help_button.setToolTip('Open user documentation' if guide.is_file() else 'No user guide is installed.')
+                help_button.clicked.connect(lambda checked=False, path=guide: open_markdown(path, parent=self.window()))
+                self.tree.setItemWidget(item, 4, help_button)
 
     def _item_changed(self, item, column):
         if column != 0:

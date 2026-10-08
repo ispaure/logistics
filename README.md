@@ -2,6 +2,9 @@
 
 Logistics is a personal Python/PySide6 desktop toolbox for managing local and remote folders, media libraries, servers, and maintenance tasks. Launchers support macOS, Windows, and Linux; individual integrations may support fewer platforms.
 
+Read [Using Logistics](USER_GUIDE.md) for user instructions, or choose **User guide**
+beside a feature on the Features tab.
+
 ## Getting started
 
 1. Clone with shared utilities: `git clone --recurse-submodules <repository-url>`.
@@ -40,7 +43,8 @@ information, previews and enabled features' selection actions. Dedicated feature
 pages provide other controls, such as Links and Smart Home. Minecraft server
 controls appear within the selected folder’s section.
 
-**Features** enables or disables integrations for the current session. Hard
+**Features** enables or disables integrations for the current session and opens
+per-feature user guides in the built-in Markdown reader. Hard
 dependencies determine availability, and disabling a feature removes its browser
 contributions and owned file-type rules. Existing operations and windows keep
 their state; disabling does not undo changes already made to files.

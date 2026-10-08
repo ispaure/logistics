@@ -1,5 +1,9 @@
 # Comics Feature
 
+For usage instructions, see the [user guide](user_docs/index.md). This README
+covers development, implementation details and validation.
+
+
 Provides comic-related integration for Logistics.
 
 ## Using this feature

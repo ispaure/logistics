@@ -1,5 +1,9 @@
 # Perforce Feature
 
+For usage instructions, see the [user guide](user_docs/index.md). This README
+covers development, implementation details and validation.
+
+
 Offers a Launch P4D action for configured local folders. Launching is supported only on Linux; the action is disabled on other platforms.
 
 ## Using this feature

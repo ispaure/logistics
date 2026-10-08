@@ -1,5 +1,9 @@
 # Smart Home
 
+For usage instructions, see the [user guide](user_docs/index.md). This README
+covers development, implementation details and validation.
+
+
 Smart Home integration for Logistics.
 
 This feature provides tools and integrations for interacting with smart home devices and services. Individual smart home platforms and automation sources are implemented as integrations within this feature rather than as separate top-level Logistics features.
