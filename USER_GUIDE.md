@@ -104,3 +104,10 @@ where their settings belong and what actions change files or external services.
 - [Run system maintenance actions](Python/features/system_tools/user_docs/index.md)
 
 Holding **Alt** when opening any Markdown window enables editing, including documentation buttons. In formatted editing, Ctrl/Cmd-click follows standard Markdown links or local `[[Page|Label]]` / `[Page|Label]` aliases.
+
+YAML properties appear above the body in a compact panel. In Formatted edit mode,
+use **+ Add property**, double-click a row to edit it, select a row and choose
+**Remove**, or right-click a row for its actions. With no properties, the panel
+stays hidden; use the toolbar's corner **… → Add YAML property…** to create the
+first one. **… → Edit YAML…** opens the raw header. Property edits retain the body
+and unrelated metadata, and require the usual explicit Save.
