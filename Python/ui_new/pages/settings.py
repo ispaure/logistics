@@ -55,16 +55,20 @@ class FeatureSettingsPanel(qt.QWidget):
         self.title = qt.QLabel(state.label)
         font = self.title.font(); font.setPointSize(font.pointSize() + 5); font.setBold(True)
         self.title.setFont(font)
+        self.title.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         self.layout.addWidget(self.title)
         self.enabled = qt.QCheckBox('Enabled for this session')
         self.enabled.toggled.connect(self._toggle)
+        self.enabled.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         self.layout.addWidget(self.enabled)
         self.status = qt.QLabel()
         self.status.setWordWrap(True)
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
+        self.status.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         self.layout.addWidget(self.status)
         self.content = qt.QVBoxLayout()
         self.layout.addLayout(self.content, 1)
+        self.content.addStretch(1)
         self.refresh(state)
 
     def _toggle(self, enabled):
@@ -93,7 +97,12 @@ class FeatureSettingsPanel(qt.QWidget):
             if entry.settings_id not in self.custom:
                 widget = entry.create_widget(self)
                 self.custom[entry.settings_id] = widget
-                self.content.addWidget(widget, 1)
+                # Labels stay compact; custom layouts with expanding controls fill the page.
+                expands = widget.sizePolicy().expandingDirections()
+                if widget.layout() is not None:
+                    expands |= widget.layout().expandingDirections()
+                stretch = int(bool(expands & qt.Qt.Orientation.Vertical))
+                self.content.insertWidget(self.content.count() - 1, widget, stretch)
             widget = self.custom[entry.settings_id]
             widget.show()
             refresh = getattr(widget, 'refresh', None)
@@ -106,7 +115,7 @@ class FeatureSettingsPanel(qt.QWidget):
             paths.append(conventional)
         if self.config is None and paths:
             self.config = ConfigurationPanel(paths, self)
-            self.content.addWidget(self.config, 1)
+            self.content.insertWidget(self.content.count() - 1, self.config, 1)
         elif self.config is not None:
             self.config.add_paths(paths)
         if self._toggle_error:
@@ -119,6 +128,13 @@ class FeatureSettingsPanel(qt.QWidget):
             self.status.setText('This feature has no additional settings. Use Configuration for shared application settings.')
         else:
             self.status.setText('')
+
+        self.status.setVisible(bool(self.status.text()))
+        expanding = self.config is not None or any(
+            key in active and self.content.stretch(self.content.indexOf(widget))
+            for key, widget in self.custom.items()
+        )
+        self.content.setStretch(self.content.count() - 1, 0 if expanding else 1)
 
     def can_close(self):
         if self.config is not None and not self.config.can_close():

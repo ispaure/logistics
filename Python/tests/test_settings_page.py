@@ -89,3 +89,42 @@ class SettingsPageTests(unittest.TestCase):
             self.app.processEvents()
             self.assertIn('Required by', panel.status.text())
             self.assertTrue(panel.enabled.isChecked())
+
+    def test_empty_feature_settings_keep_heading_and_status_at_top(self):
+        from ui_new.pages.settings import FeatureSettingsPanel
+        with patch.object(registry, 'get_settings', return_value=[]):
+            panel = FeatureSettingsPanel(self.state()); self.addCleanup(panel.deleteLater)
+            panel.resize(850, 800); panel.show(); self.app.processEvents()
+            self.assertLess(panel.title.height(), 50)
+            self.assertLess(panel.enabled.geometry().top(), 70)
+            self.assertLess(panel.status.geometry().bottom(), 140)
+            panel.close()
+
+    def test_description_is_compact_and_configuration_editor_fills_page(self):
+        from ui_new.pages.settings import FeatureSettingsPanel
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'config.ini'; path.write_text('[Test]\nkey=value\n')
+            contribution = RegisteredContribution('test', 'Test', SettingsContribution(
+                'Configuration', 'config', lambda parent: qt.QLabel('Edit configuration below.', parent),
+                config_files=(path,)))
+            with patch.object(registry, 'get_settings', return_value=[contribution]):
+                panel = FeatureSettingsPanel(self.state()); self.addCleanup(panel.deleteLater)
+                panel.resize(850, 800); panel.show(); self.app.processEvents()
+                self.assertLess(panel.custom['config'].height(), 50)
+                self.assertGreater(panel.config.height(), 600)
+                self.assertTrue(panel.status.isHidden())
+                panel.close()
+
+    def test_custom_expanding_layout_fills_available_space(self):
+        from ui_new.pages.settings import FeatureSettingsPanel
+        def factory(parent):
+            widget = qt.QWidget(parent)
+            layout = qt.QVBoxLayout(widget)
+            layout.addWidget(qt.QListWidget())
+            return widget
+        contribution = RegisteredContribution('test', 'Test', SettingsContribution('Custom', 'custom', factory))
+        with patch.object(registry, 'get_settings', return_value=[contribution]):
+            panel = FeatureSettingsPanel(self.state()); self.addCleanup(panel.deleteLater)
+            panel.resize(850, 800); panel.show(); self.app.processEvents()
+            self.assertGreater(panel.custom['custom'].height(), 650)
+            panel.close()
