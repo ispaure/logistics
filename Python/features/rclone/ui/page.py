@@ -102,7 +102,7 @@ class RclonePage(pyside.QWidget):
 
         help_label = pyside.QLabel(
             'Available encrypted ZIP packages from the Logistics '
-            'RemoteCredentials folder.'
+            'RemoteCredentials folder and Marc’s Dropbox when available.'
         )
         help_label.setWordWrap(True)
 
@@ -223,6 +223,7 @@ class RclonePage(pyside.QWidget):
                 label += ' [Loaded]'
 
             item = pyside.QListWidgetItem(label)
+            item.setToolTip(str(package.path))
             item.setData(pyside.Qt.ItemDataRole.UserRole, package)
             self.credential_list.addItem(item)
 
