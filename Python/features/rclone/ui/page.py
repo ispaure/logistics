@@ -211,6 +211,8 @@ class RclonePage(pyside.QWidget):
 
         packages = credentials.get_logistics_remote_credentials_zip_lst()
         selected_row = 0
+        from collections import Counter
+        names = Counter(package.name_without_ext.casefold() for package in packages)
 
         for row, package in enumerate(packages):
             config_path = configuration.get_credential_config_path(
@@ -218,6 +220,8 @@ class RclonePage(pyside.QWidget):
             )
 
             label = package.name_without_ext
+            if names[label.casefold()] > 1:
+                label += f' — {package.path.parent}'
 
             if config_path.is_file():
                 label += ' [Loaded]'

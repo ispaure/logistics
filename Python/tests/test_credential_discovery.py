@@ -38,3 +38,15 @@ class CredentialDiscoveryTests(unittest.TestCase):
             extra.symlink_to(local, target_is_directory=True)
             with patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(path_logistics_remote_cred=local)), patch.object(marcUtils, 'get_marc_dropbox_root', return_value=root):
                 self.assertEqual(credentials.get_credential_package_directories(), (local,))
+
+    def test_external_packages_get_distinct_stable_config_names(self):
+        from features.rclone import configuration
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            local = root / 'checkout/RemoteCredentials'
+            packages = [local / 'same.zip', root / 'dropbox/same.zip', local / 'nested/same.zip']
+            with patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(path_logistics_remote_cred=local)), patch.object(configuration, 'get_rclone_config_dir', return_value=root / 'configs'):
+                configs = [configuration.get_credential_config_path(package) for package in packages]
+                self.assertEqual(configs[0], root / 'configs/same.conf')
+                self.assertEqual(len(set(configs)), 3)
+                self.assertEqual(configuration.get_credential_config_path(packages[1]), configs[1])
