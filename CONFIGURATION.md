@@ -78,6 +78,12 @@ are supported. Either directory can point to an external/private location withou
 moving the other. Configuration loading requires write access to missing resource
 roots so it can create them.
 
+Credential discovery also includes Marc’s existing Dropbox folder at
+`Software/GIT/logistics/RemoteCredentials` beneath his Dropbox root. Missing Dropbox
+folders are skipped and never created. Packages are listed together with checkout
+packages; their original locations stay unchanged. Software provisioning continues
+to use only the configured `software_path` and never searches Dropbox automatically.
+
 `Software/`, `RemoteCredentials/` and all `.conf` files are ignored by Git.
 Git ignore rules do not protect secrets placed in other tracked files or remove
 already tracked content. Keep credential packages and real configuration passwords

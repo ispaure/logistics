@@ -38,15 +38,28 @@ def get_remote_credentials_dict(remote_credentials_dir: str | Path) -> dict:
     return credentials
 
 
+def get_credential_package_directories() -> tuple[Path, ...]:
+    """Combine checkout credentials with Marc's existing Dropbox credential folder.
+
+    The optional Dropbox location is read-only discovery: never create it, copy
+    packages, or use it as a software source.
+    """
+    from commonUtils.marcUtils import get_marc_dropbox_root
+    local = config.LogisticsConfig().path_logistics_remote_cred
+    dropbox = get_marc_dropbox_root() / 'Software/GIT/logistics/RemoteCredentials'
+    roots = [local]
+    if dropbox.is_dir() and dropbox.resolve() != local.resolve():
+        roots.append(dropbox)
+    return tuple(roots)
+
+
 def get_logistics_remote_credentials_zip_lst() -> list[fileUtils.File]:
-    """Return credential ZIP files available in the Logistics RemoteCredentials directory."""
-
-    logistics_cfg = config.LogisticsConfig()
-    remote_credentials_directory = dirUtils.Directory(
-        logistics_cfg.path_logistics_remote_cred
-    )
-
-    return remote_credentials_directory.list_files(filter_extension='zip')
+    """Return packages from all existing credential roots, deduplicated by path."""
+    from commonUtils.traversal import scan_directory, natural_path_key
+    paths = set()
+    for root in get_credential_package_directories():
+        paths.update(path.resolve() for path in scan_directory(root, mask='*.zip', recursive=True))
+    return [fileUtils.File(path) for path in sorted(paths, key=natural_path_key)]
 
 
 def get_loaded_credential_config_paths() -> list[Path]:
