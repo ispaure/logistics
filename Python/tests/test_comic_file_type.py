@@ -35,7 +35,6 @@ class ComicFileTypeTests(unittest.TestCase):
             comic = CBZFile(path)
             panel = comic.browser_panels()[0]
             self.assertEqual(panel.title, 'Comic Metadata')
-            self.assertTrue(panel.default_enabled)
             details = panel.load()
             self.assertIn(('Series', 'Example'), details.fields)
             self.assertIn(('Author', 'Author'), details.fields)

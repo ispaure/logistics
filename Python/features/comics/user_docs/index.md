@@ -31,7 +31,7 @@ tabs or collection indexing.
   selections edit only fields you explicitly change. Apply saves without closing;
   OK saves and closes. Cancel discards unapplied edits.
 - The File Information and Comic Metadata panels show details of your selection.
-  Panels can be shown or hidden from the browser's Panels menu.
+  Both panels are always available when a comic is selected.
 
 Readers do not modify page images. Applied metadata changes stay saved after Cancel.
 
