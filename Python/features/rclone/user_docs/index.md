@@ -8,7 +8,7 @@ remote config. FUSE is optional and only needed for mounting.
 1. Place your credential ZIP packages in the checkout's `RemoteCredentials/`
    directory (or the configured credentials resource directory).
 2. Open **Settings → rclone** and load a package, entering its password when asked.
-3. Return to **Folders** and select the rclone source and credential.
+3. Return to **Known Folders** and select the rclone source and credential.
 4. Select a remote. If a local folder has exactly the same name, it is associated
    with that entry.
 

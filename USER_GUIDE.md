@@ -8,7 +8,8 @@ folder's contents or configuration.
 
 | Page | Use it for |
 | --- | --- |
-| Folders | Choose a source/folder and use detected library, server or remote actions |
+| File Browser | Browse your home folder or open another location; use file/folder right-click tools |
+| Known Folders | Choose a source/folder and use detected library, server or remote actions |
 | Settings | Enable features, manage credential packages and edit configuration |
 | Debug | Standalone file/media/maintenance tools, Open File Browser and Bulk Rename |
 | Settings → Features | Enable/disable integrations and open each feature’s User guide |
@@ -130,3 +131,15 @@ it no longer has a separate top-level tab. **Configuration** edits the launcher,
 shared app settings and folder-protection INI files as plain text. Feature INI files
 appear with their feature settings. Save explicitly; some changes require restart.
 Unsaved edits are retained when switching categories and checked before closing.
+
+## File Browser and Known Folders
+
+Logistics opens in **File Browser**, rooted at your home folder. **Open folder…**
+changes the browser root to another existing folder or external drive. **Home**
+returns to your home folder. Switching pages retains browser navigation and
+selection. Enabled features contribute previews and right-click actions here.
+The Debug button can still open a separate File Browser window.
+
+**Known Folders** keeps the managed local folders, Dropbox sources and configured
+rclone remotes together with their library/server/transfer actions. Use it for
+configured destinations and use File Browser for exploring arbitrary files.

@@ -5,7 +5,7 @@ pages. Comics requires the Images feature; enabling Comics enables that dependen
 
 ## Open a library
 
-Select a configured comics folder on **Folders** and choose **Open Comics Library…**.
+Select a configured comics folder on **Known Folders** and choose **Open Comics Library…**.
 To define its library tabs, place `remoteConfig.ini` at the collection root:
 
 ```ini

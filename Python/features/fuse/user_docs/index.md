@@ -6,7 +6,7 @@ config and the platform's filesystem support.
 ## Open a mount
 
 1. Load credentials using the [rclone guide](../../rclone/user_docs/index.md).
-2. Select the remote on **Folders**.
+2. Select the remote on **Known Folders**.
 3. Choose **Open Mount Folder** in its FUSE section.
 4. If asked, download the required rclone executable or platform driver installer.
    Complete driver installation, then retry the mount action.

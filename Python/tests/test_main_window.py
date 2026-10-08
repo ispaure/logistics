@@ -83,3 +83,74 @@ class MainWindowTests(unittest.TestCase):
             window._sync_feature_pages()
         self.assertIs(window.tabs.widget(1), feature_page)
         self.assertEqual(len(self.pages), 3)
+
+    def browser_window(self, extensions=()):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from ui_new.file_browser import FileBrowserPage
+        self.temporary = TemporaryDirectory(); self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        (self.root / 'file.txt').write_text('fixture')
+        with patch.object(main_window, 'CORE_TABS', ((0, 'File Browser', FileBrowserPage),
+                (5, 'Known Folders', self.page), (90, 'Settings', self.page))), patch.object(
+                main_window.registry, 'get_pages', return_value=[]), patch.object(
+                main_window.registry, 'get_browser_extensions', return_value=extensions), patch.object(Path, 'home', return_value=self.root):
+            window = main_window.MainWindow()
+        window.dlg.show()
+        self.addCleanup(window.dlg.deleteLater)
+        return window
+
+    def wait_browser(self, page):
+        import time
+        deadline = time.monotonic() + 5
+        while page.file_browser.folder_busy or page.file_browser.busy:
+            self.assertLess(time.monotonic(), deadline)
+            self.app.processEvents(); time.sleep(.005)
+        self.app.processEvents()
+
+    def test_browser_is_default_home_and_survives_tab_switches(self):
+        from pathlib import Path
+        window = self.browser_window()
+        browser = window.tabs.widget(0)
+        self.wait_browser(browser)
+        self.assertEqual(window.tabs.tabText(0), 'File Browser')
+        self.assertEqual(window.tabs.tabText(1), 'Known Folders')
+        self.assertEqual(window.tabs.currentIndex(), 0)
+        self.assertEqual(browser.file_browser.navigation.library, self.root)
+        with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=str(self.root / 'outside')):
+            (self.root / 'outside').mkdir()
+            browser.open_folder_button.click()
+        self.wait_browser(browser)
+        self.assertEqual(browser.file_browser.navigation.library, self.root / 'outside')
+        window.tabs.setCurrentIndex(1)
+        window.tabs.setCurrentIndex(0)
+        self.assertIs(window.tabs.widget(0), browser)
+        with patch.object(Path, 'home', return_value=self.root):
+            browser.home_button.click()
+        self.wait_browser(browser)
+        self.assertEqual(browser.file_browser.navigation.library, self.root)
+        window.dlg.close(); self.app.processEvents()
+
+    def test_main_close_waits_for_embedded_extension_then_retries(self):
+        from features.contributions import BrowserExtensionContribution
+        class BusyExtension(qt.QObject):
+            idle = qt.Signal()
+            ready = False
+            def prepare_close(self):
+                return self.ready
+        controller = None
+        def install(host):
+            nonlocal controller
+            controller = BusyExtension(host)
+            return controller
+        extension = RegisteredContribution('test', 'Test', BrowserExtensionContribution(install))
+        window = self.browser_window([extension])
+        browser = window.tabs.widget(0)
+        self.wait_browser(browser)
+        window.dlg.close()
+        self.assertTrue(window.dlg.isVisible())
+        self.assertTrue(browser.closing)
+        controller.ready = True
+        controller.idle.emit()
+        self.app.processEvents()
+        self.assertFalse(window.dlg.isVisible())

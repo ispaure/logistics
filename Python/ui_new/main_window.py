@@ -7,10 +7,12 @@ from features import registry
 from ui_new.pages.debug import DebugPage
 from ui_new.pages.folders import FoldersPage
 from ui_new.pages.settings import SettingsPage
+from ui_new.file_browser import FileBrowserPage
 
 
 CORE_TABS = (
-    (0, 'Folders', FoldersPage),
+    (0, 'File Browser', FileBrowserPage),
+    (5, 'Known Folders', FoldersPage),
     (90, 'Settings', SettingsPage),
     (100, 'Debug', DebugPage),
 )
@@ -34,8 +36,8 @@ class MainWindow(pyside.Window):
     def __init__(self):
         super().__init__('Logistics', main_window=True)
 
-        self.width = 850
-        self.height = 550
+        self.width = 1250
+        self.height = 800
         self.dlg.resize(self.width, self.height)
         self.dlg.setMinimumSize(850, 550)
 
@@ -143,4 +145,11 @@ class MainWindow(pyside.Window):
 
     def can_close(self):
         pages = [page for _, _, page in self._core_pages] + list(self._feature_pages.values())
-        return all(getattr(page, 'can_close', lambda: True)() for page in pages)
+        # Resolve unsaved settings before asking browser workers/controllers to stop.
+        if not all(getattr(page, 'can_close', lambda: True)() for page in pages):
+            return False
+        ready = True
+        for page in pages:
+            if not getattr(page, 'prepare_close', lambda: True)():
+                ready = False
+        return ready
