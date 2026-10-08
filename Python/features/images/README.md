@@ -33,11 +33,17 @@ The Comics feature uses `features.images.processing` for image-file handling and
 
 Dot-file staging is implemented by shared `ImageFile.compress()`: it writes `.page.webp` beside the requested `page.webp`, verifies the encoded file, closes the input, then replaces the requested output. Existing dot files are refused and failed candidates are cleaned up. With `defer_replace=True`, it instead leaves the dot file in `compressed_image` so the caller can choose whether to publish it.
 
+## Standalone compression
+
 Standalone batch compression uses deferred replacement. The dialog checks “Exclude existing WebP images” by default, skipping `.webp` inputs (case-insensitively) before inspection, including those in subfolders when recursion is enabled. Uncheck it to recompress existing WebP files. The batch API keeps its existing behavior unless `exclude_webp=True` is supplied; this option does not affect Comics compression. It compares the dot file using the existing strict under-75% rule (or always-keep override), and only then publishes the output. Losing/failed candidates are removed and the original stays intact. Existing output files belonging to another source are refused. Dot-prefixed inputs are skipped. No temporary directory is used for image staging. Comics uses the same shared dot-and-rename step inside its existing compressed-images directory, then performs its normal page-retention selection; final comic member names are unchanged.
 
 Animated/multipage originals are preserved by default in both workflow dialogs. Explicit preservation and always-keep compression cannot be enabled together. For API calls with the preservation argument omitted, normal compression preserves multiframe originals, while an explicit always-keep request permits first-frame conversion. Passing `preserve_animated_and_multipage_originals=False` also permits it. Static GIFs are processed normally.
 
+## Metadata and color profiles
+
 The shared encoder carries ICC profiles and EXIF into WebP/JPEG output. Applied EXIF orientation is removed to avoid a second rotation; existing EXIF dimensions are updated after resizing. RGB profiles are retained unchanged. CMYK/gray profiles are transformed to sRGB when writing WebP, which stores RGB pixels, and the matching sRGB profile is embedded. Invalid or unsupported profiles fail safely. This intentionally adds metadata bytes to the size comparison and may cause more originals to be retained.
+
+## Publication and failure handling
 
 Shared encoding and standalone publication/deletion check the source's identity, size, permissions, and modification/change timestamps, refusing observed changes during processing. Existing WebP filenames retain their original spelling, using normalized `File.ext` to recognize the format. The image dialog reports exceptions and failed/partial batches and stays open; it validates the target and numeric fields before running.
 
