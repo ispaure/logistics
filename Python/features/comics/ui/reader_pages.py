@@ -111,22 +111,26 @@ def read_image(pages, index):
         ) from error
 
 
-def read_candidates(pages, index):
-    images = {index: read_image(pages, index)}
+def read_candidates(pages, index, *, decode=None):
+    decode = decode or read_image
+    images = {index: decode(pages, index)}
     if index + 1 < len(pages.pages) and index not in pages.double_pages and images[index].width() < images[index].height():
         try:
-            images[index + 1] = read_image(pages, index + 1)
+            images[index + 1] = decode(pages, index + 1)
+        except KeyError:
+            if decode is not read_image:
+                raise
         except Exception:
             # A damaged following page must not prevent reading this page.
             pass
     return images
 
 
-def read_previous(pages, index, viewport, mode):
+def read_previous(pages, index, viewport, mode, *, decode=None):
     """Choose the previous spread from its actual images after a seek or resize."""
     if index > 0:
-        images = read_candidates(pages, index - 1)
+        images = read_candidates(pages, index - 1, decode=decode)
         sizes = {page: (image.width(), image.height()) for page, image in images.items()}
         if visible_pages(index - 1, sizes, viewport, mode, pages.double_pages) == (index - 1, index):
             return index - 1, images
-    return index, read_candidates(pages, index)
+    return index, read_candidates(pages, index, decode=decode)

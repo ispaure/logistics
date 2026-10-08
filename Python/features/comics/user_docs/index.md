@@ -21,7 +21,10 @@ tabs or collection indexing.
 ## Read and edit
 
 - Double-click a CBZ to open the built-in reader. Use the page buttons or arrow
-  keys; Home/End jump to the first/last page. F11 toggles full screen.
+  keys; hold Left/Right or a page button to turn every 450 ms. Nearby pages are
+  preloaded in the background. Holding stops at the first/last page; a fresh press
+  is required to move into another comic. Home/End jump to the first/last page.
+  F11 toggles full screen.
 - Use Previous/Next File for neighboring CBZs. Reading direction follows comic
   metadata; View lets you choose single-page or two-page display.
 - Right-click comics or folders and choose **Comics → Edit Metadata**. Multiple
