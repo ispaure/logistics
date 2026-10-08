@@ -49,6 +49,30 @@ class MetadataTests(ComicFixture, unittest.TestCase):
             self.assertIn(b'<!--keep-->', data)
             self.assertIn(b'<?keep yes?>', data)
 
+    def test_unrelated_metadata_edit_preserves_extension_attribute_whitespace(self):
+        xml = (b'<?xml version="1.0"?><!--before--><c:ComicInfo xmlns:c="urn:comic" '
+               b'xmlns:x="urn:extra"><c:Writer>Old</c:Writer><x:Data '
+               b'format="A&#9;B&#10;C&#13;D"><x:Child/>tail</x:Data>'
+               b'<c:Pages><c:Page Image="0" Bookmark="Keep"/></c:Pages></c:ComicInfo><?after yes?>')
+        self.archive(xml)
+        original = self.path.read_bytes()
+        document = ComicDocument(self.path)
+        document.save({})
+        self.assertEqual(self.path.read_bytes(), original)
+        document.save({'Writer': 'New'})
+        with zipfile.ZipFile(self.path) as archive:
+            self.assertEqual(archive.read('01.png'), b'original image bytes')
+            self.assertEqual(archive.read('notes.txt'), b'keep me')
+            data = archive.read('ComicInfo.xml')
+        root = ET.fromstring(data)
+        self.assertEqual(root.findtext('{urn:comic}Writer'), 'New')
+        extension = root.find('{urn:extra}Data')
+        self.assertEqual(extension.get('format'), 'A\tB\nC\rD')
+        self.assertEqual(extension.find('{urn:extra}Child').tail, 'tail')
+        self.assertEqual(root.find('{urn:comic}Pages/{urn:comic}Page').get('Bookmark'), 'Keep')
+        self.assertIn(b'<!--before-->', data)
+        self.assertIn(b'<?after yes?>', data)
+
     def test_properties_noop_and_remove(self):
         info = ComicInfoXML.from_bytes(b'<ComicInfo><Writer>A</Writer></ComicInfo>')
         self.assertEqual(info.writer, 'A')

@@ -307,6 +307,10 @@ reject ambiguous duplicates/complex fields. Tree editing is independent of
 `line_lst` and inherited text-file operations. `ComicInfoXML` adds field mappings,
 type checks and properties such as `writer`, `series`, and `language_iso`.
 The compressor's `read_lines` and `update_pages_in_line_lst` are unchanged.
+The [generic XML guide](../../commonUtils/XML.md) also covers nested queries,
+namespace-aware attributes, element editing and atomic standalone XML saving.
+ComicInfo continues using its existing direct-field methods and verified CBZ saves;
+attribute whitespace in untouched extension data is retained during other edits.
 
 The editor validates metadata before staging, checks original file identity and
 modification timestamps, verifies all output member CRCs, retains permissions,
