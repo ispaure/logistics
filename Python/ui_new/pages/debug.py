@@ -42,11 +42,24 @@ class DebugPage(pyside.QWidget):
         self.open_browser_button.setToolTip('Choose a folder and browse with available Logistics features.')
         self.open_browser_button.clicked.connect(self._open_file_browser)
         root_layout.addWidget(self.open_browser_button)
+        self.bulk_rename_button = pyside.QPushButton('Bulk Rename…')
+        self.bulk_rename_button.setToolTip('Choose a folder, preview filename changes, and rename selected files or folders.')
+        self.bulk_rename_button.clicked.connect(self._open_bulk_rename)
+        root_layout.addWidget(self.bulk_rename_button)
         root_layout.addWidget(self.scroll, 1)
 
     def _open_file_browser(self):
         from ui_new.file_browser import open_file_browser
         return open_file_browser(self.window())
+
+    def _open_bulk_rename(self):
+        from pathlib import Path
+        from ui_new.bulk_rename import open_bulk_rename
+        directory = pyside.QFileDialog.getExistingDirectory(
+            self.window(), 'Bulk Rename — Choose folder', str(Path.home()))
+        if not directory:
+            return None
+        return open_bulk_rename(directory, parent=self.window())
 
     def refresh(self):
         """Rebuild the page from all enabled feature Debug contributions."""

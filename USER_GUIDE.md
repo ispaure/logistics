@@ -10,7 +10,7 @@ folder's contents or configuration.
 | --- | --- |
 | Folders | Choose a source/folder and use detected library, server or remote actions |
 | rclone | Load credential packages and manage remote configs |
-| Debug | Standalone file/media/maintenance tools and Open File Browser |
+| Debug | Standalone file/media/maintenance tools, Open File Browser and Bulk Rename |
 | Features | Enable/disable integrations and open each feature's User guide |
 | Links / Smart Home | Controls provided by those enabled features |
 
@@ -111,3 +111,12 @@ use **+ Add property**, double-click a row to edit it, select a row and choose
 stays hidden; use the toolbar's corner **… → Add YAML property…** to create the
 first one. **… → Edit YAML…** opens the raw header. Property edits retain the body
 and unrelated metadata, and require the usual explicit Save.
+
+## Bulk rename
+
+On **Debug**, choose **Bulk Rename…** and select a folder. Select files or folders,
+adjust the filename rules, and inspect **New name** before clicking **Rename
+selected**. Scanning and previews do not change files. **Undo last rename** restores
+the last batch's names if the files and original destinations are unchanged.
+See the [bulk rename guide](Python/ui_new/bulk_rename/README.md)
+for filters, numbering, presets, cancellation and recovery details.
