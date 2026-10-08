@@ -12,7 +12,7 @@ _cache = OrderedDict()
 _lock = RLock()
 
 
-def configured_password(path):
+def _configured_section(path):
     """Nearest LogisticsZIP section wins; an empty/missing key stops inheritance."""
     path = Path(path).absolute()
     start = path if path.is_dir() else path.parent
@@ -30,8 +30,20 @@ def configured_password(path):
         if parser.has_section('LogisticsZIP'):
             # DEFAULT belongs to other INI consumers, not archive inheritance.
             parser.defaults().clear()
-            return parser.get('LogisticsZIP', 'archive_password', fallback='') or None
+            return parser
     return None
+
+
+def has_password_configuration(path):
+    try:
+        return _configured_section(path) is not None
+    except ValueError:
+        return False
+
+
+def configured_password(path):
+    parser = _configured_section(path)
+    return (parser.get('LogisticsZIP', 'archive_password', fallback='') or None) if parser is not None else None
 
 
 def _key(path, configured):

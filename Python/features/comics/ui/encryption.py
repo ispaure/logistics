@@ -1,8 +1,7 @@
-"""Plan once, prompt once for missing passwords, then encrypt a fixed selection."""
+"""Assess on opening, then encrypt a fixed selection with configured passwords."""
 from threading import Event
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.file_browser.operations import Operation
-from services.password_prompt import confirmed_password
 from features.comics.encryption import plan_encryption, execute_encryption
 
 
@@ -21,7 +20,7 @@ class EncryptComicsDialog(qt.QDialog):
         layout = qt.QVBoxLayout(self)
         description = qt.QLabel('Encrypt unencrypted CBZ files in the selection, including nested folders. '
                                'Existing encrypted comics are skipped. Names and file contents are preserved. '
-                               'Each comic uses its configured password; one confirmed password covers all comics without one.')
+                               'Each comic requires a password configured in remoteConfig.ini.')
         description.setWordWrap(True)
         layout.addWidget(description)
         self.message = qt.QLabel()
@@ -36,10 +35,12 @@ class EncryptComicsDialog(qt.QDialog):
         self.cancel_button.setEnabled(False)
         self.cancel_button.clicked.connect(self._cancel)
         layout.addWidget(self.cancel_button)
-        self.start_button = qt.QPushButton('Check selected comics')
+        self.start_button = qt.QPushButton('Encrypt comics')
+        self.start_button.setEnabled(False)
         self.start_button.clicked.connect(self._start)
         layout.addWidget(self.start_button)
         self.resize(600, 260)
+        qt.QTimer.singleShot(0, self._assess)
 
     def _run(self, work, completed):
         self.busy = True
@@ -61,28 +62,29 @@ class EncryptComicsDialog(qt.QDialog):
             self.start_button.setText('Encrypt comics' if self.plan is not None else 'Check selected comics')
             self.start_button.setEnabled(True)
 
+    def _assess(self):
+        if self.busy or self.completed or self.plan is not None:
+            return
+        self.progress_bar.setRange(0, 0)
+        self.message.setText('Checking selected comics…')
+        self._run(lambda: plan_encryption(self.targets), self._planned)
+
     def _start(self):
         if self.busy or self.completed:
             return
         if self.plan is None:
-            self.progress_bar.setRange(0, 0)
-            self.message.setText('Checking selected comics…')
-            self._run(lambda: plan_encryption(self.targets), self._planned)
+            self._assess()
         else:
-            fallback = None
             if self.plan.missing:
-                fallback = confirmed_password(self, f'One password will be used for all {len(self.plan.missing)} comics '
-                                              'without a configured INI password in this operation. Enter it twice to confirm. '
-                                              'It will not be saved to remoteConfig.ini.')
-                if fallback is None:
-                    return
+                self.message.setText('Cannot continue: one or more comics have no password configured in remoteConfig.ini.')
+                return
             plan = self.plan
             self.plan = None
             self.message.setText('Encrypting and verifying comics…')
             self.encrypting = True
             self.progress_bar.setRange(0, max(1, len(plan.passwords)))
             self.progress_bar.setValue(0)
-            self._run(lambda: execute_encryption(plan, fallback, progress=self.progress_changed.emit,
+            self._run(lambda: execute_encryption(plan, progress=self.progress_changed.emit,
                                                  cancelled=self.cancel_requested.is_set), self._completed)
 
     def _cancel(self):
@@ -107,7 +109,9 @@ class EncryptComicsDialog(qt.QDialog):
             return
         self.plan = plan
         self.message.setText(f'{len(plan.passwords)} comics to encrypt; {len(plan.skipped)} already encrypted; '
-                             f'{len(plan.failed)} failures. {len(plan.missing)} comics need the shared password.')
+                             f'{len(plan.failed)} failures.'
+                             + (' Cannot continue: one or more comics have no password configured in remoteConfig.ini.'
+                                if plan.missing else ''))
 
     def _completed(self, result, error):
         if error:

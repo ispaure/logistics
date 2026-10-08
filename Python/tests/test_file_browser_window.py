@@ -89,7 +89,10 @@ class BrowserWindowTests(unittest.TestCase):
         index = window.file_browser.model.index(str(self.path))
         menu = window.file_browser.context_menu_for(index)
         self.assertEqual([action.text() for action in menu.actions()][2:],
-                         ['Comics', 'Edit Metadata', 'Compress Comics…', 'Encrypt unencrypted comics…'])
+                         ['Comics', 'Edit Metadata', 'Compress Comics…'])
+        (self.root / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password=\n')
+        configured_menu = window.file_browser.context_menu_for(index)
+        self.assertIn('Encrypt unencrypted comics…', [action.text() for action in configured_menu.actions()])
         next(action for action in menu.actions() if action.text() == 'Edit Metadata').trigger()
         controller = window.extensions[0].controller
         editor = controller.metadata_windows[0]
