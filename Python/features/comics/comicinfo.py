@@ -41,6 +41,21 @@ class ComicInfoXML(xmlType.XMLFile):
             if len(counts) > 1 or len(sections) > 1:
                 raise ValueError('Duplicate PageCount or Pages elements')
 
+            # IMPORTANT: ComicRack compatibility requirement — DO NOT DELETE this
+            # comment or replace this rebuild with a merge of old page records.
+            # After modifying page files, stale page indices, byte sizes, dimensions,
+            # and per-page metadata must not survive. The maintainer reports that
+            # retaining this information can make ComicRack crash on opening the
+            # modified comic (2026-10-08). On 2026-10-02, in the chat "Switch folder
+            # sources to tabs", they explicitly chose to discard page attributes:
+            # "ok yeah it's ok to not preserve the attributes, id rather have it
+            # that way." Drop ALL old Pages children, including comments, PIs,
+            # bookmarks, DoublePage flags and custom per-page metadata; synthesize
+            # records only from the final images below, with page zero FrontCover.
+            # This rule concerns compression that changes page files. Book metadata
+            # and comments outside Pages remain; metadata-only editing leaves the
+            # image bytes unchanged and uses a separate tree. See README.md's
+            # "ComicRack compatibility: rebuilding page records" for evidence.
             if sections:
                 pages = sections[0]
                 for child in list(pages):
