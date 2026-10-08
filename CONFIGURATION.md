@@ -138,3 +138,22 @@ An empty `Software/` directory does not provision every optional integration.
 Images, file diagnostics and media rename workflows take their input through
 individual dialogs. Dropbox discovers account roots from its installed account
 configuration. See each feature guide before using its file-changing actions.
+
+## Destructive folder tools
+
+`Python/maintenance.ini` configures the WEBP and PYC folder protection policy:
+
+```ini
+[FolderSafety]
+protect_system_folders = true
+additional_protected_paths =
+    ~/Important
+```
+
+System/application directories for the current OS and their descendants are
+blocked, along with recursive selections that contain them. Aliases are resolved
+before checking. Ordinary user folders and external drives are allowed. Extra
+paths may be absolute, `~`-relative or relative to the checkout root. Changes apply
+on the next operation. A missing policy file blocks these operations. Disabling
+`protect_system_folders` is an explicit override; additional protected paths still
+apply. Background folder tools skip directory links and preserve file links.

@@ -2,13 +2,18 @@
 Debug UI contributions exposed by Images.
 """
 
-from features.contributions import DebugActionContribution, FeatureContributions, WorkflowContribution
+from features.contributions import DebugActionContribution, Feature, WorkflowContribution
+from commonUtils.features import BrowserExtension, SelectionAction
+from commonUtils.dirUtils import Directory
 
-def _open_compress(data=None, parent=None):
+def _open_compress(context):
     from features.images.ui.dialogs import ImageCompressDialog
-
-    dialog = ImageCompressDialog(initial_path=data, parent=parent)
-    return dialog.exec()
+    dialog = ImageCompressDialog(initial_path=context.paths, parent=context.host or context.browser)
+    try:
+        return dialog.exec()
+    finally:
+        dialog.deleteLater()
+        context.browser.refresh()
 
 
 def _open_exif_comments(data=None, parent=None):
@@ -18,15 +23,10 @@ def _open_exif_comments(data=None, parent=None):
     return dialog.exec()
 
 
-def get_contributions() -> FeatureContributions:
-    return FeatureContributions(
+def get_contributions() -> Feature:
+    return Feature(id='images', label='Images',
+        browser=BrowserExtension(actions=[SelectionAction('compress_webp', 'Batch Compress Images to WEBP…', Directory, _open_compress)]),
         debug_actions=[
-            DebugActionContribution(
-                name='Batch Compress Images...',
-                workflow_id='debug_images_compress',
-                destructive=True,
-                order=10
-            ),
             DebugActionContribution(
                 name='JPG EXIF - Set Comments...',
                 workflow_id='debug_images_exif_comments',
@@ -35,7 +35,6 @@ def get_contributions() -> FeatureContributions:
             ),
         ],
         workflows=[
-            WorkflowContribution('debug_images_compress', _open_compress),
             WorkflowContribution('debug_images_exif_comments', _open_exif_comments),
         ]
     )

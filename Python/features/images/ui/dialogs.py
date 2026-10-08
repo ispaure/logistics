@@ -25,7 +25,15 @@ class ImageCompressDialog(ToolDialog):
         if default_path == '':
             default_path = str(image_actions.get_default_compression_path())
 
-        self.target_dir = self._add_directory_field('Target folder:', default_path)
+        self.targets = tuple(initial_path) if isinstance(initial_path, (tuple, list)) else ()
+        if len(self.targets) > 1:
+            target_label = pyside.QLabel('\n'.join(str(path) for path in self.targets))
+            target_label.setTextFormat(pyside.Qt.TextFormat.PlainText)
+            self.form.addRow('Target folders:', target_label)
+            self.target_dir = None
+        else:
+            default_path = str(self.targets[0]) if self.targets else default_path
+            self.target_dir = self._add_directory_field('Target folder:', default_path)
 
         self.recursive = pyside.QCheckBox('Include subfolders')
         self.recursive.setChecked(True)
@@ -74,6 +82,20 @@ class ImageCompressDialog(ToolDialog):
             self.max_height
         ))
 
+        self.results = pyside.QTreeWidget()
+        self.results.setHeaderLabels(['Image', 'Result', 'Details'])
+        self.results.setRootIsDecorated(False)
+        self.results.setColumnWidth(0, 420)
+        self.results.setColumnWidth(1, 260)
+        self.summary = pyside.QLabel('Results appear here after compression.')
+        self.summary.setTextFormat(pyside.Qt.TextFormat.PlainText)
+        self.summary.setWordWrap(True)
+        self.root_layout.insertWidget(self.root_layout.count() - 2, self.results, 1)
+        self.root_layout.insertWidget(self.root_layout.count() - 2, self.summary)
+        self.task.completed.connect(lambda result, error: self.summary.setText(error) if error else None)
+        self.cancel_button.setText('Close')
+        self.resize(1000, 800)
+
     def _create_enabled_value_row(self, checkbox, line_edit):
         widget = pyside.QWidget()
         layout = pyside.QHBoxLayout(widget)
@@ -92,12 +114,20 @@ class ImageCompressDialog(ToolDialog):
                 self.always_keep.isChecked(), self.preserve_originals.isChecked()):
             ui.display_msg_box_ok(self.windowTitle(), self.preserve_originals.toolTip())
             return
-        target = self._require_directory(self.target_dir)
-
-        if target is None:
+        if self.busy:
             return
-        if not target.is_dir():
-            ui.display_msg_box_ok(self.windowTitle(), 'Choose an existing directory.')
+        if self.target_dir is None:
+            targets = self.targets
+        else:
+            target = self._require_directory(self.target_dir)
+            if target is None:
+                return
+            targets = (target,)
+        from services.folder_safety import require_safe_folder
+        try:
+            targets = tuple(require_safe_folder(target, recursive=self.recursive.isChecked()) for target in targets)
+        except (OSError, ValueError) as error:
+            self.summary.setText(str(error))
             return
 
         if any(not field.hasAcceptableInput() for field in (
@@ -108,26 +138,35 @@ class ImageCompressDialog(ToolDialog):
             return
         if not self._confirm():
             return
-        try:
-            successful = image_actions.batch_compress_to_webp(
-                target_dir=target,
-                recursive=self.recursive.isChecked(),
-                always_keep_compressed=self.always_keep.isChecked(),
-                quality_color=int(self.quality_color.text()),
-                quality_grayscale=int(self.quality_grayscale.text()),
-                max_long_edge=int(self.max_long_edge.text()) if self.enable_max_long_edge.isChecked() else None,
-                max_height=int(self.max_height.text()) if self.enable_max_height.isChecked() else None,
-                preserve_animated_and_multipage_originals=self.preserve_originals.isChecked(),
-                exclude_webp=self.exclude_webp.isChecked()
-            )
-        except Exception as error:
-            ui.display_msg_box_ok(self.windowTitle(), f'Compression could not complete: {error}')
-            return
-        if not successful:
-            ui.display_msg_box_ok(self.windowTitle(),
-                'Compression stopped before the batch completed. Some files may have been converted. See the log for details.')
-            return
-        self.accept()
+        options = dict(
+            recursive=self.recursive.isChecked(),
+            always_keep_compressed=self.always_keep.isChecked(),
+            quality_color=int(self.quality_color.text()), quality_grayscale=int(self.quality_grayscale.text()),
+            max_long_edge=int(self.max_long_edge.text()) if self.enable_max_long_edge.isChecked() else None,
+            max_height=int(self.max_height.text()) if self.enable_max_height.isChecked() else None,
+            preserve_animated_and_multipage_originals=self.preserve_originals.isChecked(),
+            exclude_webp=self.exclude_webp.isChecked())
+        self.results.clear()
+        self.summary.setText('Compressing images…')
+        self._run_background(lambda report, cancelled: image_actions.compress_folders(
+            targets, report=report, cancelled=cancelled, **options), self._show_results,
+            cancel_text='Cancel after current image',
+            cancel_message='Finishing the current image before cancellation…')
+
+    def _show_results(self, result):
+        batch, outcomes = result
+        rows = [(path, outcomes[path], '') for path in batch.completed]
+        rows += [(path, 'Failed', str(error)) for path, error in batch.failed.items()]
+        rows += [(path, 'Not processed', 'Cancelled') for path in batch.remaining]
+        for path, status, detail in rows:
+            row = pyside.QTreeWidgetItem([str(path), status, detail])
+            row.setToolTip(0, str(path))
+            row.setToolTip(2, detail)
+            self.results.addTopLevelItem(row)
+        self.summary.setText(f'{len(batch.completed)} processed · {len(batch.failed)} failed · '
+                             f'{len(batch.remaining)} not processed.'
+                             + (' Cancelled; completed conversions remain.' if batch.cancelled else ''))
+
 
 class ExifCommentsDialog(ToolDialog):
     def __init__(self, initial_path=None, parent=None):
