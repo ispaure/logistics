@@ -2,6 +2,14 @@
 
 Provides Plex integration for Logistics.
 
+## Using this feature
+
+Select a local folder with a paired PMSDATA remote in **Folders**, then open
+**Manage PMS…**. Database comparisons are a separate **Debug** workflow.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Responsibilities
 
 - Detect folders with a matching `-PMSDATA` rclone remote.

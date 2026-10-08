@@ -49,3 +49,12 @@ including while verifying. Temporary archives are discarded; sources and existin
 destinations are retained. Cancellation is checked once more before publication.
 The dialog stays alive until its worker has stopped; failures and cancellation
 leave it open with an explanation. Completion after publication remains success.
+
+## Using this feature
+
+Open **Debug → Open File Browser…**, select files/folders, then right-click
+and choose **Archives → Create encrypted ZIP…**. The same action is available
+in feature-hosted browsers while Archives is enabled.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.

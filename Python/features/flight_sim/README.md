@@ -2,6 +2,15 @@
 
 Provides flight-simulator-related integration for Logistics.
 
+## Using this feature
+
+The X-Plane presets are exposed on **Debug** while Flight Simulator is enabled.
+Supply the private General software presets before applying them. These presets
+do not use the public software download manifest.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Responsibilities
 
 - Detect flight simulator installation and preference paths.

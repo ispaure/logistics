@@ -2,6 +2,15 @@
 
 Provides base rclone integration for Logistics.
 
+## Using this feature
+
+Open the **rclone** page to load credential ZIPs, then select the matching
+credential and remote on **Folders** for push/pull actions. FUSE mounting is a
+separate optional feature.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Responsibilities
 
 - Load each credential ZIP into its own same-named rclone `.conf`.
@@ -137,3 +146,15 @@ ZipCrypto and AES ZIPs retain the same extraction layout. Each load has its own
 private temporary directory, removed after success or failure; failed extraction
 never writes/replaces the generated `.conf`. This flow does not inherit Comics'
 `remoteConfig.ini` password or prompt/cache policy.
+
+
+## Software policy and shared APIs
+
+Use `services.software.get_software('rclone')` for the pinned spec and resolved
+installation path, and `ensure_software('rclone')` immediately before a command.
+The manifest remains the single source for versions, URLs, hashes and architecture
+paths. Do not add a second automatic-download path in feature code.
+[Resource setup](../../../CONFIGURATION.md#public-software-provisioning) explains
+manifest updates; [commonUtils download recipes](../../commonUtils/RECIPES.md#provision-a-pinned-executable-or-installer)
+cover the shared implementation. Cancel/failure returns no executable and must
+stop the command; downloads do not make transfers themselves asynchronous.

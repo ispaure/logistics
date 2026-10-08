@@ -72,3 +72,23 @@ Calibre's BOOX mirror still targets `/Volumes/BOOX-SD`, an explicit device workf
 Generalizing its device selection should be a separate UI change rather than
 assuming a removable-drive path on Windows or Linux. System repair and macOS power
 settings are intentionally tied to their operating systems.
+
+
+## Shared workers and API changes
+
+Recent helpers are consolidated around `commonUtils.streams`,
+`commonUtils.ui.operations.Operation` and `OperationProgress`. Download dialogs
+reuse the same progress/cancellation widget; browser workers use the generic
+worker module. New callers should use these canonical imports. Feature declarations
+and direct file-type registration share resolution-rule validation.
+
+Comic conversion, compression, organization and legacy metadata batch dialogs run
+in workers with cancellation after the current comic. Separate ZIP creation checks
+cancellation during assessment, hashing, writes and verification. Failures preserve
+the affected source and are reported per item. Do not pass a batch cancellation flag
+into an archive rewrite that must finish its current transaction.
+
+Other integrations still have synchronous work; this change does not imply that
+all Folders actions or external processes have cancellation support. See the
+[UI ownership guide](features/UI_ARCHITECTURE.md#long-running-workflows-and-safe-closing)
+and [commonUtils recipes](commonUtils/RECIPES.md) before extending a workflow.

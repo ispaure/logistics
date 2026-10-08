@@ -4,6 +4,14 @@ Smart Home integration for Logistics.
 
 This feature provides tools and integrations for interacting with smart home devices and services. Individual smart home platforms and automation sources are implemented as integrations within this feature rather than as separate top-level Logistics features.
 
+## Using this feature
+
+Use the **Smart Home** page for the configured Hue groups and presets.
+Tautulli scripts are separate external entry points and do not start with the page.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Integrations
 
 ### Philips Hue

@@ -2,6 +2,14 @@
 
 Provides small filesystem maintenance and diagnostic tools for Logistics.
 
+## Using this feature
+
+Use **Debug → List Weird Characters…** for diagnostics or **Bulk Delete PYC…**
+for cleanup. Both dialogs take the target directory and recursion options.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Responsibilities
 
 - Find files whose paths contain configured problematic Unicode characters.

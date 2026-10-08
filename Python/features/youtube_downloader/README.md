@@ -2,6 +2,14 @@
 
 Provides configured YouTube channel/playlist downloads for Logistics.
 
+## Using this feature
+
+Select a local folder with downloader configuration in **Folders**, then open
+**YouTube Downloader…**. Its dialog manages downloads and optional remote sync.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Responsibilities
 
 - Detect local folders containing YouTube Downloader configuration.

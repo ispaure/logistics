@@ -2,6 +2,14 @@
 
 Finds Obsidian vaults in a selected local folder and offers an Open Vault action for each on the Folders page.
 
+## Using this feature
+
+Select a local folder in **Folders** containing vaults. Use the contributed
+**Open Vault** action; a first registration may require closing Obsidian.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Discovery and opening
 
 Vaults are recognized by `.obsidian` directories found through a bounded directory search (`list_directories(depth=2)`). Missing expected `app.json`, `appearance.json`, `core-plugins.json`, or `workspace.json` files produce warnings but do not exclude the vault.

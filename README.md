@@ -4,10 +4,12 @@ Logistics is a personal Python/PySide6 desktop toolbox for managing local and re
 
 ## Getting started
 
-1. Clone with shared utilities: `git clone --recurse-submodules <repository-url>`. For an existing checkout, run `git submodule update --init --recursive`.
-2. `Software/` and `RemoteCredentials/` are created at the repository root when needed and are ignored by Git, as are `.conf` files. Supply credential ZIPs separately. rclone and macOS/Windows FUSE installers offer verified downloads on first use; no Dropbox installation is required. See [resource resolution](Python/config.py) and the [pinned software manifest](Python/software_manifest.json).
-3. Review [application paths](Python/configFile.ini) and [launcher settings](launch_config.ini). Feature-specific configuration is described in the docs below.
-4. Run the launcher for your platform:
+1. Clone with shared utilities: `git clone --recurse-submodules <repository-url>`.
+   For an existing checkout, run `git submodule update --init --recursive`.
+2. Review [configuration and resource setup](CONFIGURATION.md). Defaults keep
+   private resources in the checkout and managed data under your home directory;
+   Dropbox is optional.
+3. Run the launcher for your platform:
 
    | Platform | Launcher |
    | --- | --- |
@@ -15,9 +17,56 @@ Logistics is a personal Python/PySide6 desktop toolbox for managing local and re
    | Windows | `LaunchLogistics_WIN.bat` |
    | Linux | `bash LaunchLogistics_LINUX_UV.sh` |
 
-The shared launchers install `uv` when needed, resolve the requested Python version, and synchronize [dependencies](Python/pyproject.toml) from [uv.lock](Python/uv.lock) into the root `.venv`. Initial setup requires internet access. The application entry point is `Python/launch.py`.
+The shared launchers install `uv` when needed, resolve the requested Python version,
+and synchronize [dependencies](Python/pyproject.toml) from [uv.lock](Python/uv.lock)
+into the root `.venv`. The current lock targets Python 3.12.2. Initial setup
+requires internet access. The entry point is
+`Python/launch.py`; [launch_config.ini](launch_config.ini) controls launcher paths.
 
-Use **Folders** to select a source and access relevant folder actions. Load credential ZIPs on the **rclone** page to add remote sources. **Debug → Open File Browser…** opens a general browser with the enabled features’ actions and panels. **Features** enables/disables integrations for the session; browser contributions and owned file types follow those toggles. macFUSE, WinFsp, or Linux FUSE support is required for mounting remotes, rather than ordinary rclone transfers.
+## Finding your tools
+
+**Folders** brings together managed local folders, optional Dropbox accounts and
+loaded rclone remotes. Select a source, then a folder: enabled features contribute
+relevant controls for detected libraries, servers and folder configuration. A
+remote and its same-named local folder can share one entry; credential context is
+retained when several configs define the same remote name.
+
+**rclone** loads credential packages and manages the resulting remote configs.
+Transfers use the selected config; **FUSE** adds an on-demand mount action where
+supported. Ordinary transfers do not require a filesystem driver.
+
+**Debug** hosts standalone maintenance workflows and **Open File Browser…**.
+The browser navigates any selected root with list, tile and column views, file
+information, previews and enabled features' selection actions. Dedicated feature
+pages provide other controls, such as Links and Smart Home. **Servers** shows
+contributed server controls when available.
+
+**Features** enables or disables integrations for the current session. Hard
+dependencies determine availability, and disabling a feature removes its browser
+contributions and owned file-type rules. Existing operations and windows keep
+their state; disabling does not undo changes already made to files.
+
+## Configuration and resources
+
+Application paths and folder exclusions live in
+[Python/configFile.ini](Python/configFile.ini). Feature-owned settings live with
+that feature; folder-specific integration settings use `remoteConfig.ini` where
+required. The [configuration guide](CONFIGURATION.md) explains each layer and
+links to the relevant feature instructions.
+
+`Software/` and `RemoteCredentials/` are created at the repository root and ignored
+by Git. Credential packages must be supplied separately; an empty credentials
+folder is a valid starting point. `.conf` files are also ignored. On first use,
+rclone and macOS/Windows mount drivers can offer a verified download from the
+[pinned manifest](Python/software_manifest.json). Other integrations may require
+an installed application or separately supplied software. Startup does not
+provision every integration.
+
+Platform launchers support Windows, macOS and Linux, while individual features
+have their own platform limits. Actions may replace files, synchronize folders or
+modify application settings; each feature guide describes its specific behavior.
+Background progress and cancellation are available for archive creation and comic
+compression/encryption. Other workflows have their own execution models.
 
 ## Features
 
@@ -43,44 +92,6 @@ Each feature README describes its behavior, configuration, and limitations.
 | [Flight Simulator](Python/features/flight_sim/README.md) | X-Plane 12 settings and window presets |
 | [File Tools](Python/features/file_tools/README.md) | Unicode path diagnostics and bytecode cleanup |
 | [System Tools](Python/features/system_tools/README.md) | Platform-specific maintenance actions |
-
-## Comics and encrypted archives
-
-The Comics library has an **All** tab and a tab for each configured library. Closing
-a reader opened from a browser returns to that browser. Comics metadata panels,
-reader activation and selection actions are available in general browsers while
-Comics is enabled. Catalog creation/indexing remains attached to the dedicated
-Comics library view; unlocked passwords are cached in memory for the session.
-
-Set an archive password in `remoteConfig.ini` in the relevant folder or an ancestor:
-
-```ini
-[LogisticsZIP]
-archive_password = your-password-here
-```
-
-The nearest `[LogisticsZIP]` section wins; an empty/missing key in that section stops
-inheritance. Logistics owns lookup and prompts; commonUtils receives explicit
-passwords. Keep real configuration passwords out of Git.
-
-- **Archives → Create encrypted ZIP…** creates a separate archive and keeps sources.
-  `Comic.cbz` suggests `Comic.zip` containing the CBZ; selected folders retain their
-  root inside the ZIP. Missing configuration triggers password entry and confirmation.
-  One ZIP needs one password; conflicting selected passwords require separate ZIPs.
-- **Comics → Encrypt unencrypted comics…** recursively encrypts plain CBZs in place
-  without converting images or changing entry names/content. Encrypted comics are
-  skipped. Each comic uses its configured password; **one confirmed fallback covers
-  all comics missing a configured password in the operation**. A progress bar counts
-  processed comics. **Cancel after current comic** finishes and verifies the current
-  archive, then leaves remaining comics untouched.
-- Readers and single-comic metadata editing try the configured password, then prompt
-  if needed. Background previews do not prompt. Recompression of encrypted comics
-  retains their password and requires valid INI configuration, reporting errors
-  instead of repeated batch prompts.
-
-Password-protected writes use AES-256. Entry names remain visible without the
-password. Staged replacements are verified before publication; failures preserve
-the affected original. See the feature guides for exact rules and limitations.
 
 ## Development
 

@@ -2,6 +2,14 @@
 
 Provides operating-system maintenance actions for Logistics.
 
+## Using this feature
+
+Use the platform-enabled actions on **Debug**. Review the target drive and
+operation before running repair or power-setting commands; these are system changes.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Responsibilities
 
 - Launch Windows maintenance scripts bundled with Logistics.
