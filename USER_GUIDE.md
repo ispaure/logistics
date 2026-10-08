@@ -27,8 +27,24 @@ your default browser. Unsupported or missing documents show an explanation while
 keeping the current page available.
 
 Double-click `.md` or `.markdown` files in the file browser to use the same reader.
-Reading does not modify a document. Developer READMEs remain separate from these
-user guides.
+Reading does not modify a document. **Contents** opens a floating list of headings
+on the right; select a heading to jump, or click outside to dismiss it. **Edit**
+enables editing directly in the formatted document. Headings, bold text, lists and
+tables stay rendered while you type. Choose **Source** in the editing-mode selector
+for precise Markdown syntax, or **Read** to return to reading. Formatted edits can
+normalize Markdown and lose unsupported HTML/extensions; use Source when those
+need to be preserved.
+
+Use **File → Save** (Ctrl+S, or Command+S on macOS) to save, **Open** (Ctrl+O) to
+open another file, and **Save As** to write a separate copy. Formatting controls,
+Undo/Redo and Find/Replace are available while editing. Leaving an edited document
+prompts for Save/Discard/Cancel. Saving refuses to overwrite a document that has
+changed on disk since it was loaded; Save As lets you keep your changes separately.
+YAML properties between `---` delimiters at the start of a note appear above its
+body. In formatted editing, use Add/Edit/Remove property or Edit YAML; text,
+lists/tags, numbers, checkboxes and dates are supported. Body edits retain these
+properties. Invalid YAML shows an error and remains available in Source mode.
+Developer READMEs remain separate from these user guides.
 
 ## Resources and settings
 
