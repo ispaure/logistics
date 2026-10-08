@@ -312,6 +312,10 @@ def compress_image(img_file_cls, *, always_keep_compressed, img_quality_color,
                    preserve_animated_and_multipage_originals):
     """Convert one inspected image; preserve staging/source checks and return its outcome."""
     source_path = img_file_cls.path
+    from services.folder_safety import require_safe_folder
+    require_safe_folder(source_path.parent, recursive=False)
+    if source_path.is_symlink():
+        raise ValueError(f'Image links are preserved: {source_path}')
     dest_path = source_path if img_file_cls.ext == 'webp' else source_path.with_suffix('.webp')
     staged_path = None
     owns_staged_file = False
@@ -392,7 +396,10 @@ def batch_compress_image(target_dir: Union[str, Path],
     # STEP ONE: GATHER LIST OF IMAGE FILES TO CONVERT
     target_dir = dirUtils.Directory(Path(target_dir) if isinstance(target_dir, str) else target_dir)
     original_img_file_cls_lst: List[ImageFile] = []
-    file_lst: List[fileUtils.File] = target_dir.list_files(recursive=recursive)
+    from commonUtils.traversal import scan_directory
+    file_lst = [fileUtils.File(target_dir.path / path.relative_to(target_dir.path.resolve()))
+                for path in scan_directory(target_dir.path, recursive=recursive)
+                if not path.is_symlink()]
 
     try:
         for file in file_lst:
