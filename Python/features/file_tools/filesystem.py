@@ -113,10 +113,14 @@ def cleanup_pyc_files(target_dir, recursive=True, *, cancelled=lambda: False,
     stops between files; deletions already completed cannot be undone.
     """
     from commonUtils.operations import run_batch
+    from services.folder_safety import require_safe_folder
+    targets = (target_dir,) if isinstance(target_dir, (str, Path)) else target_dir
+    target_dir = tuple(require_safe_folder(root, recursive=recursive) for root in targets)
     paths = _scan_targets(target_dir, mask='*.pyc', recursive=recursive, cancelled=cancelled)
     paths = [path for path in paths if not path.is_symlink()]
     def delete(path):
         import stat
+        require_safe_folder(path.parent, recursive=False)
         if not stat.S_ISREG(path.lstat().st_mode):
             raise ValueError('No longer a regular bytecode file')
         path.unlink()

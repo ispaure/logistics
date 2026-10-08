@@ -57,3 +57,34 @@ def set_jpg_exif_comments(target_dir: str | Path, recursive: bool, comments: str
         recursive=recursive,
         comments=comments
     )
+
+
+def compress_folders(target_dirs, *, recursive=True, always_keep_compressed=False,
+                     quality_color=80, quality_grayscale=45, max_long_edge=5120,
+                     max_height=None, preserve_animated_and_multipage_originals=True,
+                     exclude_webp=True, report=lambda done, total, message: None,
+                     cancelled=lambda: False):
+    """Cancellable folder workflow with per-image outcomes and system-folder policy."""
+    from commonUtils.operations import run_batch
+    from commonUtils.traversal import scan_directory, natural_path_key
+    from services.folder_safety import require_safe_folder
+    if not processing.validate_compression_options(always_keep_compressed, preserve_animated_and_multipage_originals):
+        raise ValueError('Preserve originals and always keep compressed images cannot be combined')
+    if isinstance(target_dirs, (str, Path)):
+        target_dirs = (target_dirs,)
+    roots = [require_safe_folder(root, recursive=recursive) for root in target_dirs]
+    paths = set()
+    for root in roots:
+        paths.update(path for path in scan_directory(root, recursive=recursive, cancelled=cancelled)
+                     if not path.is_symlink() and path.suffix.lower().lstrip('.') in processing.image_file_cls_supported_ext_lst
+                     and not (exclude_webp and path.suffix.lower() == '.webp'))
+    outcomes = {}
+    def compress(path):
+        require_safe_folder(path.parent, recursive=False)
+        outcomes[path] = processing.compress_image(processing.ImageFile(path),
+            always_keep_compressed=always_keep_compressed, img_quality_color=quality_color,
+            img_quality_grayscale=quality_grayscale, img_max_long_edge=max_long_edge,
+            img_max_height=max_height,
+            preserve_animated_and_multipage_originals=preserve_animated_and_multipage_originals)
+    result = run_batch(sorted(paths, key=natural_path_key), compress, progress=report, cancelled=cancelled)
+    return result, outcomes

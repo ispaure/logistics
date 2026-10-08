@@ -29,3 +29,5 @@ between files. Completed deletions remain and have no undo command.
 
 Read [Using Logistics](../../../../USER_GUIDE.md) for navigation, resources and
 feature controls. Use Back/Forward in this viewer to return to a previous guide.
+
+PYC cleanup also enforces the system-folder protection in `Python/maintenance.ini`.

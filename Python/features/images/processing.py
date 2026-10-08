@@ -307,6 +307,64 @@ class ImageFile(fileUtils.File):
                 f'Size {self.size} bytes')
 
 
+def compress_image(img_file_cls, *, always_keep_compressed, img_quality_color,
+                   img_quality_grayscale, img_max_long_edge, img_max_height,
+                   preserve_animated_and_multipage_originals):
+    """Convert one inspected image; preserve staging/source checks and return its outcome."""
+    source_path = img_file_cls.path
+    dest_path = source_path if img_file_cls.ext == 'webp' else source_path.with_suffix('.webp')
+    staged_path = None
+    owns_staged_file = False
+    try:
+        if not img_file_cls.source_unchanged():
+            raise RuntimeError(f'Source changed before compression: {source_path}')
+        if preserve_animated_and_multipage_originals:
+            with Image.open(source_path) as image:
+                if getattr(image, 'n_frames', 1) > 1:
+                    log(Severity.INFO, 'Image compression', f'Keeping animated/multipage original: {source_path}')
+                    return 'Kept original (animated/multipage)'
+        if dest_path != source_path and (dest_path.exists() or dest_path.is_symlink()):
+            raise FileExistsError(f'Output already exists: {dest_path}')
+        log(Severity.DEBUG, 'features.images.processing.compress_image',
+            f'Compressing {img_file_cls.file_name}...')
+        result = img_file_cls.compress(
+            dest_path=dest_path,
+            defer_replace=True,
+            quality_grayscale=img_quality_grayscale,
+            quality_color=img_quality_color,
+            max_long_edge=img_max_long_edge,
+            max_height=img_max_height,
+        )
+        if not result:
+            raise OSError(f'Could not compress {source_path}')
+        staged_path = img_file_cls.compressed_image.path
+        owns_staged_file = True
+        if not img_file_cls.source_unchanged():
+            raise RuntimeError(f'Source changed during compression: {source_path}')
+
+        if (always_keep_compressed or img_file_cls.compressed_image.size
+                < img_file_cls.size * img_min_allowed_compression_percentage / 100):
+            if dest_path == source_path:
+                # Same-filesystem replacement keeps a WebP source intact
+                # until its complete replacement is ready.
+                staged_path.chmod(stat.S_IMODE(source_path.stat().st_mode))
+                os.replace(staged_path, dest_path)
+            else:
+                # Exclusive publication refuses a destination created by
+                # another operation while this image was being encoded.
+                _publish_staged_image(staged_path, dest_path)
+                staged_path.unlink()
+                if not img_file_cls.source_unchanged():
+                    raise RuntimeError(f'Output created, but source changed before deletion: {source_path}')
+                if not img_file_cls.delete_file():
+                    raise OSError(f'Output created, but could not delete {source_path}')
+            return 'Converted to WEBP'
+        return 'Kept original (size threshold)'
+    finally:
+        if owns_staged_file and staged_path.exists():
+            staged_path.unlink()
+
+
 def batch_compress_image(target_dir: Union[str, Path],
                          recursive: bool,
                          always_keep_compressed: bool,
@@ -321,6 +379,13 @@ def batch_compress_image(target_dir: Union[str, Path],
     if preserve_animated_and_multipage_originals is None:
         preserve_animated_and_multipage_originals = not always_keep_compressed
     if not validate_compression_options(always_keep_compressed, preserve_animated_and_multipage_originals):
+        return False
+
+    from services.folder_safety import require_safe_folder
+    try:
+        require_safe_folder(target_dir, recursive=recursive)
+    except (OSError, ValueError) as error:
+        log(Severity.ERROR, 'Image compression', str(error))
         return False
 
     # --------------------------------------------------------------------------------------------------------------
@@ -340,63 +405,15 @@ def batch_compress_image(target_dir: Union[str, Path],
         log(Severity.ERROR, 'Image compression', f'Could not inspect input: {error}')
         return False
 
-    # Stage every encoding beside its destination so WebP inputs remain intact
-    # until the strict size rule (or explicit override) chooses the new file.
-    for img_file_cls in original_img_file_cls_lst:
-        source_path = img_file_cls.path
-        dest_path = source_path if img_file_cls.ext == 'webp' else source_path.with_suffix('.webp')
-        staged_path = None
-        owns_staged_file = False
+    for image in original_img_file_cls_lst:
         try:
-            if not img_file_cls.source_unchanged():
-                raise RuntimeError(f'Source changed before compression: {source_path}')
-            if preserve_animated_and_multipage_originals:
-                with Image.open(source_path) as image:
-                    if getattr(image, 'n_frames', 1) > 1:
-                        log(Severity.INFO, 'Image compression', f'Keeping animated/multipage original: {source_path}')
-                        continue
-            if dest_path != source_path and (dest_path.exists() or dest_path.is_symlink()):
-                raise FileExistsError(f'Output already exists: {dest_path}')
-            log(Severity.DEBUG, f'features.images.processing.{func_name}',
-                f'Compressing {img_file_cls.file_name}...')
-            result = img_file_cls.compress(
-                dest_path=dest_path,
-                defer_replace=True,
-                quality_grayscale=img_quality_grayscale,
-                quality_color=img_quality_color,
-                max_long_edge=img_max_long_edge,
-                max_height=img_max_height,
-            )
-            if not result:
-                raise OSError(f'Could not compress {source_path}')
-            staged_path = img_file_cls.compressed_image.path
-            owns_staged_file = True
-            if not img_file_cls.source_unchanged():
-                raise RuntimeError(f'Source changed during compression: {source_path}')
-
-            if (always_keep_compressed or img_file_cls.compressed_image.size
-                    < img_file_cls.size * img_min_allowed_compression_percentage / 100):
-                if dest_path == source_path:
-                    # Same-filesystem replacement keeps a WebP source intact
-                    # until its complete replacement is ready.
-                    staged_path.chmod(stat.S_IMODE(source_path.stat().st_mode))
-                    os.replace(staged_path, dest_path)
-                else:
-                    # Exclusive publication refuses a destination created by
-                    # another operation while this image was being encoded.
-                    _publish_staged_image(staged_path, dest_path)
-                    staged_path.unlink()
-                    if not img_file_cls.source_unchanged():
-                        raise RuntimeError(f'Output created, but source changed before deletion: {source_path}')
-                    if not img_file_cls.delete_file():
-                        raise OSError(f'Output created, but could not delete {source_path}')
-            # Otherwise cleanup discards the stage and retains the source bytes.
+            compress_image(image, always_keep_compressed=always_keep_compressed,
+                img_quality_color=img_quality_color, img_quality_grayscale=img_quality_grayscale,
+                img_max_long_edge=img_max_long_edge, img_max_height=img_max_height,
+                preserve_animated_and_multipage_originals=preserve_animated_and_multipage_originals)
         except Exception as error:
             log(Severity.ERROR, f'features.images.processing.{func_name}', str(error))
             return False
-        finally:
-            if owns_staged_file and staged_path.exists():
-                staged_path.unlink()
 
     log(Severity.INFO, 'Image Compression', 'Images Compression Completed successfully!')
     return True
