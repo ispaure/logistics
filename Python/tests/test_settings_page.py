@@ -80,15 +80,17 @@ class SettingsPageTests(unittest.TestCase):
             self.assertTrue(editor.is_modified)
             editor.text.document().setModified(False)
 
-    def test_dependency_toggle_error_stays_visible_after_refresh(self):
+    def test_feature_status_directs_enablement_to_features_and_reports_missing_dependencies(self):
         from ui_new.pages.settings import FeatureSettingsPanel
         state = self.state()
-        with patch.object(registry, 'get_feature_states', return_value=[state]), patch.object(registry, 'get_settings', return_value=[]), patch.object(registry, 'set_feature_enabled', side_effect=ValueError('Required by another feature')):
+        state.enabled = False
+        with patch.object(registry, 'get_settings', return_value=[]):
             panel = FeatureSettingsPanel(state); self.addCleanup(panel.deleteLater)
-            panel.enabled.setChecked(False)
-            self.app.processEvents()
-            self.assertIn('Required by', panel.status.text())
-            self.assertTrue(panel.enabled.isChecked())
+            self.assertEqual(panel.findChildren(qt.QCheckBox), [])
+            self.assertIn('under Features', panel.status.text())
+            state.available = False
+            panel.refresh(state)
+            self.assertIn('dependencies are unavailable', panel.status.text())
 
     def test_empty_feature_settings_keep_heading_and_status_at_top(self):
         from ui_new.pages.settings import FeatureSettingsPanel
@@ -96,7 +98,6 @@ class SettingsPageTests(unittest.TestCase):
             panel = FeatureSettingsPanel(self.state()); self.addCleanup(panel.deleteLater)
             panel.resize(850, 800); panel.show(); self.app.processEvents()
             self.assertLess(panel.title.height(), 50)
-            self.assertLess(panel.enabled.geometry().top(), 70)
             self.assertLess(panel.status.geometry().bottom(), 140)
             panel.close()
 
