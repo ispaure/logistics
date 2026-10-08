@@ -47,7 +47,10 @@ The feature detects:
 
 `/Library/Filesystems/macfuse.fs`
 
-When missing, it can launch:
+When filesystem support is missing, the mount action offers to download and
+open the pinned installer. Its SHA-256 hash and path are centralized in
+`Python/software_manifest.json`. After completing installation, retry the mount:
+
 
 `Logistics/Software/macOS/macfuse-5.0.5.dmg`
 
@@ -55,13 +58,18 @@ When missing, it can launch:
 
 The feature detects WinFsp in its standard Program Files locations.
 
-When missing, it can launch:
+When filesystem support is missing, the mount action offers to download and
+open the pinned installer. Its SHA-256 hash and path are centralized in
+`Python/software_manifest.json`. After completing installation, retry the mount:
+
 
 `Logistics/Software/Windows/winfsp-1.11.22176.msi`
 
 ### Linux
 
 The feature expects the system FUSE device and helper to already be available.
+Install FUSE through the distribution package manager; Logistics does not download
+a universal Linux driver installer.
 
 ## Initialization
 

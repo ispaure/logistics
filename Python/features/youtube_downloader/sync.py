@@ -37,7 +37,9 @@ def push_seasons(folder: LocalFolder, config_path: str | Path):
         relative = source.resolve().relative_to(Path(folder.path).resolve()).as_posix()
         destination = f'{folder.name}:{relative}'
         log(Severity.INFO, 'YouTube Sync', f'Pushing {source} to {destination}')
-        rclone_sync(source, destination, config_path=config_path, wait_for_output=True)
+        if rclone_sync(source, destination, config_path=config_path, wait_for_output=True) is False:
+            return False
+    return True
 
 
 def push_config(folder: LocalFolder, config_path: str | Path):

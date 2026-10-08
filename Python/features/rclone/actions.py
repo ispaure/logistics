@@ -13,7 +13,7 @@ from features.rclone import sync as rclone_sync
 from models.local_folder import LocalFolder
 
 
-def pull_remote(remote_name: str, config_path: str | Path) -> None:
+def pull_remote(remote_name: str, config_path: str | Path) -> bool:
     """Pull an rclone remote to its matching local Logistics folder."""
 
     source_path = remote_name + ':'
@@ -22,7 +22,7 @@ def pull_remote(remote_name: str, config_path: str | Path) -> None:
         remote_name
     )
 
-    rclone_sync.rclone_sync(
+    return rclone_sync.rclone_sync(
         source_path,
         destination_path,
         config_path=config_path
@@ -33,13 +33,13 @@ def push_to_cloud(
     folder: LocalFolder,
     config_path: str | Path,
     track_renames: bool = False
-) -> None:
+) -> bool:
     """Push a local Logistics folder to its rclone remote."""
 
     source_path = folder.path
     destination_path = folder.name + ':'
 
-    rclone_sync.rclone_sync(
+    return rclone_sync.rclone_sync(
         source_path,
         destination_path,
         config_path=config_path,
@@ -72,11 +72,9 @@ def push_specific_directory(
     specific_directory_name = directory.path.name
     destination_path = folder.name + ':' + specific_directory_name
 
-    rclone_sync.rclone_sync(
+    return rclone_sync.rclone_sync(
         directory.path,
         destination_path,
         config_path=config_path,
         bw_limit=bandwidth_limit
     )
-
-    return True

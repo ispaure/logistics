@@ -142,7 +142,9 @@ def mount_remote(
 
     log(Severity.INFO, 'mount_remote', f'Mounting "{remote_name}" at path "{mount_path}"...')
 
-    rclone_path = executable.get_rclone_path()
+    rclone_path = executable.ensure_rclone()
+    if rclone_path is None:
+        return False
 
     if not rclone_path.is_file():
         log(Severity.ERROR, 'mount_remote', f'rclone executable does not exist: "{rclone_path}"')

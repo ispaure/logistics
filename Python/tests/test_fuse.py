@@ -29,7 +29,7 @@ class FuseTests(unittest.TestCase):
         for target, options in (
             ('features.fuse.mounts.log', {}),
             ('features.fuse.mounts.get_remote_mount_path', {'return_value': self.mount_path}),
-            ('features.fuse.mounts.executable.get_rclone_path', {'return_value': self.executable}),
+            ('features.fuse.mounts.executable.ensure_rclone', {'return_value': self.executable}),
             ('features.fuse.mounts.configuration.get_rclone_remote_names', {'return_value': ['Mount']}),
         ):
             patcher = patch(target, **options)
@@ -182,7 +182,7 @@ class FuseTests(unittest.TestCase):
 
     def test_linux_dependency_lookup_does_not_require_private_resources(self):
         with patch.object(detection, 'get_os', return_value=OS.LINUX), patch.object(
-                detection.config, 'LogisticsConfig') as settings:
+                detection.software, 'get_software') as settings:
             self.assertIsNone(detection.get_installer_path())
         settings.assert_not_called()
 
@@ -229,6 +229,7 @@ class FuseTests(unittest.TestCase):
     def test_installer_launch_failure_is_reported_without_mounting(self):
         with patch.object(actions, 'get_os', return_value=OS.MAC), patch.object(
                 actions.detection, 'get_installer_path', return_value=self.executable), patch.object(
+                actions.software, 'ensure_software', return_value=self.executable), patch.object(
                 actions.subprocess, 'Popen', side_effect=OSError('launch failed')), patch.object(
                 actions.ui, 'display_msg_box_ok') as message:
             self.assertFalse(actions.launch_installer())

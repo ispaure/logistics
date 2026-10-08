@@ -11,6 +11,7 @@ from commonUtils.osUtils import OS, get_os
 from models.remote_folder import RemoteFolder
 
 from features.fuse import detection, mounts
+from services import software
 
 
 def launch_installer() -> bool:
@@ -23,15 +24,13 @@ def launch_installer() -> bool:
         ui.display_msg_box_ok(
             f'{dependency_name} Required',
             'The FUSE support required by rclone mount is not currently available. '
-            'No bundled installer is provided for this platform.'
+            'Install FUSE through your distribution package manager and ensure /dev/fuse '
+            'and fusermount3 (or fusermount) are available, then retry the mount.'
         )
         return False
 
-    if not installer_path.is_file():
-        ui.display_msg_box_ok(
-            f'{dependency_name} Installer Missing',
-            f'Could not find the bundled installer:\n\n{installer_path}'
-        )
+    installer_path = software.ensure_software('macfuse' if get_os() == OS.MAC else 'winfsp', install=True)
+    if installer_path is None:
         return False
 
     log(

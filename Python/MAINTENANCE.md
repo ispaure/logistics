@@ -33,10 +33,14 @@ representative fixtures and platform checks before behavior changes.
 
 ## Folder discovery and presentation
 
-`LogisticsConfig` combines core paths with private resource discovery. Creating
-it to obtain a local-folder path also validates the Software/RemoteCredentials
-pair. A future configuration cleanup should separate those responsibilities and
-test missing resources without launching dialogs or requiring a personal setup.
+`LogisticsConfig` creates independent resource directories at the checkout root.
+Optional `[Resources] software_path` and `credentials_path` entries in
+`configFile.ini` override them independently (relative to the checkout, or absolute).
+Dropbox is never selected implicitly. Public binaries/installers are pinned in
+`software_manifest.json`; `services.software` supplies project policy to the shared
+`commonUtils.downloads` and `commonUtils.ui.download` provisioning code. Download
+hashes and extracted executable hashes must both be updated when changing releases.
+Other integrations still require their existing private software resources.
 
 Source listings are read once per page refresh, but refresh and folder feature
 detectors still run on the GUI thread. If a large or unavailable source causes

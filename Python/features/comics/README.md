@@ -435,16 +435,18 @@ Fedora 43 container; the same runner can be used locally on another machine.
 ### Encrypt existing comics
 
 With Comics enabled, **Comics → Encrypt unencrypted comics…** is available in
-all file browser windows. Selected folders are scanned recursively once; overlapping
+file browser windows when the selected item has an ancestor `remoteConfig.ini`
+with a `[LogisticsZIP]` section. The dialog assesses the selection automatically
+on opening. Selected folders are scanned recursively once; overlapping
 selections are deduplicated and symlinks are not followed. The dialog reports the
 number to encrypt, already encrypted comics to skip, and per-file planning failures
 before you start encryption.
 
 Each plain CBZ uses its nearest configured `[LogisticsZIP] archive_password`.
-**One password-and-confirmation prompt covers all comics without a configured
-password in that operation**, not one prompt per file. Canceling that prompt starts
-no encryption. Entered passwords are not written to the INI. Already encrypted
-comics retain their existing password and bytes.
+The UI refuses to encrypt if any plain comic lacks a nonempty configured password.
+The programmatic encryption API retains its explicit fallback-password argument.
+Opening an already encrypted comic still prompts for its password when no usable
+INI password exists. Already encrypted comics retain their existing password and bytes.
 
 Encryption streams entries directly into an AES-256 staged CBZ beside the original,
 preserving entry order, names, empty folders, comments and decrypted file contents.
@@ -465,4 +467,4 @@ requests the same cancellation and keeps the dialog alive until the worker finis
 Completed comics stay encrypted; unprocessed comics stay untouched. The final
 summary distinguishes cancellation and reports the number not processed. Folder
 scanning uses an indeterminate progress bar; cancellation is available during the
-encryption phase, after the scan and password confirmation.
+encryption phase, after the automatic scan.
