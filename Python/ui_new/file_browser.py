@@ -6,16 +6,11 @@ from commonUtils.ui.file_browser import FileBrowser
 from features import registry
 
 
-class FileBrowserWindow(qt.QMainWindow):
-    def __init__(self, root_path, parent=None):
-        super().__init__(parent)
-        self.setWindowFlag(qt.Qt.WindowType.Window, True)
-        self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
-        self.setWindowTitle(f'File Browser — {Path(root_path).name}')
-        self.resize(1200, 800)
+class _BrowserHost:
+    """Shared feature installation and worker-safe shutdown for embedded/standalone hosts."""
+    def _initialize_browser(self, root_path):
         self.closing = False
         self.file_browser = FileBrowser(parent=self)
-        self.setCentralWidget(self.file_browser)
         self.extensions = []
         self._extensions_by_feature = {}
         self._sync_extensions()
@@ -56,18 +51,56 @@ class FileBrowserWindow(qt.QMainWindow):
 
     def _retry_close(self):
         if self.closing:
-            self.close()
+            self.window().close()
 
-    def closeEvent(self, event):
+    def prepare_close(self):
         self.closing = True
         ready = True
         for extension in self.extensions:
             if not extension.prepare_close():
                 ready = False
-        if not ready or self.file_browser.stop():
+        browser_busy = self.file_browser.stop()
+        return ready and not browser_busy
+
+    def closeEvent(self, event):
+        if self.prepare_close():
+            event.accept()
+        else:
             event.ignore()
-            return
-        event.accept()
+
+
+class FileBrowserPage(_BrowserHost, qt.QWidget):
+    def __init__(self, parent=None, *, root_path=None):
+        super().__init__(parent)
+        self._initialize_browser(root_path or Path.home())
+        layout = qt.QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        controls = qt.QHBoxLayout()
+        self.home_button = qt.QPushButton('Home')
+        self.home_button.clicked.connect(lambda: self.file_browser.set_directory(Path.home()))
+        self.open_folder_button = qt.QPushButton('Open folder…')
+        self.open_folder_button.clicked.connect(self._choose_directory)
+        controls.addWidget(self.home_button)
+        controls.addWidget(self.open_folder_button)
+        controls.addStretch()
+        layout.addLayout(controls)
+        layout.addWidget(self.file_browser, 1)
+
+    def _choose_directory(self):
+        root = qt.QFileDialog.getExistingDirectory(self, 'Open folder', str(self.file_browser.navigation.library))
+        if root:
+            self.file_browser.set_directory(root)
+
+
+class FileBrowserWindow(_BrowserHost, qt.QMainWindow):
+    def __init__(self, root_path, parent=None):
+        super().__init__(parent)
+        self.setWindowFlag(qt.Qt.WindowType.Window, True)
+        self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle(f'File Browser — {Path(root_path).name}')
+        self.resize(1200, 800)
+        self._initialize_browser(root_path)
+        self.setCentralWidget(self.file_browser)
 
 
 _windows = []

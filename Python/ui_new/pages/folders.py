@@ -58,7 +58,7 @@ class FoldersPage(pyside.QWidget):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(8)
 
-        title_label = pyside.QLabel('Folders')
+        title_label = pyside.QLabel('Known Folders')
         title_font = title_label.font()
         title_font.setPointSize(title_font.pointSize() + 4)
         title_font.setBold(True)

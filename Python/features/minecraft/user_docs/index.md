@@ -1,7 +1,7 @@
 # Manage Minecraft servers
 
 Minecraft controls appear for servers discovered below a selected local folder
-on **Folders**. A directory with `server.properties` is recognized as a server;
+on **Known Folders**. A directory with `server.properties` is recognized as a server;
 searching is limited to one to three directory levels.
 
 ## Configure launching

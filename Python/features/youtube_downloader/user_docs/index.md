@@ -24,7 +24,7 @@ do not prevent downloads from proceeding.
 
 ## Download
 
-1. Select the configured local folder on **Folders**.
+1. Select the configured local folder on **Known Folders**.
 2. Open **YouTube Downloader…**.
 3. Start the intended download operation and review process output and failures.
 

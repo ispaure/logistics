@@ -27,7 +27,11 @@ requires internet access. The entry point is `Python/launch.py`; [launch_config.
 
 ## Finding your tools
 
-**Folders** brings together managed local folders, optional Dropbox accounts and
+**File Browser** is the startup page, opening in your home folder. Use **Open
+folder…** for another location, including external drives, and **Home** to return.
+Right-click folders for Unicode inspection, PYC cleanup and WEBP compression.
+
+**Known Folders** brings together managed local folders, optional Dropbox accounts and
 loaded rclone remotes. Select a source, then a folder: enabled features contribute
 relevant controls for detected libraries, servers and folder configuration. A
 remote and its same-named local folder can share one entry; credential context is
