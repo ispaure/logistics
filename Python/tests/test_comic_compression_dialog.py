@@ -4,6 +4,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import time
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
 from features.comics.ui.dialogs import CompressCbzDialog
@@ -17,6 +18,14 @@ class CompressionDialogTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 
+    def wait(self, dialog):
+        deadline = time.monotonic() + 5
+        while dialog.busy:
+            self.assertLess(time.monotonic(), deadline)
+            self.app.processEvents()
+            time.sleep(.005)
+        self.app.processEvents()
+
     def test_selected_targets_replace_picker_and_pass_normal_options(self):
         targets = (self.root / 'first.cbz', self.root / 'folder')
         dialog = CompressCbzDialog(targets=targets)
@@ -29,8 +38,14 @@ class CompressionDialogTests(unittest.TestCase):
         with patch.object(dialog, '_confirm', return_value=True), patch(
                 'features.comics.cbz.compress_selected_cbz', return_value=CompressionStats()) as compress:
             dialog._execute()
-        compress.assert_called_once_with(targets, recursive=False, always_keep_compressed=False,
-                                         preserve_animated_and_multipage_originals=True)
+            self.wait(dialog)
+        self.assertEqual(compress.call_args.args, (targets,))
+        options = compress.call_args.kwargs
+        self.assertFalse(options['recursive'])
+        self.assertFalse(options['always_keep_compressed'])
+        self.assertTrue(options['preserve_animated_and_multipage_originals'])
+        self.assertTrue(callable(options['progress']))
+        self.assertTrue(callable(options['cancelled']))
         self.assertEqual(dialog.result(), qt.QDialog.DialogCode.Accepted)
 
     def test_validation_and_partial_failure_keep_dialog_open(self):
@@ -48,7 +63,8 @@ class CompressionDialogTests(unittest.TestCase):
                 'features.comics.ui.dialogs.ui.display_msg_box_ok') as message, patch(
                 'features.comics.cbz.compress_selected_cbz', return_value=stats):
             dialog._execute()
-            self.assertIn('1 failed', message.call_args.args[1])
+            self.wait(dialog)
+            self.assertIn('1 failed', dialog.task.message.text())
         self.assertEqual(dialog.result(), qt.QDialog.DialogCode.Rejected)
 
     def test_regular_dialog_keeps_folder_picker(self):

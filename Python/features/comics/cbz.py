@@ -98,9 +98,10 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
         # Check if correct extension
         self.is_valid = self.ext == 'cbz'
         if not self.is_valid:
-            log(Severity.CRITICAL, tool_name, f'This CBZFile is invalid: {self.path}')
+            raise ValueError(f'This CBZFile is invalid: {self.path}')
 
         # Compression stats
+        self.last_error = ''
         self.compression_stats: CompressionStats = CompressionStats()
         # Compression log
         self.compression_log: CompressionLog = CompressionLog(self.file_name)
@@ -133,8 +134,10 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
         return True
 
     def compress_to_webp(self, always_keep_compressed: bool = False,
-                         preserve_animated_and_multipage_originals: bool | None = None):
+                         preserve_animated_and_multipage_originals: bool | None = None,
+                         *, progress=lambda message: None):
         """Compress in an isolated workspace; replace the original only on success."""
+        self.last_error = ''
         self.compression_stats.reset()
         self.compression_log.reset()
         if preserve_animated_and_multipage_originals is None:
@@ -145,13 +148,14 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
             original_stat = self.path.stat()
             with TemporaryDirectory(prefix='logistics-cbz-', ignore_cleanup_errors=True) as workspace:
                 return self._compress_to_webp(Path(workspace), always_keep_compressed, original_stat,
-                                              preserve_animated_and_multipage_originals)
+                                              preserve_animated_and_multipage_originals, progress)
         except Exception as error:
+            self.last_error = str(error)
             log(Severity.ERROR, tool_name, f'Compression failed for "{self.path}": {error}')
             return False
 
     def _compress_to_webp(self, workspace: Path, always_keep_compressed: bool, original_stat,
-                          preserve_animated_and_multipage_originals: bool):
+                          preserve_animated_and_multipage_originals: bool, progress=lambda message: None):
         func_name = 'compress_to_webp'
         temp_dir_extracted_cbz = workspace / '1_Extracted_CBZ'
         temp_dir_compressed_imgs = workspace / '2_Compressed_Images'
@@ -165,6 +169,7 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP ONE : EXTRACTION OF .CBZ IN TEMP DIRECTORY
+        progress(f'Extracting {self.path}')
         temp_dir_extracted_cbz.mkdir()
 
         validate_archive_members(self.path)
@@ -174,14 +179,17 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
         result = self.extract(temp_dir_extracted_cbz, password=password)
         if not result:
             msg = f'Unable to extract "{self.path}" properly!'
+            self.last_error = msg
             log(Severity.ERROR, tool_name, msg)
             return False
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP TWO: SANITIZE EXTRACTED DIRECTORY
+        progress(f'Sanitizing {self.path}')
         result = self.sanitize_extracted_cbz(temp_dir_extracted_cbz)
         if not result:
             msg = f'Unable to sanitize extracted archive "{self.path}" properly!'
+            self.last_error = msg
             log(Severity.ERROR, tool_name, msg)
             return False
 
@@ -207,8 +215,7 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
             elif extracted_file.file_name not in ['ComicInfo.xml', 'CompressionLog.txt']:
                 msg = (f'Unexpected File within "{self.path}" NOT CAUGHT OR '
                        f'CLEANED DURING SANITIZE: "{extracted_file.file_name}"')
-                log(Severity.CRITICAL, f'cbzUtils.CBZFile.{func_name}', msg)
-                return False
+                raise ValueError(msg)
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP FOUR: COMPRESS LIST OF IMAGES TO .WEBP
@@ -227,7 +234,8 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
             output_paths.add(key)
 
         # Compress to WEBP
-        for img_file_cls in img_file_cls_lst:
+        for page_index, img_file_cls in enumerate(img_file_cls_lst, 1):
+            progress(f'Compressing page {page_index}/{len(img_file_cls_lst)}: {self.path}')
             if img_file_cls.path in preserved_paths:
                 continue
 
@@ -244,6 +252,7 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
                                            preserve_alpha=False)
             if not result:
                 msg = f'An error occurred whilst compressing {img_file_cls.file_name}!'
+                self.last_error = msg
                 log(Severity.ERROR, f'cbzUtils.CBZFile.{func_name}', msg)
                 return False
             self.compression_stats.compressed_images_size += img_file_cls.compressed_image.size  # Log Size in Stats
@@ -304,6 +313,7 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP EIGHT: FROM CONTENTS OF THE RESULT DIRECTORY, BUILD ARCHIVE OVERWRITING THE ORIGINAL .CBZ
+        progress(f'Building and verifying {self.path}')
         replace_archive(temp_dir_result, self.path, expected_stat=original_stat, password=password)
 
         # --------------------------------------------------------------------------------------------------------------
@@ -315,7 +325,8 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
 
 
 def batch_compress_cbz(target_dir: Union[str, Path], recursive: bool = True, always_keep_compressed: bool = False,
-                       preserve_animated_and_multipage_originals: bool | None = None) -> CompressionStats | None:
+                       preserve_animated_and_multipage_originals: bool | None = None, *,
+                       progress=lambda done, total, message: None, cancelled=lambda: False) -> CompressionStats | None:
     """Compress unmarked CBZs independently and return aggregate statistics.
 
     Preserve the established cleanup, ordering, padding, WebP settings and
@@ -341,11 +352,12 @@ def batch_compress_cbz(target_dir: Union[str, Path], recursive: bool = True, alw
     cbz_file_lst: List[fileUtils.File] = target_dir.list_files(recursive=recursive, filter_extension='cbz')
 
     return _compress_cbz_paths([file.path for file in cbz_file_lst], always_keep_compressed,
-                               preserve_animated_and_multipage_originals)
+                               preserve_animated_and_multipage_originals, progress=progress, cancelled=cancelled)
 
 
 def compress_selected_cbz(targets, recursive=True, always_keep_compressed=False,
-                          preserve_animated_and_multipage_originals=None):
+                          preserve_animated_and_multipage_originals=None, *,
+                          progress=lambda done, total, message: None, cancelled=lambda: False):
     """Compress a file/folder selection once per CBZ using the batch skip policy."""
     from .selection import selected_comics
     if preserve_animated_and_multipage_originals is None:
@@ -353,51 +365,38 @@ def compress_selected_cbz(targets, recursive=True, always_keep_compressed=False,
     if not validate_compression_options(always_keep_compressed, preserve_animated_and_multipage_originals):
         return None
     paths = selected_comics(targets, recursive=recursive)
-    return _compress_cbz_paths(paths, always_keep_compressed, preserve_animated_and_multipage_originals)
+    return _compress_cbz_paths(paths, always_keep_compressed, preserve_animated_and_multipage_originals,
+                               progress=progress, cancelled=cancelled)
 
 
-def _compress_cbz_paths(paths, always_keep_compressed, preserve_animated_and_multipage_originals):
+def _compress_cbz_paths(paths, always_keep_compressed, preserve_animated_and_multipage_originals,
+                        *, progress=lambda done, total, message: None, cancelled=lambda: False):
     compression_stats = CompressionStats()
-    # Build list of CBZFile
-    cbz_file_cls_lst: List[CBZFile] = []
-    for path in paths:
-        cbz_file = CBZFile(path)
-        if cbz_file.file_name.startswith('._'):
-            log(Severity.WARNING, tool_name, f'Skipping file {cbz_file.path} because it is a macOS metadata file!')
-            continue
-        cbz_file_cls_lst.append(cbz_file)
-
-    # Filter for cbz files which need conversion
-    cbz_file_cls_to_compress_lst: List[CBZFile] = []
-    for cbz_file_cls in cbz_file_cls_lst:
+    paths = tuple(path for path in paths if not Path(path).name.startswith('._'))
+    compression_stats.total_file_count = len(paths)
+    for index, path in enumerate(paths):
+        if cancelled():
+            compression_stats.cancelled = True
+            compression_stats.remaining = list(paths[index:])
+            break
+        progress(index, len(paths), f'Checking {path}')
         try:
-            already_compressed = cbz_file_cls.is_already_compressed()
-        except (OSError, ValueError, RuntimeError, zipfile.BadZipFile) as error:
+            comic = CBZFile(path)
+            if comic.is_already_compressed():
+                compression_stats.already_compressed_file_count += 1
+            elif comic.compress_to_webp(
+                    always_keep_compressed=always_keep_compressed,
+                    preserve_animated_and_multipage_originals=preserve_animated_and_multipage_originals,
+                    progress=lambda message: progress(index, len(paths), message)):
+                compression_stats.compressed_file_count += 1
+                compression_stats += comic.compression_stats
+            else:
+                raise RuntimeError(comic.last_error or 'Compression failed; see the log for details')
+        except Exception as error:
             compression_stats.error_during_compression += 1
-            log(Severity.ERROR, tool_name, f'Cannot read "{cbz_file_cls.path}": {error}')
-            continue
-        if already_compressed:
-            compression_stats.already_compressed_file_count += 1
-            log(Severity.WARNING, tool_name, f'Skipping "{cbz_file_cls.file_name}"; Already Compressed!')
-        else:
-            cbz_file_cls_to_compress_lst.append(cbz_file_cls)
-
-    # Log number of files not yet compressed
-    pending_percentage = len(cbz_file_cls_to_compress_lst) / len(cbz_file_cls_lst) * 100 if cbz_file_cls_lst else 0
-    log(Severity.INFO, tool_name, f'{len(cbz_file_cls_to_compress_lst)}/{len(cbz_file_cls_lst)} ({pending_percentage}%) of CBZ Files Awaiting Compression!')
-
-    # Compress CBZ
-    compression_stats.total_file_count = len(cbz_file_cls_lst)
-    for cbz_file in cbz_file_cls_to_compress_lst:
-        result = cbz_file.compress_to_webp(
-            always_keep_compressed=always_keep_compressed,
-            preserve_animated_and_multipage_originals=preserve_animated_and_multipage_originals)
-        if result:
-            compression_stats.compressed_file_count += 1
-            compression_stats += cbz_file.compression_stats
-        else:
-            log(Severity.ERROR, tool_name, f'Skipped compression of "{cbz_file.path}" because it encountered an unrecoverable error! See log for details')
-            compression_stats.error_during_compression += 1
-
+            compression_stats.failed[path] = str(error)
+            log(Severity.ERROR, tool_name, f'Cannot compress "{path}": {error}')
+        compression_stats.processed_file_count += 1
+        progress(index + 1, len(paths), f'{index + 1} / {len(paths)} comics processed')
     compression_stats.print_summary()
     return compression_stats

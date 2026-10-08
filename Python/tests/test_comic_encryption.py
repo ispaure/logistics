@@ -127,11 +127,11 @@ class EncryptionDialogTests(ComicEncryptionTests):
         self.addCleanup(dialog.deleteLater)
         self.assertEqual(Path(dialog.output.text()), self.root / 'Comic.zip')
         with patch('features.archives.ui.create_zip.confirmed_password', return_value='shared') as prompt, \
-                patch('features.archives.ui.create_zip.Operation') as operation:
+                patch.object(dialog.task, 'start') as operation:
             dialog._create()
             prompt.assert_called_once()
             work = operation.call_args.args[0]
-            work()
+            work(lambda *args: None, lambda: False)
         self.contents(self.root / 'Comic.zip', 'shared')
         with open_archive(self.root / 'Comic.zip', password='shared') as archive:
             self.assertEqual(archive.namelist(), ['Comic.cbz'])
@@ -171,10 +171,10 @@ class EncryptionDialogTests(ComicEncryptionTests):
         self.addCleanup(dialog.deleteLater)
         self.assertEqual(Path(dialog.output.text()), self.root / 'Books.zip')
         with patch('features.archives.ui.create_zip.confirmed_password') as prompt, \
-                patch('features.archives.ui.create_zip.Operation') as operation:
+                patch.object(dialog.task, 'start') as operation:
             dialog._create()
             prompt.assert_not_called()
-            operation.call_args.args[0]()
+            operation.call_args.args[0](lambda *args: None, lambda: False)
         with open_archive(self.root / 'Books.zip', password='configured') as archive:
             self.assertIn('Books/Comic.cbz', archive.namelist())
             self.assertEqual(archive.read('Books/Comic.cbz'), path.read_bytes())

@@ -333,7 +333,17 @@ These need a deliberate policy decision because fixing them changes page bytes o
 - Grayscale/color detection runs on the source before resizing. Recompression markers do not encode the settings, so changed settings do not cause marked archives to be recompressed automatically.
 - Statistics labeled Archive measure the sum of image payloads, excluding ZIP overhead, XML, and logs. The forced-compression option can increase the resulting archive size.
 
-Batch dialogs still execute synchronously on the UI thread, so large runs can make the window unresponsive. Moving them to background workers with cancellation is a separate UI improvement; it was not attempted without a working Qt runtime for validation.
+Compression, CBR conversion, author/series batch edits and folder organization
+run in background workers. Forms capture their inputs before starting and disable
+changes while processing; progress and errors arrive on the GUI thread.
+**Cancel after current comic**, Escape and closing the dialog request cooperative
+cancellation and wait for the current comic to finish. Compression never passes
+that cancellation into its ZIP rebuild: the current archive must finish encoding,
+verification and atomic replacement (or fail with its original intact). Remaining
+comics are untouched. Summaries distinguish cancellation, failures and unprocessed
+files, and per-file failures remain visible. A failed comic does not stop later
+compression candidates unless cancellation was requested. Folder organization
+retains its existing stop-on-first-error policy.
 
 ## Verification
 
