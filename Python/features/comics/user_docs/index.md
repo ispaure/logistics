@@ -32,6 +32,10 @@ tabs or collection indexing.
   OK saves and closes. Cancel discards unapplied edits.
 - The File Information and Comic Metadata panels show details of your selection.
   Both panels are always available when a comic is selected.
+- Right-click files/folders for Rename, Bulk Rename and Cut/Copy. Paste is available
+  on folders or empty browser space. F2 or a slow second click renames inline;
+  standard clipboard shortcuts work in every view. Existing items are preserved
+  when pasted names collide.
 
 Readers do not modify page images. Applied metadata changes stay saved after Cancel.
 

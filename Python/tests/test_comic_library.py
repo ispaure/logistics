@@ -154,7 +154,8 @@ class WindowTests(ComicFixture, unittest.TestCase):
         self.assertIn('Author: Old', window.preview.toPlainText())
         index = window.model.index(str(self.path))
         menu = window._context_menu_for(index)
-        self.assertEqual(menu.actions()[0].text(), 'Open in Default App')
+        self.assertEqual(menu.actions()[0].text(), 'Open')
+        self.assertIn('Open in Default App', [action.text() for action in menu.actions()])
         next(action for action in menu.actions() if action.text() == 'Edit Metadata').trigger()
         editor = window.metadata_windows[0]
         self.wait_for(editor)

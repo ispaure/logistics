@@ -7,7 +7,7 @@ def register():
     from commonUtils.dirUtils import Directory
     from features.contributions import Feature
     return Feature(id='archives', label='Archives', browser=BrowserExtension(actions=[
-        SelectionAction('create_encrypted_zip', 'Create encrypted ZIP…', (File, Directory), _create_zip)
+        SelectionAction('create_encrypted_zip', 'Create encrypted ZIP…', (File, Directory), _create_zip, order=50)
     ]))
 
 

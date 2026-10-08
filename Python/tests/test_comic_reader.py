@@ -257,8 +257,9 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
             self.assertFalse(window.preview_panel.isHidden())
             menu = window._context_menu_for(index)
             labels = [action.text() for action in menu.actions()]
-            self.assertEqual(labels[0], 'Open in Default App')
-            self.assertTrue(labels[1].startswith('Reveal in '))
+            self.assertEqual(labels[0], 'Open')
+            self.assertIn('Open in Default App', labels)
+            self.assertTrue(labels[-1].startswith('Reveal in '))
             self.assertIn('Edit Metadata', labels)
             menu.deleteLater()
         with patch('features.comics.ui.browser_services.open_reader') as opened:
@@ -284,7 +285,9 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
                 qt.QItemSelectionModel.SelectionFlag.Select | qt.QItemSelectionModel.SelectionFlag.Rows)
         menu = window._context_menu_for(window.model.index(str(other)))
         labels = [action.text() for action in menu.actions()]
-        self.assertEqual(labels[2:], ['Comics', 'Edit Metadata', 'Compress Comics…', 'Archives', 'Create encrypted ZIP…'])
+        self.assertEqual([action.text() for action in menu.actions() if action.property('source') in ('Comics', 'Archives')],
+                         ['Edit Metadata', 'Compress Comics…', 'Create encrypted ZIP…'])
+        self.assertLess(labels.index('Rename'), labels.index('Bulk Rename…'))
         compress = next(action for action in menu.actions() if action.text() == 'Compress Comics…')
         self.assertEqual(compress.property('source'), 'Comics')
         with patch('features.comics.ui.dialogs.CompressCbzDialog') as dialog:

@@ -10,7 +10,9 @@ class _BrowserHost:
     """Shared feature installation and worker-safe shutdown for embedded/standalone hosts."""
     def _initialize_browser(self, root_path, *, calculate_folder_sizes=True):
         self.closing = False
-        self.file_browser = FileBrowser(parent=self, calculate_folder_sizes=calculate_folder_sizes)
+        from ui_new.bulk_rename import bulk_rename_actions
+        self.file_browser = FileBrowser(parent=self, action_providers=(bulk_rename_actions,),
+                                       calculate_folder_sizes=calculate_folder_sizes)
         self.extensions = []
         self._extensions_by_feature = {}
         self._sync_extensions()

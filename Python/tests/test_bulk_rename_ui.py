@@ -338,7 +338,8 @@ class BulkRenameWidgetTests(unittest.TestCase):
         browser = MagicMock()
         context = SimpleNamespace(selection=(SimpleNamespace(path=self.first),), widget=browser, browser=browser)
         actions = bulk_rename_actions(None, context)
-        self.assertEqual(actions[0].title, 'Bulk rename…')
+        self.assertEqual(actions[0].title, 'Bulk Rename…')
+        self.assertEqual(actions[0].category, 'rename')
         with patch('ui_new.bulk_rename.open_bulk_rename') as opened:
             actions[0].run(context)
             opened.assert_called_once_with(paths=[self.first], parent=browser.window())

@@ -100,6 +100,14 @@ namespaces them and groups entries under its label. An `is_available(context)`
 predicate can hide an action when required configuration is absent; execution
 still needs validation because state may change after menu construction.
 
+The shared browser provides inline Rename and Cut/Copy/Paste by default. Logistics
+adds Bulk Rename beside Rename for files and folders. Menus put opening and
+clipboard actions first, then rename commands, feature tools, and Reveal last.
+`SelectionAction.order` (default 100) controls feature/command ordering;
+`category='rename'` places a contribution in the rename group. Comic metadata
+editing precedes comic compression/encryption; archive and image tools follow,
+with folder-maintenance commands last.
+
 `FileActivation` handles matching files, with first matching declaration winning;
 folders keep navigation behavior. Panels/thumbnails do not require activation or
 an action. For generic built-in browser controls and direct hook signatures, use

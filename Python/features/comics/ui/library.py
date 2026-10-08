@@ -44,7 +44,8 @@ class ComicLibraryWindow(qt.QMainWindow, ComicBrowserServices):
         self.catalog_status.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.catalog_status.hide()
         layout.addWidget(self.catalog_status)
-        self.file_browser = FileBrowser(parent=self)
+        from ui_new.bulk_rename import bulk_rename_actions
+        self.file_browser = FileBrowser(parent=self, action_providers=(bulk_rename_actions,))
         definition = registry.get_feature_definition('comics')
         self.feature_binding = definition.install_browser(self.file_browser, host=self, controller=self)
         self.feature_binding.set_enabled(registry.is_feature_enabled('comics'))

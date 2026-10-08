@@ -102,8 +102,8 @@ class BrowserWindowTests(unittest.TestCase):
         self.assertEqual(window.file_browser.navigation.library, self.root)
         index = window.file_browser.model.index(str(self.path))
         menu = window.file_browser.context_menu_for(index)
-        self.assertEqual([action.text() for action in menu.actions()][2:],
-                         ['Comics', 'Edit Metadata', 'Compress Comics…'])
+        self.assertEqual([action.text() for action in menu.actions() if action.property('source') == 'Comics'],
+                         ['Edit Metadata', 'Compress Comics…'])
         (self.root / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password=\n')
         configured_menu = window.file_browser.context_menu_for(index)
         self.assertIn('Encrypt unencrypted comics…', [action.text() for action in configured_menu.actions()])
@@ -132,7 +132,8 @@ class BrowserWindowTests(unittest.TestCase):
             self.assertLess(time.monotonic(), deadline)
             self.app.processEvents()
         menu = window.file_browser.context_menu_for(window.file_browser.model.index(str(other)))
-        self.assertEqual(len(menu.actions()), 2)
+        self.assertIn('Rename', [action.text() for action in menu.actions()])
+        self.assertIn('Bulk Rename…', [action.text() for action in menu.actions()])
         self.assertFalse(window.file_browser.services)
         self.assertFalse(window.extensions)
         menu.deleteLater()
@@ -207,8 +208,8 @@ class BrowserWindowTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'disabled'):
             action.run(captured)
         self.assertFalse(window.file_browser.activation_handlers)
-        self.assertEqual([action.text() for action in window.file_browser.context_menu_for(index).actions()][2:],
-                         ['Archives', 'Create encrypted ZIP…'])
+        self.assertEqual([action.text() for action in window.file_browser.context_menu_for(index).actions()
+                          if action.property('source') == 'Archives'], ['Create encrypted ZIP…'])
         self.assertEqual(window.file_browser.tabs.count(), 1)
         registry.set_feature_enabled('comics', True)
         self.wait(window)
