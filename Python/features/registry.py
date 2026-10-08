@@ -585,3 +585,15 @@ def get_browser_extensions() -> list[RegisteredContribution[BrowserExtensionCont
                 BrowserExtensionContribution(lambda host, definition=definition:
                     definition.install_browser(host.file_browser, host=host))))
     return extensions
+
+
+def get_settings():
+    """Return lazy feature settings, with stable identities within each feature."""
+    entries = _collect_contributions('settings')
+    seen = set()
+    for entry in entries:
+        key = (entry.feature_name, entry.contribution.settings_id)
+        if key in seen:
+            raise ValueError(f'Duplicate settings ID for {entry.feature_name}: {key[1]}')
+        seen.add(key)
+    return sorted(entries, key=lambda entry: (entry.contribution.order, entry.contribution.name.casefold()))

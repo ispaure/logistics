@@ -6,14 +6,28 @@ from commonUtils.ui import pyside
 from features import registry
 from ui_new.pages.debug import DebugPage
 from ui_new.pages.folders import FoldersPage
-from ui_new.pages.features import FeaturesPage
+from ui_new.pages.settings import SettingsPage
 
 
 CORE_TABS = (
     (0, 'Folders', FoldersPage),
-    (90, 'Features', FeaturesPage),
+    (90, 'Settings', SettingsPage),
     (100, 'Debug', DebugPage),
 )
+
+
+class _CloseGuard(pyside.QObject):
+    def __init__(self, owner):
+        super().__init__(owner.dlg)
+        self.owner = owner
+        owner.dlg.installEventFilter(self)
+
+    def eventFilter(self, watched, event):
+        if event.type() == pyside.QEvent.Type.Close:
+            if not self.owner.can_close():
+                event.ignore()
+                return True
+        return super().eventFilter(watched, event)
 
 
 class MainWindow(pyside.Window):
@@ -34,6 +48,7 @@ class MainWindow(pyside.Window):
         self._unsubscribe = registry.subscribe(self._features_changed)
         self.dlg.destroyed.connect(self._unsubscribe)
         self.tabs.currentChanged.connect(self._tab_changed)
+        self._close_guard = _CloseGuard(self)
 
     def _build_layout(self):
         central_widget = pyside.QWidget()
@@ -125,3 +140,7 @@ class MainWindow(pyside.Window):
 
         if callable(refresh):
             refresh()
+
+    def can_close(self):
+        pages = [page for _, _, page in self._core_pages] + list(self._feature_pages.values())
+        return all(getattr(page, 'can_close', lambda: True)() for page in pages)

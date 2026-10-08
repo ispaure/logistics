@@ -151,6 +151,20 @@ class PageContribution:
 
 
 @dataclass(frozen=True)
+class SettingsContribution:
+    """Feature-owned settings layout hosted by Settings, with optional raw INI files.
+
+    Factories run lazily on selection, only for enabled features. The widget may
+    expose refresh() and can_close() to participate in the host lifecycle.
+    """
+    name: str
+    settings_id: str
+    create_widget: Callable[[Any], Any]
+    order: int = 0
+    config_files: tuple[Any, ...] = ()
+
+
+@dataclass(frozen=True)
 class BrowserExtensionContribution:
     """Install feature services into a Logistics file-browser window lazily.
 
@@ -172,6 +186,7 @@ class FeatureContributions:
     debug_actions: list[DebugActionContribution] = field(default_factory=list)
     workflows: list[WorkflowContribution] = field(default_factory=list)
     pages: list[PageContribution] = field(default_factory=list)
+    settings: list[SettingsContribution] = field(default_factory=list)
     browser_extensions: list[BrowserExtensionContribution] = field(default_factory=list)
 
 
