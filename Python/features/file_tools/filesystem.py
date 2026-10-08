@@ -88,3 +88,46 @@ def delete_pyc_files(target_dir: str | Path, recursive: bool = True) -> int:
     )
 
     return deleted_count
+
+
+def scan_weird_characters(target_dir, recursive=True, *, cancelled=lambda: False,
+                          report=lambda done, total, message: None):
+    """Inspect paths without following directory links or printing results."""
+    from commonUtils.operations import check_cancelled
+    paths = _scan_targets(target_dir, recursive=recursive, cancelled=cancelled)
+    matches = []
+    for index, path in enumerate(paths):
+        check_cancelled(cancelled)
+        characters = tuple(character for character in WEIRD_CHARACTERS if character in str(path))
+        if characters:
+            matches.append((path, characters))
+        report(index + 1, len(paths), f'Inspecting {path.name}')
+    return matches
+
+
+def cleanup_pyc_files(target_dir, recursive=True, *, cancelled=lambda: False,
+                      report=lambda done, total, message: None):
+    """Delete regular bytecode files; retain per-file outcomes and cancellation state.
+
+    Directory links are never traversed and file links are preserved. Cancellation
+    stops between files; deletions already completed cannot be undone.
+    """
+    from commonUtils.operations import run_batch
+    paths = _scan_targets(target_dir, mask='*.pyc', recursive=recursive, cancelled=cancelled)
+    paths = [path for path in paths if not path.is_symlink()]
+    def delete(path):
+        import stat
+        if not stat.S_ISREG(path.lstat().st_mode):
+            raise ValueError('No longer a regular bytecode file')
+        path.unlink()
+    return run_batch(paths, delete, cancelled=cancelled, progress=report)
+
+
+def _scan_targets(target_dirs, **options):
+    from commonUtils.traversal import scan_directory, natural_path_key
+    if isinstance(target_dirs, (str, Path)):
+        target_dirs = (target_dirs,)
+    paths = set()
+    for root in target_dirs:
+        paths.update(scan_directory(root, hidden=True, **options))
+    return sorted(paths, key=natural_path_key)
