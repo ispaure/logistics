@@ -1,41 +1,32 @@
-"""
-Debug UI contributions exposed by File Tools.
-"""
-
-from features.contributions import DebugActionContribution, FeatureContributions, WorkflowContribution
-
-def _open_weird_characters(data=None, parent=None):
-    from features.file_tools.ui.dialogs import WeirdCharactersDialog
-
-    dialog = WeirdCharactersDialog(initial_path=data, parent=parent)
-    return dialog.exec()
+"""Folder context-menu tools owned by the File Tools feature."""
+from commonUtils.features import BrowserExtension, SelectionAction
+from commonUtils.dirUtils import Directory
+from features.contributions import Feature
 
 
-def _open_delete_pyc(data=None, parent=None):
-    from features.file_tools.ui.dialogs import DeletePycDialog
+def _open_tool(context, dialog_class):
+    dialog = dialog_class(initial_path=context.paths, parent=context.host or context.browser)
+    try:
+        return dialog.exec()
+    finally:
+        dialog.deleteLater()
+        context.browser.refresh()
 
-    dialog = DeletePycDialog(initial_path=data, parent=parent)
-    return dialog.exec()
+
+def _open_weird_characters(context):
+    from .ui.dialogs import WeirdCharactersDialog
+    return _open_tool(context, WeirdCharactersDialog)
 
 
-def get_contributions() -> FeatureContributions:
-    return FeatureContributions(
-        debug_actions=[
-            DebugActionContribution(
-                name='List Weird Characters...',
-                workflow_id='debug_file_tools_weird_chars',
-                description='List files containing configured problematic Unicode characters.',
-                order=10
-            ),
-            DebugActionContribution(
-                name='Bulk Delete PYC...',
-                workflow_id='debug_file_tools_delete_pyc',
-                destructive=True,
-                order=20
-            ),
-        ],
-        workflows=[
-            WorkflowContribution('debug_file_tools_weird_chars', _open_weird_characters),
-            WorkflowContribution('debug_file_tools_delete_pyc', _open_delete_pyc),
-        ]
-    )
+def _open_delete_pyc(context):
+    from .ui.dialogs import DeletePycDialog
+    return _open_tool(context, DeletePycDialog)
+
+
+def get_contributions():
+    return Feature(id='file_tools', label='File Tools', browser=BrowserExtension(actions=[
+        SelectionAction('weird_characters', 'List Weird Characters…', Directory,
+                        _open_weird_characters),
+        SelectionAction('delete_pyc', 'Bulk Delete PYC…', Directory,
+                        _open_delete_pyc),
+    ]))

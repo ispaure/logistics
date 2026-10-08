@@ -1,20 +1,29 @@
 # Inspect paths and remove Python bytecode
 
-These standalone tools work on a folder selected in Debug.
+Open **Debug → Open File Browser…**, then right-click a folder. The **File Tools**
+actions open dedicated windows for the selected folders. Enable File Tools in
+**Features** if these actions are missing. These tools no longer appear as Debug
+maintenance actions.
 
 ## Inspect unusual characters
 
-Choose **Debug → List Weird Characters…**, select a folder and the recursion option,
-then run the scan. It reports paths containing the configured Unicode characters.
-The operation is read-only. Visually identical characters may have different Unicode
-representations; review the exact reported path before renaming files yourself.
+Choose **List Weird Characters…**, set **Include subfolders**, and click **Scan
+files**. The window stays open with matching paths, configured characters and
+Unicode code points. Results are also shown when no files match. The scan is
+read-only. Visually identical characters may have different Unicode representations;
+review the reported code points before renaming files yourself.
 
 ## Remove bytecode
 
-Choose **Debug → Bulk Delete PYC…**, select the target folder and whether to include
-subfolders, then run cleanup. It deletes matching `.pyc` files, which Python can
-normally regenerate. It does not delete Python source files. Choose the target
-carefully; cleanup has no undo command.
+Choose **Bulk Delete PYC…**, set **Include subfolders**, and click **Delete PYC
+files**. Confirm the displayed target folders and recursion setting. The window
+stays open with each deleted file, any failures, and files left unprocessed after
+cancellation. Python can normally regenerate `.pyc` files. Python source files and
+file links are preserved; linked subfolders are not traversed.
+
+Both tools run in the background. Closing a busy window requests cancellation;
+wait for it to finish, then close the results window. Cancelling cleanup stops
+between files. Completed deletions remain and have no undo command.
 
 ## More help
 
