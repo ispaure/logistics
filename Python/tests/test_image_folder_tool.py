@@ -58,3 +58,13 @@ class ImageFolderToolTests(unittest.TestCase):
         self.assertFalse([item for item in registry.get_debug_actions() if item.contribution.workflow_id == 'debug_images_compress'])
         definition = registry.get_feature_definition('images')
         self.assertEqual(definition.browser.actions[0].label, 'Batch Compress Images to WEBP…')
+
+    def test_legacy_batch_does_not_follow_folder_or_file_links(self):
+        from features.images import processing
+        folder = self.root / 'input'; folder.mkdir()
+        (folder / 'linked-directory').symlink_to(self.root, target_is_directory=True)
+        (folder / 'linked.png').symlink_to(self.source)
+        with patch.object(processing.ImageFile, 'compress') as encode:
+            self.assertTrue(processing.batch_compress_image(folder, True, True, 80, 45, None, None))
+        encode.assert_not_called()
+        self.assertTrue(self.source.exists())

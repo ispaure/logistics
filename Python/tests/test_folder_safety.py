@@ -38,3 +38,11 @@ class FolderSafetyTests(unittest.TestCase):
         with TemporaryDirectory() as root, patch.object(folder_safety, 'get_policy_path', return_value=Path(root) / 'missing.ini'):
             with self.assertRaisesRegex(ValueError, 'missing'):
                 folder_safety.require_safe_folder(root)
+
+    def test_malformed_policy_fails_closed(self):
+        with TemporaryDirectory() as temporary:
+            policy = Path(temporary) / 'maintenance.ini'
+            policy.write_text('not an INI file')
+            with patch.object(folder_safety, 'get_policy_path', return_value=policy):
+                with self.assertRaisesRegex(ValueError, 'could not be read'):
+                    folder_safety.require_safe_folder(temporary)
