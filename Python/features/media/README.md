@@ -2,6 +2,14 @@
 
 Provides media-specific file operations for Logistics.
 
+## Using this feature
+
+Open **Debug → Rename MKA from CSV…** and choose the folder containing
+the chapter files and CSV. The operation validates the full plan before renaming.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Responsibilities
 
 - Handle audio/video media workflows that do not belong to a more specific feature.

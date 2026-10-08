@@ -2,6 +2,23 @@
 
 Provides comic-related integration for Logistics.
 
+## Using this feature
+
+Open the Comics library from a detected folder in **Folders**, or use
+**Debug → Open File Browser…** for reader, metadata and selection actions.
+The library-specific tabs and catalog remain in the dedicated library window.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
+## Guide contents
+
+- [Library, reader and metadata editor](#comics-library-and-metadata-editor)
+- [Compression rules](#compression-contract) and [file safety](#safety-notes)
+- [General browser integration](#general-file-browser)
+- [Password-protected CBZs](#password-protected-cbzs) and [encrypting existing comics](#encrypt-existing-comics)
+- [Validation](#verification) and [historical compression comparison](ZIP_COMPRESSION_PARITY.md)
+
 ## Responsibilities
 
 - Detect and configure comic-reader integrations.
@@ -479,3 +496,14 @@ Completed comics stay encrypted; unprocessed comics stay untouched. The final
 summary distinguishes cancellation and reports the number not processed. Folder
 scanning uses an indeterminate progress bar; cancellation is available during the
 encryption phase, after the automatic scan.
+
+
+### Shared helpers for maintainers
+
+ZIP mechanics live in [commonUtils ZIP access](../../commonUtils/ZIP_ARCHIVES.md),
+stream copying/signatures in `commonUtils.streams`, and worker lifecycle in
+[the shared workflow recipes](../../commonUtils/RECIPES.md). Keep per-comic rebuilds
+transactional and use batch cancellation between comics. Encryption/compression
+must not inherit separate ZIP creation's mid-archive cancellation accidentally.
+Browser contributions use [Feature declarations](../../commonUtils/FEATURES.md);
+format loading stays independent of Logistics windows and configuration prompts.

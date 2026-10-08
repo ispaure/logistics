@@ -2,6 +2,15 @@
 
 Provides optional mounted-folder access for rclone remotes.
 
+## Using this feature
+
+Load a credential config on the **rclone** page, select its remote in
+**Folders**, then choose **Open Mount Folder** in the FUSE section. A missing
+driver or rclone executable is handled on that action, not during browsing.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Dependency
 
 This feature has a hard dependency on:
@@ -17,7 +26,7 @@ initialization and contributions.
 - Detect macFUSE on macOS.
 - Detect WinFsp on Windows.
 - Detect `/dev/fuse` and `fusermount`/`fusermount3` on Linux.
-- Launch the bundled macFUSE or WinFsp installer when required.
+- Offer a verified macFUSE or WinFsp installer download when required.
 - Mount one selected rclone remote on demand.
 - Recover stale/unresponsive Unix FUSE mounts.
 - Verify a mount can service directory reads before opening it.
@@ -102,3 +111,13 @@ Linux dependency/installer checks do not require private Software resources.
 deadline handling, recovery failures and link preservation. It also runs the
 directory probe against a temporary local folder. These tests do not mount real
 remotes or validate macFUSE/WinFsp/Linux drivers.
+
+
+## Shared provisioning boundary
+
+Driver installer metadata and paths are centralized with rclone in the Logistics
+software manifest. [Resource setup](../../../CONFIGURATION.md#public-software-provisioning)
+explains overrides and updating pins. The shared download UI verifies a local
+installer; Logistics opens it after consent, while the operating system owns driver
+installation and any privilege/restart requirements. Download cancellation is not
+an unmount or mount cancellation API.

@@ -2,6 +2,15 @@
 
 Provides Minecraft server integration for Logistics.
 
+## Using this feature
+
+Select a local folder in **Folders** containing detected servers. Its Minecraft
+section lets you choose a server, launch it, open its folder/documentation and edit
+properties. Discovery alone does not start servers.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Responsibilities
 
 - Discover Java and Bedrock servers within selected local folders.

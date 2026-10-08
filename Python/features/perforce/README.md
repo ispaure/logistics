@@ -2,6 +2,14 @@
 
 Offers a Launch P4D action for configured local folders. Launching is supported only on Linux; the action is disabled on other platforms.
 
+## Using this feature
+
+Select a configured local folder in **Folders**. The Perforce section exposes
+**Launch P4D** and **Open P4 Console** when their Linux prerequisites are met.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Configuration
 
 Place `remoteConfig.ini` in the local folder:

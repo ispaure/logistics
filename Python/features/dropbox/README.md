@@ -2,6 +2,15 @@
 
 Provides Dropbox-specific maintenance tools for Logistics.
 
+## Using this feature
+
+Choose the detected **Dropbox** source on **Folders**, select a folder, then
+open **Conflicting Copies…**. Dropbox is an optional source; it is not required
+for Logistics resources or managed local folders.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Responsibilities
 
 - Detect Dropbox conflicting-copy files.

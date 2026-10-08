@@ -2,6 +2,14 @@
 
 Provides configured web-link launching for Logistics.
 
+## Using this feature
+
+Open the **Links** page and select a configured shortcut. Edit the feature
+config to match your services and hostname substitutions.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Responsibilities
 
 - Read URL entries from the feature-owned `features/links/config.ini`.

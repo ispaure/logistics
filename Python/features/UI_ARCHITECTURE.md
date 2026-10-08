@@ -215,3 +215,30 @@ metadata dialogs and running workers remain usable and can finish; controllers s
 owned by their host until its normal worker-safe close. Per-window handlers are
 intentional because they own selection, dialog parents and workers. The globally
 shared part is feature/type availability, not widget instances.
+
+
+## Long-running workflows and safe closing
+
+Shared background primitives live in commonUtils, while the feature owns inputs,
+password prompts, transaction boundaries and result presentation. Use
+`commonUtils.ui.operation_progress.OperationProgress` for progress/cancellation
+controls and `commonUtils.ui.operations.Operation` for simpler background callbacks.
+[Workflow recipes](../commonUtils/RECIPES.md) demonstrate both the callback contract
+and safe owner lifetimes.
+
+Capture validated inputs on the GUI thread; callbacks must not read widgets,
+show dialogs or prompt for passwords. OperationProgress completes only after its
+worker stops. Route close/Escape to its cancellation request during work and defer
+destruction. The browser's panel/thumbnail workers have a separate `stop()/idle`
+lifecycle; controllers must account for their own readers/editors/jobs as well.
+
+Choose cancellation boundaries per workflow. Separate ZIP creation checks between
+chunks and discards staging before publication. Comic batches finish and verify
+the current archive before stopping, preserving completed comics. A returned batch
+can contain individual failures even when the outer worker reports no exception;
+present both worker errors and per-item results. Disabling a feature removes future
+contributions and type resolution without cancelling existing work.
+
+[Application configuration](../../CONFIGURATION.md) describes resource roots and
+software provisioning. URLs/hashes/platform policy belong to Logistics; reusable
+download, stream and worker mechanisms belong to commonUtils.

@@ -2,6 +2,14 @@
 
 Provides Calibre integration for Logistics.
 
+## Using this feature
+
+Select a local folder in **Folders** that contains an immediate child Calibre
+library. Its Calibre section provides a library selector and launch/export controls.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Responsibilities
 
 - Detect Calibre libraries contained directly within Logistics Local folders.

@@ -2,6 +2,15 @@
 
 Provides image-processing and image-metadata workflows for Logistics.
 
+## Using this feature
+
+Use **Debug → Batch Compress Images…** or **JPG EXIF - Set Comments…**.
+Select a target folder and review the compression/recursion options before running.
+Comics uses the encoder through its own workflow and transaction policy.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
 ## Responsibilities
 
 - Represent image files and inspect image dimensions/color characteristics.
