@@ -1,88 +1,31 @@
 # FUSE Feature
 
-For usage instructions, see the [user guide](user_docs/index.md). This README
-covers development, implementation details and validation.
-
+Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
+and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
 Provides optional mounted-folder access for rclone remotes.
 
-## Using this feature
+## Dependency and execution boundary
 
-Load a credential config on the **rclone** page, select its remote in
-**Folders**, then choose **Open Mount Folder** in the FUSE section. A missing
-driver or rclone executable is handled on that action, not during browsing.
+FUSE requires the rclone feature. It contributes Open Mount Folder for configured
+remotes, using the selected credential context. Browsing/switching folders must
+not probe mounts, contact remotes or provision software; dependency checks,
+readiness probes and mounting run only after that action.
 
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.
+## Platform support
 
-## Dependency
+| Platform | Local dependency check | Provisioning |
+| --- | --- | --- |
+| macOS | `/Library/Filesystems/macfuse.fs` | Offer the pinned macFUSE installer. |
+| Windows | WinFsp in standard Program Files locations | Offer the pinned WinFsp installer. |
+| Linux | `/dev/fuse` and `fusermount`/`fusermount3` | System package manager; no universal driver download. |
 
-This feature has a hard dependency on:
-
-`rclone`
-
-If the rclone feature is not present, the feature registry skips FUSE
-initialization and contributions.
-
-## Responsibilities
-
-- Detect platform filesystem support required by `rclone mount`.
-- Detect macFUSE on macOS.
-- Detect WinFsp on Windows.
-- Detect `/dev/fuse` and `fusermount`/`fusermount3` on Linux.
-- Offer a verified macFUSE or WinFsp installer download when required.
-- Mount one selected rclone remote on demand.
-- Recover stale/unresponsive Unix FUSE mounts.
-- Verify a mount can service directory reads before opening it.
-- Open the mounted remote folder.
-
-## UI
-
-Configured rclone remotes receive a separate Folder section:
-
-`fuse`
-
-with one intentionally lazy action:
-
-`Open Mount Folder`
-
-Browsing or switching folders does not probe the mount, contact the remote,
-or perform any network-related work.
-
-All FUSE detection, mount-state checks, readiness checks, and mounting occur
-only after the user clicks the action.
-
-## Platform Dependencies
-
-### macOS
-
-The feature detects:
-
-`/Library/Filesystems/macfuse.fs`
-
-When filesystem support is missing, the mount action offers to download and
-open the pinned installer. Its SHA-256 hash and path are centralized in
-`Python/software_manifest.json`. After completing installation, retry the mount:
-
-
-`Logistics/Software/macOS/macfuse-5.0.5.dmg`
-
-### Windows
-
-The feature detects WinFsp in its standard Program Files locations.
-
-When filesystem support is missing, the mount action offers to download and
-open the pinned installer. Its SHA-256 hash and path are centralized in
-`Python/software_manifest.json`. After completing installation, retry the mount:
-
-
-`Logistics/Software/Windows/winfsp-1.11.22176.msi`
-
-### Linux
-
-The feature expects the system FUSE device and helper to already be available.
-Install FUSE through the distribution package manager; Logistics does not download
-a universal Linux driver installer.
+Versions, hashes and installer paths belong to the
+[software manifest](../../software_manifest.json), not duplicated feature constants.
+See [resource setup](../../../CONFIGURATION.md#public-software-provisioning) for
+pin updates and overrides. Logistics verifies and opens the installer after consent;
+the OS owns installation, privileges and restarts. Retry mounting after installation.
+Download cancellation does not provide mount/unmount cancellation.
 
 ## Initialization
 
@@ -115,13 +58,3 @@ Linux dependency/installer checks do not require private Software resources.
 deadline handling, recovery failures and link preservation. It also runs the
 directory probe against a temporary local folder. These tests do not mount real
 remotes or validate macFUSE/WinFsp/Linux drivers.
-
-
-## Shared provisioning boundary
-
-Driver installer metadata and paths are centralized with rclone in the Logistics
-software manifest. [Resource setup](../../../CONFIGURATION.md#public-software-provisioning)
-explains overrides and updating pins. The shared download UI verifies a local
-installer; Logistics opens it after consent, while the operating system owns driver
-installation and any privilege/restart requirements. Download cancellation is not
-an unmount or mount cancellation API.

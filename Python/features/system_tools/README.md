@@ -1,29 +1,18 @@
 # System Tools Feature
 
-For usage instructions, see the [user guide](user_docs/index.md). This README
-covers development, implementation details and validation.
-
+Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
+and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
 Provides operating-system maintenance actions for Logistics.
-
-## Using this feature
-
-Use the platform-enabled actions on **Debug**. Review the target drive and
-operation before running repair or power-setting commands; these are system changes.
-
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.
 
 ## Responsibilities
 
 - Launch Windows maintenance scripts bundled with Logistics.
 - Run macOS lid-sleep configuration commands.
-- Keep operating-system maintenance behavior out of the UI and global command layer.
 
 ## Structure
 
 - `actions.py` contains Windows and macOS maintenance actions.
-- `__init__.py` exposes the feature to the Logistics feature registry.
 
 ## Windows Actions
 
@@ -44,9 +33,3 @@ These actions are available only on macOS and use `sudo pmset`.
 System Tools can modify operating-system configuration or launch repair scripts.
 
 These actions should only be run deliberately on the intended platform.
-
-## Initialization
-
-This feature does not require startup initialization.
-
-It is discovered by the Logistics feature registry but performs no work until a System Tools action is used.

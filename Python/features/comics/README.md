@@ -1,548 +1,150 @@
 # Comics Feature
 
-For usage instructions, see the [user guide](user_docs/index.md). This README
-covers development, implementation details and validation.
-
-
-Provides comic-related integration for Logistics.
-
-## Using this feature
-
-Open the Comics library from a detected folder in **Folders**, or use
-**Debug → Open File Browser…** for reader, metadata and selection actions.
-The library-specific tabs and catalog remain in the dedicated library window.
-
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.
-
-## Guide contents
-
-- [Library, reader and metadata editor](#comics-library-and-metadata-editor)
-- [Compression rules](#compression-contract) and [file safety](#safety-notes)
-- [General browser integration](#general-file-browser)
-- [Password-protected CBZs](#password-protected-cbzs) and [encrypting existing comics](#encrypt-existing-comics)
-- [Validation](#verification) and [historical compression comparison](ZIP_COMPRESSION_PARITY.md)
-
-## Responsibilities
-
-- Detect and configure comic-reader integrations.
-- Work with CBZ and CBR comic archives.
-- Edit ComicInfo.xml metadata.
-- Support comic-specific conversion, compression, and organization workflows.
-- Keep comic-specific behavior isolated from Logistics core and UI code.
-
-## Structure
-
-- `actions.py` contains user-facing comic actions such as reader launching and CBZ organization.
-- `detection.py` contains ComicRack and YACReader detection/configuration helpers.
-- `cbz.py` orchestrates CBZ compression and keeps the public entry points and settings.
-- `sanitization.py` contains archive cleanup, wrapper flattening, and page-padding rules.
-- `comicinfo.py` parses ComicInfo XML, rebuilds page records, and serializes consistent formatting while preserving other metadata.
-- `compression_stats.py` contains compression statistics and text logging.
-- `archive_io.py` builds, verifies, and commits replacement archives.
-- `conversion.py` contains CBR to CBZ conversion behavior.
-- `metadata.py` contains the legacy author/series batch replacements.
-- `library.py` owns single-CBZ document loading, edit validation and transactional saving.
-- `ui/library.py` owns library controls around the shared browser.
-- `ui/browser_services.py` shares metadata, reader and compression handlers across browser hosts.
-- `ui/browser_extension.py` provides per-window Comics controller state.
-- `ui_contributions.py:register()` declares identity, dependencies, file types, browser operations and Logistics UI contributions together.
-- `browser_support.py` contributes CBZ information, thumbnails, actions and activation through file-object hooks.
-- `ui/file_browser.py` preserves compatibility imports for the reusable commonUtils view component.
-- `pages.py` reads archive pages lazily and renders cover thumbnails without extraction.
-- `reader.py` owns native reader windows; `ui/reader.py` coordinates navigation, loading and editing.
-- `ui/reader_pages.py` decodes images and paints page spreads.
-- `ui/reader_controls.py` builds menus, direction-aware controls and progress labels.
-- `ui/reader_keys.py` scopes navigation keys to the reader, independently of control focus.
-- `reading.py` decides page spreads and naturally orders adjacent comic files.
-- `folder_stats.py` and `ui/filesystem_model.py` preserve imports for shared filesystem totals and the object-driven Qt model.
-- `ui/navigation.py` preserves imports for shared root-bounded navigation.
-- `desktop_actions.py` opens the default application and reveals items through the OS file manager.
-- `ui/metadata_editor.py` coordinates loading, saving and protected navigation.
-- `selection.py` resolves folder/file selections and coordinates batch validation and saving.
-- `edit_state.py` owns shared/mixed values and explicit pending patches without Qt dependencies.
-- `ui/metadata_form.py` owns the measured tab layouts and field feedback.
-- `ui/metadata_widgets.py` owns numeric controls, field creation and lossless widget/text conversion.
-- `ui/value_popup.py` provides floating Lists, Check and Text entry for list-valued fields.
-- `catalog.py` builds incremental library suggestions; reusable JSON parsing/atomic writing lives in `commonUtils.fileTypes.jsonType.JSONFile`.
-- `library_config.py` reads configured immediate-child library names from `remoteConfig.ini`.
-- Background callbacks use `commonUtils.ui.operations.Operation`; progress and
-  cooperative cancellation use `commonUtils.ui.operation_progress.OperationProgress`.
-- `__init__.py` exposes the feature to the Logistics feature registry.
-
-## Initialization
-
-Comics has a hard feature dependency on `images`. Reader actions support external applications, and a native Python reader is available for CBZs.
-
-The feature exposes `register() -> Feature(...)`. Its declaration includes the
-owned CBZ type rule, browser operations, activation, folder counts and controller
-factory. Logistics registers the rule before initialization; browser installation
-is also idempotent. The old `register_file_types()` helper delegates to this
-declaration for compatibility. Registration does not parse archives.
-
-It is discovered and loaded by the Logistics feature registry, but performs no work until comic functionality is used.
-
-## Comics Library and Metadata Editor
-
-Use **Open Comics Library...** in a detected Comics folder. ComicRack-configured
-folders are available on macOS and Linux as well as Windows. The browser starts
-collapsed and offers **List**, **Tiles**, and **Columns** views. List mode keeps
-Name, Date Modified and Size columns; tiles show asynchronously loaded first-page
-covers, and column mode follows folder hierarchies horizontally. Three icon buttons
-switch views. Tile cells share the available width evenly, resizing covers before
-adding columns. Folder-only directories use smaller square cells, and folders in
-mixed directories use half-size icons by default. The tile-only **Size** menu adjusts
-folder size from 25% to 100%. Layouts update immediately on resize or navigation;
-a reserved scrollbar gutter keeps columns stable. Column chevrons are compact,
-files end the trail, and unused space follows the current theme.
-Covers and selected previews use physical pixels for the display
-scale, keeping them sharp on high-DPI screens. Tile covers are
-loaded for visible items and kept in a bounded 128-entry memory cache; they are
-not added to the metadata JSON. Double-click folders in any mode to enter them.
-Back, Forward and Up navigate previous and parent folders within the selected
-library. A clickable breadcrumb path starts with the selected library root and
-continues through descendant folders; selected files never appear in it. The root
-stays visible on the left, and each folder can be clicked to navigate there.
-Changing view modes preserves the current nested location and selection.
-
-The reusable `commonUtils.ui.file_browser.FileBrowser` owns navigation, selection,
-listing, filesystem actions and information panels. Logistics owns the library
-tabs and metadata/reader services. Every selected file has a **File Information**
-tab using the File object’s generic metadata. Registered CBZFile objects add a
-default-enabled **Comic Metadata** tab, thumbnails, editing actions and reader
-activation. The shared browser contains no comic-specific type checks. Its **Panels**
-menu can show/hide additional information tabs while retaining generic information.
-Panel fields use compact aligned labels and selectable wrapped values. Folder
-previews use the same system icon as the listing and a smaller preview area.
-
-Selecting a single CBZ shows its first-page thumbnail and key fields (Series,
-Author, Volume, Issue, count, title, publisher, year and description) in the adjacent
-panel. The panel remains visible for empty and multiple selections. Selecting a
-folder shows its path, modification time, recursive file size, and comic/file/folder
-counts. Folder totals also appear in the Size column and are calculated in a
-cancellable background scan without opening archives. Symbolic links and unreadable
-items are excluded and reported; these totals stay in memory, outside the suggestion
-JSON. Refresh updates totals, suggestions and selected-comic previews. File menus
-include **Open in Default App** and an OS-specific **Reveal** action; folder menus
-start with Reveal and omit Open in Default App. A **Comics** section follows the
-built-in actions, with **Edit Metadata** first and **Compress Comics…** second.
-Both work with selected CBZ files, folders, and mixed selections; unrelated files
-are ignored. Right-clicking an unselected item targets only that item.
-Compression opens the usual options dialog with a fixed selection summary instead
-of a folder picker. Include subfolders, Always keep compressed images, and Preserve
-animated and multipage originals retain their normal defaults and validation.
-Folders expand according to Include subfolders, explicitly selected files always
-remain included, and overlapping selections process each CBZ once. Compression
-uses the batch marker/skip policy and reports partial failures. The browser refreshes
-previews, folder totals, and catalog suggestions when the dialog closes. Linux reveal uses the standard file-manager service when
-available, with a containing-folder fallback.
-
-At the collection root, configure the libraries shown in the browser:
-
-```ini
-[LogisticsComics]
-libraries = Artbooks,Comics,Comics [Marvel],Mangas,Manhwa
-```
-
-Library tabs at the top preserve this order. The first tab, **All**, browses the
-collection root with every library in one folder tree. Each library tab shows that
-folder's contents in the existing Name/Date Modified/Size tree. Missing folders are disabled;
-empty or invalid settings show a message. Without this setting, the browser keeps
-whole-root browsing for existing collections. This section alone enables the
-Comics library folder action. Switching libraries clears the preview and collapses
-the tree; existing metadata dialogs remain associated with their original files.
-The suggestion cache stays at the original collection root.
-
-Double-click a CBZ to open a native PySide reader window. Pages are naturally
-sorted and read on demand without extraction or modification; image decoding runs
-in a background worker. PNG, JPEG, WebP, GIF, BMP and TIFF pages are supported.
-The reader tries Qt first, then decodes through Pillow into raw display pixels
-if Qt cannot read the image. This avoids relying on platform-specific Qt WebP
-plugins. The fallback preserves transparency and EXIF orientation, retains valid
-RGB ICC profiles, and bounds large display images without changing archive files.
-If both decoders fail, the message identifies the archive entry and page number,
-bytes read, both decoder errors, Qt's supported formats and Pillow's WebP support.
-Archive-access errors are reported separately. Errors remain in the status bar
-and canvas tooltip until a page loads successfully, and are logged to the console.
-Automatic mode shows two portrait pages when both fit at full canvas height;
-otherwise it shows one. Landscape pages and pages marked `DoublePage` remain
-single. **View** also offers explicit Single Page and Two Pages modes. A spread
-uses the same display height for both pages and reverses its visual order for
-right-to-left reading: page 3 appears left of page 2. The footer shows the visible
-page numbers, total and percentage, such as `2 & 3 / 182`.
-
-Previous/Next page controls sit together at the lower left. Left/Right arrows
-follow `Manga=YesAndRightToLeft`; absent/other values default to left-to-right.
-For right-to-left comics the slider starts at the right end and moves left as pages
-advance; the Next control is left of Previous. Up/Down navigate sequentially;
-Home/End jump to first/last page. Navigation advances past the displayed spread,
-and these shortcuts work immediately with focus on any reader control, without
-a preliminary click on the slider. Metadata dialogs and menus retain their own
-keyboard handling. Holding a key does not
-trigger repeated navigation.
-
-Separate Previous/Next File buttons are grouped above the canvas. They use naturally
-sorted CBZ files in the same folder, excluding symbolic links, and disable when no
-adjacent file is available. Next File starts at the first page; Previous File opens
-the final page. At either reading boundary, two presses in the same direction within
-0.4 seconds open the adjacent comic. A single boundary press shows a brief hint;
-there is no wraparound. A file that cannot open leaves the current comic available.
-
-The **File** menu provides Open Comic, adjacent-file navigation and Close.
-**Edit > Edit Metadata…** opens the existing metadata dialog for the current comic.
-Saving there refreshes the reader's archive snapshot and reading direction while
-preserving its page position, and refreshes an associated library's preview and
-suggestions. External archive changes still require reopening the reader.
-Full Screen/F11 toggles full-screen display; Escape returns to the normal window.
-The current page or spread stays visible while its replacement decodes. Images
-and page labels switch together after a successful load; failures keep the current
-image visible and report the error in the status bar. Initial opening alone uses a
-loading placeholder. Rapid navigation loads only the latest queued page, and closing during a load
-safely waits for that worker. Reopening an unchanged comic raises its existing
-reader; closing a reader opened from a visible library brings that library back
-to the front, preserving its folder and selection. Reader windows remain independent
-and can stay open after the library closes. Progress is displayed
-for the current session and is not persisted.
-
-The independent dialog provides **Details** and **Plot & Notes** layouts. The reference images measure 789 x 673/677 pixels including their title
-bars. The default client area is 789 x 635 logical pixels, with 22-pixel inputs,
-105 x 28-pixel action buttons, and column proportions of 267:74:74:74:184.
-Volume, counts and dates use blank-capable integer spin controls; invalid
-non-numeric typing is rejected immediately. Number and AlternateNumber provide
-numeric arrows while still accepting suffixes/fractions as the schema requires.
-Absent fields and untouched legacy strings/sentinels retain their original XML. The latter contains Summary, Notes, and Review sub-tabs. **Apply** saves
-without closing, **OK** saves and closes, and **Cancel** immediately discards pending edits and closes without a prompt.
-Apply and OK do not ask for confirmation; already applied changes remain saved.
-Previous/Next navigate the CBZ siblings currently loaded in the browser, with the
-same save/discard/cancel protection. Disk operations run in background threads;
-windows cannot close while their operation is active.
-
-Bulk editing supports extended selection of CBZ files, folders or both. Folder
-contents are included recursively and overlapping selections are deduplicated.
-The editor works on the resolved file list loaded at opening time; files added later
-are included when the editor is reopened. Symbolic links are excluded from folder scans;
-explicit link selections and hard-linked archives are refused before editing. Shared values
-use the normal OS palette; differing values appear as muted “Multiple values —
-unchanged” placeholders. Editing any field restores normal text and marks its
-caption with `*`; the adjacent revert arrow restores its original value(s).
-Only explicit pending fields are applied. The × control explicitly clears a mixed
-field even when its display is already blank. Field tooltips show samples of the
-original differing values. Previous/Next
-are disabled for batches. Bulk preflight and archive work run off the UI thread.
-
-Characters displays one name per line in its large text box and accepts pasted
-comma-separated names. Explicit edits save comma-separated XML; opening or
-reverting the field preserves the original XML spelling.
-
-List-valued fields have a diamond button that opens a floating helper. **Lists**
-adds/removes selected suggestions, **Check** toggles values, and **Text** accepts
-one value per line or comma-separated text. A filter and new-value entry support
-large suggestion lists and custom values. Switching modes or opening/closing the
-helper leaves untouched XML unchanged; actual edits update the pending field and
-its `*` marker. Clicking outside closes the popup. A mixed field starts with no
-selected values; choosing values explicitly replaces the field for all selected
-comics. Per-field revert still restores individual original values.
-
-Library suggestions are indexed in the background at browser opening and after
-metadata saves. Routine indexing does not add a toolbar banner or comic count;
-indexing failures remain visible, and manual metadata entry stays available. The root contains `LogisticsComicsData/metadata.json`, with unique nonempty suggestions stored once per field. Suggestion whitespace is
-trimmed and collapsed to single spaces, including line breaks in dropdown values.
-Existing cached suggestions are normalized automatically without changing XML;
-untouched source values retain their exact contents. Relative file paths map
-to compact `[modification_time_ns, size, suggestion_references]` records, allowing
-changed/deleted files to remove obsolete suggestions without reparsing unchanged
-archives. Only list fields and Publisher, Imprint and Format are indexed; Series,
-titles, plot text, empty fields and metadata hashes are excluded. Existing caches
-migrate automatically on opening without rereading unchanged archives. New or
-changed archives are read again; removed files and values disappear. Image
-payloads are never read for indexing. The cache is disposable: invalid records
-are rebuilt and write failures leave session suggestions usable.
-Errors are shown in the browser status tooltip; unreadable archives are skipped
-and retried on the next refresh. Folder scans exclude symbolic links and data
-folders. Suggestions cover list-valued fields and Publisher, Imprint and Format
-dropdowns, while custom values remain editable. Suggestions updating in the
-background never overwrite pending edits.
-
-All documents are validated and checked for external changes before the first
-write. Each CBZ is replaced independently after verification; the batch is not a
-single filesystem transaction. A later I/O failure reports exact file paths and
-keeps pending edits, while successful files retain their updated in-memory state.
-Retrying skips no-op edits on files that already succeeded. After a partial save,
-field baselines are refreshed from the successful and failed documents so Revert
-accurately reflects their current, potentially mixed values.
-
-Field mappings follow the [Anansi ComicInfo documentation](https://anansi-project.github.io/docs/comicinfo/documentation)
-and [v2.0 schema](https://github.com/anansi-project/comicinfo/blob/main/schema/v2.0/ComicInfo.xsd),
-with Tags and Translator from the [v2.1 draft](https://anansi-project.github.io/docs/comicinfo/schemas/v2.1):
-
-- Number and AlternateNumber are strings; fractional and suffixed issues are accepted.
-- Count, Volume, AlternateCount, Year, Month and Day are integers. Blank removes a
-  field; `-1` is the legacy unknown sentinel. Month and Day reject values above
-  12 and 31 respectively. Existing legacy values remain untouched unless edited.
-- Manga writes Unknown/No/Yes/YesAndRightToLeft, and BlackAndWhite writes
-  Unknown/No/Yes. AgeRating offers the schema choices. An absent value remains
-  absent unless changed. Unknown existing enum values are displayed and retained.
-- Language choices display names but write codes such as `en` or `fr`. Custom
-  tags such as `zh-Hant` remain supported.
-- Creator, Genre, Tags, Characters, Teams and Locations values retain comma-separated
-  text. Web can hold multiple space-separated URLs. No filename inference or
-  automatic splitting/reformatting occurs.
-- Series complete and Proposed Values occupy their screenshot positions but are
-  disabled. These are [ComicRack library fields](https://github.com/maforget/ComicRackCE/blob/master/ComicRack.Engine/ComicBook.cs),
-  not standard ComicInfo fields. The editor does not invent XML tags for them or
-  change a ComicRack database. Existing extensions and ComicBook.xml are retained.
-
-Only changed visible fields are patched. Fields omitted from the editor (including
-GTIN, StoryArcNumber and CommunityRating), arbitrary extension elements/attributes,
-namespace declarations, comments, processing instructions and Pages survive.
-Existing XML formatting may change on a real edit; no-op saves retain the original
-archive bytes. Emptying a visible field intentionally removes that field. New
-known fields are inserted in schema order without reordering existing nodes.
-
-`commonUtils.fileTypes.xmlType.XMLFile` now provides reusable `from_bytes`,
-`read_xml`, `xml_root`, `get_text`, `set_text`, and `to_bytes` methods. Its DOM keeps
-the complete document, including nodes before/after the root and unused namespace
-declarations. Text methods address direct children in the root namespace and
-reject ambiguous duplicates/complex fields. Tree editing is independent of
-`line_lst` and inherited text-file operations. `ComicInfoXML` adds field mappings,
-type checks and properties such as `writer`, `series`, and `language_iso`.
-The compressor's `read_lines` and `update_pages_in_line_lst` are unchanged.
-The [generic XML guide](../../commonUtils/XML.md) also covers nested queries,
-namespace-aware attributes, element editing and atomic standalone XML saving.
-ComicInfo continues using its existing direct-field methods and verified CBZ saves;
-attribute whitespace in untouched extension data is retained during other edits.
-
-The editor validates metadata before staging, checks original file identity and
-modification timestamps, verifies all output member CRCs, retains permissions,
-and atomically replaces the CBZ. Failed saves retain edits so they can be reviewed;
-external file changes require closing and reopening the editor before retrying.
-ZIP container bytes/compression may change; decompressed image bytes do not.
-
-## Safety Notes
-
-Several Comics operations modify or replace files.
-
-CBR to CBZ conversion deletes the original CBR only after the CBZ has been built and verified. Existing CBZ destinations are refused. RAR extraction uses patool's platform-specific extractor discovery and requires an installed compatible external extractor.
-Legacy batch ComicInfo operations unpack and rebuild CBZ archives. The library editor streams ZIP members into a verified replacement without extracting or re-encoding images.
-CBZ organization copies each archive into a new folder and then deletes the original after the copy succeeds.
-CBZ compression and metadata edits use isolated temporary workspaces. A replacement ZIP is staged beside the destination, checked for the exact expected files, fully CRC-checked, and compared with the staged source files before atomic replacement. Existing file permission bits are retained. Source files changed during processing are refused. Other adjacent `.zip` files are untouched.
-
-Image encoding uses shared `ImageFile.compress()` dot-file staging within the compressed-images directory: `.01.webp` is verified and renamed to `01.webp` before the normal retention decision. Dot prefixes never enter final page names or ComicInfo records.
-
-Copy, image encoding, metadata, archive-building, verification, and replacement failures retain the original CBZ. Empty, unsafe, duplicate, and colliding archive/page paths are rejected. A nested ComicInfo.xml that cannot be flattened under the established rules is rejected rather than silently discarded. Batch compression continues after individual archive failures and returns aggregate statistics; workflow dialogs report partial failures.
-
-These operations should be tested against disposable data when behavioral changes are made.
-
-## Compression Contract
-
-The established output rules are preserved:
-
-- WebP quality is 60 for color and 35 for grayscale, with method 6, the shared color heuristic (with the approved uniform-color fix), EXIF orientation handling, RGB conversion, and Lanczos resizing from the shared image helper.
-- Height is capped at 2400; no longest-edge cap is enabled. Images are never upscaled.
-- Keep WebP only when its byte size is **strictly less than 75%** of the original. Exactly 75% keeps the original. The explicit override always keeps WebP.
-- `preserve_animated_and_multipage_originals=True` skips encoding images containing more than one frame/page and retains their original bytes. Static pages still follow the normal size rule. Preservation is enabled by default in the dialog and for normal API compression. An omitted API preservation argument allows an explicit always-keep request to convert the first frame; an explicit false argument also permits first-frame conversion. Explicitly enabling preservation together with `always_keep_compressed=True` logs `Severity.ERROR` and rejects the operation before processing; batch calls return `None`, single-file calls return `False`. The dialog displays the same incompatibility and remains open.
-- Retained original pages are copied byte for byte. Files are visited in the existing lexicographic directory order, not a newly introduced natural sort.
-- Numeric padding is triggered by single-digit page names. The existing count thresholds remain: fewer than 90 files uses two digits, fewer than 950 uses three, otherwise five. The count includes recognized metadata files, as before. Mixed/non-numeric names are refused when repair is needed.
-- Delete `__MACOSX`, `.DS_Store`, `Thumbs.db`, and `Thumbs1.db`. Keep the existing removal list for unwanted text/web/sidecar extensions; reject other unsupported files.
-- Flatten one wrapper folder, including the existing special case of one empty wrapper containing one leaf folder. Multiple leaf folders remain separate; unsupported deeper layouts and mixed root pages/subfolders are refused.
-- Missing ComicInfo.xml is allowed. When present, parse XML and update PageCount and rebuild Pages from the chosen images, with page zero marked FrontCover. Compact XML, different indentation, empty page sections, and missing PageCount/Pages elements are supported. Other metadata, namespaced elements/attributes, and comments/processing instructions inside the root are preserved. Output uses UTF-8 and two-space indentation; namespace prefixes may change. Malformed XML, incorrect roots, and duplicate page sections/counts fail safely before archive replacement.
-- Write CompressionLog.txt and use its presence at the archive root as the batch skip marker. Single-file compression still permits explicit recompression.
-
-The uniform-color detection bug was subsequently fixed with approval: the shared detector checks mean chroma distance from neutral as well as the existing variation test, with the same tolerance. Uniform colors and sufficiently tinted pages now receive color quality 60. This intentionally changes their compressed bytes and can change whether WebP meets the retention threshold; marked archives remain skipped.
-
-### ComicRack compatibility: rebuilding page records
-
-**Do not merge old page records when compression changes page files.** Discard
-all children of `Pages`, including old page attributes, per-page extension data,
-comments and processing instructions. Generate fresh indices, `ImageSize` byte
-counts, widths and heights from the final selected images; only page zero receives
-the synthesized `FrontCover` type. `PageCount` must match those images.
-
-Evidence for this policy:
-
-- In the chat **Switch folder sources to tabs**, October 2, 2026 at 12:19 EDT,
-  the maintainer explicitly said: “ok yeah it's ok to not preserve the attributes,
-  id rather have it that way.” This followed a discussion of losing `Bookmark`,
-  `DoublePage` and existing `Type` attributes during rebuilding.
-- The implementation before commit
-  [`8537151`](https://github.com/ispaure/logistics/commit/85371518f610d3d82d1d4eaab2038ee827ddbdab)
-  skipped the old `Pages` contents and generated new records. Structural parsing
-  in [`8cb4676`](https://github.com/ispaure/logistics/commit/8cb46761cf902cc732ab8376440833abfc559b79)
-  retained that policy.
-- On October 8, 2026, in **Map RemoteCredentials and Software**, the maintainer
-  explained that keeping stale information after modifying page files causes
-  ComicRack to crash when opening the comic. This is a maintainer-reported
-  compatibility issue; our tests do not run ComicRack or reproduce its crash.
-
-This does not require deleting book-level metadata or comments outside `Pages`.
-Metadata-only edits keep image bytes unchanged and preserve page records. Image
-ICC/EXIF handling is separate: the October 2 instruction at 12:56 EDT explicitly
-requested preserving color profiles and EXIF in the shared image compressor.
-The regression suite checks that obsolete page records and their contents are
-discarded and that generated values match the actual output images.
-
-## Output-Sensitive Findings Left Unchanged
-
-These need a deliberate policy decision because fixing them changes page bytes or metadata:
-
-- When preservation is disabled, GIF/TIFF/animated WebP/APNG compression saves only the selected initial frame. With preservation enabled (the normal default), multiframe files are kept unchanged. Comics explicitly uses `preserve_alpha=False` when encoding pages, converting alpha/palette images to RGB without compositing onto a background; retained originals keep any alpha. Standalone Images compression preserves WebP alpha by default. The shared encoder now preserves ICC/EXIF metadata as well, normalizing applied orientation and dimensions and converting non-RGB profiles to sRGB for WebP.
-- Rebuilding Pages discards old per-page attributes such as bookmarks, page types other than the synthesized FrontCover, and DoublePage flags. This is the existing rule, not a new XML merge policy.
-- Grayscale/color detection runs on the source before resizing. Recompression markers do not encode the settings, so changed settings do not cause marked archives to be recompressed automatically.
-- Statistics labeled Archive measure the sum of image payloads, excluding ZIP overhead, XML, and logs. The forced-compression option can increase the resulting archive size.
-
-Compression, CBR conversion, author/series batch edits and folder organization
-run in background workers. Forms capture their inputs before starting and disable
-changes while processing; progress and errors arrive on the GUI thread.
-**Cancel after current comic**, Escape and closing the dialog request cooperative
-cancellation and wait for the current comic to finish. Compression never passes
-that cancellation into its ZIP rebuild: the current archive must finish encoding,
-verification and atomic replacement (or fail with its original intact). Remaining
-comics are untouched. Summaries distinguish cancellation, failures and unprocessed
-files, and per-file failures remain visible. A failed comic does not stop later
-compression candidates unless cancellation was requested. Folder organization
-retains its existing stop-on-first-error policy.
-
-## Verification
-
-Run from the repository root:
-
-```sh
-PYTHONPATH=Python python3 -m unittest discover -s Python/tests -v
-```
-
-The regression suite uses disposable fixtures and simulated failures. It covers exact retention boundaries, unchanged encoder settings, forced compression, original page preservation, resize/page XML results, padding cutoffs, cleanup/flattening, concurrency isolation, collisions, invalid archives/XML, failed copies/encoding/builds/replacement, existing destinations, metadata escaping, and conversion commit ordering.
-
-A comparison before the structural XML update covered six fixture/override combinations against the original compressor: page bytes, member names, ComicInfo XML, and logs matched exactly except timestamps. Only the original multiline log export incompatibility was patched to make that comparison runnable. ComicInfo formatting is now normalized, while its other metadata values and the established page attribute policy are preserved. ZIP container bytes/timestamps are not claimed to be identical. Real RAR extraction and desktop dialogs require separate platform validation; conversion tests simulate the external extractor.
-
-## Future Work
-
-EPUB support is not currently implemented in this feature.
-
-Image utilities remain separate because they are also used outside the Comics feature.
-
-
-## General file browser
-
-The Debug tab's **Open File Browser…** button opens a chosen folder using the shared
-browser with available Logistics browser extensions. The unified Comics declaration supplies its
-metadata, compression and reader operations there as well as in its library window.
-Its handlers and folder providers are installed per browser window. The Features
-tab toggles them and CBZ file-type resolution live in existing browsers. Open readers,
-editors and jobs continue; new CBZ resolution becomes generic while Comics is disabled. General browsing omits library tabs and automatic
-collection catalog indexing; metadata suggestions continue to use the catalog in
-the dedicated comic library. Closing a reader brings its originating browser forward.
-
-
-### Declaring Comics capabilities
-
-`features/comics/ui_contributions.py:register()` is the single author-facing entry:
-`Feature(id='comics', requires=('images',), file_types=[...], browser=...,
-folder_features=[...], workflows=[...])`. `SelectionAction` declarations accept
-CBZFile/Directory objects; the framework filters mixed selections, namespaces keys
-and groups entries under Comics. Their context handlers call the current window's
-controller directly, without duplicated service strings. `FileActivation` declares
-reader opening separately from CBZ metadata/thumbnail loading. The CBZ file class
-has no UI action/activation override, so standalone generic browsers remain usable
-without installing Comics actions. See [the commonUtils guide](../../commonUtils/FEATURES.md).
+Comics owns CBZ reading, metadata editing, compression/encryption, CBR conversion
+and library integration. It requires the Images feature. See the
+[user guide](user_docs/index.md) for controls and configuration, the
+[compression contract](COMPRESSION.md) for output rules and ComicRack compatibility,
+and [file browser development](../FILE_BROWSER.md) for panels, context menus and
+activation hooks.
+
+## Implementation map
+
+| Area | Modules and responsibility |
+| --- | --- |
+| Declaration | `ui_contributions.py:register()` declares CBZ type ownership, browser actions/activation, folder controls and workflows. `__init__.py` exports it; `register_file_types()` remains a compatibility helper. |
+| Compression | `cbz.py` orchestrates; `sanitization.py` cleans layouts and pads names; `comicinfo.py` rebuilds page records; `compression_stats.py` reports results; `archive_io.py` builds, verifies and commits archives. |
+| Other batch operations | `conversion.py` handles CBR conversion, `metadata.py` legacy author/series edits, `actions.py` organization and external reader integration. |
+| Metadata model | `library.py` loads and transactionally saves documents; `selection.py` resolves batches; `edit_state.py` tracks shared/mixed values and explicit patches. |
+| Metadata UI | `ui/metadata_editor.py` coordinates jobs/navigation; `metadata_form.py`, `metadata_widgets.py` and `value_popup.py` build field controls. |
+| Reader | `pages.py` loads pages/covers; `reading.py` decides spreads and sibling ordering; `reader.py` and `ui/reader*.py` own windows, decoding, controls and keys. |
+| Browser integration | `browser_support.py` loads CBZ panels/thumbnails and folder counts; `ui/browser_extension.py` owns per-window state; `ui/browser_services.py` shares handlers between hosts. |
+| Library | `ui/library.py` adds library tabs and catalog services around the shared browser; `library_config.py` reads library names; `catalog.py` maintains suggestions. |
+
+The `ui/file_browser.py`, `ui/filesystem_model.py`, `ui/navigation.py` and
+`folder_stats.py` compatibility imports delegate to commonUtils. Extend the
+shared browser through declarations rather than adding Comics checks to it.
+Registration is idempotent and does not parse archives; UI imports remain lazy.
+
+## Browser and library boundaries
+
+The general browser and comic library consume the same declaration. Only the
+library adds tabs and automatic collection-wide suggestion indexing; it supplies
+its existing controller to coordinate catalog refresh and safe closing. The
+controller owns readers, editors and jobs for its window. Open readers can outlive
+the library; closing a reader raises its originating browser if still visible.
+Shared navigation, generic panels, selection filtering and feature toggles are
+covered by the [central browser guide](../FILE_BROWSER.md).
+
+`[LogisticsComics] libraries` names immediate-child library folders in order.
+Without it, existing collections retain whole-root browsing. This section or an
+external-reader detection enables the folder contribution. The catalog always
+belongs to the collection root, even when a library tab selects a subfolder.
+
+## Metadata editing contract
+
+Only explicitly changed fields are patched. No-op saves preserve archive bytes;
+emptying a field removes it. Unknown elements/attributes, namespace declarations,
+comments, processing instructions and existing `Pages` records survive metadata-only
+edits. Image bytes remain unchanged. New known fields follow schema order without
+reordering existing nodes. XML formatting and ZIP container bytes may change on a
+real edit. Use [XMLFile](../../commonUtils/XML.md) for generic XML mechanics;
+`ComicInfoXML` owns ComicInfo field mappings and validation.
+
+Number/AlternateNumber accept strings (including fractions and suffixes); counts,
+volume and dates are integers with blank removal and the legacy `-1` sentinel.
+Month/Day limits are 12/31. Existing unknown enum values and legacy strings are
+retained until edited. Language labels serialize as codes; custom tags remain
+valid. Explicit list edits serialize comma-separated text, while untouched text
+keeps its spelling. Series complete/Proposed Values are ComicRack library fields,
+so their disabled controls must not invent XML tags or modify a ComicRack database.
+When extending mappings, consult the [Anansi ComicInfo documentation](https://anansi-project.github.io/docs/comicinfo/documentation),
+[v2.0 schema](https://github.com/anansi-project/comicinfo/blob/main/schema/v2.0/ComicInfo.xsd)
+and [v2.1 draft](https://anansi-project.github.io/docs/comicinfo/schemas/v2.1).
+
+Preflight validates all documents and checks for external changes before the first
+write. Saves stage a replacement, verify every member CRC, retain permissions and
+atomically replace each CBZ. A batch is not one filesystem transaction: successful
+files remain saved when a later file fails. Pending edits remain available; baselines
+are refreshed from both successful and failed documents so retry/revert stays correct.
+Folder selections are recursive and deduplicated. Symlinks are excluded from scans;
+explicit links and hard-linked archives are refused.
+
+**Compression has a different page policy:** it discards old per-page metadata and
+rebuilds records for the selected output images to avoid maintainer-reported
+ComicRack crashes. Do not apply metadata-only preservation to compression. The
+[compatibility policy and evidence](COMPRESSION.md#comicrack-compatibility-rebuilding-page-records)
+must be retained when modifying the parser.
+
+## Reader and catalog contracts
+
+Readers sort pages and sibling comics naturally and load without extraction.
+Qt decoding falls back to Pillow; display transforms must not modify archive bytes.
+Spread selection respects landscape/DoublePage pages and manga direction.
+Only the latest queued page load is displayed, and failed loads retain the current
+image with an error. Metadata saves refresh the archive snapshot and direction
+while retaining page position; external archive changes require reopening.
+Closing during a load waits for its worker. Reading progress is session-only.
+
+`LogisticsComicsData/metadata.json` stores normalized suggestions and compact
+relative-path records using modification time/size. Index only list fields and
+Publisher/Imprint/Format, never image payloads, plot text, titles or metadata hashes.
+Changed/deleted records remove obsolete suggestions. Invalid caches rebuild;
+write failures leave session suggestions usable. Skip linked/data folders and
+retry unreadable archives on refresh. Background suggestions must not overwrite
+pending edits. Encrypted metadata must never enter this persistent cache.
 
 ## Password-protected CBZs
 
-Comics reads `[LogisticsZIP] archive_password` from an ancestor `remoteConfig.ini`;
-see [Archives configuration](../archives/README.md) for inheritance. Ordinary CBZs
-stay ordinary, even when a password is configured. Protected archives use that
-password seamlessly for reader pages, metadata and thumbnails. Reader opening and
-single-file metadata editing prompt on a missing/incorrect password. Successfully
-entered passwords are cached per archive in memory only, including after metadata
-replacement, and are invalidated by external file/configuration changes.
+Use `services.zip_passwords` for ancestor `[LogisticsZIP] archive_password` policy;
+see [Archives](../archives/README.md#password-configuration). Ordinary CBZs remain
+ordinary unless explicitly encrypted. Reader/single-file editor workflows prompt
+for missing/incorrect passwords and cache successful unlocks per archive in memory,
+invalidating them on external file/config changes. Background previews never prompt;
+locked archives use a placeholder. Compression accepts only the configured password,
+never a reader's cached password or an interactive prompt, and reports failures per file.
 
-Background previews never prompt: locked archives show a lock placeholder. Batch
-metadata editing reports locked files and permits edits to accessible files;
-compression reports individual failures and continues. Compression accepts only
-the configured password, even if a reader has cached a different valid password.
-It never prompts. Encrypted metadata is excluded from the persistent catalog cache
-so decrypted metadata is not written to that cache.
+Rewrites retain the successful input password and use AES-256, upgrading legacy
+ZipCrypto. Mixed encrypted/plain entries can be read but not rewritten; authenticate
+all members before replacement to reject multiple-password archives. Filenames
+remain visible. Compression's temporary plaintext workspace is removed normally,
+without secure-erasure guarantees. Encryption must preserve compression output
+rules; see the [contract](COMPRESSION.md).
 
-Metadata edits and recompression retain the successful input password and always
-write AES-256 encryption. Reading legacy ZipCrypto is supported and a rewrite
-upgrades it. Mixed encrypted/plain file entries are readable but cannot be rewritten;
-multiple passwords within one archive fail full authentication before replacement.
-ZIP filenames remain visible. Comic compression's extraction root, sanitization,
-page names/encoding/retention, XML and log behavior are identical with and without
-encryption. Tests compare complete decrypted manifests (names, sizes and hashes),
-with log time frozen. Output is fully verified before replacing the original; wrong
-passwords, failed verification and concurrent changes retain the original.
+The encryption action requires an ancestor INI with `[LogisticsZIP]` for every
+accepted selection. Its dialog assesses once on opening, recursively deduplicates
+folders without following symlinks, and refuses execution when a plain comic lacks
+a nonempty configured password. The API still permits an explicit fallback password;
+opening an encrypted comic without an INI still permits an unlock prompt.
 
-Compression temporarily extracts plaintext pages in its isolated workspace, which
-is removed after the operation. This is normal deletion, not secure erasure.
+Encryption streams unchanged decrypted contents, member order/names, empty folders
+and comments into a verified staged AES-256 CBZ. It performs no image conversion,
+extraction or sanitization. Already encrypted comics are skipped unchanged; hard-linked
+inputs are refused. This is distinct from packaging a CBZ inside a separate ZIP.
 
-Password regressions cover inherited/empty/DEFAULT configuration, Unicode and
-percent-sign passwords, memory-only unlock reuse, canceled and incorrect prompts,
-adjacent reader navigation, closing with a queued unlock retry, locked background
-previews, encrypted metadata edits,
-legacy ZipCrypto upgrades and header false positives, mixed/multiple-password
-archives, failed verification,
-and exact decrypted compression parity. For shared ZIP tests, also run:
+## Worker and file-safety contracts
 
-```sh
-QT_QPA_PLATFORM=offscreen PYTHONPATH=Python:Python/commonUtils/tests python3 -m unittest test_zip_access test_zip_paths test_file_registry test_features test_file_browser
-```
+Capture inputs on the GUI thread and run disk work in background callbacks.
+Comic batches cancel **after the current comic**: never forward batch cancellation
+into compression's ZIP rebuild. Close/Escape waits for completion before destroying
+the dialog. Report per-item failures as well as worker errors and distinguish
+unprocessed files from failures/cancellation. Compression continues after failures;
+organization retains its stop-on-first-error policy. Shared lifecycle guidance lives
+in [UI architecture](../UI_ARCHITECTURE.md#long-running-workflows-and-safe-closing)
+and [commonUtils recipes](../../commonUtils/RECIPES.md).
 
-These tests use temporary local fixtures. They do not replace manual validation
-on Fedora/Windows or real remote mounts. Encryption does not alter the file layout,
-but external applications must support WinZip AES to read protected output.
+CBR conversion deletes its source only after building/verifying the CBZ and refuses
+existing destinations; actual extraction requires patool's external RAR extractor.
+Organization copies before deleting the source. Archive rebuilds use isolated staging
+and reject source changes. See [replacement rules](COMPRESSION.md#replacement-boundary)
+before changing compression.
 
-A separate [before/after full-run comparison](ZIP_COMPRESSION_PARITY.md) against
-the pristine pre-password commits passed 24 full compression runs across four
-folder layouts and two retention modes, checking extraction through final output.
+## Validation
 
-[Cross-platform checks](../../tests/PLATFORM_CHECKS.md) run all shared/application
-tests plus the historical compression comparison on macOS, Windows, Ubuntu and a
-Fedora 43 container; the same runner can be used locally on another machine.
-
-### Encrypt existing comics
-
-With Comics enabled, **Comics → Encrypt unencrypted comics…** is available in
-file browser windows when the selected item has an ancestor `remoteConfig.ini`
-with a `[LogisticsZIP]` section. The dialog assesses the selection automatically
-on opening. Selected folders are scanned recursively once; overlapping
-selections are deduplicated and symlinks are not followed. The dialog reports the
-number to encrypt, already encrypted comics to skip, and per-file planning failures
-before you start encryption.
-
-Each plain CBZ uses its nearest configured `[LogisticsZIP] archive_password`.
-The UI refuses to encrypt if any plain comic lacks a nonempty configured password.
-The programmatic encryption API retains its explicit fallback-password argument.
-Opening an already encrypted comic still prompts for its password when no usable
-INI password exists. Already encrypted comics retain their existing password and bytes.
-
-Encryption streams entries directly into an AES-256 staged CBZ beside the original,
-preserving entry order, names, empty folders, comments and decrypted file contents.
-There is no image conversion, extraction or sanitization. Every entry is verified
-before atomic replacement, with a final check that the original has not changed.
-Hard-linked inputs require independent copies. Failures preserve that comic's
-original; other comics can succeed, and the dialog reports encrypted/skipped/failed
-counts. ZIP filenames remain visible without a password.
-
-This differs from **Archives → Create encrypted ZIP…**, which packages the CBZ file
-inside a separate outer ZIP. It does not change library catalog behavior: indexing
-remains attached to the dedicated Comics library view.
-
-The encryption dialog shows progress by processed comic count and the current file.
-**Cancel after current comic** finishes and verifies the current archive, then stops
-before starting another. Closing the dialog or pressing Escape while encrypting
-requests the same cancellation and keeps the dialog alive until the worker finishes.
-Completed comics stay encrypted; unprocessed comics stay untouched. The final
-summary distinguishes cancellation and reports the number not processed. Folder
-scanning uses an indeterminate progress bar; cancellation is available during the
-encryption phase, after the automatic scan.
-
-
-### Shared helpers for maintainers
-
-ZIP mechanics live in [commonUtils ZIP access](../../commonUtils/ZIP_ARCHIVES.md),
-stream copying/signatures in `commonUtils.streams`, and worker lifecycle in
-[the shared workflow recipes](../../commonUtils/RECIPES.md). Keep per-comic rebuilds
-transactional and use batch cancellation between comics. Encryption/compression
-must not inherit separate ZIP creation's mid-archive cancellation accidentally.
-Browser contributions use [Feature declarations](../../commonUtils/FEATURES.md);
-format loading stays independent of Logistics windows and configuration prompts.
+Use the [project test commands](../../../README.md#development) and
+[cross-platform checks](../../tests/PLATFORM_CHECKS.md). Comic tests cover compression,
+metadata, reader/spreads/decoding, catalog, file-type integration, passwords,
+encryption and asynchronous cancellation using disposable fixtures. Shared ZIP and
+browser tests belong to commonUtils. The [parity report](ZIP_COMPRESSION_PARITY.md)
+records decrypted full-run comparisons; ZIP container timestamps are not expected
+to match. Tests do not reproduce the ComicRack crash, invoke a real RAR extractor
+or replace native desktop/remote-mount validation. EPUB is not implemented.

@@ -20,20 +20,43 @@ A user guide remains accessible when its feature is disabled or lacks a dependen
 
 ## Read documentation
 
-Choose **User guide** beside a feature on Features. This reader supports headings,
+Choose **User guide** beside a feature on Features to read it. Hold **Alt**
+(**Option** on macOS) while clicking to open it with editing enabled. The reader supports headings,
 lists, tables and code examples. Click a Markdown link to navigate to another guide
 or a heading, and use Back/Forward to retrace your steps. Website links open in
 your default browser. Unsupported or missing documents show an explanation while
 keeping the current page available.
 
-Double-click `.md` or `.markdown` files in the file browser to use the same reader.
-Reading does not modify a document. **Contents** opens a floating list of headings
-on the right; select a heading to jump, or click outside to dismiss it. **Edit**
-enables editing directly in the formatted document. Headings, bold text, lists and
+Guides opened normally from Features are preview-only: they offer no editing or saving.
+Links followed inside a preview-only window remain preview-only.
+
+Double-click `.md` or `.markdown` files in the file browser to open a window that
+permits editing and starts in Formatted edit mode. Reading does not modify a document. **Contents** opens a floating list of headings
+on the right; select a heading to jump, or click outside to dismiss it. Editable
+windows let you type directly in the formatted document. Headings, bold text, lists and
 tables stay rendered while you type. Choose **Source** in the editing-mode selector
 for precise Markdown syntax, or **Read** to return to reading. Formatted edits can
 normalize Markdown and lose unsupported HTML/extensions; use Source when those
 need to be preserved.
+
+In Formatted mode, typed `# ` through `###### ` becomes a heading, and completed
+`**bold**`, `*italic*` or backtick code renders immediately. Selecting text and
+pressing `*` wraps it as italic; pressing `*` again while it remains selected makes
+it bold. `_` and backticks also wrap selections. Formatting markers appear when
+the cursor is inside the text or you select it, so you can edit the markers directly.
+They hide when you move away. Deleting a closing marker leaves plain incomplete
+syntax (for example, `**bold*`); completing it restores formatting. Source mode
+shows all delimiters. Undo reverses edits; saving is still explicit.
+
+For multiline code, put three backticks on their own opening and closing lines.
+An optional language name can follow the opening backticks. Code stays literal
+and monospaced; fences appear while you edit the block. Unfinished blocks remain
+editable without automatically adding a closing fence.
+
+Use **Table** on the formatting toolbar or the right-click menu to insert a table,
+add rows/columns around the current cell, or delete rows, columns or the whole
+table. These controls work in Formatted editing; each change supports Undo.
+The first row remains the header. Removing the final row/column removes the table.
 
 Use **File → Save** (Ctrl+S, or Command+S on macOS) to save, **Open** (Ctrl+O) to
 open another file, and **Save As** to write a separate copy. Formatting controls,
@@ -79,3 +102,5 @@ where their settings belong and what actions change files or external services.
 - [Apply X-Plane 12 presets](Python/features/flight_sim/user_docs/index.md)
 - [Inspect paths and remove Python bytecode](Python/features/file_tools/user_docs/index.md)
 - [Run system maintenance actions](Python/features/system_tools/user_docs/index.md)
+
+Holding **Alt** when opening any Markdown window enables editing, including documentation buttons. In formatted editing, Ctrl/Cmd-click follows standard Markdown links or local `[[Page|Label]]` / `[Page|Label]` aliases.

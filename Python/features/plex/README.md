@@ -1,18 +1,9 @@
 # Plex Feature
 
-For usage instructions, see the [user guide](user_docs/index.md). This README
-covers development, implementation details and validation.
-
+Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
+and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
 Provides Plex integration for Logistics.
-
-## Using this feature
-
-Select a local folder with a paired PMSDATA remote in **Folders**, then open
-**Manage PMS…**. Database comparisons are a separate **Debug** workflow.
-
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.
 
 ## Responsibilities
 
@@ -20,7 +11,6 @@ See [shared setup and resource paths](../../../CONFIGURATION.md) and the
 - Back up and restore Plex Media Server application data.
 - Support Windows split 7-Zip packages and macOS/Linux ZIP packages.
 - Compare selected Plex database copies through Debug.
-- Keep Plex-specific behavior outside Logistics core and generic UI code.
 
 ## Structure
 
@@ -31,30 +21,13 @@ See [shared setup and resource paths](../../../CONFIGURATION.md) and the
 - `database.py` reads SQLite databases in read-only mode and resolves media/episode relationships.
 - `comparison.py` matches GUIDs or episode identities without losing duplicate entries.
 - `ui_contributions.py` contributes Manage PMS to matching folders and the database test to Debug.
-- `__init__.py` exposes the feature to the Logistics feature registry.
 
-## Manage PMS
+## Detection and dependency
 
-A local Logistics folder receives the Manage PMS workflow when a matching
-`<folder>-PMSDATA` rclone remote exists.
-
-The workflow supports:
-
-- Opening local and mounted `-PMSDATA` locations.
-- Clearing the local package.
-- Pulling the remote package locally.
-- Unpacking the local package into the platform Plex Media Server data location.
-- Packaging current Plex Media Server data locally.
-- Pushing the local package to the paired remote.
-
-Plex intentionally depends on rclone for these backup and restore sync operations.
-
-## Initialization
-
-This feature does not require startup initialization.
-
-It is discovered by the Logistics feature registry and performs no work until
-Plex functionality is used.
+A local folder receives Manage PMS when a matching `<folder>-PMSDATA` rclone remote
+exists. Plex requires rclone for backup/restore synchronization. The feature owns
+packaging/restoring and database comparison; shared transfer/mount mechanisms remain
+in rclone/FUSE. No startup initialization is required.
 
 ## Package and restore behavior
 

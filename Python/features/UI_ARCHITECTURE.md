@@ -64,13 +64,8 @@ hooks and BrowserExtensionContribution installers remain supported for features
 not yet migrated. A declaration cannot mix `browser` with legacy
 `browser_extensions` installers.
 
-Comics uses this API in `features/comics/ui_contributions.py:register`. Its package
-exports `register`; the old `register_file_types` name is a compatibility helper.
-The CBZ class owns metadata/thumbnail loading; the declaration owns Edit Metadata,
-Compress Comics, reader activation, folder counts and its controller factory.
-Both the general browser and the comic library consume the same declaration; the
-library supplies its existing controller to keep catalog suggestions and close
-coordination with its surrounding controls.
+For panels, right-click actions, activation and per-window controller wiring,
+see [File browser development](FILE_BROWSER.md).
 
 ## Startup and refresh
 
@@ -159,25 +154,10 @@ does not become part of logical folder identity or filesystem layout.
 
 ## Shared file types and browser bindings
 
-Declarations register their `FileType` rules with automatic feature ownership.
-Legacy `register_file_types()` hooks remain supported and run inside an owner scope.
-Registration applies to all future Directory listings and file resolution in the
-process, including Directory objects created earlier. Existing File objects retain
-their class. The browser re-resolves cached objects after registry revision changes.
-
-`FileBrowser` owns views, navigation, selection, generic details and filesystem
-actions. File classes supply panels and thumbnails. A declared BrowserExtension
-supplies selection actions, activation and folder fields. `Feature.install_browser`
-compiles those capabilities into a reversible layer and creates optional per-window
-controller state. Applications still own safe window/controller shutdown. Legacy
-file-type action/activation hooks and direct services/providers are also supported.
-
-The general Logistics browser queries `registry.get_browser_extensions()` for
-lazy installers. This includes automatically adapted unified declarations and
-legacy installers; `ui_new` never imports project types or handlers. The installed
-binding forwards its controller's `prepare_close()/idle` protocol. The general
-host has no comic library tabs or automatic collection-wide catalog scan; metadata
-entry remains available without catalog suggestions.
+[File browser development](FILE_BROWSER.md) is the central Logistics guide for
+file types, preview panels, context menus, activation, controllers and safe closing.
+The reusable API and standalone examples live in the
+[commonUtils author guide](../commonUtils/FEATURES.md).
 
 ### Session feature controls
 
@@ -207,15 +187,6 @@ format rules. Lower-level `install_extension`, `set_extension_enabled`, and
 folder fields, restoring
 previous handlers where extensions overlap. Logistics decides feature availability;
 commonUtils contains no project-specific dependency logic.
-
-General-browser controllers and the comic library respond to toggles. Disabling
-Comics removes folder actions and handlers, refreshes selected metadata/covers, and
-makes future CBZ resolution generic. Re-enabling reuses controllers. Open readers,
-metadata dialogs and running workers remain usable and can finish; controllers stay
-owned by their host until its normal worker-safe close. Per-window handlers are
-intentional because they own selection, dialog parents and workers. The globally
-shared part is feature/type availability, not widget instances.
-
 
 ## Long-running workflows and safe closing
 
@@ -254,4 +225,6 @@ remain in README.md. Missing guides disable only their help button.
 
 Use relative Markdown links to other user guides or the root USER_GUIDE.md.
 The shared `commonUtils.ui.markdown` viewer owns rendering, local link history and
-Back/Forward. General file-browser Markdown activation uses the same reader.
+Back/Forward. Normal guide clicks open preview-only windows; Alt-click opts into
+editing. Editing-enabled windows start in Formatted mode, including general
+file-browser Markdown activation.

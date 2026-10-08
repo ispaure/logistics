@@ -1,29 +1,18 @@
 # Media Feature
 
-For usage instructions, see the [user guide](user_docs/index.md). This README
-covers development, implementation details and validation.
-
+Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
+and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
 Provides media-specific file operations for Logistics.
-
-## Using this feature
-
-Open **Debug → Rename MKA from CSV…** and choose the folder containing
-the chapter files and CSV. The operation validates the full plan before renaming.
-
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.
 
 ## Responsibilities
 
 - Handle audio/video media workflows that do not belong to a more specific feature.
-- Keep media file processing out of the UI layer.
 - Provide reusable validation and execution logic for media maintenance tools.
 
 ## Structure
 
 - `mka.py` contains Matroska Audio (`.mka`) operations.
-- `__init__.py` exposes the feature to the Logistics feature registry.
 
 ## MKA Chapter Rename
 
@@ -49,9 +38,3 @@ Before any files are renamed, Logistics validates the entire batch:
 - No destination filename already exists.
 
 Only after the complete rename plan passes validation are files renamed.
-
-## Initialization
-
-This feature does not require startup initialization.
-
-It is discovered by the Logistics feature registry but performs no work until a Media action is used.

@@ -73,7 +73,8 @@ compression/encryption. Other workflows have their own execution models.
 
 ## Features
 
-Each feature README describes its behavior, configuration, and limitations.
+Each feature README covers implementation and feature-specific contracts; its
+linked user guide covers controls and setup.
 
 | Feature | Purpose |
 | --- | --- |
@@ -98,7 +99,7 @@ Each feature README describes its behavior, configuration, and limitations.
 
 ## Development
 
-`Python/features/` owns feature logic and feature-specific UI; `Python/ui_new/` hosts the generic interface; `Python/models/` and `Python/services/` provide folder models and discovery support. `Python/commonUtils/` is a Git submodule. See [UI architecture](Python/features/UI_ARCHITECTURE.md) for contribution and configuration conventions. `Scripts/` contains standalone scripts.
+`Python/features/` owns feature logic and feature-specific UI; `Python/ui_new/` hosts the generic interface; `Python/models/` and `Python/services/` provide folder models and discovery support. `Python/commonUtils/` is a Git submodule. See [UI architecture](Python/features/UI_ARCHITECTURE.md) for contribution and configuration conventions, and [file browser development](Python/features/FILE_BROWSER.md) for panels, context actions and activation. `Scripts/` contains standalone scripts.
 
 Run the regression suite from the repository root:
 

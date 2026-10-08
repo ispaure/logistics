@@ -1,19 +1,9 @@
 # Images Feature
 
-For usage instructions, see the [user guide](user_docs/index.md). This README
-covers development, implementation details and validation.
-
+Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
+and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
 Provides image-processing and image-metadata workflows for Logistics.
-
-## Using this feature
-
-Use **Debug → Batch Compress Images…** or **JPG EXIF - Set Comments…**.
-Select a target folder and review the compression/recursion options before running.
-Comics uses the encoder through its own workflow and transaction policy.
-
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.
 
 ## Responsibilities
 
@@ -21,13 +11,11 @@ See [shared setup and resource paths](../../../CONFIGURATION.md) and the
 - Batch compress supported image formats to WEBP.
 - Apply JPG EXIF metadata through the reusable commonUtils piexif wrapper.
 - Provide shared image-processing behavior to other Logistics features such as Comics.
-- Keep image-specific behavior out of debug popup UI code.
 
 ## Structure
 
 - `processing.py` contains `ImageFile` and image-compression behavior.
 - `actions.py` exposes user-facing image and EXIF operations.
-- `__init__.py` exposes the feature to the Logistics feature registry.
 
 ## Shared Usage
 
@@ -66,9 +54,3 @@ Image compression may replace original image files with WEBP versions when the c
 EXIF operations modify JPG metadata in place.
 
 Use disposable copies when testing behavioral changes to these operations.
-
-## Initialization
-
-This feature does not require startup initialization.
-
-It is discovered by the Logistics feature registry but performs no work until an Images action is used.
