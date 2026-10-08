@@ -6,7 +6,7 @@ from commonUtils.ui.file_browser import FileBrowser
 from features import registry
 from features.comics.catalog import LibraryCatalog
 from features.comics.library_config import configured_libraries
-from .operations import Operation
+from commonUtils.ui.operations import Operation
 from .browser_services import ComicBrowserServices
 
 

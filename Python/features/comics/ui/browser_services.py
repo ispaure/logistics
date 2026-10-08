@@ -7,7 +7,7 @@ from features.comics.pages import ComicPages
 from features.comics.reader import open_reader
 from features.comics.selection import normalize_targets
 from .metadata_editor import MetadataEditor
-from .operations import Operation
+from commonUtils.ui.operations import Operation
 from services.zip_passwords import is_password_error
 from ui_new.dialogs.archive_password import ask_password
 
