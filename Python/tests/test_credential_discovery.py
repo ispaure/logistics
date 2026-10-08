@@ -39,14 +39,20 @@ class CredentialDiscoveryTests(unittest.TestCase):
             with patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(path_logistics_remote_cred=local)), patch.object(marcUtils, 'get_marc_dropbox_root', return_value=root):
                 self.assertEqual(credentials.get_credential_package_directories(), (local,))
 
-    def test_external_packages_get_distinct_stable_config_names(self):
+    def test_all_package_locations_use_zip_names_and_find_existing_configs(self):
         from features.rclone import configuration
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
-            local = root / 'checkout/RemoteCredentials'
-            packages = [local / 'same.zip', root / 'dropbox/same.zip', local / 'nested/same.zip']
-            with patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(path_logistics_remote_cred=local)), patch.object(configuration, 'get_rclone_config_dir', return_value=root / 'configs'):
-                configs = [configuration.get_credential_config_path(package) for package in packages]
-                self.assertEqual(configs[0], root / 'configs/same.conf')
-                self.assertEqual(len(set(configs)), 3)
-                self.assertEqual(configuration.get_credential_config_path(packages[1]), configs[1])
+            config_dir = root / 'configs'
+            config_dir.mkdir()
+            existing = config_dir / 'Personal.account.conf'
+            existing.write_text('[fixture]\n')
+            packages = [root / location / 'Personal.account.zip'
+                        for location in ('checkout/RemoteCredentials', 'dropbox', 'checkout/RemoteCredentials/nested')]
+            with patch.object(configuration, 'get_rclone_config_dir', return_value=config_dir):
+                for package in packages:
+                    config_path = configuration.get_credential_config_path(package)
+                    self.assertEqual(config_path, existing)
+                    self.assertTrue(config_path.is_file())
+                self.assertEqual(configuration.get_credential_config_path(root / 'Other.zip'),
+                                 config_dir / 'Other.conf')

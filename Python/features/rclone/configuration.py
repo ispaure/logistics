@@ -31,17 +31,7 @@ def get_rclone_conf_path() -> Path:
 def get_credential_config_path(credential_zip_path: str | Path) -> Path:
     """Return the generated .conf path paired with one credential ZIP."""
 
-    import hashlib
-    import config
-    package = Path(credential_zip_path).resolve()
-    primary = config.LogisticsConfig().path_logistics_remote_cred.resolve()
-    credential_name = package.stem
-    # Preserve legacy names for packages directly in the checkout credential root.
-    # External/nested packages get stable identities even if another source disappears.
-    if package.parent != primary:
-        identity = hashlib.sha256(str(package).encode('utf-8')).hexdigest()[:12]
-        credential_name += f'-{identity}'
-    return get_rclone_config_dir() / f'{credential_name}.conf'
+    return get_rclone_config_dir() / f'{Path(credential_zip_path).stem}.conf'
 
 
 def get_rclone_remote_names(config_path: str | Path) -> list[str]:
