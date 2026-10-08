@@ -8,9 +8,9 @@ from features import registry
 
 class _BrowserHost:
     """Shared feature installation and worker-safe shutdown for embedded/standalone hosts."""
-    def _initialize_browser(self, root_path):
+    def _initialize_browser(self, root_path, *, calculate_folder_sizes=True):
         self.closing = False
-        self.file_browser = FileBrowser(parent=self)
+        self.file_browser = FileBrowser(parent=self, calculate_folder_sizes=calculate_folder_sizes)
         self.extensions = []
         self._extensions_by_feature = {}
         self._sync_extensions()
@@ -72,7 +72,7 @@ class _BrowserHost:
 class FileBrowserPage(_BrowserHost, qt.QWidget):
     def __init__(self, parent=None, *, root_path=None):
         super().__init__(parent)
-        self._initialize_browser(root_path or Path.home())
+        self._initialize_browser(root_path or Path.home(), calculate_folder_sizes=False)
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         controls = qt.QHBoxLayout()
@@ -82,6 +82,10 @@ class FileBrowserPage(_BrowserHost, qt.QWidget):
         self.open_folder_button.clicked.connect(self._choose_directory)
         controls.addWidget(self.home_button)
         controls.addWidget(self.open_folder_button)
+        self.folder_sizes = qt.QCheckBox('Calculate folder sizes')
+        self.folder_sizes.setToolTip('Scan the current root recursively for folder sizes and counts.')
+        self.folder_sizes.toggled.connect(self.file_browser.set_folder_sizes_enabled)
+        controls.addWidget(self.folder_sizes)
         controls.addStretch()
         layout.addLayout(controls)
         layout.addWidget(self.file_browser, 1)
