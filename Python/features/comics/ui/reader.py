@@ -12,6 +12,7 @@ from ui_new.dialogs.archive_password import ask_password
 from .reader_pages import PageCanvas, read_image, read_candidates, read_previous
 from .reader_controls import ReaderControls, ReaderMenus
 from .reader_keys import ReaderKeyHandler
+from .reader_cache import ReaderPageCache
 
 FILE_SWITCH_INTERVAL = .4
 
@@ -45,6 +46,8 @@ class ComicReaderWindow(qt.QMainWindow):
         self.metadata_windows = []
         self.reload_metadata_path = None
         self.siblings = []
+        self.page_cache = ReaderPageCache(self)
+        self.page_cache.idle.connect(self._cache_idle)
         self.menus = ReaderMenus(self)
         self.previous_file_action = self.menus.previous_file_action
         self.next_file_action = self.menus.next_file_action
@@ -52,6 +55,10 @@ class ComicReaderWindow(qt.QMainWindow):
         self.fullscreen_action = self.menus.fullscreen_action
         self.controls = ReaderControls(self.fullscreen_action, self)
         self.setCentralWidget(self.controls)
+        status = self.statusBar()
+        status.setSizeGripEnabled(False)
+        status.messageChanged.connect(lambda message: status.setVisible(bool(message)))
+        status.hide()
         # Preserve the widget handles used by callers while keeping construction separate.
         for name in ('canvas', 'progress', 'progress_label', 'previous_button', 'next_button',
                      'previous_file_button', 'next_file_button', 'title', 'direction'):
@@ -59,11 +66,13 @@ class ComicReaderWindow(qt.QMainWindow):
         self.setFocusProxy(self.canvas)
         self.canvas.resized.connect(self._resized)
         self.progress.valueChanged.connect(self.go)
-        self.previous_button.clicked.connect(lambda: self.step(-1))
-        self.next_button.clicked.connect(lambda: self.step(1))
         self.previous_file_button.clicked.connect(lambda: self.open_adjacent(-1))
         self.next_file_button.clicked.connect(lambda: self.open_adjacent(1))
         self.keys = ReaderKeyHandler(self)
+        self.previous_button.pressed.connect(lambda: self.keys.start(-1))
+        self.next_button.pressed.connect(lambda: self.keys.start(1))
+        self.previous_button.released.connect(self.keys.stop)
+        self.next_button.released.connect(self.keys.stop)
         self._configure_file()
         self.go(0)
 
@@ -72,6 +81,7 @@ class ComicReaderWindow(qt.QMainWindow):
         self.canvas.setFocus(qt.Qt.FocusReason.OtherFocusReason)
 
     def _configure_file(self):
+        self.page_cache.set_pages(self.pages)
         self.setWindowTitle(self.pages.path.name)
         self.setWindowFilePath(str(self.pages.path))
         self.controls.set_file(self.pages)
@@ -147,6 +157,11 @@ class ComicReaderWindow(qt.QMainWindow):
             return
         self.pending_page = None
         pages = self.pages
+        cached = self.page_cache.lookup(index, previous, (self.canvas.width(), self.canvas.height()), self.mode)
+        if cached is not None:
+            self.page, images = cached
+            self._loaded(pages, self.page, images, '')
+            return
         if previous:
             viewport, mode = (self.canvas.width(), self.canvas.height()), self.mode
             self._start(lambda: read_previous(pages, index, viewport, mode),
@@ -202,6 +217,7 @@ class ComicReaderWindow(qt.QMainWindow):
         if self.closing or pages is not self.pages or index != self.page:
             return
         if error:
+            self.keys.stop()
             self.canvas.message = f'Cannot read page: {error}'
             self.statusBar().showMessage(self.canvas.message)
             self.canvas.setToolTip(self.canvas.message)
@@ -216,6 +232,8 @@ class ComicReaderWindow(qt.QMainWindow):
             self.shown_page = index
             self.images = images
             self._update_spread()
+            self.page_cache.update(images, self.shown_page, self.displayed_pages[-1])
+            self.keys.page_shown()
 
     def _finished(self):
         self.busy = False
@@ -246,6 +264,7 @@ class ComicReaderWindow(qt.QMainWindow):
         if self.busy:
             self.pending_file = (path, from_end, page, password)
             return
+        self.keys.stop()
         self.file_loading = True
         self.loading_request = (Path(path), from_end, page)
         self.pending_page = None
@@ -276,6 +295,7 @@ class ComicReaderWindow(qt.QMainWindow):
         self.displayed_pages = (self.page,)
         self._configure_file()
         self._update_spread()
+        self.page_cache.update(self.images, self.shown_page, self.displayed_pages[-1])
         self.statusBar().clearMessage()
 
     def _choose_file(self):
@@ -323,8 +343,16 @@ class ComicReaderWindow(qt.QMainWindow):
         if self.isFullScreen():
             self.showNormal()
 
+    def _cache_idle(self):
+        if self.closing:
+            self.close()
+
     def shutdown(self):
+        self.keys.stop()
+        self.page_cache.stop()
         self.closing = True
+        if self.page_cache.busy:
+            self.page_cache.operation.wait()
         if self.busy:
             self.operation.wait()
         for window in self.metadata_windows:
@@ -338,8 +366,10 @@ class ComicReaderWindow(qt.QMainWindow):
         for window in self.metadata_windows:
             if window.isVisible():
                 window.reject()
+        self.keys.stop()
+        self.page_cache.stop()
         self.closing = True
-        if self.busy:
+        if self.busy or self.page_cache.busy:
             self.hide()
             event.ignore()
         else:

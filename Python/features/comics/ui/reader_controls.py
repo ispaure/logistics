@@ -8,6 +8,8 @@ class ReaderControls(qt.QWidget):
     def __init__(self, fullscreen_action, parent=None):
         super().__init__(parent)
         layout = qt.QVBoxLayout(self)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(4)
         layout.addLayout(self._create_header(fullscreen_action))
         self.canvas = PageCanvas()
         self.canvas.setFocusPolicy(qt.Qt.FocusPolicy.StrongFocus)
