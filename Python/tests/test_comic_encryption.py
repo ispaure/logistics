@@ -137,32 +137,30 @@ class EncryptionDialogTests(ComicEncryptionTests):
             self.assertEqual(archive.namelist(), ['Comic.cbz'])
             self.assertEqual(archive.read('Comic.cbz'), path.read_bytes())
 
-    def test_comic_dialog_prompts_once_for_all_missing_files(self):
-        from features.comics.ui.encryption import EncryptComicsDialog
-        self.comic('one.cbz')
-        self.comic('nested/two.cbz')
-        dialog = EncryptComicsDialog([self.root])
-        self.addCleanup(dialog.deleteLater)
-        dialog.plan = plan_encryption([self.root])
-        with patch('features.comics.ui.encryption.confirmed_password', return_value='shared') as prompt, \
-                patch.object(dialog, '_run') as run:
-            dialog._start()
-            prompt.assert_called_once()
-            self.assertIn('all 2 comics', prompt.call_args.args[1])
-            result = run.call_args.args[0]()
-        self.assertEqual(len(result['encrypted']), 2)
-
-    def test_cancel_password_does_not_start_encryption(self):
+    def test_comic_dialog_refuses_missing_configured_password(self):
         from features.comics.ui.encryption import EncryptComicsDialog
         path = self.comic('one.cbz')
         original = path.read_bytes()
         dialog = EncryptComicsDialog([path])
         self.addCleanup(dialog.deleteLater)
         dialog.plan = plan_encryption([path])
-        with patch('features.comics.ui.encryption.confirmed_password', return_value=None), patch.object(dialog, '_run') as run:
+        with patch.object(dialog, '_run') as run:
             dialog._start()
             run.assert_not_called()
+        self.assertIn('Cannot continue', dialog.message.text())
         self.assertEqual(path.read_bytes(), original)
+
+    def test_comic_dialog_assesses_on_open(self):
+        from features.comics.ui.encryption import EncryptComicsDialog
+        path = self.comic('one.cbz')
+        with patch.object(EncryptComicsDialog, '_run') as run:
+            dialog = EncryptComicsDialog([path])
+            self.addCleanup(dialog.deleteLater)
+            dialog.show()
+            self.app.processEvents()
+            run.assert_called_once()
+            self.assertIn(path, run.call_args.args[0]().missing)
+        dialog.close()
 
     def test_folder_zip_keeps_root_and_uses_config_without_prompt(self):
         from features.archives.ui.create_zip import CreateZipDialog
@@ -203,6 +201,7 @@ class EncryptionDialogTests(ComicEncryptionTests):
         import time
         from features.comics.ui.encryption import EncryptComicsDialog
         first, second = self.comic('one.cbz'), self.comic('two.cbz')
+        (self.root / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password=shared\n')
         original = second.read_bytes()
         entered, release = Event(), Event()
         dialog = EncryptComicsDialog([first, second])
@@ -213,8 +212,7 @@ class EncryptionDialogTests(ComicEncryptionTests):
             if not release.wait(5):
                 raise RuntimeError('Test did not release encryption')
             return encrypt_comic(path, password)
-        with patch('features.comics.ui.encryption.confirmed_password', return_value='shared'), \
-                patch('features.comics.encryption.encrypt_comic', side_effect=encrypt):
+        with patch('features.comics.encryption.encrypt_comic', side_effect=encrypt):
             dialog._start()
             try:
                 deadline = time.monotonic() + 5
