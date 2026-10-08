@@ -1,5 +1,9 @@
 # Images Feature
 
+For usage instructions, see the [user guide](user_docs/index.md). This README
+covers development, implementation details and validation.
+
+
 Provides image-processing and image-metadata workflows for Logistics.
 
 ## Using this feature

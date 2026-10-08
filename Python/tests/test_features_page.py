@@ -69,3 +69,22 @@ class FeaturesPageTests(unittest.TestCase):
         self.assertTrue(registry.is_feature_enabled('test_base'))
         self.app.processEvents()
         self.assertEqual(self.item('test_base').checkState(0), qt.Qt.CheckState.Checked)
+
+    def test_user_guides_are_available_even_when_feature_is_disabled(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            guide = root / 'test_child' / 'user_docs' / 'index.md'
+            guide.parent.mkdir(parents=True)
+            guide.write_text('# Test Child\n')
+            with patch.object(registry, '__file__', str(root / 'registry.py')):
+                registry.set_feature_enabled('test_child', False)
+                self.page.refresh()
+                button = self.page.tree.itemWidget(self.item('test_child'), 4)
+                self.assertTrue(button.isEnabled())
+                with patch('ui_new.pages.features.open_markdown') as opened:
+                    button.click()
+                opened.assert_called_once_with(guide, parent=self.page.window())
+                missing = self.page.tree.itemWidget(self.item('test_missing'), 4)
+                self.assertFalse(missing.isEnabled())

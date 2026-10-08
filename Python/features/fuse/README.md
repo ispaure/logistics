@@ -1,5 +1,9 @@
 # FUSE Feature
 
+For usage instructions, see the [user guide](user_docs/index.md). This README
+covers development, implementation details and validation.
+
+
 Provides optional mounted-folder access for rclone remotes.
 
 ## Using this feature

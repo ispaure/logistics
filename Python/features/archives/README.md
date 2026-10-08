@@ -1,5 +1,9 @@
 # Archives
 
+For usage instructions, see the [user guide](user_docs/index.md). This README
+covers development, implementation details and validation.
+
+
 This feature contributes **Archives → Create encrypted ZIP…** to all Logistics
 file browsers, including the Debug tab browser and comic library. The Features
 tab enables/disables its action using the existing unified `Feature` API. Comics

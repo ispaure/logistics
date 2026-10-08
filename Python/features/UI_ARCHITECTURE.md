@@ -242,3 +242,16 @@ contributions and type resolution without cancelling existing work.
 [Application configuration](../../CONFIGURATION.md) describes resource roots and
 software provisioning. URLs/hashes/platform policy belong to Logistics; reusable
 download, stream and worker mechanisms belong to commonUtils.
+
+
+## User documentation
+
+Each distributed feature provides `user_docs/index.md` beside its developer
+`README.md`. The Features page's User guide button opens that file even when the
+feature is disabled or a dependency is missing. Keep these guides focused on
+controls, prerequisites, outcomes and recovery; implementation and validation
+remain in README.md. Missing guides disable only their help button.
+
+Use relative Markdown links to other user guides or the root USER_GUIDE.md.
+The shared `commonUtils.ui.markdown` viewer owns rendering, local link history and
+Back/Forward. General file-browser Markdown activation uses the same reader.
