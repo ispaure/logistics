@@ -5,6 +5,17 @@ file browsers, including the Debug tab browser and comic library. The Features
 tab enables/disables its action using the existing unified `Feature` API. Comics
 password support belongs to Comics and does not depend on this action being enabled.
 
+## Using this feature
+
+Open **Debug → Open File Browser…**, select files/folders, then right-click
+and choose **Archives → Create encrypted ZIP…**. The same action is available
+in feature-hosted browsers while Archives is enabled.
+
+See [shared setup and resource paths](../../../CONFIGURATION.md) and the
+[Logistics feature index](../../../README.md#features) for application-wide setup.
+
+## Password configuration
+
 Place this in `remoteConfig.ini` beside a file or inside a selected folder:
 
 ```ini
@@ -19,6 +30,8 @@ disabled, so percent signs work. `[DEFAULT]` passwords are ignored; the password
 must be an explicit key in `[LogisticsZIP]`. INI syntax trims surrounding whitespace; use a
 password without leading/trailing whitespace. The INI stores plaintext: keep real
 passwords out of Git and limit access to the configuration.
+
+## Creation and verification
 
 Creation uses the configured password, or asks for a nonempty password and matching
 confirmation when any selected item has no configured password. The entered password
@@ -42,6 +55,8 @@ verification are retained, and source changes abort publication. Ordinary empty
 directories have no secret payload and may have unencrypted directory headers;
 their names are visible like all ZIP member names.
 
+## Progress and cancellation
+
 ZIP creation uses the shared background progress widget. The dialog reports
 assessment, source hashing, streaming creation and verification. **Cancel ZIP
 creation**, Escape or closing the dialog requests cancellation between chunks,
@@ -49,12 +64,3 @@ including while verifying. Temporary archives are discarded; sources and existin
 destinations are retained. Cancellation is checked once more before publication.
 The dialog stays alive until its worker has stopped; failures and cancellation
 leave it open with an explanation. Completion after publication remains success.
-
-## Using this feature
-
-Open **Debug → Open File Browser…**, select files/folders, then right-click
-and choose **Archives → Create encrypted ZIP…**. The same action is available
-in feature-hosted browsers while Archives is enabled.
-
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.

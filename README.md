@@ -20,8 +20,7 @@ Logistics is a personal Python/PySide6 desktop toolbox for managing local and re
 The shared launchers install `uv` when needed, resolve the requested Python version,
 and synchronize [dependencies](Python/pyproject.toml) from [uv.lock](Python/uv.lock)
 into the root `.venv`. The current lock targets Python 3.12.2. Initial setup
-requires internet access. The entry point is
-`Python/launch.py`; [launch_config.ini](launch_config.ini) controls launcher paths.
+requires internet access. The entry point is `Python/launch.py`; [launch_config.ini](launch_config.ini) controls launcher paths.
 
 ## Finding your tools
 
@@ -38,8 +37,8 @@ supported. Ordinary transfers do not require a filesystem driver.
 **Debug** hosts standalone maintenance workflows and **Open File Browser…**.
 The browser navigates any selected root with list, tile and column views, file
 information, previews and enabled features' selection actions. Dedicated feature
-pages provide other controls, such as Links and Smart Home. **Servers** shows
-contributed server controls when available.
+pages provide other controls, such as Links and Smart Home. Minecraft server
+controls appear within the selected folder’s section.
 
 **Features** enables or disables integrations for the current session. Hard
 dependencies determine availability, and disabling a feature removes its browser
@@ -106,25 +105,19 @@ PYTHONPATH=Python .venv/bin/python -m unittest discover -s Python/tests -v
 
 On Windows PowerShell, set `$env:PYTHONPATH = "Python"` and run `.venv/Scripts/python.exe -m unittest discover -s Python/tests -v`.
 
-For the complete portable check runner (both repositories’ suites plus historical
-comic compression comparisons), use the project interpreter:
+For both repositories' suites and the historical comic compression comparison,
+use the same project interpreter:
 
 ```sh
-python Python/tests/run_platform_checks.py
+.venv/bin/python Python/tests/run_platform_checks.py
 ```
 
-[Cross-platform CI and local testing](Python/tests/PLATFORM_CHECKS.md) cover Windows,
-macOS, Ubuntu and Fedora 43 userspace in a container. Tests use disposable fixtures
-and headless Qt. Desktop interaction, real remote mounts and external integrations
-still require separate validation.
+On Windows, use `.venv/Scripts/python.exe Python/tests/run_platform_checks.py`.
+The runner configures the import path and headless Qt automatically. See
+[cross-platform testing](Python/tests/PLATFORM_CHECKS.md) for CI and platform details,
+[UI architecture](Python/features/UI_ARCHITECTURE.md) for extension conventions,
+and [maintenance notes](Python/MAINTENANCE.md) for remaining validation gaps.
 
-The suite covers feature startup ordering, folder-source refresh and selection,
-generic action dispatch, main navigation, comics, images, Calibre exports, simulated
-FUSE recovery, and Perforce command forwarding. Core UI tests supply mock feature contributions and use Qt's offscreen
-platform; they do not mount remotes or launch external applications. See the
-[maintenance notes](Python/MAINTENANCE.md) for the main remaining gaps.
-
-Plex package/database maintenance and downloader command construction are covered
-by temporary fixtures and mocked processes in `Python/tests/test_plex.py` and
-`Python/tests/test_youtube_downloader.py`. These checks do not run a server,
-download media, update packages or perform remote transfers.
+Tests cover application startup, contributions, local fixtures and simulated
+failures. Desktop interaction, real remote transfers/mounts, external applications
+and installed drivers require separate validation.

@@ -43,9 +43,11 @@ The launcher also has `ensure_user_dir = Server`; keep it aligned if you change
 the managed root. Changing launcher creation alone does not change application paths.
 
 `[Folders] excluded_remote_names` removes listed remote names from the Folders
-view. `excluded_folder_name_suffixes` hides matching local and remote folder suffixes. Exclusions
-are comma-separated; excluding a remote does not delete it or exclude its local
-folder. Dedicated local sources, such as Dropbox, remain separately selectable.
+view. `excluded_folder_name_suffixes` hides matching local and remote folder names
+by suffix. Both lists are comma-separated and case-insensitive. Excluding a remote
+by exact name does not exclude its local folder; suffix exclusions apply to both.
+These filters affect discovery, not files on disk. Dedicated local sources, such
+as Dropbox, remain separately selectable.
 
 ## Private resource directories
 
