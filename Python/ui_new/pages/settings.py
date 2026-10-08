@@ -50,17 +50,12 @@ class FeatureSettingsPanel(qt.QWidget):
         self.feature_name = state.name
         self.custom = {}
         self.config = None
-        self._toggle_error = ''
         self.layout = qt.QVBoxLayout(self)
         self.title = qt.QLabel(state.label)
         font = self.title.font(); font.setPointSize(font.pointSize() + 5); font.setBold(True)
         self.title.setFont(font)
         self.title.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         self.layout.addWidget(self.title)
-        self.enabled = qt.QCheckBox('Enabled for this session')
-        self.enabled.toggled.connect(self._toggle)
-        self.enabled.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
-        self.layout.addWidget(self.enabled)
         self.status = qt.QLabel()
         self.status.setWordWrap(True)
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
@@ -71,23 +66,11 @@ class FeatureSettingsPanel(qt.QWidget):
         self.content.addStretch(1)
         self.refresh(state)
 
-    def _toggle(self, enabled):
-        self._toggle_error = ''
-        try:
-            registry.set_feature_enabled(self.feature_name, enabled)
-        except Exception as error:
-            self._toggle_error = str(error)
-            self.status.setText(self._toggle_error)
-            qt.QTimer.singleShot(0, lambda: self.refresh(self._state()))
-
     def _state(self):
         return next(state for state in registry.get_feature_states() if state.name == self.feature_name)
 
     def refresh(self, state=None):
         state = state or self._state()
-        with qt.QSignalBlocker(self.enabled):
-            self.enabled.setChecked(state.enabled)
-        self.enabled.setEnabled(state.available)
         entries = [entry.contribution for entry in registry.get_settings() if entry.feature_name == state.name]
         active = set()
         paths = []
@@ -118,12 +101,10 @@ class FeatureSettingsPanel(qt.QWidget):
             self.content.insertWidget(self.content.count() - 1, self.config, 1)
         elif self.config is not None:
             self.config.add_paths(paths)
-        if self._toggle_error:
-            self.status.setText(self._toggle_error)
-        elif not state.available:
+        if not state.available:
             self.status.setText('Required feature dependencies are unavailable.')
         elif not state.enabled:
-            self.status.setText('Enable this feature to show its custom settings. Existing edits are retained.')
+            self.status.setText('Enable this feature under Features to show its custom settings. Existing edits are retained.')
         elif not entries and not paths:
             self.status.setText('This feature has no additional settings. Use Configuration for shared application settings.')
         else:
