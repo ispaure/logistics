@@ -1,19 +1,9 @@
 # Minecraft Feature
 
-For usage instructions, see the [user guide](user_docs/index.md). This README
-covers development, implementation details and validation.
-
+Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
+and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
 Provides Minecraft server integration for Logistics.
-
-## Using this feature
-
-Select a local folder in **Folders** containing detected servers. Its Minecraft
-section lets you choose a server, launch it, open its folder/documentation and edit
-properties. Discovery alone does not start servers.
-
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.
 
 ## Responsibilities
 
@@ -30,7 +20,6 @@ See [shared setup and resource paths](../../../CONFIGURATION.md) and the
 - `server.py` contains the `MinecraftServer` model and server actions.
 - `folder_widget.py` contains the server selector and controls.
 - `ui_contributions.py` contributes the Minecraft section to Folders.
-- `__init__.py` exposes the feature to the Logistics feature registry.
 
 ## Detection
 
@@ -53,10 +42,3 @@ wiki = https://minecraft.wiki/
 ```
 
 Script paths are relative to the server directory. Include entries for the platforms you use. Missing launch settings prevent launching; missing documentation prevents opening the wiki. Property edits modify the server's `server.properties`.
-
-## Initialization
-
-This feature does not require startup initialization.
-
-It is discovered by the Logistics feature registry and performs no work until
-the Folders page requests Minecraft server information.

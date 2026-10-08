@@ -1,41 +1,23 @@
 # Flight Simulator Feature
 
-For usage instructions, see the [user guide](user_docs/index.md). This README
-covers development, implementation details and validation.
-
+Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
+and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
 Provides flight-simulator-related integration for Logistics.
-
-## Using this feature
-
-The X-Plane presets are exposed on **Debug** while Flight Simulator is enabled.
-Supply the private General software presets before applying them. These presets
-do not use the public software download manifest.
-
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.
 
 ## Responsibilities
 
 - Detect flight simulator installation and preference paths.
 - Apply X-Plane 12 graphics settings.
 - Apply X-Plane 12 window-position presets.
-- Keep flight-simulator-specific behavior isolated from Logistics core.
 - Allow flight simulator support to remain optional.
 
 ## Structure
 
 - `detection.py` resolves X-Plane installation and preference paths.
 - `actions.py` applies X-Plane settings and preset configurations.
-- `__init__.py` exposes the feature to the Logistics feature registry.
 
 The Flight Sim UI only presents controls and delegates behavior to this feature package.
-
-## Initialization
-
-This feature does not require startup initialization.
-
-It is discovered and loaded by the Logistics feature registry, but performs no work until flight simulator functionality is used.
 
 ## X-Plane 12
 

@@ -1,18 +1,9 @@
 # Perforce Feature
 
-For usage instructions, see the [user guide](user_docs/index.md). This README
-covers development, implementation details and validation.
-
+Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
+and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
 Offers a Launch P4D action for configured local folders. Launching is supported only on Linux; the action is disabled on other platforms.
-
-## Using this feature
-
-Select a configured local folder in **Folders**. The Perforce section exposes
-**Launch P4D** and **Open P4 Console** when their Linux prerequisites are met.
-
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.
 
 ## Configuration
 
@@ -33,7 +24,10 @@ The action launches `./<p4d_path> -C1 -r ./<data_path> -p <port>` in a new termi
 
 `Open P4 Console` opens an interactive Bash terminal in the server folder on Linux. Place the executable `p4` client alongside `remoteConfig.ini`, or install it on your system PATH. The button is disabled when no client is found. Start the server before issuing commands.
 
-In this console, type `p4 -u marca passwd`, `p4 info`, or other normal P4 commands. A shell function supplies the client path and configured server address automatically; numeric ports use `localhost:<port>`. Interactive password prompts work normally. Connection settings apply only to this terminal, and the explicit port keeps commands targeting this server even when a P4 configuration file specifies another port.
+The console defines a shell function supplying the client path and configured server
+address (numeric ports become `localhost:<port>`). Preserve interactive password
+prompts and explicit port selection, which prevents a P4 config file from redirecting
+commands to a different server. Console command examples belong to the user guide.
 
 ## Structure
 

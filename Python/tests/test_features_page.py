@@ -86,5 +86,11 @@ class FeaturesPageTests(unittest.TestCase):
                 with patch('ui_new.pages.features.open_markdown') as opened:
                     button.click()
                 opened.assert_called_once_with(guide, parent=self.page.window())
+                with patch('ui_new.pages.features.open_markdown') as opened, \
+                        patch.object(qt.QApplication, 'keyboardModifiers',
+                                     return_value=qt.Qt.KeyboardModifier.AltModifier):
+                    button.click()
+                opened.assert_called_once_with(guide, parent=self.page.window())
+                self.assertIn('Alt', button.toolTip())
                 missing = self.page.tree.itemWidget(self.item('test_missing'), 4)
                 self.assertFalse(missing.isEnabled())

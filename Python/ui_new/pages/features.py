@@ -57,7 +57,7 @@ class FeaturesPage(qt.QWidget):
                 help_button = qt.QPushButton('User guide')
                 help_button.setAccessibleName(f'{state.label} user guide')
                 help_button.setEnabled(guide.is_file())
-                help_button.setToolTip('Open user documentation' if guide.is_file() else 'No user guide is installed.')
+                help_button.setToolTip('Open user documentation (hold Alt to edit)' if guide.is_file() else 'No user guide is installed.')
                 help_button.clicked.connect(lambda checked=False, path=guide: open_markdown(path, parent=self.window()))
                 self.tree.setItemWidget(item, 4, help_button)
 

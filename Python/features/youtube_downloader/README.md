@@ -1,18 +1,9 @@
 # YouTube Downloader Feature
 
-For usage instructions, see the [user guide](user_docs/index.md). This README
-covers development, implementation details and validation.
-
+Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
+and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
 Provides configured YouTube channel/playlist downloads for Logistics.
-
-## Using this feature
-
-Select a local folder with downloader configuration in **Folders**, then open
-**YouTube Downloader…**. Its dialog manages downloads and optional remote sync.
-
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.
 
 ## Responsibilities
 

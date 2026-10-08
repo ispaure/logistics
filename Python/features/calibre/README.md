@@ -1,18 +1,9 @@
 # Calibre Feature
 
-For usage instructions, see the [user guide](user_docs/index.md). This README
-covers development, implementation details and validation.
-
+Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
+and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
 Provides Calibre integration for Logistics.
-
-## Using this feature
-
-Select a local folder in **Folders** that contains an immediate child Calibre
-library. Its Calibre section provides a library selector and launch/export controls.
-
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.
 
 ## Responsibilities
 
@@ -20,7 +11,6 @@ See [shared setup and resource paths](../../../CONFIGURATION.md) and the
 - Represent and operate on Calibre libraries.
 - Launch libraries in Calibre.
 - Export supported book formats to external reading devices.
-- Keep Calibre-specific behavior isolated from Logistics core.
 
 ## Structure
 
@@ -30,7 +20,6 @@ See [shared setup and resource paths](../../../CONFIGURATION.md) and the
 - `export.py` builds a read-only export plan and stages verified copies before replacing files and pruning obsolete exports.
 - `launching.py` resolves native/bundled/Flatpak executables and launches them with argument lists.
 - `actions.py` exposes Calibre operations to the Logistics UI.
-- `__init__.py` exposes the feature to the Logistics feature registry.
 
 ## Library Detection
 
@@ -39,12 +28,6 @@ A Logistics Local folder is considered Calibre-supported when at least one of it
 `metadata.db`
 
 Only immediate child folders are checked. Calibre support no longer depends on a `Calibre` section in `remoteConfig.ini`.
-
-## Initialization
-
-This feature does not require startup initialization.
-
-It is discovered and loaded by the Logistics feature registry, but performs no work until Calibre functionality is used.
 
 ## Notes
 

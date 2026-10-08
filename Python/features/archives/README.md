@@ -1,22 +1,13 @@
 # Archives
 
-For usage instructions, see the [user guide](user_docs/index.md). This README
-covers development, implementation details and validation.
-
+Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
+and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
 This feature contributes **Archives → Create encrypted ZIP…** to all Logistics
-file browsers, including the Debug tab browser and comic library. The Features
-tab enables/disables its action using the existing unified `Feature` API. Comics
-password support belongs to Comics and does not depend on this action being enabled.
-
-## Using this feature
-
-Open **Debug → Open File Browser…**, select files/folders, then right-click
-and choose **Archives → Create encrypted ZIP…**. The same action is available
-in feature-hosted browsers while Archives is enabled.
-
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.
+file browsers, including the Debug tab browser and comic library. Comics password support belongs to Comics and does not depend on this action
+being enabled. `__init__.py:register()` declares the action; `ui/create_zip.py`
+owns the dialog and captures input for shared ZIP workers. Browser wiring belongs
+to [the central guide](../FILE_BROWSER.md).
 
 ## Password configuration
 
@@ -42,9 +33,6 @@ confirmation when any selected item has no configured password. The entered pass
 is not saved to the INI. A ZIP has one password: conflicting configured passwords,
 or an entered fallback different from a selected item's configured password, require
 separate ZIPs. Sources are never deleted and existing outputs are never overwritten.
-A single file `Comic.cbz` suggests `Comic.zip` beside the source, containing the
-original `Comic.cbz`; a folder `Books` suggests `Books.zip` beside that folder.
-Multiple selections suggest `Selection.zip`.
 Selected folders keep their own root directories. Unsafe paths, symbolic links,
 colliding names and outputs inside sources are rejected. Files are AES-256 encrypted,
 verified by decrypted hashes before publication. Filenames are visible without a
@@ -68,3 +56,10 @@ including while verifying. Temporary archives are discarded; sources and existin
 destinations are retained. Cancellation is checked once more before publication.
 The dialog stays alive until its worker has stopped; failures and cancellation
 leave it open with an explanation. Completion after publication remains success.
+
+## Validation
+
+Use the [project test commands](../../../README.md#development).
+`test_archive_password_ui.py` checks dialog/password behavior; commonUtils ZIP
+creation tests check source validation, cancellation, verification and publication.
+Keep this workflow's chunk-level cancellation separate from Comics' per-comic boundary.

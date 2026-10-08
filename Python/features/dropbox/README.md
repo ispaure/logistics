@@ -1,19 +1,9 @@
 # Dropbox Feature
 
-For usage instructions, see the [user guide](user_docs/index.md). This README
-covers development, implementation details and validation.
-
+Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
+and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
 Provides Dropbox-specific maintenance tools for Logistics.
-
-## Using this feature
-
-Choose the detected **Dropbox** source on **Folders**, select a folder, then
-open **Conflicting Copies…**. Dropbox is an optional source; it is not required
-for Logistics resources or managed local folders.
-
-See [shared setup and resource paths](../../../CONFIGURATION.md) and the
-[Logistics feature index](../../../README.md#features) for application-wide setup.
 
 ## Responsibilities
 
@@ -27,7 +17,6 @@ See [shared setup and resource paths](../../../CONFIGURATION.md) and the
 - `detection.py` locates Dropbox account roots and lists their folders.
 - `ui_contributions.py` contributes folder sources and the cleanup workflow.
 - `conflicts.py` contains conflicting-copy detection, reporting, and cleanup behavior.
-- `__init__.py` exposes the feature to the Logistics feature registry.
 
 ## Conflicting Copy Safety
 
@@ -43,9 +32,3 @@ Deletion is aborted when:
 - A conflicting filename cannot be interpreted safely.
 
 When either condition occurs, no conflicting copies are deleted.
-
-## Initialization
-
-This feature does not require startup initialization.
-
-It is discovered by the Logistics feature registry but performs no work until a Dropbox maintenance action is used.
