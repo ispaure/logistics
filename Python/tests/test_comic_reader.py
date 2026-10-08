@@ -240,6 +240,9 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.assertFalse(window.cover_pixmap.isNull())
         self.assertIn('Series: Test series', window.preview.toPlainText())
         self.assertIn('Author: Writer', window.preview.toPlainText())
+        self.assertEqual([window.file_browser.tabs.tabText(index) for index in range(window.file_browser.tabs.count())],
+                         ['File Information', 'Comic Metadata'])
+        self.assertNotIn('Panels', [button.text() for button in window.findChildren(qt.QToolButton)])
         for mode in (1, 2, 0):
             window.view_selector.setCurrentIndex(mode)
             self.wait(window)

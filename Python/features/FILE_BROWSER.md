@@ -86,7 +86,7 @@ with a subclass of the original type.
 
 ## Panels, selection and activation
 
-Panels extend generic File Information and appear in the Panels menu. Return
+All applicable panels appear as tabs alongside generic File Information. Return
 `BrowserDetails` from loaders, not widgets. Panel/thumbnail loaders execute on
 browser workers and must not access Qt widgets or prompt for user input. Report
 unavailable/locked previews through returned details; prompt only from an explicit
