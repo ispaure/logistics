@@ -350,6 +350,37 @@ The established output rules are preserved:
 
 The uniform-color detection bug was subsequently fixed with approval: the shared detector checks mean chroma distance from neutral as well as the existing variation test, with the same tolerance. Uniform colors and sufficiently tinted pages now receive color quality 60. This intentionally changes their compressed bytes and can change whether WebP meets the retention threshold; marked archives remain skipped.
 
+### ComicRack compatibility: rebuilding page records
+
+**Do not merge old page records when compression changes page files.** Discard
+all children of `Pages`, including old page attributes, per-page extension data,
+comments and processing instructions. Generate fresh indices, `ImageSize` byte
+counts, widths and heights from the final selected images; only page zero receives
+the synthesized `FrontCover` type. `PageCount` must match those images.
+
+Evidence for this policy:
+
+- In the chat **Switch folder sources to tabs**, October 2, 2026 at 12:19 EDT,
+  the maintainer explicitly said: “ok yeah it's ok to not preserve the attributes,
+  id rather have it that way.” This followed a discussion of losing `Bookmark`,
+  `DoublePage` and existing `Type` attributes during rebuilding.
+- The implementation before commit
+  [`8537151`](https://github.com/ispaure/logistics/commit/85371518f610d3d82d1d4eaab2038ee827ddbdab)
+  skipped the old `Pages` contents and generated new records. Structural parsing
+  in [`8cb4676`](https://github.com/ispaure/logistics/commit/8cb46761cf902cc732ab8376440833abfc559b79)
+  retained that policy.
+- On October 8, 2026, in **Map RemoteCredentials and Software**, the maintainer
+  explained that keeping stale information after modifying page files causes
+  ComicRack to crash when opening the comic. This is a maintainer-reported
+  compatibility issue; our tests do not run ComicRack or reproduce its crash.
+
+This does not require deleting book-level metadata or comments outside `Pages`.
+Metadata-only edits keep image bytes unchanged and preserve page records. Image
+ICC/EXIF handling is separate: the October 2 instruction at 12:56 EDT explicitly
+requested preserving color profiles and EXIF in the shared image compressor.
+The regression suite checks that obsolete page records and their contents are
+discarded and that generated values match the actual output images.
+
 ## Output-Sensitive Findings Left Unchanged
 
 These need a deliberate policy decision because fixing them changes page bytes or metadata:

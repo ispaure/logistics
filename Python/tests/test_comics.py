@@ -164,7 +164,10 @@ class ComicsTests(unittest.TestCase):
     def test_xml_formatting_variations_rebuild_pages_and_preserve_metadata(self):
         variants = [
             '<ComicInfo><Title>A &amp; B</Title><PageCount>99</PageCount>'
-            '<Pages><Page Image="98" Bookmark="Old" DoublePage="True" /></Pages></ComicInfo>',
+            '<Pages><!-- stale page comment --><?stale page?>'
+            '<Page Image="98" ImageSize="999999" ImageWidth="999" ImageHeight="888" '
+            'Bookmark="Old" DoublePage="True" Type="Deleted" Custom="obsolete">'
+            '<OldMetadata>obsolete</OldMetadata></Page></Pages></ComicInfo>',
             '<ComicInfo>\n\t<Title>A &amp; B</Title>\n<PageCount>99</PageCount>\n'
             '\t<Pages>\n<Page Image="98"/>\n</Pages>\n</ComicInfo>',
             '<ComicInfo><Title>A &amp; B</Title><PageCount>99</PageCount><Pages/></ComicInfo>',
@@ -186,6 +189,17 @@ class ComicsTests(unittest.TestCase):
                     self.assertIsNone(pages[1].get('Type'))
                     self.assertTrue(all('Bookmark' not in page.attrib and 'DoublePage' not in page.attrib
                                         for page in pages))
+                    for index, page in enumerate(pages):
+                        payload = archive.read(f'{index + 1:02}.webp')
+                        with Image.open(BytesIO(payload)) as image:
+                            expected = dict(Image=str(index), ImageSize=str(len(payload)),
+                                            ImageWidth=str(image.width), ImageHeight=str(image.height))
+                        if index == 0:
+                            expected['Type'] = 'FrontCover'
+                        self.assertEqual(page.attrib, expected)
+                        self.assertEqual(list(page), [])
+                    self.assertNotIn(b'stale page', serialized)
+                    self.assertNotIn(b'obsolete', serialized)
                     self.assertIn(b'\n  <PageCount>2</PageCount>', serialized)
 
     def test_xml_namespaces_comments_and_metadata_content_are_preserved(self):
