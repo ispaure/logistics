@@ -92,7 +92,7 @@ class FolderSourceTests(unittest.TestCase):
             self.app.processEvents()
             read_names.assert_called_once_with()
             known_index = next(index for index in range(window.tabs.count())
-                               if window.tabs.tabText(index) == 'Known Folders')
+                               if window.tabs.tabText(index) == 'Folder Hub')
             self.assertEqual(window.tabs.tabText(0), 'File Browser')
             window.tabs.setCurrentIndex(known_index)
             self.app.processEvents()

@@ -3,6 +3,7 @@
 from commonUtils.ui import pyside as qt
 from commonUtils.settings import get_wheel_navigation_settings
 from commonUtils.ui.page_wheel import PageWheel
+from shiboken6 import isValid
 
 PAGE_TURN_INTERVAL_MS = 225
 
@@ -54,6 +55,8 @@ class ReaderKeyHandler(qt.QObject):
         self.window.step(self.direction)
 
     def eventFilter(self, watched, event):
+        if not isValid(self.window):
+            return False
         if watched is self.window.canvas and event.type() == qt.QEvent.Type.Wheel:
             event.accept()
             if (event.modifiers() or self.window.busy or self.window.file_loading or self.window.closing
@@ -67,9 +70,9 @@ class ReaderKeyHandler(qt.QObject):
         if watched is self.window and event.type() in (
                 qt.QEvent.Type.WindowDeactivate, qt.QEvent.Type.Hide, qt.QEvent.Type.Close):
             self.stop()
-        if (not isinstance(watched, qt.QWidget) or watched.window() is not self.window
-                or event.type() not in (qt.QEvent.Type.ShortcutOverride, qt.QEvent.Type.KeyPress,
-                                        qt.QEvent.Type.KeyRelease)):
+        if (event.type() not in (qt.QEvent.Type.ShortcutOverride, qt.QEvent.Type.KeyPress,
+                                qt.QEvent.Type.KeyRelease) or not isinstance(watched, qt.QWidget)
+                or (watched is not self.window and not self.window.isAncestorOf(watched))):
             return super().eventFilter(watched, event)
         if event.type() == qt.QEvent.Type.KeyRelease and event.key() == self.held_key:
             if not event.isAutoRepeat():

@@ -16,16 +16,19 @@ class EditorService(qt.QObject):
 
         if self.window is None:
             self.window = EditorWindow()
+            self.window.destroyed.connect(self._window_destroyed)
             self.window.idle.connect(self.idle)
             self.window.saved.connect(self.saved)
         if not self.window.tabs.count():
             self.window.new_document()
         if path is not None:
             self.window.open_path(path, force=force)
-        self.window.show()
-        self.window.raise_()
-        self.window.activateWindow()
+        from ui_new.documents import show_document
+        show_document(self.window)
         return self.window
+
+    def _window_destroyed(self, *args):
+        self.window = None
 
     def prepare_close(self):
         if self.window is None:
