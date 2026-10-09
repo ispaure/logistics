@@ -24,6 +24,9 @@ tabs or collection indexing.
   keys; hold Left/Right or a page button to turn every 450 ms. Nearby pages are
   preloaded in the background. Holding stops at the first/last page; a fresh press
   is required to move into another comic. Home/End jump to the first/last page.
+  All arrow keys repeat at a steady 225 ms cadence while held, waiting for each
+  displayed page before continuing. Scroll down/up over the page to move forward/
+  backward; small trackpad deltas accumulate and a cooldown limits rapid jumps.
   F11 toggles full screen.
 - Use Previous/Next File for neighboring CBZs. Reading direction follows comic
   metadata; View lets you choose single-page or two-page display.

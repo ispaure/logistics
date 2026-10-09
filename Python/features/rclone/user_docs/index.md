@@ -24,6 +24,14 @@ available options before starting: the operation changes files at its destinatio
 If several credentials define the same remote name, choose the intended credential;
 its label does not change the local or mount path.
 
+GUI Push/Pull opens an integrated progress window with live transfer stats, command
+output, operation state, and retry attempt. The window stays open after completion.
+Success requires a normal exit with code zero; failures show the exit code and
+recent output. rclone retains its own retry policy, and a successful retry reports
+which attempt succeeded. **Cancel** stops the process; completed destination changes
+remain. Closing Logistics cancels active integrated transfers and waits for them
+to stop. Explicit synchronous/query callers retain their existing execution API.
+
 | Location | Default path |
 | --- | --- |
 | Local copy | `~/Server/Local/<folder>` |
