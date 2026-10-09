@@ -1,8 +1,10 @@
 """Window-scoped navigation with a steady hold cadence independent of OS repeats."""
 
 from commonUtils.ui import pyside as qt
+from time import monotonic
 
-PAGE_TURN_INTERVAL_MS = 450
+PAGE_TURN_INTERVAL_MS = 225
+WHEEL_COOLDOWN_SECONDS = .25
 
 
 class ReaderKeyHandler(qt.QObject):
@@ -11,6 +13,9 @@ class ReaderKeyHandler(qt.QObject):
         self.window = window
         self.held_key = None
         self.direction = None
+        self._wheel_delta = 0
+        self._wheel_time = 0
+        self._wheel_event_time = 0
         self.timer = qt.QTimer(self)
         self.timer.setInterval(PAGE_TURN_INTERVAL_MS)
         self.timer.setTimerType(qt.Qt.TimerType.PreciseTimer)
@@ -51,6 +56,28 @@ class ReaderKeyHandler(qt.QObject):
         self.window.step(self.direction)
 
     def eventFilter(self, watched, event):
+        if watched is self.window.canvas and event.type() == qt.QEvent.Type.Wheel:
+            event.accept()
+            now = monotonic()
+            if (event.modifiers() or self.window.busy or self.window.file_loading
+                    or self.window.closing or qt.QApplication.activeModalWidget()
+                    or qt.QApplication.activePopupWidget()):
+                return True
+            if now - self._wheel_time < WHEEL_COOLDOWN_SECONDS:
+                self._wheel_delta = 0
+                return True
+            delta = event.pixelDelta().y() if not event.pixelDelta().isNull() else event.angleDelta().y()
+            threshold = 60 if not event.pixelDelta().isNull() else 120
+            if now - self._wheel_event_time > 1 or self._wheel_delta * delta < 0:
+                self._wheel_delta = 0
+            self._wheel_event_time = now
+            self._wheel_delta += delta
+            if abs(self._wheel_delta) >= threshold:
+                self.stop()
+                self.window.step(-1 if self._wheel_delta > 0 else 1)
+                self._wheel_delta = 0
+                self._wheel_time = now
+            return True
         if watched is self.window and event.type() in (
                 qt.QEvent.Type.WindowDeactivate, qt.QEvent.Type.Hide, qt.QEvent.Type.Close):
             self.stop()
