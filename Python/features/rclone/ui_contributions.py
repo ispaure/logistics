@@ -104,6 +104,15 @@ def _create_page(parent=None):
     return RclonePage(parent=parent)
 
 
+def _software_settings_note(parent):
+    from commonUtils.ui import pyside as qt
+    note = qt.QLabel('Download settings below are grouped by platform. To change rclone versions, '
+                    'update the version, URL, ZIP member, destination and both hashes together. '
+                    'SHA-256 checks remain required; saving does not download or replace rclone.', parent)
+    note.setWordWrap(True)
+    return note
+
+
 def get_contributions() -> FeatureContributions:
     """Return UI contributions provided by rclone."""
 
@@ -136,6 +145,9 @@ def get_contributions() -> FeatureContributions:
                 settings_id='credentials',
                 create_widget=_create_page,
                 order=10
-            )
+            ),
+            SettingsContribution(
+                'Software downloads', 'software_downloads', _software_settings_note,
+                config_files=(Path(__file__).with_name('config.ini'),), order=20)
         ]
     )

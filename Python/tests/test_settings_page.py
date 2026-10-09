@@ -79,6 +79,13 @@ class SettingsPageTests(unittest.TestCase):
         contributions = get_contributions()
         self.assertEqual(contributions.pages, [])
         self.assertEqual(contributions.settings[0].name, 'Credential packages')
+        from features.contributions import RemoteFolderSourceContribution
+        self.assertEqual([entry.settings_id for entry in contributions.settings],
+                         ['credentials', 'software_downloads'])
+        self.assertTrue(all(isinstance(entry, RemoteFolderSourceContribution)
+                            for entry in contributions.remote_folder_sources))
+        self.assertEqual(len(contributions.remote_folder_sources), 1)
+
 
     def test_settings_api_rejects_duplicate_identity(self):
         contribution = RegisteredContribution('test', 'Test', SettingsContribution('Custom', 'custom', lambda parent: None))

@@ -4,7 +4,7 @@ Configuration access for the Logistics Smart Home feature.
 
 from pathlib import Path
 
-from commonUtils import configUtils
+from commonUtils.fileTypes.iniType import INIFile
 
 
 PHILIPS_HUE_SECTION = 'PhilipsHue'
@@ -20,8 +20,6 @@ def get_config_file_path() -> Path:
 def get_philips_hue_bridge_address() -> str:
     """Return the configured Philips Hue bridge address."""
 
-    return configUtils.config_section_map(
-        get_config_file_path(),
-        PHILIPS_HUE_SECTION,
-        BRIDGE_ADDRESS_KEY
-    )
+    ini = INIFile(get_config_file_path()).read()
+    return ini.get(PHILIPS_HUE_SECTION, BRIDGE_ADDRESS_KEY + '_str',
+                   fallback=ini.get(PHILIPS_HUE_SECTION, BRIDGE_ADDRESS_KEY))

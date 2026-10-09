@@ -11,7 +11,7 @@ individual workflows and platform limitations.
 | --- | --- | --- |
 | [launch_config.ini](launch_config.ini) | Shared launcher, source directory, entry point and optional home directory creation | Launcher directory |
 | [Python/configFile.ini](Python/configFile.ini) | Server/data roots, resource overrides and folder exclusions | Depends on setting, described below |
-| `Python/features/<feature>/config.ini` | Feature-wide settings, currently Links and Smart Home | Feature-defined |
+| `Python/features/<feature>/config.ini` | Feature-wide settings, including Books, Links, Smart Home and rclone | Feature-defined |
 | `remoteConfig.ini` in a managed folder | Folder-specific integration settings | Feature-defined; usually the selected folder |
 | `logistics_cfg.ini` in a Minecraft server | Server launch scripts and documentation URL | Server directory |
 | [Python/software_manifest.json](Python/software_manifest.json) | Pinned public download versions, URLs, hashes and installation paths | Software resource root |
@@ -20,6 +20,54 @@ These INI files are not interchangeable. Each feature interprets its own section
 there is no universal ancestor inheritance rule. In particular, archive password
 inheritance belongs to [Archives](Python/features/archives/README.md) and
 [Comics](Python/features/comics/README.md#password-protected-cbzs), not rclone credentials.
+
+## Feature INI settings
+
+Feature-wide defaults belong in `Python/features/<feature>/config.ini`, directly
+beside that feature's code. Folder/library-specific configuration keeps its
+existing location. Features with no configurable defaults need no empty INI.
+
+Settings displays INIs as section tabs with one row per key. **Source** retains
+plain-text editing for advanced changes and malformed files. Save is explicit;
+invalid typed values and concurrent disk changes block saving. Comments, key case,
+UTF-8 BOMs and line endings are retained when editing fields.
+
+Logistics opts into the shared commonUtils typed-key schema; the generic
+`INIFile` keeps values as strings:
+
+| Suffix | Value / editor |
+| --- | --- |
+| `_str` | Text |
+| `_int` | Whole number, without a 32-bit widget limit |
+| `_float` | Finite decimal number |
+| `_bool` | Boolean checkbox (`true` / `false`) |
+| `_list-str` | String list, preferably JSON such as `["one", "two"]` |
+| `_list-int`, `_list-float`, `_list-bool` | JSON list of the indicated type |
+| `_mode` | Selected string, with a dropdown when companion choices exist |
+
+For example:
+
+```ini
+[Display]
+preview_bool = true
+scale_float = 1.25
+view_mode = tiles
+view_choices_list-str = ["tiles", "list", "columns"]
+```
+
+`view_mode` stores the selected value; `view_choices_list-str` stores available
+choices. Compact string lists such as `[tiles,list,columns]` also work; quote
+strings containing commas using JSON. A `_mode` without companion choices uses a
+text row. Numeric/list settings use editable text with validation; malformed
+existing values remain visible so they can be corrected. Unsuffixed legacy keys
+are displayed as text and are not automatically renamed. Links and Smart Home
+prefer their new `_str` keys and still accept their old unsuffixed keys.
+
+The [shared configuration guide](Python/commonUtils/configuration/README.md)
+covers schema APIs, editor embedding and gradual migration. Logistics keeps its
+`ui_new.settings` imports as compatibility wrappers; its editor opts into typed
+keys by default. Ordinary users can
+edit these settings in Logistics without writing code.
 
 ## Managed data paths
 
@@ -166,3 +214,18 @@ its own settings layout and INI editors. **Settings → rclone** manages credent
 packages and generated configs. Save explicitly; shared configuration changes may
 require restarting Logistics. Generated `.conf` credentials are managed by rclone’s
 existing controls rather than the general INI editor.
+
+## Rclone download versions
+
+**Settings → rclone** exposes `Python/features/rclone/config.ini`, with one section
+per supported operating system and architecture. These values override rclone's
+entries in `Python/software_manifest.json`; missing override fields use the manifest.
+Other software continues to use the manifest directly.
+
+To select another release, update its version, HTTPS URL, ZIP member, destination
+path and both hashes together. `sha256_str` checks the downloaded ZIP;
+`installed_sha256_str` checks the executable inside it. Hash verification remains
+mandatory. Destination paths must stay inside the configured Software folder.
+Saving changes edits configuration only; provisioning still happens through the
+existing confirmed download flow when the tool is needed. Invalid metadata is
+rejected before it is used.

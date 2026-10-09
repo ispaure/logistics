@@ -79,3 +79,9 @@ used by `test_rclone_structured_ui.py` for local copy/sync/move, dry-run/check, 
 failure and cancellation; cloud credentials and live remote contents are untouched.
 The format follows [rclone JSON logging](https://rclone.org/docs/#use-json-log) and
 [core/stats](https://rclone.org/rc/#core-stats-returns-stats-about-current-transfers).
+
+Rclone download metadata is editable in this feature's `config.ini`, with
+platform-section overrides read by `services.software`. Missing fields fall back
+to the pinned root manifest; other tools still use that manifest. Both download
+and installed hashes remain required. See
+[configuration](../../../CONFIGURATION.md#rclone-download-versions).

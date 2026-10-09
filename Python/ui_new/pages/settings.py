@@ -1,7 +1,8 @@
-"""Sidebar settings host: session features, plain-text configuration and custom layouts."""
+"""Sidebar settings host: session features, structured INI configuration and custom layouts."""
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.text_editor import TextFileEditor
+from ui_new.settings.ini_editor import INISettingsEditor
 from commonUtils.settings import settings_path
 from features import registry
 from .features import FeaturesPage
@@ -16,7 +17,7 @@ class ConfigurationPanel(qt.QWidget):
         self.files.setAccessibleName('Configuration file')
         self.stack = qt.QStackedWidget()
         layout.addWidget(self.files)
-        note = qt.QLabel(description or 'Edit configuration as plain text. Save explicitly. Some settings apply to the next '
+        note = qt.QLabel(description or 'Edit settings by section, or use Source for advanced edits. Save explicitly. Some settings apply to the next '
                         'operation; others require restarting Logistics.')
         note.setWordWrap(True)
         layout.addWidget(note)
@@ -37,7 +38,8 @@ class ConfigurationPanel(qt.QWidget):
         if path is None:
             return
         if path not in self.editors:
-            self.editors[path] = TextFileEditor(path, self)
+            editor_type = INISettingsEditor if path.suffix.lower() == '.ini' else TextFileEditor
+            self.editors[path] = editor_type(path, self)
             self.stack.addWidget(self.editors[path])
         self.stack.setCurrentWidget(self.editors[path])
 
@@ -96,7 +98,8 @@ class FeatureSettingsPanel(qt.QWidget):
 
     def refresh(self, state=None):
         state = state or self._state()
-        entries = [entry.contribution for entry in registry.get_settings() if entry.feature_name == state.name]
+        members = getattr(state, 'members', ()) or (state.name,)
+        entries = [entry.contribution for entry in registry.get_settings() if entry.feature_name in members]
         active = set()
         paths = []
         for entry in entries:
@@ -118,9 +121,10 @@ class FeatureSettingsPanel(qt.QWidget):
                 refresh()
         for key, widget in self.custom.items():
             widget.setVisible(key in active)
-        conventional = Path(registry.__file__).parent / state.name / 'config.ini'
-        if conventional.is_file():
-            paths.append(conventional)
+        for member in members:
+            conventional = Path(registry.__file__).parent / member / 'config.ini'
+            if conventional.is_file():
+                paths.append(conventional)
         if self.config is None and paths:
             self.config = ConfigurationPanel(paths, self)
             self.content.insertWidget(self.content.count() - 1, self.config, 1)
