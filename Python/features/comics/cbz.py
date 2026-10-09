@@ -22,8 +22,7 @@ from commonUtils.debugUtils import *
 from features.images import processing as imageUtils
 import os
 import zipfile
-from tempfile import TemporaryDirectory
-from commonUtils.storage import temporary_directory
+from commonUtils.storage import temporary_directory, temporary_workspace
 from PIL import Image
 from commonUtils.fileTypes import zipType
 from .comicinfo import ComicInfoXML
@@ -147,7 +146,7 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
             return False
         try:
             original_stat = self.path.stat()
-            with TemporaryDirectory(prefix='logistics-cbz-', ignore_cleanup_errors=True) as workspace:
+            with temporary_workspace(prefix='logistics-cbz-', ignore_cleanup_errors=True) as workspace:
                 return self._compress_to_webp(Path(workspace), always_keep_compressed, original_stat,
                                               preserve_animated_and_multipage_originals, progress)
         except Exception as error:
