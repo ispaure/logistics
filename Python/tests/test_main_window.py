@@ -269,6 +269,21 @@ class MainWindowTests(unittest.TestCase):
         self.app.processEvents()
         self.assertIs(window.tabs.currentWidget(), window.documents)
         self.assertFalse(reader.isWindow())
+        window.documents.detach_current(); self.app.processEvents()
+        dock = window.documents.records[reader]['dock']
+        point = window.dlg.mapToGlobal(window.dlg.rect().center())
+        move = qt.QMouseEvent(qt.QEvent.Type.MouseMove,
+                             qt.QPointF(dock.tab_header.mapFromGlobal(point)), qt.QPointF(point),
+                             qt.Qt.MouseButton.NoButton, qt.Qt.MouseButton.LeftButton,
+                             qt.Qt.KeyboardModifier.NoModifier)
+        self.app.sendEvent(dock.tab_header, move)
+        self.assertIs(window.tabs.currentWidget(), window.documents)
+        self.assertTrue(dock.isFloating())
+        from PySide6.QtTest import QTest
+        QTest.mouseDClick(dock.tab_header, qt.Qt.MouseButton.LeftButton)
+        for _ in range(5): self.app.processEvents()
+        self.assertIs(window.tabs.currentWidget(), window.documents)
+        self.assertFalse(dock.isFloating())
         window.dlg.close(); self.app.processEvents()
 
     def test_main_close_waits_for_embedded_extension_then_retries(self):

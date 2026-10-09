@@ -42,8 +42,8 @@ and explore folder sizes with the storage charts.
 
 **Folder Hub** brings your configured local folders and remote sources together.
 The icon sidebar opens a dropdown for **Tools** and a document-list popup. Markdown,
-the Text Editor and comic/EPUB readers use the main document workspace, with
-**Detach** and **Bring back to Logistics** available.
+the Text Editor and comic/EPUB readers share draggable document tabs, floating
+windows, and side-by-side splits. Double-click a floating tab header to return it.
 **Settings** lets you save feature defaults and edit their configuration. Each
 feature settings page has a **User Guide** button in its upper-right corner.
 **Settings → File indexing** controls refresh rules. The default opens saved

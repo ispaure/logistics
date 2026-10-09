@@ -2,6 +2,44 @@
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.document_host import show_document, register_document_host, document_is_open
 from shiboken6 import isValid
+from commonUtils.ui.workspace import Workspace, DockTabHeader
+
+
+class DocumentPane(qt.QWidget):
+    """Keep the original reader/editor as the authority for closing its document."""
+    def __init__(self, window):
+        super().__init__()
+        self.document = window
+        self.view_title = window.windowTitle()
+        self.setMinimumSize(320, 220)
+        layout = qt.QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0)
+        window.setParent(self, qt.Qt.WindowType.Widget)
+        layout.addWidget(window)
+        window.show()
+
+    def prepare_close(self):
+        self.document.close()
+        # DocumentsPage retires the dock after the original close handler accepts
+        # or hides the document. A veto or running worker retains its owner.
+        return False
+
+
+class DocumentWorkspace(Workspace):
+    def __init__(self, page):
+        self.page = page
+        super().__init__(DocumentPane, page, allow_new_tabs=False, dock_group=page)
+        self.close_action.setEnabled(False)  # Keep each reader/editor's own close shortcut.
+        self._drop_target.widget().setText('Drag a reader or editor tab here to bring it back.')
+
+    def eventFilter(self, watched, event):
+        if (event.type() == qt.QEvent.Type.MouseMove and event.buttons() & qt.Qt.MouseButton.LeftButton
+                and isinstance(watched, DockTabHeader) and watched.parentWidget().isFloating()):
+            # Reveal the original docking area as a native floating window moves
+            # over the main application, even when another destination is active.
+            point = watched.mapToGlobal(event.position().toPoint())
+            if self.page.window().frameGeometry().contains(point):
+                self.page.activate()
+        return super().eventFilter(watched, event)
 
 
 class DocumentsPage(qt.QWidget):
@@ -15,31 +53,9 @@ class DocumentsPage(qt.QWidget):
         self._close_events = set()
         self.close_veto = False
         self.closing = False
-        layout = qt.QVBoxLayout(self)
-        self.tabs = qt.QTabWidget()
-        self.tabs.setTabsClosable(True)
-        self.tabs.setMovable(True)
-        self.tabs.setDocumentMode(True)
-        self.tabs.tabCloseRequested.connect(self.close_tab)
-        controls = qt.QWidget()
-        row = qt.QHBoxLayout(controls); row.setContentsMargins(4, 0, 4, 0)
-        self.detach_button = qt.QPushButton('Detach')
-        self.detach_button.clicked.connect(self.detach_current)
-        self.attach_button = qt.QToolButton()
-        self.attach_button.setText('Bring back')
-        self.attach_button.setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.attach_menu = qt.QMenu(self.attach_button)
-        self.attach_menu.aboutToShow.connect(self._attach_menu)
-        self.attach_button.setMenu(self.attach_menu)
-        row.addWidget(self.detach_button); row.addWidget(self.attach_button)
-        self.tabs.setCornerWidget(controls)
-        self.tabs.currentChanged.connect(self._update_controls)
-        layout.addWidget(self.tabs, 1)
-        self.empty = qt.QLabel('Readers and editors open here. Detached documents can be brought back into this window.')
-        self.empty.setWordWrap(True)
-        self.empty.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.empty, 1)
-        self._update_controls()
+        layout = qt.QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0)
+        self.workspace = DocumentWorkspace(self)
+        layout.addWidget(self.workspace)
 
     @property
     def count(self):
@@ -51,114 +67,91 @@ class DocumentsPage(qt.QWidget):
 
     def document_entries(self):
         for window, record in self.records.items():
-            if record['closed']:
-                continue
-            entries = getattr(window, 'document_entries', lambda: [(window.windowTitle(), None)])()
-            for title, tab in entries:
-                yield window, title, tab, record['detached']
+            if not record['closed']:
+                entries = getattr(window, 'document_entries', lambda: [(window.windowTitle(), None)])()
+                for title, tab in entries:
+                    yield window, title, tab, record['detached']
 
     def present(self, window):
         record = self.records.get(window)
         if record and record['detached'] and not record['closed']:
-            window.showNormal() if window.isMinimized() else window.show()
-            window.raise_(); window.activateWindow()
+            self.activate()  # Make its native return area available too.
+            dock = record['dock']
+            dock.showNormal() if dock.isMinimized() else dock.show()
+            dock.raise_(); dock.activateWindow()
             return
         if record is None:
-            record = dict(container=None, flags=window.windowFlags(), native=None, detached=False, closed=False, waiting=set())
+            record = dict(container=None, dock=None, flags=window.windowFlags(), native=None,
+                          detached=False, closed=False, waiting=set())
             self.records[window] = record
             if isinstance(window, qt.QMainWindow):
                 record['native'] = window.menuBar().isNativeMenuBar()
             window.installEventFilter(self)
             window.windowTitleChanged.connect(lambda title, view=window: self._title_changed(view, title))
             window.destroyed.connect(lambda obj=None, view=window: self._destroyed(view))
-            signals = [getattr(window, 'idle', None), getattr(window, 'closed', None),
-                       getattr(getattr(window, 'reader', None), 'idle', None)]
-            for signal in signals:
+            for signal in (getattr(window, 'idle', None), getattr(window, 'closed', None),
+                           getattr(getattr(window, 'reader', None), 'idle', None)):
                 if signal is not None:
                     signal.connect(self.idle)
             if isinstance(window, qt.QDialog):
                 window.finished.connect(lambda result, view=window: self._dialog_finished(view))
         record['closed'] = False
         record['detached'] = False
-        if record.get('return_control') is not None:
-            record['return_control'].hide()
-        if record['container'] is None:
-            container = qt.QWidget()
-            layout = qt.QVBoxLayout(container); layout.setContentsMargins(0, 0, 0, 0)
-            window.setParent(container, qt.Qt.WindowType.Widget)
+        self.activate()
+        if record['dock'] is None:
             if record['native'] is not None:
                 window.menuBar().setNativeMenuBar(False)
-            layout.addWidget(window)
-            record['container'] = container
-            self.tabs.addTab(container, window.windowTitle())
-        self.tabs.setCurrentWidget(record['container'])
+            pane = self.workspace.add_view(window)
+            dock = next(item for item in self.workspace.docks if item.widget() is pane)
+            record['container'], record['dock'] = pane, dock
+            dock.tab_header.installEventFilter(self.workspace)
+            dock.topLevelChanged.connect(lambda floating, view=window: self._docking_changed(view, floating))
+        elif record['dock'].isFloating():
+            self.workspace.adopt(record['dock'])
+        record['dock'].show(); record['dock'].raise_()
+        self.workspace._activate(record['dock'])
         window.show()
-        self.activate()
-        self._update_controls()
         self.changed.emit()
+
+    def _docking_changed(self, window, floating):
+        if window in self.records:
+            self.records[window]['detached'] = floating
+            if not floating and not self.closing and not self.records[window]['closed']:
+                self.activate()
+            self.changed.emit()
 
     def _title_changed(self, window, title):
         record = self.records.get(window)
-        if record and record['container'] is not None:
-            self.tabs.setTabText(self.tabs.indexOf(record['container']), title)
+        if record and record['dock'] is not None:
+            record['dock'].setWindowTitle(title)
         self.changed.emit()
 
     def _unembed(self, window):
         record = self.records.get(window)
-        if record is None or record['container'] is None:
+        if record is None or record['dock'] is None:
             return
-        container = record['container']
-        self.tabs.removeTab(self.tabs.indexOf(container))
+        dock = record['dock']
         if isValid(window):
             window.setParent(None, record['flags'])
             if record['native'] is not None:
                 window.menuBar().setNativeMenuBar(record['native'])
-        record['container'] = None
-        container.deleteLater()
+        record['container'] = record['dock'] = None
+        dock.hide()
+        if dock in self.workspace.docks:
+            self.workspace.remove_view(dock)
+        dock.deleteLater()
 
     def detach_current(self):
-        container = self.tabs.currentWidget()
-        window = next((view for view, record in self.records.items() if record['container'] is container), None)
-        if window is None:
-            return
-        self._unembed(window)
-        self.records[window]['detached'] = True
-        self._return_control(window)
-        window.show(); window.raise_(); window.activateWindow()
-        self._update_controls(); self.changed.emit()
+        self.workspace.detach_active()
 
     def attach(self, window):
         self.records[window]['detached'] = False
         self.present(window)
 
-    def _return_control(self, window):
-        record = self.records[window]
-        control = record.get('return_control')
-        if control is None:
-            if isinstance(window, qt.QMainWindow):
-                control = qt.QToolBar('Logistics', window)
-                control.setMovable(False)
-                control.addAction('Bring back to Logistics', lambda: self.attach(window))
-                window.addToolBar(control)
-            else:
-                control = qt.QPushButton('Bring back to Logistics', window)
-                control.clicked.connect(lambda: self.attach(window))
-                if window.layout() is not None:
-                    window.layout().insertWidget(0, control)
-            record['return_control'] = control
-        control.show()
-
-    def _attach_menu(self):
-        self.attach_menu.clear()
-        for window, record in self.records.items():
-            if record['detached'] and not record['closed'] and isValid(window):
-                self.attach_menu.addAction(window.windowTitle(), lambda view=window: self.attach(view))
-
     def close_tab(self, index):
-        container = self.tabs.widget(index)
-        window = next((view for view, record in self.records.items() if record['container'] is container), None)
-        if window is not None:
-            window.close()  # Its existing close handler protects dirty documents and workers.
+        attached = [dock for dock in self.workspace.docks if not dock.isFloating()]
+        if 0 <= index < len(attached):
+            attached[index].close()
 
     def eventFilter(self, watched, event):
         if watched in self.records:
@@ -171,10 +164,10 @@ class DocumentsPage(qt.QWidget):
         return super().eventFilter(watched, event)
 
     def _retire(self, window):
-        if not isValid(self) or not isValid(self.tabs):
+        if not isValid(self) or not isValid(self.workspace):
             return
         self._unembed(window)
-        self._update_controls(); self.changed.emit()
+        self.changed.emit()
 
     def _dialog_finished(self, window):
         if window in self.records:
@@ -183,21 +176,15 @@ class DocumentsPage(qt.QWidget):
             self.idle.emit()
 
     def _destroyed(self, window):
-        record = self.records.pop(window, None)
+        record = self.records.get(window)
         self._close_events.discard(window)
-        if not isValid(self.tabs):
+        if not isValid(self.workspace):
+            self.records.pop(window, None)
             return
-        if record and record['container'] is not None:
-            self.tabs.removeTab(self.tabs.indexOf(record['container']))
-            record['container'].deleteLater()
-        self._update_controls(); self.changed.emit(); self.idle.emit()
-
-    def _update_controls(self, *args):
-        if not isValid(self.tabs):
-            return
-        self.detach_button.setEnabled(self.tabs.count() > 0)
-        self.attach_button.setEnabled(any(record['detached'] and not record['closed'] for record in self.records.values()))
-        self.empty.setVisible(self.tabs.count() == 0)
+        if record:
+            self._unembed(window)
+            self.records.pop(window, None)
+        self.changed.emit(); self.idle.emit()
 
     def prepare_close(self):
         ready = True
