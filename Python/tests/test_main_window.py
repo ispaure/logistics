@@ -156,11 +156,13 @@ class MainWindowTests(unittest.TestCase):
         self.assertFalse(window.dlg.isVisible())
 
     def test_main_browser_sizes_start_automatically_and_can_be_paused(self):
-        with patch('commonUtils.ui.file_browser.scan_folders', return_value={}) as scan:
+        with patch('commonUtils.directory_index.directory_cache.reconcile_folder',
+                   return_value=Mock(folder_stats=lambda **kwargs: {})) as scan:
             window = self.browser_window()
             browser = window.tabs.widget(0)
             self.wait_browser(browser)
             self.assertTrue(browser.folder_sizes.isChecked())
+            self.assertTrue(browser.folder_sizes.isHidden())
             self.assertTrue(scan.called)
             browser.folder_sizes.setChecked(False)
             self.assertFalse(browser.file_browser.calculate_folder_sizes)
