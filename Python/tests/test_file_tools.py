@@ -131,6 +131,20 @@ class FileToolsWindowTests(_FileToolsFixture):
         self.assertTrue(original.exists())
         self.assertTrue(new.exists())
 
+    def test_scan_without_pyc_files_finishes_progress_and_can_scan_again(self):
+        source = self.file('source.py')
+        dialog = self.dialog(DeletePycDialog)
+        for _ in range(2):
+            dialog.action_button.click()
+            self.wait(dialog)
+            self.assertEqual(dialog.task.bar.maximum(), 1000)
+            self.assertEqual(dialog.task.bar.value(), 1000)
+            self.assertIn('No PYC files found', dialog.task.message.text())
+            self.assertIn('Scan complete', dialog.summary.text())
+            self.assertEqual(dialog.action_button.text(), 'Scan PYC files')
+            self.assertIsNone(dialog._pending)
+        self.assertTrue(source.exists())
+
     def test_cleanup_confirmation_and_results_for_multiple_folders(self):
         first, second = self.file('one/a.pyc'), self.file('two/b.pyc')
         dialog = self.dialog(DeletePycDialog, [first.parent, second.parent])
