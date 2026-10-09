@@ -2,12 +2,13 @@
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.text_editor import TextFileEditor
+from commonUtils.settings import settings_path
 from features import registry
 from .features import FeaturesPage
 
 
 class ConfigurationPanel(qt.QWidget):
-    def __init__(self, paths, parent=None):
+    def __init__(self, paths, parent=None, *, description=None):
         super().__init__(parent)
         self.editors = {}
         layout = qt.QVBoxLayout(self)
@@ -15,7 +16,7 @@ class ConfigurationPanel(qt.QWidget):
         self.files.setAccessibleName('Configuration file')
         self.stack = qt.QStackedWidget()
         layout.addWidget(self.files)
-        note = qt.QLabel('Edit configuration as plain text. Save explicitly. Some settings apply to the next '
+        note = qt.QLabel(description or 'Edit configuration as plain text. Save explicitly. Some settings apply to the next '
                         'operation; others require restarting Logistics.')
         note.setWordWrap(True)
         layout.addWidget(note)
@@ -153,7 +154,8 @@ class SettingsPage(qt.QWidget):
         with qt.QSignalBlocker(self.sidebar):
             self.sidebar.clear()
             items = {}
-            for key, title in (('features', 'Features'), ('configuration', 'Configuration')):
+            for key, title in (('features', 'Features'), ('configuration', 'Configuration'),
+                               ('commonutils', 'commonUtils')):
                 item = qt.QTreeWidgetItem([title])
                 item.setData(0, qt.Qt.ItemDataRole.UserRole, key)
                 self.sidebar.addTopLevelItem(item)
@@ -186,6 +188,11 @@ class SettingsPage(qt.QWidget):
                 source = Path(__file__).resolve().parents[2]
                 panel = ConfigurationPanel([source / 'configFile.ini', source / 'maintenance.ini',
                                             source.parent / 'launch_config.ini'], self)
+            elif key == 'commonutils':
+                panel = ConfigurationPanel([settings_path()], self, description=
+                    'Shared wheel navigation settings. Each wheel notch turns one page. Smooth scrolling '
+                    'defaults to 20× sensitivity. Edit the INI below and save explicitly; changes apply '
+                    'on the next scroll, including in open comic readers. Invalid values use defaults.')
             else:
                 state = next(state for state in registry.get_feature_states() if key == f'feature:{state.name}')
                 panel = FeatureSettingsPanel(state, self)

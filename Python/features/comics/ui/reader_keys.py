@@ -1,10 +1,10 @@
 """Window-scoped navigation with a steady hold cadence independent of OS repeats."""
 
 from commonUtils.ui import pyside as qt
+from commonUtils.settings import get_wheel_navigation_settings
 from time import monotonic
 
 PAGE_TURN_INTERVAL_MS = 225
-WHEEL_COOLDOWN_SECONDS = .25
 
 
 class ReaderKeyHandler(qt.QObject):
@@ -16,6 +16,7 @@ class ReaderKeyHandler(qt.QObject):
         self._wheel_delta = 0
         self._wheel_time = 0
         self._wheel_event_time = 0
+        self._wheel_pixels = None
         self.timer = qt.QTimer(self)
         self.timer.setInterval(PAGE_TURN_INTERVAL_MS)
         self.timer.setTimerType(qt.Qt.TimerType.PreciseTimer)
@@ -63,13 +64,26 @@ class ReaderKeyHandler(qt.QObject):
                     or self.window.closing or qt.QApplication.activeModalWidget()
                     or qt.QApplication.activePopupWidget()):
                 return True
-            if now - self._wheel_time < WHEEL_COOLDOWN_SECONDS:
+            settings = get_wheel_navigation_settings()
+            pixels = not event.pixelDelta().isNull()
+            delta = event.pixelDelta().y() if pixels else event.angleDelta().y()
+            if not delta:
+                return True
+            notch = not pixels and event.phase() == qt.Qt.ScrollPhase.NoScrollPhase
+            if notch and settings.immediate_notches:
+                self._wheel_delta = 0
+                self.stop()
+                self.window.step(-1 if delta > 0 else 1)
+                self._wheel_time = now
+                return True
+            if now - self._wheel_time < settings.cooldown_ms / 1000:
                 self._wheel_delta = 0
                 return True
-            delta = event.pixelDelta().y() if not event.pixelDelta().isNull() else event.angleDelta().y()
-            threshold = 60 if not event.pixelDelta().isNull() else 120
-            if now - self._wheel_event_time > 1 or self._wheel_delta * delta < 0:
+            threshold = (60 if pixels else 120) / settings.sensitivity
+            if (now - self._wheel_event_time > 1 or self._wheel_delta * delta < 0
+                    or self._wheel_pixels != pixels):
                 self._wheel_delta = 0
+            self._wheel_pixels = pixels
             self._wheel_event_time = now
             self._wheel_delta += delta
             if abs(self._wheel_delta) >= threshold:

@@ -27,7 +27,7 @@ class SettingsPageTests(unittest.TestCase):
         with patch.object(registry, 'get_feature_states', return_value=[state]), patch.object(registry, 'get_settings', return_value=[contribution]) as settings:
             page = SettingsPage(); self.addCleanup(page.deleteLater)
             factory.assert_not_called()
-            item = page.sidebar.topLevelItem(2).child(0)
+            item = page.sidebar.topLevelItem(3).child(0)
             page.sidebar.setCurrentItem(item)
             factory.assert_called_once()
             panel = page.panels['feature:test']
@@ -39,6 +39,25 @@ class SettingsPageTests(unittest.TestCase):
             page.refresh()
             self.assertIs(panel.custom['custom'], custom)
             factory.assert_called_once()
+
+    def test_commonutils_settings_expose_ini_and_preserve_edits(self):
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'settings.ini'
+            path.write_text('[WheelNavigation]\nsensitivity=20\n')
+            with patch('ui_new.pages.settings.settings_path', return_value=path):
+                page = SettingsPage(); self.addCleanup(page.deleteLater)
+                item = page.sidebar.topLevelItem(2)
+                self.assertEqual(item.text(0), 'commonUtils')
+                page.sidebar.setCurrentItem(item)
+                editor = page.panels['commonutils'].editors[path]
+                editor.text.setPlainText('[WheelNavigation]\nsensitivity=10\n')
+                editor.text.document().setModified(True)
+                page.sidebar.setCurrentItem(page.sidebar.topLevelItem(0))
+                page.sidebar.setCurrentItem(item)
+                self.assertIs(page.stack.currentWidget().stack.currentWidget(), editor)
+                self.assertTrue(editor.save())
+                from commonUtils.settings import get_wheel_navigation_settings
+                self.assertEqual(get_wheel_navigation_settings(path=path).sensitivity, 10)
 
     def test_configuration_file_switch_retains_unsaved_edits(self):
         with TemporaryDirectory() as temporary:
