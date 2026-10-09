@@ -89,10 +89,20 @@ class DeletePycDialog(_ResultsDialog):
         super().__init__('Bulk Delete PYC Files',
                          'Delete Python bytecode (.pyc) files. Python source files and links are preserved. '
                          'Completed deletions cannot be undone.',
-                         'Delete PYC files', True, initial_path, parent)
+                         'Scan PYC files', True, initial_path, parent)
         self.results.setHeaderLabels(['Path', 'Result', 'Details'])
         self.results.setColumnWidth(0, 550)
         self.results.setColumnWidth(1, 130)
+
+        self._pending = None
+        self.recursive.toggled.connect(self._invalidate_preview)
+        if self.target_dir is not None:
+            self.target_dir.textChanged.connect(self._invalidate_preview)
+        self.task.completed.connect(lambda result, error: self._invalidate_preview() if error else None)
+
+    def _invalidate_preview(self, *args):
+        self._pending = None
+        self.action_button.setText('Scan PYC files')
 
     def _execute(self):
         if self.busy:
@@ -101,18 +111,33 @@ class DeletePycDialog(_ResultsDialog):
         if target is None:
             return
         recursive = self.recursive.isChecked()
-        target_text = '\n'.join(str(path) for path in target)
+        if self._pending is None:
+            self._begin()
+            self._run_background(lambda report, cancelled: filesystem.scan_pyc_files(
+                target, recursive, report=report, cancelled=cancelled), self._show_preview,
+                cancel_text='Cancel scan', cancel_message='Cancelling scan…')
+            return
         choice = qt.QMessageBox.question(self, self.windowTitle(),
-            f'Delete .pyc files in:\n{target_text}\n\n'
-            f'Include subfolders: {"Yes" if recursive else "No"}\n'
-            'Python source files and links are preserved. Deletions cannot be undone.',
+            f'Delete the {len(self._pending)} reviewed .pyc files?\n\n'
+            'New or changed files are preserved. Deletions cannot be undone.',
             qt.QMessageBox.StandardButton.Yes | qt.QMessageBox.StandardButton.No,
             qt.QMessageBox.StandardButton.No)
         if choice != qt.QMessageBox.StandardButton.Yes:
             return
+        candidates = self._pending
+        self._invalidate_preview()
         self._begin()
         self._run_background(lambda report, cancelled: filesystem.cleanup_pyc_files(
-            target, recursive, report=report, cancelled=cancelled), self._show_results)
+            target, recursive, report=report, cancelled=cancelled, candidates=candidates), self._show_results)
+
+    def _show_preview(self, candidates):
+        self._pending = candidates or None
+        for path, identity in candidates:
+            self._row(path, 'Pending deletion', f'{identity[2]:,} bytes')
+        self.summary.setText(f'{len(candidates)} bytecode files found · '
+                             f'{sum(identity[2] for _, identity in candidates):,} bytes. No files deleted. '
+                             'Review these results before confirming deletion.')
+        self.action_button.setText('Delete reviewed files…' if candidates else 'Scan PYC files')
 
     def _show_results(self, result):
         for path in result.completed:

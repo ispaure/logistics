@@ -120,9 +120,24 @@ class FileToolsWindowTests(_FileToolsFixture):
         self.assertIn('Found 1', dialog.summary.text())
         self.assertTrue(path.exists())
 
+    def test_cleanup_preview_excludes_new_and_changed_files(self):
+        original = self.file('a.pyc')
+        candidates = filesystem.scan_pyc_files(self.root)
+        new = self.file('new.pyc')
+        original.write_bytes(b'changed since preview')
+        result = filesystem.cleanup_pyc_files(self.root, candidates=candidates)
+        self.assertEqual(result.completed, [])
+        self.assertIn(original, result.failed)
+        self.assertTrue(original.exists())
+        self.assertTrue(new.exists())
+
     def test_cleanup_confirmation_and_results_for_multiple_folders(self):
         first, second = self.file('one/a.pyc'), self.file('two/b.pyc')
         dialog = self.dialog(DeletePycDialog, [first.parent, second.parent])
+        dialog.action_button.click()
+        self.wait(dialog)
+        self.assertEqual(dialog.results.topLevelItemCount(), 2)
+        self.assertIn('No files deleted', dialog.summary.text())
         with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.No):
             dialog.action_button.click()
         self.assertFalse(dialog.busy)
