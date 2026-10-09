@@ -6,7 +6,7 @@ also enables its Images dependency.
 
 ## Open a library
 
-Select a configured comics folder on **Known Folders** and choose **Open Comics Library…**.
+Select a configured comics folder on **Folder Hub** and choose **Open Comics Library…**.
 To define its library tabs, place `remoteConfig.ini` at the collection root:
 
 ```ini
@@ -20,6 +20,10 @@ Missing libraries are disabled. You can also browse any folder through
 tabs or collection indexing.
 
 ## Read and edit
+
+Readers and metadata editors opened from the main app appear in **Open documents**.
+Use **Detach** to move the same view into a separate window and **Bring back** to
+return it; switching sidebar destinations retains the open views.
 
 - Double-click a CBZ to open the built-in reader. Use the page buttons or arrow
   keys; hold an arrow key or a page button to turn every 225 ms. Nearby pages are

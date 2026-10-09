@@ -5,7 +5,7 @@ or credentials. Account roots are detected from Dropbox's installed account sett
 
 ## Browse
 
-Choose the **Dropbox** source on **Known Folders** and select a folder. Multiple accounts
+Choose the **Dropbox** source on **Folder Hub** and select a folder. Multiple accounts
 are listed separately. Missing/unconfigured Dropbox installations contribute no
 sources; install and configure Dropbox separately if you want this source.
 
