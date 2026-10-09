@@ -3,7 +3,7 @@
 from commonUtils.features import BrowserExtension, FileActivation, SelectionAction
 from commonUtils.fileUtils import File
 from commonUtils.text_files import is_text_path
-from features.contributions import Feature, PageContribution, SettingsContribution
+from features.contributions import Feature, SettingsContribution
 from pathlib import Path
 
 
@@ -64,7 +64,6 @@ def register():
             activation=(FileActivation(File, open_text, is_available=activate_text),),
             create_controller=create_controller,
         ),
-        pages=[PageContribution("Text Editor", "text_editor", create_page, order=35)],
         settings=[
             SettingsContribution(
                 "Editor defaults",

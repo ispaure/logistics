@@ -13,6 +13,13 @@ from features.text_editor.window import EditorWindow
 
 
 class TextEditorTests(unittest.TestCase):
+    def test_editor_contributes_settings_and_browser_actions_without_a_navigation_tab(self):
+        from features.text_editor.contributions import register
+        feature = register()
+        self.assertEqual(feature.pages, [])
+        self.assertTrue(feature.settings)
+        self.assertTrue(feature.browser.actions)
+
     @classmethod
     def setUpClass(cls):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
