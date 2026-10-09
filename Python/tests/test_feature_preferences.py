@@ -58,3 +58,20 @@ class FeaturePreferencesTests(unittest.TestCase):
         registry.reset_feature_defaults()
         self.assertTrue(registry.is_feature_enabled('pref_child'))
         self.assertEqual(load_disabled(self.path), set())
+
+    def test_malformed_preferences_keep_recovery_copy_and_use_defaults(self):
+        original = b'[Features\ndisabled=broken\n'
+        self.path.write_bytes(original)
+        registry.load_feature_preferences(self.path)
+        self.assertTrue(registry.is_feature_enabled('pref_base'))
+        backups = list(self.path.parent.glob('preferences.ini.broken-*'))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_bytes(), original)
+        registry.set_feature_enabled('pref_child', False)
+        self.assertEqual(load_disabled(self.path), {'pref_child'})
+
+    def test_unreadable_preferences_do_not_block_startup_or_erase_file(self):
+        self.path.write_text('[Features]\ndisabled=pref_child\n')
+        with patch.object(Path, 'open', side_effect=PermissionError('No access')):
+            self.assertEqual(load_disabled(self.path), set())
+        self.assertEqual(load_disabled(self.path), {'pref_child'})
