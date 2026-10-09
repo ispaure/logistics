@@ -115,9 +115,9 @@ class MainWindowTests(unittest.TestCase):
         contribution = self.contribution('Calculator', 'calculator')
         window = self.window([contribution]); window.dlg.show(); self.app.processEvents()
         self.assertTrue(window.tabs.tabBar().isHidden())
-        tools = next(window.sidebar.topLevelItem(i) for i in range(window.sidebar.topLevelItemCount())
-                     if window.sidebar.topLevelItem(i).text(0) == 'Tools')
-        self.assertEqual([tools.child(i).text(0) for i in range(tools.childCount())], ['Calculator', 'Debug'])
+        self.assertLessEqual(window.sidebar.width(), 64)
+        self.assertEqual([action.text() for action in window.sidebar.tools_menu.actions()], ['Calculator', 'Debug'])
+        self.assertFalse(window.sidebar.tools_menu.isVisible())
         reader = qt.QMainWindow(); reader.setWindowTitle('Open reader')
         show_document(reader); self.app.processEvents()
         self.assertIs(window.tabs.currentWidget(), window.documents)
@@ -125,7 +125,10 @@ class MainWindowTests(unittest.TestCase):
         with patch.object(main_window.registry, 'get_pages', return_value=[]):
             window._sync_feature_pages()
         self.assertIs(window.tabs.currentWidget(), window.documents)
-        self.assertIn('Open documents', window.sidebar.currentItem().text(0))
+        self.assertTrue(window.sidebar.buttons['documents'].isChecked())
+        window.sidebar.show_documents()
+        self.assertEqual(window.sidebar.document_list.count(), 1)
+        window.sidebar.document_popup.hide()
         reader.close(); self.app.processEvents()
         window.dlg.close(); self.app.processEvents()
 
@@ -231,6 +234,41 @@ class MainWindowTests(unittest.TestCase):
         self.assertIsNot(page.workspace.active_view, scoped)
         self.assertEqual(scoped.file_browser.navigation.directory, folder)
         self.assertEqual(page.file_browser.navigation.directory, self.root)
+        window.dlg.close(); self.app.processEvents()
+
+    def test_document_popup_lists_and_selects_individual_text_buffers(self):
+        from features.text_editor.window import EditorWindow
+        from ui_new.documents import show_document
+        window = self.browser_window(); self.wait_browser(window.tabs.widget(0))
+        editor = EditorWindow(history_path=self.root/'recent.json', preferences_path=self.root/'editor.ini')
+        first = editor.current
+        editor.new_document()
+        show_document(editor); self.app.processEvents()
+        window.sidebar.show_documents()
+        self.assertEqual(window.sidebar.document_list.count(), 2)
+        row = window.sidebar.document_list.itemWidget(window.sidebar.document_list.item(0))
+        row.findChild(qt.QPushButton).click(); self.app.processEvents()
+        self.assertIs(editor.current, first)
+        self.assertIs(window.tabs.currentWidget(), window.documents)
+        window.dlg.close(); self.app.processEvents()
+
+    def test_all_detached_documents_keep_sidebar_return_route_without_empty_page(self):
+        from ui_new.documents import show_document
+        window = self.browser_window()
+        browser = window.tabs.widget(0); self.wait_browser(browser)
+        reader = qt.QMainWindow(); reader.setWindowTitle('Reader')
+        show_document(reader); self.app.processEvents()
+        window.documents.detach_current(); self.app.processEvents()
+        self.assertEqual(window.tabs.indexOf(window.documents), -1)
+        self.assertIs(window.tabs.currentWidget(), browser)
+        self.assertTrue(window.sidebar.buttons['documents'].isVisible())
+        window.sidebar.show_documents()
+        self.assertEqual(window.sidebar.document_list.count(), 1)
+        row = window.sidebar.document_list.itemWidget(window.sidebar.document_list.item(0))
+        next(button for button in row.findChildren(qt.QPushButton) if button.text() == 'Bring back').click()
+        self.app.processEvents()
+        self.assertIs(window.tabs.currentWidget(), window.documents)
+        self.assertFalse(reader.isWindow())
         window.dlg.close(); self.app.processEvents()
 
     def test_main_close_waits_for_embedded_extension_then_retries(self):

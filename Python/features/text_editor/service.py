@@ -23,7 +23,7 @@ class EditorService(qt.QObject):
             self.window.new_document()
         if path is not None:
             self.window.open_path(path, force=force)
-        from ui_new.documents import show_document
+        from commonUtils.ui.document_host import show_document
         show_document(self.window)
         return self.window
 
