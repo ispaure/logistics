@@ -267,9 +267,11 @@ class EditingCommands:
     def _editing_status(self, document):
         editor = document.editor
         cursor = editor.textCursor()
-        selection = cursor.selectionEnd() - cursor.selectionStart()
+        selection = len(cursor.selectedText())
+        preceding = cursor.block().text().encode('utf-16-le')[:cursor.positionInBlock() * 2]
+        column = len(preceding.decode('utf-16-le', errors='ignore')) + 1
         self.position.setText(
-            f"Ln {cursor.blockNumber() + 1}, Col {cursor.positionInBlock() + 1} · {editor.blockCount():,} lines"
+            f"Ln {cursor.blockNumber() + 1}, Col {column} · {editor.blockCount():,} lines"
             + (f" · {selection:,} selected" if selection else "")
             + (" · Simple mode" if document.simple else "")
         )
