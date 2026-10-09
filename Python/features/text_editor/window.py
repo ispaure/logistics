@@ -4,6 +4,7 @@ from commonUtils.ui.operation_progress import OperationProgress
 from commonUtils.ui.reader_menus import RecentFiles
 from commonUtils.storage import cache_directory
 from .file_operations import FileOperations
+from .editing import EditingCommands
 
 
 class DocumentTabs(qt.QTabWidget):
@@ -19,7 +20,7 @@ class DocumentTabs(qt.QTabWidget):
         return super().eventFilter(watched,event)
 
 
-class EditorWindow(FileOperations,qt.QMainWindow):
+class EditorWindow(EditingCommands,FileOperations,qt.QMainWindow):
     idle=qt.Signal()
     saved=qt.Signal(object)
     def __init__(self,*,history_path=None):
@@ -38,6 +39,7 @@ class EditorWindow(FileOperations,qt.QMainWindow):
         self.setCentralWidget(central)
         self.watcher=qt.QFileSystemWatcher(self);self.watcher.fileChanged.connect(self._external_change)
         self.actions={};self._build_menus();self._build_status()
+        self._build_editing(layout)
         self.new_document()
 
     @property
@@ -62,10 +64,12 @@ class EditorWindow(FileOperations,qt.QMainWindow):
             ('close_all','Close All',self.close_all,None)]:self.action(file,key,label,callback,shortcut)
         self.recent_menu=file.addMenu('Open Recent');self.recent_menu.aboutToShow.connect(self._recent_menu)
         edit=self.menuBar().addMenu('&Edit')
+        self._edit_menu=edit
         for method,shortcut in [('undo',qt.QKeySequence.StandardKey.Undo),('redo',qt.QKeySequence.StandardKey.Redo),
             ('cut',qt.QKeySequence.StandardKey.Cut),('copy',qt.QKeySequence.StandardKey.Copy),('paste',qt.QKeySequence.StandardKey.Paste),('selectAll',qt.QKeySequence.StandardKey.SelectAll)]:
             self.action(edit,method,{'selectAll':'Select All'}.get(method,method.title()),lambda method=method:self.edit(method),shortcut)
         view=self.menuBar().addMenu('&View');self.action(view,'next_tab','Next Tab',lambda:self.change_tab(1),'Ctrl+Tab')
+        self._view_menu=view
         self.action(view,'previous_tab','Previous Tab',lambda:self.change_tab(-1),'Ctrl+Shift+Tab')
     def edit(self,method):
         if self.current:getattr(self.current.editor,method)()
@@ -87,9 +91,11 @@ class EditorWindow(FileOperations,qt.QMainWindow):
     def _active_changed(self,*args):
         if not hasattr(self,'position'):return
         document=self.current
+        if hasattr(self,'search'):self.search.set_editor(document.editor if document else None)
         if document:
             cursor=document.editor.textCursor()
             self.position.setText(f'Ln {cursor.blockNumber()+1}, Col {cursor.positionInBlock()+1} · {document.editor.blockCount()} lines · {document.encoding.upper()}')
+            if hasattr(self,'encoding_button'):self._editing_status(document)
             self.setWindowTitle(f'{document.title} — Text Editor — Logistics')
             if document.external_changed:self.external_bar.show()
             else:self.external_bar.hide()
@@ -100,7 +106,7 @@ class EditorWindow(FileOperations,qt.QMainWindow):
         for key in ('save','save_as','save_all','reload','close','close_all'):
             if key in self.actions:self.actions[key].setEnabled(self.current is not None and not self.task.busy)
     def closeEvent(self,event):
-        if self.task.busy or self._queue:
+        if self.task.busy or self._queue or not self.search.prepare_close():
             self._close_pending=True;event.ignore();return
         if self.prepare_close():event.accept()
         else:
