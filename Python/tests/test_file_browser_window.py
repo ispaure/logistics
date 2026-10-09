@@ -58,6 +58,27 @@ class BrowserWindowTests(unittest.TestCase):
             window.close()
             self.app.processEvents()
 
+    def test_tabs_keep_independent_navigation_and_update_titles(self):
+        window = self.window([])
+        first = window.workspace.active_view
+        child = self.root / 'child'
+        child.mkdir()
+        first.file_browser.navigate(child)
+        self.app.processEvents()
+        self.assertEqual(window.workspace.docks[0].windowTitle(), 'child')
+        second = window.workspace.add_view(self.root)
+        self.wait(window)
+        self.assertIsNot(first.file_browser, second.file_browser)
+        self.assertEqual(second.file_browser.navigation.directory, self.root)
+        self.assertEqual(first.file_browser.navigation.directory, child)
+        window.workspace.docks[0].raise_()
+        window.workspace._activate(window.workspace.docks[0])
+        self.assertIs(window.file_browser, first.file_browser)
+        window.workspace.docks[1].close()
+        self.app.processEvents()
+        self.assertEqual(len(window.workspace.docks), 1)
+        self.assertEqual(first.file_browser.navigation.directory, child)
+
     def test_debug_button_opens_browser_and_survives_empty_debug_contributions(self):
         with patch.object(registry, 'get_debug_actions', return_value=[]):
             page = DebugPage()
