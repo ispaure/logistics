@@ -45,6 +45,29 @@ class ConfigurationPanel(qt.QWidget):
         return all(editor.can_close() for editor in self.editors.values())
 
 
+class CommonUtilsPanel(ConfigurationPanel):
+    def __init__(self, parent=None):
+        super().__init__([settings_path()], parent, description=
+            'Shared settings: edit and save the INI explicitly. Wheel changes apply on the next scroll. '
+            'For a startup appearance preference, add [Theme] with mode=system, light or dark.')
+        appearance = qt.QHBoxLayout()
+        appearance.addWidget(qt.QLabel('Appearance'))
+        self.theme_mode = qt.QComboBox()
+        self.theme_mode.setAccessibleName('Appearance mode')
+        for label, mode in [('System', 'system'), ('Light', 'light'), ('Dark', 'dark')]:
+            self.theme_mode.addItem(label, mode)
+        controller = getattr(qt.QApplication.instance(), '_commonutils_theme', None)
+        self.theme_mode.setCurrentIndex(self.theme_mode.findData(controller.mode if controller else 'system'))
+        self.theme_mode.currentIndexChanged.connect(self._appearance_changed)
+        appearance.addWidget(self.theme_mode)
+        appearance.addStretch()
+        self.layout().insertLayout(0, appearance)
+
+    def _appearance_changed(self, index):
+        from commonUtils.ui.theme import apply_theme
+        apply_theme(mode=self.theme_mode.itemData(index))
+
+
 class FeatureSettingsPanel(qt.QWidget):
     def __init__(self, state, parent=None):
         super().__init__(parent)
@@ -189,10 +212,7 @@ class SettingsPage(qt.QWidget):
                 panel = ConfigurationPanel([source / 'configFile.ini', source / 'maintenance.ini',
                                             source.parent / 'launch_config.ini'], self)
             elif key == 'commonutils':
-                panel = ConfigurationPanel([settings_path()], self, description=
-                    'Shared wheel navigation settings. Each wheel notch turns one page. Smooth scrolling '
-                    'defaults to 20× sensitivity. Edit the INI below and save explicitly; changes apply '
-                    'on the next scroll, including in open comic readers. Invalid values use defaults.')
+                panel = CommonUtilsPanel(self)
             else:
                 state = next(state for state in registry.get_feature_states() if key == f'feature:{state.name}')
                 panel = FeatureSettingsPanel(state, self)
