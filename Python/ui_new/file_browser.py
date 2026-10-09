@@ -88,11 +88,11 @@ class BrowserView(_BrowserHost, qt.QWidget):
         self.open_folder_button.clicked.connect(self._choose_directory)
         controls.addWidget(self.home_button)
         controls.addWidget(self.open_folder_button)
-        self.folder_sizes = qt.QCheckBox('Background indexing')
+        self.folder_sizes = qt.QCheckBox('Background indexing', self)
         self.folder_sizes.setToolTip('Pause or resume this tab’s indexing subscription. Cached search and sizes stay available; other tabs may continue indexing.')
         self.folder_sizes.setChecked(True)
         self.folder_sizes.toggled.connect(self.file_browser.set_folder_sizes_enabled)
-        controls.addWidget(self.folder_sizes)
+        self.folder_sizes.hide()  # Legacy API; the browser toolbar now offers Pause/Resume.
         controls.addStretch()
         layout.addLayout(controls)
         layout.addWidget(self.file_browser, 1)
