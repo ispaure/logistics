@@ -79,6 +79,29 @@ class BrowserWindowTests(unittest.TestCase):
         self.assertEqual(len(window.workspace.docks), 1)
         self.assertEqual(first.file_browser.navigation.directory, child)
 
+    def test_detach_split_and_reattach_preserve_view_identity(self):
+        source = self.window([])
+        target = self.window([])
+        original = source.workspace.active_view
+        source.workspace.add_view(self.root)
+        self.wait(source)
+        dock = source.workspace.docks[0]
+        source.workspace.arrange(dock, 'right')
+        self.app.processEvents()
+        self.assertFalse(dock.isFloating())
+        source.workspace._activate(dock)
+        source.workspace.detach_active()
+        self.app.processEvents()
+        self.assertTrue(dock.isFloating())
+        target.workspace.adopt(dock)
+        self.app.processEvents()
+        self.assertIs(target.workspace.active_view, original)
+        self.assertEqual(len(source.workspace.docks), 1)
+        self.assertEqual(len(target.workspace.docks), 2)
+        self.assertFalse(dock.isFloating())
+        self.assertFalse(original.closing)
+        self.assertFalse(original.file_browser.stopping)
+
     def test_debug_button_opens_browser_and_survives_empty_debug_contributions(self):
         with patch.object(registry, 'get_debug_actions', return_value=[]):
             page = DebugPage()
