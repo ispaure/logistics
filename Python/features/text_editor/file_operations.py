@@ -150,6 +150,7 @@ class FileOperations:
 
     def prepare_close(self):
         if self.task.busy or self._queue:return False
+        if hasattr(self,'search') and not self.search.prepare_close():return False
         for index in range(self.tabs.count()-1,-1,-1):
             if not self.close_tab(index):return False
         return True
