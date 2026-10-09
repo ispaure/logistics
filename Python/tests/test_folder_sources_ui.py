@@ -87,6 +87,7 @@ class FolderSourceTests(unittest.TestCase):
                 'features.registry.get_debug_actions', return_value=[]):
             window = MainWindow()
             self.addCleanup(window.dlg.deleteLater)
+            self.addCleanup(window.tabs.widget(0).file_browser.shutdown)
             window.dlg.show()
             self.app.processEvents()
             read_names.assert_called_once_with()
