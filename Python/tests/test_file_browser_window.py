@@ -69,6 +69,8 @@ class BrowserWindowTests(unittest.TestCase):
         self.assertIs(window.index_status.label.parent(), window.workspace.statusBar())
         second._index_progressed('Indexing /some/location · 42 processed this run')
         self.assertIn('42 processed this run', window.index_status.label.text())
+        self.assertNotIn('/some/location', window.index_status.label.text())
+        self.assertNotIn('/some/location', window.index_status.label.toolTip())
         window.workspace.docks[0].raise_()
         window.workspace._activate(window.workspace.docks[0])
         self.app.processEvents()

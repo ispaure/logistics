@@ -49,6 +49,7 @@ class CommonUtilsPanel(ConfigurationPanel):
     def __init__(self, parent=None):
         super().__init__([settings_path()], parent, description=
             'Shared settings: edit and save the INI explicitly. Wheel changes apply on the next scroll. '
+            'Use [FileBrowser] preview_enabled=false to hide selection details by default in new tabs. '
             'For a startup appearance preference, add [Theme] with mode=system, light or dark.')
         appearance = qt.QHBoxLayout()
         appearance.addWidget(qt.QLabel('Appearance'))
