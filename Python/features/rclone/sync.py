@@ -19,9 +19,14 @@ def rclone_sync(
     wait_for_output=False,
     dry_run=False,
     track_renames=False,
-    bw_limit=None
+    bw_limit=None,
+    integrated=True
 ):
-    """Synchronize using one explicit rclone config file."""
+    """Synchronize using one explicit config.
+
+    GUI transfers return True when accepted; the progress window owns their actual
+    exit result. Query and explicitly synchronous callers retain their legacy API.
+    """
 
     rclone_path = executable.ensure_rclone()
     if rclone_path is None:
@@ -29,28 +34,12 @@ def rclone_sync(
 
     source_path_str = str(source_path)
     destination_path_str = str(destination_path)
-    config_path_str = str(config_path)
-
-    baseline = (
-        f'"{rclone_path}" '
-        f'--config "{config_path_str}" sync --progress --copy-links '
-    )
-
-    if track_renames:
-        baseline += '--track-renames '
-
-    if '-VM' in source_path_str:
-        baseline += '--transfers=1 '
-    else:
-        baseline += '--transfers=10 '
-
-    if bw_limit is not None:
-        baseline += f'--bwlimit {bw_limit}M '
-
-    if dry_run:
-        baseline += '--dry-run '
-
-    baseline += f'"{source_path_str}" "{destination_path_str}"'
+    arguments = build_sync_arguments(rclone_path, source_path, destination_path,
+        config_path=config_path, track_renames=track_renames, bw_limit=bw_limit,
+        dry_run=dry_run, integrated=integrated and not query and not wait_for_output)
+    import shlex
+    import subprocess
+    baseline = subprocess.list2cmdline(arguments) if get_os() == OS.WIN else shlex.join(arguments)
 
     if not Path(destination_path).exists():
         match get_os():
@@ -73,12 +62,45 @@ def rclone_sync(
             output_lines
         )
 
+    if integrated and not wait_for_output:
+        from commonUtils.ui import pyside as qt
+        application = qt.QApplication.instance()
+        if application is not None and qt.QThread.currentThread() == application.thread():
+            from commonUtils.ui.process_progress import open_process
+            from .progress import RcloneProgressParser
+            open_process(f'rclone sync — {source_path_str} → {destination_path_str}',
+                         arguments[0], arguments[1:], parser=RcloneProgressParser())
+            return True
+
     cmdShellWrapper.exec_cmd(
         baseline,
         wait_for_output=wait_for_output,
         in_new_window=True
     )
     return True
+
+
+def build_sync_arguments(rclone_path, source_path, destination_path, *, config_path,
+                         track_renames=False, bw_limit=None, dry_run=False, integrated=True):
+    """Argument vector shared by UI and legacy callers; no shell interpretation."""
+    arguments = [str(rclone_path), '--config', str(config_path), 'sync', '--copy-links']
+    if integrated:
+        # Leave rclone's retry policy untouched; observe its own retry messages.
+        arguments += ['--use-json-log', '--stats', '1s', '--stats-log-level', 'NOTICE']
+    else:
+        arguments += ['--progress']
+    if track_renames:
+        arguments += ['--track-renames']
+    arguments += ['--transfers=1' if '-VM' in str(source_path) else '--transfers=10']
+    if bw_limit is not None:
+        value = int(bw_limit)
+        if value <= 0:
+            raise ValueError('Bandwidth limit must be a positive number of MB/s')
+        arguments += ['--bwlimit', f'{value}M']
+    if dry_run:
+        arguments += ['--dry-run']
+    arguments += ['--', str(source_path), str(destination_path)]
+    return arguments
 
 
 def rclone_sync_process_query(

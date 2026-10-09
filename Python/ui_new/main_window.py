@@ -148,7 +148,8 @@ class MainWindow(pyside.Window):
         # Resolve unsaved settings before asking browser workers/controllers to stop.
         if not all(getattr(page, 'can_close', lambda: True)() for page in pages):
             return False
-        ready = True
+        from commonUtils.ui.process_progress import prepare_close_all
+        ready = prepare_close_all(self.dlg.close)
         for page in pages:
             if not getattr(page, 'prepare_close', lambda: True)():
                 ready = False
