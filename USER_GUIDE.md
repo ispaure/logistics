@@ -6,19 +6,31 @@ folder's contents or configuration.
 
 ## Find a tool
 
+The sidebar keeps **File Browser** and **Folder Hub** at the top. Logistics opens
+in File Browser; Folder Hub is the destination for configured libraries, servers
+and remotes. Feature tools and Debug are grouped under **Tools**, with **Settings**
+below them. Switching destinations retains each view's state.
+
 | Page | Use it for |
 | --- | --- |
 | File Browser | Browse your home folder or open another location; use file/folder right-click tools |
-| Known Folders | Choose a source/folder and use detected library, server or remote actions |
+| Folder Hub | Choose a source/folder and use detected library, server or remote actions |
 | Settings | Enable features, manage credential packages and edit configuration |
-| Debug | Standalone file/media/maintenance tools, Open File Browser and Bulk Rename |
+| Tools → Debug | File/media/maintenance tools, Open File Browser and Bulk Rename |
 | Settings → Features | Enable/disable integrations using feature toggle cards |
-| Aviation Tools | Flight calculators and aircraft/airport reference tables |
-| Links / Smart Home | Controls provided by those enabled features |
+| Tools → Aviation Tools | Flight calculators and aircraft/airport reference tables |
+| Tools → Links / Smart Home | Controls provided by those enabled features |
 
 Disabling a feature removes its new actions; existing windows/jobs can finish.
-Enabling also enables required dependencies. Changes last for the current session.
+Enabling also enables required dependencies. Choices are saved for the next launch.
 A user guide remains accessible when its feature is disabled or lacks a dependency.
+
+The Text Editor, comic and EPUB readers, and their metadata editors opened from
+the main app appear in **Open documents** under File Browser.
+Switch between their content tabs, use **Detach** for a separate
+window, and use **Bring back** to return it. Detaching retains the document and
+reading/editing state. Unsaved buffers and background workers are checked before
+closing. File-browser pane tabs remain independent of these document tabs.
 
 ## Remove files and folders
 
@@ -39,7 +51,7 @@ or a heading, and use Back/Forward to retrace your steps. Website links open in
 your default browser. Unsupported or missing documents show an explanation while
 keeping the current page available.
 
-Guides opened normally from Settings → Features are preview-only: they offer no editing or saving.
+Guides opened normally from feature settings are preview-only: they offer no editing or saving.
 Links followed inside a preview-only window remain preview-only.
 
 Double-click `.md` or `.markdown` files in the file browser to open a window that
@@ -145,7 +157,7 @@ for filters, numbering, presets, cancellation and recovery details.
 ## Settings
 
 Select a category on the left to see its settings on the right. **Features**
-controls session enablement through a bounded list of toggle cards with dependency
+controls saved feature defaults through a bounded list of toggle cards with dependency
 details. Each feature has its own settings category and a User Guide button in
 the upper-right corner. **rclone** separates **INI files** from **Credential packages**
 in tabs; switching retains edits and package state. **Configuration** edits the launcher,
@@ -154,7 +166,12 @@ Use **Source** for plain-text edits. Feature INI files
 appear with their feature settings. Save explicitly; some changes require restart.
 Unsaved edits are retained when switching categories and checked before closing.
 
-## File Browser and Known Folders
+**Reset to defaults** enables all available features. Choices are stored in
+`preferences.ini` under `~/Library/Application Support/Logistics/` on macOS,
+`%APPDATA%/Logistics/` on Windows, and `$XDG_CONFIG_HOME/logistics/` (normally
+`~/.config/logistics/`) on Linux. Feature package folders are never renamed.
+
+## File Browser and Folder Hub
 
 Logistics opens in **File Browser** at your home folder. Use the browser's
 navigation controls and folder entries to move through the filesystem.
@@ -200,9 +217,12 @@ and updates as background indexing progresses. Use **Refresh index** to check
 for changes beneath the current folder; incomplete results are identified in the
 search summary.
 
-**Known Folders** keeps the managed local folders, Dropbox sources and configured
+**Folder Hub** keeps the managed local folders, Dropbox sources and configured
 rclone remotes together with their library/server/transfer actions. Use it for
 configured destinations and use File Browser for exploring arbitrary files.
+For a local folder, **Browse in Logistics** switches directly to File Browser.
+If the active browser is restricted to another folder, Logistics opens a new
+browser tab and keeps that existing view intact.
 
 ## Opening Logistics again
 
@@ -216,7 +236,7 @@ The file browser no longer shows a pause-scan button.
 
 ## Text Editor
 
-Choose **Settings → Text Editor → Open Text Editor** for a standalone document window, or
+Choose **Settings → Text Editor → Open Text Editor** for the document workspace, or
 right-click text in File Browser and select **Open in Text Editor**. Open multiple
 files in draggable tabs, search/replace with regex and undo support, and edit
 scripts/configuration with syntax, line numbers and indentation controls. Save

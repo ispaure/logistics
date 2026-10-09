@@ -19,7 +19,7 @@ Paths are relative to that folder. All three values are needed. An optional
 
 ## Start and use the console
 
-1. Select the configured local folder on **Known Folders**.
+1. Select the configured local folder on **Folder Hub**.
 2. Choose **Launch P4D** and inspect the new terminal.
 3. Use **Open P4 Console** after the server has started.
 

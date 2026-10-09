@@ -62,6 +62,9 @@ saved preferences. Feature defaults live in `config.ini`; private overrides,
 recent files and window geometry live under the commonUtils Cache/TextEditor
 folder. **Reset Editor Preferences** removes overrides and restores feature defaults.
 
+In the main app, Text Editor opens in **Open documents**. **Detach** moves the same
+editor into a separate window; **Bring back** returns it without losing buffers.
+
 Disabling Text Editor removes its browser actions but retains its open
 buffers. Re-enable it to return to those documents. Browser windows do not own
 editor buffers. Application closure still checks modified documents. Tabs are

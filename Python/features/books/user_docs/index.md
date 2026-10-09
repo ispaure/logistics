@@ -14,6 +14,10 @@ Right-clicking an EPUB offers **Read EPUB…** and **Edit metadata…**.
 The same **Edit metadata…** action works for comics and mixed selections.
 It opens the appropriate editors without opening a reader.
 
+In the main app, readers and metadata editors open as tabs in **Open documents**.
+Use **Detach** for a separate window and **Bring back** to return it to the same
+workspace. Switching to File Browser or Folder Hub retains your open documents.
+
 Choose a chapter or nested section in the chapter list. **Previous chapter** and
 **Next chapter** follow the book's reading order. Links to another chapter or
 section work inside the reader. Use Left/Right arrows or Page Up/Page Down to

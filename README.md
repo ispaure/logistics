@@ -40,9 +40,12 @@ The app opens in **File Browser**, starting in your home folder. Use **Open
 folder…** to browse another location. You can search, preview files, switch views,
 and explore folder sizes with the storage charts.
 
-**Known Folders** brings your configured local folders and remote sources together.
-**Settings** lets you enable features and edit their configuration. Each feature
-has a **User guide** button under **Settings → Features**.
+**Folder Hub** brings your configured local folders and remote sources together.
+The sidebar groups feature-specific tools under **Tools**. The Text Editor and
+comic/EPUB readers open in the main document workspace, with **Detach** and
+**Bring back** available.
+**Settings** lets you save feature defaults and edit their configuration. Each
+feature settings page has a **User Guide** button in its upper-right corner.
 
 Start with the tools you need. Credentials for remote services are supplied
 separately, and some integrations need their own software or setup. The

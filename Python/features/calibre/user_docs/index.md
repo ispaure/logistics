@@ -1,6 +1,6 @@
 # Open and export Calibre libraries
 
-Calibre controls appear on **Known Folders** when the selected local folder contains an
+Calibre controls appear on **Folder Hub** when the selected local folder contains an
 immediate child library with `metadata.db`.
 
 ## Open a library

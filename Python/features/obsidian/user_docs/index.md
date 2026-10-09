@@ -1,6 +1,6 @@
 # Open Obsidian vaults
 
-Vault controls appear on **Known Folders** for local folders containing `.obsidian`
+Vault controls appear on **Folder Hub** for local folders containing `.obsidian`
 directories within the bounded discovery search.
 
 ## Open a vault
