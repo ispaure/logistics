@@ -87,7 +87,7 @@ class BrowserView(_BrowserHost, qt.QWidget):
         self.open_folder_button.clicked.connect(self._choose_directory)
         controls.addWidget(self.home_button)
         controls.addWidget(self.open_folder_button)
-        self.folder_sizes = qt.QCheckBox('Background sizes')
+        self.folder_sizes = qt.QCheckBox('Background indexing and sizes')
         self.folder_sizes.setToolTip('Pause or resume automatic indexing and folder-size updates for this location.')
         self.folder_sizes.setChecked(True)
         self.folder_sizes.toggled.connect(self.file_browser.set_folder_sizes_enabled)
