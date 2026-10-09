@@ -147,7 +147,10 @@ the active view after any pending work stops. **Detach** opens the active view i
 a floating window; **Split left/right** shows views side by side, and **Combine
 tabs** brings them together. Drag native dock titles to rearrange them. Right-click
 a dock title and choose **Attach to window** to move that same view into another
-open browser workspace, preserving its history and selection.
+open browser workspace, preserving its history and selection. If every tab is
+detached, the empty window displays a large docking area so you can drop a tab
+back into the window. **Reattach** returns the active detached tab (or another
+detached tab belonging to that window) without dragging.
 
 **Search…** matches partial file or folder names, ignoring case. Choose whether
 to include subfolders; double-click a result to show it in the browser. **Rescan**
