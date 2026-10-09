@@ -68,8 +68,10 @@ def rclone_sync(
         if application is not None and qt.QThread.currentThread() == application.thread():
             from commonUtils.ui.process_progress import open_process
             from .progress import RcloneProgressParser
-            open_process(f'rclone sync — {source_path_str} → {destination_path_str}',
-                         arguments[0], arguments[1:], parser=RcloneProgressParser())
+            open_process('rclone sync (dry run)' if dry_run else 'rclone sync',
+                         arguments[0], arguments[1:], parser=RcloneProgressParser(),
+                         context={'operation': 'Sync (dry run)' if dry_run else 'Sync', 'source': source_path_str,
+                                  'destination': destination_path_str, 'dry_run': dry_run})
             return True
 
     cmdShellWrapper.exec_cmd(

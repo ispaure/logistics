@@ -60,3 +60,22 @@ Use the [project test commands](../../../README.md#development).
 `test_folder_sources_ui.py` covers source selection/context, and `test_software.py`
 covers provisioning policy. Tests use local fixtures and mocked providers; actual
 remote transfers and credential ownership of existing mounts need platform checks.
+
+## Structured progress monitor
+
+GUI push/pull and explicit `rclone_sync()` calls use the shared QProcess runner,
+argument vectors, and rclone's own retry policy. The JSON `stats` dictionary is
+mapped to dedicated bytes, files, checks, speed, ETA, elapsed time and error fields;
+reported active transfers update in place. Operation, source and destination have
+separate labels. Missing statistics remain “Not reported”, and actual process exit
+confirms success/failure. Cancellation clears live speed/ETA and active transfers
+while retaining the last measured progress. Dry-run byte counts are labeled planned
+work, because rclone includes simulated work in its statistics.
+
+Raw JSON/console diagnostics remain under Details and logs. Non-stat log messages
+retain the last progress values rather than resetting the monitor. Query/synchronous
+console APIs retain their previous behavior. The installed pinned executable is
+used by `test_rclone_structured_ui.py` for local copy/sync/move, dry-run/check, actual
+failure and cancellation; cloud credentials and live remote contents are untouched.
+The format follows [rclone JSON logging](https://rclone.org/docs/#use-json-log) and
+[core/stats](https://rclone.org/rc/#core-stats-returns-stats-about-current-transfers).
