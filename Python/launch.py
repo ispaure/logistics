@@ -23,6 +23,7 @@ def main() -> int:
     try:
         apply_theme(app)
         log(Severity.DEBUG, 'Logistics', 'Initialize Features')
+        registry.load_feature_preferences()
         registry.initialize_features()
 
         log(Severity.DEBUG, 'PySide6', 'Display Main UI Window')

@@ -21,10 +21,13 @@ class FeaturesPage(qt.QWidget):
         font = title.font(); font.setPointSize(font.pointSize() + 5); font.setBold(True)
         title.setFont(font)
         content_layout.addWidget(title)
-        description = qt.QLabel('Enable or disable features for this session. Required dependencies are enabled together. '
-                                'Existing windows and jobs can finish. Changes reset on restart.')
+        description = qt.QLabel('Choose which features to use. Required dependencies are enabled together. '
+                                'Choices are saved for your next launch; existing windows and jobs can finish.')
         description.setWordWrap(True)
         content_layout.addWidget(description)
+        reset = qt.QPushButton('Reset to defaults')
+        reset.clicked.connect(self._reset_defaults)
+        content_layout.addWidget(reset, alignment=qt.Qt.AlignmentFlag.AlignRight)
         self.cards = qt.QVBoxLayout()
         self.cards.setSpacing(10)
         content_layout.addLayout(self.cards)
@@ -65,7 +68,7 @@ class FeaturesPage(qt.QWidget):
             toggle.setChecked(state.enabled)
             toggle.setEnabled(state.available)
             toggle.setToolTip('Required feature packages are missing.' if not state.available else
-                              'Enable or disable this feature for the current session.')
+                              'Enable or disable this feature and remember the choice.')
             toggle.toggled.connect(lambda enabled, feature=state: self._toggled(feature, enabled))
             header.addWidget(toggle, 1)
             text = 'Missing dependency' if not state.available else 'Enabled' if state.enabled else 'Disabled'
@@ -99,4 +102,13 @@ class FeaturesPage(qt.QWidget):
             # Retain the emitting checkbox until Qt finishes delivering its signal.
             self._features_changed()
         else:
-            self.status.setText(f'{state.label} {"enabled" if enabled else "disabled"} for this session.')
+            self.status.setText(f'{state.label} {"enabled" if enabled else "disabled"}. Choice saved for the next launch.')
+
+    def _reset_defaults(self):
+        try:
+            registry.reset_feature_defaults()
+        except Exception as error:
+            self.status.setText(str(error))
+            self._features_changed()
+        else:
+            self.status.setText('Defaults restored. All available features are enabled.')

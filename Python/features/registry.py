@@ -32,6 +32,50 @@ _disabled_features = set()
 _initialized_features = set()
 _listeners = []
 _definitions = weakref.WeakKeyDictionary()
+_preferences_path = None
+
+
+def load_feature_preferences(path=None):
+    """Load defaults before feature initialization; no package folders are renamed."""
+    from .preferences import preferences_path, load_disabled
+    global _preferences_path
+    path = Path(path) if path is not None else preferences_path()
+    disabled = load_disabled(path)
+    _disabled_features.clear()
+    _disabled_features.update(disabled)
+    _preferences_path = path
+
+
+def _save_feature_preferences():
+    if _preferences_path is not None:
+        from .preferences import save_disabled
+        save_disabled(_preferences_path, _disabled_features)
+
+
+def reset_feature_defaults():
+    """Enable all available features and save the default choice atomically."""
+    before = set(_disabled_features)
+    feature_map = _get_feature_map()
+    from commonUtils.fileTypes.registry import file_types
+    def activate(name, enabled):
+        definition = get_feature_definition(feature_map[name])
+        if definition is not None:
+            definition.set_enabled(enabled)
+        else:
+            file_types.set_owner_enabled(name, enabled)
+    try:
+        _disabled_features.clear()
+        for name in feature_map:
+            activate(name, _is_feature_available(name, feature_map))
+        initialize_features()
+        _save_feature_preferences()
+    except Exception:
+        _disabled_features.clear()
+        _disabled_features.update(before)
+        for name in feature_map:
+            activate(name, name not in before and _is_feature_available(name, feature_map))
+        raise
+    _notify_changed()
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -385,7 +429,7 @@ def _notify_changed():
 
 
 def set_feature_enabled(name, enabled):
-    """Session toggle; enable dependencies and refuse disabling required features."""
+    """Persist choices; enable dependencies and refuse disabling required features."""
     feature_map = _get_feature_map()
     if name not in feature_map:
         raise ValueError(f'Unknown feature: {name}')
@@ -434,6 +478,14 @@ def set_feature_enabled(name, enabled):
         for member in members:
             _disabled_features.add(member)
             activate(member, False)
+    try:
+        _save_feature_preferences()
+    except Exception:
+        _disabled_features.clear()
+        _disabled_features.update(before)
+        for current in feature_map:
+            activate(current, current not in before and _is_feature_available(current, feature_map))
+        raise
     _notify_changed()
 
 
