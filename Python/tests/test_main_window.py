@@ -155,15 +155,13 @@ class MainWindowTests(unittest.TestCase):
         self.app.processEvents()
         self.assertFalse(window.dlg.isVisible())
 
-    def test_main_browser_does_not_scan_home_recursively_until_requested(self):
+    def test_main_browser_sizes_start_automatically_and_can_be_paused(self):
         with patch('commonUtils.ui.file_browser.scan_folders', return_value={}) as scan:
             window = self.browser_window()
             browser = window.tabs.widget(0)
             self.wait_browser(browser)
-            scan.assert_not_called()
-            browser.folder_sizes.setChecked(True)
-            self.wait_browser(browser)
-            scan.assert_called_once()
+            self.assertTrue(browser.folder_sizes.isChecked())
+            self.assertTrue(scan.called)
             browser.folder_sizes.setChecked(False)
             self.assertFalse(browser.file_browser.calculate_folder_sizes)
             window.dlg.close(); self.app.processEvents()
