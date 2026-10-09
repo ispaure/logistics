@@ -58,6 +58,22 @@ class BrowserWindowTests(unittest.TestCase):
             window.close()
             self.app.processEvents()
 
+    def test_workspace_shares_one_bottom_index_status_across_tabs(self):
+        window = self.window([])
+        first = window.file_browser
+        second_view = window.workspace.add_view(self.root)
+        self.wait(window)
+        second = second_view.file_browser
+        self.assertTrue(first.index_status.isHidden())
+        self.assertTrue(second.index_status.isHidden())
+        self.assertIs(window.index_status.label.parent(), window.workspace.statusBar())
+        second._index_progressed('Indexing /some/location · 42 processed this run')
+        self.assertIn('42 processed this run', window.index_status.label.text())
+        window.workspace.docks[0].raise_()
+        window.workspace._activate(window.workspace.docks[0])
+        self.app.processEvents()
+        self.assertEqual(window.index_status.label.text(), first.index_status.text())
+
     def test_tabs_keep_independent_navigation_and_update_titles(self):
         window = self.window([])
         first = window.workspace.active_view

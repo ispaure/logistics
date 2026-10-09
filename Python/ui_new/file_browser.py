@@ -5,6 +5,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.file_browser import FileBrowser
 from features import registry
 from commonUtils.ui.workspace import Workspace
+from commonUtils.ui.file_browser.status import WorkspaceIndexStatus
 
 
 class _BrowserHost:
@@ -163,6 +164,7 @@ class FileBrowserPage(_WorkspaceHost, qt.QWidget):
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.workspace)
+        self.index_status = WorkspaceIndexStatus(self.workspace)
         self.workspace.add_view(root_path or Path.home())
 
 
@@ -178,6 +180,7 @@ class FileBrowserWindow(_WorkspaceHost, qt.QMainWindow):
         self.workspace.active_changed.connect(lambda view: self.setWindowTitle(
             f'File Browser — {view.view_title}' if view else 'File Browser'))
         self.setCentralWidget(self.workspace)
+        self.index_status = WorkspaceIndexStatus(self.workspace)
         view = self.workspace.add_view(root_path)
         view.folder_sizes.setChecked(True)
 
