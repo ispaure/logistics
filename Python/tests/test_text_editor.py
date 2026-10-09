@@ -70,6 +70,20 @@ class TextEditorTests(unittest.TestCase):
             self.wait()
             self.assertTrue(path.read_bytes().endswith(b" more"))
 
+    def test_readonly_save_buffer_blocks_programmatic_undo(self):
+        editor = self.window.current.editor
+        editor.setPlainText("original")
+        editor.moveCursor(qt.QTextCursor.MoveOperation.End)
+        editor.textCursor().insertText(" changed")
+        editor.setReadOnly(True)
+        self.window.edit("undo")
+        self.window.edit("cut")
+        self.window.edit("paste")
+        self.assertEqual(editor.toPlainText(), "original changed")
+        editor.setReadOnly(False)
+        self.window.edit("undo")
+        self.assertEqual(editor.toPlainText(), "original")
+
     def test_unsaved_close_cancel_discard_save(self):
         doc = self.window.current
         doc.editor.insertPlainText("untitled")
