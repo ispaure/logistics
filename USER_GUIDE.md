@@ -173,8 +173,11 @@ Drop in the center to combine tabs. Double-click a single pane's header to detac
 it, or drag outside the workspace. Drop a detached tab into another browser
 workspace to move that same view while preserving its history and selection.
 An empty workspace remains a drop target. Each pane has a visible border, with
-shared indexing status outside the panes. The inline **Size** slider sits before
-**View** and controls tile, list and column icon sizes.
+shared indexing status outside the panes. The inline **Size** slider follows the
+breadcrumbs on the same row, before **View**, and controls tile, list and column
+icon sizes. Narrow paths prioritize the current folder. Split panes enforce a
+minimum usable width so the controls do not overlap as the window shrinks.
+Attached tabs show a full-pane image while dragging; detached windows move normally.
 
 Select the **magnifying glass** to show the search bar below the breadcrumbs,
 inside the file-list panel. Type to search names in the current folder and its
