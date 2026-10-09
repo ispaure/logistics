@@ -44,7 +44,10 @@ supported. Ordinary transfers do not require a filesystem driver.
 **Debug** hosts standalone maintenance workflows, **Open File Browser…** and
 **Bulk Rename…** for previewing and applying filename rules.
 The browser navigates any selected root with list, tile and column views, file
-information, previews and enabled features' selection actions. Dedicated feature
+information, previews and enabled features' selection actions. Independent tabs
+can detach, split side by side, and reattach through native dock controls. Search
+and storage analysis share validated metadata snapshots, with explicit rescan and
+refresh controls. Dedicated feature
 pages provide other controls, such as Links and Smart Home. Minecraft server
 controls appear within the selected folder’s section.
 
@@ -74,7 +77,8 @@ Platform launchers support Windows, macOS and Linux, while individual features
 have their own platform limits. Actions may replace files, synchronize folders or
 modify application settings; each feature guide describes its specific behavior.
 Background progress and cancellation are available for archive creation and comic
-compression/encryption. Other workflows have their own execution models.
+compression/encryption. GUI rclone transfers use an integrated status/progress/log window and retain
+final exit and retry outcomes. Other workflows have their own execution models.
 
 ## Features
 

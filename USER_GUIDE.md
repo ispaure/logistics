@@ -141,6 +141,29 @@ for the current root; it starts unchecked to keep Home startup light. Switching 
 selection. Enabled features contribute previews and right-click actions here.
 The Debug button can still open a separate File Browser window.
 
+Use **New tab** (Ctrl/Cmd+T) to create another independent browser view. Folder
+names identify tabs and change as you navigate. **Close tab** (Ctrl/Cmd+W) closes
+the active view after any pending work stops. **Detach** opens the active view in
+a floating window; **Split left/right** shows views side by side, and **Combine
+tabs** brings them together. Drag native dock titles to rearrange them. Right-click
+a dock title and choose **Attach to window** to move that same view into another
+open browser workspace, preserving its history and selection.
+
+**Search…** matches partial file or folder names, ignoring case. Choose whether
+to include subfolders; double-click a result to show it in the browser. **Rescan**
+forces a fresh scan. **Storage… → Analyze / Refresh** displays recursive logical
+file sizes as a treemap and largest-first list. Double-click a folder to drill
+down, use **Up** to return, and **Show in browser** to navigate to a selection.
+Links and directory junctions are excluded from recursive analysis. Unreadable
+entries are reported, so totals may be partial. Logical sizes differ from physical
+space used by sparse files, compression, and shared hard links.
+
+Search and storage share bounded metadata snapshots. Before reusing a snapshot,
+Logistics checks file identities and directory timestamps for changes. Each window
+shows its scan time and whether cached metadata was checked. Results describe a
+snapshot; use Rescan/Refresh after external changes. Browser Refresh invalidates
+cached data for that root.
+
 **Known Folders** keeps the managed local folders, Dropbox sources and configured
 rclone remotes together with their library/server/transfer actions. Use it for
 configured destinations and use File Browser for exploring arbitrary files.

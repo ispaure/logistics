@@ -15,8 +15,11 @@ review the reported code points before renaming files yourself.
 
 ## Remove bytecode
 
-Choose **Bulk Delete PYC…**, set **Include subfolders**, and click **Delete PYC
-files**. Confirm the displayed target folders and recursion setting. The window
+Choose **Bulk Delete PYC…**, set **Include subfolders**, and click **Scan PYC
+files**. Review the listed paths, count, and byte total; the scan changes no files.
+Click **Delete reviewed files…** and explicitly confirm those files. Changing the
+folder or recursion setting requires a new scan. Files added after preview are
+excluded, and changed/replaced files are reported and preserved. The window
 stays open with each deleted file, any failures, and files left unprocessed after
 cancellation. Python can normally regenerate `.pyc` files. Python source files and
 file links are preserved; linked subfolders are not traversed.

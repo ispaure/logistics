@@ -10,7 +10,7 @@ their domain rules and link here for browser wiring.
 
 `commonUtils.ui.file_browser.FileBrowser` owns views, root-bounded navigation,
 selection, generic File Information, filesystem actions and background preview/scan
-workers. `ui_new/file_browser.py:FileBrowserWindow` hosts it and installs enabled
+workers. `ui_new/file_browser.py:BrowserView` hosts it and installs enabled
 Logistics contributions through `registry.get_browser_extensions()`. Feature-owned
 hosts can add their own controls around the same component.
 
@@ -145,3 +145,11 @@ shared selection, panels, registry revisions and declarations. Feature tests sho
 check their handlers, format data, validation and failure behavior instead of
 repeating the shared browser contract. Manually check native menus/previews and
 window shutdown on the platforms affected by UI changes.
+
+
+The embedded `FileBrowserPage` and standalone `FileBrowserWindow` wrap BrowserViews
+in `commonUtils.ui.workspace.Workspace`. Feature bindings/controllers belong to
+one view and move with its dock when detached or reattached. Each view independently
+subscribes to feature toggles and participates in cooperative shutdown. Browser
+search and storage dialogs use shared directory metadata snapshots/cache; their
+workers are included in `FileBrowser.stop()` and `idle` handling.
