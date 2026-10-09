@@ -13,11 +13,21 @@ folder's contents or configuration.
 | Settings | Enable features, manage credential packages and edit configuration |
 | Debug | Standalone file/media/maintenance tools, Open File Browser and Bulk Rename |
 | Settings → Features | Enable/disable integrations and open each feature’s User guide |
+| Aviation Tools | Flight calculators and aircraft/airport reference tables |
 | Links / Smart Home | Controls provided by those enabled features |
 
 Disabling a feature removes its new actions; existing windows/jobs can finish.
 Enabling also enables required dependencies. Changes last for the current session.
 A user guide remains accessible when its feature is disabled or lacks a dependency.
+
+## Remove files and folders
+
+To remove files or folders, select them in the file browser and choose **Move to
+Trash / Recycle Bin…** from the right-click menu. You’ll be asked to confirm.
+If a network drive or another location cannot use Trash, the items stay in place.
+You can keep them or review a separate permanent-deletion warning; permanent
+deletion cannot be undone through Logistics.
+
 
 ## Read documentation
 
@@ -39,6 +49,15 @@ tables stay rendered while you type. Choose **Source** in the editing-mode selec
 for precise Markdown syntax, or **Read** to return to reading. Formatted edits can
 normalize Markdown and lose unsupported HTML/extensions; use Source when those
 need to be preserved.
+
+The Markdown reader follows the app's light/dark appearance, with clearer tables,
+quotes and code blocks. Obsidian-style callouts (`> [!tip] Title`) appear as colored
+panels; `+` and `-` after the type make their titles expandable. Callout documents
+use Source mode for editing so their syntax stays intact. Mermaid code blocks can
+be rendered using **Diagrams** when the optional Mermaid CLI is installed.
+**F11** enters fullscreen; **Escape** leaves it after dismissing any open Contents
+or Find panel.
+
 
 In Formatted mode, typed `# ` through `###### ` becomes a heading, and completed
 `**bold**`, `*italic*` or backtick code renders immediately. Selecting text and
@@ -128,17 +147,17 @@ Select a category on the left to see its settings on the right. **Features**
 controls session enablement. Each feature has its own settings category and can
 retain a custom layout. **rclone** holds credential packages and generated configs;
 it no longer has a separate top-level tab. **Configuration** edits the launcher,
-shared app settings and folder-protection INI files as plain text. Feature INI files
+shared app settings and folder-protection INI files with section tabs and key rows.
+Use **Source** for plain-text edits. Feature INI files
 appear with their feature settings. Save explicitly; some changes require restart.
 Unsaved edits are retained when switching categories and checked before closing.
 
 ## File Browser and Known Folders
 
-Logistics opens in **File Browser**, rooted at your home folder. **Open folder…**
-changes the browser root to another existing folder or external drive. **Home**
-returns to your home folder. **Calculate folder sizes** opts into recursive totals
-for the current root; it starts unchecked to keep Home startup light. Switching pages retains browser navigation and
-selection. Enabled features contribute previews and right-click actions here.
+Logistics opens in **File Browser** at your home folder. Use the browser's
+navigation controls and folder entries to move through the filesystem.
+Switching pages retains browser navigation and selection. Enabled features
+contribute previews and right-click actions here.
 The Debug button can still open a separate File Browser window.
 
 Use **New tab** (Ctrl/Cmd+T) to create another independent browser view. Folder
@@ -152,21 +171,32 @@ detached, the empty window displays a large docking area so you can drop a tab
 back into the window. **Reattach** returns the active detached tab (or another
 detached tab belonging to that window) without dragging.
 
-**Search…** matches partial file or folder names, ignoring case. Choose whether
-to include subfolders; double-click a result to show it in the browser. **Rescan**
-forces a fresh scan. **Storage… → Analyze / Refresh** displays recursive logical
+Select the **magnifying glass** to show the search bar below the breadcrumbs,
+inside the file-list panel. Type to search names in the current folder and its
+subfolders; results appear in that same panel. Close search with its **X**, **Escape**,
+or another click on the magnifying glass. **Ctrl/Cmd+F** opens and focuses search.
+**Storage… → Analyze / Refresh** displays recursive logical
 file sizes as a treemap and largest-first list. Double-click a folder to drill
 down, use **Up** to return, and **Show in browser** to navigate to a selection.
 Links and directory junctions are excluded from recursive analysis. Unreadable
 entries are reported, so totals may be partial. Logical sizes differ from physical
 space used by sparse files, compression, and shared hard links.
 
-Search and storage share bounded metadata snapshots. Before reusing a snapshot,
-Logistics checks file identities and directory timestamps for changes. Each window
-shows its scan time and whether cached metadata was checked. Results describe a
-snapshot; use Rescan/Refresh after external changes. Browser Refresh invalidates
-cached data for that root.
+Search and storage share the saved directory index. Search reads cached names
+and updates as background indexing progresses. Use **Refresh index** to check
+for changes beneath the current folder; incomplete results are identified in the
+search summary.
 
 **Known Folders** keeps the managed local folders, Dropbox sources and configured
 rclone remotes together with their library/server/transfer actions. Use it for
 configured destinations and use File Browser for exploring arbitrary files.
+
+## Opening Logistics again
+
+Only one Logistics process can run per user. Opening the launcher again shows
+“Logistics is already open” and exits successfully. Use the existing app window;
+its browser tabs and detached browser windows remain available.
+
+Radial storage charts use a short zoom when opening a folder or going up. You can
+disable it in **Settings → commonUtils**, under **Storage → radial animations**.
+The file browser no longer shows a pause-scan button.
