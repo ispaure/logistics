@@ -16,7 +16,8 @@ class _BrowserHost:
         self.filesystem_scope = filesystem_scope
         from ui_new.bulk_rename import bulk_rename_actions
         self.file_browser = FileBrowser(parent=self, action_providers=(bulk_rename_actions,),
-                                       calculate_folder_sizes=calculate_folder_sizes)
+                                       calculate_folder_sizes=calculate_folder_sizes,
+                                       index_settings_path=Path(__file__).resolve().parents[1]/'configFile.ini')
         self.extensions = []
         self._extensions_by_feature = {}
         self._sync_extensions()
