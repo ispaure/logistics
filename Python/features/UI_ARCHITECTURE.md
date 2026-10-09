@@ -277,3 +277,14 @@ Contribution lists are type-checked during collection, before UI page creation.
 For example, `SettingsContribution` belongs only in `settings`; remote source
 lists require `RemoteFolderSourceContribution`. A misplaced entry raises a
 TypeError naming the feature and category rather than reaching folder discovery.
+
+## Independent text documents
+
+Text Editor owns one standalone window through a QApplication-parented service.
+Browser controllers forward opens and receive saved-path notifications, while
+closing a browser leaves documents alive. The retained feature page participates
+in application shutdown so disabled/re-enabled features do not silently discard
+buffers. Native QTabWidget document tabs are separate from dock-based browser
+workspaces because their close lifecycle includes save/discard/cancel decisions.
+Conditional FileActivation predicates let generic text handling coexist with
+specialized viewers; existing activation declarations retain their original defaults.

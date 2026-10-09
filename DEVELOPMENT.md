@@ -62,3 +62,11 @@ handles workers that have exited before their queued GUI completion is delivered
 
 The macOS launcher supports the system Bash 3.2. Pause flags use portable,
 case-insensitive case patterns; avoid Bash 4 lowercase parameter expansion there.
+
+## Text Editor
+
+The independent feature and its application document lifecycle live in
+`Python/features/text_editor`; its [developer guide](Python/features/text_editor/README.md)
+explains module boundaries, limits and tests. Reusable text-file IO and code-editor
+widgets belong to the existing commonUtils submodule. Pygments 2.19.2 is pinned
+in the same project/lockfile; no separate editor environment is introduced.
