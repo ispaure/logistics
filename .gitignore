@@ -50,3 +50,6 @@ Desktop.ini
 
 # Local cross-platform validation reports and disposable comic fixtures
 /test-results/
+
+# Release dry-run output (CI writes outside the checkout)
+/release.zip
