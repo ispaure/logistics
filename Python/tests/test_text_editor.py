@@ -15,7 +15,7 @@ class TextEditorTests(unittest.TestCase):
     def setUpClass(cls):cls.app=qt.QApplication.instance() or qt.QApplication([])
     def setUp(self):
         self.temp=TemporaryDirectory();self.root=Path(self.temp.name);self.addCleanup(self.temp.cleanup)
-        self.window=EditorWindow(history_path=self.root/'recent.json')
+        self.window=EditorWindow(history_path=self.root/'recent.json',preferences_path=self.root/'preferences.ini')
         self.addCleanup(self.cleanup)
     def cleanup(self):
         self.wait()
@@ -74,3 +74,21 @@ class TextEditorTests(unittest.TestCase):
         with patch.object(registry,'load_features',return_value=[text_editor]),patch.object(registry,'_disabled_features',set()),patch.object(registry,'_initialized_features',set()):
             registry.set_feature_enabled('text_editor',False);self.assertFalse(registry.is_feature_enabled('text_editor'))
             registry.set_feature_enabled('text_editor',True);self.assertTrue(registry.is_feature_enabled('text_editor'))
+
+    def test_status_conversions_preferences_and_themes_preserve_source(self):
+        path,doc=self.open('config.py',b'value = 1\r\n')
+        self.assertEqual(doc.language,'python');self.assertEqual(self.window.endings_button.text(),'CRLF')
+        palette=doc.editor.palette();palette.setColor(qt.QPalette.ColorRole.Base,qt.QColor('#111111'));doc.editor.setPalette(palette);self.app.processEvents()
+        self.assertFalse(doc.modified)
+        self.window.actions['wrap'].setChecked(True);self.window.toggle_option('wrap')
+        doc.editor.set_font_size(16);self.window._save_preferences()
+        from features.text_editor.preferences import Preferences
+        loaded=Preferences(self.root/'preferences.ini').load();self.assertEqual(loaded['font_size_int'],16);self.assertTrue(loaded['word_wrap_bool'])
+        with patch.object(qt.QInputDialog,'getItem',return_value=('LF',True)):self.window.choose_endings()
+        self.window.save_document();self.wait();self.assertEqual(path.read_bytes(),b'value = 1\n')
+        with patch.object(qt.QInputDialog,'getItem',return_value=('utf-8-sig',True)):self.window.choose_encoding()
+        self.window.save_document();self.wait();self.assertTrue(path.read_bytes().startswith(b'\xef\xbb\xbf'))
+        with patch.object(qt.QInputDialog,'getText',return_value=('1:3',True)):self.window.go_to()
+        self.assertEqual(doc.editor.textCursor().positionInBlock(),2)
+        before=doc.editor.toPlainText();doc.editor.setReadOnly(True)
+        self.window.edit('duplicate');self.assertEqual(doc.editor.toPlainText(),before)

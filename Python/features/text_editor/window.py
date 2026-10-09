@@ -3,8 +3,10 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.operation_progress import OperationProgress
 from commonUtils.ui.reader_menus import RecentFiles
 from commonUtils.storage import cache_directory
+from commonUtils.ui.code_editor.syntax import LANGUAGES
 from .file_operations import FileOperations
 from .editing import EditingCommands
+from .syntax_settings import SyntaxSettings
 
 
 class DocumentTabs(qt.QTabWidget):
@@ -20,12 +22,13 @@ class DocumentTabs(qt.QTabWidget):
         return super().eventFilter(watched,event)
 
 
-class EditorWindow(EditingCommands,FileOperations,qt.QMainWindow):
+class EditorWindow(SyntaxSettings,EditingCommands,FileOperations,qt.QMainWindow):
     idle=qt.Signal()
     saved=qt.Signal(object)
-    def __init__(self,*,history_path=None):
+    def __init__(self,*,history_path=None,preferences_path=None):
         super().__init__()
         self.setWindowTitle('Text Editor — Logistics');self.resize(1100,780);self.setMinimumSize(640,420)
+        self._initialize_preferences(preferences_path)
         self.tabs=DocumentTabs(self);self.tabs.tabCloseRequested.connect(self.close_tab);self.tabs.currentChanged.connect(self._active_changed)
         self._queue=[];self._close_pending=False;self._done=None;self._failed=None
         self.recent=RecentFiles(path=history_path or cache_directory(create=False)/'TextEditor'/'recent.json')
@@ -40,6 +43,7 @@ class EditorWindow(EditingCommands,FileOperations,qt.QMainWindow):
         self.watcher=qt.QFileSystemWatcher(self);self.watcher.fileChanged.connect(self._external_change)
         self.actions={};self._build_menus();self._build_status()
         self._build_editing(layout)
+        self._build_syntax_controls()
         self.new_document()
 
     @property
@@ -82,7 +86,6 @@ class EditorWindow(EditingCommands,FileOperations,qt.QMainWindow):
         if not self.recent_menu.actions():self.recent_menu.addAction('No recent files').setEnabled(False)
     def _build_status(self):
         self.position=qt.QLabel();self.statusBar().addWidget(self.position,1)
-    def _configure_document(self,document):pass
     def _document_changed(self,document):
         index=self.tabs.indexOf(document)
         if index>=0:
@@ -96,6 +99,7 @@ class EditorWindow(EditingCommands,FileOperations,qt.QMainWindow):
             cursor=document.editor.textCursor()
             self.position.setText(f'Ln {cursor.blockNumber()+1}, Col {cursor.positionInBlock()+1} · {document.editor.blockCount()} lines · {document.encoding.upper()}')
             if hasattr(self,'encoding_button'):self._editing_status(document)
+            if hasattr(self,'language_button'):self.language_button.setText(dict((alias,name) for name,alias in LANGUAGES).get(document.language,document.language))
             self.setWindowTitle(f'{document.title} — Text Editor — Logistics')
             if document.external_changed:self.external_bar.show()
             else:self.external_bar.hide()
@@ -108,7 +112,9 @@ class EditorWindow(EditingCommands,FileOperations,qt.QMainWindow):
     def closeEvent(self,event):
         if self.task.busy or self._queue or not self.search.prepare_close():
             self._close_pending=True;event.ignore();return
-        if self.prepare_close():event.accept()
+        if self.prepare_close():
+            self.options['geometry_str']=self.saveGeometry().toHex().data().decode('ascii')
+            self._preference_timer.stop();self._save_preferences();event.accept()
         else:
             self._close_pending=self.task.busy
             event.ignore()
