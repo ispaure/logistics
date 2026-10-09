@@ -54,6 +54,7 @@ separately, and some integrations need their own software or setup. The
 | --- | --- |
 | File Browser | Browse, search, preview files and explore storage usage |
 | Bulk Rename | Preview and apply changes to many filenames at once |
+| [Text Editor](Python/features/text_editor/user_docs/index.md) | Edit text and code in tabs, search/replace, and preserve file encodings |
 | [Books & Comics](Python/features/books/user_docs/index.md) | Read EPUBs and comics, edit metadata, and manage or compress comic archives |
 | [Archives](Python/features/archives/user_docs/index.md) | Create encrypted ZIPs from files and folders |
 | [Images](Python/features/images/user_docs/index.md) | Compress images and work with photo metadata |

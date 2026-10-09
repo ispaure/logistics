@@ -200,3 +200,14 @@ its browser tabs and detached browser windows remain available.
 Radial storage charts use a short zoom when opening a folder or going up. You can
 disable it in **Settings → commonUtils**, under **Storage → radial animations**.
 The file browser no longer shows a pause-scan button.
+
+## Text Editor
+
+Choose **Text Editor → Open Text Editor** for a standalone document window, or
+right-click text in File Browser and select **Open in Text Editor**. Open multiple
+files in draggable tabs, search/replace with regex and undo support, and edit
+scripts/configuration with syntax, line numbers and indentation controls. Save
+keeps the original file location and encoding; explicit status controls convert
+encoding or line endings. Disk changes and unsaved tabs are checked before data
+can be discarded. Markdown retains its existing reader as well as this source
+editing option. See the [Text Editor guide](Python/features/text_editor/user_docs/index.md).
