@@ -185,6 +185,9 @@ explicit Save and checkboxes for opening folders/new tabs, recursive scanning,
 validating saved results after startup, revisits, file-change notifications, and
 background thread priority. Changes apply on the next request. Other configuration
 sections are retained.
+Cached macOS `/` indexes also remove the duplicate `/System/Volumes/Data`
+traversal before loading saved totals, even when startup validation is disabled.
+Opening that Data folder explicitly remains supported.
 
 ## File Browser and Folder Hub
 
