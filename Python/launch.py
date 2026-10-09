@@ -1,5 +1,6 @@
 from commonUtils.debugUtils import Severity, log
 from commonUtils.ui import pyside
+from commonUtils.ui.theme import apply_theme
 from features import registry
 from ui_new.main_window import MainWindow
 
@@ -10,6 +11,7 @@ def main() -> int:
     # Startup errors may show a dialog, so Qt must exist before feature hooks run.
     log(Severity.DEBUG, 'PySide6', 'Create QApplication')
     app = pyside.initialize_q_app()
+    apply_theme(app)
 
     log(Severity.DEBUG, 'Logistics', 'Initialize Features')
     registry.initialize_features()
