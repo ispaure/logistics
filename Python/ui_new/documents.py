@@ -1,6 +1,6 @@
 """Retained readers/editors hosted in the main window, with optional detachment."""
-import weakref
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.document_host import show_document, register_document_host, document_is_open
 from shiboken6 import isValid
 
 
@@ -45,6 +45,18 @@ class DocumentsPage(qt.QWidget):
     def count(self):
         return sum(not record['closed'] for record in self.records.values())
 
+    @property
+    def attached_count(self):
+        return sum(not record['closed'] and not record['detached'] for record in self.records.values())
+
+    def document_entries(self):
+        for window, record in self.records.items():
+            if record['closed']:
+                continue
+            entries = getattr(window, 'document_entries', lambda: [(window.windowTitle(), None)])()
+            for title, tab in entries:
+                yield window, title, tab, record['detached']
+
     def present(self, window):
         record = self.records.get(window)
         if record and record['detached'] and not record['closed']:
@@ -68,6 +80,8 @@ class DocumentsPage(qt.QWidget):
                 window.finished.connect(lambda result, view=window: self._dialog_finished(view))
         record['closed'] = False
         record['detached'] = False
+        if record.get('return_control') is not None:
+            record['return_control'].hide()
         if record['container'] is None:
             container = qt.QWidget()
             layout = qt.QVBoxLayout(container); layout.setContentsMargins(0, 0, 0, 0)
@@ -87,6 +101,7 @@ class DocumentsPage(qt.QWidget):
         record = self.records.get(window)
         if record and record['container'] is not None:
             self.tabs.setTabText(self.tabs.indexOf(record['container']), title)
+        self.changed.emit()
 
     def _unembed(self, window):
         record = self.records.get(window)
@@ -108,12 +123,30 @@ class DocumentsPage(qt.QWidget):
             return
         self._unembed(window)
         self.records[window]['detached'] = True
+        self._return_control(window)
         window.show(); window.raise_(); window.activateWindow()
         self._update_controls(); self.changed.emit()
 
     def attach(self, window):
         self.records[window]['detached'] = False
         self.present(window)
+
+    def _return_control(self, window):
+        record = self.records[window]
+        control = record.get('return_control')
+        if control is None:
+            if isinstance(window, qt.QMainWindow):
+                control = qt.QToolBar('Logistics', window)
+                control.setMovable(False)
+                control.addAction('Bring back to Logistics', lambda: self.attach(window))
+                window.addToolBar(control)
+            else:
+                control = qt.QPushButton('Bring back to Logistics', window)
+                control.clicked.connect(lambda: self.attach(window))
+                if window.layout() is not None:
+                    window.layout().insertWidget(0, control)
+            record['return_control'] = control
+        control.show()
 
     def _attach_menu(self):
         self.attach_menu.clear()
@@ -177,9 +210,12 @@ class DocumentsPage(qt.QWidget):
                 if hasattr(window, 'documents') and not window.task.busy and not window._close_pending:
                     self.close_veto = True
                 continue
-            window.close()
+            accepted = window.close()
             # Comic readers hide immediately while their decode/cache workers retire.
             owners = [window, getattr(window, 'task', None), getattr(window, 'page_cache', None)]
+            if not accepted and not self.records.get(window, {}).get('closed', True) and not any(getattr(owner, 'busy', False) for owner in owners):
+                self.close_veto = True
+                ready = False
             if any(getattr(owner, 'busy', False) for owner in owners):
                 ready = False
                 for operation in (getattr(window, 'operation', None), getattr(window, 'worker', None),
@@ -190,27 +226,3 @@ class DocumentsPage(qt.QWidget):
             if any(getattr(editor, 'busy', False) for editor in getattr(window, 'metadata_windows', ())):
                 ready = False
         return ready
-
-
-def show_document(window):
-    app = qt.QApplication.instance()
-    reference = getattr(app, '_logistics_document_host', None)
-    host = reference() if reference else None
-    if host is not None and isValid(host) and host.window().isVisible() and not host.closing:
-        host.present(window)
-    else:
-        window.showNormal() if window.isMinimized() else window.show()
-        window.raise_(); window.activateWindow()
-    return window
-
-
-def register_document_host(host):
-    qt.QApplication.instance()._logistics_document_host = weakref.ref(host)
-
-
-def document_is_open(window):
-    reference = getattr(qt.QApplication.instance(), '_logistics_document_host', None)
-    host = reference() if reference else None
-    if host is not None and isValid(host) and window in host.records:
-        return not host.records[window]['closed']
-    return isValid(window) and window.isVisible()

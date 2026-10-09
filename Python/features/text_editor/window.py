@@ -88,6 +88,12 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
     def documents(self):
         return [self.tabs.widget(index) for index in range(self.tabs.count())]
 
+    def document_entries(self):
+        """Expose individual buffers to the application's document switcher."""
+        return [(self.tabs.tabText(index) if self.tabs.widget(index).path else f'Untitled {index+1}' +
+                 (' *' if self.tabs.widget(index).modified else ''), self.tabs.widget(index))
+                for index in range(self.tabs.count())]
+
     def show_error(self, error):
         qt.QMessageBox.warning(self, "Text Editor", str(error))
 

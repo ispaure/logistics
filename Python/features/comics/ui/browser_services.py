@@ -81,7 +81,7 @@ class ComicBrowserServices:
             qt.QTimer.singleShot(0, lambda: self._read(path, password=password))
 
     def _open_editor(self, path, index=None):
-        from ui_new.documents import show_document, document_is_open
+        from commonUtils.ui.document_host import show_document, document_is_open
         targets = normalize_targets(path)
         path = targets[0]
         existing = next((window for window in self.metadata_windows

@@ -31,6 +31,7 @@ class ComicBrowserExtension(qt.QObject, ComicBrowserServices):
             self.idle.emit()
 
     def prepare_close(self):
+        from commonUtils.ui.document_host import host_keeps_document
         self.close_after_catalog = True
         books = getattr(self, '_books_metadata_controller', None)
         if books is not None and not books.prepare_close():
@@ -38,6 +39,8 @@ class ComicBrowserExtension(qt.QObject, ComicBrowserServices):
         if self.reader_busy:
             return False
         for window in self.metadata_windows:
+            if host_keeps_document(window):
+                continue
             if window.busy:
                 # Saves may use a new Operation after initial metadata loading.
                 window.operation.finished.connect(self._notify_idle)

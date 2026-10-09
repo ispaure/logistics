@@ -28,13 +28,16 @@ class BooksController(qt.QObject):
                 window.saved.connect(refresh)
         else:
             window.reader.idle.connect(self.idle)
-        from ui_new.documents import show_document
+        from commonUtils.ui.document_host import show_document
         show_document(window)
         return window
 
     def prepare_close(self):
+        from commonUtils.ui.document_host import host_keeps_document
         ready = True
         for window in tuple(self.windows):
+            if host_keeps_document(window):
+                continue
             if window.prepare_close():
                 window.close()
             else:

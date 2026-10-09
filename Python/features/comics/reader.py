@@ -31,13 +31,13 @@ def open_reader(comic):
     if existing is not None:
         # Returning to an already-open reader should preserve full screen or
         # maximization. Only a minimized reader needs its normal state restored.
-        from ui_new.documents import show_document
+        from commonUtils.ui.document_host import show_document
         show_document(existing)
         return existing
     window = ComicReaderWindow(pages)
     _windows.append(window)
     window.destroyed.connect(lambda: _windows.remove(window) if window in _windows else None)
     qt.QApplication.instance().aboutToQuit.connect(window.shutdown)
-    from ui_new.documents import show_document
+    from commonUtils.ui.document_host import show_document
     show_document(window)
     return window

@@ -9,6 +9,7 @@ from ui_new.pages.folders import FoldersPage
 from ui_new.pages.settings import SettingsPage
 from ui_new.file_browser import FileBrowserPage
 from ui_new.documents import DocumentsPage, register_document_host
+from ui_new.sidebar import DestinationRail
 
 
 CORE_TABS = (
@@ -44,15 +45,9 @@ class MainWindow(pyside.Window):
 
         self.tabs = pyside.QTabWidget()
         self.tabs.tabBar().hide()
-        self.sidebar = pyside.QTreeWidget()
-        self.sidebar.setHeaderHidden(True)
-        self.sidebar.setAccessibleName('Main destinations')
-        self.sidebar.setMinimumWidth(160)
-        self.sidebar.setMaximumWidth(210)
-        self.sidebar.setStyleSheet('QTreeWidget { border: none; background: palette(window); }')
-        self.sidebar.currentItemChanged.connect(self._destination_changed)
-        self._sidebar_items = {}
         self.documents = DocumentsPage(self._show_documents, self.dlg)
+        self.sidebar = DestinationRail(self.documents, self.dlg)
+        self.sidebar.selected.connect(self._destination_changed)
         self.documents.changed.connect(self._documents_changed)
         self.documents.idle.connect(self._retry_close)
         self._closing = False
@@ -69,6 +64,7 @@ class MainWindow(pyside.Window):
         self.dlg.destroyed.connect(self._unsubscribe)
         self.tabs.currentChanged.connect(self._tab_changed)
         self._close_guard = _CloseGuard(self)
+        self._last_destination = self.tabs.currentWidget()
         register_document_host(self.documents)
         self._refresh_sidebar()
 
@@ -160,7 +156,7 @@ class MainWindow(pyside.Window):
         pages = registry.get_pages()
         seen = set()
         entries = list(self._core_pages)
-        if self.documents.count:
+        if self.documents.attached_count:
             entries.append((80, 'Open documents', self.documents))
         for registered in pages:
             contribution = registered.contribution
@@ -185,42 +181,11 @@ class MainWindow(pyside.Window):
         self._refresh_sidebar()
 
     def _refresh_sidebar(self):
-        with pyside.QSignalBlocker(self.sidebar):
-            self.sidebar.clear()
-            self._sidebar_items = {}
-            tools = pyside.QTreeWidgetItem(['Tools'])
-            tools.setFlags(tools.flags() & ~pyside.Qt.ItemFlag.ItemIsSelectable)
-            core = {page: (order, name) for order, name, page in self._core_pages}
-            browser_item = None
-            for index in range(self.tabs.count()):
-                page = self.tabs.widget(index)
-                if page is self.documents:
-                    continue
-                item = pyside.QTreeWidgetItem([self.tabs.tabText(index)])
-                item.setData(0, pyside.Qt.ItemDataRole.UserRole, index)
-                self._sidebar_items[page] = item
-                if page in core and (core[page][0] < 10 or core[page][1] == 'Settings'):
-                    self.sidebar.addTopLevelItem(item)
-                    if core[page][0] == 0:
-                        browser_item = item
-                else:
-                    tools.addChild(item)
-            if browser_item is not None and self.documents.count:
-                item = pyside.QTreeWidgetItem([f'Open documents ({self.documents.count})'])
-                item.setData(0, pyside.Qt.ItemDataRole.UserRole, self.tabs.indexOf(self.documents))
-                browser_item.addChild(item); browser_item.setExpanded(True)
-                self._sidebar_items[self.documents] = item
-            self.sidebar.insertTopLevelItem(min(2, self.sidebar.topLevelItemCount()), tools)
-            tools.setExpanded(True)
-            item = self._sidebar_items.get(self.tabs.currentWidget())
-            if item is not None:
-                self.sidebar.setCurrentItem(item)
+        self.sidebar.refresh(self.tabs, self._core_pages)
 
-    def _destination_changed(self, item, previous):
-        if item is not None:
-            index = item.data(0, pyside.Qt.ItemDataRole.UserRole)
-            if index is not None:
-                self.tabs.setCurrentIndex(index)
+    def _destination_changed(self, page):
+        if page is not None and self.tabs.indexOf(page) >= 0:
+            self.tabs.setCurrentWidget(page)
 
     def _browse_folder(self, path):
         page = next((page for _, _, page in self._core_pages if isinstance(page, FileBrowserPage)), None)
@@ -235,6 +200,8 @@ class MainWindow(pyside.Window):
         self.tabs.setCurrentWidget(page)
 
     def _show_documents(self):
+        if self.tabs.currentWidget() is not self.documents:
+            self._last_destination = self.tabs.currentWidget()
         if self.tabs.indexOf(self.documents) < 0:
             self.tabs.addTab(self.documents, 'Open documents')
         self.tabs.setCurrentWidget(self.documents)
@@ -244,8 +211,12 @@ class MainWindow(pyside.Window):
         from shiboken6 import isValid
         if not isValid(self.tabs):
             return
-        if not self.documents.count and self.tabs.indexOf(self.documents) >= 0:
+        if not self.documents.attached_count and self.tabs.indexOf(self.documents) >= 0:
+            active = self.tabs.currentWidget() is self.documents
+            destination = self._last_destination
             self.tabs.removeTab(self.tabs.indexOf(self.documents))
+            if active and self.tabs.indexOf(destination) >= 0:
+                self.tabs.setCurrentWidget(destination)
         self._refresh_sidebar()
 
     def _retry_close(self):
@@ -262,10 +233,9 @@ class MainWindow(pyside.Window):
         """Refresh the active page when that page exposes a refresh method."""
 
         current_widget = self.tabs.currentWidget()
-        item = self._sidebar_items.get(current_widget)
-        if item is not None:
-            with pyside.QSignalBlocker(self.sidebar):
-                self.sidebar.setCurrentItem(item)
+        if current_widget is not self.documents:
+            self._last_destination = current_widget
+        self.sidebar.set_current(current_widget)
 
         if current_widget is None:
             return

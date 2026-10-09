@@ -81,6 +81,20 @@ class DocumentWorkspaceTests(unittest.TestCase):
             self.page.close_tab(0); self.settle()
             self.assertEqual(self.page.tabs.count(), 0)
 
+    def test_origin_controller_leaves_hosted_document_alive(self):
+        from features.books.controller import BooksController
+        window = qt.QMainWindow(); window.setWindowTitle('Retained reader')
+        window.prepare_close = lambda: True
+        controller = BooksController(self.host)
+        controller.windows.append(window)
+        show_document(window); self.settle()
+        self.assertTrue(controller.prepare_close())
+        self.assertTrue(document_is_open(window))
+        self.assertTrue(window.isVisible())
+        self.page.closing = True
+        self.assertTrue(controller.prepare_close()); self.settle()
+        self.assertFalse(document_is_open(window))
+
     def test_closed_main_host_does_not_reopen_when_a_standalone_document_opens(self):
         self.host.hide()
         window = qt.QMainWindow()
@@ -88,6 +102,30 @@ class DocumentWorkspaceTests(unittest.TestCase):
         self.assertTrue(window.isWindow())
         self.assertEqual(self.page.tabs.count(), 0)
         window.close(); window.deleteLater()
+
+    def test_all_detached_documents_can_return_from_their_window(self):
+        window = qt.QMainWindow(); window.setWindowTitle('Detached reader')
+        show_document(window); self.settle()
+        self.page.detach_current(); self.settle()
+        self.assertEqual(self.page.attached_count, 0)
+        self.assertEqual(self.page.count, 1)
+        toolbar = self.page.records[window]['return_control']
+        toolbar.actions()[0].trigger(); self.settle()
+        self.assertEqual(self.page.attached_count, 1)
+        self.assertFalse(window.isWindow())
+        self.assertTrue(toolbar.isHidden())
+
+    def test_markdown_uses_workspace_and_close_cancel_vetoes_main_close(self):
+        from commonUtils.ui.markdown import open_markdown
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary)/'note.md'; path.write_text('# A note')
+            window = open_markdown(path, allow_edit=True); self.settle()
+            self.assertFalse(window.isWindow())
+            self.assertEqual(self.page.attached_count, 1)
+            with patch.object(window.viewer, 'can_close', return_value=False):
+                self.assertFalse(self.page.prepare_close())
+                self.assertTrue(self.page.close_veto)
+            window.close(); self.settle()
 
     def test_embedded_epub_keeps_its_title_and_close_action_local(self):
         from books_fixture import make_book

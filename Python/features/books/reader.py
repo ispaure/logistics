@@ -91,12 +91,8 @@ class BooksPage(qt.QWidget):
         self.fullscreen.toggle()
 
     def reader_window(self):
-        parent = self.parentWidget()
-        while parent is not None:
-            if isinstance(parent, BookWindow):
-                return parent
-            parent = parent.parentWidget()
-        return None
+        from commonUtils.ui.document_host import document_owner
+        return document_owner(self, BookWindow)
 
     def close_reader(self):
         if self.reader_window() is not None:
