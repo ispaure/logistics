@@ -1,137 +1,92 @@
 # Logistics
 
-Logistics is a personal Python/PySide6 desktop toolbox for managing local and remote folders, media libraries, servers, and maintenance tasks. Launchers support macOS, Windows, and Linux; individual integrations may support fewer platforms.
+Logistics brings file browsing, media tools and remote-folder management into one
+desktop app. Browse your files, see what's taking up space, read comics, rename
+batches of files, or work with your servers and libraries.
 
-Read [Using Logistics](USER_GUIDE.md) for user instructions, or choose **User guide**
-beside a feature in Settings → Features.
+It runs on Windows, macOS and Linux. Some tools are specific to one platform or
+need another application installed.
 
-## Getting started
+## Get started
 
-1. Clone with shared utilities: `git clone --recurse-submodules <repository-url>`.
-   For an existing checkout, run `git submodule update --init --recursive`.
-2. Review [configuration and resource setup](CONFIGURATION.md). Defaults keep
-   private resources in the checkout and managed data under your home directory;
-   Dropbox is optional.
-3. Run the launcher for your platform:
+1. Download **release.zip** from [GitHub Releases](https://github.com/ispaure/logistics/releases)
+   when a packaged release is available. Choose that file rather than GitHub's
+   automatic “Source code” ZIP: it includes the shared commonUtils files too.
+2. Extract the ZIP and open the `Logistics` folder.
+3. Start the app using the launcher for your computer:
 
-   | Platform | Launcher |
+   | Computer | What to open |
    | --- | --- |
-   | macOS | `LaunchLogistics_MAC.command` |
-   | Windows | `LaunchLogistics_WIN.bat` |
-   | Linux | `bash LaunchLogistics_LINUX_UV.sh` |
+   | Windows | Double-click **LaunchLogistics_WIN.bat** |
+   | macOS | Double-click **LaunchLogistics_MAC.command** |
+   | Linux | Open a terminal in the folder and run `bash LaunchLogistics_LINUX_UV.sh` |
 
-The shared launchers install `uv` when needed, resolve the requested Python version,
-and synchronize [dependencies](Python/pyproject.toml) from [uv.lock](Python/uv.lock)
-into the root `.venv`. The current lock targets Python 3.12.2. Initial setup
-requires internet access. The entry point is `Python/launch.py`; [launch_config.ini](launch_config.ini) controls launcher paths.
+The launcher sets up Python and the required Python packages for you. You'll need
+an internet connection for the first run. Setup may take a little while; later
+launches reuse the installed environment.
 
-## Finding your tools
+Using Git instead? Clone with the shared utilities included, then open the same launcher:
 
-**File Browser** is the startup page, opening in your home folder. Use **Open
-folder…** for another location, including external drives, and **Home** to return.
-Right-click folders for Unicode inspection, PYC cleanup and WEBP compression.
+```sh
+git clone --recurse-submodules https://github.com/ispaure/logistics.git
+```
 
-**Known Folders** brings together managed local folders, optional Dropbox accounts and
-loaded rclone remotes. Select a source, then a folder: enabled features contribute
-relevant controls for detected libraries, servers and folder configuration. A
-remote and its same-named local folder can share one entry; credential context is
-retained when several configs define the same remote name.
+If you've already cloned it, run `git submodule update --init --recursive` in the
+project folder to fetch any missing shared files.
 
-**Settings → rclone** loads credential packages and manages the resulting remote configs.
-Transfers use the selected config; **FUSE** adds an on-demand mount action where
-supported. Ordinary transfers do not require a filesystem driver.
+## Find your way around
 
-**Debug** hosts standalone maintenance workflows, **Open File Browser…** and
-**Bulk Rename…** for previewing and applying filename rules.
-The browser navigates any selected root with list, tile and column views, file
-information, previews and enabled features' selection actions. Independent tabs
-can detach, split side by side, and reattach through native dock controls. Search
-and storage analysis share validated metadata snapshots, with explicit rescan and
-refresh controls. Dedicated feature
-pages provide other controls, such as Links and Smart Home. Minecraft server
-controls appear within the selected folder’s section.
+The app opens in **File Browser**, starting in your home folder. Use **Open
+folder…** to browse another location. You can search, preview files, switch views,
+and explore folder sizes with the storage charts.
 
-**Settings → Features** enables or disables integrations for the current session and opens
-per-feature user guides in the built-in Markdown reader. Hard
-dependencies determine availability, and disabling a feature removes its browser
-contributions and owned file-type rules. Existing operations and windows keep
-their state; disabling does not undo changes already made to files.
+**Known Folders** brings your configured local folders and remote sources together.
+**Settings** lets you enable features and edit their configuration. Each feature
+has a **User guide** button under **Settings → Features**.
 
-## Configuration and resources
+Start with the tools you need. Credentials for remote services are supplied
+separately, and some integrations need their own software or setup. The
+[configuration guide](CONFIGURATION.md) explains those steps when you're ready.
 
-Application paths and folder exclusions live in
-[Python/configFile.ini](Python/configFile.ini). Feature-owned settings live with
-that feature; folder-specific integration settings use `remoteConfig.ini` where
-required. The [configuration guide](CONFIGURATION.md) explains each layer and
-links to the relevant feature instructions.
+## What can it do?
 
-`Software/` and `RemoteCredentials/` are created at the repository root and ignored
-by Git. Credential packages must be supplied separately; an empty credentials
-folder is a valid starting point. `.conf` files are also ignored. On first use,
-rclone and macOS/Windows mount drivers can offer a verified download from the
-[pinned manifest](Python/software_manifest.json). Other integrations may require
-an installed application or separately supplied software. Startup does not
-provision every integration.
-
-Platform launchers support Windows, macOS and Linux, while individual features
-have their own platform limits. Actions may replace files, synchronize folders or
-modify application settings; each feature guide describes its specific behavior.
-Background progress and cancellation are available for archive creation and comic
-compression/encryption. GUI rclone transfers use an integrated status/progress/log window and retain
-final exit and retry outcomes. Other workflows have their own execution models.
-
-## Features
-
-Each feature README covers implementation and feature-specific contracts; its
-linked user guide covers controls and setup.
-
-| Feature | Purpose |
+| Tool | Use it to… |
 | --- | --- |
-| [rclone](Python/features/rclone/README.md) | Credential configs and remote push/pull |
-| [FUSE](Python/features/fuse/README.md) | Mount and open remotes on demand |
-| [Comics](Python/features/comics/README.md) | Library tabs, native reader, metadata editing, CBZ compression and encryption, and CBR conversion |
-| [Archives](Python/features/archives/README.md) | Create separate verified AES-256 ZIPs from file/folder selections |
-| [Images](Python/features/images/README.md) | Image compression and JPG EXIF tools |
-| [Calibre](Python/features/calibre/README.md) | Library launching and book export |
-| [Plex](Python/features/plex/README.md) | Media Server data backup and restore |
-| [Media](Python/features/media/README.md) | MKA chapter renaming from CSV |
-| [YouTube Downloader](Python/features/youtube_downloader/README.md) | Channel/playlist downloads and optional remote sync |
-| [Minecraft](Python/features/minecraft/README.md) | Discover and manage servers within local folders |
-| [Perforce](Python/features/perforce/README.md) | Launch configured P4D servers on Linux |
-| [Obsidian](Python/features/obsidian/README.md) | Discover, register, and open vaults |
-| [Dropbox](Python/features/dropbox/README.md) | Folder sources and conflicting-copy cleanup |
-| [Links](Python/features/links/README.md) | Configured website shortcuts |
-| [Smart Home](Python/features/smart_home/README.md) | Philips Hue controls and Tautulli scripts |
-| [Flight Simulator](Python/features/flight_sim/README.md) | X-Plane 12 settings and window presets |
-| [File Tools](Python/features/file_tools/README.md) | Unicode path diagnostics and bytecode cleanup |
-| [System Tools](Python/features/system_tools/README.md) | Platform-specific maintenance actions |
+| File Browser | Browse, search, preview files and explore storage usage |
+| Bulk Rename | Preview and apply changes to many filenames at once |
+| [Books & Comics](Python/features/books/user_docs/index.md) | Read EPUBs and comics, edit metadata, and manage or compress comic archives |
+| [Archives](Python/features/archives/user_docs/index.md) | Create encrypted ZIPs from files and folders |
+| [Images](Python/features/images/user_docs/index.md) | Compress images and work with photo metadata |
+| [rclone](Python/features/rclone/user_docs/index.md) | Transfer files between local folders and remote storage |
+| [FUSE](Python/features/fuse/user_docs/index.md) | Open supported remote storage as a mounted folder |
+| [Calibre](Python/features/calibre/user_docs/index.md) | Open book libraries and export books |
+| [Plex](Python/features/plex/user_docs/index.md) | Back up and restore media-server data |
+| [YouTube Downloader](Python/features/youtube_downloader/user_docs/index.md) | Download channels and playlists |
+| [Minecraft](Python/features/minecraft/user_docs/index.md) | Find and manage local servers |
+| [Perforce](Python/features/perforce/user_docs/index.md) | Launch configured servers on Linux |
+| [Obsidian](Python/features/obsidian/user_docs/index.md) | Find and open vaults |
+| [Dropbox](Python/features/dropbox/user_docs/index.md) | Browse Dropbox folders and clean up conflicting copies |
+| [Links](Python/features/links/user_docs/index.md) | Keep useful website shortcuts together |
+| [Smart Home](Python/features/smart_home/user_docs/index.md) | Control Philips Hue and access Tautulli tools |
+| [Aviation Tools](Python/features/aviation_tools/user_docs/index.md) | Flight calculators and aircraft/airport reference data |
+| [Flight Simulator](Python/features/flight_sim/user_docs/index.md) | Manage X-Plane settings and window presets |
+| [Media](Python/features/media/user_docs/index.md) | Rename audio chapters from a CSV |
+| [File Tools](Python/features/file_tools/user_docs/index.md) | Check filenames and remove Python bytecode files |
+| [System Tools](Python/features/system_tools/user_docs/index.md) | Run platform-specific maintenance tools |
 
-## Development
+## Learn more
 
-`Python/features/` owns feature logic and feature-specific UI; `Python/ui_new/` hosts the generic interface; `Python/models/` and `Python/services/` provide folder models and discovery support. `Python/commonUtils/` is a Git submodule. See [UI architecture](Python/features/UI_ARCHITECTURE.md) for contribution and configuration conventions, and [file browser development](Python/features/FILE_BROWSER.md) for panels, context actions and activation. `Scripts/` contains standalone scripts.
+- [User guide](USER_GUIDE.md): using the app and its tools.
+- [Configuration](CONFIGURATION.md): paths, settings and optional integrations.
+- [Development](DEVELOPMENT.md): project structure, extension guides and testing.
+- [Publishing releases](RELEASING.md): package checks and release troubleshooting.
 
-Run the regression suite from the repository root:
-
-```sh
-# macOS / Linux
-PYTHONPATH=Python .venv/bin/python -m unittest discover -s Python/tests -v
-```
-
-On Windows PowerShell, set `$env:PYTHONPATH = "Python"` and run `.venv/Scripts/python.exe -m unittest discover -s Python/tests -v`.
-
-For both repositories' suites and the historical comic compression comparison,
-use the same project interpreter:
+Maintainers publish a release by tagging a committed, pushed version:
 
 ```sh
-.venv/bin/python Python/tests/run_platform_checks.py
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
-On Windows, use `.venv/Scripts/python.exe Python/tests/run_platform_checks.py`.
-The runner configures the import path and headless Qt automatically. See
-[cross-platform testing](Python/tests/PLATFORM_CHECKS.md) for CI and platform details,
-[UI architecture](Python/features/UI_ARCHITECTURE.md) for extension conventions,
-and [maintenance notes](Python/MAINTENANCE.md) for remaining validation gaps.
-
-Tests cover application startup, contributions, local fixtures and simulated
-failures. Desktop interaction, real remote transfers/mounts, external applications
-and installed drivers require separate validation.
+GitHub builds **release.zip**, including submodules, and adds it to a release with
+automatic notes. See the release guide for the steps before publishing your first one.

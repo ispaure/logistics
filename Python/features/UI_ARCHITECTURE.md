@@ -169,6 +169,13 @@ is refused with their names. Missing packages are listed but cannot be enabled.
 `is_feature_enabled` and `get_enabled_features` describe the active session.
 Contribution queries and workflow lookup return only enabled features.
 
+Related engines may declare `FEATURE_GROUP = '<leader module name>'` to share
+one user-facing settings entry. `FeatureState.members` retains their runtime
+names; toggling either the leader or a legacy member applies to the whole group.
+Requirements and dependents are presented at group level, while file-type
+ownership, controllers and configuration files remain attached to each engine.
+Books & Comics uses this to keep the existing `books` and `comics` APIs intact.
+
 Features remain imported. Their initializers run once per session; disabling does
 not unmount remotes or reverse other initialization effects. Declared format rules receive the declaration id as their owner automatically.
 Legacy registration hooks run inside `file_types.owner_scope(feature_name)`;
@@ -252,9 +259,21 @@ def get_contributions():
 ```
 
 The same `settings` field is supported by unified `Feature` declarations.
-`settings_id` must be unique within its feature. `config_files` adds plain-text
-editors below the custom layout. Conventional feature `config.ini` files are
+`settings_id` must be unique within its feature. `config_files` adds section-and-key INI editors (with a Source tab)
+below the custom layout. Other text files retain the plain-text editor. Conventional feature `config.ini` files are
 available even while a feature is disabled. Application INI files are in
 **Settings → Configuration**. Editors preserve UTF-8 BOM/newlines, save atomically,
 and refuse to overwrite changes made outside the editor. Settings is distinct
 from feature action pages such as Links or Smart Home.
+
+New feature-wide settings belong directly in the feature's `config.ini`. See
+[typed INI conventions](../../CONFIGURATION.md#feature-ini-settings) for suffixes
+and dropdown choices. The schema lives in `commonUtils.configuration.ini_schema` and its editor in
+`commonUtils.ui.ini_editor`; Logistics retains compatibility imports and opts
+into typed keys. commonUtils `fileTypes.iniType.INIFile` remains schema-free. Keep fallback reads
+when migrating an existing public key; do not rename folder-owned configs.
+
+Contribution lists are type-checked during collection, before UI page creation.
+For example, `SettingsContribution` belongs only in `settings`; remote source
+lists require `RemoteFolderSourceContribution`. A misplaced entry raises a
+TypeError naming the feature and category rather than reaching folder discovery.
