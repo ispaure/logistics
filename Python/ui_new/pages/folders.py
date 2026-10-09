@@ -17,6 +17,7 @@ LOCAL_SOURCE_NAME = 'Local'
 
 
 class FoldersPage(pyside.QWidget):
+    browse_requested = pyside.Signal(object)
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -58,7 +59,7 @@ class FoldersPage(pyside.QWidget):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(8)
 
-        title_label = pyside.QLabel('Known Folders')
+        title_label = pyside.QLabel('Folder Hub')
         title_font = title_label.font()
         title_font.setPointSize(title_font.pointSize() + 4)
         title_font.setBold(True)
@@ -69,6 +70,9 @@ class FoldersPage(pyside.QWidget):
         self.credential_label.setFont(source_font)
 
         left_layout.addWidget(title_label)
+        subtitle = pyside.QLabel('Libraries, servers and remote folders')
+        subtitle.setWordWrap(True)
+        left_layout.addWidget(subtitle)
         left_layout.addWidget(self.source_tabs)
         left_layout.addWidget(self.credential_label)
         left_layout.addWidget(self.credential_combo)
@@ -434,6 +438,9 @@ class FoldersPage(pyside.QWidget):
         layout.addLayout(status_layout)
 
         if entry.local is not None:
+            browse_button = pyside.QPushButton('Browse in Logistics')
+            browse_button.clicked.connect(lambda checked=False, path=entry.local.path: self.browse_requested.emit(path))
+            layout.addWidget(browse_button)
             open_button = pyside.QPushButton('Open Folder')
             open_button.clicked.connect(
                 lambda _checked=False, folder=entry.local: folder.open()

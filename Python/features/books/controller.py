@@ -28,7 +28,8 @@ class BooksController(qt.QObject):
                 window.saved.connect(refresh)
         else:
             window.reader.idle.connect(self.idle)
-        window.show()
+        from ui_new.documents import show_document
+        show_document(window)
         return window
 
     def prepare_close(self):

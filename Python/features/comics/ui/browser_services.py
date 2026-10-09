@@ -81,16 +81,16 @@ class ComicBrowserServices:
             qt.QTimer.singleShot(0, lambda: self._read(path, password=password))
 
     def _open_editor(self, path, index=None):
+        from ui_new.documents import show_document, document_is_open
         targets = normalize_targets(path)
         path = targets[0]
         existing = next((window for window in self.metadata_windows
-                         if set(window.targets) == set(targets) and window.isVisible()), None)
+                         if set(window.targets) == set(targets) and document_is_open(window)), None)
         if existing is not None:
-            existing.raise_()
-            existing.activateWindow()
+            show_document(existing)
             return existing
         for window in list(self.metadata_windows):
-            if not window.isVisible() and not window.busy:
+            if not document_is_open(window) and not window.busy:
                 self.metadata_windows.remove(window)
                 window.deleteLater()
         index = index if index is not None else self.model.index(str(path))
@@ -106,5 +106,5 @@ class ComicBrowserServices:
         self.suggestions_changed.connect(window.tabs.set_suggestions)
         self.metadata_windows.append(window)
         window.saved.connect(self._metadata_saved)
-        window.show()
+        show_document(window)
         return window

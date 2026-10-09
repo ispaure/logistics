@@ -90,9 +90,17 @@ class BooksPage(qt.QWidget):
     def toggle_fullscreen(self):
         self.fullscreen.toggle()
 
+    def reader_window(self):
+        parent = self.parentWidget()
+        while parent is not None:
+            if isinstance(parent, BookWindow):
+                return parent
+            parent = parent.parentWidget()
+        return None
+
     def close_reader(self):
-        if isinstance(self.window(), BookWindow):
-            self.window().close()
+        if self.reader_window() is not None:
+            self.reader_window().close()
             return
         if self.worker:
             return
@@ -169,7 +177,7 @@ class BooksPage(qt.QWidget):
                 task.deleteLater()
                 self.idle.emit()
                 if self._closing:
-                    target = self.window()
+                    target = self.reader_window() or self
                     qt.QTimer.singleShot(0, target, target.close)
         task.finished.connect(finish)
         task.start()
@@ -196,9 +204,9 @@ class BooksPage(qt.QWidget):
         self.empty_panel.hide()
         self.title.setText(book.title)
         self.title.setToolTip(book.title)
-        if isinstance(self.window(), BookWindow):
-            self.window().setWindowTitle(book.title + ' — EPUB reader')
-            self.window().setWindowFilePath(str(book.path))
+        if self.reader_window() is not None:
+            self.reader_window().setWindowTitle(book.title + ' — EPUB reader')
+            self.reader_window().setWindowFilePath(str(book.path))
         self._remember(book.path)
         self._state = ReadingState(book.path, folder=self._state_folder)
         state = self._state.load() if self._settings['remember'] else {}

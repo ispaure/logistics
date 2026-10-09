@@ -77,16 +77,13 @@ class MainWindowTests(unittest.TestCase):
                     patch.object(main_window,'CORE_TABS',core):
                 window = main_window.MainWindow()
                 self.assertEqual([window.tabs.tabText(i) for i in range(window.tabs.count())],
-                                 ['File Browser','Known Folders','Settings','Debug'])
-                loop = qt.QEventLoop()
-                poll = qt.QTimer()
-                poll.setInterval(10)
-                poll.timeout.connect(lambda: loop.quit() if window.can_close() else None)
-                poll.start()
-                qt.QTimer.singleShot(5000, loop.quit)
-                if not window.can_close():
-                    loop.exec()
-                poll.stop()
+                                 ['File Browser','Folder Hub','Settings','Debug'])
+                # Drain the application's event queue, including completion
+                # callbacks queued before entering a nested test event loop.
+                from time import monotonic, sleep
+                deadline = monotonic() + 5
+                while not window.can_close() and monotonic() < deadline:
+                    self.app.processEvents(); sleep(.005)
                 browser = window.tabs.widget(0).file_browser
                 self.assertTrue(window.can_close(), repr({
                     'listing': browser.busy, 'index': browser.folder_busy,
@@ -112,6 +109,25 @@ class MainWindowTests(unittest.TestCase):
         window.tabs.currentWidget().refresh.assert_called_once_with()
         window.tabs.setCurrentIndex(0)
         window.tabs.currentWidget().refresh.assert_called_once_with()
+
+    def test_sidebar_groups_tools_and_keeps_documents_when_features_change(self):
+        from ui_new.documents import show_document
+        contribution = self.contribution('Calculator', 'calculator')
+        window = self.window([contribution]); window.dlg.show(); self.app.processEvents()
+        self.assertTrue(window.tabs.tabBar().isHidden())
+        tools = next(window.sidebar.topLevelItem(i) for i in range(window.sidebar.topLevelItemCount())
+                     if window.sidebar.topLevelItem(i).text(0) == 'Tools')
+        self.assertEqual([tools.child(i).text(0) for i in range(tools.childCount())], ['Calculator', 'Debug'])
+        reader = qt.QMainWindow(); reader.setWindowTitle('Open reader')
+        show_document(reader); self.app.processEvents()
+        self.assertIs(window.tabs.currentWidget(), window.documents)
+        self.assertFalse(reader.isWindow())
+        with patch.object(main_window.registry, 'get_pages', return_value=[]):
+            window._sync_feature_pages()
+        self.assertIs(window.tabs.currentWidget(), window.documents)
+        self.assertIn('Open documents', window.sidebar.currentItem().text(0))
+        reader.close(); self.app.processEvents()
+        window.dlg.close(); self.app.processEvents()
 
     def test_pages_with_equal_order_sort_by_display_name(self):
         window = self.window([self.contribution('Zebra', 'zebra'),
@@ -157,7 +173,7 @@ class MainWindowTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         (self.root / 'file.txt').write_text('fixture')
         with patch.object(main_window, 'CORE_TABS', ((0, 'File Browser', FileBrowserPage),
-                (5, 'Known Folders', self.page), (90, 'Settings', self.page))), patch.object(
+                (5, 'Folder Hub', self.page), (90, 'Settings', self.page))), patch.object(
                 main_window.registry, 'get_pages', return_value=[]), patch.object(
                 main_window.registry, 'get_browser_extensions', return_value=extensions), patch.object(Path, 'home', return_value=self.root):
             window = main_window.MainWindow()
@@ -179,7 +195,7 @@ class MainWindowTests(unittest.TestCase):
         browser = window.tabs.widget(0)
         self.wait_browser(browser)
         self.assertEqual(window.tabs.tabText(0), 'File Browser')
-        self.assertEqual(window.tabs.tabText(1), 'Known Folders')
+        self.assertEqual(window.tabs.tabText(1), 'Folder Hub')
         self.assertEqual(window.tabs.currentIndex(), 0)
         self.assertEqual(browser.file_browser.navigation.library, Path(self.root.anchor))
         self.assertEqual(browser.file_browser.navigation.directory, self.root)
@@ -195,6 +211,26 @@ class MainWindowTests(unittest.TestCase):
         self.wait_browser(browser)
         self.assertEqual(browser.file_browser.navigation.library, Path(self.root.anchor))
         self.assertEqual(browser.file_browser.navigation.directory, self.root)
+        window.dlg.close(); self.app.processEvents()
+
+    def test_folder_hub_browse_uses_browser_and_preserves_scoped_views(self):
+        window = self.browser_window()
+        page = window.tabs.widget(0)
+        self.wait_browser(page)
+        folder = self.root / 'library'
+        folder.mkdir()
+        window.tabs.setCurrentIndex(1)
+        window._browse_folder(folder)
+        self.wait_browser(page)
+        self.assertIs(window.tabs.currentWidget(), page)
+        self.assertEqual(page.file_browser.navigation.directory, folder)
+        scoped = page.workspace.add_view(folder)
+        self.wait_browser(page)
+        window._browse_folder(self.root)
+        self.wait_browser(page)
+        self.assertIsNot(page.workspace.active_view, scoped)
+        self.assertEqual(scoped.file_browser.navigation.directory, folder)
+        self.assertEqual(page.file_browser.navigation.directory, self.root)
         window.dlg.close(); self.app.processEvents()
 
     def test_main_close_waits_for_embedded_extension_then_retries(self):
