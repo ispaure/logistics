@@ -85,6 +85,64 @@ class SettingsPageTests(unittest.TestCase):
         self.assertTrue(all(isinstance(entry, RemoteFolderSourceContribution)
                             for entry in contributions.remote_folder_sources))
         self.assertEqual(len(contributions.remote_folder_sources), 1)
+        self.assertTrue(contributions.settings[0].separate_tab)
+
+    def test_feature_guide_is_in_header_and_available_when_disabled(self):
+        from ui_new.pages.settings import FeatureSettingsPanel
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            guide = root / 'test' / 'user_docs' / 'index.md'
+            guide.parent.mkdir(parents=True); guide.write_text('# Test\n')
+            state = self.state(); state.enabled = False
+            with patch.object(registry, '__file__', str(root / 'registry.py')), \
+                    patch.object(registry, 'get_settings', return_value=[]):
+                panel = FeatureSettingsPanel(state); self.addCleanup(panel.deleteLater)
+                panel.resize(850, 600); panel.show(); self.app.processEvents()
+                self.assertTrue(panel.guide_button.isEnabled())
+                self.assertGreater(panel.guide_button.x(), panel.width() / 2)
+                self.assertLess(panel.guide_button.y(), 60)
+                with patch('ui_new.pages.settings.open_markdown') as opened:
+                    panel.guide_button.click()
+                opened.assert_called_once_with(guide, parent=panel.window())
+                self.assertIn('Alt', panel.guide_button.toolTip())
+                panel.close()
+
+    def test_tabbed_settings_retain_custom_state_and_unsaved_ini_edits(self):
+        from ui_new.pages.settings import FeatureSettingsPanel
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'config.ini'; path.write_text('[Test]\nkey=value\n')
+            factory = Mock(side_effect=lambda parent: qt.QLineEdit('credential state', parent))
+            tab = RegisteredContribution('test', 'Test', SettingsContribution(
+                'Credential packages', 'credentials', factory, separate_tab=True))
+            ini = RegisteredContribution('test', 'Test', SettingsContribution(
+                'INI', 'ini', lambda parent: qt.QLabel('Configuration', parent), config_files=(path,)))
+            state = self.state()
+            with patch.object(registry, 'get_settings', return_value=[tab, ini]) as entries:
+                panel = FeatureSettingsPanel(state); self.addCleanup(panel.deleteLater)
+                panel.show(); self.app.processEvents()
+                self.assertEqual([panel.settings_tabs.tabText(i) for i in range(2)], ['INI files', 'Credential packages'])
+                widget = panel.custom['credentials']
+                self.assertTrue(widget.isHidden())
+                editor = panel.config.editors[path]
+                editor.text.insertPlainText('# unsaved\n')
+                panel.settings_tabs.setCurrentIndex(1)
+                widget.setText('retained')
+                panel.refresh(state)
+                self.assertIs(panel.settings_tabs.currentWidget(), widget)
+                self.assertTrue(panel.body.isHidden())
+                state.enabled = False; entries.return_value = []
+                panel.refresh(state)
+                self.assertEqual(panel.settings_tabs.count(), 1)
+                state.enabled = True; entries.return_value = [tab, ini]
+                panel.refresh(state)
+                self.assertIs(panel.custom['credentials'], widget)
+                self.assertEqual(widget.text(), 'retained')
+                self.assertTrue(editor.is_modified)
+                factory.assert_called_once()
+                with patch.object(editor, 'can_close', return_value=False):
+                    self.assertFalse(panel.can_close())
+                editor.text.document().setModified(False)
+                panel.close()
 
 
     def test_settings_api_rejects_duplicate_identity(self):

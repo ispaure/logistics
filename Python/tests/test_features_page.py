@@ -38,59 +38,40 @@ class FeaturesPageTests(unittest.TestCase):
         self.addCleanup(self.page.deleteLater)
 
     def item(self, name):
-        return next(self.page.tree.topLevelItem(i) for i in range(self.page.tree.topLevelItemCount())
-                    if self.page.tree.topLevelItem(i).data(0, qt.Qt.ItemDataRole.UserRole) == name)
+        return self.page.toggles[name]
 
     def test_checkbox_dependency_error_and_reenable_dependencies(self):
-        self.item('test_base').setCheckState(0, qt.Qt.CheckState.Unchecked)
+        self.item('test_base').setChecked(False)
         self.assertIn('Test Child', self.page.status.text())
         self.assertTrue(registry.is_feature_enabled('test_base'))
-        self.item('test_child').setCheckState(0, qt.Qt.CheckState.Unchecked)
+        self.item('test_child').setChecked(False)
         self.app.processEvents()
         self.assertFalse(registry.is_feature_enabled('test_child'))
-        self.item('test_base').setCheckState(0, qt.Qt.CheckState.Unchecked)
+        self.item('test_base').setChecked(False)
         self.app.processEvents()
-        self.item('test_child').setCheckState(0, qt.Qt.CheckState.Checked)
+        self.item('test_child').setChecked(True)
         self.app.processEvents()
         self.assertTrue(registry.is_feature_enabled('test_base'))
         self.assertTrue(registry.is_feature_enabled('test_child'))
-        self.assertEqual(self.item('test_base').checkState(0), qt.Qt.CheckState.Checked)
+        self.assertEqual(self.item('test_base').checkState(), qt.Qt.CheckState.Checked)
 
     def test_missing_dependency_is_not_checkable(self):
         item = self.item('test_missing')
-        self.assertEqual(item.text(1), 'Missing dependency')
-        self.assertFalse(item.flags() & qt.Qt.ItemFlag.ItemIsUserCheckable)
+        self.assertEqual(self.page.states['test_missing'].text(), 'Missing dependency')
+        self.assertFalse(item.isEnabled())
 
     def test_rejected_toggle_keeps_emitting_item_alive_until_signal_returns(self):
         from shiboken6 import isValid
         item = self.item('test_base')
-        item.setCheckState(0, qt.Qt.CheckState.Unchecked)
+        item.setChecked(False)
         self.assertTrue(isValid(item))
         self.assertTrue(registry.is_feature_enabled('test_base'))
         self.app.processEvents()
-        self.assertEqual(self.item('test_base').checkState(0), qt.Qt.CheckState.Checked)
+        self.assertEqual(self.item('test_base').checkState(), qt.Qt.CheckState.Checked)
 
-    def test_user_guides_are_available_even_when_feature_is_disabled(self):
-        from pathlib import Path
-        from tempfile import TemporaryDirectory
-        with TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            guide = root / 'test_child' / 'user_docs' / 'index.md'
-            guide.parent.mkdir(parents=True)
-            guide.write_text('# Test Child\n')
-            with patch.object(registry, '__file__', str(root / 'registry.py')):
-                registry.set_feature_enabled('test_child', False)
-                self.page.refresh()
-                button = self.page.tree.itemWidget(self.item('test_child'), 4)
-                self.assertTrue(button.isEnabled())
-                with patch('ui_new.pages.features.open_markdown') as opened:
-                    button.click()
-                opened.assert_called_once_with(guide, parent=self.page.window())
-                with patch('ui_new.pages.features.open_markdown') as opened, \
-                        patch.object(qt.QApplication, 'keyboardModifiers',
-                                     return_value=qt.Qt.KeyboardModifier.AltModifier):
-                    button.click()
-                opened.assert_called_once_with(guide, parent=self.page.window())
-                self.assertIn('Alt', button.toolTip())
-                missing = self.page.tree.itemWidget(self.item('test_missing'), 4)
-                self.assertFalse(missing.isEnabled())
+    def test_toggle_cards_are_bounded_and_do_not_use_a_table(self):
+        self.page.resize(1400, 800); self.page.show(); self.app.processEvents()
+        self.assertLessEqual(self.page.content.width(), 820)
+        self.assertEqual(self.page.findChildren(qt.QTreeWidget), [])
+        self.assertEqual(self.page.cards.count(), 3)
+        self.page.close()

@@ -156,12 +156,14 @@ class SettingsContribution:
 
     Factories run lazily on selection, only for enabled features. The widget may
     expose refresh() and can_close() to participate in the host lifecycle.
+    separate_tab places the custom widget beside the INI files in its own tab.
     """
     name: str
     settings_id: str
     create_widget: Callable[[Any], Any]
     order: int = 0
     config_files: tuple[Any, ...] = ()
+    separate_tab: bool = False
 
 
 @dataclass(frozen=True)

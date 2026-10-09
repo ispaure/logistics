@@ -1,9 +1,5 @@
 """Session feature controls with dependency-aware enable/disable behavior."""
-
-from pathlib import Path
-
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.markdown import open_markdown
 from features import registry
 
 
@@ -11,23 +7,36 @@ class FeaturesPage(qt.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = qt.QVBoxLayout(self)
-        description = qt.QLabel('Enable or disable features for this session. Enabling a feature also enables its '
-                                'required dependencies. Existing windows and jobs can finish. Changes reset on restart.')
+        self.scroll = qt.QScrollArea()
+        self.scroll.setFrameShape(qt.QFrame.Shape.NoFrame)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setAlignment(qt.Qt.AlignmentFlag.AlignHCenter | qt.Qt.AlignmentFlag.AlignTop)
+        self.content = qt.QWidget()
+        self.content.setMaximumWidth(820)
+        content_layout = qt.QVBoxLayout(self.content)
+        content_layout.setContentsMargins(12, 12, 12, 12)
+        content_layout.setSpacing(16)
+        title = qt.QLabel('Features')
+        font = title.font(); font.setPointSize(font.pointSize() + 5); font.setBold(True)
+        title.setFont(font)
+        content_layout.addWidget(title)
+        description = qt.QLabel('Enable or disable features for this session. Required dependencies are enabled together. '
+                                'Existing windows and jobs can finish. Changes reset on restart.')
         description.setWordWrap(True)
-        layout.addWidget(description)
-        self.tree = qt.QTreeWidget()
-        self.tree.setHeaderLabels(['Feature', 'State', 'Requires', 'Required by enabled features', 'Help'])
-        self.tree.setRootIsDecorated(False)
-        self.tree.setAccessibleName('Enabled Logistics features')
-        self.tree.header().setSectionResizeMode(qt.QHeaderView.ResizeMode.ResizeToContents)
-        self.tree.header().setStretchLastSection(False)
-        self.tree.header().setSectionResizeMode(3, qt.QHeaderView.ResizeMode.Stretch)
-        layout.addWidget(self.tree, 1)
+        content_layout.addWidget(description)
+        self.cards = qt.QVBoxLayout()
+        self.cards.setSpacing(10)
+        content_layout.addLayout(self.cards)
         self.status = qt.QLabel()
         self.status.setWordWrap(True)
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
-        layout.addWidget(self.status)
-        self.tree.itemChanged.connect(self._item_changed)
+        content_layout.addWidget(self.status)
+        content_layout.addStretch()
+        self.scroll.setWidget(self.content)
+        layout.addWidget(self.scroll)
+        self.toggles = {}
+        self.states = {}
         self._unsubscribe = registry.subscribe(self._features_changed)
         self.destroyed.connect(self._unsubscribe)
         self.refresh()
@@ -36,42 +45,58 @@ class FeaturesPage(qt.QWidget):
         qt.QTimer.singleShot(0, self.refresh)
 
     def refresh(self):
-        with qt.QSignalBlocker(self.tree):
-            self.tree.clear()
-            states = sorted(registry.get_feature_states(), key=lambda state: state.label.casefold())
-            labels = {state.name: state.label for state in states}
-            for state in states:
-                text = 'Enabled' if state.enabled else 'Disabled' if state.available else 'Missing dependency'
-                item = qt.QTreeWidgetItem([state.label, text,
-                    ', '.join(labels.get(name, name) for name in state.dependencies),
-                    ', '.join(labels.get(name, name) for name in state.dependents)])
-                item.setData(0, qt.Qt.ItemDataRole.UserRole, state.name)
-                if state.available:
-                    item.setFlags(item.flags() | qt.Qt.ItemFlag.ItemIsUserCheckable)
-                    item.setCheckState(0, qt.Qt.CheckState.Checked if state.enabled else qt.Qt.CheckState.Unchecked)
-                else:
-                    item.setFlags(item.flags() & ~qt.Qt.ItemFlag.ItemIsUserCheckable)
-                    item.setToolTip(0, 'Required feature packages are missing.')
-                self.tree.addTopLevelItem(item)
-                guide = Path(registry.__file__).parent / state.name / 'user_docs' / 'index.md'
-                help_button = qt.QPushButton('User guide')
-                help_button.setAccessibleName(f'{state.label} user guide')
-                help_button.setEnabled(guide.is_file())
-                help_button.setToolTip('Open user documentation (hold Alt to edit)' if guide.is_file() else 'No user guide is installed.')
-                help_button.clicked.connect(lambda checked=False, path=guide: open_markdown(path, parent=self.window()))
-                self.tree.setItemWidget(item, 4, help_button)
+        while self.cards.count():
+            widget = self.cards.takeAt(0).widget()
+            widget.hide(); widget.deleteLater()
+        self.toggles.clear(); self.states.clear()
+        states = sorted(registry.get_feature_states(), key=lambda state: state.label.casefold())
+        labels = {state.name: state.label for state in states}
+        for state in states:
+            card = qt.QFrame()
+            card.setObjectName('featureCard')
+            card.setStyleSheet('QFrame#featureCard { background: palette(base); border: 1px solid palette(mid); border-radius: 6px; }')
+            card.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Maximum)
+            card_layout = qt.QVBoxLayout(card)
+            card_layout.setContentsMargins(14, 12, 14, 12)
+            header = qt.QHBoxLayout()
+            toggle = qt.QCheckBox(state.label)
+            toggle.setAccessibleName(f'Enable {state.label}')
+            font = toggle.font(); font.setBold(True); toggle.setFont(font)
+            toggle.setChecked(state.enabled)
+            toggle.setEnabled(state.available)
+            toggle.setToolTip('Required feature packages are missing.' if not state.available else
+                              'Enable or disable this feature for the current session.')
+            toggle.toggled.connect(lambda enabled, feature=state: self._toggled(feature, enabled))
+            header.addWidget(toggle, 1)
+            text = 'Missing dependency' if not state.available else 'Enabled' if state.enabled else 'Disabled'
+            status = qt.QLabel(text)
+            self._muted(status)
+            header.addWidget(status)
+            card_layout.addLayout(header)
+            details = []
+            if state.dependencies:
+                details.append('Requires: ' + ', '.join(labels.get(name, name) for name in state.dependencies))
+            if state.dependents:
+                details.append('Used by: ' + ', '.join(labels.get(name, name) for name in state.dependents))
+            if details:
+                note = qt.QLabel(' · '.join(details))
+                note.setWordWrap(True)
+                self._muted(note)
+                card_layout.addWidget(note)
+            self.cards.addWidget(card)
+            self.toggles[state.name] = toggle
+            self.states[state.name] = status
 
-    def _item_changed(self, item, column):
-        if column != 0:
-            return
-        name = item.data(0, qt.Qt.ItemDataRole.UserRole)
-        enabled = item.checkState(0) == qt.Qt.CheckState.Checked
+    @staticmethod
+    def _muted(label):
+        label.setForegroundRole(qt.QPalette.ColorRole.PlaceholderText)
+
+    def _toggled(self, state, enabled):
         try:
-            registry.set_feature_enabled(name, enabled)
+            registry.set_feature_enabled(state.name, enabled)
         except Exception as error:
             self.status.setText(str(error))
-            # The signal came from this item: clearing it before setCheckState
-            # unwinds can crash native Qt. Rebuild after signal delivery ends.
+            # Retain the emitting checkbox until Qt finishes delivering its signal.
             self._features_changed()
         else:
-            self.status.setText(f'{item.text(0)} {"enabled" if enabled else "disabled"} for this session.')
+            self.status.setText(f'{state.label} {"enabled" if enabled else "disabled"} for this session.')

@@ -12,7 +12,7 @@ folder's contents or configuration.
 | Known Folders | Choose a source/folder and use detected library, server or remote actions |
 | Settings | Enable features, manage credential packages and edit configuration |
 | Debug | Standalone file/media/maintenance tools, Open File Browser and Bulk Rename |
-| Settings → Features | Enable/disable integrations and open each feature’s User guide |
+| Settings → Features | Enable/disable integrations using feature toggle cards |
 | Aviation Tools | Flight calculators and aircraft/airport reference tables |
 | Links / Smart Home | Controls provided by those enabled features |
 
@@ -31,7 +31,8 @@ deletion cannot be undone through Logistics.
 
 ## Read documentation
 
-Choose **User guide** beside a feature on Features to read it. Hold **Alt**
+Select a feature under **Settings → Feature settings**, then choose **User Guide**
+in its upper-right corner to read it. Hold **Alt**
 (**Option** on macOS) while clicking to open it with editing enabled. The reader supports headings,
 lists, tables and code examples. Click a Markdown link to navigate to another guide
 or a heading, and use Back/Forward to retrace your steps. Website links open in
@@ -144,9 +145,10 @@ for filters, numbering, presets, cancellation and recovery details.
 ## Settings
 
 Select a category on the left to see its settings on the right. **Features**
-controls session enablement. Each feature has its own settings category and can
-retain a custom layout. **rclone** holds credential packages and generated configs;
-it no longer has a separate top-level tab. **Configuration** edits the launcher,
+controls session enablement through a bounded list of toggle cards with dependency
+details. Each feature has its own settings category and a User Guide button in
+the upper-right corner. **rclone** separates **INI files** from **Credential packages**
+in tabs; switching retains edits and package state. **Configuration** edits the launcher,
 shared app settings and folder-protection INI files with section tabs and key rows.
 Use **Source** for plain-text edits. Feature INI files
 appear with their feature settings. Save explicitly; some changes require restart.
@@ -214,7 +216,7 @@ The file browser no longer shows a pause-scan button.
 
 ## Text Editor
 
-Choose **Text Editor → Open Text Editor** for a standalone document window, or
+Choose **Settings → Text Editor → Open Text Editor** for a standalone document window, or
 right-click text in File Browser and select **Open in Text Editor**. Open multiple
 files in draggable tabs, search/replace with regex and undo support, and edit
 scripts/configuration with syntax, line numbers and indentation controls. Save
