@@ -107,7 +107,7 @@ class ReaderKeyHandler(qt.QObject):
         else:
             self.stop()
             if key in (qt.Qt.Key.Key_Up, qt.Qt.Key.Key_Down):
-                self.window.step(1 if key == qt.Qt.Key.Key_Down else -1)
+                self.start(1 if key == qt.Qt.Key.Key_Down else -1, key)
             elif key in (qt.Qt.Key.Key_Home, qt.Qt.Key.Key_End):
                 self.window.go(0 if key == qt.Qt.Key.Key_Home else len(self.window.pages.pages) - 1)
             else:
