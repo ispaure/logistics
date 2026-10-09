@@ -23,3 +23,5 @@ Configured URLs may contain placeholders such as:
 - `<yagi-mac>`
 
 The feature replaces these placeholders using values from the `ResolveIP` section of `features/links/config.ini` before opening the URL.
+
+Feature configuration keys now use `_str`; existing unsuffixed URL and ResolveIP keys remain readable. Settings displays each section as a tab with one row per entry.

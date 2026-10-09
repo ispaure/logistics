@@ -27,6 +27,26 @@ class SoftwareTests(unittest.TestCase):
                         self.assertEqual(len(spec.sha256), 64)
                         self.assertEqual(len(spec.installed_sha256), 64)
 
+    def test_rclone_ini_overrides_and_required_hash_validation(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = root / 'config.ini'
+            settings.write_text('[osx-arm64]\nversion_str = test-version\nsha256_str = ' + 'a'*64 + '\n')
+            with patch.object(software, 'RCLONE_CONFIG_PATH', settings), \
+                    patch.object(software, 'get_os', return_value=OS.MAC), \
+                    patch.object(software, 'get_arch', return_value=Arch.ARM_64), \
+                    patch.object(software.config, 'LogisticsConfig', return_value=SimpleNamespace(path_logistics_software=root)):
+                spec, destination = software.get_software('rclone')
+                self.assertEqual(spec.version, 'test-version')
+                self.assertEqual(spec.sha256, 'a'*64)
+                self.assertEqual(len(spec.installed_sha256), 64)
+                settings.write_text('[osx-arm64]\nsha256_str = invalid\n')
+                with self.assertRaisesRegex(ValueError, 'SHA-256'):
+                    software.get_software('rclone')
+                settings.write_text('[osx-arm64]\npath_str = ../outside\n')
+                with self.assertRaisesRegex(ValueError, 'inside'):
+                    software.get_software('rclone')
+
     def test_empty_root_resources_and_independent_overrides(self):
         with TemporaryDirectory() as root:
             root = Path(root).resolve()

@@ -14,7 +14,7 @@ This feature provides tools and integrations for interacting with smart home dev
 `philips_hue/api.py` connects to the bridge, resolves groups by name and applies
 on/off, brightness, hue/saturation and preset changes.
 
-The Hue Bridge address is read from this feature's `config.ini`, under `[PhilipsHue]` / `bridge_address`.
+The Hue Bridge address is read from this feature's `config.ini`, under `[PhilipsHue]` / `bridge_address_str` (legacy `bridge_address` is still accepted).
 
 ### Tautulli
 

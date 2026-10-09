@@ -59,3 +59,12 @@ feature controls. Use Back/Forward in this viewer to return to a previous guide.
 
 Marc’s existing Dropbox credential folder (`Software/GIT/logistics/RemoteCredentials`)
 is also discovered automatically when present. Hover a package to see its location.
+
+## Choose a rclone download version
+
+In **Settings → rclone**, the configuration tabs list supported platforms. Each
+contains the version, download URL, ZIP member, local destination and verification
+hashes. If you change releases, update these values together. One hash verifies
+the ZIP; the other verifies its executable. Saving does not download anything or
+replace a running tool. See [download settings](../../../../CONFIGURATION.md#rclone-download-versions)
+for the field details.

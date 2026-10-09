@@ -27,6 +27,15 @@ class FeatureRegistryTests(unittest.TestCase):
         self.addCleanup(disabled.stop)
         self.addCleanup(initialized.stop)
 
+    def test_settings_cannot_be_registered_as_folder_sources(self):
+        from features.contributions import SettingsContribution
+        wrong = FeatureContributions(remote_folder_sources=[
+            SettingsContribution('Downloads', 'downloads', lambda parent: None)])
+        provider = feature('bad', get_contributions=lambda: wrong)
+        with patch.object(registry, 'get_enabled_features', return_value=[provider]):
+            with self.assertRaisesRegex(TypeError, 'remote_folder_sources requires RemoteFolderSourceContribution'):
+                registry.get_feature_contributions()
+
     def test_dependencies_initialize_first_and_all_types_register_before_startup(self):
         events = []
         def tracked(name, dependencies=()):

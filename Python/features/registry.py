@@ -22,6 +22,7 @@ from features.contributions import (
     RegisteredContribution,
     RemoteFolderSourceContribution,
     ServerProviderContribution,
+    SettingsContribution,
     WorkflowContribution,
 )
 
@@ -324,16 +325,41 @@ class FeatureState:
     enabled: bool
     dependencies: tuple[str, ...]
     dependents: tuple[str, ...]
+    members: tuple[str, ...] = ()
+
+
+def _feature_groups(feature_map):
+    """Present grouped engines together while preserving their runtime identities."""
+    leaders = {}
+    for name, feature in feature_map.items():
+        group = getattr(feature, 'FEATURE_GROUP', None)
+        if group is not None and (not isinstance(group, str) or not group):
+            raise TypeError(f'{name} FEATURE_GROUP must be a feature name')
+        leaders[name] = group if group in feature_map else name
+    groups = {}
+    for name, leader in leaders.items():
+        if leaders[leader] != leader:
+            raise ValueError('Feature groups must point directly to their visible leader')
+        groups.setdefault(leader, []).append(name)
+    return leaders, groups
 
 
 def get_feature_states():
     feature_map = _get_feature_map()
     enabled = {_get_feature_name(feature) for feature in get_enabled_features()}
-    return [FeatureState(name, _get_feature_label(feature), _is_feature_available(name, feature_map),
-                         name in enabled, get_feature_dependencies(feature),
-                         tuple(other for other, module in feature_map.items()
-                               if other in enabled and name in get_feature_dependencies(module)))
-            for name, feature in feature_map.items()]
+    leaders, groups = _feature_groups(feature_map)
+    states = []
+    for name, members in groups.items():
+        dependencies = tuple(dict.fromkeys(leaders.get(dependency, dependency)
+            for member in members for dependency in get_feature_dependencies(feature_map[member])
+            if dependency not in members))
+        dependents = tuple(dict.fromkeys(leaders[other] for other, module in feature_map.items()
+            if other in enabled and other not in members
+            and any(member in get_feature_dependencies(module) for member in members)))
+        states.append(FeatureState(name, _get_feature_label(feature_map[name]),
+            all(_is_feature_available(member, feature_map) for member in members),
+            all(member in enabled for member in members), dependencies, dependents, tuple(members)))
+    return states
 
 
 def subscribe(callback):
@@ -363,7 +389,9 @@ def set_feature_enabled(name, enabled):
     feature_map = _get_feature_map()
     if name not in feature_map:
         raise ValueError(f'Unknown feature: {name}')
-    if is_feature_enabled(name) == enabled:
+    leaders, groups = _feature_groups(feature_map)
+    members = groups[leaders[name]]
+    if all(is_feature_enabled(member) == enabled for member in members):
         return
     from commonUtils.fileTypes.registry import file_types
     before = set(_disabled_features)
@@ -374,7 +402,7 @@ def set_feature_enabled(name, enabled):
         else:
             file_types.set_owner_enabled(current, value)
     if enabled:
-        if not _is_feature_available(name, feature_map):
+        if not all(_is_feature_available(member, feature_map) for member in members):
             raise ValueError(f'{name} has missing required dependencies')
         required = set()
         def visit(current):
@@ -383,7 +411,8 @@ def set_feature_enabled(name, enabled):
             required.add(current)
             for dependency in get_feature_dependencies(feature_map[current]):
                 visit(dependency)
-        visit(name)
+        for member in members:
+            visit(member)
         plan = _get_initialization_order([feature_map[item] for item in feature_map if item in required])
         _disabled_features.difference_update(required)
         for item in required:
@@ -397,11 +426,14 @@ def set_feature_enabled(name, enabled):
                 activate(item, item not in before)
             raise
     else:
-        dependents = [state.label for state in get_feature_states() if state.enabled and name in state.dependencies]
+        dependents = list(dict.fromkeys(_get_feature_label(feature_map[leaders[other]])
+            for other, module in feature_map.items() if other not in members and is_feature_enabled(other)
+            and any(member in get_feature_dependencies(module) for member in members)))
         if dependents:
             raise ValueError(f'Disable these dependent features first: {", ".join(dependents)}')
-        _disabled_features.add(name)
-        activate(name, False)
+        for member in members:
+            _disabled_features.add(member)
+            activate(member, False)
     _notify_changed()
 
 
@@ -424,43 +456,39 @@ def _get_startup_hooks(features: list[ModuleType], name: str) -> list[Callable[[
 # CONTRIBUTIONS
 
 def get_feature_contributions() -> list[tuple[ModuleType, FeatureContributions]]:
-    """
-    Return contribution sets exposed by available features.
-
-    Features with unsatisfied hard dependencies are skipped before
-    get_contributions() is called, allowing their implementation modules to
-    safely import the dependencies they explicitly require.
-    """
-
+    """Return enabled contributions, checking category types before UI creation."""
     feature_contributions = []
-
+    expected_types = {
+        'local_folder_sources': LocalFolderSourceContribution,
+        'remote_folder_sources': RemoteFolderSourceContribution,
+        'folder_features': FolderFeatureContribution,
+        'server_providers': ServerProviderContribution,
+        'debug_actions': DebugActionContribution,
+        'workflows': WorkflowContribution,
+        'pages': PageContribution,
+        'settings': SettingsContribution,
+        'browser_extensions': BrowserExtensionContribution,
+    }
     for feature in get_enabled_features():
         definition = get_feature_definition(feature)
         if definition is not None:
             contributions = definition if isinstance(definition, FeatureContributions) else FeatureContributions()
-            feature_contributions.append((feature, contributions))
-            continue
-        get_contributions = getattr(feature, 'get_contributions', None)
-
-        if get_contributions is None:
-            continue
-
-        if not callable(get_contributions):
-            raise TypeError(
-                f"Feature '{feature.__name__}' defines get_contributions, "
-                f'but it is not callable.'
-            )
-
-        contributions = get_contributions()
-
-        if not isinstance(contributions, FeatureContributions):
-            raise TypeError(
-                f"Feature '{feature.__name__}' get_contributions() must return "
-                f'FeatureContributions, got {type(contributions).__name__}.'
-            )
-
+        else:
+            get_contributions = getattr(feature, 'get_contributions', None)
+            if get_contributions is None:
+                continue
+            if not callable(get_contributions):
+                raise TypeError(f"Feature '{feature.__name__}' defines get_contributions, but it is not callable.")
+            contributions = get_contributions()
+            if not isinstance(contributions, FeatureContributions):
+                raise TypeError(f"Feature '{feature.__name__}' get_contributions() must return "
+                                f'FeatureContributions, got {type(contributions).__name__}.')
+        for category, expected in expected_types.items():
+            for item in getattr(contributions, category):
+                if not isinstance(item, expected):
+                    raise TypeError(f"Feature '{feature.__name__}' {category} requires "
+                                    f'{expected.__name__}, got {type(item).__name__}.')
         feature_contributions.append((feature, contributions))
-
     return feature_contributions
 
 
