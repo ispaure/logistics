@@ -7,6 +7,7 @@ from ui_new.settings.ini_editor import INISettingsEditor
 from commonUtils.settings import settings_path
 from features import registry
 from .features import FeaturesPage
+from ui_new.settings.indexing import IndexSettingsPanel
 
 
 class ConfigurationPanel(qt.QWidget):
@@ -213,7 +214,7 @@ class SettingsPage(qt.QWidget):
         with qt.QSignalBlocker(self.sidebar):
             self.sidebar.clear()
             items = {}
-            for key, title in (('features', 'Features'), ('configuration', 'Configuration'),
+            for key, title in (('features', 'Features'), ('indexing', 'File indexing'), ('configuration', 'Configuration'),
                                ('commonutils', 'commonUtils')):
                 item = qt.QTreeWidgetItem([title])
                 item.setData(0, qt.Qt.ItemDataRole.UserRole, key)
@@ -243,6 +244,8 @@ class SettingsPage(qt.QWidget):
         if key not in self.panels:
             if key == 'features':
                 panel = FeaturesPage(self)
+            elif key == 'indexing':
+                panel = IndexSettingsPanel(self)
             elif key == 'configuration':
                 source = Path(__file__).resolve().parents[2]
                 panel = ConfigurationPanel([source / 'configFile.ini', source / 'maintenance.ini',

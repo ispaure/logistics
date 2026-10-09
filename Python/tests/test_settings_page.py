@@ -20,6 +20,21 @@ class SettingsPageTests(unittest.TestCase):
         return SimpleNamespace(name='test', label='Test', enabled=True, available=True,
                                dependencies=(), dependents=())
 
+    def test_indexing_has_boolean_rules_and_explicit_save_preserves_other_sections(self):
+        from ui_new.settings.indexing import IndexSettingsPanel
+        from commonUtils.ui.file_browser.index_policy import index_policy
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary)/'configFile.ini'
+            path.write_text('[Other]\nvalue=kept\n[FileIndex]\nscan_on_open=true\nrecursive_on_open=false\nwatch_changes=true\n')
+            panel = IndexSettingsPanel(path=path); self.addCleanup(panel.deleteLater)
+            field = panel.editor.fields['FileIndex', 'scan_on_open']
+            self.assertIsInstance(field, qt.QCheckBox)
+            field.setChecked(False)
+            self.assertTrue(index_policy(path=path).scan_on_open)
+            self.assertTrue(panel.editor.save())
+            self.assertFalse(index_policy(path=path).scan_on_open)
+            self.assertIn('value=kept', path.read_text())
+
     def test_custom_layout_is_lazy_and_retained_across_feature_toggles(self):
         state = self.state()
         factory = Mock(side_effect=lambda parent: qt.QWidget(parent))
@@ -27,7 +42,7 @@ class SettingsPageTests(unittest.TestCase):
         with patch.object(registry, 'get_feature_states', return_value=[state]), patch.object(registry, 'get_settings', return_value=[contribution]) as settings:
             page = SettingsPage(); self.addCleanup(page.deleteLater)
             factory.assert_not_called()
-            item = page.sidebar.topLevelItem(3).child(0)
+            item = next(page.sidebar.topLevelItem(i) for i in range(page.sidebar.topLevelItemCount()) if page.sidebar.topLevelItem(i).text(0) == 'Feature settings').child(0)
             page.sidebar.setCurrentItem(item)
             factory.assert_called_once()
             panel = page.panels['feature:test']
@@ -46,7 +61,7 @@ class SettingsPageTests(unittest.TestCase):
             path.write_text('[WheelNavigation]\nsensitivity=20\n')
             with patch('ui_new.pages.settings.settings_path', return_value=path):
                 page = SettingsPage(); self.addCleanup(page.deleteLater)
-                item = page.sidebar.topLevelItem(2)
+                item = next(page.sidebar.topLevelItem(i) for i in range(page.sidebar.topLevelItemCount()) if page.sidebar.topLevelItem(i).text(0) == 'commonUtils')
                 self.assertEqual(item.text(0), 'commonUtils')
                 page.sidebar.setCurrentItem(item)
                 editor = page.panels['commonutils'].editors[path]
