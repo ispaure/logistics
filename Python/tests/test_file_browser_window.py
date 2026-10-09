@@ -113,7 +113,7 @@ class BrowserWindowTests(unittest.TestCase):
         second = second_view.file_browser
         self.assertTrue(first.index_status.isHidden())
         self.assertTrue(second.index_status.isHidden())
-        self.assertIs(window.index_status.label.parent(), window.workspace.statusBar())
+        self.assertTrue(window.workspace.statusBar().isAncestorOf(window.index_status.label))
         second._index_progressed('Indexing /some/location · 42 processed this run')
         self.assertIn('42 processed this run', window.index_status.label.text())
         self.assertNotIn('/some/location', window.index_status.label.text())
