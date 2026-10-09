@@ -1,6 +1,7 @@
 """General browser host enriched by available Logistics feature contributions."""
 
 from pathlib import Path
+import sys
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.file_browser import FileBrowser
 from features import registry
@@ -10,8 +11,9 @@ from commonUtils.ui.file_browser.status import WorkspaceIndexStatus
 
 class _BrowserHost:
     """Shared feature installation and worker-safe shutdown for embedded/standalone hosts."""
-    def _initialize_browser(self, root_path, *, calculate_folder_sizes=True):
+    def _initialize_browser(self, root_path, *, calculate_folder_sizes=True, filesystem_scope=False):
         self.closing = False
+        self.filesystem_scope = filesystem_scope
         from ui_new.bulk_rename import bulk_rename_actions
         self.file_browser = FileBrowser(parent=self, action_providers=(bulk_rename_actions,),
                                        calculate_folder_sizes=calculate_folder_sizes)
@@ -21,7 +23,16 @@ class _BrowserHost:
         self._unsubscribe = registry.subscribe(self._features_changed)
         self.destroyed.connect(self._unsubscribe)
         self.file_browser.idle.connect(self._retry_close)
-        self.file_browser.set_directory(root_path)
+        self._open_location(root_path)
+
+    def _open_location(self, path):
+        path = Path(path).absolute()
+        root = Path(path.anchor) if self.filesystem_scope else None
+        self.file_browser.set_directory(path, navigation_root=root)
+        selector = getattr(self, 'drive_selector', None)
+        if selector is not None:
+            with qt.QSignalBlocker(selector):
+                selector.setCurrentIndex(selector.findData(str(root)))
 
     def _features_changed(self):
         self._sync_extensions()
@@ -76,25 +87,36 @@ class _BrowserHost:
 class BrowserView(_BrowserHost, qt.QWidget):
     title_changed = qt.Signal(str)
     idle = qt.Signal()
-    def __init__(self, parent=None, *, root_path=None):
+    def __init__(self, parent=None, *, root_path=None, filesystem_scope=False):
         super().__init__(parent)
-        self._initialize_browser(root_path or Path.home(), calculate_folder_sizes=True)
+        initial = Path(root_path or Path.home())
+        if filesystem_scope and sys.platform == 'win32':
+            drive = Path('C:/')
+            if drive.is_dir() and initial.anchor.casefold() != drive.anchor.casefold():
+                initial = drive
+        self._initialize_browser(initial, calculate_folder_sizes=True, filesystem_scope=filesystem_scope)
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
-        controls = qt.QHBoxLayout()
-        self.home_button = qt.QPushButton('Home')
-        self.home_button.clicked.connect(lambda: self.file_browser.set_directory(Path.home()))
-        self.open_folder_button = qt.QPushButton('Open folder…')
-        self.open_folder_button.clicked.connect(self._choose_directory)
-        controls.addWidget(self.home_button)
-        controls.addWidget(self.open_folder_button)
+        self.drive_selector = None
+        if filesystem_scope and sys.platform == 'win32':
+            controls = qt.QHBoxLayout()
+            self.drive_selector = qt.QComboBox()
+            self.drive_selector.setAccessibleName('Browse drive')
+            self.drive_selector.setToolTip('Choose the drive to browse')
+            for info in qt.QDir.drives():
+                path = info.absoluteFilePath()
+                self.drive_selector.addItem(path, str(Path(path)))
+            self.drive_selector.setCurrentIndex(self.drive_selector.findData(str(Path(initial.anchor))))
+            self.drive_selector.currentIndexChanged.connect(lambda index: self._open_location(
+                self.drive_selector.itemData(index)) if index >= 0 else None)
+            controls.addWidget(self.drive_selector)
+            controls.addStretch()
+            layout.addLayout(controls)
         self.folder_sizes = qt.QCheckBox('Background indexing', self)
         self.folder_sizes.setToolTip('Pause or resume this tab’s indexing subscription. Cached search and sizes stay available; other tabs may continue indexing.')
         self.folder_sizes.setChecked(True)
         self.folder_sizes.toggled.connect(self.file_browser.set_folder_sizes_enabled)
         self.folder_sizes.hide()  # Legacy API; the browser toolbar now offers Pause/Resume.
-        controls.addStretch()
-        layout.addLayout(controls)
         layout.addWidget(self.file_browser, 1)
         self.file_browser.views.directory_changed.connect(lambda path: self.title_changed.emit(self.view_title))
         self.file_browser.idle.connect(self.idle)
@@ -107,11 +129,6 @@ class BrowserView(_BrowserHost, qt.QWidget):
     def _retry_close(self):
         if self.closing:
             self.idle.emit()
-
-    def _choose_directory(self):
-        root = qt.QFileDialog.getExistingDirectory(self, 'Open folder', str(self.file_browser.navigation.library))
-        if root:
-            self.file_browser.set_directory(root)
 
 
 class _WorkspaceHost:
@@ -132,19 +149,8 @@ class _WorkspaceHost:
         return self.workspace.active_view._extensions_by_feature
 
     @property
-    def home_button(self):
-        return self.workspace.active_view.home_button
-
-    @property
-    def open_folder_button(self):
-        return self.workspace.active_view.open_folder_button
-
-    @property
     def folder_sizes(self):
         return self.workspace.active_view.folder_sizes
-
-    def _choose_directory(self):
-        self.workspace.active_view._choose_directory()
 
     def prepare_close(self):
         return self.workspace.prepare_close()
@@ -160,7 +166,8 @@ class FileBrowserPage(_WorkspaceHost, qt.QWidget):
     def __init__(self, parent=None, *, root_path=None):
         super().__init__(parent)
         self.workspace = Workspace(lambda path: BrowserView(root_path=path or (
-            self.file_browser.navigation.directory if self.workspace.active_view else root_path or Path.home())), self)
+            self.file_browser.navigation.directory if self.workspace.active_view else root_path or Path.home()),
+            filesystem_scope=root_path is None and not self.workspace.docks), self)
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.workspace)

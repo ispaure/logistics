@@ -34,6 +34,71 @@ class MainWindowTests(unittest.TestCase):
         self.addCleanup(window.dlg.deleteLater)
         return window
 
+    def test_startup_failure_waits_for_previously_created_worker(self):
+        class WorkingPage(qt.QWidget):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.worker = qt.QThread(self)
+                self.worker.run = lambda: self.worker.msleep(40)
+                self.worker.start()
+
+            def prepare_close(self):
+                self.worker.requestInterruption()
+                return not self.worker.isRunning()
+
+        created = []
+        def working(parent=None):
+            page = WorkingPage(parent)
+            created.append(page)
+            return page
+        def failing(parent=None):
+            raise RuntimeError('folder discovery failed')
+        with patch.object(main_window, 'CORE_TABS', ((0,'Browser',working),(5,'Folders',failing))), \
+                patch.object(main_window.registry, 'get_pages', return_value=[]):
+            with self.assertRaisesRegex(RuntimeError, 'folder discovery failed'):
+                main_window.MainWindow()
+        self.assertEqual(len(created), 1)
+        self.assertFalse(created[0].worker.isRunning())
+
+    def test_real_core_pages_start_with_rclone_contributions(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from features import rclone
+        from features.rclone import credentials
+        from services import folder_sources
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root/'example.txt').write_text('fixture')
+            original = main_window.CORE_TABS
+            core = ((0,'File Browser',lambda parent: main_window.FileBrowserPage(parent,root_path=root)),) + original[1:]
+            with patch.object(main_window.registry,'get_enabled_features',return_value=[rclone]), \
+                    patch.object(credentials,'get_loaded_credential_config_paths',return_value=[]), \
+                    patch.object(folder_sources,'get_folder_entries',return_value=[]), \
+                    patch.object(main_window,'CORE_TABS',core):
+                window = main_window.MainWindow()
+                self.assertEqual([window.tabs.tabText(i) for i in range(window.tabs.count())],
+                                 ['File Browser','Known Folders','Settings','Debug'])
+                loop = qt.QEventLoop()
+                poll = qt.QTimer()
+                poll.setInterval(10)
+                poll.timeout.connect(lambda: loop.quit() if window.can_close() else None)
+                poll.start()
+                qt.QTimer.singleShot(5000, loop.quit)
+                if not window.can_close():
+                    loop.exec()
+                poll.stop()
+                browser = window.tabs.widget(0).file_browser
+                self.assertTrue(window.can_close(), repr({
+                    'listing': browser.busy, 'index': browser.folder_busy,
+                    'cover': browser.views.cover_busy, 'storage': browser.views.storage.busy,
+                    'actions': browser.file_actions.busy,
+                    'pages': [(name,getattr(page,'can_close',lambda:True)(),
+                               getattr(page,'prepare_close',lambda:True)())
+                              for _,name,page in window._core_pages],
+                }))
+                window.dlg.close()
+                window.dlg.deleteLater()
+
     def test_startup_constructs_each_page_once_without_redundant_refresh(self):
         window = self.window([self.contribution('Feature', 'feature')])
         self.assertEqual(len(self.pages), 3)
@@ -116,19 +181,20 @@ class MainWindowTests(unittest.TestCase):
         self.assertEqual(window.tabs.tabText(0), 'File Browser')
         self.assertEqual(window.tabs.tabText(1), 'Known Folders')
         self.assertEqual(window.tabs.currentIndex(), 0)
-        self.assertEqual(browser.file_browser.navigation.library, self.root)
-        with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=str(self.root / 'outside')):
-            (self.root / 'outside').mkdir()
-            browser.open_folder_button.click()
+        self.assertEqual(browser.file_browser.navigation.library, Path(self.root.anchor))
+        self.assertEqual(browser.file_browser.navigation.directory, self.root)
+        (self.root / 'outside').mkdir()
+        browser.workspace.active_view._open_location(self.root / 'outside')
         self.wait_browser(browser)
-        self.assertEqual(browser.file_browser.navigation.library, self.root / 'outside')
+        self.assertEqual(browser.file_browser.navigation.library, Path(self.root.anchor))
+        self.assertEqual(browser.file_browser.navigation.directory, self.root / 'outside')
         window.tabs.setCurrentIndex(1)
         window.tabs.setCurrentIndex(0)
         self.assertIs(window.tabs.widget(0), browser)
-        with patch.object(Path, 'home', return_value=self.root):
-            browser.home_button.click()
+        browser.workspace.active_view._open_location(self.root)
         self.wait_browser(browser)
-        self.assertEqual(browser.file_browser.navigation.library, self.root)
+        self.assertEqual(browser.file_browser.navigation.library, Path(self.root.anchor))
+        self.assertEqual(browser.file_browser.navigation.directory, self.root)
         window.dlg.close(); self.app.processEvents()
 
     def test_main_close_waits_for_embedded_extension_then_retries(self):
@@ -166,4 +232,16 @@ class MainWindowTests(unittest.TestCase):
             self.assertTrue(scan.called)
             browser.folder_sizes.setChecked(False)
             self.assertFalse(browser.file_browser.calculate_folder_sizes)
+            window.dlg.close(); self.app.processEvents()
+
+    def test_browser_passes_session_policy_and_refreshes_deeper_contents(self):
+        with patch('commonUtils.directory_index.directory_cache.reconcile_folder',
+                   return_value=Mock(folder_stats=lambda **kwargs: {})) as scan:
+            window = self.browser_window()
+            page = window.tabs.widget(0)
+            self.wait_browser(page)
+            self.assertTrue(scan.call_args.kwargs['once'])
+            page.file_browser.refresh()
+            self.wait_browser(page)
+            self.assertTrue(scan.call_args.kwargs['full'])
             window.dlg.close(); self.app.processEvents()

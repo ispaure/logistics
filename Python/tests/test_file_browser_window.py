@@ -58,6 +58,36 @@ class BrowserWindowTests(unittest.TestCase):
             window.close()
             self.app.processEvents()
 
+    def test_default_page_starts_at_home_with_filesystem_boundary_and_scoped_extra_tabs(self):
+        from ui_new.file_browser import FileBrowserPage
+        from commonUtils.directory_index import DirectoryCache
+        cache_temp = TemporaryDirectory()
+        self.addCleanup(cache_temp.cleanup)
+        directory_cache = DirectoryCache(database=Path(cache_temp.name) / 'index.sqlite3')
+        for name in ('commonUtils.directory_index.directory_cache',
+                     'commonUtils.ui.file_browser.index_worker.directory_cache',
+                     'commonUtils.ui.file_browser.index_search.directory_cache'):
+            patcher = patch(name, directory_cache)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        directory_cache.get(self.root)
+        with patch.object(Path,'home',return_value=self.root), patch.object(registry,'get_browser_extensions',return_value=[]):
+            page = FileBrowserPage(); page.show()
+        self.addCleanup(self.close_window,page)
+        self.wait(page)
+        browser = page.file_browser
+        self.assertEqual(browser.navigation.library,Path(self.root.anchor))
+        self.assertEqual(browser.navigation.directory,self.root)
+        self.assertTrue(browser.navigation.up.isEnabled())
+        self.assertFalse(browser.navigation.back.isEnabled())
+        # Construction indexes the opened home scope, never the filesystem root.
+        import sqlite3
+        with sqlite3.connect(directory_cache.database) as db:
+            self.assertIsNone(db.execute('SELECT 1 FROM roots WHERE root=?', (self.root.anchor,)).fetchone())
+        extra = page.workspace.add_view(self.root); self.wait(page)
+        self.assertEqual(extra.file_browser.navigation.library,self.root)
+        self.assertFalse(extra.filesystem_scope)
+
     def test_workspace_shares_one_bottom_index_status_across_tabs(self):
         window = self.window([])
         first = window.file_browser
@@ -193,12 +223,12 @@ class BrowserWindowTests(unittest.TestCase):
         self.assertEqual(window.file_browser.navigation.library, self.root)
         index = window.file_browser.model.index(str(self.path))
         menu = window.file_browser.context_menu_for(index)
-        self.assertEqual([action.text() for action in menu.actions() if action.property('source') == 'Comics'],
-                         ['Edit Metadata', 'Compress Comics…'])
+        self.assertEqual([action.text() for action in menu.actions() if action.property('source') == 'Books & Comics'],
+                         ['Edit metadata…', 'Compress Comics…'])
         (self.root / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password=\n')
         configured_menu = window.file_browser.context_menu_for(index)
         self.assertIn('Encrypt unencrypted comics…', [action.text() for action in configured_menu.actions()])
-        next(action for action in menu.actions() if action.text() == 'Edit Metadata').trigger()
+        next(action for action in menu.actions() if action.text() == 'Edit metadata…').trigger()
         controller = window.extensions[0].controller
         editor = controller.metadata_windows[0]
         deadline = time.monotonic() + 5
@@ -306,7 +336,7 @@ class BrowserWindowTests(unittest.TestCase):
         self.wait(window)
         self.assertIsInstance(file_from_path(self.path), CBZFile)
         self.assertIs(window._extensions_by_feature['comics'].controller, controller)
-        self.assertEqual(len(window.file_browser.activation_handlers), 1)
+        self.assertEqual(len(window.file_browser.activation_handlers), 2)  # EPUB and CBZ engines.
         self.assertEqual(window.file_browser.tabs.count(), 2)
 
     def test_disable_comics_keeps_existing_editor_alive(self):
@@ -355,7 +385,7 @@ class BrowserWindowTests(unittest.TestCase):
         menu, actions = archive_actions()
         self.assertEqual(actions, [])
         menu.deleteLater()
-        self.assertIn('Edit Metadata', [action.text() for action in window.file_browser.context_menu_for(index).actions()])
+        self.assertIn('Edit metadata…', [action.text() for action in window.file_browser.context_menu_for(index).actions()])
         registry.set_feature_enabled('archives', True)
         self.wait(window)
         menu, actions = archive_actions()
