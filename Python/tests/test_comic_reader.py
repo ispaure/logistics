@@ -83,14 +83,14 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
                 qt.Qt.KeyboardModifier.NoModifier, qt.Qt.ScrollPhase.NoScrollPhase, False)
             self.app.sendEvent(reader.canvas, event)
             self.wait_reader(reader)
-        with patch('features.comics.ui.reader_keys.monotonic', return_value=10):
+        with patch('commonUtils.ui.page_wheel.monotonic', return_value=10):
             wheel(-1)
             self.assertEqual(reader.page, 1)
             wheel(1)
             self.assertEqual(reader.page, 0)
             wheel(-1200)
             self.assertEqual(reader.page, 1)
-        with patch('features.comics.ui.reader_keys.monotonic', return_value=11):
+        with patch('commonUtils.ui.page_wheel.monotonic', return_value=11):
             wheel(1200)
             self.assertEqual(reader.page, 0)
         self.assertEqual(reader.keys.timer.interval(), 225)
@@ -107,7 +107,7 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
             self.app.sendEvent(reader.canvas, event)
             self.wait_reader(reader)
         with patch('commonUtils.settings.settings_path', return_value=path):
-            with patch('features.comics.ui.reader_keys.monotonic', return_value=10):
+            with patch('commonUtils.ui.page_wheel.monotonic', return_value=10):
                 wheel(pixel=-3)
                 self.assertEqual(reader.page, 0)
                 path.write_text('[WheelNavigation]\nsensitivity=20\n')
@@ -115,7 +115,7 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
                 self.assertEqual(reader.page, 1)
                 wheel(pixel=-600)
                 self.assertEqual(reader.page, 1)
-            with patch('features.comics.ui.reader_keys.monotonic', return_value=11):
+            with patch('commonUtils.ui.page_wheel.monotonic', return_value=11):
                 wheel(angle=6)
                 self.assertEqual(reader.page, 0)
             with patch.object(reader, 'file_loading', True):
@@ -131,7 +131,7 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
         path = self.root / 'settings.ini'
         path.write_text('[WheelNavigation]\nimmediate_notches=false\nsensitivity=1\n')
         with patch('commonUtils.settings.settings_path', return_value=path), patch(
-                'features.comics.ui.reader_keys.monotonic', return_value=10):
+                'commonUtils.ui.page_wheel.monotonic', return_value=10):
             for expected in (0, 1):
                 event = qt.QWheelEvent(qt.QPointF(), qt.QPointF(), qt.QPoint(), qt.QPoint(0, -60),
                     qt.Qt.MouseButton.NoButton, qt.Qt.KeyboardModifier.NoModifier,
@@ -199,7 +199,11 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         first = reader.open_reader(self.path)
         self.wait_reader(first)
+        first.toggle_fullscreen()
         self.assertIs(reader.open_reader(self.path), first)
+        self.assertTrue(first.isFullScreen())
+        self.assertTrue(first.fullscreen_action.isChecked())
+        first.leave_fullscreen()
         self.archive('YesAndRightToLeft')
         first.go(1)
         self.wait_reader(first)
@@ -342,7 +346,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
             self.assertEqual(labels[0], 'Open')
             self.assertIn('Open in Default App', labels)
             self.assertTrue(labels[-1].startswith('Reveal in '))
-            self.assertIn('Edit Metadata', labels)
+            self.assertIn('Edit metadata…', labels)
             menu.deleteLater()
         with patch('features.comics.ui.browser_services.open_reader') as opened:
             window._activate(index)
@@ -367,11 +371,11 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
                 qt.QItemSelectionModel.SelectionFlag.Select | qt.QItemSelectionModel.SelectionFlag.Rows)
         menu = window._context_menu_for(window.model.index(str(other)))
         labels = [action.text() for action in menu.actions()]
-        self.assertEqual([action.text() for action in menu.actions() if action.property('source') in ('Comics', 'Archives')],
-                         ['Edit Metadata', 'Compress Comics…', 'Create encrypted ZIP…'])
+        self.assertEqual([action.text() for action in menu.actions() if action.property('source') in ('Books & Comics', 'Archives')],
+                         ['Edit metadata…', 'Compress Comics…', 'Create encrypted ZIP…'])
         self.assertLess(labels.index('Rename'), labels.index('Bulk Rename…'))
         compress = next(action for action in menu.actions() if action.text() == 'Compress Comics…')
-        self.assertEqual(compress.property('source'), 'Comics')
+        self.assertEqual(compress.property('source'), 'Books & Comics')
         with patch('features.comics.ui.dialogs.CompressCbzDialog') as dialog:
             compress.trigger()
             self.assertEqual(set(dialog.call_args.kwargs['targets']), {self.path, folder})

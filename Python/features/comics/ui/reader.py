@@ -30,6 +30,7 @@ class ComicReaderWindow(qt.QMainWindow):
         super().__init__()
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.resize(950, 900)
+        self.setMinimumSize(640, 420)
         self.pages = pages
         self.page = 0
         self.shown_page = 0
@@ -53,7 +54,7 @@ class ComicReaderWindow(qt.QMainWindow):
         self.next_file_action = self.menus.next_file_action
         self.edit_metadata_action = self.menus.edit_metadata_action
         self.fullscreen_action = self.menus.fullscreen_action
-        self.controls = ReaderControls(self.fullscreen_action, self)
+        self.controls = ReaderControls(self.fullscreen_action, self, menus=self.menus)
         self.setCentralWidget(self.controls)
         status = self.statusBar()
         status.setSizeGripEnabled(False)
@@ -84,6 +85,7 @@ class ComicReaderWindow(qt.QMainWindow):
         self.page_cache.set_pages(self.pages)
         self.setWindowTitle(self.pages.path.name)
         self.setWindowFilePath(str(self.pages.path))
+        self.menus.shared.remember(self.pages.path)
         self.controls.set_file(self.pages)
         self._refresh_siblings()
 
@@ -116,12 +118,18 @@ class ComicReaderWindow(qt.QMainWindow):
             label = 'Previous file' if direction < 0 else 'Next file'
             button.setToolTip(f'{label}: {path.name}' if path else label)
         self.edit_metadata_action.setEnabled(not self.file_loading)
+        self.menus.previous_page_action.setEnabled(self.previous_button.isEnabled())
+        self.menus.next_page_action.setEnabled(self.next_button.isEnabled())
+        self.menus.go_page_action.setEnabled(not self.file_loading)
+        self.menus.shared.open_action.setEnabled(not self.file_loading)
+        self.menus.shared.recent.setEnabled(not self.file_loading)
 
     def set_mode(self, mode):
         if mode not in self.menus.mode_actions:
             raise ValueError('Unknown reader page mode')
         self.menus.mode_actions[mode].setChecked(True)
         self.mode = mode
+        self.controls.layout_button.setToolTip(f'Page layout: {self.menus.mode_actions[mode].text()}')
         self.boundary = None
         self.previous_starts.clear()
         self._update_spread()
@@ -258,6 +266,9 @@ class ComicReaderWindow(qt.QMainWindow):
     def _request_file(self, path, from_end=False, page=0, *, password=None):
         if self.closing:
             return
+        if Path(path).suffix.lower() != '.cbz':
+            self.statusBar().showMessage('This reader opens CBZ comics. Open EPUB books in the EPUB reader.')
+            return
         if any(window.busy for window in self.metadata_windows):
             self.statusBar().showMessage('Finishing metadata save…', 1800)
             return
@@ -299,9 +310,18 @@ class ComicReaderWindow(qt.QMainWindow):
         self.statusBar().clearMessage()
 
     def _choose_file(self):
-        path, _ = qt.QFileDialog.getOpenFileName(self, 'Open Comic', str(self.pages.path.parent), 'Comic archives (*.cbz)')
+        path, _ = qt.QFileDialog.getOpenFileName(self, 'Open comic', str(self.pages.path.parent), 'Comic archives (*.cbz *.CBZ)')
         if path:
             self._request_file(path)
+
+    def go_to_page(self):
+        if self.closing or self.file_loading:
+            return
+        number, accepted = qt.QInputDialog.getInt(self, 'Go to page',
+            f'Page (of {len(self.pages.pages)}):', self.shown_page + 1, 1, len(self.pages.pages))
+        if accepted:
+            self.go(number - 1)
+            self.canvas.setFocus()
 
     def edit_metadata(self):
         from .metadata_editor import MetadataEditor
@@ -337,11 +357,10 @@ class ComicReaderWindow(qt.QMainWindow):
         self._request_file(self.reload_metadata_path, False, self.page)
 
     def toggle_fullscreen(self):
-        self.showNormal() if self.isFullScreen() else self.showFullScreen()
+        self.menus.fullscreen.toggle()
 
     def leave_fullscreen(self):
-        if self.isFullScreen():
-            self.showNormal()
+        self.menus.fullscreen.leave()
 
     def _cache_idle(self):
         if self.closing:

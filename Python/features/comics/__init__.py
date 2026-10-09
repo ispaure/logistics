@@ -1,5 +1,8 @@
 """Comics has one unified declaration consumed by the Logistics feature registry."""
 
+# Keep public modules and runtime ownership stable; present one feature in Settings.
+FEATURE_GROUP = 'books'
+
 
 def register():
     from .ui_contributions import register as declaration

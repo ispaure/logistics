@@ -1,7 +1,8 @@
 # Read and manage comics
 
 Browse comic libraries, read CBZs, edit metadata, convert CBRs and compress comic
-pages. Comics requires the Images feature; enabling Comics enables that dependency.
+pages. Comic tools belong to **Books & Comics** in Settings. Enabling that feature
+also enables its Images dependency.
 
 ## Open a library
 
@@ -27,9 +28,16 @@ tabs or collection indexing.
   Held navigation waits for each displayed page before continuing. Scroll down/up over the page to move forward/
   backward; small trackpad deltas accumulate and a cooldown limits rapid jumps.
   F11 toggles full screen.
+- **File → Open comic…** and **Open recent** open CBZs only. EPUBs use their own
+  reader. Both readers share the same fullscreen button; Escape exits fullscreen
+  and preserves a previously maximized window.
+- **Navigate → Go to page…** (Ctrl+G, Command+G on macOS) jumps directly to a page.
+  The footer shows the current page/spread and a slider for quick seeking.
 - Use Previous/Next File for neighboring CBZs. Reading direction follows comic
-  metadata; View lets you choose single-page or two-page display.
-- Right-click comics or folders and choose **Comics → Edit Metadata**. Multiple
+  metadata; the page-layout button or **View → Page layout** lets you choose
+  Automatic, Single page or Two pages. Menu page turns follow the same spread
+  boundaries as the buttons and keyboard.
+- Right-click comics or folders and choose **Books & Comics → Edit metadata…**. Multiple
   selections edit only fields you explicitly change. Apply saves without closing;
   OK saves and closes. Cancel discards unapplied edits.
 - The File Information and Comic Metadata panels show details of your selection.
@@ -43,7 +51,7 @@ Readers do not modify page images. Applied metadata changes stay saved after Can
 
 ## Compress or convert
 
-Right-click CBZs/folders and choose **Comics → Compress Comics…**, or use the
+Right-click CBZs/folders and choose **Books & Comics → Compress Comics…**, or use the
 folder's **Compress CBZ…** action. Review recursion and page-retention options.
 Compression replaces each successful original only after checking its output.
 Normally, an encoded page is kept only if it is under 75% of the original size;
@@ -71,7 +79,7 @@ To encrypt plain comics in place, add this to a nearby/ancestor `remoteConfig.in
 archive_password = your-password
 ```
 
-Right-click and choose **Comics → Encrypt unencrypted comics…**. The action appears
+Right-click and choose **Books & Comics → Encrypt unencrypted comics…**. The action appears
 only when a selected item has an ancestor INI with that section. The dialog scans
 automatically. Every plain comic needs a nonempty configured password before
 starting; encrypted comics are skipped. Encryption preserves decrypted page bytes.

@@ -354,7 +354,7 @@ class SpreadTests(unittest.TestCase):
         self.assertFalse(reader.statusBar().isHidden())
         reader.statusBar().clearMessage()
         self.assertTrue(reader.statusBar().isHidden())
-        self.assertEqual(reader.controls.layout().contentsMargins().bottom(), 4)
+        self.assertEqual(reader.controls.layout().contentsMargins().bottom(), 8)
 
     def test_preload_memory_budget_keeps_nearest_pages_without_reloading_evictions(self):
         from features.comics.ui import reader_cache

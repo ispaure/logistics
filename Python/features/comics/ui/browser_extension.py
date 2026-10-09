@@ -32,6 +32,9 @@ class ComicBrowserExtension(qt.QObject, ComicBrowserServices):
 
     def prepare_close(self):
         self.close_after_catalog = True
+        books = getattr(self, '_books_metadata_controller', None)
+        if books is not None and not books.prepare_close():
+            return False
         if self.reader_busy:
             return False
         for window in self.metadata_windows:
