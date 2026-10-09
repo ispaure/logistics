@@ -314,6 +314,10 @@ class BrowserWindowTests(unittest.TestCase):
         self.wait(window)
         binding = window._extensions_by_feature['comics']
         controller = binding.controller
+        original_handlers = window.file_browser.activation_handlers
+        # Books and Comics share one feature toggle; independent editors stay installed.
+        other_handlers = tuple(handler for handler in original_handlers
+                               if handler.__self__.feature.id not in ('books', 'comics'))
         index = window.file_browser.model.index(str(self.path))
         window.file_browser.tree.selectionModel().setCurrentIndex(index,
             qt.QItemSelectionModel.SelectionFlag.ClearAndSelect | qt.QItemSelectionModel.SelectionFlag.Rows)
@@ -328,7 +332,7 @@ class BrowserWindowTests(unittest.TestCase):
         self.assertNotIn('comics.read', window.file_browser.services)
         with self.assertRaisesRegex(RuntimeError, 'disabled'):
             action.run(captured)
-        self.assertFalse(window.file_browser.activation_handlers)
+        self.assertEqual(window.file_browser.activation_handlers, other_handlers)
         self.assertEqual([action.text() for action in window.file_browser.context_menu_for(index).actions()
                           if action.property('source') == 'Archives'], ['Create encrypted ZIP…'])
         self.assertEqual(window.file_browser.tabs.count(), 1)
@@ -336,7 +340,7 @@ class BrowserWindowTests(unittest.TestCase):
         self.wait(window)
         self.assertIsInstance(file_from_path(self.path), CBZFile)
         self.assertIs(window._extensions_by_feature['comics'].controller, controller)
-        self.assertEqual(len(window.file_browser.activation_handlers), 2)  # EPUB and CBZ engines.
+        self.assertEqual(window.file_browser.activation_handlers, original_handlers)
         self.assertEqual(window.file_browser.tabs.count(), 2)
 
     def test_disable_comics_keeps_existing_editor_alive(self):
