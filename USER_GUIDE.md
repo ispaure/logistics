@@ -28,8 +28,10 @@ A user guide remains accessible when its feature is disabled or lacks a dependen
 
 The document icon opens a popup listing Markdown documents, text buffers, comic
 and EPUB readers, and metadata editors. Click an entry to select or focus it.
-Switch between their content tabs, use **Detach** for a separate
-window, and use **Bring back to Logistics** in that window to return it. The popup
+Drag their tabs outside the workspace to open floating windows, or onto the
+center of another document to tabify and onto either edge to split. Floating
+windows move with their full contents; drag them back over the main window to
+reveal the document docking area, or double-click their tab header to return. The popup
 also offers **Bring back** beside detached entries. When all documents are
 detached, the empty document workspace closes; the icon stays available for return.
 Detaching retains the document and

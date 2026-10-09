@@ -40,26 +40,28 @@ class DocumentWorkspaceTests(unittest.TestCase):
         edit = qt.QLineEdit('retained'); window.setCentralWidget(edit)
         show_document(window); self.settle()
         self.assertFalse(window.isWindow())
-        self.assertEqual(self.page.tabs.count(), 1)
+        self.assertEqual(self.page.attached_count, 1)
         self.page.detach_current(); self.settle()
-        self.assertTrue(window.isWindow())
-        self.assertEqual(self.page.tabs.count(), 0)
+        self.assertTrue(self.page.records[window]['dock'].isFloating())
+        self.assertEqual(self.page.attached_count, 0)
         show_document(window)
-        self.assertTrue(window.isWindow())  # Keep an explicitly detached document detached.
+        self.assertTrue(self.page.records[window]['dock'].isFloating())  # Keep an explicitly detached document detached.
         self.page.attach(window); self.settle()
         self.assertFalse(window.isWindow())
         self.assertEqual(edit.text(), 'retained')
         show_document(window)
-        self.assertEqual(self.page.tabs.count(), 1)
+        self.assertEqual(self.page.attached_count, 1)
 
     def test_background_document_is_open_and_dialog_accept_removes_its_tab(self):
         first = qt.QDialog(); first.setWindowTitle('Metadata')
         second = qt.QMainWindow(); second.setWindowTitle('Reader')
         show_document(first); show_document(second); self.settle()
-        self.assertFalse(first.isVisible())
+        self.assertIs(self.page.workspace.active_view.document, second)
+        self.assertIn(self.page.records[first]['dock'],
+                      self.page.workspace.tabifiedDockWidgets(self.page.records[second]['dock']))
         self.assertTrue(document_is_open(first))
         first.accept(); self.settle()
-        self.assertEqual(self.page.tabs.count(), 1)
+        self.assertEqual(self.page.attached_count, 1)
         self.assertFalse(document_is_open(first))
 
     def test_cancel_keeps_dirty_editor_and_detachment_preserves_its_buffer(self):
@@ -72,14 +74,14 @@ class DocumentWorkspaceTests(unittest.TestCase):
             show_document(editor); self.settle()
             with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Cancel):
                 self.page.close_tab(0); self.settle()
-                self.assertEqual(self.page.tabs.count(), 1)
+                self.assertEqual(self.page.attached_count, 1)
                 self.assertFalse(self.page.prepare_close())
                 self.assertTrue(self.page.close_veto)
             self.page.detach_current(); self.page.attach(editor); self.settle()
             self.assertEqual(editor.current.editor.toPlainText(), 'dirty buffer')
             editor.current.editor.document().setModified(False)
             self.page.close_tab(0); self.settle()
-            self.assertEqual(self.page.tabs.count(), 0)
+            self.assertEqual(self.page.attached_count, 0)
 
     def test_origin_controller_leaves_hosted_document_alive(self):
         from features.books.controller import BooksController
@@ -100,7 +102,7 @@ class DocumentWorkspaceTests(unittest.TestCase):
         window = qt.QMainWindow()
         show_document(window)
         self.assertTrue(window.isWindow())
-        self.assertEqual(self.page.tabs.count(), 0)
+        self.assertEqual(self.page.attached_count, 0)
         window.close(); window.deleteLater()
 
     def test_all_detached_documents_can_return_from_their_window(self):
@@ -109,11 +111,55 @@ class DocumentWorkspaceTests(unittest.TestCase):
         self.page.detach_current(); self.settle()
         self.assertEqual(self.page.attached_count, 0)
         self.assertEqual(self.page.count, 1)
-        toolbar = self.page.records[window]['return_control']
-        toolbar.actions()[0].trigger(); self.settle()
+        dock = self.page.records[window]['dock']
+        from PySide6.QtTest import QTest
+        QTest.mouseDClick(dock.tab_header, qt.Qt.MouseButton.LeftButton); self.settle()
         self.assertEqual(self.page.attached_count, 1)
         self.assertFalse(window.isWindow())
-        self.assertTrue(toolbar.isHidden())
+        self.assertFalse(dock.isFloating())
+        self.assertNotIn('return_control', self.page.records[window])
+
+    def test_document_tabs_drag_with_full_pane_preview_and_drop_back(self):
+        from commonUtils.ui.workspace_drag import tab_mime
+        window = qt.QMainWindow(); window.setWindowTitle('Dragged reader')
+        edit = qt.QLineEdit('retained'); window.setCentralWidget(edit)
+        show_document(window); self.settle()
+        dock = self.page.records[window]['dock']
+        with patch('commonUtils.ui.workspace_drag.qt.QDrag') as drag, \
+             patch.object(qt.QCursor, 'pos', return_value=qt.QPoint(5000,5000)), \
+             patch.object(qt.QApplication, 'mouseButtons', return_value=qt.Qt.MouseButton.NoButton):
+            drag.return_value.exec.return_value = qt.Qt.DropAction.IgnoreAction
+            self.page.workspace.drag_tab(dock)
+            preview = drag.return_value.setPixmap.call_args.args[0]
+            self.assertGreater(preview.width(), 300)
+            self.assertGreater(preview.height(), 200)
+        self.settle(); self.assertTrue(dock.isFloating())
+        point = self.page.workspace.contentsRect().center()
+        mime = tab_mime(dock)
+        event = qt.QDropEvent(qt.QPointF(point),qt.Qt.DropAction.MoveAction,mime,
+                             qt.Qt.MouseButton.LeftButton,qt.Qt.KeyboardModifier.NoModifier)
+        self.assertTrue(self.page.workspace.handle_tab_drop(self.page.workspace,event))
+        self.settle(); self.assertFalse(dock.isFloating())
+        self.assertEqual(edit.text(), 'retained')
+        self.assertFalse(dock.tab_header.new_button.isVisible())
+
+    def test_readers_can_split_and_browser_tabs_keep_their_own_workspace(self):
+        from commonUtils.ui.workspace import Workspace
+        from commonUtils.ui.workspace_drag import tab_mime
+        first = qt.QMainWindow(); second = qt.QMainWindow()
+        show_document(first); show_document(second); self.settle()
+        left = self.page.records[first]['dock']; right = self.page.records[second]['dock']
+        self.page.workspace.arrange(right,'right',anchor=left); self.settle()
+        self.assertLess(left.geometry().right(), right.geometry().left())
+        self.assertTrue(first.isVisible() and second.isVisible())
+        show_document(second); self.settle()
+        self.assertFalse(self.page.workspace.tabifiedDockWidgets(right))
+        browser = Workspace(lambda argument: qt.QWidget(), self.host)
+        browser.add_view(); self.addCleanup(browser.deleteLater)
+        mime = tab_mime(right)
+        event = qt.QDropEvent(qt.QPointF(50,50),qt.Qt.DropAction.MoveAction,mime,
+                             qt.Qt.MouseButton.LeftButton,qt.Qt.KeyboardModifier.NoModifier)
+        self.assertFalse(browser.handle_tab_drop(browser,event))
 
     def test_markdown_uses_workspace_and_close_cancel_vetoes_main_close(self):
         from commonUtils.ui.markdown import open_markdown
@@ -138,10 +184,10 @@ class DocumentWorkspaceTests(unittest.TestCase):
             deadline = monotonic() + 5
             while reader.reader.worker is not None:
                 self.assertLess(monotonic(), deadline); self.app.processEvents(); sleep(.005)
-            self.assertIn('Sample Book', self.page.tabs.tabText(0))
+            self.assertIn('Sample Book', self.page.records[reader]['dock'].windowTitle())
             self.assertIs(reader.reader.reader_window(), reader)
             reader.reader.close_reader(); self.settle()
-            self.assertEqual(self.page.tabs.count(), 0)
+            self.assertEqual(self.page.attached_count, 0)
             self.assertTrue(self.host.isVisible())
 
     def test_embedded_comic_keys_are_scoped_to_the_reader(self):
