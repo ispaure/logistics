@@ -22,6 +22,23 @@ def _install_browser_extension(host):
 
 
 class BrowserWindowTests(unittest.TestCase):
+    def test_new_unconstrained_tab_starts_at_home_and_can_go_up(self):
+        from ui_new.file_browser import FileBrowserPage
+        home = self.root / 'home'
+        home.mkdir()
+        with patch.object(Path, 'home', return_value=home), patch.object(registry, 'get_browser_extensions', return_value=[]):
+            page = FileBrowserPage()
+            page.show()
+            self.addCleanup(self.close_window, page)
+            self.wait(page)
+            view = page.workspace.add_view()
+            self.wait(page)
+            self.assertEqual(view.file_browser.navigation.directory, home)
+            self.assertEqual(view.file_browser.navigation.library, Path(self.root.anchor))
+            view.file_browser.navigation.up.click()
+            self.wait(page)
+            self.assertEqual(view.file_browser.navigation.directory, self.root)
+
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.temp = TemporaryDirectory()

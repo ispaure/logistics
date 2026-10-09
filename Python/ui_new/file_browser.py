@@ -74,6 +74,7 @@ class _BrowserHost:
         for extension in self.extensions:
             if not extension.prepare_close():
                 ready = False
+        self.can_retire = ready
         browser_busy = self.file_browser.stop()
         return ready and not browser_busy
 
@@ -165,9 +166,9 @@ class _WorkspaceHost:
 class FileBrowserPage(_WorkspaceHost, qt.QWidget):
     def __init__(self, parent=None, *, root_path=None):
         super().__init__(parent)
-        self.workspace = Workspace(lambda path: BrowserView(root_path=path or (
-            self.file_browser.navigation.directory if self.workspace.active_view else root_path or Path.home()),
-            filesystem_scope=root_path is None and not self.workspace.docks), self)
+        self.workspace = Workspace(lambda path: BrowserView(
+            root_path=path or root_path or Path.home(),
+            filesystem_scope=root_path is None and (path is None or not self.workspace.docks)), self)
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.workspace)
