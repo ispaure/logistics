@@ -95,6 +95,21 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
             self.assertEqual(reader.page, 0)
         self.assertEqual(reader.keys.timer.interval(), 225)
 
+    def test_vertical_arrows_use_the_same_hold_cadence(self):
+        from commonUtils.ui import pyside as qt
+        reader = self.native_reader()
+        reader.keys._navigate(qt.Qt.Key.Key_Down)
+        self.wait_reader(reader)
+        self.assertEqual(reader.page, 1)
+        self.assertTrue(reader.keys.timer.isActive())
+        self.assertEqual(reader.keys.direction, 1)
+        reader.keys.stop()
+        reader.keys._navigate(qt.Qt.Key.Key_Up)
+        self.wait_reader(reader)
+        self.assertEqual(reader.page, 0)
+        self.assertEqual(reader.keys.direction, -1)
+        reader.keys.stop()
+
     def test_native_reader_direction_keys_progress_slider_and_fit(self):
         from commonUtils.ui import pyside as qt
         from PySide6.QtTest import QTest
