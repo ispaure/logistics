@@ -3,4 +3,5 @@
 
 def register():
     from .contributions import register as declaration
+
     return declaration()
