@@ -70,6 +70,17 @@ class TextEditorTests(unittest.TestCase):
             self.wait()
             self.assertTrue(path.read_bytes().endswith(b" more"))
 
+    def test_status_counts_unicode_characters_consistently_with_go_to(self):
+        editor = self.window.current.editor
+        editor.setPlainText('😀 text')
+        cursor = editor.textCursor()
+        cursor.setPosition(0)
+        cursor.setPosition(2, qt.QTextCursor.MoveMode.KeepAnchor)
+        editor.setTextCursor(cursor)
+        self.window._active_changed()
+        self.assertIn('Col 2', self.window.position.text())
+        self.assertIn('1 selected', self.window.position.text())
+
     def test_readonly_save_buffer_blocks_programmatic_undo(self):
         editor = self.window.current.editor
         editor.setPlainText("original")
