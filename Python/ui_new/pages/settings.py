@@ -2,6 +2,7 @@
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.text_editor import TextFileEditor
+from commonUtils.ui.markdown import open_markdown
 from ui_new.settings.ini_editor import INISettingsEditor
 from commonUtils.settings import settings_path
 from features import registry
@@ -77,19 +78,32 @@ class FeatureSettingsPanel(qt.QWidget):
         self.feature_name = state.name
         self.custom = {}
         self.config = None
+        self.settings_tabs = None
         self.layout = qt.QVBoxLayout(self)
         self.title = qt.QLabel(state.label)
         font = self.title.font(); font.setPointSize(font.pointSize() + 5); font.setBold(True)
         self.title.setFont(font)
         self.title.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
-        self.layout.addWidget(self.title)
+        header = qt.QHBoxLayout()
+        header.addWidget(self.title, 1)
+        self.guide = Path(registry.__file__).parent / state.name / 'user_docs' / 'index.md'
+        self.guide_button = qt.QPushButton('User Guide')
+        self.guide_button.setAccessibleName(f'{state.label} user guide')
+        self.guide_button.setEnabled(self.guide.is_file())
+        self.guide_button.setToolTip('Open user documentation (hold Alt to edit)' if self.guide.is_file()
+                                     else 'No user guide is installed.')
+        self.guide_button.clicked.connect(lambda: open_markdown(self.guide, parent=self.window()))
+        header.addWidget(self.guide_button)
+        self.layout.addLayout(header)
         self.status = qt.QLabel()
         self.status.setWordWrap(True)
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.status.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         self.layout.addWidget(self.status)
-        self.content = qt.QVBoxLayout()
-        self.layout.addLayout(self.content, 1)
+        self.body = qt.QWidget(self)
+        self.content = qt.QVBoxLayout(self.body)
+        self.content.setContentsMargins(0, 0, 0, 0)
+        self.layout.addWidget(self.body, 1)
         self.content.addStretch(1)
         self.refresh(state)
 
@@ -100,6 +114,13 @@ class FeatureSettingsPanel(qt.QWidget):
         state = state or self._state()
         members = getattr(state, 'members', ()) or (state.name,)
         entries = [entry.contribution for entry in registry.get_settings() if entry.feature_name in members]
+        if self.settings_tabs is None and any(entry.separate_tab for entry in entries):
+            self.settings_tabs = qt.QTabWidget(self)
+            self.settings_tabs.setAccessibleName('Feature settings sections')
+            self.layout.removeWidget(self.body)
+            self.content.setContentsMargins(12, 10, 12, 10)
+            self.settings_tabs.addTab(self.body, 'INI files')
+            self.layout.addWidget(self.settings_tabs, 1)
         active = set()
         paths = []
         for entry in entries:
@@ -113,13 +134,23 @@ class FeatureSettingsPanel(qt.QWidget):
                 if widget.layout() is not None:
                     expands |= widget.layout().expandingDirections()
                 stretch = int(bool(expands & qt.Qt.Orientation.Vertical))
-                self.content.insertWidget(self.content.count() - 1, widget, stretch)
+                if not entry.separate_tab:
+                    self.content.insertWidget(self.content.count() - 1, widget, stretch)
             widget = self.custom[entry.settings_id]
-            widget.show()
+            if entry.separate_tab and self.settings_tabs.indexOf(widget) < 0:
+                self.settings_tabs.addTab(widget, entry.name)
+            if not entry.separate_tab:
+                widget.show()
             refresh = getattr(widget, 'refresh', None)
             if callable(refresh):
                 refresh()
         for key, widget in self.custom.items():
+            if key in active and self.settings_tabs is not None and self.settings_tabs.indexOf(widget) >= 0:
+                continue  # QTabWidget owns visibility of its retained pages.
+            if key not in active and self.settings_tabs is not None:
+                index = self.settings_tabs.indexOf(widget)
+                if index >= 0:
+                    self.settings_tabs.removeTab(index)
             widget.setVisible(key in active)
         for member in members:
             conventional = Path(registry.__file__).parent / member / 'config.ini'
@@ -141,7 +172,7 @@ class FeatureSettingsPanel(qt.QWidget):
 
         self.status.setVisible(bool(self.status.text()))
         expanding = self.config is not None or any(
-            key in active and self.content.stretch(self.content.indexOf(widget))
+            key in active and self.content.indexOf(widget) >= 0 and self.content.stretch(self.content.indexOf(widget))
             for key, widget in self.custom.items()
         )
         self.content.setStretch(self.content.count() - 1, 0 if expanding else 1)

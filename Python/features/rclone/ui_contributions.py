@@ -144,7 +144,8 @@ def get_contributions() -> FeatureContributions:
                 name='Credential packages',
                 settings_id='credentials',
                 create_widget=_create_page,
-                order=10
+                order=10,
+                separate_tab=True,
             ),
             SettingsContribution(
                 'Software downloads', 'software_downloads', _software_settings_note,

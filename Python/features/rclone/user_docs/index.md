@@ -7,7 +7,7 @@ remote config. FUSE is optional and only needed for mounting.
 
 1. Place your credential ZIP packages in the checkout's `RemoteCredentials/`
    directory (or the configured credentials resource directory).
-2. Open **Settings → rclone** and load a package, entering its password when asked.
+2. Open **Settings → rclone → Credential packages** and load a package, entering its password when asked.
 3. Return to **Known Folders** and select the rclone source and credential.
 4. Select a remote. If a local folder has exactly the same name, it is associated
    with that entry.
@@ -16,6 +16,10 @@ Each package creates its own config, such as `~/.config/rclone/Personal.conf`.
 Credential ZIPs contain TXT entries with a remote section header as their first
 line and the remote's rclone settings below it. Packages must be supplied separately;
 Logistics does not create account credentials for you.
+
+The **INI files** tab holds feature configuration, including software download
+settings. Switching tabs retains unsaved INI edits and credential-panel state.
+The **User Guide** button remains in the upper-right corner of the feature page.
 
 ## Transfer files
 

@@ -61,7 +61,7 @@ class RclonePage(pyside.QWidget):
         root_layout.setContentsMargins(16, 16, 16, 16)
         root_layout.setSpacing(14)
 
-        title = pyside.QLabel('rclone')
+        title = pyside.QLabel('Credential packages')
         title_font = title.font()
         title_font.setPointSize(title_font.pointSize() + 7)
         title_font.setBold(True)
