@@ -160,7 +160,10 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
 
     def edit(self, method):
         if self.current:
-            getattr(self.current.editor, method)()
+            editor = self.current.editor
+            if editor.isReadOnly() and method in ("undo", "redo", "cut", "paste"):
+                return
+            getattr(editor, method)()
 
     def change_tab(self, direction):
         if self.tabs.count():
