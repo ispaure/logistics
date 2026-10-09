@@ -74,6 +74,27 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
         self.app.processEvents()
         self.assertFalse(reader.busy)
 
+    def test_wheel_navigation_debounces_large_and_partial_deltas(self):
+        from commonUtils.ui import pyside as qt
+        reader = self.native_reader()
+        def wheel(delta):
+            event = qt.QWheelEvent(qt.QPointF(10, 10), qt.QPointF(10, 10), qt.QPoint(),
+                qt.QPoint(0, delta), qt.Qt.MouseButton.NoButton,
+                qt.Qt.KeyboardModifier.NoModifier, qt.Qt.ScrollPhase.NoScrollPhase, False)
+            self.app.sendEvent(reader.canvas, event)
+            self.wait_reader(reader)
+        with patch('features.comics.ui.reader_keys.monotonic', return_value=10):
+            wheel(-60)
+            self.assertEqual(reader.page, 0)
+            wheel(-60)
+            self.assertEqual(reader.page, 1)
+            wheel(-1200)
+            self.assertEqual(reader.page, 1)
+        with patch('features.comics.ui.reader_keys.monotonic', return_value=11):
+            wheel(1200)
+            self.assertEqual(reader.page, 0)
+        self.assertEqual(reader.keys.timer.interval(), 225)
+
     def test_native_reader_direction_keys_progress_slider_and_fit(self):
         from commonUtils.ui import pyside as qt
         from PySide6.QtTest import QTest
