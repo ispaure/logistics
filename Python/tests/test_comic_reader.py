@@ -74,7 +74,7 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
         self.app.processEvents()
         self.assertFalse(reader.busy)
 
-    def test_wheel_navigation_debounces_large_and_partial_deltas(self):
+    def test_wheel_notches_turn_once_even_for_small_or_large_deltas(self):
         from commonUtils.ui import pyside as qt
         reader = self.native_reader()
         def wheel(delta):
@@ -84,16 +84,61 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
             self.app.sendEvent(reader.canvas, event)
             self.wait_reader(reader)
         with patch('features.comics.ui.reader_keys.monotonic', return_value=10):
-            wheel(-60)
-            self.assertEqual(reader.page, 0)
-            wheel(-60)
+            wheel(-1)
             self.assertEqual(reader.page, 1)
+            wheel(1)
+            self.assertEqual(reader.page, 0)
             wheel(-1200)
             self.assertEqual(reader.page, 1)
         with patch('features.comics.ui.reader_keys.monotonic', return_value=11):
             wheel(1200)
             self.assertEqual(reader.page, 0)
         self.assertEqual(reader.keys.timer.interval(), 225)
+
+    def test_smooth_wheel_sensitivity_reload_cooldown_and_busy_guard(self):
+        from commonUtils.ui import pyside as qt
+        reader = self.native_reader()
+        path = self.root / 'settings.ini'
+        path.write_text('[WheelNavigation]\nsensitivity=1\n')
+        def wheel(pixel=0, angle=0):
+            event = qt.QWheelEvent(qt.QPointF(10, 10), qt.QPointF(10, 10), qt.QPoint(0, pixel),
+                qt.QPoint(0, angle), qt.Qt.MouseButton.NoButton,
+                qt.Qt.KeyboardModifier.NoModifier, qt.Qt.ScrollPhase.ScrollUpdate, False)
+            self.app.sendEvent(reader.canvas, event)
+            self.wait_reader(reader)
+        with patch('commonUtils.settings.settings_path', return_value=path):
+            with patch('features.comics.ui.reader_keys.monotonic', return_value=10):
+                wheel(pixel=-3)
+                self.assertEqual(reader.page, 0)
+                path.write_text('[WheelNavigation]\nsensitivity=20\n')
+                wheel(pixel=-3)
+                self.assertEqual(reader.page, 1)
+                wheel(pixel=-600)
+                self.assertEqual(reader.page, 1)
+            with patch('features.comics.ui.reader_keys.monotonic', return_value=11):
+                wheel(angle=6)
+                self.assertEqual(reader.page, 0)
+            with patch.object(reader, 'file_loading', True):
+                event = qt.QWheelEvent(qt.QPointF(), qt.QPointF(), qt.QPoint(), qt.QPoint(0, -120),
+                    qt.Qt.MouseButton.NoButton, qt.Qt.KeyboardModifier.NoModifier,
+                    qt.Qt.ScrollPhase.NoScrollPhase, False)
+                self.app.sendEvent(reader.canvas, event)
+                self.assertEqual(reader.page, 0)
+
+    def test_notch_mode_can_be_disabled_in_shared_ini(self):
+        from commonUtils.ui import pyside as qt
+        reader = self.native_reader()
+        path = self.root / 'settings.ini'
+        path.write_text('[WheelNavigation]\nimmediate_notches=false\nsensitivity=1\n')
+        with patch('commonUtils.settings.settings_path', return_value=path), patch(
+                'features.comics.ui.reader_keys.monotonic', return_value=10):
+            for expected in (0, 1):
+                event = qt.QWheelEvent(qt.QPointF(), qt.QPointF(), qt.QPoint(), qt.QPoint(0, -60),
+                    qt.Qt.MouseButton.NoButton, qt.Qt.KeyboardModifier.NoModifier,
+                    qt.Qt.ScrollPhase.NoScrollPhase, False)
+                self.app.sendEvent(reader.canvas, event)
+                self.wait_reader(reader)
+                self.assertEqual(reader.page, expected)
 
     def test_vertical_arrows_use_the_same_hold_cadence(self):
         from commonUtils.ui import pyside as qt
