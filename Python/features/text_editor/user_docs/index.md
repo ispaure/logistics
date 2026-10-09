@@ -1,6 +1,6 @@
 # Using Text Editor
 
-Open **Text Editor → Open Text Editor**, or right-click a text file in File Browser
+Open **Settings → Text Editor → Open Text Editor**, or right-click a text file in File Browser
 and choose **Open in Text Editor**. Scripts, configuration and ordinary text open
 there on double-click. Markdown keeps its existing reader; the right-click action
 opens its source in Text Editor. Extensionless and unknown files are recognized
@@ -62,7 +62,7 @@ saved preferences. Feature defaults live in `config.ini`; private overrides,
 recent files and window geometry live under the commonUtils Cache/TextEditor
 folder. **Reset Editor Preferences** removes overrides and restores feature defaults.
 
-Disabling Text Editor removes its tab and browser actions but retains its open
+Disabling Text Editor removes its browser actions but retains its open
 buffers. Re-enable it to return to those documents. Browser windows do not own
 editor buffers. Application closure still checks modified documents. Tabs are
 not restored automatically after a restart; there is no autosave or crash recovery.
