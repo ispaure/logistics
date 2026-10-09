@@ -105,26 +105,51 @@ def scan_weird_characters(target_dir, recursive=True, *, cancelled=lambda: False
     return matches
 
 
-def cleanup_pyc_files(target_dir, recursive=True, *, cancelled=lambda: False,
-                      report=lambda done, total, message: None):
-    """Delete regular bytecode files; retain per-file outcomes and cancellation state.
+def scan_pyc_files(target_dir, recursive=True, *, cancelled=lambda: False,
+                   report=lambda done, total, message: None):
+    """Return a read-only snapshot of regular bytecode files and their identities."""
+    from services.folder_safety import require_safe_folder
+    from commonUtils.operations import check_cancelled
+    targets = (target_dir,) if isinstance(target_dir, (str, Path)) else target_dir
+    roots = tuple(require_safe_folder(root, recursive=recursive) for root in targets)
+    paths = _scan_targets(roots, mask='*.pyc', recursive=recursive, cancelled=cancelled)
+    found = []
+    for index, path in enumerate(paths):
+        check_cancelled(cancelled)
+        if not path.is_symlink() and path.is_file():
+            found.append((path, _pyc_identity(path)))
+        report(index + 1, len(paths), f'Inspecting {path.name}')
+    return tuple(found)
 
-    Directory links are never traversed and file links are preserved. Cancellation
-    stops between files; deletions already completed cannot be undone.
-    """
+
+def _pyc_identity(path):
+    stats = path.lstat()
+    return stats.st_dev, stats.st_ino, stats.st_size, stats.st_mtime_ns, stats.st_mode
+
+
+def cleanup_pyc_files(target_dir, recursive=True, *, cancelled=lambda: False,
+                      report=lambda done, total, message: None, candidates=None):
+    """Delete only reviewed bytecode identities, preserving links and changed files."""
     from commonUtils.operations import run_batch
     from services.folder_safety import require_safe_folder
     targets = (target_dir,) if isinstance(target_dir, (str, Path)) else target_dir
-    target_dir = tuple(require_safe_folder(root, recursive=recursive) for root in targets)
-    paths = _scan_targets(target_dir, mask='*.pyc', recursive=recursive, cancelled=cancelled)
-    paths = [path for path in paths if not path.is_symlink()]
+    roots = tuple(require_safe_folder(root, recursive=recursive) for root in targets)
+    if candidates is None:
+        candidates = scan_pyc_files(roots, recursive, cancelled=cancelled)
+    identities = dict(candidates)
     def delete(path):
         import stat
         require_safe_folder(path.parent, recursive=False)
-        if not stat.S_ISREG(path.lstat().st_mode):
-            raise ValueError('No longer a regular bytecode file')
+        if (path.suffix.lower() != '.pyc' or not any(path.parent == root or
+                (recursive and root in path.parents) for root in roots)):
+            raise ValueError('Outside reviewed deletion scope')
+        if any(parent.is_symlink() for parent in path.parents):
+            raise ValueError('Directory replaced with a symbolic link; scan again')
+        identity = _pyc_identity(path)
+        if not stat.S_ISREG(identity[-1]) or identity != identities[path]:
+            raise ValueError('File changed since preview; scan again')
         path.unlink()
-    return run_batch(paths, delete, cancelled=cancelled, progress=report)
+    return run_batch(list(identities), delete, cancelled=cancelled, progress=report)
 
 
 def _scan_targets(target_dirs, **options):
