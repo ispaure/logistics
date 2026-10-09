@@ -41,11 +41,13 @@ folder…** to browse another location. You can search, preview files, switch vi
 and explore folder sizes with the storage charts.
 
 **Folder Hub** brings your configured local folders and remote sources together.
-The sidebar groups feature-specific tools under **Tools**. The Text Editor and
-comic/EPUB readers open in the main document workspace, with **Detach** and
-**Bring back** available.
+The icon sidebar opens a dropdown for **Tools** and a document-list popup. Markdown,
+the Text Editor and comic/EPUB readers use the main document workspace, with
+**Detach** and **Bring back to Logistics** available.
 **Settings** lets you save feature defaults and edit their configuration. Each
 feature settings page has a **User Guide** button in its upper-right corner.
+**Settings → File indexing** controls refresh rules. The default opens saved
+results immediately and indexes only visited folders; **Refresh index** scans deeper.
 
 Start with the tools you need. Credentials for remote services are supplied
 separately, and some integrations need their own software or setup. The

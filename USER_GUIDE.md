@@ -6,10 +6,11 @@ folder's contents or configuration.
 
 ## Find a tool
 
-The sidebar keeps **File Browser** and **Folder Hub** at the top. Logistics opens
+The icon sidebar keeps **File Browser** and **Folder Hub** at the top. Hover an
+icon for its name. Logistics opens
 in File Browser; Folder Hub is the destination for configured libraries, servers
-and remotes. Feature tools and Debug are grouped under **Tools**, with **Settings**
-below them. Switching destinations retains each view's state.
+and remotes. **Tools** opens a dropdown of enabled tools and Debug; **Settings**
+stays at the bottom. Switching destinations retains each view's state.
 
 | Page | Use it for |
 | --- | --- |
@@ -25,12 +26,16 @@ Disabling a feature removes its new actions; existing windows/jobs can finish.
 Enabling also enables required dependencies. Choices are saved for the next launch.
 A user guide remains accessible when its feature is disabled or lacks a dependency.
 
-The Text Editor, comic and EPUB readers, and their metadata editors opened from
-the main app appear in **Open documents** under File Browser.
+The document icon opens a popup listing Markdown documents, text buffers, comic
+and EPUB readers, and metadata editors. Click an entry to select or focus it.
 Switch between their content tabs, use **Detach** for a separate
-window, and use **Bring back** to return it. Detaching retains the document and
+window, and use **Bring back to Logistics** in that window to return it. The popup
+also offers **Bring back** beside detached entries. When all documents are
+detached, the empty document workspace closes; the icon stays available for return.
+Detaching retains the document and
 reading/editing state. Unsaved buffers and background workers are checked before
 closing. File-browser pane tabs remain independent of these document tabs.
+Closing an originating browser pane retains documents hosted by the main app.
 
 ## Remove files and folders
 
@@ -54,7 +59,7 @@ keeping the current page available.
 Guides opened normally from feature settings are preview-only: they offer no editing or saving.
 Links followed inside a preview-only window remain preview-only.
 
-Double-click `.md` or `.markdown` files in the file browser to open a window that
+Double-click `.md` or `.markdown` files in the file browser to open a document that
 permits editing and starts in Formatted edit mode. Reading does not modify a document. **Contents** opens a floating list of headings
 on the right; select a heading to jump, or click outside to dismiss it. Editable
 windows let you type directly in the formatted document. Headings, bold text, lists and
@@ -170,6 +175,16 @@ Unsaved edits are retained when switching categories and checked before closing.
 `preferences.ini` under `~/Library/Application Support/Logistics/` on macOS,
 `%APPDATA%/Logistics/` on Windows, and `$XDG_CONFIG_HOME/logistics/` (normally
 `~/.config/logistics/`) on Linux. Feature package folders are never renamed.
+Unknown feature IDs are ignored until those packages are installed again. Missing
+or unreadable preference files use defaults. A malformed file is preserved beside
+the original as `preferences.ini.broken-<timestamp>` before defaults are loaded.
+If that recovery copy cannot be created, the original remains intact.
+
+**File indexing** edits `[FileIndex]` in Logistics' `Python/configFile.ini`, with
+explicit Save and checkboxes for opening folders/new tabs, recursive scanning,
+validating saved results after startup, revisits, file-change notifications, and
+background thread priority. Changes apply on the next request. Other configuration
+sections are retained.
 
 ## File Browser and Folder Hub
 
@@ -206,14 +221,18 @@ Opening a matching folder keeps the query and scopes the results to its
 subfolders. **Show in browser** explicitly leaves search and locates an item.
 The **Storage** toolbar offers Treemap and Radial views, with a largest-first
 list beside the chart. Double-click a folder to drill down and use **Up** to return.
-Charts show at most 3,000 immediate children; Radial also bounds its four-level
-hierarchy. The view indicates when that limit applies. Use List or Search for all entries.
+Treemap shows at most 3,000 children; Radial shares a 3,000-entry budget across four
+levels, prioritizing larger entries and retaining room for later rings. Gaps may
+represent omitted or incomplete data. Use List or Search for all entries.
 Links and directory junctions are excluded from recursive analysis. Unreadable
 entries are reported, so totals may be partial. Logical sizes differ from physical
 space used by sparse files, compression, and shared hard links.
 
-Search and storage share the saved directory index. Search reads cached names
-and updates as background indexing progresses. Use **Refresh index** to check
+Search and storage share the saved directory index. By default, opening a new
+location indexes its immediate contents without walking its descendants. Saved
+results open immediately; notifications update changed folders. Subtree sizes
+and search coverage remain partial until deeper folders are visited or scanned.
+Search reads cached names and updates as indexing progresses. Use **Refresh index** to check
 for changes beneath the current folder; incomplete results are identified in the
 search summary.
 
