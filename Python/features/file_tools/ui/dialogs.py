@@ -136,7 +136,10 @@ class DeletePycDialog(_ResultsDialog):
             self._row(path, 'Pending deletion', f'{identity[2]:,} bytes')
         self.summary.setText(f'{len(candidates)} bytecode files found · '
                              f'{sum(identity[2] for _, identity in candidates):,} bytes. No files deleted. '
-                             'Review these results before confirming deletion.')
+                             + ('Review these results before confirming deletion.' if candidates else
+                                'Scan complete. No PYC files found.'))
+        self.task.message.setText(f'Scan complete. {len(candidates)} PYC files found.' if candidates else
+                                  'Scan complete. No PYC files found.')
         self.action_button.setText('Delete reviewed files…' if candidates else 'Scan PYC files')
 
     def _show_results(self, result):
