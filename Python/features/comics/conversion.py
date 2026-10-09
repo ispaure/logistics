@@ -7,7 +7,7 @@ CBR to CBZ conversion helpers for the Logistics Comics feature.
 
 from pathlib import Path
 from typing import List
-from tempfile import TemporaryDirectory
+from commonUtils.storage import temporary_workspace
 
 import config
 
@@ -40,7 +40,7 @@ def convert_cbr_to_cbz(target_file_path: Path) -> bool:
         return False
     try:
         original_stat = source.stat()
-        with TemporaryDirectory(prefix='logistics-cbr-', ignore_cleanup_errors=True) as workspace:
+        with temporary_workspace(prefix='logistics-cbr-', ignore_cleanup_errors=True) as workspace:
             extracted = Path(workspace)
             # Let patool discover an installed extractor on the current platform.
             # The old Windows software path was also passed on macOS/Linux.

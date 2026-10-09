@@ -23,6 +23,7 @@ from features.images import processing as imageUtils
 import os
 import zipfile
 from tempfile import TemporaryDirectory
+from commonUtils.storage import temporary_directory
 from PIL import Image
 from commonUtils.fileTypes import zipType
 from .comicinfo import ComicInfoXML
@@ -59,7 +60,7 @@ cbz_img_min_allowed_compression_percentage = 75
 
 # Legacy paths retained for callers of the ComicInfo export helper.
 # Compression itself uses a private TemporaryDirectory for each archive.
-temp_compression_path = Path(fileUtils.get_user_home_dir(), 'Temp_CBZ_Compression')
+temp_compression_path = temporary_directory(create=False) / 'CBZ_Compression'
 temp_dir_extracted_cbz = Path(temp_compression_path, '1_Extracted_CBZ')
 temp_dir_compressed_imgs = Path(temp_compression_path, '2_Compressed_Images')
 temp_dir_result = Path(temp_compression_path, '3_Result')
