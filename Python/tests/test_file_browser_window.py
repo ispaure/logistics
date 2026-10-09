@@ -89,6 +89,13 @@ class BrowserWindowTests(unittest.TestCase):
         source.workspace.arrange(dock, 'right')
         self.app.processEvents()
         self.assertFalse(dock.isFloating())
+        for placement in ('tabs', 'left', 'tabs', 'right'):
+            source.workspace.arrange(dock, placement)
+            self.app.processEvents()
+            if placement != 'tabs':
+                other = source.workspace.docks[1]
+                self.assertFalse(dock.geometry().intersects(other.geometry()))
+                self.assertEqual(dock.geometry().left() < other.geometry().left(), placement == 'left')
         source.workspace._activate(dock)
         source.workspace.detach_active()
         self.app.processEvents()
@@ -101,6 +108,28 @@ class BrowserWindowTests(unittest.TestCase):
         self.assertFalse(dock.isFloating())
         self.assertFalse(original.closing)
         self.assertFalse(original.file_browser.stopping)
+
+    def test_busy_tab_close_waits_for_its_own_controller(self):
+        class BusyExtension(qt.QObject):
+            idle = qt.Signal()
+            ready = False
+            def prepare_close(self):
+                return self.ready
+        extension = RegisteredContribution('busy', 'Busy', BrowserExtensionContribution(lambda host: BusyExtension(host)))
+        window = self.window([extension])
+        dock = window.workspace.active_dock
+        controller = window.extensions[0]
+        dock.close()
+        self.assertEqual(len(window.workspace.docks), 1)
+        controller.ready = True
+        controller.idle.emit()
+        controller.idle.emit()
+        self.app.processEvents()
+        self.assertEqual(len(window.workspace.docks), 0)
+        self.assertFalse(window.workspace._closing)
+        window.workspace.add_view(self.root)
+        self.wait(window)
+        self.assertEqual(len(window.workspace.docks), 1)
 
     def test_debug_button_opens_browser_and_survives_empty_debug_contributions(self):
         with patch.object(registry, 'get_debug_actions', return_value=[]):
