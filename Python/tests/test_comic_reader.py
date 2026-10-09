@@ -312,7 +312,8 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         window = ComicLibraryWindow(self.root)
         window.show()
         self.wait(window)
-        self.assertTrue(window.preview_panel.isHidden())
+        self.assertFalse(window.preview_panel.isHidden())
+        self.assertIn(f'Path: {self.root}', window.preview.toPlainText())
         index = window.model.index(str(self.path))
         window.tree.selectionModel().select(index, qt.QItemSelectionModel.SelectionFlag.Select |
                                             qt.QItemSelectionModel.SelectionFlag.Rows)
@@ -502,8 +503,8 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.assertEqual(window.model.data(folder_index.siblingAtColumn(1)), expected)
         window.browser.tiles.clearSelection()
         self.wait(window)
-        self.assertTrue(window.preview_panel.isHidden())
-        self.assertEqual(window.preview.toPlainText(), '')
+        self.assertFalse(window.preview_panel.isHidden())
+        self.assertIn(f'Path: {window.navigation.directory}', window.preview.toPlainText())
         window.close()
         self.app.processEvents()
 

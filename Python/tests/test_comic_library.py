@@ -492,7 +492,7 @@ class WindowTests(ComicFixture, unittest.TestCase):
         menu.deleteLater()
         window.tree.clearSelection()
         self.wait_for(window)
-        self.assertEqual(window.preview.toPlainText(), '')
+        self.assertIn(f'Path: {window.navigation.directory}', window.preview.toPlainText())
         window.close()
         self.app.processEvents()
 
