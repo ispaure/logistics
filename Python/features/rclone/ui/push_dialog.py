@@ -235,6 +235,9 @@ class RclonePushDialog(pyside.QDialog):
             return
 
         bandwidth_limit = self.bandwidth_limit.text().strip()
+        if bandwidth_limit and not self.bandwidth_limit.hasAcceptableInput():
+            ui.display_msg_box_ok('Push Specific Folder', 'Enter a bandwidth limit from 1 to 1000000 MB/s, or leave it blank.')
+            return
 
         if actions.push_specific_directory(
             self.entry.local,
