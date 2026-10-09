@@ -1,7 +1,7 @@
 """Transactional, line-preserving ComicInfo.xml author and series edits."""
 
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from commonUtils.storage import temporary_workspace
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape
 
@@ -28,7 +28,7 @@ def _replace_tag(file_path: Path, tag: str, search: str, replacement: str) -> bo
         password = resolve_password(file_path, configured_only=True)
         if password is not None:
             authenticate(file_path, password, all_members=True, for_rewrite=True)
-        with TemporaryDirectory(prefix='logistics-comicinfo-', ignore_cleanup_errors=True) as workspace:
+        with temporary_workspace(prefix='logistics-comicinfo-', ignore_cleanup_errors=True) as workspace:
             extracted = Path(workspace)
             if not zipUtils.unzip_file(file_path, extracted, pwd=password):
                 raise OSError(f'Could not extract {file_path}')

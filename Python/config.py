@@ -2,6 +2,7 @@ from configparser import ConfigParser
 from pathlib import Path
 from commonUtils import configUtils, fileUtils
 from commonUtils.osUtils import OS, get_os
+from commonUtils.storage import temporary_directory
 
 
 def get_config_file_path() -> Path:
@@ -63,7 +64,7 @@ class LogisticsConfig:
         self.path_logistics_software_general: Path = self.path_logistics_software / 'General'
 
         # General paths
-        self.temp_path: Path = self.path_logistics / 'temp'
+        self.temp_path: Path = temporary_directory(create=False)
 
         remote_network_mount_sub_path = configUtils.config_section_map(
             config_file_path, 'DirectoryStructure', 'remote_network_mount_sub_path'
