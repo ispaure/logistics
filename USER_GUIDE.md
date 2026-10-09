@@ -160,24 +160,32 @@ Switching pages retains browser navigation and selection. Enabled features
 contribute previews and right-click actions here.
 The Debug button can still open a separate File Browser window.
 
-Use **New tab** (Ctrl/Cmd+T) to create another independent browser view. Folder
-names identify tabs and change as you navigate. **Close tab** (Ctrl/Cmd+W) closes
-the active view after any pending work stops. **Detach** opens the active view in
-a floating window; **Split left/right** shows views side by side, and **Combine
-tabs** brings them together. Drag native dock titles to rearrange them. Right-click
-a dock title and choose **Attach to window** to move that same view into another
-open browser workspace, preserving its history and selection. If every tab is
-detached, the empty window displays a large docking area so you can drop a tab
-back into the window. **Reattach** returns the active detached tab (or another
-detached tab belonging to that window) without dragging.
+Use **New tab** (Ctrl/Cmd+T or **+**) to create another independent browser view.
+New tabs in the main explorer start at Home and can navigate up to the filesystem
+root; explicitly scoped windows retain their folder boundary. Folder names
+identify tabs and change as you navigate. **Close tab** (Ctrl/Cmd+W or **×**)
+removes the tab immediately while background work shuts down safely. Feature
+prompts that refuse closure retain the tab.
+
+Drag a tab down from its header, then onto the left or right quarter of another
+pane to split the views side by side. The drop preview shows the destination.
+Drop in the center to combine tabs. Double-click a single pane's header to detach
+it, or drag outside the workspace. Drop a detached tab into another browser
+workspace to move that same view while preserving its history and selection.
+An empty workspace remains a drop target. Each pane has a visible border, with
+shared indexing status outside the panes. The inline **Size** slider sits before
+**View** and controls tile, list and column icon sizes.
 
 Select the **magnifying glass** to show the search bar below the breadcrumbs,
 inside the file-list panel. Type to search names in the current folder and its
 subfolders; results appear in that same panel. Close search with its **X**, **Escape**,
 or another click on the magnifying glass. **Ctrl/Cmd+F** opens and focuses search.
-**Storage… → Analyze / Refresh** displays recursive logical
-file sizes as a treemap and largest-first list. Double-click a folder to drill
-down, use **Up** to return, and **Show in browser** to navigate to a selection.
+Opening a matching folder keeps the query and scopes the results to its
+subfolders. **Show in browser** explicitly leaves search and locates an item.
+The **Storage** toolbar offers Treemap and Radial views, with a largest-first
+list beside the chart. Double-click a folder to drill down and use **Up** to return.
+Charts show at most 3,000 immediate children; Radial also bounds its four-level
+hierarchy. The view indicates when that limit applies. Use List or Search for all entries.
 Links and directory junctions are excluded from recursive analysis. Unreadable
 entries are reported, so totals may be partial. Logical sizes differ from physical
 space used by sparse files, compression, and shared hard links.
