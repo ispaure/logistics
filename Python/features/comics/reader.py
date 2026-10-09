@@ -29,7 +29,9 @@ def open_reader(comic):
                      and not window.closing
                      and archive_unchanged(pages.path, window.pages.document.snapshot)), None)
     if existing is not None:
-        existing.showNormal()
+        # Returning to an already-open reader should preserve full screen or
+        # maximization. Only a minimized reader needs its normal state restored.
+        existing.showNormal() if existing.isMinimized() else existing.show()
         existing.raise_()
         existing.activateWindow()
         return existing

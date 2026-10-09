@@ -2,7 +2,7 @@
 
 from commonUtils.ui import pyside as qt
 from commonUtils.settings import get_wheel_navigation_settings
-from time import monotonic
+from commonUtils.ui.page_wheel import PageWheel
 
 PAGE_TURN_INTERVAL_MS = 225
 
@@ -13,10 +13,7 @@ class ReaderKeyHandler(qt.QObject):
         self.window = window
         self.held_key = None
         self.direction = None
-        self._wheel_delta = 0
-        self._wheel_time = 0
-        self._wheel_event_time = 0
-        self._wheel_pixels = None
+        self.wheel = PageWheel()
         self.timer = qt.QTimer(self)
         self.timer.setInterval(PAGE_TURN_INTERVAL_MS)
         self.timer.setTimerType(qt.Qt.TimerType.PreciseTimer)
@@ -59,38 +56,13 @@ class ReaderKeyHandler(qt.QObject):
     def eventFilter(self, watched, event):
         if watched is self.window.canvas and event.type() == qt.QEvent.Type.Wheel:
             event.accept()
-            now = monotonic()
-            if (event.modifiers() or self.window.busy or self.window.file_loading
-                    or self.window.closing or qt.QApplication.activeModalWidget()
-                    or qt.QApplication.activePopupWidget()):
+            if (event.modifiers() or self.window.busy or self.window.file_loading or self.window.closing
+                    or qt.QApplication.activeModalWidget() or qt.QApplication.activePopupWidget()):
                 return True
-            settings = get_wheel_navigation_settings()
-            pixels = not event.pixelDelta().isNull()
-            delta = event.pixelDelta().y() if pixels else event.angleDelta().y()
-            if not delta:
-                return True
-            notch = not pixels and event.phase() == qt.Qt.ScrollPhase.NoScrollPhase
-            if notch and settings.immediate_notches:
-                self._wheel_delta = 0
+            direction = self.wheel.direction(event, settings=get_wheel_navigation_settings())
+            if direction:
                 self.stop()
-                self.window.step(-1 if delta > 0 else 1)
-                self._wheel_time = now
-                return True
-            if now - self._wheel_time < settings.cooldown_ms / 1000:
-                self._wheel_delta = 0
-                return True
-            threshold = (60 if pixels else 120) / settings.sensitivity
-            if (now - self._wheel_event_time > 1 or self._wheel_delta * delta < 0
-                    or self._wheel_pixels != pixels):
-                self._wheel_delta = 0
-            self._wheel_pixels = pixels
-            self._wheel_event_time = now
-            self._wheel_delta += delta
-            if abs(self._wheel_delta) >= threshold:
-                self.stop()
-                self.window.step(-1 if self._wheel_delta > 0 else 1)
-                self._wheel_delta = 0
-                self._wheel_time = now
+                self.window.step(direction)
             return True
         if watched is self.window and event.type() in (
                 qt.QEvent.Type.WindowDeactivate, qt.QEvent.Type.Hide, qt.QEvent.Type.Close):

@@ -2,14 +2,17 @@
 
 from commonUtils.ui import pyside as qt
 from .reader_pages import PageCanvas
+from commonUtils.ui.reader_menus import ReaderMenus as SharedReaderMenus
+from commonUtils.ui.reader_chrome import ReaderLabel, ReaderFullscreen, reader_button, reader_icon, READER_MARGINS, READER_SPACING
 
 
 class ReaderControls(qt.QWidget):
-    def __init__(self, fullscreen_action, parent=None):
+    def __init__(self, fullscreen_action, parent=None, *, menus=None):
         super().__init__(parent)
+        self.menus = menus
         layout = qt.QVBoxLayout(self)
-        layout.setContentsMargins(6, 4, 6, 4)
-        layout.setSpacing(4)
+        layout.setContentsMargins(*READER_MARGINS)
+        layout.setSpacing(READER_SPACING)
         layout.addLayout(self._create_header(fullscreen_action))
         self.canvas = PageCanvas()
         self.canvas.setFocusPolicy(qt.Qt.FocusPolicy.StrongFocus)
@@ -18,48 +21,54 @@ class ReaderControls(qt.QWidget):
 
     def _create_header(self, fullscreen_action):
         header = qt.QHBoxLayout()
-        self.previous_file_button = self._button('Previous file', qt.QStyle.StandardPixmap.SP_MediaSkipBackward)
-        self.next_file_button = self._button('Next file', qt.QStyle.StandardPixmap.SP_MediaSkipForward)
+        header.setSpacing(READER_SPACING)
+        if self.menus is not None:
+            self.open_button = reader_button(self, 'Open comic', action=self.menus.shared.open_action)
+            header.addWidget(self.open_button)
+        self.previous_file_button = self._button('Previous file', 'previous-file')
+        self.next_file_button = self._button('Next file', 'next-file')
         self.file_controls = qt.QHBoxLayout()
         header.addLayout(self.file_controls)
-        self.title = qt.QLabel()
-        self.title.setTextFormat(qt.Qt.TextFormat.PlainText)
-        self.title.setWordWrap(True)
+        self.title = ReaderLabel()
+        self.title.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
         header.addWidget(self.title, 1)
         self.direction = qt.QLabel()
+        self.direction.setForegroundRole(qt.QPalette.ColorRole.PlaceholderText)
         header.addWidget(self.direction)
-        fullscreen = qt.QToolButton()
-        fullscreen.setDefaultAction(fullscreen_action)
-        header.addWidget(fullscreen)
+        if self.menus is not None:
+            self.layout_button = reader_button(self, 'Page layout', icon='layout')
+            self.layout_button.setMenu(self.menus.layout_menu)
+            self.layout_button.setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
+            header.addWidget(self.layout_button)
+        self.fullscreen_button = reader_button(self, 'Full screen', action=fullscreen_action, icon='fullscreen')
+        header.addWidget(self.fullscreen_button)
         return header
 
     def _create_footer(self):
         footer = qt.QHBoxLayout()
-        self.previous_button = self._button('Previous page', qt.QStyle.StandardPixmap.SP_ArrowLeft)
-        self.next_button = self._button('Next page', qt.QStyle.StandardPixmap.SP_ArrowRight)
+        footer.setSpacing(READER_SPACING)
+        self.previous_button = self._button('Previous page', 'previous')
+        self.next_button = self._button('Next page', 'next')
         self.page_controls = qt.QHBoxLayout()
         footer.addLayout(self.page_controls)
         self.progress = qt.QSlider(qt.Qt.Orientation.Horizontal)
         self.progress.setAccessibleName('Reading progress')
+        self.progress.setToolTip('Jump to a page · Ctrl+G opens Go to page')
         self.progress.setLayoutDirection(qt.Qt.LayoutDirection.LeftToRight)
         footer.addWidget(self.progress, 1)
         self.progress_label = qt.QLabel()
+        self.progress_label.setAccessibleName('Reading progress')
         footer.addWidget(self.progress_label)
         return footer
 
     def _button(self, name, icon):
-        button = qt.QToolButton()
-        button.setIcon(self.style().standardIcon(icon))
-        button.setIconSize(qt.QSize(22, 22))
-        button.setAutoRaise(True)
-        button.setToolTip(name)
-        button.setAccessibleName(name)
-        return button
+        return reader_button(self, name, icon=icon)
 
     def set_file(self, pages):
         self.title.setText(pages.path.name)
         rtl = pages.right_to_left
         self.direction.setText('Right to left' if rtl else 'Left to right')
+        self.direction.setVisible(rtl)
         with qt.QSignalBlocker(self.progress):
             self.progress.setInvertedAppearance(rtl)
             self.progress.setRange(0, max(1, len(pages.pages) - 1))
@@ -71,20 +80,20 @@ class ReaderControls(qt.QWidget):
             layout.addWidget(following if rtl else previous)
             layout.addWidget(previous if rtl else following)
         self._set_direction_icons(self.previous_button, self.next_button, rtl,
-                                  qt.QStyle.StandardPixmap.SP_ArrowLeft, qt.QStyle.StandardPixmap.SP_ArrowRight)
+                                  'previous', 'next')
         self._set_direction_icons(self.previous_file_button, self.next_file_button, rtl,
-                                  qt.QStyle.StandardPixmap.SP_MediaSkipBackward, qt.QStyle.StandardPixmap.SP_MediaSkipForward)
+                                  'previous-file', 'next-file')
 
     def _set_direction_icons(self, previous, following, rtl, backward_icon, forward_icon):
-        previous.setIcon(self.style().standardIcon(forward_icon if rtl else backward_icon))
-        following.setIcon(self.style().standardIcon(backward_icon if rtl else forward_icon))
+        previous.setIcon(reader_icon(forward_icon if rtl else backward_icon))
+        following.setIcon(reader_icon(backward_icon if rtl else forward_icon))
 
     def show_progress(self, start, displayed, count):
         end = displayed[-1]
         with qt.QSignalBlocker(self.progress):
             self.progress.setValue(0 if start == 0 else end)
         numbers = ' & '.join(str(index + 1) for index in displayed)
-        self.progress_label.setText(f'{numbers} / {count} · {(end + 1) / count:.0%}')
+        self.progress_label.setText(f'Page {numbers} / {count} · {(end + 1) / count:.0%}')
 
 
 class ReaderMenus(qt.QObject):
@@ -94,36 +103,32 @@ class ReaderMenus(qt.QObject):
         self._build()
 
     def _build(self):
-        file_menu = self.window.menuBar().addMenu('File')
-        open_action = file_menu.addAction('Open Comic…')
-        open_action.setShortcut(qt.QKeySequence.StandardKey.Open)
-        open_action.triggered.connect(self.window._choose_file)
-        self.previous_file_action = file_menu.addAction('Previous File')
-        self.previous_file_action.setShortcut('Ctrl+Shift+Left')
-        self.previous_file_action.triggered.connect(lambda: self.window.open_adjacent(-1))
-        self.next_file_action = file_menu.addAction('Next File')
-        self.next_file_action.setShortcut('Ctrl+Shift+Right')
-        self.next_file_action.triggered.connect(lambda: self.window.open_adjacent(1))
-        self.previous_file_action.setAutoRepeat(False)
-        self.next_file_action.setAutoRepeat(False)
-        file_menu.addSeparator()
-        close_action = file_menu.addAction('Close')
-        close_action.setShortcut(qt.QKeySequence.StandardKey.Close)
-        close_action.triggered.connect(self.window.close)
-        edit_menu = self.window.menuBar().addMenu('Edit')
-        self.edit_metadata_action = edit_menu.addAction('Edit Metadata…')
-        self.edit_metadata_action.setShortcut('Ctrl+I')
-        self.edit_metadata_action.triggered.connect(self.window.edit_metadata)
-        view_menu = self.window.menuBar().addMenu('View')
+        self.shared = SharedReaderMenus(self, self.window.menuBar(),
+            open_file=self.window._choose_file, edit_metadata=self.window.edit_metadata,
+            close=self.window.close, fullscreen=self.window.toggle_fullscreen,
+            open_path=lambda path: self.window._request_file(path, False),
+            open_label='Open comic…', suffixes=('.cbz',))
+        self.fullscreen = ReaderFullscreen(self.window, self.shared.fullscreen_action)
+        self.previous_file_action = self.shared.action(self.shared.navigate, 'Previous file',
+            lambda: self.window.open_adjacent(-1), 'Ctrl+Shift+Left')
+        self.next_file_action = self.shared.action(self.shared.navigate, 'Next file',
+            lambda: self.window.open_adjacent(1), 'Ctrl+Shift+Right')
+        self.previous_page_action = self.shared.action(self.shared.navigate, 'Previous page', lambda: self.window.step(-1))
+        self.next_page_action = self.shared.action(self.shared.navigate, 'Next page', lambda: self.window.step(1))
+        self.go_page_action = self.shared.action(self.shared.navigate, 'Go to page…', self.window.go_to_page, 'Ctrl+G')
+        self.edit_metadata_action = self.shared.metadata_action
+        self.fullscreen_action = self.shared.fullscreen_action
+        self.layout_menu = self.shared.view.addMenu('Page layout')
+        view_menu = self.layout_menu
         group = qt.QActionGroup(self)
         self.mode_actions = {}
-        for mode, label in (('auto', 'Automatic Pages'), ('single', 'Single Page'), ('double', 'Two Pages')):
+        for mode, label in (('auto', 'Automatic'), ('single', 'Single page'), ('double', 'Two pages')):
             action = view_menu.addAction(label)
             action.setCheckable(True)
             action.setChecked(mode == 'auto')
+            action.setToolTip({'auto': 'Fit one or two pages according to the window and page shapes.',
+                              'single': 'Display one page at a time.',
+                              'double': 'Display facing pages together when possible.'}[mode])
             group.addAction(action)
             self.mode_actions[mode] = action
             action.triggered.connect(lambda checked=False, selected=mode: self.window.set_mode(selected))
-        self.fullscreen_action = view_menu.addAction('Full Screen')
-        self.fullscreen_action.setShortcut('F11')
-        self.fullscreen_action.triggered.connect(self.window.toggle_fullscreen)

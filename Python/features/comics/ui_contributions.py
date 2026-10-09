@@ -164,10 +164,12 @@ def register() -> Feature:
     comic_type = 'features.comics.cbz:CBZFile'
     from features.comics.browser_support import folder_fields
     return Feature(
-        id='comics', label='Comics', requires=('images',),
+        id='comics', label='Books & Comics', requires=('images',),
         file_types=[FileType(comic_type, extensions=('cbz',))],
         browser=BrowserExtension(
-            actions=[SelectionAction('edit_metadata', 'Edit Metadata', (comic_type, Directory), _edit_metadata, order=10),
+            actions=[SelectionAction('edit_metadata', 'Edit metadata…',
+                         (comic_type, 'features.books.file_type:EPUBFile', Directory),
+                         _edit_shared_metadata, order=10, shared_key='books.edit_metadata'),
                      SelectionAction('compress', 'Compress Comics…', (comic_type, Directory), _compress, order=20),
                      SelectionAction('encrypt', 'Encrypt unencrypted comics…', (comic_type, Directory), _encrypt, is_available=_can_encrypt, order=30)],
             activation=[FileActivation(comic_type, _read)],
@@ -189,3 +191,8 @@ def register() -> Feature:
             WorkflowContribution('debug_comics_compress_cbz', _open_compress_cbz),
         ]
     )
+
+
+def _edit_shared_metadata(context):
+    from features.books.metadata_actions import edit_metadata
+    return edit_metadata(context)

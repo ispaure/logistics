@@ -156,7 +156,7 @@ class WindowTests(ComicFixture, unittest.TestCase):
         menu = window._context_menu_for(index)
         self.assertEqual(menu.actions()[0].text(), 'Open')
         self.assertIn('Open in Default App', [action.text() for action in menu.actions()])
-        next(action for action in menu.actions() if action.text() == 'Edit Metadata').trigger()
+        next(action for action in menu.actions() if action.text() == 'Edit metadata…').trigger()
         editor = window.metadata_windows[0]
         self.wait_for(editor)
         self.assertEqual(editor.tabs.count(), 2)
@@ -337,7 +337,9 @@ class WindowTests(ComicFixture, unittest.TestCase):
         editor = MetadataEditor(self.path)
         self.wait_for(editor)
         self.assertEqual(editor.size(), qt.QSize(789, 635))
-        self.assertEqual(editor.ok_button.size(), qt.QSize(105, 28))
+        self.assertEqual(editor.ok_button.width(), 105)
+        # An application theme can increase the button's minimum height.
+        self.assertGreaterEqual(editor.ok_button.height(), 28)
         self.assertFalse(editor._changes())
         for field in ComicInfoXML.INTEGER_FIELDS:
             self.assertIsInstance(editor.editors[field], OptionalIntegerSpinBox)
@@ -487,7 +489,7 @@ class WindowTests(ComicFixture, unittest.TestCase):
         self.assertIn('2 items', window.heading.text())
         with patch.object(window, '_open_editor') as opened:
             menu = window._context_menu_for(indexes[1])
-            next(action for action in menu.actions() if action.text() == 'Edit Metadata').trigger()
+            next(action for action in menu.actions() if action.text() == 'Edit metadata…').trigger()
         self.assertEqual(set(opened.call_args.args[0]), {folder, self.path})
         menu.deleteLater()
         window.tree.clearSelection()
