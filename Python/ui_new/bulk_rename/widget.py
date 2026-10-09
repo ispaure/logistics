@@ -12,6 +12,7 @@ from commonUtils.filesystem import format_size
 from commonUtils.renameUtils import RenameRules, plan_renames, apply_renames, undo_renames
 from commonUtils.traversal import natural_path_key, scan_directory
 from .rules import RenameRuleControls
+from .preview import RenamePreviewDelegate, preview_tooltip
 
 
 class _FolderIconProvider(qt.QFileIconProvider):
@@ -120,13 +121,17 @@ class BulkRenameWidget(qt.QWidget):
         self.table.setUniformRowHeights(True)
         self.table.setSelectionMode(qt.QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setAccessibleName('Original and preview filenames; selected rows will be renamed')
+        self.table.setItemDelegateForColumn(1, RenamePreviewDelegate(self.table))
         self.table.itemSelectionChanged.connect(self.request_preview)
         self.table.itemDoubleClicked.connect(self._enter_folder)
-        self.table.setColumnWidth(0, 240)
-        self.table.setColumnWidth(1, 240)
-        self.table.setColumnWidth(2, 180)
-        self.table.setColumnWidth(3, 80)
-        self.table.setColumnWidth(4, 150)
+        header = self.table.header()
+        header.setStretchLastSection(False)
+        for column in (0, 1):
+            header.setSectionResizeMode(column, qt.QHeaderView.ResizeMode.Stretch)
+        for column in (3, 4):
+            header.setSectionResizeMode(column, qt.QHeaderView.ResizeMode.ResizeToContents)
+        self.table.setColumnWidth(2, 130)
+        self.table.setColumnWidth(5, 110)
         splitter.addWidget(self.folder_tree)
         splitter.addWidget(self.table)
         splitter.setStretchFactor(0, 0)
@@ -341,6 +346,7 @@ class BulkRenameWidget(qt.QWidget):
                 item = self.table.topLevelItem(index)
                 entry = entries.get(item.data(0, qt.Qt.ItemDataRole.UserRole))
                 item.setText(1, entry.target.name if entry else item.text(0))
+                item.setToolTip(1, preview_tooltip(item.text(0), item.text(1)))
                 status = entry.error if entry and entry.error else 'Ready' if entry and entry.changed else 'Unchanged' if entry else 'Not selected'
                 item.setText(5, status)
                 color = qt.QColor('#bb2525') if entry and entry.error else self.palette().color(

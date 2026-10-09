@@ -46,7 +46,11 @@ class MainWindow(pyside.Window):
         self._build_layout()
         self._core_pages = []
         self._feature_pages = {}
-        self._populate_tabs()
+        try:
+            self._populate_tabs()
+        except BaseException:
+            self._cleanup_failed_startup()
+            raise
         self._unsubscribe = registry.subscribe(self._features_changed)
         self.dlg.destroyed.connect(self._unsubscribe)
         self.tabs.currentChanged.connect(self._tab_changed)
@@ -75,11 +79,12 @@ class MainWindow(pyside.Window):
 
             seen_page_ids.add(contribution.page_id)
 
-        tabs = [
-            (order, name, page_type(parent=self.dlg))
-            for order, name, page_type in CORE_TABS
-        ]
-        self._core_pages = list(tabs)
+        tabs = []
+        # Keep each constructed page owned even if a later page fails at startup.
+        for order, name, page_type in CORE_TABS:
+            page = page_type(parent=self.dlg)
+            tabs.append((order, name, page))
+            self._core_pages.append((order, name, page))
         for registered in pages:
             contribution = registered.contribution
             page = contribution.create_page(self.dlg)
@@ -97,6 +102,32 @@ class MainWindow(pyside.Window):
             key=lambda item: (item[0], item[1].casefold())
         ):
             self.tabs.addTab(page, name)
+
+    def _cleanup_failed_startup(self):
+        """Cancel already-created pages and drain Qt workers before destruction."""
+        pages = [page for _, _, page in self._core_pages] + list(self._feature_pages.values())
+        loop = pyside.QEventLoop()
+        timer = pyside.QTimer()
+        timer.setInterval(20)
+
+        def stopped():
+            ready = True
+            for page in pages:
+                if not getattr(page, 'prepare_close', lambda: True)():
+                    ready = False
+            return ready
+
+        def check():
+            if stopped():
+                loop.quit()
+
+        if not stopped():
+            timer.timeout.connect(check)
+            timer.start()
+            loop.exec()
+            timer.stop()
+        self.dlg.close()
+        self.dlg.deleteLater()
 
     def _features_changed(self):
         pyside.QTimer.singleShot(0, self._sync_feature_pages)

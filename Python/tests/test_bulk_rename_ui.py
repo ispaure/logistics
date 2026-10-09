@@ -60,6 +60,28 @@ class BulkRenameWidgetTests(unittest.TestCase):
             time.sleep(.005)
         self.fail(f'Folder did not become visible in tree: {path}')
 
+    def test_preview_bolds_changed_spans_and_prioritizes_filename_columns(self):
+        from ui_new.bulk_rename.preview import changed_spans, change_formats, preview_tooltip, RenamePreviewDelegate
+        self.assertEqual(changed_spans('page2.txt','page3.txt'),((4,5),))
+        self.assertEqual(changed_spans('old-page.txt','page.txt'),())
+        self.assertEqual(preview_tooltip('old-page.txt','page.txt'),'page.txt\nRemoved: old-')
+        self.assertEqual(changed_spans('page.txt','page.txt'),())
+        self.assertEqual(changed_spans('page.txt','<b>page.txt'),((0,3),))
+        formats = change_formats('😀page2.txt','😀page3.txt')
+        self.assertEqual([(span.start,span.length) for span in formats],[(6,1)])
+        self.assertEqual(formats[0].format.fontWeight(),qt.QFont.Weight.Bold)
+        self.assertIsInstance(self.widget.table.itemDelegateForColumn(1),RenamePreviewDelegate)
+        header = self.widget.table.header()
+        for column in (0,1):
+            self.assertEqual(header.sectionResizeMode(column),qt.QHeaderView.ResizeMode.Stretch)
+            self.assertGreater(self.widget.table.columnWidth(column), self.widget.table.columnWidth(2))
+        self.widget.controls.set_rules(RenameRules(prefix='New_'))
+        self.wait_idle()
+        row = self.widget.table.topLevelItem(0)
+        self.assertEqual(row.text(1),'New_'+row.text(0))
+        self.assertEqual(row.toolTip(1),row.text(1))
+        self.assertTrue(self.first.exists())
+
     def test_navigation_keeps_parent_siblings_and_existing_expanded_branches(self):
         parent = self.root / 'Parent'
         child = parent / 'Child'
