@@ -4,14 +4,15 @@ Debug UI contributions exposed by System Tools.
 
 from commonUtils.osUtils import OS, get_os
 
-from features.contributions import DebugActionContribution, FeatureContributions
+from features.contributions import DebugActionContribution, Feature
 from features.system_tools import actions
 
 
-def get_contributions() -> FeatureContributions:
+def get_contributions() -> Feature:
     current_os = get_os()
 
-    return FeatureContributions(
+    return Feature(
+        id='system_tools', label='System Tools',
         debug_actions=[
             DebugActionContribution(
                 name='Windows System Files Repair',

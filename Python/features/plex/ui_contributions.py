@@ -8,7 +8,7 @@ from commonUtils.osUtils import OS, get_os
 
 from features.contributions import (
     DebugActionContribution,
-    FeatureContributions,
+    Feature,
     FolderFeatureContribution,
     UIAction,
     WorkflowContribution,
@@ -57,10 +57,11 @@ def _open_manage_pms(data=None, parent=None):
     return dialog.exec()
 
 
-def get_contributions() -> FeatureContributions:
+def get_contributions() -> Feature:
     """Return UI contributions provided by Plex."""
 
-    return FeatureContributions(
+    return Feature(
+        id='plex', label='Plex', requires=('rclone',),
         folder_features=[
             FolderFeatureContribution(
                 name='Plex',

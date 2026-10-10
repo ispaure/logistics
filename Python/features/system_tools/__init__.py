@@ -9,3 +9,8 @@ FEATURE_LABEL = "System Tools"
 def get_contributions():
     from features.system_tools.ui_contributions import get_contributions as _get_contributions
     return _get_contributions()
+
+
+def register():
+    """Unified declaration; get_contributions remains a compatibility entry point."""
+    return get_contributions()

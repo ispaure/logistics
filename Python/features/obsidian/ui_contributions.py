@@ -3,7 +3,7 @@ UI contributions exposed by the Logistics Obsidian feature.
 """
 
 from features.obsidian import detection
-from features.contributions import FeatureContributions, FolderFeatureContribution, UIAction, WorkflowContribution
+from features.contributions import Feature, FolderFeatureContribution, UIAction, WorkflowContribution
 from models.folder_entry import FolderEntry
 from commonUtils.dirUtils import Directory
 
@@ -44,10 +44,11 @@ def _open_vault_workflow(data=None, parent=None):
     return actions.open_vault(data)
 
 
-def get_contributions() -> FeatureContributions:
+def get_contributions() -> Feature:
     """Return UI contributions provided by Obsidian."""
 
-    return FeatureContributions(
+    return Feature(
+        id='obsidian', label='Obsidian',
         folder_features=[
             FolderFeatureContribution(
                 name='Obsidian',

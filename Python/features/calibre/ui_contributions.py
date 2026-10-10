@@ -3,7 +3,7 @@ UI contributions exposed by the Logistics Calibre feature.
 """
 
 from features.calibre import detection
-from features.contributions import FeatureContributions, FolderFeatureContribution
+from features.contributions import Feature, FolderFeatureContribution
 from models.folder_entry import FolderEntry
 
 
@@ -27,10 +27,11 @@ def _create_widget(entry: FolderEntry, parent=None):
     return CalibreFolderWidget(entry, parent=parent)
 
 
-def get_contributions() -> FeatureContributions:
+def get_contributions() -> Feature:
     """Return UI contributions provided by Calibre."""
 
-    return FeatureContributions(
+    return Feature(
+        id='calibre', label='Calibre',
         folder_features=[
             FolderFeatureContribution(
                 name='Calibre',

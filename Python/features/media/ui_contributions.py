@@ -2,7 +2,7 @@
 Debug UI contributions exposed by Media.
 """
 
-from features.contributions import DebugActionContribution, FeatureContributions, WorkflowContribution
+from features.contributions import DebugActionContribution, Feature, WorkflowContribution
 
 def _open_rename_mka(data=None, parent=None):
     from features.media.ui.dialogs import RenameMkaDialog
@@ -11,8 +11,9 @@ def _open_rename_mka(data=None, parent=None):
     return dialog.exec()
 
 
-def get_contributions() -> FeatureContributions:
-    return FeatureContributions(
+def get_contributions() -> Feature:
+    return Feature(
+        id='media', label='Media',
         debug_actions=[
             DebugActionContribution(
                 name='Rename MKA from CSV...',

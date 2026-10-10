@@ -2,14 +2,15 @@
 UI contributions exposed by the Logistics Flight Simulator feature.
 """
 
-from features.contributions import DebugActionContribution, FeatureContributions
+from features.contributions import DebugActionContribution, Feature
 from features.flight_sim import actions
 
 
-def get_contributions() -> FeatureContributions:
+def get_contributions() -> Feature:
     """Return UI contributions provided by Flight Simulator."""
 
-    return FeatureContributions(
+    return Feature(
+        id='flight_sim', label='Flight Simulator',
         debug_actions=[
             DebugActionContribution(
                 name='X-Plane 12: M3 Max Standalone',
