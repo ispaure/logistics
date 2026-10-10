@@ -34,7 +34,9 @@ def main():
     env.update(TEMP=native_temp, TMP=native_temp, TMPDIR=native_temp)
     checks = [
         ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests'], 300),
-        ('logistics', ['Python/tests/run_regressions.py', 'Python/tests'], 300),
+        # Windows' Git/process tests keep making progress past five minutes.
+        # Leave room for the whole growing suite, within the job's 20m budget.
+        ('logistics', ['Python/tests/run_regressions.py', 'Python/tests'], 600),
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(results / 'parity')], 600),
     ]
     for name, command, timeout in checks:
