@@ -6,13 +6,14 @@ from .epub import EPUBBook, BookError, resolve_href
 from .metadata import save_metadata
 from .metadata_editor import MetadataEditor
 from .preferences import THEMES, ReadingState, defaults
+from .bookmarks import Bookmarks
 from .tasks import BookTask
 from .reader_controls import build_controls
 from .navigation import BookNavigation
 from pathlib import Path
 
 
-class BooksPage(qt.QWidget):
+class BooksPage(Bookmarks, qt.QWidget):
     idle = qt.Signal()
 
     def __init__(self, parent=None, initial_path=None, *, state_folder=None, menu_bar=None):
@@ -423,47 +424,6 @@ class BooksPage(qt.QWidget):
                                   font_size=self.font_size.value(), line_spacing=self.spacing.value(), reading_width=self.reading_width.value()))
         except (OSError, ValueError) as error:
             self.status.setText(f'Reading position could not be saved: {error}')
-
-    def _populate_bookmarks(self):
-        self.bookmarks.clear()
-        from commonUtils.ui.outline import OutlineEntry
-        self.bookmark_list.set_entries(OutlineEntry(index, item['label'], item)
-                                      for index, item in enumerate(self._bookmarks))
-        for item in self._bookmarks:
-            self.bookmarks.addItem(item['label'])
-        self.remove_bookmark.setEnabled(bool(self._bookmarks) and self.worker is None)
-
-    def add_bookmark(self):
-        if not self.book or self.worker:
-            return
-        if len(self._bookmarks) >= 50:
-            self.status.setText('This book has 50 bookmarks. Remove one to add another.')
-            return
-        label, accepted = qt.QInputDialog.getText(self, 'Bookmark', 'Name:', text=f'Chapter {self._current + 1}')
-        if accepted and label.strip():
-            self._bookmarks.append(dict(label=label.strip(), path=self._path, position=self._position(), location=self.text.location()))
-            self._populate_bookmarks()
-            self._save_state()
-
-    def open_bookmark(self, index):
-        if self.worker or not 0 <= index < len(self._bookmarks):
-            return
-        item = self._bookmarks[index]
-        self._current = self.book.spine.index(item['path'])
-        try:
-            self._render(position=item['position'], location=item.get('location'))
-        except (OSError, BookError) as error:
-            self.status.setText(str(error))
-        self._set_busy(False)
-
-    def delete_bookmark(self):
-        index = self.bookmark_list.currentRow()
-        if index < 0:
-            index = self.bookmarks.currentIndex()
-        if 0 <= index < len(self._bookmarks):
-            del self._bookmarks[index]
-            self._populate_bookmarks()
-            self._save_state()
 
     def edit_metadata(self):
         if not self.book or self.worker:
