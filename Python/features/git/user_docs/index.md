@@ -67,6 +67,11 @@ or path** filters this list independently of the history search. Below the list,
 the commit message and identity fields summarize the selection; click a parent
 hash to select and scroll to that commit in history. Diff hunks show old/new line
 numbers and colored addition/deletion rows.
+Patch headers are hidden in the normal view. Use the arrow buttons to jump between
+hunks, **Wrap** to read long lines, and **Raw** to inspect the original patch.
+**Ignore whitespace** hides whitespace-only differences for review; staging or
+unstaging a file still affects all its changes. File badges identify added (+),
+modified (M), deleted (−), renamed (→), untracked (?) and conflicted (!) files.
 Use **Full tree at commit** to browse every historical file and read its contents.
 Submodule entries show the recorded child commit. File actions stage, unstage or
 discard whole files; hunk actions are a future addition.
