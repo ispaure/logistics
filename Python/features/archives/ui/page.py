@@ -107,6 +107,11 @@ class ArchivePage(qt.QWidget):
             if not self.closing:
                 qt.QTimer.singleShot(0, self, lambda: self.open_archive(result))
 
+        if kind in ('create', 'edit', 'extract', 'test'):
+            from ui_new.notifications import notify
+            outcome = 'failure' if error else 'cancelled' if result is None else 'success'
+            notify('archives', 'Archive operation', self.status.text(), outcome=outcome)
+
     def _extract(self, selected=None):
         if self.path:
             return self.extract_path(self.path, selected=selected)

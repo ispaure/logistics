@@ -73,6 +73,9 @@ class MainWindow(pyside.Window):
         self._last_destination = self.tabs.currentWidget()
         register_document_host(self.documents)
         register_process_host(self.actions)
+        from .notifications import notification_service, Toast
+        self.toast = Toast(notification_service(), self.dlg)
+        self.dlg.statusBar().addWidget(self.toast, 1)
         self._refresh_sidebar()
 
     def _build_layout(self):

@@ -9,7 +9,6 @@ class FolderActionsPage(DocumentsPage):
         super().__init__(activate, parent)
         self.workspace._drop_target.widget().setText('Folder actions appear here when you start a sync.')
         self.workspace.active_changed.connect(lambda pane: self.acknowledge_current())
-        self.tray = None
         self.window().installEventFilter(self)
 
     @property
@@ -49,30 +48,39 @@ class FolderActionsPage(DocumentsPage):
         window.setWindowTitle(f"{record['name']} · {label}")
         self.changed.emit()
         if not self.closing:
-            self.notify(f"{record['name']} · {label}", result.error or 'Open Folder Actions for details.',
-                        failed=not result.succeeded)
+            notice = self.notify(f"{record['name']} · {label}", result.error or 'Open Folder Actions for details.',
+                        failed=result.state != 'cancelled' and not result.succeeded,
+                        outcome='cancelled' if result.state == 'cancelled' else None)
+            if notice is not None:
+                record['notice_id'] = notice.id
+                if not record['unseen']:
+                    from .notifications import notification_service
+                    notification_service().acknowledge(notice.id)
 
-    def notify(self, title, message, *, failed=False):
-        # Qt uses the system's notification service; no service is required to
-        # retain the result or its in-application badge.
-        if not qt.QSystemTrayIcon.isSystemTrayAvailable() or not qt.QSystemTrayIcon.supportsMessages():
-            return
-        if self.tray is None:
-            from .sidebar import DestinationIcon
-            from commonUtils.ui.icons import set_painted_icon
-            self.tray = qt.QSystemTrayIcon(self)
-            set_painted_icon(self.tray, DestinationIcon, 'actions')
-            self.tray.setToolTip('Logistics folder actions')
-            self.tray.messageClicked.connect(self.activate)
-            self.tray.show()
-        icon = qt.QSystemTrayIcon.MessageIcon.Warning if failed else qt.QSystemTrayIcon.MessageIcon.Information
-        self.tray.showMessage(title, message, icon, 5000)
+    @property
+    def tray(self):
+        from .notifications import notification_service
+        return notification_service().tray
+
+    @tray.setter
+    def tray(self, value):
+        from .notifications import notification_service
+        notification_service().tray = value
+
+    def notify(self, title, message, *, failed=False, outcome=None):
+        from .notifications import notify
+        return notify('folder_actions', title, message,
+                      outcome=outcome or ('failure' if failed else 'success'),
+                      activate=self.activate, native=True)
 
     def acknowledge_current(self):
         changed = False
         for window, record in self.records.items():
             if record.get('unseen') and self._viewed(window):
                 record['unseen'] = False
+                if record.get('notice_id'):
+                    from .notifications import notification_service
+                    notification_service().acknowledge(record['notice_id'])
                 changed = True
         if changed:
             self.changed.emit()
