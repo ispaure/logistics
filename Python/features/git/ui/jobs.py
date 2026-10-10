@@ -74,6 +74,9 @@ class GitJobs:
 
     def prepare_close(self):
         self.closing = True
+        self.file_timer.stop()
+        self.fetch_timer.stop()
+        self._refresh_pending = False
         if self.worker:
             self.cancel()
             return False

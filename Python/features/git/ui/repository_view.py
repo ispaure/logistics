@@ -353,6 +353,9 @@ class RepositoryView(ApplicationPreferences, GitJobs, qt.QWidget):
             self._refresh()
 
     def _refresh(self, operation_error=''):
+        # This snapshot also satisfies filesystem notifications already queued
+        # by the preceding operation; do not launch a duplicate refresh later.
+        self.file_timer.stop()
         path, limit = self.path, self.history_limit
         def render(snapshot):
             self._render(snapshot)
