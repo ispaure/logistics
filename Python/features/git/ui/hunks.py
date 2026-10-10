@@ -52,6 +52,7 @@ class HunkCards(qt.QScrollArea):
                     row.addWidget(button)
             box.addWidget(header)
             editor = DiffEdit()
+            editor.diff_color_overrides = getattr(self.preview, 'diff_color_overrides', {})
             editor.setReadOnly(True); editor.indent_guides = False
             editor.setFont(self.preview.editor.font())
             editor.setAccessibleName(label)

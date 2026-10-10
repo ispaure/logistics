@@ -143,6 +143,11 @@ class RepositorySettingsDialog(qt.QDialog):
         executable = qt.QPushButton('Git executable…')
         executable.clicked.connect(self._executable)
         layout.addWidget(executable)
+        preferences = qt.QPushButton('Git preferences…')
+        def open_preferences():
+            self.reject(); self.parentWidget().application_settings_dialog()
+        preferences.clicked.connect(open_preferences)
+        layout.addWidget(preferences)
         layout.addStretch()
 
     def _edit_file(self, relative):

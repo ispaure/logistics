@@ -9,7 +9,7 @@ Enable or disable it under Settings like other features.
 
 Install **Git 2.40 or newer**. Logistics uses `git` from your PATH; **Settings → Advanced → Git executable…**
 lets you choose another executable and checks its version. Before opening a repository,
-Settings opens that executable chooser directly. Git is supplied separately
+Settings opens Git preferences directly. Git is supplied separately
 from Logistics.
 
 - **Open…** selects an existing working repository, including a linked worktree.
@@ -120,13 +120,70 @@ and are outside this version's UI.
 fetch, edit its URL, or remove it. Removing a remote keeps the server repository.
 
 - **Fetch** updates configured remote references.
-- **Pull…** offers fast-forward only (default), merge, or rebase of the upstream.
+- **Pull…** offers fast-forward only (initial default), merge, or rebase of the upstream.
 - **Push…** pushes the current branch to its configured upstream. Alternatively,
-  publish to a chosen remote/branch and set the upstream. No force push is used.
+  publish to a chosen remote/branch and set the upstream. Force-with-lease is available
+  only after enabling it in Git preferences and confirming the individual push.
 
 Ahead/behind counts reflect the last fetched local references. Fetch again to learn
 about server changes. Push affects only the current branch and does not automatically
-publish tags or other local branches.
+publish tags or other local branches. **Push tags with the selected branch** is
+an opt-in Git preference.
+
+## Git preferences
+
+Use **More… → Git preferences…**, **+ → Git preferences…**, or repository
+**Settings → Advanced → Git preferences…**. Before opening a repository, the
+toolbar Settings button opens these preferences directly. Preferences apply
+across retained repository panes and are saved in the feature's `git.json` file.
+Cancel leaves preference edits unchanged.
+
+- **General** controls the initial project folder, last-repository restoration,
+  terminal choice (Terminal/iTerm on macOS), file-change refresh, optional periodic
+  origin fetch, and staging/branch-switch confirmations. File watching is limited
+  to 2,000 existing files/directories; use Refresh for larger repositories or
+  changes in previously unwatched nested directories. Global author identity is
+  edited only when its explicit checkbox is enabled; local identity overrides remain.
+- **Accounts** adds, edits, removes and selects a default account per host. HTTPS
+  tokens go directly through a secure credential helper: macOS Keychain, libsecret
+  or Git Credential Manager with a native credential store. Tokens are sent on
+  standard input, never saved in preferences or displayed in the operation log.
+  Removing an account also erases its helper credential when you click OK.
+  SSH accounts use existing keys and agents. GitHub browser sign-in opens Git
+  Credential Manager in a terminal; install it first, finish its browser prompt,
+  then add the username here and choose **Git Credential Manager** authentication.
+  Logistics does not register its own OAuth application or request passwords.
+- **Commit** controls selection (without staging), the default push checkbox,
+  fixed-width message font and column guide, and an importable plain-text template.
+  A nonempty Logistics template overrides an inherited Git template. Explicit
+  repository templates, including “None”, take precedence. Existing drafts stay intact.
+- **Diff** controls font, addition/deletion colors, wrapping, bounded text capture,
+  and file patterns skipped for preview. Patterns affect review only. External
+  diff/merge tool names use existing Git configuration; invoke them through More
+  with a selected file/conflict. Binary files have no internal text preview.
+- **Git** selects the executable, ignore list, default pull strategy, double-click
+  staging, recursive submodule updates, dirty-submodule checks, tag pushing, HTTPS
+  certificate verification, merge commit policy and history date source. These
+  options affect Logistics commands without rewriting global Git configuration.
+- **Custom Actions** supports ordered entries and optional shortcuts. Parameters
+  are a JSON string array, such as `["status", "--short"]` for program `git`.
+  `{repo}`, `{file}` and `{commit}` expand within individual arguments. A selected
+  file/commit is required for its placeholder. Actions run in the repository,
+  through the cancellable worker, without shell expansion.
+- **Advanced** enables discard backups, persistent log visibility, force-with-lease,
+  diagnostics, a GPG executable and per-host default HTTPS usernames. Backups keep
+  the file bytes before whole-file or hunk discard under the repository's Git
+  metadata in `logistics-backups/<id>/`, with `paths.json` mapping backup names to
+  original paths. They are not committed. Restore them manually if needed.
+- **Update** opens Logistics releases and release notes. Mercurial, embedded
+  Git/git-flow/LFS runtimes, automatic update installation, Gravatars and language
+  customization are not implemented here. Theme and language use Logistics itself.
+
+Credential-store operations and explicitly enabled global identity changes are
+separate from the JSON save; a failed save can leave those operations completed.
+Review the operation error before retrying. Browser sign-in is a separate action
+and is not undone by cancelling preferences. Hooks and custom actions manage
+their own backups and side effects.
 
 **More… → Create tag…** creates a lightweight tag or an annotated tag with a message,
 at HEAD or the selected commit. Right-click a tag to view its commit, push it to a

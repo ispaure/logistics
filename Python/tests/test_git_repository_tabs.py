@@ -80,7 +80,7 @@ class GitRepositoryTabsTests(QtTestCase):
         self.assertTrue(view.repository_menu.isVisible())
         view.repository_menu.close()
         self.assertEqual([action.text() for action in view.repository_menu.actions()],
-                         ['Open…', 'Clone…', 'Init…', 'Manage bookmarks…', 'Bookmarks'])
+                         ['Open…', 'Clone…', 'Init…', 'Manage bookmarks…', 'Bookmarks', '', 'Git preferences…'])
         self.assertFalse(any(button.text() == '+ Repositories' for button in view.toolbar.findChildren(qt.QToolButton)))
 
     def test_narrow_floating_pane_keeps_actions_in_toolbar_overflow(self):

@@ -22,7 +22,10 @@ from .repository_tools import RepositoryTools
 from .chrome import toolbar_button, WORKSPACE_STYLE
 
 
-class RepositoryView(GitJobs, qt.QWidget):
+from .application_preferences import ApplicationPreferences
+
+
+class RepositoryView(ApplicationPreferences, GitJobs, qt.QWidget):
     title_changed = qt.Signal(str)
     view_title = "Repository (Git)"
     idle = qt.Signal()
@@ -43,10 +46,11 @@ class RepositoryView(GitJobs, qt.QWidget):
         self._refresh_pending = False
         self.repository_tools = RepositoryTools(self)
         self._build()
+        self.init_preferences()
         self._repositories()
         self._set_busy(False)
         if self.preferences.warning: self._message(self.preferences.warning, error=True)
-        if restore_last and self.preferences.last_repository:
+        if restore_last and self.preferences.options['restore_windows'] and self.preferences.last_repository:
             qt.QTimer.singleShot(0, self, lambda: self.open_repository(self.preferences.last_repository))
 
     def _build(self):
@@ -180,8 +184,8 @@ class RepositoryView(GitJobs, qt.QWidget):
         self.content.setStretchFactor(1, 1)
         layout.addWidget(self.content, 1)
         self.changes.change_selected.connect(self.preview_change)
-        self.changes.stage_requested.connect(lambda paths: self._operation('Stage files', lambda repo: repo.stage(paths)))
-        self.changes.unstage_requested.connect(lambda paths: self._operation('Unstage files', lambda repo: repo.unstage(paths)))
+        self.changes.stage_requested.connect(self.stage_files)
+        self.changes.unstage_requested.connect(lambda paths: self.stage_files(paths, True))
         self.changes.discard_requested.connect(self.discard_dialog)
         self.changes.commit_requested.connect(self.commit)
         self.changes.edit_requested.connect(self.edit_file)
@@ -379,10 +383,11 @@ class RepositoryView(GitJobs, qt.QWidget):
             button.defaultAction().setIcon(action_icon(icon, count))
             button.defaultAction().setToolTip(f'{title} · {count} {description}')
         if not self.changes.amend.isChecked():
-            self._apply_template({'template_text': snapshot.template_text})
+            self._apply_template({'template_text': snapshot.template_text if snapshot.template_configured else self.preferences.options['commit_template'] or snapshot.template_text})
         if snapshot.template_warning:
             self._append_log(snapshot.template_warning + '\n')
         self.history.head_oid = status.oid
+        self.update_watch()
         self.history.uncommitted_count = len(status.changes)
         self.history.set_commits(snapshot.commits, snapshot.more_history and self.history_limit < 5000)
         self.search_results.stale = True
@@ -447,6 +452,7 @@ class RepositoryView(GitJobs, qt.QWidget):
 
     def focus_commit(self):
         self.views.setCurrentIndex(0)
+        if self.preferences.options['select_all_commit']: self.changes.unstaged_files.selectAll()
         self.changes.message.setFocus()
 
     def view_remote(self):
@@ -460,14 +466,14 @@ class RepositoryView(GitJobs, qt.QWidget):
 
     def open_terminal(self):
         if not self.path: return
-        from commonUtils.integrations.wrappers.cmdShellWrapper.terminal import exec_cmd_new_window
+        from .terminal import launch
         command = 'cd' if sys.platform == 'win32' else f'cd -- {shlex.quote(str(self.path))} && pwd'
         try:
-            if exec_cmd_new_window(command, str(self.path)) is False: self._message('Terminal could not be opened.', error=True)
+            if launch(command, str(self.path), self.preferences.options['terminal']) is False: self._message('Terminal could not be opened.', error=True)
         except OSError as error: self._message(str(error), error=True)
 
     def open_dialog(self):
-        path = qt.QFileDialog.getExistingDirectory(self, 'Open Git repository')
+        path = qt.QFileDialog.getExistingDirectory(self, 'Open Git repository', self.preferences.options['project_folder'])
         if path: self.open_repository(path)
 
     def clone_dialog(self):
@@ -492,7 +498,7 @@ class RepositoryView(GitJobs, qt.QWidget):
     def settings_dialog(self):
         from .settings import RepositorySettingsDialog
         if self.path is None:
-            self.executable_dialog()
+            self.application_settings_dialog()
             return
         path = self.path
         def show(settings):
@@ -542,6 +548,7 @@ class RepositoryView(GitJobs, qt.QWidget):
 
     def preview_change(self, change, staged):
         if self.busy or not self.path: return
+        if self.skip_preview(change.path): return
         self._comparison_selection = (change, staged)
         self.preview.compare_button.setVisible(not change.conflict and change.submodule == "N...")
         self._preview_reload = lambda: self.preview_change(change, staged)
@@ -628,6 +635,7 @@ class RepositoryView(GitJobs, qt.QWidget):
         self._job('Load parent history', lambda runner: Repository(path, runner).history(5000), show)
 
     def preview_blob(self, entry):
+        if self.skip_preview(entry.path): return
         if entry.kind == 'working':
             change = next((change for change in self.snapshot.status.changes if change.path == entry.path), None)
             if change is not None: self.preview_working_file(change)
@@ -785,6 +793,7 @@ class RepositoryView(GitJobs, qt.QWidget):
         if not self.snapshot: return
         dialog = FormDialog('Pull upstream', self, f'Current upstream: {self.snapshot.status.upstream or "not configured"}. Fetch is included. A failed merge or rebase may require conflict resolution.')
         strategy = dialog.choice('Strategy', ['Fast-forward only', 'Merge', 'Rebase'])
+        strategy.setCurrentIndex(('ff-only', 'merge', 'rebase').index(self.preferences.options['pull_strategy']))
         if dialog.submitted():
             value = ('ff-only', 'merge', 'rebase')[strategy.currentIndex()]
             self._operation('Pull upstream', lambda repo: repo.pull(value))
@@ -795,17 +804,21 @@ class RepositoryView(GitJobs, qt.QWidget):
         if status.branch == '(detached)':
             self._message('Create or switch to a branch before pushing.', error=True)
             return
-        dialog = FormDialog('Push branch', self, f'Push {status.branch}. Upstream: {status.upstream or "not configured"}. Force push is not used.')
+        dialog = FormDialog('Push branch', self, f'Push {status.branch}. Upstream: {status.upstream or "not configured"}.')
+        force = dialog.check('Force push with lease')
+        force.setVisible(self.preferences.options['allow_force_push'])
         publish = dialog.check('Publish branch and set upstream', not bool(status.upstream))
         remote = dialog.choice('Remote for publishing', self.snapshot.remotes)
         branch = dialog.text('Remote branch for publishing', status.branch)
         if dialog.submitted():
+            forced = force.isChecked() and self.preferences.options['allow_force_push']
+            if forced and not self._confirm('Force push with lease?', 'Replace remote branch history only if its tip matches the last fetched state?'): return
             if publish.isChecked():
                 if not remote.currentText(): self._message('Add a remote before publishing.', error=True); return
                 name, target = remote.currentText(), branch.text()
-                self._operation('Publish branch', lambda repo: repo.push(name, target))
+                self._operation('Publish branch', lambda repo: repo.push(name, target, force_with_lease=forced))
             else:
-                self._operation('Push branch', lambda repo: repo.push())
+                self._operation('Push branch', lambda repo: repo.push(force_with_lease=forced))
 
     def branch_dialog(self):
         dialog = FormDialog('Create branch', self)
@@ -839,6 +852,7 @@ class RepositoryView(GitJobs, qt.QWidget):
         elif value and value[0] == 'subtree':
             self.repository_tools.subtree_dialog()
         elif value and value[0] == 'branch':
+            if self.preferences.options['confirm_switch'] and self.snapshot and not self.snapshot.status.changes and not self._confirm('Switch branch?', f'Switch to {value[1]}?'): return
             self._operation('Switch branch', lambda repo: repo.switch(value[1]))
 
     def ref_menu(self, point):

@@ -18,7 +18,7 @@ class GitPage(qt.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.workspace = Workspace(self._create_view, self, dock_group=self, new_view=self._repository_menu)
         layout.addWidget(self.workspace)
-        self.workspace.add_view(self.preferences.last_repository or None)
+        self.workspace.add_view((self.preferences.last_repository or None) if self.preferences.options['restore_windows'] else None)
 
     def _repository_menu(self, workspace):
         view = workspace.active_view

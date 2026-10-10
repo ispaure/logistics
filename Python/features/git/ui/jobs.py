@@ -14,10 +14,17 @@ class GitJobs:
         self._append_log('\n' + label + '\n')
         self._set_busy(True)
         worker = GitWorker(self.preferences.executable, action, self)
+        from ..options import git_defaults
+        options = self.preferences.options
+        worker.runner.config_options = git_defaults(options)
+        worker.runner.diff_limit = options['diff_limit_kb'] * 1024
+        for key in ('author_date', 'keep_backups', 'no_ff', 'check_submodules', 'push_tags'):
+            setattr(worker.runner, key, options[key])
         self.worker = worker
         worker.progress.connect(self._append_log)
         worker.finished.connect(lambda: self._finished(worker, label, after, refresh))
         worker.start()
+        if options['full_output']: self.log_toggle.setChecked(True)
         return True
 
     def _finished(self, worker, label, after, refresh):

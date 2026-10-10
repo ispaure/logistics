@@ -38,7 +38,7 @@ class RepositoryTools:
             destination = dialog.text('Relative submodule path')
             if dialog.submitted():
                 action, address, target = operation.currentIndex(), url.text(), destination.text()
-                if action == 0: self.page._operation('Update submodules', lambda repo: repo.update_submodules())
+                if action == 0: self.page._operation('Update submodules', lambda repo: repo.update_submodules(self.page.preferences.options['recursive_submodules']))
                 elif action == 1: self.page._operation('Add submodule', lambda repo: repo.add_submodule(address, target))
                 else:
                     candidate = (self.page.path / target).resolve()
