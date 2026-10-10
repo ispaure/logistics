@@ -70,7 +70,9 @@ class DocumentsPage(qt.QWidget):
         return sum(not record['closed'] and not record['detached'] for record in self.records.values())
 
     def document_entries(self):
-        for window, record in self.records.items():
+        for dock in self.workspace.docks:
+            window = dock.widget().document
+            record = self.records[window]
             if not record['closed']:
                 entries = getattr(window, 'document_entries', lambda: [(window.windowTitle(), None)])()
                 for title, tab in entries:
