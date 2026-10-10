@@ -19,9 +19,12 @@ class DestinationIcon(qt.QIconEngine):
         role = qt.QPalette.ColorRole.Highlight if state == qt.QIcon.State.On else qt.QPalette.ColorRole.ButtonText
         painter.setPen(qt.QPen(palette.color(role), 1.6))
         painter.setBrush(qt.Qt.BrushStyle.NoBrush)
-        if self.name == 'browser':
+        if self.name in ('browser', 'actions'):
             painter.drawRoundedRect(qt.QRectF(2, 6, 20, 15), 2, 2)
             painter.drawPolyline(qt.QPolygonF([qt.QPointF(2, 9), qt.QPointF(2, 3), qt.QPointF(9, 3), qt.QPointF(12, 6)]))
+            if self.name == 'actions':
+                painter.drawArc(qt.QRectF(8, 10, 10, 8), 30 * 16, 280 * 16)
+                painter.drawPolyline(qt.QPolygonF([qt.QPointF(16, 9), qt.QPointF(19, 11), qt.QPointF(16, 13)]))
         elif self.name == 'hub':
             for y in (3, 10, 17):
                 painter.drawRoundedRect(qt.QRectF(3, y, 18, 4), 1, 1)
@@ -50,12 +53,30 @@ class DestinationIcon(qt.QIconEngine):
         return pixmap
 
 
+class ActivityButton(qt.QToolButton):
+    unread = 0
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self.unread:
+            painter = qt.QPainter(self)
+            painter.setRenderHint(qt.QPainter.RenderHint.Antialiasing)
+            painter.setPen(qt.Qt.PenStyle.NoPen)
+            painter.setBrush(qt.QColor('#c84c4c'))
+            badge = qt.QRectF(self.width() - 18, 1, 16, 16)
+            painter.drawEllipse(badge)
+            painter.setPen(qt.QColor('white'))
+            font = painter.font(); font.setPointSizeF(8); font.setBold(True); painter.setFont(font)
+            painter.drawText(badge, qt.Qt.AlignmentFlag.AlignCenter, str(min(9, self.unread)))
+
+
 class DestinationRail(qt.QWidget):
     selected = qt.Signal(object)
 
     def __init__(self, documents, parent=None):
         super().__init__(parent)
         self.documents = documents
+        self.actions = None
         self.buttons = {}
         self.pages = {}
         self.setFixedWidth(60)
@@ -64,7 +85,7 @@ class DestinationRail(qt.QWidget):
         layout.setContentsMargins(6, 10, 6, 10)
         layout.setSpacing(8)
         for key, title in [('browser', 'File Browser'), ('hub', 'Folder Hub'),
-                           ('documents', 'Open documents'), ('tools', 'Tools')]:
+                           ('documents', 'Open documents'), ('actions', 'Folder Actions'), ('tools', 'Tools')]:
             button = self._button(key, title)
             layout.addWidget(button)
         layout.addStretch()
@@ -85,9 +106,10 @@ class DestinationRail(qt.QWidget):
         self.document_list.setMaximumWidth(480)
         popup_layout.addWidget(self.document_list)
         self.buttons['documents'].hide()
+        self.buttons['actions'].hide()
 
     def _button(self, key, title):
-        button = qt.QToolButton(self)
+        button = ActivityButton(self) if key == 'actions' else qt.QToolButton(self)
         button.setIcon(qt.QIcon(DestinationIcon(key)))
         button.setIconSize(qt.QSize(26, 26))
         button.setFixedSize(46, 42)
@@ -109,6 +131,8 @@ class DestinationRail(qt.QWidget):
             page = tabs.widget(index)
             if page is self.documents:
                 continue
+            if page is self.actions:
+                continue
             info = core.get(page)
             key = ('browser' if info and info[0] == 0 else
                    'hub' if info and info[0] == 5 else
@@ -125,6 +149,14 @@ class DestinationRail(qt.QWidget):
             self.buttons[key].setVisible(key in self.pages)
         self.buttons['tools'].setVisible(bool(self.tools_menu.actions()))
         self.buttons['documents'].setVisible(bool(self.documents.count))
+        if self.actions is not None:
+            self.pages['actions'] = self.actions
+            button = self.buttons['actions']
+            button.setVisible(bool(self.actions.count))
+            button.unread = self.actions.unread_count
+            button.setToolTip(f'Folder Actions ({self.actions.count}; {button.unread} unseen results)')
+            button.setAccessibleName(button.toolTip())
+            button.update()
         detached = sum(record['detached'] and not record['closed'] for record in self.documents.records.values())
         self.buttons['documents'].setToolTip(f'Open documents ({self.documents.count}; {detached} detached)')
         self.set_current(tabs.currentWidget())

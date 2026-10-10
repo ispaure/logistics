@@ -10,6 +10,8 @@ from ui_new.pages.settings import SettingsPage
 from ui_new.file_browser import FileBrowserPage
 from ui_new.documents import DocumentsPage, register_document_host
 from ui_new.sidebar import DestinationRail
+from ui_new.folder_actions import FolderActionsPage
+from commonUtils.ui.process_host import register_process_host
 
 
 CORE_TABS = (
@@ -46,10 +48,14 @@ class MainWindow(pyside.Window):
         self.tabs = pyside.QTabWidget()
         self.tabs.tabBar().hide()
         self.documents = DocumentsPage(self._show_documents, self.dlg)
+        self.actions = FolderActionsPage(self._show_actions, self.dlg)
         self.sidebar = DestinationRail(self.documents, self.dlg)
+        self.sidebar.actions = self.actions
         self.sidebar.selected.connect(self._destination_changed)
         self.documents.changed.connect(self._documents_changed)
         self.documents.idle.connect(self._retry_close)
+        self.actions.changed.connect(self._actions_changed)
+        self.actions.idle.connect(self._retry_close)
         self._closing = False
 
         self._build_layout()
@@ -66,6 +72,7 @@ class MainWindow(pyside.Window):
         self._close_guard = _CloseGuard(self)
         self._last_destination = self.tabs.currentWidget()
         register_document_host(self.documents)
+        register_process_host(self.actions)
         self._refresh_sidebar()
 
     def _build_layout(self):
@@ -158,6 +165,8 @@ class MainWindow(pyside.Window):
         entries = list(self._core_pages)
         if self.documents.attached_count:
             entries.append((80, 'Open documents', self.documents))
+        if self.actions.count:
+            entries.append((85, 'Folder Actions', self.actions))
         for registered in pages:
             contribution = registered.contribution
             if contribution.page_id in seen:
@@ -207,6 +216,21 @@ class MainWindow(pyside.Window):
         self.tabs.setCurrentWidget(self.documents)
         self.dlg.show(); self.dlg.raise_(); self.dlg.activateWindow()
 
+    def _show_actions(self):
+        if self.tabs.indexOf(self.actions) < 0:
+            self.tabs.addTab(self.actions, 'Folder Actions')
+        self.tabs.setCurrentWidget(self.actions)
+        self.dlg.show(); self.dlg.raise_(); self.dlg.activateWindow()
+        self.actions.acknowledge_current()
+
+    def _actions_changed(self):
+        from shiboken6 import isValid
+        if not isValid(self.tabs):
+            return
+        if not self.actions.count and self.tabs.indexOf(self.actions) >= 0:
+            self.tabs.removeTab(self.tabs.indexOf(self.actions))
+        self._refresh_sidebar()
+
     def _documents_changed(self):
         from shiboken6 import isValid
         if not isValid(self.tabs):
@@ -233,6 +257,8 @@ class MainWindow(pyside.Window):
         """Refresh the active page when that page exposes a refresh method."""
 
         current_widget = self.tabs.currentWidget()
+        if current_widget is self.actions:
+            pyside.QTimer.singleShot(0, self.actions, self.actions.acknowledge_current)
         if current_widget is not self.documents:
             self._last_destination = current_widget
         self.sidebar.set_current(current_widget)
@@ -251,15 +277,19 @@ class MainWindow(pyside.Window):
         if not all(getattr(page, 'can_close', lambda: True)() for page in pages):
             self._closing = False
             self.documents.closing = False
+            self.actions.closing = False
             return False
         self._closing = True
         self.documents.closing = True
+        self.actions.closing = True
         from commonUtils.ui.process_progress import prepare_close_all
         ready = prepare_close_all(self.dlg.close)
         ready = self.documents.prepare_close() and ready
+        ready = self.actions.prepare_close() and ready
         if self.documents.close_veto:
             self._closing = False
             self.documents.closing = False
+            self.actions.closing = False
             return False
         for page in pages:
             if not getattr(page, 'prepare_close', lambda: True)():

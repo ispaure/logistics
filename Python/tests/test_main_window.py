@@ -11,6 +11,34 @@ from ui_new import main_window
 
 
 class MainWindowTests(unittest.TestCase):
+    def test_sync_job_appears_in_the_rail_and_marks_background_completion(self):
+        import sys, time
+        from commonUtils.ui.process_progress import open_process
+        window = self.window()
+        window.dlg.show(); window.dlg.activateWindow()
+        with patch.object(window.actions, 'notify') as notice:
+            job = open_process('Sync', sys.executable, ['-c', 'import time; time.sleep(.1)'],
+                               context={'operation': 'Sync'})
+            browser = window._core_pages[0][2]
+            window.tabs.setCurrentWidget(browser)
+            deadline = time.monotonic() + 5
+            while job.result is None:
+                self.assertLess(time.monotonic(), deadline)
+                self.app.processEvents(); time.sleep(.005)
+            self.app.processEvents()
+            self.assertTrue(window.sidebar.buttons['actions'].isVisible())
+            self.assertEqual(window.sidebar.buttons['actions'].unread, 1)
+            with patch.object(main_window.registry, 'get_pages', return_value=[]):
+                window._sync_feature_pages()
+            self.assertGreaterEqual(window.tabs.indexOf(window.actions), 0)
+            window.sidebar.buttons['actions'].click(); self.app.processEvents()
+            self.assertIs(window.tabs.currentWidget(), window.actions)
+            self.assertEqual(window.sidebar.buttons['actions'].unread, 0)
+            notice.assert_called_once()
+            job.close(); self.app.processEvents()
+            self.assertEqual(window.actions.count, 0)
+            self.assertFalse(window.sidebar.buttons['actions'].isVisible())
+
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.pages = []
