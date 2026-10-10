@@ -13,6 +13,8 @@ from .commands import CommandControls
 
 
 class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperations, qt.QMainWindow):
+    document_editor_name = 'Text Editor'
+    document_editor_id = 'text'
     idle = qt.Signal()
     saved = qt.Signal(object)
     closed = qt.Signal()

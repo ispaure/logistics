@@ -5,10 +5,10 @@ def register():
     from commonUtils.features import BrowserExtension, SelectionAction, FileActivation
     from commonUtils.fileUtils import File
     from commonUtils.dirUtils import Directory
-    from features.contributions import Feature, PageContribution
-    return Feature(id='archives', label='Archives', pages=[
-        PageContribution('Archives', 'archives.workspace', create_page, order=12, navigation_icon='archives'),
-    ], browser=BrowserExtension(actions=[
+    from features.contributions import Feature, DocumentLauncherContribution
+    return Feature(id='archives', label='Archives',
+                   document_launchers=[DocumentLauncherContribution('archive', 'Archives', launch, 'archives', 50)],
+                   browser=BrowserExtension(actions=[
         SelectionAction('manage_archive', 'Open archive manager…', (File,), _manage, order=40,
                         is_available=_can_manage),
         SelectionAction('extract_archive', 'Extract archive…', (File,), _extract, order=42,
@@ -67,3 +67,12 @@ def _create_zip(context):
     finally:
         dialog.deleteLater()
         context.browser.refresh()
+
+
+def launch(parent):
+    from commonUtils.ui import pyside as qt
+    from commonUtils.archives import ARCHIVE_FILTER
+    path, _ = qt.QFileDialog.getOpenFileName(parent, 'Open archive', '', ARCHIVE_FILTER)
+    if path:
+        from .ui.window import open_archive_window
+        return open_archive_window(path)

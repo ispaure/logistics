@@ -15,6 +15,7 @@ from commonUtils.features import Feature as CommonFeature
 from features.contributions import (
     BrowserExtensionContribution,
     DebugActionContribution,
+    DocumentLauncherContribution,
     FeatureContributions,
     FolderFeatureContribution,
     LocalFolderSourceContribution,
@@ -523,6 +524,7 @@ def get_feature_contributions() -> list[tuple[ModuleType, FeatureContributions]]
         'debug_actions': DebugActionContribution,
         'workflows': WorkflowContribution,
         'pages': PageContribution,
+        'document_launchers': DocumentLauncherContribution,
         'settings': SettingsContribution,
         'browser_extensions': BrowserExtensionContribution,
     }
@@ -682,3 +684,9 @@ def get_settings():
             raise ValueError(f'Duplicate settings ID for {entry.feature_name}: {key[1]}')
         seen.add(key)
     return sorted(entries, key=lambda entry: (entry.contribution.order, entry.contribution.name.casefold()))
+
+
+def get_document_launchers() -> list[RegisteredContribution[DocumentLauncherContribution]]:
+    """Return enabled editor categories and their lazy openers in navigation order."""
+    return sorted(_collect_contributions('document_launchers'),
+                  key=lambda entry: (entry.contribution.order, entry.contribution.name.casefold()))
