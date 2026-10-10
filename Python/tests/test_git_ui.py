@@ -65,6 +65,68 @@ class GitUITests(QtTestCase):
         self.repo.stage(['file.txt'])
         self.repo.commit('First')
 
+    def test_workspace_navigation_reparents_preview_and_spans_commit_composer(self):
+        self.commit_fixture(); self.open()
+        self.assertEqual(self.page.refs.topLevelItem(0).text(0),'WORKSPACE')
+        self.assertEqual(self.page.repository_tabs.tabText(0),'repo (Git)')
+        self.assertTrue(self.page.views.tabBar().isHidden())
+        self.page._navigation_selected(self.page.workspace_items[1],0); self.wait()
+        self.assertIs(self.page.preview.parentWidget(),self.page.history_preview_host)
+        self.assertIn('First',self.page.history.metadata.toPlainText())
+        self.page.action_buttons['Commit'].click(); self.wait()
+        self.assertIs(self.page.preview.parentWidget(),self.page.change_preview_host)
+        self.assertGreater(self.page.changes.composer.width(),self.page.changes.width())
+
+    def test_annotated_tag_navigation_moves_preview_to_history(self):
+        self.commit_fixture()
+        self.repo.create_tag('v1','Annotated release')
+        self.open()
+        group=self.page.refs.topLevelItem(2)
+        self.page._navigation_selected(group.child(0),0); self.wait()
+        self.assertEqual(self.page.views.currentIndex(),1)
+        self.assertIs(self.page.preview.parentWidget(),self.page.history_preview_host)
+        self.assertIn('First',self.page.history.metadata.toPlainText())
+        self.assertEqual(self.page.history.tree.topLevelItemCount(),1)
+
+    def test_file_checkboxes_stage_and_unstage_exact_path(self):
+        self.commit_fixture(); self.open()
+        (self.repo.path / 'file.txt').write_text('second\n')
+        self.page.refresh(); self.wait()
+        item=self.page.changes.unstaged_files.topLevelItem(0)
+        from PySide6.QtTest import QTest
+        rect=self.page.changes.unstaged_files.visualItemRect(item)
+        QTest.mouseClick(self.page.changes.unstaged_files.viewport(),qt.Qt.MouseButton.LeftButton,
+                        pos=qt.QPoint(rect.left()+8,rect.center().y()))
+        self.wait()
+        self.assertEqual(self.page.changes.staged_files.topLevelItemCount(),1)
+        self.assertEqual(self.page.changes.unstaged_files.topLevelItemCount(),0)
+        item=self.page.changes.staged_files.topLevelItem(0)
+        item.setCheckState(0,qt.Qt.CheckState.Unchecked); self.wait()
+        self.assertFalse(self.page.snapshot.status.changes[0].staged)
+
+    def test_current_branch_filter_excludes_unmerged_branch_and_search_focus(self):
+        self.commit_fixture()
+        self.repo.create_branch('feature/other')
+        (self.repo.path / 'other.txt').write_text('other')
+        self.repo.stage(['other.txt']); self.repo.commit('Other branch')
+        self.repo.switch('main'); self.open()
+        self.page.history.branch_filter.setCurrentIndex(1)
+        self.assertTrue(self.page.history.table.isColumnHidden(0))
+        visible=[self.page.history.table.topLevelItem(i).text(1) for i in range(self.page.history.table.topLevelItemCount())
+                 if not self.page.history.table.topLevelItem(i).isHidden()]
+        self.assertEqual(len(visible),1)
+        self.assertIn('First',visible[0])
+        self.page._navigation_selected(self.page.workspace_items[2],0); self.wait()
+        self.assertTrue(self.page.history.search.hasFocus())
+
+    def test_browser_remote_addresses_accept_http_and_ssh_only(self):
+        from features.git.ui.chrome import browser_remote_url
+        self.assertEqual(browser_remote_url('https://github.com/example/repo.git'),'https://github.com/example/repo')
+        self.assertEqual(browser_remote_url('git@github.com:example/repo.git'),'https://github.com/example/repo')
+        self.assertEqual(browser_remote_url('ssh://git@github.com/example/repo.git'),'https://github.com/example/repo')
+        for address in ('/tmp/repo','file:///tmp/repo','ext::command','https://host:bad/repo','https://u:secret@host/repo','C:/repo'):
+            self.assertEqual(browser_remote_url(address),'')
+
     def test_open_empty_repository_and_persist_bookmark(self):
         self.open()
         self.assertTrue(self.page.toolbar.isEnabled())
@@ -84,22 +146,24 @@ class GitUITests(QtTestCase):
         self.assertEqual(self.page.changes.message.toPlainText(), '')
         self.assertEqual(self.page.snapshot.commits[0].subject, 'UI commit')
         self.page.views.setCurrentIndex(1); self.wait()
-        self.assertIn('UI commit', self.page.preview.editor.toPlainText())
+        self.assertIn('UI commit', self.page.history.metadata.toPlainText())
         item = self.page.history.tree.topLevelItem(0)
         self.assertIsNotNone(item)
         self.page.history.tree.setCurrentItem(item); self.wait()
+        self.assertIn('+first', self.page.preview.editor.toPlainText())
+        self.page.history.file_mode.setCurrentIndex(1); self.wait()
+        self.page.history.tree.setCurrentItem(self.page.history.tree.topLevelItem(0)); self.wait()
         self.assertEqual(self.page.preview.editor.toPlainText(), 'first\n')
 
     def test_diff_and_staged_unstaged_selection(self):
         self.commit_fixture(); self.open()
         (self.repo.path / 'file.txt').write_text('second\n')
         self.page.refresh(); self.wait()
-        section = self.page.changes.files.topLevelItem(1)
-        self.page.changes.files.setCurrentItem(section.child(0)); self.wait()
+        self.page.changes.unstaged_files.setCurrentItem(self.page.changes.unstaged_files.topLevelItem(0)); self.wait()
         self.assertIn('+second', self.page.preview.editor.toPlainText())
         self.page.changes.stage_selected(); self.wait()
-        staged = self.page.changes.files.topLevelItem(2).child(0)
-        self.page.changes.files.setCurrentItem(staged); self.wait()
+        staged = self.page.changes.staged_files.topLevelItem(0)
+        self.page.changes.staged_files.setCurrentItem(staged); self.wait()
         self.page.changes.unstage_selected(); self.wait()
         self.assertFalse(self.page.snapshot.status.changes[0].staged)
 
@@ -144,7 +208,7 @@ class GitUITests(QtTestCase):
         self.page._operation('Merge branch', lambda repo: repo.merge('other')); self.wait()
         self.assertEqual(self.page.snapshot.operation, 'merge')
         self.assertTrue(self.page.operation_bar.isVisible())
-        self.assertEqual(self.page.changes.files.topLevelItem(0).childCount(), 1)
+        self.assertEqual(self.page.changes.unstaged_files.topLevelItemCount(), 1)
         with patch.object(self.page, '_confirm', return_value=True): self.page.finish_operation(abort=True)
         self.wait()
         self.assertFalse(self.page.snapshot.operation)
@@ -259,8 +323,10 @@ class GitUITests(QtTestCase):
         ref = next(r for r in self.page.snapshot.refs if r.name == 'refs/tags/first')
         self.page.show_ref_commit(ref); self.wait()
         self.assertEqual(self.page.history.selected_commit().oid, first)
-        self.assertEqual(self.page.preview.title.text(), 'refs/tags/first')
-        self.assertIn('First', self.page.preview.editor.toPlainText())
+        self.assertEqual(self.page.preview.title.text(), 'file.txt')
+        self.assertIn('First', self.page.history.metadata.toPlainText())
+        self.assertIn('+first', self.page.preview.editor.toPlainText())
+        self.assertNotIn('+second', self.page.preview.editor.toPlainText())
 
     def test_edit_remote_reads_and_prefills_current_url(self):
         self.repo.remote_add('origin', '/example/remote.git')
