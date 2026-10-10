@@ -125,7 +125,7 @@ where their settings belong and what actions change files or external services.
 
 ## Feature guides
 
-- [Create encrypted ZIPs](Python/features/archives/user_docs/index.md)
+- [Archive manager and encrypted ZIPs](Python/features/archives/user_docs/index.md)
 - [Read and manage comics](Python/features/comics/user_docs/index.md)
 - [Connect and transfer remote folders](Python/features/rclone/user_docs/index.md)
 - [Open a mounted remote folder](Python/features/fuse/user_docs/index.md)

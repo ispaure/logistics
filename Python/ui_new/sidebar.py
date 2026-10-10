@@ -48,6 +48,12 @@ class DestinationIcon(qt.QIconEngine):
             painter.drawLine(qt.QLineF(8, 8, 8, 14))
             painter.drawEllipse(qt.QPointF(17, 10), .8, .8)
             painter.drawEllipse(qt.QPointF(19, 13), .8, .8)
+        elif self.name == 'archives':
+            painter.drawRoundedRect(qt.QRectF(4, 3, 16, 18), 2, 2)
+            painter.drawLine(qt.QLineF(4, 8, 20, 8))
+            for y in (4, 10, 13, 16):
+                painter.drawLine(qt.QLineF(11, y, 13, y))
+            painter.drawRoundedRect(qt.QRectF(10, 18, 4, 3), .5, .5)
         elif self.name == 'git':
             painter.drawLine(qt.QLineF(7, 6, 7, 18))
             path = qt.QPainterPath(qt.QPointF(7, 15))

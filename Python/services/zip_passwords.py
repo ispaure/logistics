@@ -74,7 +74,7 @@ def remember_verified_password(path, password):
             _cache.popitem(last=False)
 
 
-def resolve_password(path, *, password=None, configured_only=False):
+def resolve_password(path, *, password=None, configured_only=False, cancelled=lambda: False):
     """No prompts. Return a tested password, or raise a sanitized password error.
 
     Compression uses configured_only so an invalid/missing INI is a per-file
@@ -96,7 +96,7 @@ def resolve_password(path, *, password=None, configured_only=False):
     last_error = None
     for candidate in candidates:
         try:
-            authenticate(path, candidate)
+            authenticate(path, candidate, cancelled=cancelled)
         except ArchivePasswordError as error:
             last_error = error
             continue
