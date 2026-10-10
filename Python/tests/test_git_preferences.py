@@ -129,5 +129,26 @@ class PreferenceUITests(QtTestCase):
             self.app.processEvents(); sleep(.01)
         self.assertEqual(self.page.snapshot.status.changes[0].path, 'file.txt')
 
+    def test_manual_refresh_does_not_retrigger_itself(self):
+        from time import monotonic, sleep
+        self.commit_fixture(); self.open()
+        # Make the index's stat data stale, the condition under which ordinary
+        # git status would rewrite it and notify the .git directory watcher.
+        file = self.repo.path / 'file.txt'
+        file.touch()
+        index = self.repo.path / '.git' / 'index'
+        original_index = index.read_bytes()
+        with patch.object(self.page, '_job', wraps=self.page._job) as jobs:
+            self.page.refresh(); self.wait()
+            deadline = monotonic() + 2
+            while monotonic() < deadline:
+                self.app.processEvents(); sleep(.01)
+            self.wait()
+            # The real file edit may also request one debounced refresh.
+            self.assertLessEqual(jobs.call_count, 2)
+        self.assertEqual(index.read_bytes(), original_index)
+        self.assertFalse(self.page.file_timer.isActive())
+        self.assertFalse(self.page._refresh_pending)
+
 
 del GitUITests
