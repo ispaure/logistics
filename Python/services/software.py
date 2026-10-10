@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import config
-from commonUtils.downloads import DownloadSpec
+from commonUtils.streams.downloads import DownloadSpec
 from commonUtils.fileTypes.iniType import INIFile
 from commonUtils.osUtils import Arch, OS, get_arch, get_os
 

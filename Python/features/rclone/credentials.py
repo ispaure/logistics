@@ -55,7 +55,7 @@ def get_credential_package_directories() -> tuple[Path, ...]:
 
 def get_logistics_remote_credentials_zip_lst() -> list[fileUtils.File]:
     """Return packages from all existing credential roots, deduplicated by path."""
-    from commonUtils.traversal import scan_directory, natural_path_key
+    from commonUtils.filesystem.traversal import scan_directory, natural_path_key
     paths = set()
     for root in get_credential_package_directories():
         paths.update(path.resolve() for path in scan_directory(root, mask='*.zip', recursive=True))

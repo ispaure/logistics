@@ -31,7 +31,7 @@ from .sanitization import CBZSanitizationMixin
 from .browser_support import ComicBrowserMixin
 from .archive_io import replace_archive, validate_archive_members
 from services.zip_passwords import resolve_password
-from commonUtils.zip_access import open_archive, authenticate
+from commonUtils.archives.zip_access import open_archive, authenticate
 
 
 # User Defined Settings

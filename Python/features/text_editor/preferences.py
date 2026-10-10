@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from commonUtils.fileTypes.iniType import INIFile
-from commonUtils.settings import get_setting
+from commonUtils.configuration.settings import get_setting
 from commonUtils.storage import cache_directory
 
 DEFAULTS = {

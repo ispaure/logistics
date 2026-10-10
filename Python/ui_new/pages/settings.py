@@ -4,7 +4,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.text_editor import TextFileEditor
 from commonUtils.ui.markdown import open_markdown
 from ui_new.settings.ini_editor import INISettingsEditor
-from commonUtils.settings import settings_path
+from commonUtils.configuration.settings import settings_path
 from features import registry
 from .features import FeaturesPage
 from ui_new.settings.indexing import IndexSettingsPanel

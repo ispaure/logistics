@@ -9,7 +9,7 @@ import zipfile
 
 from .archive_io import archive_unchanged, validate_archive_members
 from .comicinfo import ComicInfoXML
-from commonUtils.zip_access import open_archive, authenticate, copy_member_info, archive_manifest
+from commonUtils.archives.zip_access import open_archive, authenticate, copy_member_info, archive_manifest
 from services.zip_passwords import resolve_password, remember_verified_password
 
 

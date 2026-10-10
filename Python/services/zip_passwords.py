@@ -6,7 +6,7 @@ from hashlib import sha256
 from pathlib import Path
 from threading import RLock
 
-from commonUtils.zip_access import ArchivePasswordError, authenticate, is_encrypted, password_bytes
+from commonUtils.archives.zip_access import ArchivePasswordError, authenticate, is_encrypted, password_bytes
 
 _cache = OrderedDict()
 _lock = RLock()

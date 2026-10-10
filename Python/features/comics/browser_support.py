@@ -1,7 +1,7 @@
 """Project-owned browser behavior contributed by CBZFile objects."""
 
 from commonUtils.filesystem import BrowserPanel, BrowserDetails
-from commonUtils.zip_access import ArchivePasswordError
+from commonUtils.archives.zip_access import ArchivePasswordError
 from features.comics.locked_preview import locked_preview
 
 

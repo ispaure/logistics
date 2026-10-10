@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
-from commonUtils.zip_access import open_archive
+from commonUtils.archives.zip_access import open_archive
 from features.rclone import credentials
 
 

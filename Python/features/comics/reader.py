@@ -5,7 +5,7 @@ from commonUtils.ui import pyside as qt
 from .pages import ComicPages
 from .archive_io import archive_unchanged
 from .ui.reader import ComicReaderWindow
-from commonUtils.zip_access import ArchivePasswordError
+from commonUtils.archives.zip_access import ArchivePasswordError
 from ui_new.dialogs.archive_password import ask_password
 
 _windows = []

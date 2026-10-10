@@ -8,7 +8,7 @@ from PIL import Image, ImageOps
 
 from .archive_io import archive_unchanged
 from .library import ComicDocument
-from commonUtils.zip_access import open_archive
+from commonUtils.archives.zip_access import open_archive
 
 IMAGE_TYPES = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
                '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp',

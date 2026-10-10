@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import config
 from commonUtils.osUtils import OS, Arch
-from commonUtils.downloads import DownloadSpec
+from commonUtils.streams.downloads import DownloadSpec
 from services import software
 
 
@@ -115,7 +115,7 @@ class SoftwareTests(QtTestCase):
         import time
         from commonUtils.ui import pyside as qt
         from commonUtils.ui import download
-        from commonUtils.downloads import DownloadCancelled
+        from commonUtils.streams.downloads import DownloadCancelled
         self.app = qt.QApplication.instance() or qt.QApplication([])
         spec = DownloadSpec('Tool','1','https://example.test/tool','0'*64,'0'*64)
         def work(*args, cancelled, **kwargs):

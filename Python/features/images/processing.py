@@ -396,7 +396,7 @@ def batch_compress_image(target_dir: Union[str, Path],
     # STEP ONE: GATHER LIST OF IMAGE FILES TO CONVERT
     target_dir = dirUtils.Directory(Path(target_dir) if isinstance(target_dir, str) else target_dir)
     original_img_file_cls_lst: List[ImageFile] = []
-    from commonUtils.traversal import scan_directory
+    from commonUtils.filesystem.traversal import scan_directory
     file_lst = [fileUtils.File(target_dir.path / path.relative_to(target_dir.path.resolve()))
                 for path in scan_directory(target_dir.path, recursive=recursive)
                 if not path.is_symlink()]

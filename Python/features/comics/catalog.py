@@ -7,7 +7,7 @@ from pathlib import Path
 from commonUtils.fileTypes.jsonType import JSONFile
 
 from .library import ComicDocument
-from commonUtils.zip_access import is_encrypted
+from commonUtils.archives.zip_access import is_encrypted
 
 LIST_FIELDS = frozenset(('Writer', 'Penciller', 'Inker', 'Colorist', 'Letterer',
                          'CoverArtist', 'Editor', 'Translator', 'Genre', 'Tags',
