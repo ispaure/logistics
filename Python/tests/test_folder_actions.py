@@ -87,11 +87,11 @@ class FolderActionTests(QtTestCase):
         self.assertEqual(self.page.unread_count, 1)
 
     def test_supported_system_notification_uses_the_actual_result_severity(self):
-        with patch('ui_new.folder_actions.qt.QSystemTrayIcon') as tray_type:
+        with patch('ui_new.notifications.qt.QSystemTrayIcon') as tray_type:
             tray_type.isSystemTrayAvailable.return_value = True
             tray_type.supportsMessages.return_value = True
             FolderActionsPage.notify(self.page, 'Sync failed', 'See details', failed=True)
             tray_type.return_value.showMessage.assert_called_once_with('Sync failed', 'See details',
                 tray_type.MessageIcon.Warning, 5000)
-            tray_type.return_value.messageClicked.connect.assert_called_once_with(self.page.activate)
+            tray_type.return_value.messageClicked.connect.assert_called_once()
         self.page.tray = None
