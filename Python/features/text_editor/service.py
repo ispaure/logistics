@@ -13,9 +13,20 @@ class EditorService(qt.QObject):
         self.window = None
         self.history_path = history_path
         self.preferences_path = preferences_path
+        from pathlib import Path
+        from commonUtils.storage import cache_directory
+        from .session import EditorSession
+        directory = Path(preferences_path).parent if preferences_path else cache_directory(create=False) / "TextEditor"
+        self.session = EditorSession(self, directory / "sessions")
+        self._restore_checked = False
 
     def register(self, window):
         self.windows.append(window)
+        if self.session.suspended:
+            self.session.retained = []
+        self.session.suspended = False
+        self.session.start()
+        self.session.changed()
         self.window = window
         window.destroyed.connect(lambda obj=None, owner=window: self._window_destroyed(owner))
         window.closed.connect(lambda owner=window: self._window_destroyed(owner))
@@ -27,6 +38,16 @@ class EditorService(qt.QObject):
         from .window import EditorWindow
         from commonUtils.ui.document_host import show_document
         path = Path(path).resolve() if path is not None else None
+        if not self._restore_checked:
+            self._restore_checked = True
+            if not self.windows:
+                previous = self.session.previous()
+                if previous is not None:
+                    window = EditorWindow(service=self, create_blank=False,
+                        history_path=self.history_path, preferences_path=self.preferences_path)
+                    self.session.restore(window, previous, requested=path)
+                    show_document(window)
+                    return window
         window = None
         if path is not None:
             window = next((owner for owner in self.windows
@@ -47,10 +68,23 @@ class EditorService(qt.QObject):
         return window
 
     def _window_destroyed(self, window):
+        if window not in self.windows:
+            return
+        suspended = getattr(window, "_suspending", False)
         if window in self.windows:
             self.windows.remove(window)
         if self.window is window:
             self.window = self.windows[-1] if self.windows else None
+        if not suspended:
+            self.session.changed()
+        if not self.windows:
+            self.session.last_window_closed(suspended)
+            if self.session.suspended:
+                from commonUtils.session_store import SessionStore
+                from uuid import uuid4
+                self.session.store = SessionStore(self.session.directory / (uuid4().hex + ".json"))
+                self.session.persisted = -1
+                self._restore_checked = False
 
     def save_all(self):
         pending = [(window, window.current) for window in self.windows
@@ -92,6 +126,12 @@ class EditorService(qt.QObject):
             if not window.close() and not window._close_pending:
                 window.closed.disconnect(closed)
         step()
+
+    def suspend(self):
+        from commonUtils.ui.document_host import close_document
+        for window in tuple(self.windows):
+            window._suspend_requested = True
+            close_document(window)
 
     def prepare_close(self):
         ready = True

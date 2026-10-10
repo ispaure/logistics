@@ -70,5 +70,75 @@ the window to detach it; **Bring back** returns it without losing edits.
 
 Disabling Text Editor removes its browser actions but retains its open
 buffers. Re-enable it to return to those documents. Browser windows do not own
-editor buffers. Application closure still checks modified documents. Tabs are
-not restored automatically after a restart; there is no autosave or crash recovery.
+editor buffers. Application closure still checks modified documents. Open sessions are checkpointed privately while you work and restored when you next
+open Text Editor. Recovery includes unsaved Untitled buffers, edits, encoding and
+line-ending choices, cursor/selection and scroll positions, and both document views.
+Application shutdown waits for a durable checkpoint and retains editor buffers;
+closing an individual document still asks Save/Discard/Cancel. If checkpointing
+fails, ordinary save prompts remain in effect. Recovery never writes your original
+files. Disk changes since a checkpoint retain normal conflict protection.
+
+**File → Keep Session and Close Editors** also suspends standalone editors.
+**Restore Editor Session…** lets you select an older checkpoint; sessions held by
+another running instance cannot be restored. Checkpoints live in private
+Cache/TextEditor/sessions files, with a 64 MiB total and 100-document limit.
+Checkpoints run about one second after changes; a crash can lose changes made
+since the last completed checkpoint. Corrupt checkpoints are retained for inspection.
+
+
+## Text transformations and structured text
+
+**Edit → Text Transformations** offers sorting, duplicate removal, trailing-space
+trimming, case conversion, tab/space conversion, and numbered lines. Line commands
+operate on complete selected lines, or the whole document without a selection.
+Case commands use the selection or current word. Conversion to tabs affects leading
+spaces only. Each transformation is one undo step.
+
+**Tools → Format JSON/XML** formats the selection, or the document without a
+selection. **Validate JSON/XML** reports syntax errors without changing text.
+JSON formatting preserves numeric tokens and duplicate keys. XML formatting
+preserves comments but refuses DTD/entity declarations, mixed content, CDATA,
+and xml:space="preserve" content; mixed content and CDATA can still be validated.
+Formatting/validation is limited to 1 MiB of text.
+
+## Multiple cursors and rectangular selection
+
+Use **Edit → Add Next Occurrence** (Ctrl/Cmd+Alt+D) to select the current word and
+add matching occurrences. Alt-click adds a cursor; Alt+Shift-drag makes a rectangular
+selection. **Rectangular Selection from Selection** converts an existing selection
+into a column selection. Short lines clamp at their end; virtual columns are not
+inserted. There is a limit of 1,000 cursors.
+
+Typing, deletion, Enter/Tab, optional pairing, copy/cut/paste and simple input-method
+commits work across cursors. A paste containing exactly one line per cursor fills
+those cursors individually; other text is pasted at every cursor. Escape clears
+extra cursors before dismissing search. Unsupported navigation/commands return to
+one cursor, and edits through another view clear stale extra cursors.
+
+## Folding and two views
+
+**View → Code Folding** toggles the current region or folds/unfolds all regions.
+Click a gutter +/− marker to fold a region. Folding uses indentation for Python/YAML,
+tags for XML/HTML, and lexical delimiters for other highlighted languages; it is
+structural rather than a language parser. Folding is disabled above 256 KiB or
+10,000 lines. Search and Go to Line reveal hidden destinations; editing expands
+folds before refreshing the regions. **Indentation Guides** can be toggled in View.
+
+**View → Document Views** splits one document side by side or above/below. Both
+views share text, undo history, folding and save state, with independent navigation.
+Commands and search follow the focused view. **Single View** removes the extra view.
+
+## Comparing and discovering commands
+
+**Compare → Compare with Disk / Another File** opens a read-only side-by-side view
+and a unified diff. Previous/Next visits changes. **Use Left Change** copies the
+selected disk/file change into your buffer in one undo step; it never saves the
+file. Reopen comparison after applying a change. Applying changes is blocked if the
+buffer changed after comparison. The disk-change banner also offers Compare.
+Comparison is limited to 1 MiB and 5,000 lines per side.
+
+**View → Find Command…** (Ctrl/Cmd+Shift+P) searches editor commands and displays
+shortcuts. **Configure Shortcuts…** saves bindings globally for editor panes,
+rejects conflicting bindings and offers Restore Defaults. Clear a binding in the
+shortcut field to remove it. Shortcut choices are saved separately from normal
+editor preferences.

@@ -17,6 +17,7 @@ contributions while retaining open documents for re-enablement.
 | `document.py` | Per-document snapshot, encoding and editing metadata |
 | `file_operations.py` | Queued background loads/saves, conflicts and disk notifications |
 | `editing.py` | Application commands, nonmodal search integration and status controls |
+| `session.py`, `commands.py` | Private recovery checkpoints, safe session restore, command discovery and shortcuts |
 | `syntax_settings.py`, `preferences.py` | Language selection and existing INI-based preferences |
 
 The shared dock workspace owns document tabs, splitting and detachment. Editors
@@ -67,8 +68,24 @@ code. Unsupported definitions fall back to plain text.
   Blocks above 20,000 characters skip syntax formatting. Search stops at 50,000
   matches and disables Replace All when truncated; occurrence highlighting caps
   at 1,000 matches and is omitted for large files. Regex patterns have PCRE resource limits.
-- No automatic tab/session restore, autosave or crash-recovery journal is provided.
-  Normal tab/window closure always prompts for modified buffers.
+- Private session checkpoints run in a serialized background executor, with atomic
+  replacement and fsync. Per-session QLockFile ownership prevents concurrent-instance
+  overwrite/restoration. Original bytes remain the save-conflict baseline for dirty
+  restored files; clean files reload current disk content.
+- Individual document closure prompts for modified buffers. Application shutdown or
+  explicit session suspension waits for the latest durable checkpoint and retains
+  buffers without saving originals. Recovery failure falls back to normal prompts.
+- Recovery restores editor buffers, two-view orientation, cursors/selections and scroll
+  positions on the next editor opening. It does not reproduce the outer workspace's
+  dock layout or detached-window placement. Limits: 100 documents / 64 MiB checkpoint;
+  edits after the last completed checkpoint can be lost in a crash.
+- Diff uses owned background loading/comparison and a reusable side-by-side/unified
+  dialog. Applying one change validates the captured buffer and forms one undo block.
+  Comparison is capped at 1 MiB / 5,000 lines per side.
+- Structural folding is shared across views and bounded to 256 KiB / 10,000 lines.
+  Text transformations, multi-cursor commands, format/validation and EditorViews
+  remain reusable commonUtils components. XML formatting refuses semantic-risk
+  constructs; JSON formatting preserves original number/key tokens.
 
 ## Validation
 
@@ -86,3 +103,14 @@ search/replace undo, language definitions and theme-safe presentation. macOS Qt
 offscreen testing and rendered layout inspection are available here. Windows and
 Linux behavior uses Qt/stdlib APIs and code review; native desktop validation on
 those platforms remains separate.
+
+
+## Additional regression checks
+
+Run `test_text_editor*.py` for feature lifecycle, commands, diff, split views and
+recovery failure paths. The reusable `test_code*.py`, `test_session_store.py`,
+`test_text_files.py` and `test_workspace.py` suites cover the shared components.
+`test_document_workspace.py`, `test_main_window.py` and
+`test_application_instance.py` cover surrounding Logistics integration. These are
+headless macOS Qt checks; Windows/Linux native interaction still needs platform
+validation. New UI surfaces have also been rendered and inspected in both themes.

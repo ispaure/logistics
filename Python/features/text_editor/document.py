@@ -1,7 +1,7 @@
 """Application document metadata around the shared editing widget."""
 
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.code_editor import CodeEdit
+from commonUtils.ui.code_editor.views import EditorViews
 from commonUtils.text_files import TextSnapshot
 
 
@@ -18,14 +18,20 @@ class Document(qt.QWidget):
         self.external_changed = False
         self.external_acknowledged = False
         self.language = "text"
-        self.editor = CodeEdit(self)
+        self.views = EditorViews(self)
+        self.views.active_changed.connect(self.changed)
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.editor)
+        layout.addWidget(self.views)
         self.editor.setPlainText(self.snapshot.text)
         self.editor.document().setModified(False)
         self.editor.document().modificationChanged.connect(self.changed)
         self.editor.cursorPositionChanged.connect(self.changed)
+        self.editor.focused.connect(self.changed)
+
+    @property
+    def editor(self):
+        return self.views.active
 
     @property
     def path(self):
