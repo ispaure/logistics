@@ -88,6 +88,28 @@ class ReaderTests(unittest.TestCase):
         self.assertFalse(self.page.spread.enabled)
         cursor = qt.QTextCursor(self.page.text.document()); cursor.setPosition(anchor)
         self.assertTrue(self.page.text.viewport().rect().contains(self.page.text.cursorRect(cursor).center()))
+
+    def test_read_aloud_follows_the_word_and_resize_centers_its_pointer(self):
+        from PySide6.QtTest import QTest
+        from commonUtils.tests.test_read_aloud import SilentEngine
+        from PySide6.QtTextToSpeech import QTextToSpeech
+        self.page.text.setHtml('<p>' + 'A paragraph to read. ' * 600 + '</p>')
+        QTest.qWait(200)
+        speech = self.page.speech
+        speech.engine_factory = SilentEngine
+        speech.show()
+        speech.engine.engineCapabilities = lambda: QTextToSpeech.Capability.WordByWordProgress
+        speech.start()
+        speech.engine.sayingWord.emit('paragraph', 0, 1200, 9)
+        self.assertEqual(self.page.text.read_pointer, speech._utterance_offset + 1200)
+        self.page.resize(920, 600); QTest.qWait(200)
+        cursor = qt.QTextCursor(self.page.text.document()); cursor.setPosition(self.page.text.read_pointer)
+        midpoint = self.page.text.cursorRect(cursor).center().y()
+        self.assertLess(abs(midpoint - self.page.text.viewport().height() / 2), 50)
+        speech.stop()
+        self.assertIsNone(self.page.text.read_pointer)
+        self.assertEqual(self.page.text.extraSelections(), [])
+        self.assertEqual(self.page.spread.second.extraSelections(), [])
     def wait_idle(self, page):
         loop = qt.QEventLoop()
         page.idle.connect(loop.quit)

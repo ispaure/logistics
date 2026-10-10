@@ -118,3 +118,9 @@ Page turns advance past the displayed pages, and resizing follows the current
 text location. The bottom track shows estimated whole-book progress, weighted
 by chapter resource size. Taller ticks mark higher-level contents entries;
 click anywhere on the track to jump to that part of the book.
+
+Read aloud opens a compact panel anchored to its toolbar button. The reader
+highlights the spoken word when the platform engine reports word progress;
+otherwise it highlights the current utterance. During speech, the reading pane
+follows that pointer and keeps it near the center, including after resizing.
+Closing the panel, changing chapters, or closing the reader stops playback.

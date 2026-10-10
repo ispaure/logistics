@@ -11,6 +11,11 @@ def tool(page, action, name, icon=None):
     return reader_button(page, name, action=action, icon=icon)
 
 
+def speech_widget(page):
+    second = page.spread.second
+    return second if second.isVisible() and second.textCursor().hasSelection() else page.text
+
+
 def build_controls(page):
     layout = qt.QVBoxLayout(page)
     layout.setContentsMargins(*READER_MARGINS)
@@ -139,10 +144,13 @@ def build_controls(page):
     reading_layout = qt.QHBoxLayout(page.reading_area)
     reading_layout.setContentsMargins(0, 0, 0, 0)
     page.text = BookText()
-    page.speech = ReadAloud(page, lambda: reader_text(page.text, start=page.text.location()),
-                            scope='the current chapter from this page')
+    page.speech = ReadAloud(page, lambda: reader_text(speech_widget(page), start=page.text.location()),
+                            scope='the current chapter from this page', text_widget=lambda: speech_widget(page),
+                            start_provider=page.text.location)
+    page.speech.positionChanged.connect(page.follow_speech)
     page.menus.view.addAction(page.speech.action)
-    header.addWidget(reader_button(page, 'Read aloud', action=page.speech.action, text='Read aloud'))
+    page.speech.anchor = reader_button(page, 'Read aloud', action=page.speech.action, text='Read aloud')
+    header.addWidget(page.speech.anchor)
     page.text.textChanged.connect(page.speech.stop)
     page.text.setMaximumWidth(page.reading_width.value())
     page.text.anchorClicked.connect(page._link_clicked)

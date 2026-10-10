@@ -278,6 +278,7 @@ class BooksPage(qt.QWidget):
     def turn_page(self, direction):
         if not self.book or self.worker or self._loading:
             return
+        self.speech.stop()
         target = self.text.page_index + direction * self.spread.step
         if 0 <= target < self.text.page_count:
             self.text.show_page(target)
@@ -298,6 +299,24 @@ class BooksPage(qt.QWidget):
                 self._render(position=fraction)
             except (OSError, BookError) as error:
                 self.status.setText(str(error))
+
+    def follow_speech(self, start, end):
+        previous = self.text.read_pointer
+        self.text.read_pointer = start if start >= 0 else None
+        if start >= 0:
+            self.text._resize_anchor = start
+            self.text.show_location(start, center=True)
+        elif previous is not None:
+            self.text._resize_anchor = None
+            self.text.show_location(previous)
+        source = self.speech._highlight_widget
+        tag = qt.QTextFormat.Property.UserProperty + 77
+        for widget in (self.text, self.spread.second):
+            if widget is not source:
+                selections = [entry for entry in widget.extraSelections() if not entry.format.property(tag)]
+                if source is not None:
+                    selections += [entry for entry in source.extraSelections() if entry.format.property(tag)]
+                widget.setExtraSelections(selections)
 
     def _render(self, *, position=0, fragment='', location=None):
         if not self.book:
@@ -353,7 +372,7 @@ class BooksPage(qt.QWidget):
     def _appearance_changed(self, *args):
         if self.book and not self.worker:
             try:
-                self._render(location=self.text.location())
+                self._render(location=self.text.read_pointer if self.text.read_pointer is not None else self.text.location())
             except (OSError, BookError) as error:
                 self.status.setText(str(error))
 
