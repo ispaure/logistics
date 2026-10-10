@@ -344,9 +344,11 @@ detaches the existing pane. Qt toolbar actions remain available in overflow menu
 on narrow panes. Switching tabs does not discard drafts or move command targets.
 
 
-Document navigation stays visible beside a scrollable icon rail, even when no
-files are open. Features contribute `DocumentLauncherContribution` entries with
-a stable editor ID, title, icon and lazy opener. Their windows declare
+The Documents icon stays visible in the scrollable icon rail, even when no
+files are open. It toggles a Qt popup overlay with editor buttons and a grouped
+document tree; opening the overlay does not change the active workspace page. Features contribute `DocumentLauncherContribution` entries with
+a stable editor ID, title, icon, lazy opener and optional new-document callback.
+The optional callback enables the shared New/Open menu; readers use Open directly. Their windows declare
 `document_editor_id` and `document_editor_name`; the rail groups retained windows
 by that ID and reveals the original window/buffer when selected. Closed documents
 retire their rows; detached documents retain a Bring back action. Bulk Rename is

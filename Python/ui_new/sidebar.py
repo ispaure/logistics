@@ -1,4 +1,4 @@
-"""Scrollable destination icons and persistent, editor-grouped documents."""
+"""Scrollable destinations and a grouped document-launcher overlay."""
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.icons import set_painted_icon
 
@@ -123,7 +123,7 @@ class DestinationRail(qt.QWidget):
         self.actions = None
         self.buttons = {}
         self.pages = {}
-        self.setFixedWidth(320)
+        self.setFixedWidth(60)
         self.setAccessibleName('Main destinations')
         outer = qt.QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -135,17 +135,40 @@ class DestinationRail(qt.QWidget):
         icons = qt.QWidget()
         icon_scroll.setWidget(icons)
         outer.addWidget(icon_scroll)
-        panel = qt.QWidget(self)
-        panel_layout = qt.QVBoxLayout(panel)
+        panel = self.document_overlay = qt.QFrame(self, qt.Qt.WindowType.Popup)
+        panel.setObjectName('documentOverlay')
+        panel.setAccessibleName('Document launchers and open documents')
+        panel.installEventFilter(self)
+        panel.setStyleSheet("""
+            QFrame#documentOverlay { border: 1px solid palette(mid); border-radius: 10px; background: palette(window); }
+            QFrame#documentOverlay QTreeWidget { border: none; background: palette(window); }
+            QFrame#documentOverlay QToolButton { border: none; border-radius: 6px; padding: 3px; }
+            QFrame#documentOverlay QToolButton:hover { background: palette(midlight); }
+            QFrame#documentOverlay QToolButton:pressed { background: palette(highlight); }
+            QFrame#documentOverlay QLabel#documentHeading { font-weight: bold; font-size: 14px; }
+        """)
+        panel.resize(390, 420)
+        overlay_layout = qt.QHBoxLayout(panel)
+        self.editor_destinations = qt.QVBoxLayout()
+        self.editor_destinations.setSpacing(8)
+        overlay_layout.addLayout(self.editor_destinations)
+        self.editor_destinations.addStretch()
+        content = qt.QWidget(panel)
+        overlay_layout.addWidget(content, 1)
+        panel_layout = qt.QVBoxLayout(content)
         panel_layout.setContentsMargins(4, 10, 4, 4)
-        panel_layout.addWidget(qt.QLabel('Documents'))
+        heading = qt.QHBoxLayout()
+        title = qt.QLabel('Documents'); title.setObjectName('documentHeading')
+        heading.addWidget(title, 1)
+        close = qt.QToolButton(); close.setText('×'); close.setAccessibleName('Close document overlay')
+        close.clicked.connect(panel.hide); heading.addWidget(close)
+        panel_layout.addLayout(heading)
         self.document_tree = qt.QTreeWidget(panel)
         self.document_tree.setHeaderHidden(True)
         self.document_tree.setAccessibleName('Documents grouped by editor')
         self.document_tree.setIndentation(16)
         self.document_tree.itemClicked.connect(self._select_tree_document)
         panel_layout.addWidget(self.document_tree)
-        outer.addWidget(panel, 1)
         self.launchers = {}
         self.editor_buttons = {}
         self.editor_groups = {}
@@ -254,17 +277,29 @@ class DestinationRail(qt.QWidget):
         self._populate_document_tree()
 
     def set_current(self, page):
+        self.current_page = page
         is_tool = page is not None and page not in self.pages.values() and page is not self.documents
         for key, button in self.buttons.items():
             if key.startswith('editor:') or key == 'rename':
                 button.setChecked(False)
                 continue
-            button.setChecked(is_tool if key == 'tools' else
-                              page is (self.documents if key == 'documents' else self.pages.get(key)))
+            if key == 'tools':
+                checked = is_tool
+            elif key == 'documents':
+                checked = page is self.documents or self.document_overlay.isVisible()
+            else:
+                checked = page is self.pages.get(key)
+            button.setChecked(checked)
         for action in self.tools_menu.actions():
             action.setChecked(action.data() is page)
 
+    def eventFilter(self, watched, event):
+        if watched is self.document_overlay and event.type() in (qt.QEvent.Type.Show, qt.QEvent.Type.Hide):
+            self.set_current(getattr(self, 'current_page', None))
+        return super().eventFilter(watched, event)
+
     def _open_document(self, window, *, attach=False, tab=None):
+        self.document_overlay.hide()
         if tab is not None:
             window.tabs.setCurrentWidget(tab)
         if attach:
@@ -273,30 +308,53 @@ class DestinationRail(qt.QWidget):
             self.documents.present(window)
 
     def show_documents(self):
-        activate = getattr(self.documents, 'activate', None)
-        if activate is not None:
-            activate()
+        if self.document_overlay.isVisible():
+            self.document_overlay.hide()
+            return
         self._populate_document_tree()
+        button = self.buttons['documents']
+        point = button.mapToGlobal(qt.QPoint(button.width() + 8, 0))
+        screen = button.screen().availableGeometry()
+        overlay = self.document_overlay
+        overlay.resize(min(390, screen.width()), min(420, screen.height()))
+        point.setX(max(screen.left(), min(point.x(), screen.right() - overlay.width() + 1)))
+        point.setY(max(screen.top(), min(point.y(), screen.bottom() - overlay.height() + 1)))
+        overlay.move(point)
+        overlay.show()
         self.document_tree.setFocus()
 
     def _refresh_editors(self):
         from features import registry
         from features.contributions import DocumentLauncherContribution
-        entries = [DocumentLauncherContribution('markdown', 'Markdown / Obsidian', self._open_markdown, 'markdown', 20)]
+        entries = [DocumentLauncherContribution('markdown', 'Markdown Editor', self._open_markdown, 'markdown', 20, self._new_markdown)]
         entries.extend(entry.contribution for entry in registry.get_document_launchers())
         self.launchers = {entry.editor_id: entry for entry in sorted(entries, key=lambda item: item.order)}
         for key, button in self.editor_buttons.items():
             button.setVisible(key in self.launchers)
-        for key, entry in self.launchers.items():
+        for position, (key, entry) in enumerate(self.launchers.items()):
             if key not in self.editor_buttons:
                 button = self._button('editor:'+key, entry.name, entry.icon)
-                button.clicked.connect(lambda checked=False, editor=key: self._launch_editor(editor))
-                self.workspace_destinations.addWidget(button)
+                self._configure_launcher_button(button, key)
                 self.editor_buttons[key] = button
+            self.editor_destinations.insertWidget(position, self.editor_buttons[key])
             self.editor_buttons[key].show()
 
-    def _launch_editor(self, key):
-        self.launchers[key].open_document(self.documents)
+    def _configure_launcher_button(self, button, key):
+        launcher = self.launchers[key]
+        if launcher.new_document is not None:
+            menu = qt.QMenu(button)
+            menu.addAction('New', lambda editor=key: self._launch_editor(editor, new=True))
+            menu.addAction('Open…', lambda editor=key: self._launch_editor(editor))
+            button.setMenu(menu)
+            button.setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
+        else:
+            button.clicked.connect(lambda checked=False, editor=key: self._launch_editor(editor))
+
+    def _launch_editor(self, key, *, new=False):
+        self.document_overlay.hide()
+        launcher = self.launchers[key]
+        callback = launcher.new_document if new else launcher.open_document
+        callback(self.documents)
         self._populate_document_tree()
 
     def _open_markdown(self, parent):
@@ -304,6 +362,10 @@ class DestinationRail(qt.QWidget):
         path, _ = qt.QFileDialog.getOpenFileName(parent, 'Open Markdown', '', 'Markdown (*.md *.markdown);;All files (*)')
         if path:
             return open_markdown(path, allow_edit=True)
+
+    def _new_markdown(self, parent):
+        from commonUtils.ui.markdown.window import open_markdown
+        return open_markdown(None, allow_edit=True)
 
     def _open_bulk_rename(self):
         from ui_new.bulk_rename import open_bulk_rename
@@ -321,9 +383,10 @@ class DestinationRail(qt.QWidget):
             layout = qt.QHBoxLayout(row); layout.setContentsMargins(0, 0, 0, 0)
             label = qt.QLabel(launcher.name)
             layout.addWidget(label, 1)
-            button = qt.QToolButton(); button.setText('+'); button.setToolTip('Open '+launcher.name)
-            button.setAccessibleName('Open '+launcher.name)
-            button.clicked.connect(lambda checked=False, editor=key: self._launch_editor(editor))
+            button = qt.QToolButton(); button.setText('New / Open' if launcher.new_document else 'Open…')
+            button.setToolTip('New or open '+launcher.name if launcher.new_document else 'Open '+launcher.name)
+            button.setAccessibleName('New or open '+launcher.name if launcher.new_document else 'Open '+launcher.name)
+            self._configure_launcher_button(button, key)
             layout.addWidget(button)
             group.setSizeHint(0, qt.QSize(0, 30))
             self.document_tree.setItemWidget(group, 0, row)
