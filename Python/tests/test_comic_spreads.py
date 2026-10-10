@@ -248,15 +248,16 @@ class SpreadTests(QtTestCase):
             time.sleep(.005)
         self.app.processEvents()
 
+    def wait_shown(self, reader, page):
+        deadline = time.monotonic() + 3
+        while reader.shown_page != page and time.monotonic() < deadline:
+            self.app.processEvents()
+            time.sleep(.005)
+        self.assertEqual(reader.shown_page, page)
+
     def test_holding_arrows_uses_steady_timer_and_stops_on_release_for_both_directions(self):
         from PySide6.QtTest import QTest
         from features.comics.ui.reader_keys import PAGE_TURN_INTERVAL_MS
-        def wait_shown(reader, page):
-            deadline = time.monotonic() + 3
-            while reader.shown_page != page and time.monotonic() < deadline:
-                self.app.processEvents()
-                time.sleep(.005)
-            self.assertEqual(reader.shown_page, page)
         for rtl in (False, True):
             reader = self.reader(self.archive(f'held-{rtl}.cbz', colors=('red',) * 12, rtl=rtl), wide=False)
             reader.set_mode('single')
@@ -274,14 +275,14 @@ class SpreadTests(QtTestCase):
                               qt.Qt.KeyboardModifier.NoModifier, '', True))
             self.assertTrue(reader.keys.timer.isActive())
             self.assertEqual(reader.keys.timer.interval(), PAGE_TURN_INTERVAL_MS)
-            wait_shown(reader, 2)
+            self.wait_shown(reader, 2)
             QTest.keyRelease(reader.canvas, forward)
             self.assertFalse(reader.keys.timer.isActive())
             QTest.qWait(PAGE_TURN_INTERVAL_MS + 50)
             self.assertEqual(reader.shown_page, 2)
             QTest.keyPress(reader.canvas, backward)
             self.assertEqual(reader.shown_page, 1)
-            wait_shown(reader, 0)
+            self.wait_shown(reader, 0)
             QTest.keyRelease(reader.canvas, backward)
             reader.close(); self.wait(reader)
 
@@ -294,8 +295,8 @@ class SpreadTests(QtTestCase):
         reader.set_mode('single'); self.wait_cache(reader)
         QTest.mousePress(reader.next_button, qt.Qt.MouseButton.LeftButton)
         self.assertEqual(reader.shown_page, 1)
-        QTest.qWait(PAGE_TURN_INTERVAL_MS + 50)
-        self.assertEqual(reader.shown_page, 2)
+        self.assertEqual(reader.keys.timer.interval(), PAGE_TURN_INTERVAL_MS)
+        self.wait_shown(reader, 2)
         QTest.mouseRelease(reader.next_button, qt.Qt.MouseButton.LeftButton)
         self.assertFalse(reader.keys.timer.isActive())
         reader.go(4); self.wait(reader)

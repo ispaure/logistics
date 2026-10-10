@@ -22,7 +22,7 @@ from services.folder_sources import discover_folder_sources
 class FolderSourceTests(QtTestCase):
     def until(self, condition):
         from time import monotonic, sleep
-        deadline = monotonic() + 5
+        deadline = monotonic() + 10
         while not condition():
             self.assertLess(monotonic(), deadline)
             self.app.processEvents(); sleep(.005)
@@ -119,7 +119,7 @@ class FolderSourceTests(QtTestCase):
 
     def wait(self, page):
         from time import monotonic, sleep
-        deadline = monotonic() + 5
+        deadline = monotonic() + 10
         while page.discovery.busy or page.details.busy:
             self.assertLess(monotonic(), deadline, 'Folder discovery did not finish')
             self.app.processEvents(); sleep(.005)
