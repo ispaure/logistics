@@ -87,6 +87,11 @@ class GitRepositoryTabsTests(QtTestCase):
         view = self.page.open_repository(self.first_path); self.wait()
         dock = self.page.workspace.active_dock
         dock.setFloating(True); dock.resize(640, 600); self.wait()
+        # Native font metrics can make the pane's content minimum wider than
+        # 640px. Constrain the toolbar itself to exercise its overflow on every OS.
+        view.toolbar.setMaximumWidth(min(640, view.toolbar.sizeHint().width() - 40))
+        self.wait()
+        self.assertLess(view.toolbar.width(), view.toolbar.sizeHint().width())
         extension = view.toolbar.findChild(qt.QToolButton, 'qt_toolbar_ext_button')
         self.assertIsNotNone(extension)
         self.assertTrue(extension.isVisible())
