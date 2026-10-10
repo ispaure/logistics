@@ -184,17 +184,21 @@ class BrowserWindowTests(unittest.TestCase):
         window = self.window([extension])
         dock = window.workspace.active_dock
         controller = window.extensions[0]
+        window.workspace.add_view(self.root)
+        window.extensions[0].ready = True
+        self.wait(window)
         dock.close()
-        self.assertEqual(len(window.workspace.docks), 1)
+        self.assertEqual(len(window.workspace.docks), 2)
         controller.ready = True
         controller.idle.emit()
         controller.idle.emit()
         self.app.processEvents()
-        self.assertEqual(len(window.workspace.docks), 0)
+        self.assertEqual(len(window.workspace.docks), 1)
         self.assertFalse(window.workspace._closing)
         window.workspace.add_view(self.root)
+        window.extensions[0].ready = True
         self.wait(window)
-        self.assertEqual(len(window.workspace.docks), 1)
+        self.assertEqual(len(window.workspace.docks), 2)
 
     def test_debug_button_opens_browser_and_survives_empty_debug_contributions(self):
         with patch.object(registry, 'get_debug_actions', return_value=[]):

@@ -1,27 +1,29 @@
 # Text Editor
 
 An optional Logistics feature for plain text and code, independent of Books,
-Comics and the shared Markdown reader. Open its navigation tab, then **Open Text
-Editor**, or use **Open in Text Editor** in a browser. One QApplication-owned
-service reuses the document window across browser hosts. Disabling the feature
-removes contributions while retaining open buffers for re-enablement.
+Comics and the shared Markdown reader. Open **Settings → Text Editor → Open Text
+Editor**, or use **Open in Text Editor** in a browser. Each file has one editor
+pane in the application's document workspace, and can detach into its own window.
+Reopening a file focuses its existing pane. Disabling the feature removes
+contributions while retaining open documents for re-enablement.
 
 ## Architecture
 
 | Module | Responsibility |
 | --- | --- |
 | `contributions.py`, `page.py` | Lazy feature registration, entry point and browser integration |
-| `service.py` | Shared window ownership and browser save notifications |
-| `window.py` | Native document tabs, menus, status and close lifecycle |
+| `service.py` | Per-document window ownership and browser save notifications |
+| `window.py` | Single-document presentation, menus, status and close lifecycle |
 | `document.py` | Per-document snapshot, encoding and editing metadata |
 | `file_operations.py` | Queued background loads/saves, conflicts and disk notifications |
 | `editing.py` | Application commands, nonmodal search integration and status controls |
 | `syntax_settings.py`, `preferences.py` | Language selection and existing INI-based preferences |
 
-The existing dock workspace targets browser layouts rather than editor document
-lifecycles. This feature uses Qt's `QTabWidget` for closable, draggable document
-tabs and adds middle-click closure. It uses the existing `OperationProgress`
-worker ownership and `RecentFiles` implementation rather than duplicating them.
+The shared dock workspace owns document tabs, splitting and detachment. Editors
+have no nested tab bar. File → New opens another document pane; opening a file
+reuses an untouched blank document or opens another pane without an extra Untitled
+buffer. Each pane retains its existing `OperationProgress` worker and
+`RecentFiles` implementation.
 
 Reusable Qt-independent file IO lives in `commonUtils.text_files`. The shared
 `commonUtils.ui.code_editor` package supplies the gutter, code editing, search

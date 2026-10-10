@@ -1,4 +1,4 @@
-"""Logistics-owned standalone document window with native Qt document tabs."""
+"""One text document per host tab or standalone editor window."""
 
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.operation_progress import OperationProgress
@@ -10,41 +10,25 @@ from .editing import EditingCommands
 from .syntax_settings import SyntaxSettings
 
 
-class DocumentTabs(qt.QTabWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setTabsClosable(True)
-        self.setMovable(True)
-        self.setDocumentMode(True)
-        self.tabBar().setExpanding(True)
-        self.tabBar().setElideMode(qt.Qt.TextElideMode.ElideRight)
-        self.tabBar().installEventFilter(self)
-
-    def eventFilter(self, watched, event):
-        if (
-            event.type() == qt.QEvent.Type.MouseButtonRelease
-            and event.button() == qt.Qt.MouseButton.MiddleButton
-        ):
-            index = self.tabBar().tabAt(event.position().toPoint())
-            if index >= 0:
-                self.tabCloseRequested.emit(index)
-            return True
-        return super().eventFilter(watched, event)
-
-
 class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWindow):
     idle = qt.Signal()
     saved = qt.Signal(object)
+    closed = qt.Signal()
 
-    def __init__(self, *, history_path=None, preferences_path=None):
+    def __init__(self, *, history_path=None, preferences_path=None, service=None, create_blank=True):
         super().__init__()
+        self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle("Text Editor — Logistics")
         self.resize(1100, 780)
         self.setMinimumSize(640, 420)
         self._initialize_preferences(preferences_path)
-        self.tabs = DocumentTabs(self)
-        self.tabs.tabCloseRequested.connect(self.close_tab)
-        self.tabs.currentChanged.connect(self._active_changed)
+        self.document_stack = qt.QStackedWidget(self)
+        self.document_stack.currentChanged.connect(self._active_changed)
+        self._opening_path = None
+        from .service import EditorService
+        self.service = service or EditorService(qt.QApplication.instance(),
+            history_path=history_path, preferences_path=preferences_path)
+        self.service.register(self)
         self._queue = []
         self._close_pending = False
         self._done = None
@@ -68,7 +52,7 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
             row.addWidget(widget)
         layout.addWidget(self.external_bar)
         self.external_bar.hide()
-        layout.addWidget(self.tabs, 1)
+        layout.addWidget(self.document_stack, 1)
         self.task = OperationProgress(self)
         self.task.completed.connect(self._finished)
         layout.addWidget(self.task)
@@ -80,21 +64,21 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
         self._build_status()
         self._build_editing(layout)
         self._build_syntax_controls()
-        self.new_document()
+        if create_blank:
+            from .document import Document
+            self._add_document(Document())
 
     @property
     def current(self):
-        return self.tabs.currentWidget()
+        return self.document_stack.currentWidget()
 
     @property
     def documents(self):
-        return [self.tabs.widget(index) for index in range(self.tabs.count())]
+        return [self.document_stack.widget(index) for index in range(self.document_stack.count())]
 
     def document_entries(self):
-        """Expose individual buffers to the application's document switcher."""
-        return [(self.tabs.tabText(index) if self.tabs.widget(index).path else f'Untitled {index+1}' +
-                 (' *' if self.tabs.widget(index).modified else ''), self.tabs.widget(index))
-                for index in range(self.tabs.count())]
+        """The host owns tab navigation; this editor has one document."""
+        return [(self.current.title if self.current else self.windowTitle(), None)]
 
     def show_error(self, error):
         qt.QMessageBox.warning(self, "Text Editor", str(error))
@@ -127,8 +111,8 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
             ("reload", "Reload from Disk", self.reload_document, None),
             (
                 "close",
-                "Close Tab",
-                lambda: self.close_tab(self.tabs.currentIndex()),
+                "Close Document",
+                self.close,
                 qt.QKeySequence.StandardKey.Close,
             ),
             ("close_all", "Close All", self.close_all, None),
@@ -154,17 +138,7 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
                 shortcut,
             )
         view = self.menuBar().addMenu("&View")
-        self.action(
-            view, "next_tab", "Next Tab", lambda: self.change_tab(1), "Ctrl+Tab"
-        )
         self._view_menu = view
-        self.action(
-            view,
-            "previous_tab",
-            "Previous Tab",
-            lambda: self.change_tab(-1),
-            "Ctrl+Shift+Tab",
-        )
 
     def edit(self, method):
         if self.current:
@@ -172,12 +146,6 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
             if editor.isReadOnly() and method in ("undo", "redo", "cut", "paste"):
                 return
             getattr(editor, method)()
-
-    def change_tab(self, direction):
-        if self.tabs.count():
-            self.tabs.setCurrentIndex(
-                (self.tabs.currentIndex() + direction) % self.tabs.count()
-            )
 
     def _recent_menu(self):
         self.recent_menu.clear()
@@ -195,14 +163,6 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
         self.statusBar().addWidget(self.position, 1)
 
     def _document_changed(self, document):
-        index = self.tabs.indexOf(document)
-        if index >= 0:
-            self.tabs.setTabText(
-                index, document.title + (" [disk]" if document.external_changed else "")
-            )
-            self.tabs.setTabToolTip(
-                index, str(document.path) if document.path else "Unsaved document"
-            )
         if document is self.current:
             self._active_changed()
 
@@ -264,6 +224,7 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
             self._preference_timer.stop()
             self._save_preferences()
             event.accept()
+            self.closed.emit()
         else:
             self._close_pending = self.task.busy
             event.ignore()

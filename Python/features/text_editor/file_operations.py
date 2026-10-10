@@ -42,14 +42,13 @@ class FileOperations:
         self.idle.emit()
 
     def new_document(self):
+        if self.current is not None or self.task.busy:
+            return self.service.open()
         return self._add_document(Document())
 
     def _add_document(self, document):
-        index = self.tabs.addTab(document, document.title)
-        self.tabs.setCurrentIndex(index)
-        self.tabs.setTabToolTip(
-            index, str(document.path) if document.path else "Unsaved new document"
-        )
+        index = self.document_stack.addWidget(document)
+        self.document_stack.setCurrentIndex(index)
         document.changed.connect(lambda: self._document_changed(document))
         self._configure_document(document)
         self._document_changed(document)
@@ -68,17 +67,34 @@ class FileOperations:
 
     def open_path(self, path, *, force=False, encoding=None):
         path = Path(path).resolve()
+        if self.task.busy and self._opening_path == path:
+            return None
+        current = self.current
+        blank = (current is not None and current.path is None and not current.modified
+                 and not current.editor.toPlainText())
+        if ((current is not None and current.path != path and not blank)
+                or self.task.busy and self._opening_path != path):
+            return self.service.open(path, force=force, encoding=encoding)
+        self._opening_path = path
         for doc in self.documents:
             if doc.path == path:
-                self.tabs.setCurrentWidget(doc)
+                self._opening_path = None
+                self.document_stack.setCurrentWidget(doc)
                 self.show()
                 self.raise_()
                 return doc
 
+        if blank:
+            self.document_stack.removeWidget(current)
+            current.deleteLater()
+            self._watch_paths()
+        self.setWindowTitle(f'{path.name} — Text Editor — Logistics')
+
         def loaded(snapshot):
+            self._opening_path = None
             # Requests can be queued; canonical paths are checked again on arrival.
             if any(doc.path == path for doc in self.documents):
-                self.tabs.setCurrentWidget(
+                self.document_stack.setCurrentWidget(
                     next(doc for doc in self.documents if doc.path == path)
                 )
                 return
@@ -94,6 +110,7 @@ class FileOperations:
             self._watch_paths()
 
         def failed(error):
+            self._opening_path = None
             if "binary file" in error and not force:
                 answer = qt.QMessageBox.warning(
                     self,
@@ -245,13 +262,7 @@ class FileOperations:
         return True
 
     def save_all(self):
-        pending = [doc for doc in self.documents if doc.modified or doc.path is None]
-
-        def step():
-            if pending:
-                self.save_document(pending.pop(0), after=step)
-
-        step()
+        self.service.save_all()
 
     def reload_document(self):
         document = self.current
@@ -283,11 +294,11 @@ class FileOperations:
     def close_tab(self, index, *, after=None):
         if self.task.busy or self._queue:
             return False
-        document = self.tabs.widget(index)
+        document = self.document_stack.widget(index)
         if document is None:
             return True
         if document.modified:
-            self.tabs.setCurrentIndex(index)
+            self.document_stack.setCurrentIndex(index)
             answer = qt.QMessageBox.question(
                 self,
                 "Unsaved text changes",
@@ -303,11 +314,11 @@ class FileOperations:
                 self.save_document(
                     document,
                     after=lambda: self.close_tab(
-                        self.tabs.indexOf(document), after=after
+                        self.document_stack.indexOf(document), after=after
                     ),
                 )
                 return False
-        self.tabs.removeTab(index)
+        self.document_stack.removeWidget(document)
         document.deleteLater()
         self._watch_paths()
         if after:
@@ -315,15 +326,14 @@ class FileOperations:
         return True
 
     def close_all(self):
-        if self.tabs.count():
-            self.close_tab(self.tabs.count() - 1, after=self.close_all)
+        self.service.close_all()
 
     def prepare_close(self):
         if self.task.busy or self._queue:
             return False
         if hasattr(self, "search") and not self.search.prepare_close():
             return False
-        for index in range(self.tabs.count() - 1, -1, -1):
+        for index in range(self.document_stack.count() - 1, -1, -1):
             if not self.close_tab(index):
                 return False
         return True

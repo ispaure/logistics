@@ -8,12 +8,15 @@ by a bounded content check rather than a restrictive extension list.
 
 ## Documents and saving
 
-Use File → New/Open to create tabs. Drag tabs to reorder; use the close button,
-middle-click or Ctrl/Cmd+W to close a tab. Ctrl+Tab switches documents. Reopening a
-file selects its existing tab. A star marks unsaved changes; closing offers Save,
-Discard or Cancel. Save keeps the original location; Save As selects a new one.
+Use File → New/Open to create document panes. Each file uses the same tabs as
+other readers; there is no second tab bar inside the editor. Drag a document tab
+to detach it or split the view; its X or Ctrl/Cmd+W closes only that document.
+Reopening a file selects its existing pane. A star marks unsaved changes; closing
+offers Save, Discard or Cancel. Save keeps the original location; Save As selects
+a new one.
 
-Save All processes modified documents in sequence. Reload from Disk asks before
+Save All saves open text documents in sequence. Close All closes text document
+panes, stopping if you cancel an unsaved-changes prompt. Reload from Disk asks before
 discarding edits. A disk-change banner offers Reload or Keep Buffer. Keeping the
 buffer does not overwrite the external version: choose Save As to preserve it.
 Failed saves keep the buffer and explain the problem. Read-only files can be
@@ -57,13 +60,13 @@ or Syntax to choose a language manually. Plain Text disables highlighting.
 
 View offers font selection, wrapping, line numbers, whitespace, automatic
 indentation and optional bracket/quote pairing. The editor follows Logistics'
-light/dark palette and uses a monospace font by default. New tabs inherit your
+light/dark palette and uses a monospace font by default. New documents inherit your
 saved preferences. Feature defaults live in `config.ini`; private overrides,
 recent files and window geometry live under the commonUtils Cache/TextEditor
 folder. **Reset Editor Preferences** removes overrides and restores feature defaults.
 
-In the main app, Text Editor opens in **Open documents**. **Detach** moves the same
-editor into a separate window; **Bring back** returns it without losing buffers.
+In the main app, Text Editor opens in **Open documents**. Drag its tab outside
+the window to detach it; **Bring back** returns it without losing edits.
 
 Disabling Text Editor removes its browser actions but retains its open
 buffers. Re-enable it to return to those documents. Browser windows do not own
