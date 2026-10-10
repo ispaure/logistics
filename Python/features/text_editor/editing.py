@@ -76,6 +76,16 @@ class EditingCommands:
             ),
         ]:
             self.action(self._edit_menu, key, label, callback, shortcut)
+        transforms = self._edit_menu.addMenu("Text Transformations")
+        for key, label in [
+            ("sort", "Sort Lines Ascending"), ("sort_reverse", "Sort Lines Descending"),
+            ("unique", "Remove Duplicate Lines"), ("trim", "Trim Trailing Whitespace"),
+            ("upper", "UPPERCASE"), ("lower", "lowercase"), ("title", "Title Case"),
+            ("tabs_to_spaces", "Tabs to Spaces"), ("spaces_to_tabs", "Leading Spaces to Tabs"),
+            ("number", "Number Lines…"),
+        ]:
+            self.action(transforms, "transform_" + key, label,
+                        lambda key=key: self.transform_text(key))
         for key, label in [
             ("wrap", "Word Wrap"),
             ("numbers", "Line Numbers"),
@@ -314,3 +324,13 @@ class EditingCommands:
 
     def _preferences_changed(self):
         pass
+
+    def transform_text(self, command):
+        if not self.current:
+            return
+        start = 1
+        if command == "number":
+            start, accepted = qt.QInputDialog.getInt(self, "Number Lines", "Starting number:", 1)
+            if not accepted:
+                return
+        self.current.editor.transform(command, start=start)
