@@ -10,17 +10,17 @@ import sys
 from commonUtils.ui import pyside as qt
 from ..preferences import Preferences
 from ..repository import Repository, clone, initialize
-from ..runner import CommandResult, redact
+from ..runner import redact
 from .changes import ChangesPanel
 from .dialogs import FormDialog
 from .history import HistoryPanel
 from .preview import Preview
-from .worker import GitWorker
+from .jobs import GitJobs
 from .repository_tools import RepositoryTools
 from .chrome import toolbar_button, WORKSPACE_STYLE
 
 
-class GitPage(qt.QWidget):
+class GitPage(GitJobs, qt.QWidget):
     idle = qt.Signal()
 
     def __init__(self, parent=None, *, preferences_path=None):
@@ -269,66 +269,6 @@ class GitPage(qt.QWidget):
             trim.setPosition(count - 1024 * 1024, qt.QTextCursor.MoveMode.KeepAnchor)
             trim.removeSelectedText()
         self.log.setTextCursor(cursor)
-
-    def _job(self, label, action, after=None, *, refresh=False):
-        if self.busy or self.closing: return False
-        self._message(label + '…')
-        self._append_log('\n' + label + '\n')
-        self._set_busy(True)
-        worker = GitWorker(self.preferences.executable, action, self)
-        self.worker = worker
-        worker.progress.connect(self._append_log)
-        worker.finished.connect(lambda: self._finished(worker, label, after, refresh))
-        worker.start()
-        return True
-
-    def _finished(self, worker, label, after, refresh):
-        self.worker = None
-        self._set_busy(False)
-        error = worker.error
-        result = worker.result
-        worker.deleteLater()
-        if self.closing:
-            self.idle.emit()
-            return
-        if error:
-            self._message(error, error=not worker.cancelled)
-            self._append_log(error + '\n')
-            self.log_toggle.setChecked(True)
-        else:
-            self._message(label + ' completed.')
-            if isinstance(result, CommandResult) and result.stdout:
-                self._append_log(result.stdout[-65536:].decode('utf-8', 'replace') + '\n')
-            if after:
-                try: after(result)
-                except (OSError, ValueError) as exc: self._message(str(exc), error=True)
-        if (refresh or self._refresh_pending) and self.path and not self.busy:
-            # Refresh even after failure: merge conflicts and cancellation can
-            # leave valid new repository state. Keep the operation error visible.
-            self._refresh_pending = False
-            self._refresh(error)
-        if not self.busy:
-            if getattr(self, '_focus_search_pending', False):
-                self._focus_search_pending = False
-                self.history.search.setFocus()
-            self.idle.emit()
-
-    def _operation(self, label, action, after=None):
-        if self.path is None: return
-        path = self.path
-        return self._job(label, lambda runner: action(Repository(path, runner)), after, refresh=True)
-
-    def cancel(self):
-        if self.worker:
-            self.worker.cancel()
-            self._message('Cancellation requested…')
-
-    def prepare_close(self):
-        self.closing = True
-        if self.worker:
-            self.cancel()
-            return False
-        return True
 
     def can_close(self):
         return self._discard_draft()
