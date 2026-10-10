@@ -70,8 +70,10 @@ code. Unsupported definitions fall back to plain text.
   at 1,000 matches and is omitted for large files. Regex patterns have PCRE resource limits.
 - Private session checkpoints run in a serialized background executor, with atomic
   replacement and fsync. Per-session QLockFile ownership prevents concurrent-instance
-  overwrite/restoration. Original bytes remain the save-conflict baseline for dirty
-  restored files; clean files reload current disk content.
+  overwrite/restoration. Closing the last editor releases its recovery writer and
+  lock; late document callbacks cannot restart them until another editor opens.
+  Original bytes remain the save-conflict baseline for dirty restored files; clean
+  files reload current disk content.
 - Individual document closure prompts for modified buffers. Application shutdown or
   explicit session suspension waits for the latest durable checkpoint and retains
   buffers without saving originals. Recovery failure falls back to normal prompts.
@@ -112,5 +114,5 @@ recovery failure paths. The reusable `test_code*.py`, `test_session_store.py`,
 `test_text_files.py` and `test_workspace.py` suites cover the shared components.
 `test_document_workspace.py`, `test_main_window.py` and
 `test_application_instance.py` cover surrounding Logistics integration. These are
-headless macOS Qt checks; Windows/Linux native interaction still needs platform
-validation. New UI surfaces have also been rendered and inspected in both themes.
+headless Qt checks run on macOS, Windows, Ubuntu, and Fedora 43 in CI; native
+desktop interaction still benefits from manual validation. New UI surfaces have also been rendered and inspected in both themes.

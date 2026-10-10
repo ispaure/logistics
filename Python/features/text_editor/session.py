@@ -112,7 +112,7 @@ class EditorSession(qt.QObject):
                 self.error = str(error)
 
     def changed(self, *args):
-        if self.restoring or self.suspended:
+        if self.restoring or self.suspended or not self.service.windows:
             return
         self.revision += 1
         if not self.timer.isActive():
@@ -127,7 +127,7 @@ class EditorSession(qt.QObject):
         return {"version": 1, "documents": documents, "active": active}
 
     def checkpoint(self):
-        if self.restoring or self.suspended or self.future is not None:
+        if self.restoring or self.suspended or self.future is not None or not self.service.windows:
             return
         self.start()
         if self.lock is None or not self.lock.isLocked():

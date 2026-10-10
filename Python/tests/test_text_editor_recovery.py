@@ -52,6 +52,28 @@ class EditorRecoveryTests(unittest.TestCase):
         self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
         self.temp.cleanup()
 
+    def test_late_checkpoint_after_last_window_closes_does_not_reopen_session_lock(self):
+        service = self.service()
+        service.open()
+        service.open()
+        service.close_all()
+        self.wait(lambda: not service.windows)
+        session = service.session
+        try:
+            # Deferred document/scroll signals and an already queued timeout can
+            # arrive after close. They must not create an orphan recovery writer.
+            session.changed()
+            session.checkpoint()
+            self.assertIsNone(session.lock)
+            self.assertIsNone(session.executor)
+            self.assertFalse(session.timer.isActive())
+            self.assertFalse(session.store.path.with_suffix('.lock').exists())
+            service.open()
+            self.assertTrue(session.lock.isLocked())
+        finally:
+            if not service.windows:
+                session.last_window_closed(False)
+
     def test_suspend_restore_unsaved_views_cursor_and_original_disk_conflict(self):
         service = self.service()
         path = self.root / "bom.txt"
