@@ -286,7 +286,7 @@ class ComicsTests(unittest.TestCase):
     def test_copy_failure_preserves_original(self):
         path = self.archive()
         before = path.read_bytes()
-        with patch.object(cbz.fileUtils, 'copy_file', return_value=False):
+        with patch.object(cbz.fileUtils.File, 'copy_file', side_effect=OSError('copy failed')):
             self.assertFalse(cbz.CBZFile(path).compress_to_webp(True))
         self.assertEqual(path.read_bytes(), before)
 
@@ -516,7 +516,7 @@ class ComicsTests(unittest.TestCase):
     def test_individual_folder_move_copy_failure_keeps_original(self):
         path = self.archive()
         before = path.read_bytes()
-        with patch.object(actions.fileUtils, 'copy_file', return_value=False):
+        with patch.object(actions.fileUtils.File, 'copy_file', side_effect=OSError('copy failed')):
             self.assertFalse(actions.move_cbz_to_individual_folders(self.root))
         self.assertEqual(path.read_bytes(), before)
 

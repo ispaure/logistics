@@ -122,8 +122,7 @@ def move_cbz_to_individual_folders(target_dir, *, progress=lambda done, total, m
         if new_path.exists() or new_path.is_symlink():
             raise FileExistsError(f'Destination already exists: {new_path}. Original kept.')
         fileUtils.make_dir(dir_path)
-        if not fileUtils.copy_file(file.path, new_path):
-            raise OSError(f'Failed to copy {file.path}. Original kept.')
+        file.copy_file(new_path)
         if not file.delete_file():
             raise OSError(f'Copied {file.path}, but failed to delete the original.')
         return True

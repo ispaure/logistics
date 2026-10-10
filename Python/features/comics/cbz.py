@@ -295,8 +295,7 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
             kept_img_result_file_path = temp_dir_result / kept_image_cls.path.relative_to(source_root)
 
             # Copy image in Result folder
-            if not fileUtils.copy_file(kept_image_cls.path, kept_img_result_file_path):
-                raise OSError(f'Could not copy page: {kept_image_cls.path}')
+            kept_image_cls.copy_file(kept_img_result_file_path)
 
         # --------------------------------------------------------------------------------------------------------------
         # STEP SEVEN: WRAP-UP OTHER FILES
