@@ -5,17 +5,21 @@ from .chrome import action_icon
 
 def populate_navigation(page, snapshot):
     tree = page.refs
+    expanded = ({tree.topLevelItem(i).text(0): tree.topLevelItem(i).isExpanded()
+                 for i in range(tree.topLevelItemCount())}
+                if getattr(page, '_navigation_root', None) == snapshot.root else {})
+    page._navigation_root = snapshot.root
     with qt.QSignalBlocker(tree):
         tree.clear()
         groups = {}
         for title in ('WORKSPACE','BRANCHES','TAGS','REMOTES','STASHES','SUBMODULES','SUBTREES'):
             item = qt.QTreeWidgetItem([title])
             item.setFlags(item.flags() & ~qt.Qt.ItemFlag.ItemIsSelectable)
-            item.setSizeHint(0,qt.QSize(0,tree.fontMetrics().height()+(6 if title == 'WORKSPACE' else 14)))
+            item.setSizeHint(0,qt.QSize(0,tree.fontMetrics().height()+18))
             item.setForeground(0,tree.palette().brush(qt.QPalette.ColorRole.PlaceholderText))
             item.setIcon(0,action_icon({'WORKSPACE':'folder','BRANCHES':'branch','TAGS':'commit','REMOTES':'remote','STASHES':'stash','SUBMODULES':'folder','SUBTREES':'branch'}[title]))
             font = item.font(0); font.setBold(True); item.setFont(0,font)
-            tree.addTopLevelItem(item); item.setExpanded(True)
+            tree.addTopLevelItem(item); item.setExpanded(expanded.get(title, title != 'TAGS'))
             groups[title] = item
         page.workspace_items = []
         for index, title in enumerate((f'File status ({len(snapshot.status.changes)})','History','Search')):

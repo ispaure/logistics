@@ -10,5 +10,5 @@ def create_page(parent=None):
 def register():
     return Feature(
         id='aviation_tools', label='Aviation Tools',
-        pages=[PageContribution('Aviation Tools', 'aviation_tools', create_page, order=40)],
+        pages=[PageContribution('Aviation Tools', 'aviation_tools', create_page, order=40, navigation_icon='aviation')],
     )

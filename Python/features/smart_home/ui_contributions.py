@@ -23,7 +23,8 @@ def get_contributions() -> Feature:
                 name='Smart Home',
                 page_id='smart_home',
                 create_page=_create_page,
-                order=30
+                order=30,
+                navigation_icon='smart_home'
             )
         ]
     )

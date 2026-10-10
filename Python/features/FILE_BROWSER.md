@@ -2,7 +2,7 @@
 
 This is the Logistics integration guide for adding information panels, thumbnails,
 right-click actions and double-click behavior. Reusable APIs and standalone examples
-live in the [commonUtils feature guide](../commonUtils/docs/FEATURES.md) and
+live in the [commonUtils feature guide](../commonUtils/ui/features/README.md) and
 [browser reference](../commonUtils/ui/README.md). Keep feature READMEs focused on
 their domain rules and link here for browser wiring.
 
@@ -120,7 +120,7 @@ handlers receive it as `context.controller`. `context.host` is the dialog parent
 and `context.browser` the shared component. Do not put widgets or worker state in
 the globally cached feature declaration. A feature-specific host may pass its
 existing controller to `Feature.install_browser`; retain the returned binding.
-The [shared guide](../commonUtils/docs/FEATURES.md) documents explicit installation.
+The [shared guide](../commonUtils/ui/features/README.md) documents explicit installation.
 
 Session toggles deactivate owned type rules, actions, activation and folder fields.
 Cached browser objects are re-resolved after registry revisions; existing file

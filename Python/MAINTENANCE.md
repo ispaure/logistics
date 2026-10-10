@@ -93,4 +93,4 @@ into an archive rewrite that must finish its current transaction.
 Other integrations still have synchronous work; this change does not imply that
 all Folders actions or external processes have cancellation support. See the
 [UI ownership guide](features/UI_ARCHITECTURE.md#long-running-workflows-and-safe-closing)
-and [commonUtils recipes](commonUtils/docs/RECIPES.md) before extending a workflow.
+and [commonUtils recipes](commonUtils/ui/operation_progress.md) before extending a workflow.

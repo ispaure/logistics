@@ -38,6 +38,7 @@ class Snapshot:
     operation: str = ''
     more_history: bool = False
     submodule_paths: tuple[str, ...] = ()
+    display_name: str = ''
 
 
 
@@ -104,7 +105,12 @@ class Repository:
         config = self.run(['config', '--file', '.gitmodules', '--null', '--get-regexp', r'^submodule\..*\.path$'], check=False)
         if config.returncode not in (0,1): raise GitError(config.stderr)
         submodule_paths = tuple(os.fsdecode(record.partition(b'\n')[2]) for record in config.stdout.split(b'\0') if b'\n' in record)
-        return Snapshot(root, status, commits[:limit], refs, remotes, stashes, self.operation(), len(commits) > limit, submodule_paths)
+        superproject = self.run(['rev-parse', '--show-superproject-working-tree']).stdout.removesuffix(b'\n')
+        display_name = root.name
+        if superproject:
+            parent = Path(os.fsdecode(superproject))
+            display_name = parent.name + '/' + root.relative_to(parent).as_posix()
+        return Snapshot(root, status, commits[:limit], refs, remotes, stashes, self.operation(), len(commits) > limit, submodule_paths, display_name)
 
     def diff(self, path, *, staged=False, ignore_whitespace=False):
         result = self.run(['diff', '--no-ext-diff', '--no-textconv', *(['--cached'] if staged else []),

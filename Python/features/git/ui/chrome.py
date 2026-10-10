@@ -9,10 +9,11 @@ from commonUtils.ui import pyside as qt
 WORKSPACE_STYLE = '''
 QWidget#gitWorkspace QTreeWidget::item,
 QWidget#gitWorkspace QTreeWidget::item:hover,
-QWidget#gitWorkspace QTreeWidget::item:selected { padding: 1px 4px; margin: 0; }
+QWidget#gitWorkspace QTreeWidget::item:selected { padding: 2px 4px; margin: 0; }
 QWidget#gitWorkspace QHeaderView::section { padding: 2px 4px; }
 QWidget#gitWorkspace QWidget#gitSidebar { background: palette(alternate-base); }
 QWidget#gitWorkspace QWidget#gitSidebar QTreeWidget { background: transparent; border: none; }
+QWidget#gitWorkspace QWidget#gitSidebar QTreeWidget::item { padding: 3px 4px; }
 QWidget#gitWorkspace QWidget#gitSidebar QTreeWidget::item:selected { background: #ed851b; color: white; }
 QWidget#gitWorkspace QWidget#gitToolbar QToolButton { padding: 4px; border: none; }
 QWidget#gitWorkspace QTabWidget::pane { border: none; }
