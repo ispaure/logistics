@@ -113,6 +113,6 @@ Run `test_text_editor*.py` for feature lifecycle, commands, diff, split views an
 recovery failure paths. The reusable `test_code*.py`, `test_session_store.py`,
 `test_text_files.py` and `test_workspace.py` suites cover the shared components.
 `test_document_workspace.py`, `test_main_window.py` and
-`test_application_instance.py` cover surrounding Logistics integration. These are
+`test_application_instance.py` cover surrounding Logistics integration. These
 headless Qt checks run on macOS, Windows, Ubuntu, and Fedora 43 in CI; native
 desktop interaction still benefits from manual validation. New UI surfaces have also been rendered and inspected in both themes.
