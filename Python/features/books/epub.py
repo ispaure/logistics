@@ -63,6 +63,7 @@ class EPUBBook:
             with ZipFile(self.path) as archive:
                 infos = archive.infolist()
                 self.members = {info.filename for info in infos}
+                self.resource_sizes = {info.filename: info.file_size for info in infos}
                 if len(infos) > MAX_MEMBERS or sum(info.file_size for info in infos) > MAX_TOTAL:
                     raise BookError('This EPUB exceeds the supported archive size limits.')
                 if len(self.members) != len(infos):
@@ -110,6 +111,24 @@ class EPUBBook:
                             if resource in self.spine:
                                 raise BookError('DRM-encrypted chapters are not supported.')
                 self.chapters = self._navigation(archive, spine)
+                self.section_offsets = {}
+                for target in {entry.path for entry in self.chapters if entry.fragment}:
+                    document = parse_xml(self._read(archive, target))
+                    body = next((node for node in document.iter()
+                                 if node.tag.rsplit('}', 1)[-1] == 'body'), document)
+                    offsets, length = {}, 0
+                    def visit(node):
+                        nonlocal length
+                        anchor = node.get('id') or node.get('name')
+                        if anchor:
+                            offsets[anchor] = length
+                        length += len(node.text or '')
+                        for child in node:
+                            visit(child)
+                            length += len(child.tail or '')
+                    visit(body)
+                    self.section_offsets.update({(target, anchor): offset / max(1, length)
+                                                 for anchor, offset in offsets.items()})
                 self.signature = self._signature()
         except (BadZipFile, KeyError, UnicodeError) as error:
             raise BookError(f'Cannot read EPUB: {error}') from error

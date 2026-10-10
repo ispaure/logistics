@@ -16,7 +16,7 @@ class BookNavigation(qt.QObject):
                 or event.key() not in (qt.Qt.Key.Key_Left, qt.Qt.Key.Key_Right)):
             return False
         # Do not steal arrows from find fields, appearance controls or dialogs.
-        panes = (self.page.text, self.page.chapters, self.page.bookmark_list)
+        panes = (self.page.text, self.page.spread.second, self.page.chapters, self.page.bookmark_list)
         if not any(watched is pane or pane.isAncestorOf(watched) for pane in panes):
             return False
         event.accept()
