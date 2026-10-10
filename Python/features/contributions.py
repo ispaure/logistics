@@ -148,6 +148,7 @@ class PageContribution:
     page_id: str
     create_page: Callable[[Any], Any]
     order: int = 0
+    navigation_icon: str | None = None
 
 
 @dataclass(frozen=True)

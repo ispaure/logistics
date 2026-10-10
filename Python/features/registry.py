@@ -95,6 +95,11 @@ def get_feature_names() -> list[str]:
         if not path.is_dir():
             continue
 
+        if path.name == 'emulation':
+            from services.ally_integration import is_active
+            if not is_active(path):
+                continue
+
         if path.name.startswith('_'):
             continue
 
