@@ -123,10 +123,14 @@ class DocumentWorkspaceTests(QtTestCase):
                 self.assertFalse(self.page.prepare_close())
                 self.assertTrue(self.page.close_veto)
             self.page.detach_current(); self.page.attach(editor); self.settle()
+            self.assertEqual(self.page.attached_count, 1)
+            self.assertTrue(document_is_open(editor))
             self.assertEqual(editor.current.editor.toPlainText(), 'dirty buffer')
             editor.current.editor.document().setModified(False)
             self.page.close_tab(0); self.settle()
             self.assertEqual(self.page.attached_count, 0)
+            self.assertEqual(editor.service.windows, [])
+            self.assertIsNone(editor.service.session.lock)
 
     def test_origin_controller_leaves_hosted_document_alive(self):
         from features.books.controller import BooksController
