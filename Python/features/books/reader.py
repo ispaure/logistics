@@ -239,21 +239,11 @@ class BooksPage(qt.QWidget):
         self.text.setFocus()
 
     def _populate_chapters(self):
-        self.chapters.clear()
-        self._chapter_items = {}
-        parents = []
-        for chapter in self.book.chapters:
-            item = qt.QTreeWidgetItem([chapter.label])
-            item.setToolTip(0, chapter.label)
-            item.setData(0, qt.Qt.ItemDataRole.UserRole, chapter)
-            self._chapter_items[(chapter.path, chapter.fragment)] = item
-            depth = min(chapter.depth, len(parents))
-            if depth:
-                parents[depth - 1].addChild(item)
-            else:
-                self.chapters.addTopLevelItem(item)
-            parents[depth:] = [item]
-        self.chapters.expandAll()
+        from commonUtils.ui.outline import OutlineEntry
+        self.chapters.set_entries(OutlineEntry((chapter.path, chapter.fragment), chapter.label,
+                                               chapter, chapter.depth)
+                                  for chapter in self.book.chapters)
+        self._chapter_items = self.chapters.items_by_id
 
     def _chapter_selected(self, item, column=0):
         if self.worker:
@@ -440,11 +430,11 @@ class BooksPage(qt.QWidget):
 
     def _populate_bookmarks(self):
         self.bookmarks.clear()
-        self.bookmark_list.clear()
+        from commonUtils.ui.outline import OutlineEntry
+        self.bookmark_list.set_entries(OutlineEntry(index, item['label'], item)
+                                      for index, item in enumerate(self._bookmarks))
         for item in self._bookmarks:
             self.bookmarks.addItem(item['label'])
-            self.bookmark_list.addItem(item['label'])
-            self.bookmark_list.item(self.bookmark_list.count() - 1).setToolTip(item['label'])
         self.remove_bookmark.setEnabled(bool(self._bookmarks) and self.worker is None)
 
     def add_bookmark(self):

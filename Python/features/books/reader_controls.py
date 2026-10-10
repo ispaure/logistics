@@ -112,7 +112,8 @@ def build_controls(page):
     page.sidebar = qt.QTabWidget()
     page.sidebar.setMinimumWidth(170)
     page.sidebar.setMaximumWidth(420)
-    page.chapters = qt.QTreeWidget()
+    from commonUtils.ui.outline import OutlineTree, OutlineList
+    page.chapters = OutlineTree()
     page.chapters.setHeaderHidden(True)
     page.chapters.setAccessibleName('Book table of contents')
     page.chapters.itemClicked.connect(page._chapter_selected)
@@ -122,7 +123,7 @@ def build_controls(page):
     bookmarks_layout = qt.QVBoxLayout(bookmarks_panel)
     bookmarks_layout.setContentsMargins(8, 8, 8, 8)
     bookmarks_layout.setSpacing(8)
-    page.bookmark_list = qt.QListWidget()
+    page.bookmark_list = OutlineList()
     page.bookmark_list.setAccessibleName('Bookmarked places')
     page.bookmark_list.itemActivated.connect(lambda item: page.open_bookmark(page.bookmark_list.row(item)))
     page.bookmark_list.itemClicked.connect(lambda item: page.open_bookmark(page.bookmark_list.row(item)))

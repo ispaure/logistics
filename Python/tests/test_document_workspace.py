@@ -288,6 +288,9 @@ class DocumentWorkspaceTests(QtTestCase):
 
 
 class PublicCloseContractTests(QtTestCase):
+    def setUp(self):
+        self.app = qt.QApplication.instance() or qt.QApplication([])
+
     def test_pending_owner_does_not_need_private_worker_attributes(self):
         from commonUtils.ui.document_host import CloseOutcome
         host = qt.QMainWindow()
