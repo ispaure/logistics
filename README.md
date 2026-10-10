@@ -80,6 +80,8 @@ separately, and some integrations need their own software or setup. The
 | [File Tools](Python/features/file_tools/user_docs/index.md) | Check filenames and remove Python bytecode files |
 | [System Tools](Python/features/system_tools/user_docs/index.md) | Run platform-specific maintenance tools |
 
+Additional emulator tools are available on request through ispaure’s **ally-tools**.
+
 ## Learn more
 
 - [User guide](USER_GUIDE.md): using the app and its tools.

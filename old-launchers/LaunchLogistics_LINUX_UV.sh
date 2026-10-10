@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 PROJECT_ROOT="$(cd -- "$(dirname -- "$0")" && pwd)"
 CONFIG_FILE="$PROJECT_ROOT/launch_config.ini"
@@ -30,7 +30,7 @@ if [[ -z "$COMMONUTILS_ROOT" ]]; then
     exit 1
 fi
 
-LAUNCHER="$PROJECT_ROOT/$COMMONUTILS_ROOT/launchers/LaunchPythonProject_MAC.command"
+LAUNCHER="$PROJECT_ROOT/$COMMONUTILS_ROOT/launchers/LaunchPythonProject_LINUX_UV.sh"
 
 if [[ ! -f "$LAUNCHER" ]]; then
     echo "ERROR: Shared Python launcher was not found:"
@@ -38,18 +38,5 @@ if [[ ! -f "$LAUNCHER" ]]; then
     exit 1
 fi
 
-export LOGISTICS_ROOT="$PROJECT_ROOT"
-unset LOGISTICS_ALLY_ROOT
-ENVIRONMENT_ROOT="$PROJECT_ROOT"
-ALLY_ROOT="$(dirname -- "$PROJECT_ROOT")/ally-tools"
-if [[ -d "$ALLY_ROOT" ]]; then
-    if [[ ! -f "$ALLY_ROOT/Python/pyproject.toml" || ! -f "$ALLY_ROOT/logistics_launch.ini" || ! -f "$ALLY_ROOT/Python/ally_feature/__init__.py" ]]; then
-        echo "ERROR: Sibling ally-tools is missing its dependency manifest, Logistics launch config, or feature package." >&2
-        exit 1
-    fi
-    ENVIRONMENT_ROOT="$ALLY_ROOT"
-    CONFIG_FILE="$ALLY_ROOT/logistics_launch.ini"
-    echo "Using private Ally environment: $ALLY_ROOT/.venv"
-fi
-/bin/bash "$LAUNCHER" "$ENVIRONMENT_ROOT" "$CONFIG_FILE" "$PAUSE_AFTER_COMPLETED"
+bash "$LAUNCHER" "$PROJECT_ROOT" "$CONFIG_FILE" "$PAUSE_AFTER_COMPLETED"
 exit $?

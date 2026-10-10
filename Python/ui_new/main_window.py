@@ -111,6 +111,7 @@ class MainWindow(pyside.Window):
         for registered in pages:
             contribution = registered.contribution
             page = contribution.create_page(self.dlg)
+            page.setProperty('navigation_icon', contribution.navigation_icon)
             self._feature_pages[(registered.feature_name, contribution.page_id)] = page
             tabs.append(
                 (
@@ -175,6 +176,7 @@ class MainWindow(pyside.Window):
             key = (registered.feature_name, contribution.page_id)
             if key not in self._feature_pages:
                 self._feature_pages[key] = contribution.create_page(self.dlg)
+                self._feature_pages[key].setProperty('navigation_icon', contribution.navigation_icon)
             entries.append((contribution.order, contribution.name, self._feature_pages[key]))
         with pyside.QSignalBlocker(self.tabs):
             while self.tabs.count():

@@ -237,6 +237,27 @@ class MainWindowTests(unittest.TestCase):
         self.addCleanup(window.dlg.deleteLater)
         return window
 
+    def test_feature_destination_button_selects_page_and_survives_toggle(self):
+        contribution = RegisteredContribution('private', 'Private', PageContribution(
+            'Private page', 'private.main', self.page, order=20, navigation_icon='controller'))
+        window = self.window([contribution])
+        feature_page = window._feature_pages[('private', 'private.main')]
+        key = next(iter(window.sidebar.feature_buttons))
+        button = window.sidebar.buttons[key]
+        self.assertFalse(button.isHidden())
+        self.assertNotIn('Private page', [action.text() for action in window.sidebar.tools_menu.actions()])
+        button.click()
+        self.assertIs(window.tabs.currentWidget(), feature_page)
+        self.assertTrue(button.isChecked())
+        with patch.object(main_window.registry, 'get_pages', return_value=[]):
+            window._sync_feature_pages()
+        self.assertTrue(button.isHidden())
+        with patch.object(main_window.registry, 'get_pages', return_value=[contribution]):
+            window._sync_feature_pages()
+        self.assertFalse(button.isHidden())
+        self.assertIs(window.sidebar.buttons[key], button)
+        self.assertEqual(len(window.sidebar.feature_buttons), 1)
+
     def test_startup_failure_waits_for_previously_created_worker(self):
         class WorkingPage(qt.QWidget):
             def __init__(self, parent=None):

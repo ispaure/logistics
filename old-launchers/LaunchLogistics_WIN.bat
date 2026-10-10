@@ -38,21 +38,5 @@ if not exist "%LAUNCHER%" (
     exit /b 1
 )
 
-set "LOGISTICS_ROOT=%PROJECT_ROOT%"
-set "LOGISTICS_ALLY_ROOT="
-set "ENVIRONMENT_ROOT=%PROJECT_ROOT%"
-for %%I in ("%PROJECT_ROOT%..\ally-tools") do set "ALLY_ROOT=%%~fI"
-if exist "%ALLY_ROOT%\." (
-    if not exist "%ALLY_ROOT%\Python\pyproject.toml" goto :InvalidAlly
-    if not exist "%ALLY_ROOT%\logistics_launch.ini" goto :InvalidAlly
-    if not exist "%ALLY_ROOT%\Python\ally_feature\__init__.py" goto :InvalidAlly
-    set "ENVIRONMENT_ROOT=%ALLY_ROOT%"
-    set "CONFIG_FILE=%ALLY_ROOT%\logistics_launch.ini"
-    echo Using private Ally environment.
-)
-call "%LAUNCHER%" "%ENVIRONMENT_ROOT%" "%CONFIG_FILE%" "%PAUSE_AFTER_COMPLETED%"
+call "%LAUNCHER%" "%PROJECT_ROOT%" "%CONFIG_FILE%" "%PAUSE_AFTER_COMPLETED%"
 exit /b %ERRORLEVEL%
-
-:InvalidAlly
-echo ERROR: Sibling ally-tools is missing its dependency manifest, Logistics launch config, or feature package.
-exit /b 1

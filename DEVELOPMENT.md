@@ -70,3 +70,23 @@ The independent feature and its application document lifecycle live in
 explains module boundaries, limits and tests. Reusable text-file IO and code-editor
 widgets belong to the existing commonUtils submodule. Pygments 2.19.2 is pinned
 in the same project/lockfile; no separate editor environment is introduced.
+
+## Optional sibling Ally integration
+
+The three root launchers detect a sibling `ally-tools/Python/ally_feature` package.
+They retain Logistics’ shared commonUtils launcher, but pass the Ally project root
+and its `logistics_launch.ini` so dependency sync and execution use Ally’s manifest,
+lockfile and `.venv`. Existing locks are never deleted on launch. Originals of the
+root launchers are saved in `old-launchers` as historical copies (their relative
+paths assume the root, so they are not directly runnable from that folder).
+
+Ally’s private bootstrap calls `services.ally_integration.activate`, which creates
+an ignored `Python/features/emulation` symlink (Unix) or junction (Windows).
+It updates existing links but refuses to overwrite an ordinary directory/file.
+Feature discovery only includes that package when this bootstrap has activated
+it; direct Logistics startup still works with a leftover link and its own venv.
+
+`PageContribution.navigation_icon` optionally promotes a feature page from the
+Tools menu to a dedicated destination below the existing top-left buttons. The
+`controller` icon is supported. The page and all emulator-specific source remain
+in the sibling repository. Shared commonUtils source and dependencies are unchanged.

@@ -35,6 +35,19 @@ class DestinationIcon(qt.QIconEngine):
             painter.drawPolyline(qt.QPolygonF([qt.QPointF(3, 6), qt.QPointF(3, 21), qt.QPointF(17, 21)]))
             for y in (8, 12, 16):
                 painter.drawLine(qt.QLineF(10, y, 17, y))
+        elif self.name == 'controller':
+            path = qt.QPainterPath()
+            path.moveTo(7, 7); path.lineTo(17, 7)
+            path.cubicTo(21, 7, 24, 20, 20, 20)
+            path.cubicTo(18, 20, 17, 16, 15, 16)
+            path.lineTo(9, 16)
+            path.cubicTo(7, 16, 6, 20, 4, 20)
+            path.cubicTo(0, 20, 3, 7, 7, 7)
+            painter.drawPath(path)
+            painter.drawLine(qt.QLineF(5, 11, 11, 11))
+            painter.drawLine(qt.QLineF(8, 8, 8, 14))
+            painter.drawEllipse(qt.QPointF(17, 10), .8, .8)
+            painter.drawEllipse(qt.QPointF(19, 13), .8, .8)
         elif self.name == 'tools':
             for x in (4, 14):
                 for y in (4, 14):
@@ -89,6 +102,11 @@ class DestinationRail(qt.QWidget):
                            ('documents', 'Open documents'), ('actions', 'Folder Actions'), ('tools', 'Tools')]:
             button = self._button(key, title)
             layout.addWidget(button)
+        self.feature_destinations = qt.QVBoxLayout()
+        self.feature_destinations.setContentsMargins(0, 0, 0, 0)
+        self.feature_destinations.setSpacing(8)
+        layout.addLayout(self.feature_destinations)
+        self.feature_buttons = set()
         layout.addStretch()
         layout.addWidget(self._button('settings', 'Settings'))
         self.tools_menu = qt.QMenu(self)
@@ -109,9 +127,9 @@ class DestinationRail(qt.QWidget):
         self.buttons['documents'].hide()
         self.buttons['actions'].hide()
 
-    def _button(self, key, title):
+    def _button(self, key, title, icon=None):
         button = ActivityButton(self) if key == 'actions' else qt.QToolButton(self)
-        set_painted_icon(button, DestinationIcon, key)
+        set_painted_icon(button, DestinationIcon, icon or key)
         button.setIconSize(qt.QSize(26, 26))
         button.setFixedSize(46, 42)
         button.setCheckable(True)
@@ -127,6 +145,8 @@ class DestinationRail(qt.QWidget):
     def refresh(self, tabs, core):
         core = {page: (order, name) for order, name, page in core}
         self.pages = {}
+        for key in self.feature_buttons:
+            self.buttons[key].hide()
         self.tools_menu.clear()
         for index in range(tabs.count()):
             page = tabs.widget(index)
@@ -138,6 +158,13 @@ class DestinationRail(qt.QWidget):
             key = ('browser' if info and info[0] == 0 else
                    'hub' if info and info[0] == 5 else
                    'settings' if info and info[1] == 'Settings' else None)
+            icon = page.property('navigation_icon')
+            if key is None and icon:
+                key = f'feature:{id(page)}'
+                if key not in self.buttons:
+                    self.feature_destinations.addWidget(self._button(key, tabs.tabText(index), icon))
+                    self.feature_buttons.add(key)
+                self.buttons[key].show()
             if key:
                 self.pages[key] = page
             else:
