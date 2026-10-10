@@ -183,7 +183,7 @@ class BrowserWindowTests(QtTestCase):
             source.workspace.arrange(dock, placement)
             self.app.processEvents()
             if placement != 'tabs':
-                other = source.workspace.docks[1]
+                other = next(candidate for candidate in source.workspace.docks if candidate is not dock)
                 self.assertFalse(dock.geometry().intersects(other.geometry()))
                 self.assertEqual(dock.geometry().left() < other.geometry().left(), placement == 'left')
         source.workspace._activate(dock)
