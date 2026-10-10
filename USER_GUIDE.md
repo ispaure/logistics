@@ -16,6 +16,7 @@ stays at the bottom. Switching destinations retains each view's state.
 | --- | --- |
 | File Browser | Browse your home folder or open another location; use file/folder right-click tools |
 | Folder Hub | Choose a source/folder and use detected library, server or remote actions |
+| [Git](Python/features/git/user_docs/index.md) | Clone/open repositories, inspect history, commit changes, and manage branches, remotes, submodules and subtrees |
 | Settings | Enable features, manage credential packages and edit configuration |
 | Tools → Debug | File/media/maintenance tools, Open File Browser and Bulk Rename |
 | Settings → Features | Enable/disable integrations using feature toggle cards |

@@ -58,6 +58,7 @@ separately, and some integrations need their own software or setup. The
 | Tool | Use it to… |
 | --- | --- |
 | File Browser | Browse, search, preview files and explore storage usage |
+| [Git](Python/features/git/user_docs/index.md) | Clone repositories, browse history, stage and commit changes, manage branches and remotes |
 | Bulk Rename | Preview and apply changes to many filenames at once |
 | [Text Editor](Python/features/text_editor/user_docs/index.md) | Edit text and code in tabs, search/replace, and preserve file encodings |
 | [Books & Comics](Python/features/books/user_docs/index.md) | Read EPUBs and comics, edit metadata, and manage or compress comic archives |
