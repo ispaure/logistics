@@ -37,6 +37,27 @@ class GitBackendTests(unittest.TestCase):
         self.repo.commit(message)
         return self.repo.status().oid
 
+    def test_commit_changed_files_include_root_deleted_and_literal_paths(self):
+        first=self.commit('[literal].txt','first\n')
+        self.assertEqual([(e.path,e.mode) for e in self.repo.commit_files(first)],[('[literal].txt','A')])
+        self.assertIn('+first',self.repo.commit_file_diff(first,'[literal].txt'))
+        (self.repo.path/'[literal].txt').unlink()
+        self.repo.stage(['[literal].txt']); self.repo.commit('Delete')
+        deleted=self.repo.status().oid
+        self.assertEqual([(e.path,e.mode) for e in self.repo.commit_files(deleted)],[('[literal].txt','D')])
+        self.assertIn('-first',self.repo.commit_file_diff(deleted,'[literal].txt'))
+
+    def test_merge_changed_files_compare_first_parent(self):
+        self.commit()
+        self.repo.create_branch('feature')
+        self.commit('feature.txt','feature\n','Feature')
+        self.repo.switch('main')
+        self.commit('main.txt','main\n','Main')
+        self.repo.merge('feature')
+        merged=self.repo.status().oid
+        self.assertEqual([e.path for e in self.repo.commit_files(merged)],['feature.txt'])
+        self.assertIn('+feature',self.repo.commit_file_diff(merged,'feature.txt'))
+
     def test_empty_repository_snapshot_and_unborn_unstage(self):
         snapshot = self.repo.snapshot()
         self.assertEqual(snapshot.status.oid, '(initial)')
@@ -256,6 +277,7 @@ class GitBackendTests(unittest.TestCase):
         self.repo.runner = LocalTransportRunner()
         self.repo.add_submodule(str(source.path), 'modules/child repo')
         self.assertIn('modules/child repo', self.repo.submodules())
+        self.assertEqual(self.repo.snapshot().submodule_paths,('modules/child repo',))
         self.repo.stage(['.gitmodules', 'modules/child repo']); self.repo.commit('Add submodule')
         self.repo.update_submodules()
         child = Repository(self.repo.path / 'modules/child repo')
