@@ -1,7 +1,7 @@
 """Compact EPUB controls and discoverable reading panels, independent of loading."""
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.reader_menus import ReaderMenus
-from commonUtils.ui.reader_chrome import ReaderLabel, ReaderFullscreen, reader_button, READER_MARGINS, READER_SPACING
+from commonUtils.ui.reader_chrome import ReaderLabel, ReaderFullscreen, reader_button, READER_MARGINS, READER_SPACING, reading_spin
 from .preferences import THEMES
 from .text_view import BookText
 from commonUtils.ui.read_aloud import ReadAloud, reader_text
@@ -71,33 +71,14 @@ def build_controls(page):
     page.font_family.setAccessibleName('Reading font')
     page.font_family.setMinimumHeight(32)
     form.addRow('Font', page.font_family)
-    page.font_size = qt.QSpinBox()
-    page.font_size.setRange(8, 48)
-    page.font_size.setSuffix(' pt')
-    page.font_size.setValue(page._settings['font_size'])
-    page.font_size.valueChanged.connect(page._appearance_changed)
-    page.font_size.setAccessibleName('Reading font size')
-    page.font_size.setMinimumHeight(32)
-    page.font_size.setKeyboardTracking(False)
+    page.font_size = reading_spin(page.appearance, minimum=8, maximum=48,
+        value=page._settings['font_size'], label='Reading font size', suffix=' pt', changed=page._appearance_changed)
     form.addRow('Text size', page.font_size)
-    page.spacing = qt.QSpinBox()
-    page.spacing.setRange(100, 220)
-    page.spacing.setSingleStep(25)
-    page.spacing.setSuffix('%')
-    page.spacing.setValue(page._settings['line_spacing'])
-    page.spacing.valueChanged.connect(page._appearance_changed)
-    page.spacing.setAccessibleName('Line spacing')
-    page.spacing.setMinimumHeight(32)
-    page.spacing.setKeyboardTracking(False)
+    page.spacing = reading_spin(page.appearance, minimum=100, maximum=220,
+        value=page._settings['line_spacing'], label='Line spacing', suffix='%', step=25, changed=page._appearance_changed)
     form.addRow('Line spacing', page.spacing)
-    page.reading_width = qt.QSpinBox()
-    page.reading_width.setRange(480, 1400)
-    page.reading_width.setSuffix(' px')
-    page.reading_width.setValue(page._settings['reading_width'])
-    page.reading_width.valueChanged.connect(page._appearance_changed)
-    page.reading_width.setAccessibleName('Maximum reading width')
-    page.reading_width.setMinimumHeight(32)
-    page.reading_width.setKeyboardTracking(False)
+    page.reading_width = reading_spin(page.appearance, minimum=480, maximum=1400,
+        value=page._settings['reading_width'], label='Maximum reading width', suffix=' px', changed=page._appearance_changed)
     form.addRow('Reading width', page.reading_width)
     page.theme = qt.QComboBox()
     for name in THEMES:

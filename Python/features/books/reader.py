@@ -80,12 +80,8 @@ class BooksPage(qt.QWidget):
 
     def show_appearance(self):
         self.appearance.adjustSize()
-        point = self.appearance_button.mapToGlobal(qt.QPoint(0, self.appearance_button.height()))
-        screen = self.screen().availableGeometry()
-        point.setX(max(screen.left(), min(point.x(), screen.right() - self.appearance.width())))
-        point.setY(max(screen.top(), min(point.y(), screen.bottom() - self.appearance.height())))
-        self.appearance.move(point)
-        self.appearance.show()
+        from commonUtils.ui.reader_chrome import show_reader_popup
+        show_reader_popup(self.appearance, self.appearance_button)
 
     def toggle_fullscreen(self):
         self.fullscreen.toggle()
