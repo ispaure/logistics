@@ -185,3 +185,22 @@ class BrowserWindowIndexTests(QtTestCase):
         self.assertTrue(second.file_browser.index_status.isHidden())
         self.assertTrue(second.file_browser.refresh_button.isHidden())
         self.assertFalse(status.refresh_button.isHidden())
+
+    def test_first_open_shallow_scan_displays_independently_cached_sizes(self):
+        self.cache.get(self.first)
+        self.cache.get(self.second)
+        scanned = []
+        original = self.cache._scan_folder
+        def scan(*args, **kwargs):
+            scanned.append(args[4])
+            return original(*args, **kwargs)
+        policy = IndexPolicy(recursive_on_open=False, refresh_cached_on_startup=True, watch_changes=False)
+        with patch('commonUtils.ui.file_browser.index_policy.index_policy', return_value=policy), \
+             patch.object(self.cache, '_scan_folder', side_effect=scan):
+            workspace = self.window(); view = workspace.add_view(self.root)
+            browser = view.file_browser
+            self.wait(lambda: not browser.folder_busy)
+            self.assertEqual(browser.model.folder_totals[self.first].size, 3)
+            self.assertEqual(browser.model.folder_totals[self.second].size, 5)
+            self.assertEqual(browser.model.data(browser.model.index(str(self.first), 1)), '3 B')
+            self.assertEqual(scanned, [self.root])

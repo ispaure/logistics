@@ -343,13 +343,14 @@ class RepositoryView(GitJobs, qt.QWidget):
     def _render(self, snapshot):
         self.snapshot = snapshot
         self.path = snapshot.root
-        self.view_title = snapshot.root.name + " (Git)"
+        name = snapshot.display_name or snapshot.root.name
+        self.view_title = name + " (Git)"
         self.title_changed.emit(self.view_title)
         self.setToolTip(str(snapshot.root))
         status = snapshot.status
         branch = status.branch if status.branch != '(detached)' else f'Detached HEAD {status.oid[:8]}'
         tracking = f' · {status.upstream} · ↑{status.ahead} ↓{status.behind}' if status.upstream else ' · no upstream'
-        self.repository_label.setText(f'  {snapshot.root.name} · {branch}{tracking}')
+        self.repository_label.setText(f'  {name} · {branch}{tracking}')
         self.repository_label.setToolTip(str(snapshot.root))
         self.changes.set_changes(status.changes)
         self.history.head_oid = status.oid

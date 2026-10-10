@@ -27,21 +27,63 @@ class DestinationIcon(qt.QIconEngine):
                 painter.drawArc(qt.QRectF(8, 10, 10, 8), 30 * 16, 280 * 16)
                 painter.drawPolyline(qt.QPolygonF([qt.QPointF(16, 9), qt.QPointF(19, 11), qt.QPointF(16, 13)]))
         elif self.name == 'rename':
-            font = painter.font(); font.setPointSizeF(8); font.setBold(True); painter.setFont(font)
-            painter.drawText(qt.QRectF(1, 3, 22, 18), qt.Qt.AlignmentFlag.AlignCenter, 'A→B')
+            pen = painter.pen()
+            pen.setCapStyle(qt.Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(qt.Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(pen)
+            glyph = qt.QPainterPath()
+            glyph.moveTo(2, 17); glyph.lineTo(5, 7); glyph.lineTo(8, 17)
+            glyph.moveTo(3, 14); glyph.lineTo(7, 14)
+            glyph.moveTo(10, 12); glyph.lineTo(14, 12)
+            glyph.moveTo(12, 10); glyph.lineTo(14, 12); glyph.lineTo(12, 14)
+            glyph.moveTo(17, 7); glyph.lineTo(17, 17); glyph.lineTo(20, 17)
+            glyph.arcTo(qt.QRectF(17.5, 12, 5, 5), -90, 180)
+            glyph.lineTo(17, 12); glyph.lineTo(19.5, 12)
+            glyph.arcTo(qt.QRectF(17, 7, 5, 5), -90, 180)
+            glyph.lineTo(17, 7)
+            painter.drawPath(glyph)
         elif self.name == 'hub':
             for y in (3, 10, 17):
                 painter.drawRoundedRect(qt.QRectF(3, y, 18, 4), 1, 1)
                 painter.drawPoint(qt.QPointF(17, y+2))
+        elif self.name == 'smart_home':
+            painter.drawPolyline(qt.QPolygonF([qt.QPointF(x, y) for x, y in
+                ((2, 11), (12, 3), (22, 11))]))
+            painter.drawPolyline(qt.QPolygonF([qt.QPointF(x, y) for x, y in
+                ((5, 9), (5, 21), (19, 21), (19, 9))]))
+            painter.drawLine(qt.QLineF(12, 11, 12, 15))
+            painter.drawArc(qt.QRectF(8, 12, 8, 7), 30 * 16, 300 * 16)
+        elif self.name == 'aviation':
+            plane = qt.QPainterPath()
+            for index, (x, y) in enumerate(((12, 2), (14, 10), (22, 15), (22, 17),
+                    (14, 14), (14, 19), (17, 21), (17, 22), (12, 21),
+                    (7, 22), (7, 21), (10, 19), (10, 14), (2, 17), (2, 15), (10, 10))):
+                if index == 0: plane.moveTo(x, y)
+                else: plane.lineTo(x, y)
+            plane.closeSubpath()
+            painter.drawPath(plane)
+        elif self.name == 'links':
+            painter.save()
+            painter.translate(12, 12); painter.rotate(-45)
+            for y in (-9, 1):
+                painter.drawRoundedRect(qt.QRectF(-4, y, 8, 8), 4, 4)
+            painter.drawLine(qt.QLineF(0, -4, 0, 4))
+            painter.restore()
+        elif self.name == 'debug':
+            painter.drawRoundedRect(qt.QRectF(7, 7, 10, 14), 5, 5)
+            painter.drawArc(qt.QRectF(9, 3, 6, 8), 0, 180 * 16)
+            painter.drawLine(qt.QLineF(12, 8, 12, 20))
+            for y in (10, 15, 20):
+                painter.drawLine(qt.QLineF(3, y-2, 7, y))
+                painter.drawLine(qt.QLineF(17, y, 21, y-2))
         elif self.name == 'comic':
-            painter.drawRoundedRect(qt.QRectF(3, 3, 18, 18), 1.5, 1.5)
-            painter.drawLine(qt.QLineF(3, 12, 21, 12))
-            painter.drawLine(qt.QLineF(11, 12, 11, 21))
-            bubble = qt.QPainterPath()
-            bubble.moveTo(7, 6); bubble.lineTo(17, 6); bubble.lineTo(17, 9)
-            bubble.lineTo(11, 9); bubble.lineTo(9, 11); bubble.lineTo(9, 9)
-            bubble.lineTo(7, 9); bubble.closeSubpath()
-            painter.drawPath(bubble)
+            pen = painter.pen()
+            pen.setCapStyle(qt.Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(qt.Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(pen)
+            painter.drawRoundedRect(qt.QRectF(4, 3, 16, 18), 1.5, 1.5)
+            painter.drawLine(qt.QLineF(4, 11, 20, 11))
+            painter.drawLine(qt.QLineF(12, 11, 12, 21))
         elif self.name == 'epub':
             book = qt.QPainterPath()
             book.moveTo(12, 6)
@@ -151,8 +193,9 @@ class DestinationRail(qt.QWidget):
         self.pages = {}
         self.setFixedWidth(60)
         self.setAccessibleName('Main destinations')
-        outer = qt.QHBoxLayout(self)
+        outer = qt.QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
         icon_scroll = qt.QScrollArea(self)
         icon_scroll.setWidgetResizable(True)
         icon_scroll.setFixedWidth(60)
@@ -160,7 +203,7 @@ class DestinationRail(qt.QWidget):
         icon_scroll.setFrameShape(qt.QFrame.Shape.NoFrame)
         icons = qt.QWidget()
         icon_scroll.setWidget(icons)
-        outer.addWidget(icon_scroll)
+        outer.addWidget(icon_scroll, 1)
         panel = self.document_overlay = qt.QFrame(self, qt.Qt.WindowType.Popup)
         panel.setObjectName('documentOverlay')
         panel.setAccessibleName('Document launchers and open documents')
@@ -168,6 +211,9 @@ class DestinationRail(qt.QWidget):
         panel.setStyleSheet("""
             QFrame#documentOverlay { border: 1px solid palette(mid); border-radius: 10px; background: palette(window); }
             QFrame#documentOverlay QTreeWidget { border: none; background: palette(window); }
+            QFrame#documentOverlay QTreeWidget::item,
+            QFrame#documentOverlay QTreeWidget::item:hover,
+            QFrame#documentOverlay QTreeWidget::item:selected { padding: 0px; margin: 0px; }
             QFrame#documentOverlay QToolButton { border: 1px solid palette(mid); border-radius: 6px; padding: 4px; }
             QFrame#documentOverlay QToolButton:hover { background: palette(midlight); }
             QFrame#documentOverlay QToolButton:focus { border: 1px solid palette(highlight); }
@@ -202,31 +248,46 @@ class DestinationRail(qt.QWidget):
         layout.setContentsMargins(6, 10, 6, 10)
         layout.setSpacing(8)
         for key, title in [('browser', 'File Browser'), ('hub', 'Folder Hub'),
-                           ('documents', 'Open documents'), ('actions', 'Folder Actions'), ('tools', 'Tools')]:
+                           ('actions', 'Folder Actions'), ('documents', 'Open documents')]:
             button = self._button(key, title)
             layout.addWidget(button)
             if key == 'actions':
+                self.sync_destinations = qt.QVBoxLayout()
+                self.sync_destinations.setContentsMargins(0, 0, 0, 0)
+                self.sync_destinations.setSpacing(8)
+                layout.addLayout(self.sync_destinations)
+            if key == 'documents':
                 self.workspace_destinations = qt.QVBoxLayout()
                 self.workspace_destinations.setContentsMargins(0, 0, 0, 0)
                 self.workspace_destinations.setSpacing(8)
                 layout.addLayout(self.workspace_destinations)
+        self.bulk_rename_button = self._button('rename', 'Bulk Rename')
+        layout.addWidget(self.bulk_rename_button)
+        self.bulk_rename_button.clicked.connect(self._open_bulk_rename)
         self.feature_destinations = qt.QVBoxLayout()
         self.feature_destinations.setContentsMargins(0, 0, 0, 0)
         self.feature_destinations.setSpacing(8)
         layout.addLayout(self.feature_destinations)
         self.feature_buttons = set()
         self.workspace_buttons = set()
+        self.sync_buttons = set()
+        # Retain the Misc/Tools menu and glyph for future nested destinations.
+        # Remove them only when the user explicitly asks (see AGENTS.md).
+        layout.addWidget(self._button('tools', 'Misc tools'))
         layout.addStretch()
-        layout.addWidget(self._button('settings', 'Settings'))
+        footer = qt.QVBoxLayout()
+        footer.setContentsMargins(6, 4, 6, 4)
+        footer.setSpacing(6)
+        footer.addWidget(self._button('debug', 'Debug'))
+        footer.addWidget(self._button('settings', 'Settings'))
+        outer.addLayout(footer)
         self.tools_menu = qt.QMenu(self)
         self.buttons['tools'].setMenu(self.tools_menu)
         self.buttons['tools'].setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
         self.buttons['documents'].clicked.connect(self.show_documents)
         self.buttons['documents'].show()
-        self.bulk_rename_button = self._button('rename', 'Bulk Rename')
-        layout.insertWidget(layout.count()-2, self.bulk_rename_button)
-        self.bulk_rename_button.clicked.connect(self._open_bulk_rename)
         self.buttons['actions'].hide()
+        self.buttons['debug'].hide()
 
     def _button(self, key, title, icon=None):
         button = ActivityButton(self) if key == 'actions' else qt.QToolButton(self)
@@ -250,6 +311,8 @@ class DestinationRail(qt.QWidget):
             self.buttons[key].hide()
         self.tools_menu.clear()
         workspace_entries = []
+        sync_entries = []
+        feature_entries = []
         for index in range(tabs.count()):
             page = tabs.widget(index)
             if page is self.documents:
@@ -262,13 +325,17 @@ class DestinationRail(qt.QWidget):
             info = core.get(page)
             key = ('browser' if info and info[0] == 0 else
                    'hub' if info and info[0] == 5 else
+                   'debug' if info and info[1] == 'Debug' else
                    'settings' if info and info[1] == 'Settings' else None)
             icon = page.property('navigation_icon')
             if key is None and icon:
                 key = f'feature:{id(page)}'
                 if key not in self.buttons:
                     button = self._button(key, tabs.tabText(index), icon)
-                    if page.property('navigation_position') == 'workspace':
+                    if page.property('navigation_position') == 'workspace' and icon == 'actions':
+                        self.sync_destinations.addWidget(button)
+                        self.sync_buttons.add(key)
+                    elif page.property('navigation_position') == 'workspace':
                         self.workspace_destinations.addWidget(button)
                         self.workspace_buttons.add(key)
                     else:
@@ -277,6 +344,11 @@ class DestinationRail(qt.QWidget):
                 self.buttons[key].show()
                 if key in self.workspace_buttons:
                     workspace_entries.append((page.property('navigation_order') or 100, tabs.tabText(index), self.buttons[key]))
+                elif key in self.sync_buttons:
+                    sync_entries.append((page.property('navigation_order') or 100, tabs.tabText(index), self.buttons[key]))
+                else:
+                    order = {'smart_home': 30, 'aviation': 40, 'links': 50}.get(icon, 60)
+                    feature_entries.append((order, tabs.tabText(index), self.buttons[key]))
             if key:
                 self.pages[key] = page
             else:
@@ -285,9 +357,12 @@ class DestinationRail(qt.QWidget):
                 action.setCheckable(True)
                 action.setChecked(page is tabs.currentWidget())
                 action.triggered.connect(lambda checked=False, target=page: self.selected.emit(target))
-        for position, (_, _, button) in enumerate(sorted(workspace_entries, key=lambda entry: (entry[0], entry[1].casefold()))):
-            self.workspace_destinations.insertWidget(position, button)
-        for key in ('browser', 'hub', 'settings'):
+        for target, entries in ((self.sync_destinations, sync_entries),
+                                (self.workspace_destinations, workspace_entries),
+                                (self.feature_destinations, feature_entries)):
+            for position, (_, _, button) in enumerate(sorted(entries, key=lambda entry: (entry[0], entry[1].casefold()))):
+                target.insertWidget(position, button)
+        for key in ('browser', 'hub', 'debug', 'settings'):
             self.buttons[key].setVisible(key in self.pages)
         self.buttons['tools'].setVisible(bool(self.tools_menu.actions()))
         self.buttons['documents'].setVisible(True)
@@ -389,11 +464,11 @@ class DestinationRail(qt.QWidget):
             group.setData(0, qt.Qt.ItemDataRole.AccessibleTextRole, launcher.name)
             group.setData(0, qt.Qt.ItemDataRole.UserRole, ('editor', key))
             group.setFlags(group.flags() & ~qt.Qt.ItemFlag.ItemIsSelectable)
-            row = qt.QWidget()
+            row = qt.QWidget(self.document_tree.viewport())
             row.setAutoFillBackground(True)
             row.setBackgroundRole(qt.QPalette.ColorRole.Window)
             layout = qt.QHBoxLayout(row)
-            layout.setContentsMargins(4, 6, 4, 6)
+            layout.setContentsMargins(4, 8, 4, 8)
             layout.setSpacing(8)
             glyph = DestinationGlyph(); glyph.setFixedSize(24, 24)
             set_painted_icon(glyph, DestinationIcon, launcher.icon or key)
@@ -417,7 +492,9 @@ class DestinationRail(qt.QWidget):
             button.clicked.connect(lambda checked=False, editor=key: self._launch_editor(editor))
             layout.addWidget(button)
             self.editor_buttons[key] = button
-            group.setSizeHint(0, row.sizeHint())
+            row.ensurePolished()
+            layout.activate()
+            group.setSizeHint(0, row.sizeHint().expandedTo(row.minimumSizeHint()))
             self.document_tree.setItemWidget(group, 0, row)
             group.setExpanded(True)
             self.editor_groups[key] = group

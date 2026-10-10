@@ -166,7 +166,7 @@ Invalid/stale plans raise before disk changes. Failures during a transaction ret
 Internals are separated into Qt-independent `renameUtils.py`, rule controls in
 `rules.py`, worker/UI coordination in `widget.py`, and public window/lifetime code
 in `__init__.py`. The shared engine is documented in
-[commonUtils](../../commonUtils/docs/RENAME.md). Filtered traversal lives in `commonUtils.filesystem.traversal`; transformations accept explicit `RenameMetadata` for folders and file dates without reading the filesystem.
+[commonUtils](../../commonUtils/filesystem/rename/README.md). Filtered traversal lives in `commonUtils.filesystem.traversal`; transformations accept explicit `RenameMetadata` for folders and file dates without reading the filesystem.
 
 ## Main-window hosting
 

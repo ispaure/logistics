@@ -12,6 +12,37 @@ from ui_new import main_window
 
 
 class MainWindowTests(QtTestCase):
+    def test_notification_footer_releases_space_when_empty(self):
+        from ui_new.notifications import notify
+        from uuid import uuid4
+        window = self.window(); window.dlg.show(); self.app.processEvents()
+        self.assertTrue(window.dlg.statusBar().isHidden())
+        notify('test', 'Completed', 'Navigation check', identifier=uuid4().hex)
+        self.app.processEvents()
+        self.assertFalse(window.dlg.statusBar().isHidden())
+        self.assertTrue(window.toast.isVisible())
+        window.toast.timer.timeout.emit(); self.app.processEvents()
+        self.assertTrue(window.dlg.statusBar().isHidden())
+
+    def test_named_feature_destinations_are_ordered_and_debug_has_a_footer_button(self):
+        entries = [RegisteredContribution(icon, name, PageContribution(name, icon, self.page,
+                   order=order, navigation_icon=icon))
+                   for icon, name, order in [('links', 'Links', 20), ('aviation', 'Aviation Tools', 10),
+                                              ('smart_home', 'Smart Home', 30)]]
+        window = self.window(entries); window.dlg.show(); self.app.processEvents()
+        rail = window.sidebar
+        self.assertEqual([rail.feature_destinations.itemAt(i).widget().text() for i in range(3)],
+                         ['Smart Home', 'Aviation Tools', 'Links'])
+        self.assertEqual(rail.tools_menu.actions(), [])
+        self.assertTrue(rail.buttons['tools'].isHidden())
+        self.assertTrue(rail.buttons['debug'].isVisible())
+        rail.buttons['debug'].click()
+        self.assertIs(window.tabs.currentWidget(), rail.pages['debug'])
+        for button in (rail.feature_destinations.itemAt(i).widget() for i in range(3)):
+            self.assertTrue(button.isVisible())
+            button.click()
+            self.assertTrue(button.isChecked())
+
     def test_abandoned_docking_preview_restores_page_and_destination(self):
         from commonUtils.ui.document_host import show_document
         window = self.window(); window.dlg.show()
@@ -438,7 +469,8 @@ class MainWindowTests(QtTestCase):
         window = self.window([contribution]); window.dlg.show(); self.app.processEvents()
         self.assertTrue(window.tabs.tabBar().isHidden())
         self.assertEqual(window.sidebar.width(), 60)
-        self.assertEqual([action.text() for action in window.sidebar.tools_menu.actions()], ['Calculator', 'Debug'])
+        self.assertEqual([action.text() for action in window.sidebar.tools_menu.actions()], ['Calculator'])
+        self.assertTrue(window.sidebar.buttons['debug'].isVisible())
         self.assertFalse(window.sidebar.tools_menu.isVisible())
         reader = qt.QMainWindow(); reader.setWindowTitle('Open reader')
         show_document(reader); self.app.processEvents()

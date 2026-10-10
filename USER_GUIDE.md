@@ -9,8 +9,10 @@ folder's contents or configuration.
 The icon sidebar keeps **File Browser** and **Folder Hub** at the top. Hover an
 icon for its name. Logistics opens
 in File Browser; Folder Hub is the destination for configured libraries, servers
-and remotes. **Tools** opens a dropdown of enabled tools and Debug; **Settings**
-stays at the bottom. Switching destinations retains each view's state.
+and remotes. **Smart Home**, **Aviation Tools** and **Links** have their own icons.
+**Misc tools** holds any other enabled tools. **Debug** and **Settings** remain at
+the bottom. Switching destinations retains each view's state. While sync or other
+folder jobs are present, their status appears after Folder Hub, before Documents.
 
 | Page | Use it for |
 | --- | --- |
@@ -18,10 +20,10 @@ stays at the bottom. Switching destinations retains each view's state.
 | Folder Hub | Choose a source/folder and use detected library, server or remote actions |
 | [Git](Python/features/git/user_docs/index.md) | Clone/open repositories, inspect history, commit changes, and manage branches, remotes, submodules and subtrees |
 | Settings | Enable features, manage credential packages and edit configuration |
-| Tools → Debug | File/media/maintenance tools, Open File Browser and Bulk Rename |
+| Debug | File/media/maintenance tools, Open File Browser and Bulk Rename |
 | Settings → Features | Enable/disable integrations using feature toggle cards |
-| Tools → Aviation Tools | Flight calculators and aircraft/airport reference tables |
-| Tools → Links / Smart Home | Controls provided by those enabled features |
+| Aviation Tools | Flight calculators and aircraft/airport reference tables |
+| Links / Smart Home | Controls provided by those enabled features |
 
 Disabling a feature removes its new actions; existing windows/jobs can finish.
 Enabling also enables required dependencies. Choices are saved for the next launch.

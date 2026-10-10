@@ -28,7 +28,7 @@ New features expose `register() -> Feature(...)` from their package `__init__.py
 Import `Feature` from `features.contributions`: it extends the reusable
 `commonUtils.ui.features.Feature` with Logistics Debug actions, folder/server/source
 contributions, workflows and pages. File types and browser capabilities are declared
-on that same object. See [the commonUtils author guide](../commonUtils/docs/FEATURES.md).
+on that same object. See [the commonUtils author guide](../commonUtils/ui/features/README.md).
 
 ```python
 from commonUtils.ui.features import FileType, BrowserExtension, SelectionAction, FileActivation
@@ -162,7 +162,7 @@ does not become part of logical folder identity or filesystem layout.
 [File browser development](FILE_BROWSER.md) is the central Logistics guide for
 file types, preview panels, context menus, activation, controllers and safe closing.
 The reusable API and standalone examples live in the
-[commonUtils author guide](../commonUtils/docs/FEATURES.md).
+[commonUtils author guide](../commonUtils/ui/features/README.md).
 
 ### Persistent feature controls
 
@@ -206,7 +206,7 @@ Shared background primitives live in commonUtils, while the feature owns inputs,
 password prompts, transaction boundaries and result presentation. Use
 `commonUtils.ui.operation_progress.OperationProgress` for progress/cancellation
 controls and `commonUtils.ui.operations.Operation` for simpler background callbacks.
-[Workflow recipes](../commonUtils/docs/RECIPES.md) demonstrate both the callback contract
+[Workflow recipes](../commonUtils/ui/operation_progress.md) demonstrate both the callback contract
 and safe owner lifetimes.
 
 Capture validated inputs on the GUI thread; callbacks must not read widgets,

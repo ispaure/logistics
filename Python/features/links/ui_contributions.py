@@ -23,7 +23,8 @@ def get_contributions() -> Feature:
                 name='Links',
                 page_id='links',
                 create_page=_create_page,
-                order=40
+                order=40,
+                navigation_icon='links'
             )
         ]
     )

@@ -282,6 +282,7 @@ class GitBackendTests(unittest.TestCase):
         self.repo.update_submodules()
         child = Repository(self.repo.path / 'modules/child repo')
         self.assertEqual(child.status().oid, source.status().oid)
+        self.assertEqual(child.snapshot().display_name, 'repo/modules/child repo')
         self.assertFalse(self.repo.status().changes)
 
     def test_subtree_add_pull_and_push(self):

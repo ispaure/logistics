@@ -36,6 +36,23 @@ class _CloseGuard(pyside.QObject):
         return super().eventFilter(watched, event)
 
 
+class _ToastStatusGuard(pyside.QObject):
+    """Reserve footer space only while the transient notice is shown."""
+    def __init__(self, toast, status_bar):
+        super().__init__(toast)
+        self.status_bar = status_bar
+        toast.installEventFilter(self)
+        toast.hide()
+        status_bar.hide()
+
+    def eventFilter(self, watched, event):
+        if event.type() == pyside.QEvent.Type.ShowToParent:
+            self.status_bar.show()
+        elif event.type() == pyside.QEvent.Type.HideToParent:
+            self.status_bar.hide()
+        return super().eventFilter(watched, event)
+
+
 class MainWindow(pyside.Window):
     def __init__(self):
         super().__init__('Logistics', main_window=True)
@@ -83,6 +100,7 @@ class MainWindow(pyside.Window):
         from .notifications import notification_service, Toast
         self.toast = Toast(notification_service(), self.dlg)
         self.dlg.statusBar().addWidget(self.toast, 1)
+        self._toast_status_guard = _ToastStatusGuard(self.toast, self.dlg.statusBar())
         self._refresh_sidebar()
 
     def _build_layout(self):
