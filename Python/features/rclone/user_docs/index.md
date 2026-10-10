@@ -72,3 +72,9 @@ hashes. If you change releases, update these values together. One hash verifies
 the ZIP; the other verifies its executable. Saving does not download anything or
 replace a running tool. See [download settings](../../../../CONFIGURATION.md#rclone-download-versions)
 for the field details.
+
+Sync progress opens in **Folder Actions** on the left rail. Each job has its own
+tab with transfer statistics and logs; completed and failed jobs remain available
+until you close them. A red badge marks results you haven't viewed. Completion
+and errors also use system notifications when the platform supports them.
+Closing a running job cancels it and waits for its process to stop.
