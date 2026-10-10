@@ -84,6 +84,18 @@ class DocumentWorkspaceTests(QtTestCase):
             second_window.close()
             self.settle()
 
+    def test_reordered_document_tabs_close_the_visible_tab_and_list_in_order(self):
+        first = qt.QMainWindow(); first.setWindowTitle('First')
+        second = qt.QMainWindow(); second.setWindowTitle('Second')
+        show_document(first); show_document(second); self.settle()
+        bar = next(bar for bar in self.page.workspace.findChildren(qt.QTabBar)
+                   if bar.parent() is self.page.workspace and bar.count() == 2)
+        bar.moveTab(0, 1); self.settle()
+        self.assertEqual([entry[1] for entry in self.page.document_entries()], ['Second', 'First'])
+        self.page.close_tab(0); self.settle()
+        self.assertTrue(document_is_open(first))
+        self.assertFalse(document_is_open(second))
+
     def test_closed_document_retires_without_recreating_native_window_or_menu(self):
         document = qt.QMainWindow()
         document.menuBar().setNativeMenuBar(True)
