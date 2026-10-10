@@ -15,6 +15,7 @@ See the [user guide](user_docs/index.md) for the interface and authentication se
 - `graph.py`: lane geometry for a bounded, topologically ordered commit DAG.
 - `ui/worker.py`: retained cancellable Qt worker; no widgets accessed from its thread.
 - `ui/page.py`: workspace state, forms, and sequential job dispatch.
+- `ui/chrome.py`, `navigation.py`: scoped styling, vector toolbar icons and reference navigation.
 - `ui/repository_tools.py`: worktree/submodule/subtree dialogs using that dispatcher.
 - `ui/changes.py`, `history.py`, `preview.py`, `dialogs.py`: focused widgets.
 
@@ -61,6 +62,19 @@ sidebar places workspace contributions after Folder Hub and the contextual
 documents/actions icons, before Tools. Active rclone sync jobs use Folder Actions,
 so Git sits below that icon when it appears. A future Sync destination can use the
 workspace position with order 10. Other feature destinations retain their location.
+
+## Workspace layout
+
+Repository bookmarks appear as tabs beneath an icon toolbar. A reference tree
+provides File status, History and Search, hierarchical branches/remotes, tags,
+stashes, configured submodules and saved subtrees. File status uses two separately
+resizable lists, a shared diff preview and a bottom commit composer. History puts
+the graph above a files/metadata pane and the preview. The same CodeEdit preview
+moves between hosts, keeping a single selection/search implementation.
+
+Commit file lists use NUL-delimited first-parent comparisons, including root
+commits and deletions; full historical trees remain available separately. File
+staging checkboxes dispatch through the same serialized command boundary.
 
 ## Validation
 

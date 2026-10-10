@@ -7,7 +7,7 @@ Enable or disable it under Settings like other features.
 
 ## Get started
 
-Install **Git 2.40 or newer**. Logistics uses `git` from your PATH; **Git settings…**
+Install **Git 2.40 or newer**. Logistics uses `git` from your PATH; **Settings**
 lets you choose another executable and checks its version. Git is supplied separately
 from Logistics.
 
@@ -16,8 +16,8 @@ from Logistics.
   destination. You can choose a branch and initialize submodules recursively.
 - **Init…** creates Git metadata in a selected folder while keeping existing files.
 
-The repository selector remembers recent repositories. **Repositories…** pins or
-removes bookmarks. Removing a bookmark keeps all repository files on disk.
+Repository tabs remember recent repositories. **+ Repositories → Manage bookmarks…** pins or
+removes bookmarks. Open, Clone and Init are in the same menu. Removing a bookmark keeps all repository files on disk.
 Bare repositories can be remote destinations; open working repositories in the UI.
 
 For private repositories, configure your Git credential helper or SSH agent first.
@@ -27,12 +27,13 @@ tokens. Authentication errors appear in the operation log.
 
 ## Everyday changes
 
-The **Changes** tab separates **Conflicts**, **Unstaged**, and **Staged** files.
+Choose **File status** in the left WORKSPACE section. It separates **Staged files**
+and **Unstaged files**, with conflicts marked `!` in the unstaged list.
 One file can appear in both staged and unstaged groups when you edit it after staging.
 Select a file to inspect its diff; untracked text files show a bounded content preview.
 Binary files show an explanation instead of text.
 
-1. Select files and choose **Stage**. **Stage all** includes untracked files and deletions.
+1. Check files or use **Stage file** beside the diff. **Stage all** includes untracked files and deletions.
 2. Use **Unstage** to remove selected changes from the index while keeping working files.
 3. Enter a commit subject and optional description, then **Commit staged changes**.
 4. If Git needs an author name/email, use **More… → Commit identity…**. This saves
@@ -54,14 +55,16 @@ repositories or closing the app asks before discarding a draft.
 
 ## History and branches
 
-The **History** tab shows the commit graph, subjects, branch/tag decorations, authors,
-dates, and hashes. Select a commit for its details, diff, and complete historical file
-tree; select a file in that tree to inspect its contents. Submodule entries show the
-recorded child commit. Merge previews use Git's normal merge display, which may not
-show every individual parent comparison.
+Choose **History** in the left WORKSPACE section to see the commit graph, subjects, branch/tag decorations, authors,
+dates, and hashes. Select a commit for its metadata and changed files below the graph;
+select a changed file for its patch. Merge changed files compare the first parent.
+Use **Full tree at commit** to browse every historical file and read its contents.
+Submodule entries show the recorded child commit. File actions stage, unstage or
+discard whole files; hunk actions are a future addition.
 
 History starts with 200 commits. **Load 200 more commits** expands it up to 5,000.
-Search filters the loaded page by message, author, hash, or ref. The graph is hidden
+**Search** focuses the history search. The branch selector can show all loaded
+branches or only ancestors of the current branch. Search filters the loaded page by message, author, hash, or ref. The graph is hidden
 while filtering so omitted rows cannot imply false ancestry. **Find in preview**
 searches the displayed text; Enter moves to the next match.
 

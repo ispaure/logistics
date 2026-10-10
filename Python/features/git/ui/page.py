@@ -5,6 +5,7 @@ and refreshes cannot overlap. Failures remain visible and trigger a fresh snapsh
 after writes, including conflicts and cancelled network operations.
 """
 from pathlib import Path
+import sys
 
 from commonUtils.ui import pyside as qt
 from ..preferences import Preferences
@@ -16,6 +17,7 @@ from .history import HistoryPanel
 from .preview import Preview
 from .worker import GitWorker
 from .repository_tools import RepositoryTools
+from .chrome import toolbar_button, WORKSPACE_STYLE
 
 
 class GitPage(qt.QWidget):
@@ -42,40 +44,65 @@ class GitPage(qt.QWidget):
 
     def _build(self):
         layout = qt.QVBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 10)
-        row = qt.QHBoxLayout()
-        self.repositories = qt.QComboBox()
-        self.repositories.setMinimumWidth(220)
-        self.repositories.setAccessibleName('Git repositories')
+        self.setObjectName('gitWorkspace')
+        self.setStyleSheet(WORKSPACE_STYLE)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        palette = self.palette()
+        for role, color in ((qt.QPalette.ColorRole.Window,'#282935'),(qt.QPalette.ColorRole.WindowText,'#e0e0e4'),
+                (qt.QPalette.ColorRole.Base,'#22232f'),(qt.QPalette.ColorRole.AlternateBase,'#30313c'),
+                (qt.QPalette.ColorRole.Text,'#e0e0e4'),(qt.QPalette.ColorRole.Button,'#3b3c46'),
+                (qt.QPalette.ColorRole.ButtonText,'#e0e0e4'),(qt.QPalette.ColorRole.PlaceholderText,'#92949f'),
+                (qt.QPalette.ColorRole.Highlight,'#454650'),(qt.QPalette.ColorRole.HighlightedText,'#ffffff')):
+            palette.setColor(role,qt.QColor(color))
+        self.setPalette(palette)
+        self.repositories = qt.QComboBox(self)
+        self.repositories.hide()
         self.repositories.currentIndexChanged.connect(self._repository_selected)
-        row.addWidget(self.repositories, 1)
-        self.global_buttons = []
-        for title, callback in (('Open…', self.open_dialog), ('Clone…', self.clone_dialog),
-                                ('Init…', self.init_dialog), ('Repositories…', self.manage_repositories),
-                                ('Git settings…', self.settings_dialog)):
-            button = qt.QPushButton(title)
-            button.clicked.connect(callback)
-            row.addWidget(button)
-            self.global_buttons.append(button)
-        layout.addLayout(row)
-        self.repository_label = qt.QLabel('Open an existing repository, clone one, or initialize a folder.')
+        self.repository_menu = qt.QToolButton()
+        self.repository_menu.setText('+ Repositories')
+        self.repository_menu.setAccessibleName('Open, clone or manage repositories')
+        self.repository_menu.setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = qt.QMenu(self.repository_menu)
+        for title, callback in (('Open…',self.open_dialog),('Clone…',self.clone_dialog),
+                               ('Init…',self.init_dialog),('Manage bookmarks…',self.manage_repositories)):
+            menu.addAction(title,callback)
+        self.repository_menu.setMenu(menu)
+        self.global_buttons = [self.repository_menu]
+        self.repository_label = qt.QLabel()
         self.repository_label.setTextFormat(qt.Qt.TextFormat.PlainText)
-        self.repository_label.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.repository_label.setWordWrap(True)
-        layout.addWidget(self.repository_label)
+        self.repository_label.hide()
         self.toolbar = qt.QWidget()
         actions = qt.QHBoxLayout(self.toolbar)
-        actions.setContentsMargins(0, 0, 0, 0)
+        actions.setContentsMargins(8, 6, 8, 6)
+        actions.setSpacing(2)
         self.action_buttons = {}
-        for title, callback in (('Refresh', self.refresh), ('Fetch', self.fetch), ('Pull…', self.pull_dialog),
-                                ('Push…', self.push_dialog), ('Branch…', self.branch_dialog),
-                                ('Stash…', self.stash_dialog), ('More…', self.show_more)):
-            button = qt.QPushButton(title)
-            button.clicked.connect(callback)
+        for title, icon, callback in (
+                ('Commit', 'commit', self.focus_commit), ('Pull…', 'pull', self.pull_dialog),
+                ('Push…', 'push', self.push_dialog), ('Fetch', 'fetch', self.fetch),
+                ('Branch…', 'branch', self.branch_dialog), ('Merge…', 'merge', self.merge_dialog),
+                ('Stash…', 'stash', self.stash_dialog)):
+            button = toolbar_button(title, icon, callback, self.toolbar)
             actions.addWidget(button)
             self.action_buttons[title] = button
         actions.addStretch()
-        layout.addWidget(self.toolbar)
+        for title, icon, callback in (
+                ('View Remote', 'remote', self.view_remote), ('Show in Finder' if sys.platform == 'darwin' else 'Open Folder', 'folder', self.open_folder),
+                ('Terminal', 'terminal', self.open_terminal), ('Refresh', 'fetch', self.refresh),
+                ('Settings', 'settings', self.settings_dialog), ('More…', 'more', self.show_more)):
+            button = toolbar_button(title, icon, callback, self.toolbar)
+            actions.addWidget(button)
+            self.action_buttons[title] = button
+        layout.insertWidget(0, self.toolbar)
+        self.repository_tabs = qt.QTabBar()
+        self.repository_tabs.setExpanding(False)
+        self.repository_tabs.setAccessibleName('Open repository bookmarks')
+        self.repository_tabs.currentChanged.connect(self._repository_tab_selected)
+        tabs_row = qt.QHBoxLayout()
+        tabs_row.setContentsMargins(0,0,6,0)
+        tabs_row.addWidget(self.repository_tabs,1)
+        tabs_row.addWidget(self.repository_menu)
+        layout.addLayout(tabs_row)
         self.operation_bar = qt.QWidget()
         operation_layout = qt.QHBoxLayout(self.operation_bar)
         operation_layout.setContentsMargins(0, 0, 0, 0)
@@ -88,26 +115,62 @@ class GitPage(qt.QWidget):
         self.operation_bar.hide()
         layout.addWidget(self.operation_bar)
         self.content = qt.QSplitter(qt.Qt.Orientation.Horizontal)
+        sidebar = qt.QWidget()
+        sidebar.setObjectName('gitSidebar')
+        sidebar_layout = qt.QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(6, 8, 6, 4)
         self.refs = qt.QTreeWidget()
-        self.refs.setHeaderLabels(['Repository'])
-        self.refs.setMinimumWidth(150)
-        self.refs.setAccessibleName('Repository references')
+        self.refs.setHeaderHidden(True)
+        self.refs.setMinimumWidth(190)
+        self.refs.setUniformRowHeights(False)
+        self.refs.setAccessibleName('Git workspace navigation and references')
+        self.refs.itemClicked.connect(self._navigation_selected)
         self.refs.itemDoubleClicked.connect(self._ref_activated)
         self.refs.setContextMenuPolicy(qt.Qt.ContextMenuPolicy.CustomContextMenu)
         self.refs.customContextMenuRequested.connect(self.ref_menu)
-        self.content.addWidget(self.refs)
+        sidebar_layout.addWidget(self.refs, 1)
+        self.ref_filter = qt.QLineEdit()
+        self.ref_filter.setPlaceholderText('Filter references')
+        self.ref_filter.textChanged.connect(self._filter_refs)
+        sidebar_layout.addWidget(self.ref_filter)
+        self.content.addWidget(sidebar)
         self.views = qt.QTabWidget()
+        self.views.tabBar().hide()
         self.changes = ChangesPanel()
         self.history = HistoryPanel()
-        self.views.addTab(self.changes, 'Changes')
-        self.views.addTab(self.history, 'History')
-        self.content.addWidget(self.views)
         self.preview = Preview()
-        self.content.addWidget(self.preview)
-        self.content.setSizes([170, 620, 380])
+        self.preview.editor.setPalette(self.palette())
+        self.change_split = qt.QSplitter(qt.Qt.Orientation.Horizontal)
+        self.change_split.addWidget(self.changes)
+        self.change_preview_host = qt.QWidget()
+        self.change_preview_layout = qt.QVBoxLayout(self.change_preview_host)
+        self.change_preview_layout.setContentsMargins(0, 0, 0, 0)
+        self.change_preview_layout.addWidget(self.preview)
+        self.change_split.addWidget(self.change_preview_host)
+        self.change_split.setSizes([350, 650])
+        change_view = qt.QWidget()
+        change_layout = qt.QVBoxLayout(change_view)
+        change_layout.setContentsMargins(0, 0, 0, 0)
+        change_layout.setSpacing(0)
+        change_layout.addWidget(self.change_split, 1)
+        change_layout.addWidget(self.changes.composer)
+        self.views.addTab(change_view, 'File status')
+        history_view = qt.QSplitter(qt.Qt.Orientation.Vertical)
+        history_view.addWidget(self.history)
+        self.history_bottom = qt.QSplitter(qt.Qt.Orientation.Horizontal)
+        self.history_bottom.addWidget(self.history.details)
+        self.history_preview_host = qt.QWidget()
+        self.history_preview_layout = qt.QVBoxLayout(self.history_preview_host)
+        self.history_preview_layout.setContentsMargins(0, 0, 0, 0)
+        self.history_bottom.addWidget(self.history_preview_host)
+        self.history_bottom.setSizes([450, 550])
+        history_view.addWidget(self.history_bottom)
+        history_view.setSizes([440, 300])
+        self.views.addTab(history_view, 'History')
+        self.content.addWidget(self.views)
+        self.content.setSizes([210, 1040])
         self.content.setStretchFactor(0, 0)
         self.content.setStretchFactor(1, 1)
-        self.content.setStretchFactor(2, 1)
         layout.addWidget(self.content, 1)
         self.changes.change_selected.connect(self.preview_change)
         self.changes.stage_requested.connect(lambda paths: self._operation('Stage files', lambda repo: repo.stage(paths)))
@@ -119,6 +182,9 @@ class GitPage(qt.QWidget):
         self.history.blob_selected.connect(self.preview_blob)
         self.history.load_more.connect(self.load_more)
         self.views.currentChanged.connect(self._view_changed)
+        self.preview.stage_button.clicked.connect(self.changes.stage_selected)
+        self.preview.unstage_button.clicked.connect(self.changes.unstage_selected)
+        self.preview.discard_button.clicked.connect(self.changes.discard_selected)
         status = qt.QHBoxLayout()
         self.status = qt.QLabel('Ready')
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
@@ -162,8 +228,10 @@ class GitPage(qt.QWidget):
     def _set_busy(self, busy):
         available = self.snapshot is not None
         self.repositories.setEnabled(not busy)
+        self.repository_tabs.setEnabled(not busy)
         for button in self.global_buttons: button.setEnabled(not busy)
-        self.toolbar.setEnabled(available and not busy)
+        self.toolbar.setEnabled(not busy)
+        for title, button in self.action_buttons.items(): button.setEnabled(not busy and (available or title == 'Settings'))
         self.content.setEnabled(available and not busy)
         self.operation_bar.setEnabled(available and not busy)
         self.cancel_button.setEnabled(busy)
@@ -227,7 +295,11 @@ class GitPage(qt.QWidget):
             # leave valid new repository state. Keep the operation error visible.
             self._refresh_pending = False
             self._refresh(error)
-        if not self.busy: self.idle.emit()
+        if not self.busy:
+            if getattr(self, '_focus_search_pending', False):
+                self._focus_search_pending = False
+                self.history.search.setFocus()
+            self.idle.emit()
 
     def _operation(self, label, action, after=None):
         if self.path is None: return
@@ -279,6 +351,19 @@ class GitPage(qt.QWidget):
             if self.path:
                 index = self.repositories.findData(str(self.path))
                 if index >= 0: self.repositories.setCurrentIndex(index)
+        with qt.QSignalBlocker(self.repository_tabs):
+            while self.repository_tabs.count(): self.repository_tabs.removeTab(0)
+            for entry in self.preferences.repositories:
+                path = Path(entry['path'])
+                index = self.repository_tabs.addTab(path.name + ' (Git)')
+                self.repository_tabs.setTabData(index, str(path))
+                self.repository_tabs.setTabToolTip(index, str(path))
+                if self.path == path: self.repository_tabs.setCurrentIndex(index)
+
+
+    def _repository_tab_selected(self, index):
+        path = self.repository_tabs.tabData(index)
+        if path and str(self.path) != path: self.open_repository(path)
 
     def _repository_selected(self, index):
         path = self.repositories.itemData(index)
@@ -325,39 +410,70 @@ class GitPage(qt.QWidget):
         status = snapshot.status
         branch = status.branch if status.branch != '(detached)' else f'Detached HEAD {status.oid[:8]}'
         tracking = f' · {status.upstream} · ↑{status.ahead} ↓{status.behind}' if status.upstream else ' · no upstream'
-        self.repository_label.setText(f'{snapshot.root}\n{branch}{tracking}')
+        self.repository_label.setText(f'  {snapshot.root.name} · {branch}{tracking}')
+        self.repository_label.setToolTip(str(snapshot.root))
         self.changes.set_changes(status.changes)
+        self.history.head_oid = status.oid
         self.history.set_commits(snapshot.commits, snapshot.more_history and self.history_limit < 5000)
-        self.views.setTabText(0, f'Changes ({len(status.changes)})')
-        with qt.QSignalBlocker(self.refs):
-            self.refs.clear()
-            groups = {name: qt.QTreeWidgetItem([name]) for name in ('Local branches', 'Remote branches', 'Tags', 'Remotes', 'Stashes')}
-            for group in groups.values(): self.refs.addTopLevelItem(group)
-            for ref in snapshot.refs:
-                if ref.name.startswith('refs/heads/'):
-                    kind, group, name = 'branch', 'Local branches', ref.name[len('refs/heads/'):]
-                elif ref.name.startswith('refs/remotes/'):
-                    kind, group, name = 'remote_branch', 'Remote branches', ref.name[len('refs/remotes/'):]
-                else:
-                    kind, group, name = 'tag', 'Tags', ref.name[len('refs/tags/'):]
-                item = qt.QTreeWidgetItem([('● ' if ref.current else '') + name])
-                item.setData(0, qt.Qt.ItemDataRole.UserRole, (kind, name, ref))
-                item.setToolTip(0, ref.name + ('\nUpstream: ' + ref.upstream if ref.upstream else ''))
-                groups[group].addChild(item)
-            for remote in snapshot.remotes:
-                item = qt.QTreeWidgetItem([remote])
-                item.setData(0, qt.Qt.ItemDataRole.UserRole, ('remote', remote, None))
-                groups['Remotes'].addChild(item)
-            for ref, message in snapshot.stashes:
-                item = qt.QTreeWidgetItem([message])
-                item.setData(0, qt.Qt.ItemDataRole.UserRole, ('stash', ref, None))
-                groups['Stashes'].addChild(item)
-            for group in groups.values(): group.setExpanded(True)
+        self._render_navigation(snapshot)
         self.operation_label.setText(f'{snapshot.operation} in progress — resolve conflicts, stage files, then Continue.')
         self.operation_bar.setVisible(snapshot.operation in ('merge', 'rebase', 'cherry-pick', 'revert'))
         self.changes.amend.setEnabled(bool(snapshot.commits) and not snapshot.operation)
         if snapshot.operation: self.changes.amend.setChecked(False)
         self._set_busy(self.busy)
+
+    def _render_navigation(self, snapshot):
+        from .navigation import populate_navigation
+        populate_navigation(self, snapshot)
+        self._select_navigation(self.views.currentIndex())
+        self._filter_refs(self.ref_filter.text())
+
+    def _select_navigation(self, index):
+        if hasattr(self, 'workspace_items'):
+            with qt.QSignalBlocker(self.refs): self.refs.setCurrentItem(self.workspace_items[index])
+
+    def _navigation_selected(self, item, column):
+        value = item.data(0, qt.Qt.ItemDataRole.UserRole)
+        if not value: return
+        kind, name, ref = value
+        if kind == 'view':
+            if name == 2: self._focus_search_pending = True
+            self.views.setCurrentIndex(0 if name == 0 else 1)
+            if name == 2:
+                if not self.busy:
+                    self._focus_search_pending = False
+                    self.history.search.setFocus()
+                self.refs.setCurrentItem(item)
+        elif kind in ('branch', 'remote_branch', 'tag'):
+            self.show_ref_commit(ref)
+
+    def _filter_refs(self, text):
+        def visit(item):
+            visible = text.casefold() in item.text(0).casefold()
+            for i in range(item.childCount()): visible = visit(item.child(i)) or visible
+            item.setHidden(not visible)
+            return visible
+        for i in range(self.refs.topLevelItemCount()): visit(self.refs.topLevelItem(i))
+
+    def focus_commit(self):
+        self.views.setCurrentIndex(0)
+        self.changes.message.setFocus()
+
+    def view_remote(self):
+        if not self.path or not self.snapshot.remotes: return
+        from .chrome import browser_remote_url
+        def show(address):
+            url = browser_remote_url(address)
+            if url: qt.QDesktopServices.openUrl(qt.QUrl(url))
+            else: self._message('This remote has no HTTP browser address. Use Git settings or the operation log to inspect it.')
+        self._job('Read remote address', lambda runner: Repository(self.path, runner).remote_details(self.snapshot.remotes[0]), show)
+
+    def open_terminal(self):
+        if not self.path: return
+        from commonUtils.wrappers.cmdShellWrapper.terminal import exec_cmd_new_window
+        try:
+            if exec_cmd_new_window('', str(self.path)) is False: self._message('Terminal could not be opened.', error=True)
+        except OSError as error: self._message(str(error), error=True)
 
     def open_dialog(self):
         path = qt.QFileDialog.getExistingDirectory(self, 'Open Git repository')
@@ -418,23 +534,33 @@ class GitPage(qt.QWidget):
         def read(runner):
             repo = Repository(path, runner)
             return repo.untracked_preview(change.path) if change.index == '?' else repo.diff(change.path, staged=staged)
+        self.preview.set_file_actions(staged, change.index != '?' and not change.conflict)
         self._job('Read file changes', read, lambda text: self.preview.show_text(
             ('Staged: ' if staged else 'Working tree: ') + change.path, text or 'No textual diff. Check submodule or file-mode status.'))
 
     def preview_commit(self, commit):
         if self.busy or not self.path: return
         path = self.path
+        full_tree = bool(self.history.file_mode.currentIndex())
         def read(runner):
             repo = Repository(path, runner)
-            return repo.commit_details(commit.oid), repo.tree(commit.oid)
+            return repo.commit_details(commit.oid), (repo.tree(commit.oid) if full_tree else repo.commit_files(commit.oid))
         def show(result):
             text, entries = result
             self.preview.show_text(commit.oid + ' · ' + commit.subject, text)
             self.history.set_tree(entries)
+            self.history.metadata.setPlainText(text.split("\ndiff --git ", 1)[0])
+            self.preview.hide_file_actions()
+            self.history.select_first_file()
         self._job('Read commit', read, show)
 
     def preview_blob(self, entry):
         if self.busy or not self.path: return
+        if entry.kind == 'change':
+            path = self.path
+            self._job('Read commit file diff', lambda runner: Repository(path, runner).commit_file_diff(entry.oid, entry.path),
+                      lambda text: self.preview.show_text(entry.path, text or 'No textual diff (binary or file mode change).'))
+            return
         if entry.kind == 'commit':
             self.preview.show_text(entry.path, f'Submodule commit: {entry.oid}\nOpen its repository to browse its files.')
             return
@@ -443,8 +569,21 @@ class GitPage(qt.QWidget):
                   lambda text: self.preview.show_text(entry.path + ' · ' + entry.oid[:8], text))
 
     def _view_changed(self, index):
-        if index == 1 and self.history.selected_commit() is None and self.history.table.topLevelItemCount():
-            self.history.table.setCurrentItem(self.history.table.topLevelItem(0))
+        target = self.history_preview_layout if index == 1 else self.change_preview_layout
+        target.addWidget(self.preview)
+        self.preview.hide_file_actions()
+        self._select_navigation(index)
+        if index == 1:
+            if self.history.selected_commit() is None and self.history.table.topLevelItemCount():
+                self.history.table.setCurrentItem(self.history.table.topLevelItem(0))
+            elif self.history.selected_commit(): self.preview_commit(self.history.selected_commit())
+        else:
+            for tree in (self.changes.staged_files, self.changes.unstaged_files):
+                item=tree.currentItem()
+                if item:
+                    self.preview_change(*item.data(0,qt.Qt.ItemDataRole.UserRole))
+                    break
+            else: self.preview.show_text('Select a changed file', '')
 
     def load_more(self):
         self.history_limit = min(5000, self.history_limit + 200)
@@ -526,7 +665,13 @@ class GitPage(qt.QWidget):
 
     def _ref_activated(self, item, column):
         value = item.data(0, qt.Qt.ItemDataRole.UserRole)
-        if value and value[0] == 'branch':
+        if value and value[0] == 'submodule':
+            candidate=(self.path / value[1]).resolve()
+            if candidate.is_relative_to(self.path.resolve()): self.open_repository(candidate)
+            else: self._message('The submodule path is outside this repository.', error=True)
+        elif value and value[0] == 'subtree':
+            self.repository_tools.subtree_dialog()
+        elif value and value[0] == 'branch':
             self._operation('Switch branch', lambda repo: repo.switch(value[1]))
 
     def ref_menu(self, point):
@@ -591,12 +736,15 @@ class GitPage(qt.QWidget):
     def show_ref_commit(self, ref):
         # Tags can point to annotated tag objects: resolve to a commit first.
         path = self.path
+        full_tree = bool(self.history.file_mode.currentIndex())
         def read(runner):
             repo = Repository(path, runner)
             oid = repo.run(['rev-parse', '--verify', ref.name + '^{commit}']).stdout.decode('ascii').strip()
-            return oid, repo.commit_details(oid), repo.tree(oid)
+            return oid, repo.commit_details(oid), (repo.tree(oid) if full_tree else repo.commit_files(oid))
         def show(result):
             oid, text, entries = result
+            self.history.search.clear()
+            self.history.branch_filter.setCurrentIndex(0)
             with qt.QSignalBlocker(self.history.table):
                 self.history.table.setCurrentItem(None)
                 for index in range(self.history.table.topLevelItemCount()):
@@ -606,8 +754,13 @@ class GitPage(qt.QWidget):
                         break
             self.preview.show_text(ref.name, text)
             self.history.set_tree(entries)
+            self.history.metadata.setPlainText(text.split("\ndiff --git ", 1)[0])
+            self.preview.hide_file_actions()
             with qt.QSignalBlocker(self.views): self.views.setCurrentIndex(1)
-        self._job('Read tag commit', read, show)
+            self.history_preview_layout.addWidget(self.preview)
+            self._select_navigation(1)
+            self.history.select_first_file()
+        self._job('Read reference commit', read, show)
 
     def stash_action(self, action, ref):
         if self._confirm(action.capitalize() + ' stash?', f'{action.capitalize()} {ref}?' + (' Dropped stashes may be difficult to recover.' if action == 'drop' else ' Conflicts may need manual resolution.')):
