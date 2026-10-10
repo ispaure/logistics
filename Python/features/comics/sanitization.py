@@ -221,8 +221,9 @@ class CBZSanitizationMixin:
             if file.path == padded_path:
                 continue
             # Rename file
-            result = fileUtils.rename_file(file.path, padded_path)
-            if not result:
+            try:
+                file.rename_file(padded_path)
+            except OSError:
                 msg = f'File {file.path} could not be renamed!'
                 log(Severity.ERROR, padding_tool_name, msg)
                 return False
