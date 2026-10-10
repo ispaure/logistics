@@ -164,10 +164,10 @@ file types, preview panels, context menus, activation, controllers and safe clos
 The reusable API and standalone examples live in the
 [commonUtils author guide](../commonUtils/FEATURES.md).
 
-### Session feature controls
+### Persistent feature controls
 
 The core Features tab shows installed features, enabled state, requirements, and
-enabled dependents. Toggles are session-only and reset on restart. Enabling a feature
+enabled dependents. Enabled choices are saved in private feature preferences and loaded before startup initialization. Enabling a feature
 enables its hard dependencies first; disabling a dependency with enabled dependents
 is refused with their names. Missing packages are listed but cannot be enabled.
 `is_feature_available` still describes installed packages/dependencies;
@@ -285,11 +285,54 @@ TypeError naming the feature and category rather than reaching folder discovery.
 
 ## Independent text documents
 
-Text Editor owns one standalone window through a QApplication-parented service.
-Browser controllers forward opens and receive saved-path notifications, while
-closing a browser leaves documents alive. The retained feature page participates
-in application shutdown so disabled/re-enabled features do not silently discard
-buffers. Native QTabWidget document tabs are separate from dock-based browser
-workspaces because their close lifecycle includes save/discard/cancel decisions.
-Conditional FileActivation predicates let generic text handling coexist with
-specialized viewers; existing activation declarations retain their original defaults.
+Text Editor retains one window per document through a QApplication-parented
+EditorService. Browser controllers forward opens and receive saved-path events;
+closing the originating browser leaves hosted documents alive. Open files reuse
+an existing owner. Each EditorWindow contains a document stack and optional split
+views; document tabs belong to the shared dock workspace in DocumentsPage.
+
+The document host asks `request_document_close()` for `CloseOutcome.ACCEPTED`,
+`VETOED`, or `PENDING`. An owner implementing `request_close()` distinguishes a
+user's Cancel decision from asynchronous retirement. It exposes `idle` when work
+stops. Plain windows retain native close vetoes; legacy `prepare_close()` can defer
+closure. The host does not inspect private worker/cache fields. Save prompts,
+subordinate dialogs and cancellation boundaries remain the owner's responsibility.
+
+## Reusable presentation and persistence
+
+- `commonUtils.ui.outline.OutlineEntry` carries ID, label, depth and opaque target.
+  OutlineList and OutlineTree present Markdown headings, EPUB chapters and book
+  bookmarks. The reader resolves activation; entries are not filesystem objects.
+- `reader_chrome.reading_spin` and `show_reader_popup` standardize appearance
+  controls and screen-bounded placement. Readers supply ranges and callbacks.
+- `text_commands.wrap_selection` shares one-step, UTF-16-aware wrapping across
+  code/source/formatted editors. Selection and character-format policies are explicit.
+- `entry_views` shares extended selection and typed sorting. ArchiveContents keeps
+  its member model and list-only view; FileBrowser keeps its filesystem/index model.
+- `commonUtils.persistence.atomic_write_bytes` validates before staging and before
+  publication; atomic_write_json adds serialization and optional limits/directory
+  durability. Format rules, encoding, symlink policy and schemas belong to callers.
+- `operations.ResultWorker` retains result/error until finished. GitWorker supplies
+  cancellation/redaction policy; BookTask supplies an interruption predicate.
+  Operation preserves its existing callback signal; OperationProgress remains the
+  owner-facing finish-safe progress API.
+
+Git job lifecycle is in `features/git/ui/jobs.py`; EPUB bookmark commands are in
+`features/books/bookmarks.py`. Their containing pages retain presentation and
+public command compatibility.
+
+## Application notifications
+
+`ui_new.notifications.notification_service()` retains a bounded NotificationCenter
+for the QApplication. Features publish Notice events through `notify`, with source,
+ID, title, plain-text message, outcome, optional details action and native delivery
+preference. Stable IDs deduplicate an event; acknowledgement clears unread state.
+The main window owns a shared Toast presenter. Folder Actions retains its result
+panes and badge, and forwards completion/native notice presentation to the service.
+Archives publishes create/edit/extract/test outcomes through the same service.
+Cancellation is distinct from failure. Native delivery is optional; retained
+results do not depend on a system notification service. Widget-bound details
+callbacks are weak and checked for a live Qt owner.
+
+Notifications are passive results. Password prompts, destructive confirmations
+and save/discard/cancel decisions remain feature-owned dialogs.
