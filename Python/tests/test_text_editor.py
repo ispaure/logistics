@@ -32,14 +32,18 @@ class TextEditorTests(unittest.TestCase):
             history_path=self.root / "recent.json",
             preferences_path=self.root / "preferences.ini",
         )
+        self.service = self.window.service
         self.addCleanup(self.cleanup)
 
     def cleanup(self):
-        self.wait()
-        for doc in self.window.documents:
-            doc.editor.document().setModified(False)
-        self.window.close()
-        self.window.deleteLater()
+        service = self.service
+        for window in tuple(service.windows):
+            self.window = window
+            self.wait()
+            for doc in window.documents:
+                doc.editor.document().setModified(False)
+            window.close()
+            window.deleteLater()
         self.app.processEvents()
 
     def wait(self):
@@ -54,20 +58,21 @@ class TextEditorTests(unittest.TestCase):
         path = self.root / name
         path.write_bytes(data)
         self.window.open_path(path)
+        self.window = self.window.service.window
         self.wait()
         return path, self.window.current
 
-    def test_open_save_round_trip_and_duplicate_tabs(self):
+    def test_open_save_round_trip_and_duplicate_documents(self):
         for name, data in [
             ("script.py", b"print(1)\r\n"),
             (".env", b"VAR=1\r"),
             ("bom", b"\xef\xbb\xbfcaf\xc3\xa9"),
         ]:
             path, doc = self.open(name, data)
-            count = self.window.tabs.count()
+            count = self.window.document_stack.count()
             self.window.open_path(path)
             self.wait()
-            self.assertEqual(self.window.tabs.count(), count)
+            self.assertEqual(self.window.document_stack.count(), count)
             self.window.save_document()
             self.wait()
             self.assertEqual(path.read_bytes(), data)
@@ -76,6 +81,75 @@ class TextEditorTests(unittest.TestCase):
             self.window.save_document()
             self.wait()
             self.assertTrue(path.read_bytes().endswith(b" more"))
+
+    def test_open_file_replaces_blank_and_new_keeps_existing_dirty_document(self):
+        path, document = self.open('only.txt', b'Only file')
+        self.assertEqual(self.window.documents, [document])
+        self.assertEqual(document.path, path.resolve())
+        self.assertEqual(self.window.findChildren(qt.QTabWidget), [])
+        document.editor.insertPlainText('keep ')
+        original = self.window
+        new_window = original.new_document()
+        self.assertIsNot(new_window, original)
+        self.assertEqual(original.current.editor.toPlainText(), 'keep Only file')
+        self.assertIsNone(new_window.current.path)
+        self.assertEqual(len(original.service.windows), 2)
+        self.window = new_window
+
+    def test_repeated_open_during_loading_does_not_queue_a_second_buffer(self):
+        path = self.root / 'loading.txt'; path.write_text('One buffer')
+        self.window.open_path(path)
+        self.assertIsNone(self.window.current)
+        self.assertNotIn('Untitled', self.window.windowTitle())
+        self.window.open_path(path)
+        self.assertEqual(self.window._queue, [])
+        self.wait()
+        self.assertEqual(len(self.window.documents), 1)
+        self.assertEqual(self.window.current.path, path.resolve())
+        self.assertFalse(self.window.current.editor.isReadOnly())
+
+    def test_save_all_and_close_all_apply_to_separate_editor_panes(self):
+        first_path, first = self.open('first.txt', b'first')
+        first_window = self.window
+        second_path, second = self.open('second.txt', b'second')
+        second_window = self.window
+        first.editor.insertPlainText('new ')
+        second.editor.insertPlainText('new ')
+        service = self.window.service
+        self.window.actions['save_all'].trigger()
+        deadline = monotonic() + 5
+        while any(window.task.busy for window in service.windows):
+            self.assertLess(monotonic(), deadline)
+            self.app.processEvents(); sleep(.005)
+        self.assertEqual(first_path.read_text(), 'new first')
+        self.assertEqual(second_path.read_text(), 'new second')
+        first.editor.moveCursor(qt.QTextCursor.MoveOperation.Start)
+        first.editor.insertPlainText('dirty ')
+        with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Cancel):
+            self.window.actions['close_all'].trigger()
+            self.assertEqual(service.windows, [first_window, second_window])
+        with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Save):
+            self.window.actions['close_all'].trigger()
+            while service.windows:
+                self.assertLess(monotonic(), deadline)
+                self.app.processEvents(); sleep(.005)
+        self.assertEqual(first_path.read_text(), 'dirty new first')
+        # Both windows have accepted close and will be deleted; cleanup has no buffers left.
+
+    def test_save_all_waits_for_another_editor_already_saving(self):
+        first_path, first = self.open('first.txt', b'first')
+        first_window = self.window
+        second_path, second = self.open('second.txt', b'second')
+        first.editor.insertPlainText('new ')
+        second.editor.insertPlainText('new ')
+        first_window.save_document()
+        self.window.save_all()
+        deadline = monotonic() + 5
+        while any(window.task.busy for window in self.service.windows):
+            self.assertLess(monotonic(), deadline)
+            self.app.processEvents(); sleep(.005)
+        self.assertEqual(first_path.read_text(), 'new first')
+        self.assertEqual(second_path.read_text(), 'new second')
 
     def test_status_counts_unicode_characters_consistently_with_go_to(self):
         editor = self.window.current.editor
@@ -126,7 +200,7 @@ class TextEditorTests(unittest.TestCase):
             self.window.close_tab(0)
             self.wait()
         self.assertEqual(path.read_text(), "untitled")
-        self.assertEqual(self.window.tabs.count(), 0)
+        self.assertEqual(self.window.document_stack.count(), 0)
 
     def test_conflict_readonly_missing_and_binary_keep_buffer(self):
         path, doc = self.open("file", b"original")
@@ -154,14 +228,18 @@ class TextEditorTests(unittest.TestCase):
             self.assertIn("deleted", error.call_args.args[0])
         binary = self.root / "binary"
         binary.write_bytes(b"a\0b")
-        count = self.window.tabs.count()
+        count = self.window.document_stack.count()
         with patch.object(
             qt.QMessageBox, "warning", return_value=qt.QMessageBox.StandardButton.Cancel
         ):
+            owner = self.window
             self.window.open_path(binary)
-            self.wait()
-        self.assertEqual(self.window.tabs.count(), count)
+            failed_window = self.window.service.window
+            self.window = failed_window; self.wait()
+            self.window = owner
+        self.assertEqual(self.window.document_stack.count(), count)
         self.window.open_path(binary, force=True)
+        self.window = self.window.service.window
         self.wait()
         self.assertEqual(self.window.current.editor.toPlainText(), "a\0b")
 
@@ -225,38 +303,30 @@ class TextEditorTests(unittest.TestCase):
         self.window.edit("duplicate")
         self.assertEqual(doc.editor.toPlainText(), before)
 
-    def test_queued_open_close_external_change_and_shared_window(self):
-        from features.text_editor.service import EditorService
-
-        service = EditorService(self.app)
-        service.window = self.window
-        first = self.root / "first"
-        first.write_text("first")
-        second = self.root / "second"
-        second.write_text("second")
-        self.assertIs(service.open(first), service.open(second))
-        self.wait()
-        count = self.window.tabs.count()
-        service.open(first)
-        self.wait()
-        self.assertEqual(self.window.tabs.count(), count)
-        current = self.window.current
-        self.window._external_change(str(second.resolve()))
-        self.assertIs(self.window.current, current)
-        doc = next(doc for doc in self.window.documents if doc.path == second.resolve())
-        self.assertTrue(doc.external_changed)
-        self.window.close_all()
-        self.wait()
-        self.assertEqual(self.window.tabs.count(), 0)
-        self.window.new_document()
-        self.window.current.editor.insertPlainText("keep")
-        with patch.object(
-            qt.QMessageBox,
-            "question",
-            return_value=qt.QMessageBox.StandardButton.Cancel,
-        ):
+    def test_files_have_independent_editor_panes_and_reopening_reuses_the_document(self):
+        service = self.window.service
+        first = self.root / 'first'; first.write_text('first')
+        second = self.root / 'second'; second.write_text('second')
+        first_window = service.open(first)
+        second_window = service.open(second)
+        self.assertIsNot(first_window, second_window)
+        for window in (first_window, second_window):
+            self.window = window; self.wait()
+            self.assertEqual(len(window.documents), 1)
+            self.assertEqual(window.findChildren(qt.QTabWidget), [])
+        self.assertIs(service.open(first), first_window)
+        self.assertEqual(len(service.windows), 2)
+        self.assertEqual(first_window.current.editor.toPlainText(), 'first')
+        self.assertEqual(second_window.current.editor.toPlainText(), 'second')
+        second_window._external_change(str(second.resolve()))
+        self.assertTrue(second_window.current.external_changed)
+        self.assertFalse(first_window.current.external_changed)
+        first_window.current.editor.insertPlainText('keep')
+        with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Cancel):
             self.assertFalse(service.prepare_close())
-            self.assertEqual(self.window.current.editor.toPlainText(), "keep")
+            self.assertIn(first_window, service.windows)
+            self.assertEqual(first_window.current.editor.toPlainText(), 'keepfirst')
+        self.window = first_window
 
     def test_legacy_decoding_force_and_unicode_separator_save(self):
         path = self.root / "legacy"
@@ -282,8 +352,7 @@ class TextEditorTests(unittest.TestCase):
         from ui_new.file_browser import FileBrowserWindow
         from features import registry
 
-        service = EditorService(self.app)
-        service.window = self.window
+        service = self.window.service
         with patch.object(registry, "get_browser_extensions", return_value=[]):
             host = FileBrowserWindow(self.root)
         definition = register()

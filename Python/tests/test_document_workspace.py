@@ -52,6 +52,35 @@ class DocumentWorkspaceTests(unittest.TestCase):
         show_document(window)
         self.assertEqual(self.page.attached_count, 1)
 
+    def test_text_files_use_separate_host_tabs_without_inner_tabs_or_untitled_buffers(self):
+        from features.text_editor.service import EditorService
+        from time import monotonic, sleep
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            first = root / 'first.txt'; first.write_text('First')
+            second = root / 'second.txt'; second.write_text('Second')
+            service = EditorService(self.app, history_path=root/'recent.json', preferences_path=root/'editor.ini')
+            first_window = service.open(first)
+            second_window = service.open(second)
+            self.assertIs(service.open(first), first_window)
+            deadline = monotonic() + 5
+            while any(window.task.busy for window in service.windows):
+                self.assertLess(monotonic(), deadline)
+                self.app.processEvents(); sleep(.005)
+            self.settle()
+            self.assertEqual(self.page.attached_count, 2)
+            for window, path in ((first_window, first), (second_window, second)):
+                self.assertEqual(len(window.documents), 1)
+                self.assertEqual(window.current.path, path.resolve())
+                self.assertEqual(window.findChildren(qt.QTabWidget), [])
+            self.assertTrue(all(tab is None for window, title, tab, detached in self.page.document_entries()))
+            self.page.records[first_window]['dock'].tab_header.close_button.click()
+            self.settle()
+            self.assertEqual(self.page.count, 1)
+            self.assertEqual(service.windows, [second_window])
+            self.assertTrue(self.host.isVisible())
+            self.assertEqual(second_window.current.editor.toPlainText(), 'Second')
+
     def test_background_document_is_open_and_dialog_accept_removes_its_tab(self):
         first = qt.QDialog(); first.setWindowTitle('Metadata')
         second = qt.QMainWindow(); second.setWindowTitle('Reader')
