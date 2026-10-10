@@ -514,6 +514,8 @@ class BooksPage(qt.QWidget):
 
 class BookWindow(qt.QMainWindow):
     """Independent reader window retained by its browser controller."""
+    idle = qt.Signal()
+
     def __init__(self, path, parent=None):
         super().__init__(parent, qt.Qt.WindowType.Window)
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
@@ -523,6 +525,7 @@ class BookWindow(qt.QMainWindow):
         self.reader = BooksPage(self, initial_path=path, menu_bar=self.menuBar())
         self.setCentralWidget(self.reader)
         self.reader.idle.connect(self._finish_close)
+        self.reader.idle.connect(self.idle)
         self._close_pending = False
 
     def _finish_close(self):

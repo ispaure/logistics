@@ -25,6 +25,7 @@ class ComicReaderWindow(qt.QMainWindow):
     """
     metadata_saved = qt.Signal(object)
     closed = qt.Signal()
+    idle = qt.Signal()
 
     def __init__(self, pages):
         super().__init__()
@@ -49,6 +50,7 @@ class ComicReaderWindow(qt.QMainWindow):
         self.siblings = []
         self.page_cache = ReaderPageCache(self)
         self.page_cache.idle.connect(self._cache_idle)
+        self.page_cache.idle.connect(self.idle)
         self.menus = ReaderMenus(self)
         self.previous_file_action = self.menus.previous_file_action
         self.next_file_action = self.menus.next_file_action
@@ -219,6 +221,7 @@ class ComicReaderWindow(qt.QMainWindow):
         self.operation = Operation(callback, self)
         self.operation.completed.connect(completed)
         self.operation.finished.connect(self._finished)
+        self.operation.finished.connect(self.idle)
         self.operation.start()
 
     def _loaded(self, pages, index, images, error):
@@ -339,6 +342,7 @@ class ComicReaderWindow(qt.QMainWindow):
         self._refresh_siblings()
         editor = MetadataEditor(self.pages.path, self.siblings, self)
         self.metadata_windows.append(editor)
+        editor.idle.connect(self.idle)
         editor.saved.connect(self._metadata_saved)
         show_document(editor)
         return editor
@@ -379,6 +383,14 @@ class ComicReaderWindow(qt.QMainWindow):
         for window in self.metadata_windows:
             if window.busy:
                 window.operation.wait()
+
+    def request_close(self):
+        from commonUtils.ui.document_host import CloseOutcome, close_document
+        accepted = close_document(self)
+        pending = self.busy or self.page_cache.busy or any(window.busy for window in self.metadata_windows)
+        if pending:
+            return CloseOutcome.PENDING
+        return CloseOutcome.ACCEPTED if accepted else CloseOutcome.VETOED
 
     def closeEvent(self, event):
         from commonUtils.ui.document_host import host_keeps_document
