@@ -15,6 +15,7 @@ from .dialogs import FormDialog
 from .history import HistoryPanel
 from .preview import Preview
 from .worker import GitWorker
+from .repository_tools import RepositoryTools
 
 
 class GitPage(qt.QWidget):
@@ -30,6 +31,8 @@ class GitPage(qt.QWidget):
         self.path = None
         self.history_limit = 200
         self.closing = False
+        self._refresh_pending = False
+        self.repository_tools = RepositoryTools(self)
         self._build()
         self._repositories()
         self._set_busy(False)
@@ -101,7 +104,7 @@ class GitPage(qt.QWidget):
         self.content.addWidget(self.views)
         self.preview = Preview()
         self.content.addWidget(self.preview)
-        self.content.setSizes([190, 470, 520])
+        self.content.setSizes([170, 620, 380])
         self.content.setStretchFactor(0, 0)
         self.content.setStretchFactor(1, 1)
         self.content.setStretchFactor(2, 1)
@@ -136,6 +139,7 @@ class GitPage(qt.QWidget):
         layout.addLayout(status)
         self.log = qt.QPlainTextEdit()
         self.log.setReadOnly(True)
+        self.log.setLineWrapMode(qt.QPlainTextEdit.LineWrapMode.NoWrap)
         self.log.setAccessibleName('Git operation log')
         self.log.setMaximumBlockCount(1500)
         self.log.setMaximumHeight(170)
@@ -144,9 +148,12 @@ class GitPage(qt.QWidget):
         layout.addWidget(self.log)
         self.more_menu = qt.QMenu(self)
         for title, callback in (('Merge branch…', self.merge_dialog), ('Cherry-pick selected commit…', self.cherry_pick),
-                                ('Revert selected commit…', self.revert), ('Add remote…', self.remote_dialog),
-                                ('Worktrees…', self.worktrees_dialog), ('Submodules…', self.submodules_dialog),
-                                ('Subtrees…', self.subtree_dialog), ('Open repository folder', self.open_folder)):
+                                ('Revert selected commit…', self.revert), ('Compare selected commit to HEAD', self.compare_to_head),
+                                ('Create tag…', self.tag_dialog), ('Recover from reflog…', self.reflog_dialog),
+                                ('Commit identity…', self.identity_dialog),
+                                ('Add remote…', self.remote_dialog),
+                                ('Worktrees…', self.repository_tools.worktrees_dialog), ('Submodules…', self.repository_tools.submodules_dialog),
+                                ('Subtrees…', self.repository_tools.subtree_dialog), ('Open repository folder', self.open_folder)):
             self.more_menu.addAction(title, callback)
 
     @property
@@ -169,7 +176,18 @@ class GitPage(qt.QWidget):
     def _append_log(self, text):
         cursor = self.log.textCursor()
         cursor.movePosition(qt.QTextCursor.MoveOperation.End)
-        cursor.insertText(redact(text)[-65536:])
+        text = redact(text[-65536:]).replace('\r\n', '\n').replace('\r', '\n')
+        # Hooks can emit arbitrarily long lines. Cap them before Qt shapes text;
+        # retaining a megabyte-long single line can stall the GUI even without wrap.
+        text = '\n'.join(line if len(line) <= 4000 else line[:4000] + '\n[Log line truncated]\n'
+                         for line in text.split('\n'))
+        cursor.insertText(text)
+        count = self.log.document().characterCount()
+        if count > 1024 * 1024:
+            trim = qt.QTextCursor(self.log.document())
+            trim.setPosition(0)
+            trim.setPosition(count - 1024 * 1024, qt.QTextCursor.MoveMode.KeepAnchor)
+            trim.removeSelectedText()
         self.log.setTextCursor(cursor)
 
     def _job(self, label, action, after=None, *, refresh=False):
@@ -204,9 +222,10 @@ class GitPage(qt.QWidget):
             if after:
                 try: after(result)
                 except (OSError, ValueError) as exc: self._message(str(exc), error=True)
-        if refresh and self.path and not self.busy:
+        if (refresh or self._refresh_pending) and self.path and not self.busy:
             # Refresh even after failure: merge conflicts and cancellation can
             # leave valid new repository state. Keep the operation error visible.
+            self._refresh_pending = False
             self._refresh(error)
         if not self.busy: self.idle.emit()
 
@@ -287,7 +306,11 @@ class GitPage(qt.QWidget):
         self._job('Open repository', lambda runner: Repository(path, runner).snapshot(limit), opened)
 
     def refresh(self):
-        if self.path and not self.busy and not self.closing: self._refresh()
+        if self.closing or not self.path: return
+        if self.busy:
+            self._refresh_pending = True
+        else:
+            self._refresh()
 
     def _refresh(self, operation_error=''):
         path, limit = self.path, self.history_limit
@@ -482,9 +505,13 @@ class GitPage(qt.QWidget):
         dialog = FormDialog('Create branch', self)
         name = dialog.text('Branch name')
         switch = dialog.check('Switch to the new branch', True)
+        commit = self.history.selected_commit()
+        base = dialog.check('Start at selected history commit' + (f' ({commit.oid[:8]})' if commit else ''))
+        base.setEnabled(commit is not None)
         if dialog.submitted():
             value, checkout = name.text(), switch.isChecked()
-            self._operation('Create branch', lambda repo: repo.create_branch(value, checkout))
+            oid = commit.oid if commit and base.isChecked() else None
+            self._operation('Create branch', lambda repo: repo.create_branch(value, checkout, oid))
 
     def stash_dialog(self):
         dialog = FormDialog('Stash changes', self)
@@ -513,6 +540,7 @@ class GitPage(qt.QWidget):
             menu.addAction('Switch branch', lambda: self._operation('Switch branch', lambda repo: repo.switch(name)))
             menu.addAction('Merge into current branch…', lambda: self._merge(name))
             menu.addAction('Rename…', lambda: self.rename_branch(name))
+            menu.addAction('Set upstream…', lambda: self.upstream_dialog(name))
             menu.addAction('Delete merged branch…', lambda: self.delete_branch(name))
         elif kind == 'remote_branch' and not name.endswith('/HEAD'):
             menu.addAction('Check out tracking branch…', lambda: self.checkout_remote(name))
@@ -526,6 +554,8 @@ class GitPage(qt.QWidget):
                 menu.addAction(action.capitalize() + '…', lambda checked=False, action=action: self.stash_action(action, name))
         elif kind == 'tag':
             menu.addAction('View tag commit', lambda: self.show_ref_commit(ref))
+            menu.addAction('Push tag…', lambda: self.push_tag(name))
+            menu.addAction('Delete local tag…', lambda: self.delete_tag(name))
         if menu.actions(): menu.exec(self.refs.viewport().mapToGlobal(point))
 
     def rename_branch(self, old):
@@ -539,6 +569,14 @@ class GitPage(qt.QWidget):
         if self._confirm('Delete branch?', f'Delete local branch {name}? Git will refuse if it is unmerged or checked out.'):
             self._operation('Delete merged branch', lambda repo: repo.delete_branch(name))
 
+    def upstream_dialog(self, name):
+        dialog = FormDialog('Set branch upstream', self, f'Configure tracking for {name} without pushing any commits.')
+        remote = dialog.choice('Remote branch', [r.name for r in self.snapshot.refs
+                              if r.name.startswith('refs/remotes/') and not r.name.endswith('/HEAD')])
+        if dialog.submitted() and remote.currentText():
+            ref = remote.currentText()
+            self._operation('Set branch upstream', lambda repo: repo.set_upstream(name, ref))
+
     def checkout_remote(self, ref):
         dialog = FormDialog('Create tracking branch', self)
         name = dialog.text('Local branch name', ref.split('/', 1)[1])
@@ -547,7 +585,7 @@ class GitPage(qt.QWidget):
             from ..repository import argument
             def checkout(repo):
                 repo.run(['check-ref-format', '--branch', argument(value)])
-                return repo.run(['switch', '-c', value, '--track', argument(ref)])
+                return repo.run(['switch', '-c', value, '--track', argument('refs/remotes/' + ref)])
             self._operation('Create tracking branch', checkout)
 
     def show_ref_commit(self, ref):
@@ -556,11 +594,19 @@ class GitPage(qt.QWidget):
         def read(runner):
             repo = Repository(path, runner)
             oid = repo.run(['rev-parse', '--verify', ref.name + '^{commit}']).stdout.decode('ascii').strip()
-            return repo.commit_details(oid), repo.tree(oid)
+            return oid, repo.commit_details(oid), repo.tree(oid)
         def show(result):
-            self.preview.show_text(ref.name, result[0])
-            self.history.set_tree(result[1])
-            self.views.setCurrentIndex(1)
+            oid, text, entries = result
+            with qt.QSignalBlocker(self.history.table):
+                self.history.table.setCurrentItem(None)
+                for index in range(self.history.table.topLevelItemCount()):
+                    item = self.history.table.topLevelItem(index)
+                    if item.data(1, qt.Qt.ItemDataRole.UserRole).oid == oid:
+                        self.history.table.setCurrentItem(item)
+                        break
+            self.preview.show_text(ref.name, text)
+            self.history.set_tree(entries)
+            with qt.QSignalBlocker(self.views): self.views.setCurrentIndex(1)
         self._job('Read tag commit', read, show)
 
     def stash_action(self, action, ref):
@@ -568,10 +614,18 @@ class GitPage(qt.QWidget):
             self._operation(action.capitalize() + ' stash', lambda repo: repo.stash_action(action, ref))
 
     def remote_dialog(self, name=None):
+        if name:
+            path = self.path
+            self._job('Read remote URL', lambda runner: Repository(path, runner).remote_details(name),
+                      lambda url: self._remote_form(name, url))
+        else:
+            self._remote_form()
+
+    def _remote_form(self, name=None, current_url=''):
         dialog = FormDialog('Edit remote URL' if name else 'Add remote', self)
         remote = dialog.text('Remote name', name or 'origin')
         if name: remote.setReadOnly(True)
-        url = dialog.text('Repository URL or local path')
+        url = dialog.text('Repository URL or local path', current_url)
         if dialog.submitted():
             value, address = remote.text(), url.text()
             self._operation('Edit remote' if name else 'Add remote',
@@ -633,68 +687,60 @@ class GitPage(qt.QWidget):
     def _editor_saved(self, path):
         if self.path and Path(path).resolve().is_relative_to(self.path.resolve()): self.refresh()
 
-    def worktrees_dialog(self):
+    def compare_to_head(self):
+        selected = self.history.selected_commit()
+        if not selected or not self.snapshot:
+            self._message('Select a commit in History first.', error=True)
+            return
+        first, second, path = selected.oid, self.snapshot.status.oid, self.path
+        self._job('Compare revisions', lambda runner: Repository(path, runner).compare(first, second),
+                  lambda text: self.preview.show_text(f'{first[:8]} → HEAD {second[:8]}', text or 'No differences.'))
+
+    def tag_dialog(self):
+        dialog = FormDialog('Create tag', self, 'Leave the message empty for a lightweight tag. Tags are created locally; use the tag context menu to push one.')
+        name = dialog.text('Tag name')
+        message = dialog.text('Annotation (optional)')
+        selected = self.history.selected_commit()
+        base = dialog.check('Tag selected history commit' + (f' ({selected.oid[:8]})' if selected else ''))
+        base.setEnabled(selected is not None)
+        if dialog.submitted():
+            value, annotation = name.text(), message.text()
+            oid = selected.oid if selected and base.isChecked() else None
+            self._operation('Create tag', lambda repo: repo.create_tag(value, annotation, oid))
+
+    def push_tag(self, name):
+        dialog = FormDialog('Push tag', self, f'Publish tag {name}.')
+        remote = dialog.choice('Remote', self.snapshot.remotes)
+        if dialog.submitted() and remote.currentText():
+            value = remote.currentText()
+            self._operation('Push tag', lambda repo: repo.push_tag(value, name))
+
+    def delete_tag(self, name):
+        if self._confirm('Delete local tag?', f'Delete tag {name} locally? Any remote copy is kept.'):
+            self._operation('Delete tag', lambda repo: repo.delete_tag(name))
+
+    def reflog_dialog(self):
         path = self.path
         def show(entries):
-            dialog = FormDialog('Worktrees', self, '\n'.join(f'{e.get("worktree", "")} — {e.get("branch", "detached")}' for e in entries))
-            operation = dialog.choice('Action', ['Open worktree', 'Add worktree for existing branch'])
-            existing = dialog.choice('Existing worktree', [e['worktree'] for e in entries if 'worktree' in e])
-            destination = dialog.text('New worktree folder', folder=True)
-            branch = dialog.choice('Existing branch', [r.name[len('refs/heads/'):] for r in self.snapshot.refs if r.name.startswith('refs/heads/')])
-            if dialog.submitted():
-                if operation.currentIndex() == 0: self.open_repository(existing.currentText())
-                else:
-                    target, name = destination.text(), branch.currentText()
-                    if not target.strip(): self._message('Enter a worktree destination.', error=True); return
-                    self._operation('Add worktree', lambda repo: repo.add_worktree(target, name))
-        self._job('List worktrees', lambda runner: Repository(path, runner).worktrees(), show)
-
-    def submodules_dialog(self):
-        path = self.path
-        def show(text):
-            dialog = FormDialog('Submodules', self, text or 'No submodules. Updates check out the commits recorded by the parent repository.')
-            operation = dialog.choice('Action', ['Initialize/update recursively', 'Add submodule', 'Open submodule folder'])
-            url = dialog.text('URL for new submodule')
-            destination = dialog.text('Relative submodule path')
-            if dialog.submitted():
-                action, address, target = operation.currentIndex(), url.text(), destination.text()
-                if action == 0: self._operation('Update submodules', lambda repo: repo.update_submodules())
-                elif action == 1: self._operation('Add submodule', lambda repo: repo.add_submodule(address, target))
-                else:
-                    candidate = (self.path / target).resolve()
-                    if not target or not candidate.is_relative_to(self.path.resolve()):
-                        self._message('Choose a submodule path within this repository.', error=True)
-                    else: self.open_repository(candidate)
-        self._job('Read submodule status', lambda runner: Repository(path, runner).submodules(), show)
-
-    def subtree_dialog(self):
-        path = self.path
-        def show(result):
-            if result.returncode not in (0, 129) or 'git subtree' not in (result.stdout.decode('utf-8', 'replace') + result.stderr):
-                self._message('git subtree is unavailable in this Git installation.', error=True)
+            if not entries:
+                self._message('This repository has no HEAD reflog entries.')
                 return
-            dialog = FormDialog('Subtrees', self, 'Add, pull, or push a repository at a relative directory prefix. Git must have a clean working tree. Successful mappings are remembered locally.')
-            saved = self.preferences.subtrees.get(str(path), [])
-            saved = [v for v in saved if isinstance(v, dict) and all(isinstance(v.get(k), str) for k in ('prefix', 'url', 'branch'))]
-            mapping = dialog.choice('Saved mapping', ['New mapping', *(v['prefix'] for v in saved)])
-            action = dialog.choice('Action', ['add', 'pull', 'push'])
-            prefix = dialog.text('Directory prefix')
-            url = dialog.text('Upstream URL')
-            branch = dialog.text('Upstream branch', 'main')
-            squash = dialog.check('Squash imported history')
-            def populate(index):
-                if index:
-                    value = saved[index - 1]
-                    prefix.setText(value['prefix']); url.setText(value['url']); branch.setText(value['branch'])
-                    squash.setChecked(bool(value.get('squash')))
-            mapping.currentIndexChanged.connect(populate)
+            dialog = FormDialog('Recover from reflog', self, 'Create a branch at a previous HEAD position. This preserves the current working tree unless you choose to switch branches. Only the latest 100 HEAD entries are shown.')
+            entry = dialog.choice('Reflog entry', [f'{ref} · {oid[:8]} · {message}' for oid, ref, message in entries])
+            name = dialog.text('Recovery branch', 'rescue/recovered')
+            switch = dialog.check('Switch to recovery branch')
             if dialog.submitted():
-                operation = action.currentText()
-                value = {'prefix': prefix.text(), 'url': url.text(), 'branch': branch.text(), 'squash': squash.isChecked()}
-                if operation == 'push' and not self._confirm('Push subtree?', f'Publish {value["prefix"]} to {value["url"]}, branch {value["branch"]}?'):
-                    return
-                def remember(result):
-                    self.preferences.subtrees[str(path)] = [value, *(v for v in saved if v['prefix'] != value['prefix'])]
-                    self._save()
-                self._operation('Subtree ' + operation, lambda repo: repo.subtree(operation, value['prefix'], value['url'], value['branch'], value['squash']), remember)
-        self._job('Check subtree availability', lambda runner: runner.run(['subtree', '-h'], check=False), show)
+                oid, value, checkout = entries[entry.currentIndex()][0], name.text(), switch.isChecked()
+                self._operation('Create recovery branch', lambda repo: repo.create_branch(value, checkout, oid))
+        self._job('Read reflog', lambda runner: Repository(path, runner).reflog(), show)
+
+    def identity_dialog(self):
+        path = self.path
+        def show(values):
+            dialog = FormDialog('Repository commit identity', self, 'Save author identity in this repository’s local Git configuration. Linked worktrees share these settings. Global Git settings are kept.')
+            name = dialog.text('Author name', values[0])
+            email = dialog.text('Author email', values[1])
+            if dialog.submitted():
+                author, address = name.text(), email.text()
+                self._operation('Save repository identity', lambda repo: repo.set_identity(author, address))
+        self._job('Read commit identity', lambda runner: Repository(path, runner).identity(), show)

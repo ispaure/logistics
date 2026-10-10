@@ -2,7 +2,6 @@
 from pathlib import Path
 import os
 import shutil
-import subprocess
 from tempfile import TemporaryDirectory
 from threading import Event
 import unittest
@@ -129,6 +128,9 @@ class GitBackendTests(unittest.TestCase):
         self.repo.runner.run(['init', '--bare', '--', str(bare)])
         self.repo.remote_add('origin', str(bare))
         self.repo.push('origin', 'main')
+        self.repo.run(['branch', '--unset-upstream'])
+        self.repo.set_upstream('main', 'refs/remotes/origin/main')
+        self.assertEqual(self.repo.status().upstream, 'origin/main')
         self.repo.runner.run(['--git-dir', str(bare), 'symbolic-ref', 'HEAD', 'refs/heads/main'])
         copy = Repository(clone(str(bare), self.root / 'copy'))
         self.assertEqual(copy.status().branch, 'main')
@@ -146,6 +148,56 @@ class GitBackendTests(unittest.TestCase):
     def test_clone_refuses_nonempty_destination(self):
         self.commit()
         with self.assertRaises(GitError): clone(str(self.repo.path), self.repo.path)
+
+    def test_push_only_updates_current_upstream_even_with_matching_config(self):
+        first = self.commit()
+        bare = self.root / 'remote.git'
+        self.repo.runner.run(['init', '--bare', '--', str(bare)])
+        self.repo.remote_add('origin', str(bare))
+        self.repo.push('origin', 'main')
+        self.repo.create_branch('other')
+        self.repo.push('origin', 'other')
+        other = self.commit('other.txt', message='Other change')
+        self.repo.switch('main')
+        main = self.commit('main.txt', message='Main change')
+        self.repo.run(['config', 'push.default', 'matching'])
+        self.repo.push()
+        read = lambda ref: self.repo.runner.run(['--git-dir', str(bare), 'rev-parse', ref]).stdout.decode().strip()
+        self.assertEqual(read('main'), main)
+        self.assertEqual(read('other'), first)
+        self.assertNotEqual(read('other'), other)
+
+    def test_tags_comparison_and_reflog_recovery(self):
+        first = self.commit()
+        self.repo.create_tag('v1.0', 'First release', first)
+        self.repo.create_tag('lightweight', oid=first)
+        self.assertIn('refs/tags/v1.0', [ref.name for ref in self.repo.refs()])
+        self.commit(content='second\n', message='Second')
+        lost = self.repo.status().oid
+        self.assertIn('+second', self.repo.compare(first, lost))
+        self.repo.commit('Replace second', amend=True)
+        reflog = self.repo.reflog()
+        self.assertIn(lost, [entry[0] for entry in reflog])
+        self.repo.create_branch('rescue/recovered', switch=False, start_oid=lost)
+        self.assertEqual(next(r.oid for r in self.repo.refs() if r.name == 'refs/heads/rescue/recovered'), lost)
+        bare = self.root / 'tags.git'
+        self.repo.runner.run(['init', '--bare', '--', str(bare)])
+        self.repo.remote_add('origin', str(bare)); self.repo.push_tag('origin', 'v1.0')
+        self.assertEqual(self.repo.runner.run(['--git-dir', str(bare), 'rev-parse', 'v1.0^{commit}']).stdout.decode().strip(), first)
+        self.repo.delete_tag('lightweight')
+        self.assertNotIn('refs/tags/lightweight', [r.name for r in self.repo.refs()])
+
+    def test_repository_identity_can_be_configured_without_global_edits(self):
+        self.repo.set_identity('Local Author', 'local@example.invalid')
+        self.assertEqual(self.repo.identity(), ('Local Author', 'local@example.invalid'))
+        self.commit()
+        self.assertEqual(self.repo.history()[0].author, 'Local Author')
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX path fixture')
+    def test_repository_root_preserves_trailing_newline(self):
+        path = self.root / 'repo\n'
+        repo = Repository(initialize(path))
+        self.assertEqual(repo.root(), path.resolve())
 
     def test_worktree_discovery_and_creation(self):
         self.commit()
@@ -170,7 +222,7 @@ class GitBackendTests(unittest.TestCase):
     def test_invalid_options_credentials_and_ids_rejected(self):
         for value in ('-x', '', 'line\nbreak'):
             with self.assertRaises(GitError): argument(value)
-        for value in ('https://token@example.com/repo', 'https://example.com/repo?token=x'):
+        for value in ('https://token@example.com/repo', 'https://example.com/repo?token=x', 'ssh://user:secret@host/repo'):
             with self.assertRaises(GitError): remote_url(value)
         with self.assertRaises(GitError): self.repo.commit_details('HEAD;anything')
         with self.assertRaises(GitError): self.repo.create_branch('-bad')
@@ -261,9 +313,9 @@ class GitBackendTests(unittest.TestCase):
 
 class GitParsingTests(unittest.TestCase):
     def test_redaction(self):
-        secret = 'fatal https://user:secret@example.com/repo?token=abc password=hunter2'
+        secret = 'fatal https://user:secret@example.com/repo?token=abc password=hunter2 ssh://user:othersecret@host/repo Authorization: Bearer sensitive'
         result = redact(secret)
-        for value in ('secret', 'abc', 'hunter2'): self.assertNotIn(value, result)
+        for value in ('secret', 'abc', 'hunter2', 'sensitive'): self.assertNotIn(value, result)
 
     def test_conflict_parser_and_branch_tracking(self):
         data = (b'# branch.oid abc\0# branch.head main\0# branch.upstream origin/main\0# branch.ab +2 -3\0'
