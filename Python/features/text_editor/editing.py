@@ -76,6 +76,9 @@ class EditingCommands:
             ),
         ]:
             self.action(self._edit_menu, key, label, callback, shortcut)
+        self.action(self._edit_menu, "next_occurrence", "Add Next Occurrence", lambda: self.edit("add_next_occurrence"), "Ctrl+Alt+D")
+        self.action(self._edit_menu, "rectangle", "Rectangular Selection from Selection", lambda: self.edit("rectangular_selection"))
+        self.action(self._edit_menu, "clear_cursors", "Clear Extra Cursors", lambda: self.edit("clear_extra_cursors"))
         views = self._view_menu.addMenu("Document Views")
         for key, label, orientation in [
             ("split_vertical", "Split Side by Side", qt.Qt.Orientation.Horizontal),
@@ -134,7 +137,7 @@ class EditingCommands:
         )
         self.escape = qt.QShortcut(qt.QKeySequence("Escape"), self)
         self.escape.setContext(qt.Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        self.escape.activated.connect(self.search.close_panel)
+        self.escape.activated.connect(self.escape_editor)
         self.encoding_button = self._status_button("Encoding", self.choose_encoding)
         self.endings_button = self._status_button("Line endings", self.choose_endings)
         self.indent_button = self._status_button("Indentation", self.choose_indentation)
@@ -429,3 +432,9 @@ class EditingCommands:
             editor.cursorPositionChanged.connect(document.changed)
             editor.zoom_changed.connect(self._preferences_changed)
         self._active_changed()
+
+    def escape_editor(self):
+        if self.current and self.current.editor.extra_cursors:
+            self.current.editor.clear_extra_cursors()
+        else:
+            self.search.close_panel()

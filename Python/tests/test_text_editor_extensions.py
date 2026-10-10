@@ -124,3 +124,16 @@ class EditorExtensionTests(unittest.TestCase):
         self.window.split_document(None)
         self.assertIs(document.editor, primary)
         self.assertEqual(primary.toPlainText(), "one\ntwo")
+
+    def test_multicursor_clears_on_other_view_edit_and_escape(self):
+        document = self.window.current
+        primary = document.editor
+        primary.setPlainText("foo foo")
+        primary.add_next_occurrence()
+        self.assertEqual(len(primary.extra_cursors), 1)
+        self.window.escape_editor()
+        self.assertEqual(primary.extra_cursors, [])
+        primary.add_next_occurrence()
+        self.window.split_document(qt.Qt.Orientation.Horizontal)
+        document.editor.insertPlainText("other")
+        self.assertEqual(primary.extra_cursors, [])
