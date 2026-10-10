@@ -105,6 +105,29 @@ class BrowserWindowTests(unittest.TestCase):
         self.assertEqual(extra.file_browser.navigation.library,self.root)
         self.assertFalse(extra.filesystem_scope)
 
+    def test_repeated_index_progress_does_not_relayout_browser_controls(self):
+        window = self.window([])
+        browser = window.file_browser
+        window.index_status.refresh()
+        with patch.object(browser, '_update_pause_button', wraps=browser._update_pause_button) as layout:
+            for _ in range(5):
+                browser._index_progressed('Indexing files · 42 processed this run')
+            layout.assert_not_called()
+        self.assertIn('42 processed this run', window.index_status.label.text())
+
+    def test_cached_size_loading_keeps_status_instead_of_flashing_scan_progress(self):
+        window = self.window([])
+        browser = window.file_browser
+        before = browser.index_status.text()
+        browser.folder_busy = True
+        browser._loading_cached_only = True
+        try:
+            browser._index_progressed('Waiting for index writer · 0 entries/s')
+            self.assertEqual(browser.index_status.text(), before)
+            self.assertEqual(window.index_status.label.text(), before)
+        finally:
+            browser.folder_busy = False
+
     def test_workspace_shares_one_bottom_index_status_across_tabs(self):
         window = self.window([])
         first = window.file_browser
@@ -174,7 +197,7 @@ class BrowserWindowTests(unittest.TestCase):
         self.assertFalse(original.closing)
         self.assertFalse(original.file_browser.stopping)
 
-    def test_busy_tab_close_waits_for_its_own_controller(self):
+    def test_busy_tab_disappears_immediately_and_retains_its_controller(self):
         class BusyExtension(qt.QObject):
             idle = qt.Signal()
             ready = False
@@ -187,8 +210,13 @@ class BrowserWindowTests(unittest.TestCase):
         window.workspace.add_view(self.root)
         window.extensions[0].ready = True
         self.wait(window)
-        dock.close()
-        self.assertEqual(len(window.workspace.docks), 2)
+        with patch.object(controller, 'prepare_close', wraps=controller.prepare_close) as cleanup:
+            dock.close()
+            cleanup.assert_not_called()
+        self.assertEqual(len(window.workspace.docks), 1)
+        self.assertIn(dock, window.workspace._retiring)
+        self.assertFalse(dock.isVisible())
+        self.app.processEvents()
         controller.ready = True
         controller.idle.emit()
         controller.idle.emit()
