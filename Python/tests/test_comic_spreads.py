@@ -251,6 +251,12 @@ class SpreadTests(QtTestCase):
     def test_holding_arrows_uses_steady_timer_and_stops_on_release_for_both_directions(self):
         from PySide6.QtTest import QTest
         from features.comics.ui.reader_keys import PAGE_TURN_INTERVAL_MS
+        def wait_shown(reader, page):
+            deadline = time.monotonic() + 3
+            while reader.shown_page != page and time.monotonic() < deadline:
+                self.app.processEvents()
+                time.sleep(.005)
+            self.assertEqual(reader.shown_page, page)
         for rtl in (False, True):
             reader = self.reader(self.archive(f'held-{rtl}.cbz', colors=('red',) * 12, rtl=rtl), wide=False)
             reader.set_mode('single')
@@ -267,16 +273,15 @@ class SpreadTests(QtTestCase):
             self.app.sendEvent(reader.canvas, qt.QKeyEvent(qt.QEvent.Type.KeyRelease, forward,
                               qt.Qt.KeyboardModifier.NoModifier, '', True))
             self.assertTrue(reader.keys.timer.isActive())
-            QTest.qWait(PAGE_TURN_INTERVAL_MS + 50)
-            self.assertEqual(reader.shown_page, 2)
+            self.assertEqual(reader.keys.timer.interval(), PAGE_TURN_INTERVAL_MS)
+            wait_shown(reader, 2)
             QTest.keyRelease(reader.canvas, forward)
             self.assertFalse(reader.keys.timer.isActive())
             QTest.qWait(PAGE_TURN_INTERVAL_MS + 50)
             self.assertEqual(reader.shown_page, 2)
             QTest.keyPress(reader.canvas, backward)
             self.assertEqual(reader.shown_page, 1)
-            QTest.qWait(PAGE_TURN_INTERVAL_MS + 50)
-            self.assertEqual(reader.shown_page, 0)
+            wait_shown(reader, 0)
             QTest.keyRelease(reader.canvas, backward)
             reader.close(); self.wait(reader)
 

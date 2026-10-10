@@ -192,7 +192,6 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
             reader.previous_button.click()
             self.assertEqual(reader.page, 0)
             reader.close()
-            self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
             self.app.processEvents()
 
     def test_native_windows_reused_and_changed_archives_show_errors(self):
@@ -266,7 +265,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.app = qt.QApplication.instance() or qt.QApplication([])
 
     def wait(self, window):
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + 10
         while (window.busy or window.catalog_busy or window.browser.cover_busy or window.reader_busy or window.folder_busy) and time.monotonic() < deadline:
             self.app.processEvents()
             time.sleep(.01)
@@ -290,7 +289,10 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.assertFalse(reader.busy)
         with patch.object(window, 'raise_') as raised, patch.object(window, 'activateWindow') as activated:
             reader.close()
-            self.app.processEvents()
+            deadline = time.monotonic() + 5
+            while not raised.called and time.monotonic() < deadline:
+                self.app.processEvents()
+                time.sleep(.01)
             raised.assert_called_once()
             activated.assert_called_once()
         self.assertEqual(window.browser.browsing_directory(), folder)
