@@ -1,4 +1,5 @@
 """General browser extension installation, actions and worker-safe closure."""
+from contextlib import closing
 
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
@@ -81,30 +82,30 @@ class BrowserWindowTests(QtTestCase):
         from commonUtils.directory_index import DirectoryCache
         cache_temp = TemporaryDirectory()
         self.addCleanup(cache_temp.cleanup)
-        directory_cache = DirectoryCache(database=Path(cache_temp.name) / 'index.sqlite3')
-        for name in ('commonUtils.directory_index.directory_cache',
-                     'commonUtils.ui.file_browser.index_worker.directory_cache',
-                     'commonUtils.ui.file_browser.index_search.directory_cache'):
-            patcher = patch(name, directory_cache)
-            patcher.start()
-            self.addCleanup(patcher.stop)
-        directory_cache.get(self.root)
-        with patch.object(Path,'home',return_value=self.root), patch.object(registry,'get_browser_extensions',return_value=[]):
-            page = FileBrowserPage(); page.show()
-        self.addCleanup(self.close_window,page)
-        self.wait(page)
-        browser = page.file_browser
-        self.assertEqual(browser.navigation.library,Path(self.root.anchor))
-        self.assertEqual(browser.navigation.directory,self.root)
-        self.assertTrue(browser.navigation.up.isEnabled())
-        self.assertFalse(browser.navigation.back.isEnabled())
-        # Construction indexes the opened home scope, never the filesystem root.
-        import sqlite3
-        with sqlite3.connect(directory_cache.database) as db:
-            self.assertIsNone(db.execute('SELECT 1 FROM roots WHERE root=?', (self.root.anchor,)).fetchone())
-        extra = page.workspace.add_view(self.root); self.wait(page)
-        self.assertEqual(extra.file_browser.navigation.library,self.root)
-        self.assertFalse(extra.filesystem_scope)
+        with DirectoryCache(database=Path(cache_temp.name) / 'index.sqlite3') as directory_cache:
+            for name in ('commonUtils.directory_index.directory_cache',
+                         'commonUtils.ui.file_browser.index_worker.directory_cache',
+                         'commonUtils.ui.file_browser.index_search.directory_cache'):
+                patcher = patch(name, directory_cache)
+                patcher.start()
+                self.addCleanup(patcher.stop)
+            directory_cache.get(self.root)
+            with patch.object(Path,'home',return_value=self.root), patch.object(registry,'get_browser_extensions',return_value=[]):
+                page = FileBrowserPage(); page.show()
+            self.addCleanup(self.close_window,page)
+            self.wait(page)
+            browser = page.file_browser
+            self.assertEqual(browser.navigation.library,Path(self.root.anchor))
+            self.assertEqual(browser.navigation.directory,self.root)
+            self.assertTrue(browser.navigation.up.isEnabled())
+            self.assertFalse(browser.navigation.back.isEnabled())
+            # Construction indexes the opened home scope, never the filesystem root.
+            import sqlite3
+            with closing(sqlite3.connect(directory_cache.database)) as db, db:
+                self.assertIsNone(db.execute('SELECT 1 FROM roots WHERE root=?', (self.root.anchor,)).fetchone())
+            extra = page.workspace.add_view(self.root); self.wait(page)
+            self.assertEqual(extra.file_browser.navigation.library,self.root)
+            self.assertFalse(extra.filesystem_scope)
 
     def test_repeated_index_progress_does_not_relayout_browser_controls(self):
         window = self.window([])

@@ -28,7 +28,7 @@ class GitBackendTests(unittest.TestCase):
     def write(self, name='file.txt', content='one\n'):
         path = self.repo.path / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding='utf-8')
+        path.write_text(content, encoding='utf-8', newline='')
         return path
 
     def commit(self, name='file.txt', content='one\n', message='First'):
@@ -301,7 +301,7 @@ class GitBackendTests(unittest.TestCase):
         source.stage(['child.txt']); source.commit('Update child')
         self.repo.subtree('pull', 'vendor/child', str(source.path), 'main', squash=True)
         self.assertEqual((self.repo.path/'vendor/child/child.txt').read_text(), 'updated\n')
-        (self.repo.path/'vendor/child/child.txt').write_text('published\n')
+        (self.repo.path/'vendor/child/child.txt').write_text('published\n', newline='')
         self.repo.stage(['vendor/child/child.txt']); self.repo.commit('Vendor fix')
         bare = self.root / 'subtree-remote.git'
         self.repo.runner.run(['init', '--bare', '--', str(bare)])

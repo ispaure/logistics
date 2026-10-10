@@ -192,6 +192,7 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
             reader.previous_button.click()
             self.assertEqual(reader.page, 0)
             reader.close()
+            self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
             self.app.processEvents()
 
     def test_native_windows_reused_and_changed_archives_show_errors(self):

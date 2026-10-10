@@ -64,7 +64,7 @@ class RcloneProgressTests(QtTestCase):
                     patch('features.rclone.sync.cmdShellWrapper.exec_cmd') as console:
                 self.assertTrue(rclone_sync('Remote:', destination, config_path='/selected.conf'))
                 console.assert_not_called()
-                self.assertEqual(opened.call_args.args[1], '/rclone')
+                self.assertEqual(Path(opened.call_args.args[1]), Path('/rclone'))
                 self.assertIn('/selected.conf', opened.call_args.args[2])
                 self.assertTrue(destination.is_dir())
 

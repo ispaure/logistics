@@ -343,7 +343,8 @@ class TextEditorTests(QtTestCase):
         self.window.save_document()
         self.wait()
         self.assertEqual(path.read_bytes(), "one\u2029two".encode())
-        self.assertTrue(qt.QFontInfo(doc.editor.font()).fixedPitch())
+        metrics = qt.QFontMetrics(doc.editor.font())
+        self.assertEqual(metrics.horizontalAdvance("iiii"), metrics.horizontalAdvance("WWWW"))
 
     def test_real_browser_activation_and_disable_reenable_reuse_buffers(self):
         from features.text_editor import register

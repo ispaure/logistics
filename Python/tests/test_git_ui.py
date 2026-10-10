@@ -331,7 +331,7 @@ class GitUITests(QtTestCase):
         self.page.open_repository(self.root / 'missing'); self.wait()
         self.assertEqual(self.page.path, original)
         self.assertTrue(self.page.toolbar.isEnabled())
-        self.assertIn('No such file', self.page.status.text())
+        self.assertIn('invalid' if os.name == 'nt' else 'No such file', self.page.status.text())
 
     def test_repository_switch_respects_commit_draft(self):
         self.open()

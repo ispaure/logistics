@@ -259,6 +259,7 @@ class SpreadTests(QtTestCase):
             backward = qt.Qt.Key.Key_Right if rtl else qt.Qt.Key.Key_Left
             QTest.keyPress(reader.canvas, forward)
             self.assertEqual(reader.shown_page, 1)
+            self.wait(reader)
             for _ in range(10):
                 self.app.sendEvent(reader.canvas, qt.QKeyEvent(qt.QEvent.Type.KeyPress, forward,
                                   qt.Qt.KeyboardModifier.NoModifier, '', True))

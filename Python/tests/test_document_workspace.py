@@ -81,6 +81,8 @@ class DocumentWorkspaceTests(QtTestCase):
             self.assertEqual(service.windows, [second_window])
             self.assertTrue(self.host.isVisible())
             self.assertEqual(second_window.current.editor.toPlainText(), 'Second')
+            second_window.close()
+            self.settle()
 
     def test_closed_document_retires_without_recreating_native_window_or_menu(self):
         document = qt.QMainWindow()

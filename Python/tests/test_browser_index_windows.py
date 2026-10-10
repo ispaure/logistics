@@ -31,6 +31,7 @@ class BrowserWindowIndexTests(QtTestCase):
         self.background = self.root / 'a-background'; self.background.mkdir()
         (self.background / 'file.txt').write_bytes(b'x')
         self.cache = DirectoryCache(database=base / 'cache' / 'index.sqlite3')
+        self.addCleanup(self.cache.close)
         self.patches = [patch(name,self.cache) for name in (
             'commonUtils.directory_index.directory_cache',
             'commonUtils.ui.file_browser.index_worker.directory_cache',
