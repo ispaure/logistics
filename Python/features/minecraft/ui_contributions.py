@@ -2,7 +2,7 @@
 UI contributions exposed by the Logistics Minecraft feature.
 """
 
-from features.contributions import FeatureContributions, FolderFeatureContribution
+from features.contributions import Feature, FolderFeatureContribution
 from features.minecraft import detection
 from models.folder_entry import FolderEntry
 
@@ -27,10 +27,11 @@ def _create_widget(entry: FolderEntry, parent=None):
     return MinecraftFolderWidget(entry, parent=parent)
 
 
-def get_contributions() -> FeatureContributions:
+def get_contributions() -> Feature:
     """Return UI contributions provided by Minecraft."""
 
-    return FeatureContributions(
+    return Feature(
+        id='minecraft', label='Minecraft',
         folder_features=[
             FolderFeatureContribution(
                 name='Minecraft',

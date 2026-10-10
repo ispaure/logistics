@@ -3,7 +3,7 @@ UI contributions exposed by Dropbox.
 """
 
 from features.contributions import (
-    FeatureContributions,
+    Feature,
     FolderFeatureContribution,
     LocalFolderSource,
     LocalFolderSourceContribution,
@@ -71,8 +71,9 @@ def _open_conflicts(data=None, parent=None):
     return dialog.exec()
 
 
-def get_contributions() -> FeatureContributions:
-    return FeatureContributions(
+def get_contributions() -> Feature:
+    return Feature(
+        id='dropbox', label='Dropbox',
         local_folder_sources=[
             LocalFolderSourceContribution(
                 name='Dropbox',

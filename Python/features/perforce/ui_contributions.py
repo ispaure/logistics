@@ -4,7 +4,7 @@ UI contributions exposed by the Logistics Perforce feature.
 
 from commonUtils.osUtils import OS, get_os
 
-from features.contributions import FeatureContributions, FolderFeatureContribution, UIAction
+from features.contributions import Feature, FolderFeatureContribution, UIAction
 from features.perforce import actions, detection
 from models.folder_entry import FolderEntry
 
@@ -50,10 +50,11 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
     ]
 
 
-def get_contributions() -> FeatureContributions:
+def get_contributions() -> Feature:
     """Return UI contributions provided by Perforce."""
 
-    return FeatureContributions(
+    return Feature(
+        id='perforce', label='Perforce',
         folder_features=[
             FolderFeatureContribution(
                 name='Perforce',

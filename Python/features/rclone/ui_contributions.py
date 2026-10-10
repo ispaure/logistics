@@ -5,7 +5,7 @@ UI contributions exposed by the Logistics rclone feature.
 from pathlib import Path
 
 from features.contributions import (
-    FeatureContributions,
+    Feature,
     FolderFeatureContribution,
     SettingsContribution,
     RemoteFolderSource,
@@ -113,10 +113,12 @@ def _software_settings_note(parent):
     return note
 
 
-def get_contributions() -> FeatureContributions:
+def get_contributions() -> Feature:
     """Return UI contributions provided by rclone."""
 
-    return FeatureContributions(
+    from . import initialize
+    return Feature(
+        id='rclone', label='rclone', initialize=initialize,
         remote_folder_sources=[
             RemoteFolderSourceContribution(
                 name='rclone',

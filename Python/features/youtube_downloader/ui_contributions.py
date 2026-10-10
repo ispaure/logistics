@@ -2,7 +2,7 @@
 UI contributions exposed by the Logistics YouTube Downloader feature.
 """
 
-from features.contributions import FeatureContributions, FolderFeatureContribution, UIAction, WorkflowContribution
+from features.contributions import Feature, FolderFeatureContribution, UIAction, WorkflowContribution
 from features.youtube_downloader import detection
 from models.folder_entry import FolderEntry
 
@@ -35,10 +35,11 @@ def _open_manage(data=None, parent=None):
     return dialog.exec()
 
 
-def get_contributions() -> FeatureContributions:
+def get_contributions() -> Feature:
     """Return UI contributions provided by YouTube Downloader."""
 
-    return FeatureContributions(
+    return Feature(
+        id='youtube_downloader', label='YouTube Downloader', optional_requires=('rclone',),
         folder_features=[
             FolderFeatureContribution(
                 name='YouTube Downloader',

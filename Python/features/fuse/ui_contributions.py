@@ -5,7 +5,7 @@ Folder UI contribution exposed by the optional Logistics FUSE feature.
 from pathlib import Path
 
 from features.contributions import (
-    FeatureContributions,
+    Feature,
     FolderFeatureContribution,
     UIAction,
 )
@@ -53,10 +53,12 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
     ]
 
 
-def get_contributions() -> FeatureContributions:
+def get_contributions() -> Feature:
     """Return UI contributions provided by FUSE."""
 
-    return FeatureContributions(
+    from . import initialize
+    return Feature(
+        id='fuse', label='FUSE', requires=('rclone',), initialize=initialize,
         folder_features=[
             FolderFeatureContribution(
                 name='fuse',
