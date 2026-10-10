@@ -1,7 +1,6 @@
 """Reuse the commonUtils code editor for selectable, searchable Git previews."""
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.code_editor import CodeEdit
-import re
 from ..diff_view import present_diff
 
 
@@ -18,9 +17,7 @@ class DiffEdit(CodeEdit):
     def __init__(self):
         super().__init__()
         self.diff_rows = []
-        self._view = None
         self._bands_key = None
-        self.textChanged.connect(self._read_diff)
         self.updateRequest.connect(self._refresh_bands)
 
     def _refresh_bands(self, *args):
@@ -29,38 +26,16 @@ class DiffEdit(CodeEdit):
     def setPlainText(self, text):
         # The shared cursor handler runs before our textChanged handler.
         self.diff_rows = []
-        self._view = None
         self._bands_key = None
         super().setPlainText(text)
 
-    def set_diff(self, view):
-        self.setPlainText(view.text)
-        self._view = view
-        self._read_diff()
+        self.update_gutter()
+        self.gutter.setFixedWidth(self.gutter_width())
 
-    def _read_diff(self):
-        if self._view is not None:
-            self.diff_rows = [(line.old, line.new, line.kind) for line in self._view.lines]
-            self._update_diff_gutter()
-            return
-        rows = []
-        old = new = None
-        for line in self.toPlainText().split('\n'):
-            hunk = re.match(r'^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@', line)
-            if hunk:
-                old, new = map(int, hunk.groups())
-                rows.append(('', '', 'hunk'))
-            elif line.startswith('diff --git '):
-                old = new = None
-                rows.append(('', '', ''))
-            elif old is not None and line.startswith(('+', '-', ' ')):
-                kind = 'add' if line.startswith('+') else 'remove' if line.startswith('-') else ''
-                rows.append(('' if kind == 'add' else str(old), '' if kind == 'remove' else str(new), kind))
-                old += kind != 'add'
-                new += kind != 'remove'
-            else:
-                rows.append(('', '', ''))
-        self.diff_rows = rows if any(row[2] == 'hunk' for row in rows) else []
+    def set_diff(self, view, *, raw=False):
+        self.setPlainText(view.raw_text if raw else view.text)
+        lines = view.raw_lines if raw else view.lines
+        self.diff_rows = [(line.old, line.new, line.kind) for line in lines]
         self._update_diff_gutter()
 
     def _update_diff_gutter(self):
@@ -97,7 +72,7 @@ class DiffEdit(CodeEdit):
     def highlight_cursor(self, *args):
         if not getattr(self, 'diff_rows', None): return super().highlight_cursor()
         block = self.firstVisibleBlock()
-        key = (block.blockNumber(), self.viewport().height(), self.font().key(),
+        key = (block.blockNumber(), self.viewport().size().width(), self.viewport().height(), self.font().key(),
                self.palette().cacheKey(), id(self.search_selections))
         if key == self._bands_key: return
         self._bands_key = key
@@ -189,6 +164,7 @@ class Preview(qt.QWidget):
         layout.addLayout(controls)
         self.editor = DiffEdit()
         self.editor.setReadOnly(True)
+        self.editor.indent_guides = False
         self.editor.setAccessibleName('Git diff or historical file preview')
         self.highlighter = DiffHighlighter(self.editor)
         layout.addWidget(self.editor, 1)
@@ -233,14 +209,13 @@ class Preview(qt.QWidget):
 
     def _render_diff(self, *args):
         if self.raw_patch is None: return
-        if self.raw.isChecked(): self.editor.setPlainText(self.raw_patch)
-        else: self.editor.set_diff(self.diff_view)
+        self.editor.set_diff(self.diff_view, raw=self.raw.isChecked())
         self.highlighter.rehighlight()
 
     def move_hunk(self, step):
         if self.raw_patch is None: return
         if self.raw.isChecked():
-            positions = [i for i, line in enumerate(self.raw_patch.split('\n')) if line.startswith('@@ ')]
+            positions = [i for i, line in enumerate(self.diff_view.raw_lines) if line.kind == 'hunk']
         else: positions = [index for index, label in self.diff_view.hunks]
         if not positions: return
         current = self.editor.textCursor().blockNumber()
