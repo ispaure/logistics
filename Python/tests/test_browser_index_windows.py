@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 from threading import Event
 from time import monotonic, sleep
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from commonUtils.directory_index import DirectoryCache
 from commonUtils.ui import pyside as qt
@@ -15,7 +16,7 @@ from ui_new.file_browser import BrowserView
 from commonUtils.ui.file_browser.index_policy import IndexPolicy
 
 
-class BrowserWindowIndexTests(unittest.TestCase):
+class BrowserWindowIndexTests(QtTestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = qt.QApplication.instance() or qt.QApplication([])

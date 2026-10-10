@@ -2,6 +2,7 @@
 import sys
 import time
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from shiboken6 import isValid
 from commonUtils.ui import pyside as qt
@@ -10,7 +11,7 @@ from commonUtils.ui.process_progress import open_process
 from ui_new.folder_actions import FolderActionsPage
 
 
-class FolderActionTests(unittest.TestCase):
+class FolderActionTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.host = qt.QMainWindow()

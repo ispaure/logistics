@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import Mock, patch
 from commonUtils.ui import pyside as qt
 from features import registry
@@ -12,7 +13,7 @@ from features.contributions import SettingsContribution, RegisteredContribution
 from ui_new.pages.settings import SettingsPage, ConfigurationPanel
 
 
-class SettingsPageTests(unittest.TestCase):
+class SettingsPageTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
 

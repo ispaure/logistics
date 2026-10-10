@@ -4,6 +4,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
 from commonUtils.fileTypes.iniType import INIFile
@@ -11,7 +12,7 @@ from ui_new.settings.ini_editor import INISettingsEditor
 from commonUtils.ui.ini_editor import INISettingsEditor as SharedINISettingsEditor
 
 
-class CompatibilityTests(unittest.TestCase):
+class CompatibilityTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.temp = TemporaryDirectory()

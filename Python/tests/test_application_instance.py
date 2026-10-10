@@ -7,12 +7,13 @@ import sys
 from tempfile import TemporaryDirectory
 from time import time
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
 from services.application_instance import instance_lock
 
 
-class InstanceTests(unittest.TestCase):
+class InstanceTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.temp = TemporaryDirectory()

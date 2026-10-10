@@ -4,6 +4,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 import zipfile
 from xml.etree import ElementTree as ET
@@ -583,7 +584,7 @@ class BulkSelectionTests(ComicFixture, unittest.TestCase):
         self.assertEqual(ComicDocument(second).info.writer, 'New')
 
 
-class EditStateTests(unittest.TestCase):
+class EditStateTests(QtTestCase):
     def test_shared_mixed_clear_and_revert_only_patch_explicit_changes(self):
         from features.comics.edit_state import MetadataEditState
         state = MetadataEditState()
@@ -646,7 +647,7 @@ class SelectionEdgeTests(ComicFixture, unittest.TestCase):
             ComicSelection(self.path)
 
 
-class GenericXMLTests(unittest.TestCase):
+class GenericXMLTests(QtTestCase):
     def test_full_document_and_namespace_extensions_are_preserved(self):
         from commonUtils.fileTypes.xmlType import XMLFile
         data = (b'<?xml version="1.0"?><!--before--><?before yes?>'

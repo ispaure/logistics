@@ -8,13 +8,14 @@ from tempfile import TemporaryDirectory
 import json
 import time
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
 from ui_new.bulk_rename import BulkRenameWidget, open_bulk_rename
 from commonUtils.renameUtils import RenameRules
 
 
-class BulkRenameWidgetTests(unittest.TestCase):
+class BulkRenameWidgetTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.temp = TemporaryDirectory()

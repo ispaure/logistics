@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import monotonic, sleep
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.process_progress import ProcessProgressWindow
 from commonUtils.ui.process_runner import ProcessRunner
@@ -13,7 +14,7 @@ from features.rclone.progress import RcloneProgressParser
 from features.rclone.executable import get_rclone_path
 
 
-class StructuredParserTests(unittest.TestCase):
+class StructuredParserTests(QtTestCase):
     def test_unknowns_active_transfers_and_error_severity_are_preserved(self):
         parser=RcloneProgressParser()
         update=parser(json.dumps({'stats':{'bytes':128,'totalBytes':1024,'eta':None,
@@ -34,7 +35,7 @@ class StructuredParserTests(unittest.TestCase):
         self.assertIsNone(invalid.metrics['eta'])
 
 
-class RealStructuredRcloneTests(unittest.TestCase):
+class RealStructuredRcloneTests(QtTestCase):
     @classmethod
     def setUpClass(cls):
         cls.executable=get_rclone_path()

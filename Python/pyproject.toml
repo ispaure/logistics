@@ -10,9 +10,21 @@ dependencies = [
     "piexif==1.1.3",
     "pygments==2.19.2",
     "pyzipper==0.3.6",
+    "yt-dlp==2026.8.19",
 ]
 
 [tool.uv]
 constraint-dependencies = [
     "pycryptodomex==3.23.0",
 ]
+
+[dependency-groups]
+dev = ["ruff==0.14.0"]
+
+[tool.ruff]
+target-version = "py312"
+exclude = ["features/emulation"]
+
+[tool.ruff.lint]
+# Start with correctness checks; formatting and legacy import cleanup are separate.
+select = ["E9", "F63", "F7", "F82"]

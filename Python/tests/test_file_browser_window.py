@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import time
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 import zipfile
 from PIL import Image
@@ -21,7 +22,7 @@ def _install_browser_extension(host):
     return registry.get_feature_definition('comics').install_browser(host.file_browser, host=host)
 
 
-class BrowserWindowTests(unittest.TestCase):
+class BrowserWindowTests(QtTestCase):
     def test_new_unconstrained_tab_starts_at_home_and_can_go_up(self):
         from ui_new.file_browser import FileBrowserPage
         home = self.root / 'home'

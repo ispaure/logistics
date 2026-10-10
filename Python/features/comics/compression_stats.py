@@ -9,7 +9,7 @@ from commonUtils.fileTypes import txtType
 
 class CompressionStats:
     def __init__(self):
-        self.has_comicinfo_xml: Optional[bool] = None
+        self.has_comicinfo_xml: bool | None = None
         self.original_images_size = 0
         self.compressed_images_size = 0
         self.kept_images_size = 0

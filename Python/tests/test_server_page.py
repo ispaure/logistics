@@ -4,13 +4,14 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from unittest.mock import Mock, patch
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 
 from commonUtils.ui import pyside as qt
 from features.contributions import RegisteredContribution, ServerProviderContribution
 from ui_new.pages.servers import ServersPage
 
 
-class ServerPageTests(unittest.TestCase):
+class ServerPageTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.servers = []

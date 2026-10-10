@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import time
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 import zipfile
 from PIL import Image
@@ -513,7 +514,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.app.processEvents()
 
 
-class FolderStatsTests(unittest.TestCase):
+class FolderStatsTests(QtTestCase):
     def test_recursive_sizes_counts_links_and_cancellation(self):
         from features.comics.folder_stats import scan_folders
         with TemporaryDirectory() as temporary:
@@ -534,7 +535,7 @@ class FolderStatsTests(unittest.TestCase):
             self.assertIsNone(scan_folders(root, lambda: True))
 
 
-class DesktopActionTests(unittest.TestCase):
+class DesktopActionTests(QtTestCase):
     def test_platform_reveal_commands_and_linux_fallback(self):
         from commonUtils.osUtils import OS
         from commonUtils.ui import desktop_actions

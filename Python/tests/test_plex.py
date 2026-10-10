@@ -9,6 +9,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from zipfile import ZipFile
 
@@ -16,7 +17,7 @@ from commonUtils.osUtils import OS
 from features.plex import database, packages, actions, detection
 
 
-class PlexDatabaseTests(unittest.TestCase):
+class PlexDatabaseTests(QtTestCase):
     def setUp(self):
         temporary = TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -113,7 +114,7 @@ class PlexDatabaseTests(unittest.TestCase):
         self.assertEqual(result['Only in 2'], [])
 
 
-class PlexPackageTests(unittest.TestCase):
+class PlexPackageTests(QtTestCase):
     def setUp(self):
         temporary = TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -271,7 +272,7 @@ class PlexPackageTests(unittest.TestCase):
         self.assertEqual((self.data / 'private/tool').stat().st_mode & 0o777, 0o750)
 
 
-class PlexDialogTests(unittest.TestCase):
+class PlexDialogTests(QtTestCase):
     def test_manage_dialog_constructs_and_displays_local_and_remote_paths(self):
         from commonUtils.ui import pyside as qt
         from features.plex.ui.manage_pms_dialog import PlexManagePMSDialog

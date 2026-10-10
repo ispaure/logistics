@@ -4,6 +4,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from types import SimpleNamespace
 
@@ -13,7 +14,7 @@ from commonUtils.downloads import DownloadSpec
 from services import software
 
 
-class SoftwareTests(unittest.TestCase):
+class SoftwareTests(QtTestCase):
     def test_manifest_covers_six_platforms_with_pinned_hashes(self):
         with TemporaryDirectory() as root:
             with patch.object(software.config, 'LogisticsConfig', return_value=SimpleNamespace(path_logistics_software=Path(root))):

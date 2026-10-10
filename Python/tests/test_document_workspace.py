@@ -5,12 +5,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from ui_new.documents import DocumentsPage, document_is_open, register_document_host, show_document
 from shiboken6 import isValid
 
 
-class DocumentWorkspaceTests(unittest.TestCase):
+class DocumentWorkspaceTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.host = qt.QMainWindow()
