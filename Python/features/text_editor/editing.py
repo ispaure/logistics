@@ -252,6 +252,7 @@ class EditingCommands:
             self.current.encoding = value
             self.current.bom_override = b"" if value == "utf-8" else None
             self.current.editor.document().setModified(True)
+            self.current.changed.emit()
             self._active_changed()
 
     def choose_endings(self):
@@ -271,6 +272,7 @@ class EditingCommands:
                 value
             ]
             self.current.editor.document().setModified(True)
+            self.current.changed.emit()
             self._active_changed()
 
     def choose_indentation(self):
@@ -437,7 +439,11 @@ class EditingCommands:
         if not had_secondary and document.views.secondary is not None:
             editor = document.views.secondary
             editor.cursorPositionChanged.connect(document.changed)
+            editor.focused.connect(document.changed)
+            editor.verticalScrollBar().valueChanged.connect(self.service.session.changed)
+            editor.horizontalScrollBar().valueChanged.connect(self.service.session.changed)
             editor.zoom_changed.connect(self._preferences_changed)
+        self.service.session.changed()
         self._active_changed()
 
     def escape_editor(self):

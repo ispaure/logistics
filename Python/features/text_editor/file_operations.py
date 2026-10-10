@@ -50,6 +50,11 @@ class FileOperations:
         index = self.document_stack.addWidget(document)
         self.document_stack.setCurrentIndex(index)
         document.changed.connect(lambda: self._document_changed(document))
+        document.changed.connect(self.service.session.changed)
+        document.editor.textChanged.connect(self.service.session.changed)
+        document.editor.verticalScrollBar().valueChanged.connect(self.service.session.changed)
+        document.editor.horizontalScrollBar().valueChanged.connect(self.service.session.changed)
+        self.service.session.changed()
         self._configure_document(document)
         self._document_changed(document)
         document.editor.setFocus()
@@ -333,6 +338,18 @@ class FileOperations:
             return False
         if hasattr(self, "search") and not self.search.prepare_close():
             return False
+        from commonUtils.ui.document_host import current_document_host
+        host = current_document_host()
+        if getattr(self, "_suspending", False):
+            return True
+        if getattr(self, "_suspend_requested", False) or host is not None and host.closing:
+            ready = self.service.session.ensure_current(self)
+            if ready is False:
+                return False
+            if ready is True:
+                self.service.session.retain_window(self)
+                self._suspending = True
+                return True
         for index in range(self.document_stack.count() - 1, -1, -1):
             if not self.close_tab(index):
                 return False

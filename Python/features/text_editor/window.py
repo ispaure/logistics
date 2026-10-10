@@ -123,6 +123,8 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
             ("close_all", "Close All", self.close_all, None),
         ]:
             self.action(file, key, label, callback, shortcut)
+        self.action(file, "restore_session", "Restore Editor Session…", lambda: self.service.session.restore_selected(self))
+        self.action(file, "suspend_session", "Keep Session and Close Editors", self.service.suspend)
         self.recent_menu = file.addMenu("Open Recent")
         self.recent_menu.aboutToShow.connect(self._recent_menu)
         edit = self.menuBar().addMenu("&Edit")
@@ -178,6 +180,8 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
         if hasattr(self, "search"):
             self.search.set_editor(document.editor if document else None)
         if document:
+            if document.editor.hasFocus():
+                self.service.window = self
             cursor = document.editor.textCursor()
             self.position.setText(
                 f"Ln {cursor.blockNumber() + 1}, Col {cursor.positionInBlock() + 1} · {document.editor.blockCount()} lines · {document.encoding.upper()}"
@@ -190,6 +194,8 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
                         document.language, document.language
                     )
                 )
+            if "indent_guides" in self.actions:
+                self.actions["indent_guides"].setChecked(document.editor.indent_guides)
             if "comment" in self.actions:
                 self.actions["comment"].setEnabled(
                     document.editor.comment_prefix is not None

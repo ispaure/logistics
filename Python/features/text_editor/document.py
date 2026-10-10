@@ -27,6 +27,7 @@ class Document(qt.QWidget):
         self.editor.document().setModified(False)
         self.editor.document().modificationChanged.connect(self.changed)
         self.editor.cursorPositionChanged.connect(self.changed)
+        self.editor.focused.connect(self.changed)
 
     @property
     def editor(self):
