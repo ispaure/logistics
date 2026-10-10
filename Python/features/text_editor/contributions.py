@@ -78,6 +78,7 @@ def register():
 
 def _service(parent):
     from .service import EditorService
+    parent = getattr(parent, 'document_service_owner', parent)
     service = getattr(parent, '_text_editor_service', None)
     if service is None:
         service = parent._text_editor_service = EditorService(parent)

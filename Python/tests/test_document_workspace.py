@@ -3,7 +3,7 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
@@ -43,10 +43,10 @@ class DocumentWorkspaceTests(QtTestCase):
         self.assertFalse(window.isWindow())
         self.assertEqual(self.page.attached_count, 1)
         self.page.detach_current(); self.settle()
-        self.assertTrue(self.page.records[window]['dock'].isFloating())
+        self.assertTrue(self.page.records[window]['dock'].is_detached)
         self.assertEqual(self.page.attached_count, 0)
         show_document(window)
-        self.assertTrue(self.page.records[window]['dock'].isFloating())  # Keep an explicitly detached document detached.
+        self.assertTrue(self.page.records[window]['dock'].is_detached)  # Keep an explicitly detached document detached.
         self.page.attach(window); self.settle()
         self.assertFalse(window.isWindow())
         self.assertEqual(edit.text(), 'retained')
@@ -196,7 +196,7 @@ class DocumentWorkspaceTests(QtTestCase):
         self.assertEqual(self.page.count, 1)
         dock = self.page.records[window]['dock']
         from PySide6.QtTest import QTest
-        QTest.mouseDClick(dock.tab_header, qt.Qt.MouseButton.LeftButton); self.settle()
+        dock.return_button.click(); self.settle()
         self.assertEqual(self.page.attached_count, 1)
         self.assertFalse(window.isWindow())
         self.assertFalse(dock.isFloating())
@@ -216,7 +216,9 @@ class DocumentWorkspaceTests(QtTestCase):
             preview = drag.return_value.setPixmap.call_args.args[0]
             self.assertGreater(preview.width(), 300)
             self.assertGreater(preview.height(), 200)
-        self.settle(); self.assertTrue(dock.isFloating())
+        self.settle(); self.assertFalse(dock.is_detached)  # An ignored drag retains its owner.
+        self.page.detach_current(); self.settle()
+        self.assertTrue(dock.is_detached)
         point = self.page.workspace.contentsRect().center()
         mime = tab_mime(dock)
         event = qt.QDropEvent(qt.QPointF(point),qt.Qt.DropAction.MoveAction,mime,
@@ -224,7 +226,113 @@ class DocumentWorkspaceTests(QtTestCase):
         self.assertTrue(self.page.workspace.handle_tab_drop(self.page.workspace,event))
         self.settle(); self.assertFalse(dock.isFloating())
         self.assertEqual(edit.text(), 'retained')
-        self.assertFalse(dock.tab_header.new_button.isVisible())
+        self.assertTrue(dock.tab_header.new_button.isVisible())
+
+    def test_detached_plus_launches_document_in_its_own_container(self):
+        from features import registry
+        from features.contributions import DocumentLauncherContribution, RegisteredContribution
+        first = qt.QMainWindow(); first.setWindowTitle('First')
+        show_document(first); self.settle()
+        self.page.detach_current(); self.settle()
+        detached = self.page.records[first]['dock'].workspace
+        created = []
+        def new(parent):
+            window = qt.QMainWindow(); window.setWindowTitle('Created here')
+            created.append(window)
+            return show_document(window)
+        entry = RegisteredContribution('test', 'Test',
+            DocumentLauncherContribution('test', 'Test editor', new, 'text', 0, new))
+        choices = []
+        menu = Mock()
+        def submenu(title):
+            sub = Mock(); actions = {}; choices.append(actions)
+            sub.addAction.side_effect = lambda title, callback: actions.update({title: callback})
+            return sub
+        menu.addMenu.side_effect = submenu
+        menu.exec.side_effect = lambda point: choices[0]['New']()
+        with patch.object(registry, 'get_document_launchers', return_value=[entry]), \
+                patch('ui_new.documents.qt.QMenu', return_value=menu):
+            self.page.records[first]['dock'].local_new_button.click()
+        self.settle()
+        self.assertEqual(self.page.workspace.docks, [])
+        self.assertEqual(len(detached.docks), 2)
+        self.assertIs(detached.active_view.document, created[0])
+        self.assertTrue(self.page.records[created[0]]['detached'])
+        bar = next(bar for bar in detached.findChildren(qt.QTabBar) if bar.parent() is detached and bar.count() == 2)
+        self.assertTrue(bar.isVisible())
+        self.assertEqual(detached.window().windowTitle(), 'Documents: Created here')
+        created[0].setWindowTitle('Renamed *'); self.settle()
+        self.assertEqual(detached.window().windowTitle(), 'Documents: Renamed *')
+
+    def test_async_session_restore_keeps_all_documents_in_originating_container(self):
+        from time import monotonic, sleep
+        from features.text_editor.document import Document
+        from features.text_editor.session import document_record
+        from features.text_editor.service import EditorService
+        from commonUtils.persistence.session import SessionStore
+        first = qt.QMainWindow(); show_document(first); self.settle()
+        self.page.detach_current(); self.settle()
+        detached = self.page.records[first]['dock'].workspace
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            records = []
+            for text in ('First recovery', 'Second recovery'):
+                document = Document(); document.editor.setPlainText(text)
+                records.append(document_record(document)); document.deleteLater()
+            checkpoint = root/'recovery.json'
+            SessionStore(checkpoint).write({'version': 1, 'documents': records, 'active': 1})
+            service = EditorService(self.page, history_path=root/'recent.json', preferences_path=root/'editor.ini')
+            with patch.object(service.session, 'previous', return_value=checkpoint):
+                placeholder = self.page.launch_document(detached, lambda parent: service.open())
+            deadline = monotonic() + 5
+            while placeholder.task.busy or len(service.windows) < 2:
+                self.assertLess(monotonic(), deadline)
+                self.app.processEvents(); sleep(.005)
+            self.settle()
+            self.assertEqual(self.page.workspace.docks, [])
+            self.assertEqual(len(detached.docks), 3)
+            self.assertEqual({window.current.editor.toPlainText() for window in service.windows},
+                             {'First recovery', 'Second recovery'})
+            self.assertTrue(all(self.page.records[window]['dock'].workspace is detached for window in service.windows))
+            for window in tuple(service.windows):
+                window.current.editor.document().setModified(False)
+                window.close()
+            first.close(); self.settle()
+
+    def test_detached_text_creation_keeps_service_alive_after_return(self):
+        from features.text_editor.service import EditorService
+        from features.text_editor.contributions import new_document
+        first = qt.QMainWindow(); show_document(first); self.settle()
+        self.page.detach_current(); self.settle()
+        detached = self.page.records[first]['dock'].workspace
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            service = EditorService(self.page, history_path=root/'recent.json', preferences_path=root/'editor.ini')
+            self.page._text_editor_service = service
+            editor = self.page.launch_document(detached, new_document); self.settle()
+            self.assertIs(editor.service, service)
+            self.assertIs(service.parent(), self.page)
+            dock = self.page.records[editor]['dock']
+            self.page.workspace.adopt(self.page.records[first]['dock']); self.settle()
+            dock.return_button.click(); self.settle()
+            self.assertTrue(isValid(service))
+            self.assertIs(dock.workspace, self.page.workspace)
+            self.assertIs(editor.service, service)
+            self.assertEqual(self.page.workspace.detached_windows, [])
+            editor.close(); first.close(); self.settle()
+
+    def test_cancelled_detached_creation_and_container_close_preserve_documents(self):
+        window = qt.QMainWindow(); window.setCentralWidget(qt.QLineEdit('Retained'))
+        show_document(window); self.settle()
+        self.page.detach_current(); self.settle()
+        dock = self.page.records[window]['dock']; detached = dock.workspace
+        self.assertIsNone(self.page.launch_document(detached, lambda parent: None))
+        self.assertEqual(detached.docks, [dock])
+        self.assertIsNone(self.page._creation_workspace)
+        detached.window().close(); self.settle()
+        self.assertIs(dock.workspace, self.page.workspace)
+        self.assertEqual(self.page.attached_count, 1)
+        self.assertEqual(window.centralWidget().text(), 'Retained')
 
     def test_readers_can_split_and_browser_tabs_keep_their_own_workspace(self):
         from commonUtils.ui.workspace import Workspace

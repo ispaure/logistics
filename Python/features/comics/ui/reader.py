@@ -59,6 +59,7 @@ class ComicReaderWindow(qt.QMainWindow):
         self.edit_metadata_action = self.menus.edit_metadata_action
         self.fullscreen_action = self.menus.fullscreen_action
         self.controls = ReaderControls(self.fullscreen_action, self, menus=self.menus)
+        self.workspace_controls = self.controls.workspace_controls
         self.setCentralWidget(self.controls)
         status = self.statusBar()
         status.setSizeGripEnabled(False)

@@ -548,15 +548,16 @@ class MainWindowTests(QtTestCase):
             sleep(.005)
         window.dlg.close(); self.app.processEvents()
 
-    def test_all_detached_documents_keep_sidebar_return_route_without_empty_page(self):
+    def test_all_detached_documents_keep_documents_selected_and_sidebar_return_route(self):
         from ui_new.documents import show_document
         window = self.browser_window()
         browser = window.tabs.widget(0); self.wait_browser(browser)
         reader = qt.QMainWindow(); reader.setWindowTitle('Reader')
         show_document(reader); self.app.processEvents()
         window.documents.detach_current(); self.app.processEvents()
-        self.assertEqual(window.tabs.indexOf(window.documents), -1)
-        self.assertIs(window.tabs.currentWidget(), browser)
+        self.assertGreaterEqual(window.tabs.indexOf(window.documents), 0)
+        self.assertIs(window.tabs.currentWidget(), window.documents)
+        self.assertTrue(window.documents.workspace.empty_new_button.isVisible())
         self.assertTrue(window.sidebar.buttons['documents'].isVisible())
         window.sidebar.show_documents()
         self.assertEqual(sum(item.childCount() for item in window.sidebar.editor_groups.values()), 1)
@@ -574,9 +575,8 @@ class MainWindowTests(QtTestCase):
                              qt.Qt.KeyboardModifier.NoModifier)
         self.app.sendEvent(dock.tab_header, move)
         self.assertIs(window.tabs.currentWidget(), window.documents)
-        self.assertTrue(dock.isFloating())
-        from PySide6.QtTest import QTest
-        QTest.mouseDClick(dock.tab_header, qt.Qt.MouseButton.LeftButton)
+        self.assertTrue(dock.is_detached)
+        dock.return_button.click()
         for _ in range(5): self.app.processEvents()
         self.assertIs(window.tabs.currentWidget(), window.documents)
         self.assertFalse(dock.isFloating())

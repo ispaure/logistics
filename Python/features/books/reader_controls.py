@@ -41,6 +41,7 @@ def build_controls(page):
     page.add_bookmark_action = page.menus.action(page.menus.navigate, 'Add bookmark…', page.add_bookmark, 'Ctrl+D')
     page.menus.action(page.menus.navigate, 'Show bookmarks', page.show_bookmarks)
     header = qt.QHBoxLayout()
+    page.workspace_controls = header
     header.setSpacing(READER_SPACING)
     page.open_button = tool(page, page.menus.open_action, 'Open EPUB')
     page.open_button.hide()  # Retain the legacy handle; File > Open owns this action.

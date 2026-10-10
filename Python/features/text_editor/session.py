@@ -201,11 +201,15 @@ class EditorSession(qt.QObject):
         return None
 
     def restore(self, window, path, requested=None):
+        from commonUtils.ui.document_host import document_creation_scope
         self.restoring = True
         def work():
             payload = SessionStore(path).read()
             return payload, [load_document_record(record) for record in payload["documents"]]
         def done(result):
+            with document_creation_scope(window):
+                restore_documents(result)
+        def restore_documents(result):
             from .document import Document
             from .window import EditorWindow
             from commonUtils.ui.document_host import show_document
@@ -273,6 +277,9 @@ class EditorSession(qt.QObject):
             if requested is not None:
                 self.service.open(requested)
         def failed(error):
+            with document_creation_scope(window):
+                restore_failed(error)
+        def restore_failed(error):
             self.restoring = False
             if self.claim is not None:
                 self.claim[1].unlock()

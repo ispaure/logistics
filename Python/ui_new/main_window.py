@@ -174,7 +174,9 @@ class MainWindow(pyside.Window):
         pages = registry.get_pages()
         seen = set()
         entries = list(self._core_pages)
-        if self.documents.attached_count:
+        # Once opened, Documents remains a destination even with zero tabs.
+        # Feature refresh must not remove it based on attached document count.
+        if self.tabs.indexOf(self.documents) >= 0:
             entries.append((80, 'Open documents', self.documents))
         if self.actions.count:
             entries.append((85, 'Folder Actions', self.actions))
@@ -247,12 +249,6 @@ class MainWindow(pyside.Window):
         from shiboken6 import isValid
         if not isValid(self.tabs):
             return
-        if not self.documents.attached_count and self.tabs.indexOf(self.documents) >= 0:
-            active = self.tabs.currentWidget() is self.documents
-            destination = self._last_destination
-            self.tabs.removeTab(self.tabs.indexOf(self.documents))
-            if active and self.tabs.indexOf(destination) >= 0:
-                self.tabs.setCurrentWidget(destination)
         self._refresh_sidebar()
 
     def _retry_close(self):

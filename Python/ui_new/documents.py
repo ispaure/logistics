@@ -1,8 +1,10 @@
 """Retained readers/editors hosted in the main window, with optional detachment."""
+from contextlib import contextmanager
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.document_host import show_document, register_document_host, document_is_open, close_document, request_document_close, CloseOutcome
 from shiboken6 import isValid
 from commonUtils.ui.workspace import Workspace, DockTabHeader
+from commonUtils.ui.workspace_policy import WorkspacePolicy
 
 
 class DocumentPane(qt.QWidget):
@@ -13,6 +15,18 @@ class DocumentPane(qt.QWidget):
         self.view_title = window.windowTitle()
         self.setMinimumSize(320, 220)
         layout = qt.QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0)
+        self.workspace_controls = getattr(window, 'workspace_controls', None)
+        if self.workspace_controls is None:
+            self.workspace_controls_widget = qt.QWidget(self)
+            self.workspace_controls = qt.QHBoxLayout(self.workspace_controls_widget)
+            self.workspace_controls.setContentsMargins(4, 0, 4, 0)
+            self.workspace_controls.addStretch()
+            self.workspace_controls_widget.hide()
+            if (isinstance(window, qt.QMainWindow) and window.menuBar().actions()
+                    and window.menuBar().cornerWidget() is None):
+                window.menuBar().setCornerWidget(self.workspace_controls_widget)
+            else:
+                layout.addWidget(self.workspace_controls_widget)
         window.setAttribute(qt.Qt.WidgetAttribute.WA_QuitOnClose, False)
         window.setParent(self, qt.Qt.WindowType.Widget)
         layout.addWidget(window)
@@ -28,9 +42,12 @@ class DocumentPane(qt.QWidget):
 class DocumentWorkspace(Workspace):
     def __init__(self, page):
         self.page = page
-        super().__init__(DocumentPane, page, allow_new_tabs=False, dock_group=page)
+        super().__init__(DocumentPane, page, dock_group=page,
+                         policy=WorkspacePolicy(show_single_tab_in_detached=False,
+                                                detached_title='Documents: {title}'),
+                         new_view=page.new_document_menu)
         self.close_action.setEnabled(False)  # Keep each reader/editor's own close shortcut.
-        self._drop_target.widget().setText('Drag a reader or editor tab here to bring it back.')
+        self._drop_target.widget().setText('Open a document with +, or drop a detached reader or editor here to bring it back.')
 
     def reveal_for_drop(self, point):
         if self.page.window().frameGeometry().contains(point):
@@ -54,6 +71,7 @@ class DocumentsPage(qt.QWidget):
         super().__init__(parent)
         self.activate = activate
         self.records = {}
+        self._creation_workspace = None
         self._close_events = set()
         self.close_veto = False
         self.closing = False
@@ -70,7 +88,7 @@ class DocumentsPage(qt.QWidget):
         return sum(not record['closed'] and not record['detached'] for record in self.records.values())
 
     def document_entries(self):
-        for dock in self.workspace.docks:
+        for dock in self.workspace.all_docks:
             window = dock.widget().document
             record = self.records[window]
             if not record['closed']:
@@ -79,12 +97,12 @@ class DocumentsPage(qt.QWidget):
                     yield window, title, tab, record['detached']
 
     def present(self, window):
+        destination = self._creation_workspace or self.workspace
         record = self.records.get(window)
-        if record and record['detached'] and not record['closed']:
-            self.activate()  # Make its native return area available too.
+        if self._creation_workspace is None and record and record['detached'] and not record['closed']:
             dock = record['dock']
-            dock.showNormal() if dock.isMinimized() else dock.show()
-            dock.raise_(); dock.activateWindow()
+            dock.window().showNormal() if dock.window().isMinimized() else dock.window().show()
+            dock.raise_(); dock.workspace._activate(dock); dock.window().raise_(); dock.window().activateWindow()
             return
         if record is None:
             record = dict(container=None, dock=None, flags=window.windowFlags(), native=None,
@@ -101,29 +119,84 @@ class DocumentsPage(qt.QWidget):
             if isinstance(window, qt.QDialog):
                 window.finished.connect(lambda result, view=window: self._dialog_finished(view))
         record['closed'] = False
-        record['detached'] = False
-        self.activate()
+        record['detached'] = destination.is_detached
+        if not destination.is_detached:
+            self.activate()
         if record['dock'] is None:
             if record['native'] is not None:
                 window.menuBar().setNativeMenuBar(False)
-            pane = self.workspace.add_view(window)
-            dock = next(item for item in self.workspace.docks if item.widget() is pane)
+            pane = destination.add_view(window)
+            dock = next(item for item in destination.docks if item.widget() is pane)
             record['container'], record['dock'] = pane, dock
             dock.tab_header.installEventFilter(self.workspace)
             dock.topLevelChanged.connect(lambda floating, view=window: self._docking_changed(view, floating))
-        elif record['dock'].isFloating():
-            self.workspace.adopt(record['dock'])
+            dock.owner_changed.connect(lambda owner, view=window: self._owner_changed(view, owner))
+        elif record['dock'].workspace is not destination or record['dock'].isFloating():
+            destination.adopt(record['dock'], force=True)
         record['dock'].show(); record['dock'].raise_()
-        self.workspace._activate(record['dock'])
+        record['dock'].workspace._activate(record['dock'])
         window.show()
         self.changed.emit()
 
     def _docking_changed(self, window, floating):
         if window in self.records:
-            self.records[window]['detached'] = floating
-            if not floating and not self.closing and not self.records[window]['closed']:
+            self.records[window]['detached'] = floating or self.records[window]['dock'].workspace.is_detached
+            if not self.records[window]['detached'] and not self.closing and not self.records[window]['closed']:
                 self.activate()
             self.changed.emit()
+
+    def _owner_changed(self, window, owner):
+        if window in self.records:
+            self.records[window]['detached'] = owner.is_detached
+            self.changed.emit()
+
+    def new_document_menu(self, workspace):
+        """Bind the existing launcher workflow to the button's owning container."""
+        from features import registry
+        from features.contributions import DocumentLauncherContribution
+        from commonUtils.ui.markdown.window import open_markdown
+        def open_markdown_file(parent):
+            path, _ = qt.QFileDialog.getOpenFileName(parent, 'Open Markdown', '',
+                                                    'Markdown (*.md *.markdown);;All files (*)')
+            return open_markdown(path, allow_edit=True) if path else None
+        launchers = [DocumentLauncherContribution('markdown', 'Markdown Editor', open_markdown_file,
+                     'markdown', 20, lambda parent: open_markdown(None, allow_edit=True))]
+        launchers.extend(entry.contribution for entry in registry.get_document_launchers())
+        menu = qt.QMenu(workspace)
+        for entry in sorted(launchers, key=lambda entry: entry.order):
+            sub = menu.addMenu(entry.name)
+            if entry.new_document is not None:
+                sub.addAction('New', lambda callback=entry.new_document: self.launch_document(workspace, callback))
+            sub.addAction('Open…', lambda callback=entry.open_document: self.launch_document(workspace, callback))
+        menu.exec(qt.QCursor.pos())
+        menu.deleteLater()
+
+    def launch_document(self, workspace, callback):
+        if self.closing or not isValid(workspace) or workspace._closing:
+            return None
+        with self.creation_scope(workspace):
+            parent = workspace.window()
+            # Dialogs belong to their originating window; shared editor services
+            # outlive an emptied detached container and stay with this page.
+            parent.document_service_owner = self
+            return callback(parent)
+
+    @contextmanager
+    def creation_scope(self, origin):
+        if isinstance(origin, Workspace):
+            workspace = origin
+        else:
+            record = self.records.get(origin)
+            dock = record['dock'] if record else None
+            workspace = dock.workspace if dock is not None and isValid(dock) else self.workspace
+        if not isValid(workspace) or workspace._closing:
+            workspace = self.workspace
+        previous = self._creation_workspace
+        self._creation_workspace = workspace
+        try:
+            yield
+        finally:
+            self._creation_workspace = previous
 
     def _title_changed(self, window, title):
         record = self.records.get(window)
@@ -143,8 +216,8 @@ class DocumentsPage(qt.QWidget):
             window.setParent(self, qt.Qt.WindowType.Widget)
         record['container'] = record['dock'] = None
         dock.hide()
-        if dock in self.workspace.docks:
-            self.workspace.remove_view(dock)
+        if dock in dock.workspace.docks:
+            dock.workspace.remove_view(dock)
         dock.deleteLater()
 
     def detach_current(self):
