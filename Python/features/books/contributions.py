@@ -50,7 +50,8 @@ def launch(parent):
     path, _ = qt.QFileDialog.getOpenFileName(parent, 'Open EPUB', '', 'EPUB books (*.epub)')
     if path:
         from .controller import BooksController
-        controller = getattr(parent, '_books_controller', None)
+        owner = getattr(parent, 'document_service_owner', parent)
+        controller = getattr(owner, '_books_controller', None)
         if controller is None:
-            controller = parent._books_controller = BooksController(parent)
+            controller = owner._books_controller = BooksController(owner)
         return controller.open(path)

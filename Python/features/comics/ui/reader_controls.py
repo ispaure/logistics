@@ -22,6 +22,7 @@ class ReaderControls(qt.QWidget):
 
     def _create_header(self, fullscreen_action):
         header = qt.QHBoxLayout()
+        self.workspace_controls = header
         header.setSpacing(READER_SPACING)
         if self.menus is not None:
             self.open_button = reader_button(self, 'Open comic', action=self.menus.shared.open_action)

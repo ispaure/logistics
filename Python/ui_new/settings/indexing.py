@@ -1,13 +1,39 @@
 """An explicit-save home for browser refresh rules in Logistics' existing INI."""
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.file_browser.index_policy import IndexPolicy
 from .ini_editor import INISettingsEditor
+
+INDEX_FIELDS = {
+    'scan_on_open': ('Build an index when opening an unindexed folder',
+        'Opening a folder without saved index data starts a scan. Saved data is reused unless '
+        '“Recheck saved indexes on first use” is enabled. Turning this off still allows Refresh index, '
+        'change notifications and reopening checks to update the index.'),
+    'recursive_on_open': ('Include subfolders in automatic scans',
+        'Automatic index creation or reconciliation may scan subfolders and collect their sizes. '
+        'When off, automatic scans check the current folder only, so subtree search and sizes may be partial. '
+        'This does not continuously scan, or rebuild an existing cache just because you open it. '
+        'Refresh index always checks the full subtree. Large trees can take several minutes.'),
+    'refresh_cached_on_startup': ('Recheck saved indexes on first use',
+        'The first use of a saved index in this application session checks it instead of only reading the cache. '
+        'This requires automatic indexing on open. Further visits reuse the session’s results unless '
+        'a change notification, reopening check or Refresh index requests another check.'),
+    'refresh_on_revisit': ('Recheck the current folder when reopened',
+        'Opening the current indexed folder again while its index job is idle requests a check. '
+        'This can update saved search results and sizes even when indexing on open is off. '
+        'It does not poll in the background; scan depth follows the subfolder setting.'),
+    'watch_changes': ('Update the index after filesystem notifications',
+        'Notifications for watched files and folders request an index update after a short delay. '
+        'This can update saved search results and sizes even when indexing on open is off. '
+        'Only watched locations are monitored; this is not a repeated full-tree scan.'),
+    'background_priority': ('Run index jobs at background priority',
+        'Use lower worker priority for index jobs to keep other work responsive. '
+        'This does not change scan depth or which files are indexed.'),
+}
 
 
 class IndexSettingsEditor(INISettingsEditor):
     def _key_type(self, key):
-        return (key, 'bool') if key in vars(IndexPolicy()) else super()._key_type(key)
+        return (INDEX_FIELDS[key][0], 'bool') if key in INDEX_FIELDS else super()._key_type(key)
 
     def _build_fields(self):
         super()._build_fields()
@@ -17,6 +43,21 @@ class IndexSettingsEditor(INISettingsEditor):
                 self.sections.removeTab(index)
                 widget.deleteLater()
         self.fields = {key: value for key, value in self.fields.items() if key[0] == 'FileIndex'}
+        for (_, key), control in self.fields.items():
+            if key in INDEX_FIELDS:
+                control.setToolTip(INDEX_FIELDS[key][1])
+        scan = self.fields.get(('FileIndex', 'scan_on_open'))
+        if isinstance(scan, qt.QCheckBox):
+            scan.toggled.connect(self._dependencies)
+        self._dependencies()
+
+    def _dependencies(self, *args):
+        scan = self.fields.get(('FileIndex', 'scan_on_open'))
+        startup = self.fields.get(('FileIndex', 'refresh_cached_on_startup'))
+        if isinstance(scan, qt.QCheckBox) and startup is not None:
+            startup.setEnabled(scan.isChecked())
+            startup.setToolTip(INDEX_FIELDS['refresh_cached_on_startup'][1] +
+                              ('' if scan.isChecked() else '\nEnable indexing on open to use this option. Its saved value is retained.'))
 
 
 class IndexSettingsPanel(qt.QWidget):
@@ -25,11 +66,11 @@ class IndexSettingsPanel(qt.QWidget):
         layout = qt.QVBoxLayout(self)
         title = qt.QLabel('File indexing')
         layout.addWidget(title)
-        note = qt.QLabel('The default indexes only folders you visit and opens saved results immediately. '
-                        'Refresh index checks the full subtree. Enable recursive on open for continuous subtree scanning, '
-                        'or turn off scan on open for manual indexing. Watch changes updates notified folders. '
-                        'Startup refresh validates saved contents once per launch; revisit refresh checks each reopening. '
-                        'These rules also apply to new tabs. Save explicitly; changes apply to the next request.')
+        note = qt.QLabel('The index stores search results and folder sizes. Saved results open immediately; '
+                        'automatic scan depth follows the options below. Refresh index manually checks the current '
+                        'folder and all its subfolders. Large trees take longer. Pausing a tab keeps its cached '
+                        'results available; other tabs may continue shared work. Network locations are not indexed. '
+                        'Save explicitly; changes apply to the next index request in any tab.')
         note.setWordWrap(True)
         layout.addWidget(note)
         self.editor = IndexSettingsEditor(path or Path(__file__).resolve().parents[2]/'configFile.ini', self)

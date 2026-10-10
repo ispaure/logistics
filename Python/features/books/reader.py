@@ -471,6 +471,7 @@ class BookWindow(qt.QMainWindow):
         self.resize(1150, 850)
         self.setMinimumSize(640, 420)
         self.reader = BooksPage(self, initial_path=path, menu_bar=self.menuBar())
+        self.workspace_controls = self.reader.workspace_controls
         self.setCentralWidget(self.reader)
         self.reader.idle.connect(self._finish_close)
         self.reader.idle.connect(self.idle)

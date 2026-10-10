@@ -6,7 +6,22 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.file_browser import FileBrowser
 from features import registry
 from commonUtils.ui.workspace import Workspace
+from commonUtils.ui.workspace_policy import WorkspacePolicy
 from commonUtils.ui.file_browser.status import WorkspaceIndexStatus
+
+BROWSER_POLICY = WorkspacePolicy(allow_last_tab_detach=False,
+                                 show_single_tab_in_main=False,
+                                 show_single_tab_in_detached=False,
+                                 detached_title='File Browser: {title}')
+
+
+def _new_browser_tab(workspace):
+    browser = getattr(workspace.active_view, 'file_browser', None)
+    return workspace.add_view(browser.navigation.directory if browser else Path.home())
+
+
+def _browser_container(workspace):
+    workspace.index_status = WorkspaceIndexStatus(workspace)
 
 
 class _BrowserHost:
@@ -109,6 +124,7 @@ class BrowserView(_BrowserHost, qt.QWidget):
         self.folder_sizes.toggled.connect(self.file_browser.set_folder_sizes_enabled)
         self.folder_sizes.hide()  # Legacy API; the browser toolbar now offers Pause/Resume.
         layout.addWidget(self.file_browser, 1)
+        self.workspace_controls = self.file_browser.workspace_controls
         self.file_browser.views.directory_changed.connect(lambda path: self.title_changed.emit(self.view_title))
         self.file_browser.idle.connect(self.idle)
 
@@ -158,7 +174,9 @@ class FileBrowserPage(_WorkspaceHost, qt.QWidget):
         super().__init__(parent)
         self.workspace = Workspace(lambda path: BrowserView(
             root_path=path or root_path or Path.home(),
-            filesystem_scope=root_path is None and (path is None or not self.workspace.docks)), self, keep_one_tab=True)
+            filesystem_scope=root_path is None and (path is None or not self.workspace.all_docks)), self,
+            keep_one_tab=True, policy=BROWSER_POLICY, new_view=_new_browser_tab,
+            setup_container=_browser_container)
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.workspace)
@@ -171,16 +189,21 @@ class FileBrowserWindow(_WorkspaceHost, qt.QMainWindow):
         super().__init__(parent)
         self.setWindowFlag(qt.Qt.WindowType.Window, True)
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
-        self.setWindowTitle(f'File Browser — {Path(root_path).name}')
+        self.setWindowTitle(f'File Browser: {Path(root_path).name}')
         self.resize(1200, 800)
-        self.workspace = Workspace(lambda path: BrowserView(root_path=path or (
-            self.file_browser.navigation.directory if self.workspace.active_view else root_path)), self, keep_one_tab=True)
-        self.workspace.active_changed.connect(lambda view: self.setWindowTitle(
-            f'File Browser — {view.view_title}' if view else 'File Browser'))
+        self.workspace = Workspace(lambda path: BrowserView(root_path=path or root_path), self,
+                                   keep_one_tab=True, policy=BROWSER_POLICY,
+                                   new_view=_new_browser_tab, setup_container=_browser_container)
+        self.workspace.active_changed.connect(self._update_title)
+        self.workspace.tabs_changed.connect(self._update_title)
         self.setCentralWidget(self.workspace)
         self.index_status = WorkspaceIndexStatus(self.workspace)
         view = self.workspace.add_view(root_path)
         view.folder_sizes.setChecked(True)
+
+    def _update_title(self, *args):
+        view = self.workspace.active_view
+        self.setWindowTitle(f'File Browser: {view.view_title}' if view else 'File Browser')
 
 
 _windows = []

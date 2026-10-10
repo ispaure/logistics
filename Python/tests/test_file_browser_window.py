@@ -189,8 +189,8 @@ class BrowserWindowTests(QtTestCase):
         source.workspace._activate(dock)
         source.workspace.detach_active()
         self.app.processEvents()
-        self.assertTrue(dock.isFloating())
-        target.workspace.adopt(dock)
+        self.assertTrue(dock.is_detached)
+        target.workspace.adopt(dock, force=True)
         self.app.processEvents()
         self.assertIs(target.workspace.active_view, original)
         self.assertEqual(len(source.workspace.docks), 1)
@@ -198,6 +198,31 @@ class BrowserWindowTests(QtTestCase):
         self.assertFalse(dock.isFloating())
         self.assertFalse(original.closing)
         self.assertFalse(original.file_browser.stopping)
+
+    def test_detached_plus_and_index_status_belong_to_the_local_container(self):
+        window = self.window([])
+        original = window.workspace.active_dock
+        window.workspace.add_view(self.root); self.wait(window)
+        dock = window.workspace.active_dock
+        detached_window = window.workspace.detach_active()
+        detached = detached_window.workspace
+        self.app.processEvents()
+        browser = dock.widget().file_browser
+        self.assertNotIn(browser, window.index_status.connected)
+        self.assertIn(browser, detached.index_status.connected)
+        dock.local_new_button.click(); self.wait(detached.active_view)
+        self.assertEqual(window.workspace.docks, [original])
+        self.assertEqual(len(detached.docks), 2)
+        self.assertIsNot(detached.active_dock, dock)
+        self.assertEqual(detached.active_view.file_browser.navigation.directory, self.root)
+        child = self.root/'renamed'; child.mkdir()
+        detached.active_view.file_browser.navigate(child); self.wait(detached.active_view)
+        self.assertEqual(detached_window.windowTitle(), 'File Browser: renamed')
+        detached_window.close(); self.wait(window)
+        self.app.processEvents()
+        self.assertIn(browser, window.index_status.connected)
+        self.assertEqual(len(window.workspace.docks), 3)
+        self.assertFalse(browser.stopping)
 
     def test_busy_tab_disappears_immediately_and_retains_its_controller(self):
         class BusyExtension(qt.QObject):

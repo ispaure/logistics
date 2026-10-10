@@ -36,6 +36,30 @@ class SettingsPageTests(QtTestCase):
             self.assertFalse(index_policy(path=path).scan_on_open)
             self.assertIn('value=kept', path.read_text())
 
+    def test_indexing_dependencies_keep_saved_values_and_independent_triggers(self):
+        from ui_new.settings.indexing import IndexSettingsPanel
+        from commonUtils.ui.file_browser.index_policy import index_policy
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary)/'config.ini'
+            path.write_text('[FileIndex]\nscan_on_open=true\nrecursive_on_open=true\n'
+                            'refresh_cached_on_startup=true\nwatch_changes=true\nrefresh_on_revisit=true\n')
+            panel = IndexSettingsPanel(path=path); self.addCleanup(panel.deleteLater)
+            fields = panel.editor.fields
+            scan = fields['FileIndex', 'scan_on_open']
+            startup = fields['FileIndex', 'refresh_cached_on_startup']
+            scan.setChecked(False)
+            self.assertFalse(startup.isEnabled())
+            self.assertTrue(startup.isChecked())
+            self.assertIn('saved value is retained', startup.toolTip())
+            for name in ('watch_changes', 'refresh_on_revisit', 'recursive_on_open'):
+                self.assertTrue(fields['FileIndex', name].isEnabled())
+                self.assertTrue(fields['FileIndex', name].toolTip())
+            self.assertTrue(panel.editor.save())
+            self.assertTrue(index_policy(path=path).refresh_cached_on_startup)
+            fields = panel.editor.fields
+            fields['FileIndex', 'scan_on_open'].setChecked(True)
+            self.assertTrue(fields['FileIndex', 'refresh_cached_on_startup'].isEnabled())
+
     def test_custom_layout_is_lazy_and_retained_across_feature_toggles(self):
         state = self.state()
         factory = Mock(side_effect=lambda parent: qt.QWidget(parent))
