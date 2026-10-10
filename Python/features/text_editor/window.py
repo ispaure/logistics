@@ -223,6 +223,13 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
             self.current.external_acknowledged = True
         self.external_bar.hide()
 
+    def request_close(self):
+        from commonUtils.ui.document_host import CloseOutcome, close_document
+        accepted = close_document(self)
+        if accepted:
+            return CloseOutcome.ACCEPTED
+        return CloseOutcome.PENDING if self._close_pending else CloseOutcome.VETOED
+
     def closeEvent(self, event):
         if self.task.busy or self._queue or not self.search.prepare_close():
             self._close_pending = True

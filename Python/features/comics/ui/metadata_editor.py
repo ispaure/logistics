@@ -13,6 +13,7 @@ BUTTON_SIZE = (105, 28)
 
 
 class MetadataEditor(qt.QDialog):
+    idle = qt.Signal()
     saved = qt.Signal(object)
 
     def __init__(self, path, siblings=None, parent=None):
@@ -98,6 +99,7 @@ class MetadataEditor(qt.QDialog):
         self.operation = Operation(callback, self)
         self.operation.completed.connect(finished)
         self.operation.finished.connect(self._finished)
+        self.operation.finished.connect(self.idle)
         self.operation.start()
 
     def _finished(self):
@@ -221,6 +223,13 @@ class MetadataEditor(qt.QDialog):
     def reject(self):
         if not self.busy:
             super().reject()
+
+    def request_close(self):
+        from commonUtils.ui.document_host import CloseOutcome, close_document, document_is_open
+        if self.busy:
+            return CloseOutcome.PENDING
+        accepted = close_document(self)
+        return CloseOutcome.ACCEPTED if accepted or not document_is_open(self) else CloseOutcome.VETOED
 
     def closeEvent(self, event):
         event.ignore()

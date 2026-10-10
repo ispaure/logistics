@@ -285,3 +285,22 @@ class DocumentWorkspaceTests(QtTestCase):
             while isValid(reader) and (reader.busy or reader.page_cache.busy):
                 self.assertLess(monotonic(), deadline); self.app.processEvents(); sleep(.005)
             self.settle()
+
+
+class PublicCloseContractTests(QtTestCase):
+    def test_pending_owner_does_not_need_private_worker_attributes(self):
+        from commonUtils.ui.document_host import CloseOutcome
+        host = qt.QMainWindow()
+        page = DocumentsPage(lambda: None, host)
+        window = qt.QMainWindow()
+        window.request_close = lambda: CloseOutcome.PENDING
+        page.present(window)
+        self.assertFalse(page.prepare_close())
+        self.assertFalse(page.close_veto)
+        window.request_close = lambda: CloseOutcome.VETOED
+        self.assertFalse(page.prepare_close())
+        self.assertTrue(page.close_veto)
+        window.request_close = lambda: CloseOutcome.ACCEPTED
+        self.assertTrue(page.prepare_close())
+        host.close()
+        host.deleteLater()

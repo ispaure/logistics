@@ -1,6 +1,6 @@
 """Retained readers/editors hosted in the main window, with optional detachment."""
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.document_host import show_document, register_document_host, document_is_open, close_document
+from commonUtils.ui.document_host import show_document, register_document_host, document_is_open, close_document, request_document_close, CloseOutcome
 from shiboken6 import isValid
 from commonUtils.ui.workspace import Workspace, DockTabHeader
 
@@ -93,8 +93,7 @@ class DocumentsPage(qt.QWidget):
             window.installEventFilter(self)
             window.windowTitleChanged.connect(lambda title, view=window: self._title_changed(view, title))
             window.destroyed.connect(lambda obj=None, view=window: self._destroyed(view))
-            for signal in (getattr(window, 'idle', None), getattr(window, 'closed', None),
-                           getattr(getattr(window, 'reader', None), 'idle', None)):
+            for signal in (getattr(window, 'idle', None), getattr(window, 'closed', None)):
                 if signal is not None:
                     signal.connect(self.idle)
             if isinstance(window, qt.QDialog):
@@ -197,24 +196,7 @@ class DocumentsPage(qt.QWidget):
         for window in tuple(self.records):
             if not isValid(window):
                 continue
-            if not getattr(window, 'prepare_close', lambda: True)():
-                ready = False
-                if hasattr(window, 'documents') and not window.task.busy and not window._close_pending:
-                    self.close_veto = True
-                continue
-            accepted = close_document(window)
-            # Comic readers hide immediately while their decode/cache workers retire.
-            owners = [window, getattr(window, 'task', None), getattr(window, 'page_cache', None)]
-            if not accepted and not self.records.get(window, {}).get('closed', True) and not any(getattr(owner, 'busy', False) for owner in owners):
-                self.close_veto = True
-                ready = False
-            if any(getattr(owner, 'busy', False) for owner in owners):
-                ready = False
-                for operation in (getattr(window, 'operation', None), getattr(window, 'worker', None),
-                                  getattr(getattr(window, 'page_cache', None), 'operation', None)):
-                    if operation is not None and hasattr(operation, 'finished') and operation not in self.records[window]['waiting']:
-                        self.records[window]['waiting'].add(operation)
-                        operation.finished.connect(self.idle)
-            if any(getattr(editor, 'busy', False) for editor in getattr(window, 'metadata_windows', ())):
-                ready = False
+            outcome = request_document_close(window)
+            ready = ready and outcome is CloseOutcome.ACCEPTED
+            self.close_veto |= outcome is CloseOutcome.VETOED
         return ready
