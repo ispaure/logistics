@@ -1,6 +1,6 @@
 """Retained readers/editors hosted in the main window, with optional detachment."""
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.document_host import show_document, register_document_host, document_is_open
+from commonUtils.ui.document_host import show_document, register_document_host, document_is_open, close_document
 from shiboken6 import isValid
 from commonUtils.ui.workspace import Workspace, DockTabHeader
 
@@ -13,12 +13,13 @@ class DocumentPane(qt.QWidget):
         self.view_title = window.windowTitle()
         self.setMinimumSize(320, 220)
         layout = qt.QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0)
+        window.setAttribute(qt.Qt.WidgetAttribute.WA_QuitOnClose, False)
         window.setParent(self, qt.Qt.WindowType.Widget)
         layout.addWidget(window)
         window.show()
 
     def prepare_close(self):
-        self.document.close()
+        close_document(self.document)
         # DocumentsPage retires the dock after the original close handler accepts
         # or hides the document. A veto or running worker retains its owner.
         return False
@@ -200,7 +201,7 @@ class DocumentsPage(qt.QWidget):
                 if hasattr(window, 'documents') and not window.task.busy and not window._close_pending:
                     self.close_veto = True
                 continue
-            accepted = window.close()
+            accepted = close_document(window)
             # Comic readers hide immediately while their decode/cache workers retire.
             owners = [window, getattr(window, 'task', None), getattr(window, 'page_cache', None)]
             if not accepted and not self.records.get(window, {}).get('closed', True) and not any(getattr(owner, 'busy', False) for owner in owners):

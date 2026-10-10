@@ -96,7 +96,8 @@ class BooksPage(qt.QWidget):
 
     def close_reader(self):
         if self.reader_window() is not None:
-            self.reader_window().close()
+            from commonUtils.ui.document_host import close_document
+            close_document(self.reader_window())
             return
         if self.worker:
             return
@@ -178,7 +179,8 @@ class BooksPage(qt.QWidget):
                 self.idle.emit()
                 if self._closing:
                     target = self.reader_window() or self
-                    qt.QTimer.singleShot(0, target, target.close)
+                    from commonUtils.ui.document_host import close_document
+                    qt.QTimer.singleShot(0, target, lambda: close_document(target))
         task.finished.connect(finish)
         task.start()
 
@@ -525,7 +527,8 @@ class BookWindow(qt.QMainWindow):
 
     def _finish_close(self):
         if self._close_pending:
-            self.close()
+            from commonUtils.ui.document_host import close_document
+            close_document(self)
 
     def prepare_close(self):
         return self.reader.prepare_close()

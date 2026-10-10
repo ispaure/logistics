@@ -103,9 +103,10 @@ class ReaderMenus(qt.QObject):
         self._build()
 
     def _build(self):
+        from commonUtils.ui.document_host import close_document
         self.shared = SharedReaderMenus(self, self.window.menuBar(),
             open_file=self.window._choose_file, edit_metadata=self.window.edit_metadata,
-            close=self.window.close, fullscreen=self.window.toggle_fullscreen,
+            close=lambda: close_document(self.window), fullscreen=self.window.toggle_fullscreen,
             open_path=lambda path: self.window._request_file(path, False),
             open_label='Open comic…', suffixes=('.cbz',))
         self.fullscreen = ReaderFullscreen(self.window, self.shared.fullscreen_action)
