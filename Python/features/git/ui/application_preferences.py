@@ -101,9 +101,10 @@ class ApplicationPreferences:
         self.update_watch()
 
     def update_watch(self):
-        watched = self.watch.files() + self.watch.directories()
-        if watched: self.watch.removePaths(watched)
-        if not self.path or not self.preferences.options['auto_refresh'] or not self.snapshot: return
+        watched = set(self.watch.files() + self.watch.directories())
+        if not self.path or not self.preferences.options['auto_refresh'] or not self.snapshot:
+            if watched: self.watch.removePaths(sorted(watched))
+            return
         paths = {str(self.path)}
         git = self.path / '.git'
         if git.is_dir(): paths.add(str(git))
@@ -116,7 +117,9 @@ class ApplicationPreferences:
             path = self.path / file
             if path.is_file() and not path.is_symlink(): paths.add(str(path))
             if path.parent.is_dir(): paths.add(str(path.parent))
-        self.watch.addPaths(sorted(paths)[:2000])
+        paths = set(sorted(paths)[:2000])
+        if watched - paths: self.watch.removePaths(sorted(watched - paths))
+        if paths - watched: self.watch.addPaths(sorted(paths - watched))
 
     def files_changed(self, path):
         if not self.closing and self.preferences.options['auto_refresh']: self.file_timer.start()

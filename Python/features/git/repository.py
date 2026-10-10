@@ -72,7 +72,8 @@ class Repository:
         return Path(result.stdout.removesuffix(b'\n').decode('utf-8', 'surrogateescape'))
 
     def status(self):
-        return parse_status(self.run(['status', '--porcelain=v2', '--branch', '-z']).stdout)
+        # A read must not rewrite the index and retrigger the filesystem watcher.
+        return parse_status(self.run(['--no-optional-locks', 'status', '--porcelain=v2', '--branch', '-z']).stdout)
 
     def refs(self):
         return parse_refs(self.run(['for-each-ref', '--format=%(refname)%00%(objectname)%00%(upstream)%00%(HEAD)',
