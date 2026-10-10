@@ -79,6 +79,13 @@ class EditingCommands:
         self.action(self._edit_menu, "next_occurrence", "Add Next Occurrence", lambda: self.edit("add_next_occurrence"), "Ctrl+Alt+D")
         self.action(self._edit_menu, "rectangle", "Rectangular Selection from Selection", lambda: self.edit("rectangular_selection"))
         self.action(self._edit_menu, "clear_cursors", "Clear Extra Cursors", lambda: self.edit("clear_extra_cursors"))
+        folding = self._view_menu.addMenu("Code Folding")
+        for key, label, method in [("fold_current", "Toggle Current Fold", "fold_current"),
+                                   ("fold_all", "Fold All", "fold_all"),
+                                   ("unfold_all", "Unfold All", "unfold_all")]:
+            self.action(folding, key, label, lambda method=method: self.edit(method))
+        self.action(self._view_menu, "indent_guides", "Indentation Guides", self.toggle_guides, checkable=True)
+        self.actions["indent_guides"].setChecked(True)
         views = self._view_menu.addMenu("Document Views")
         for key, label, orientation in [
             ("split_vertical", "Split Side by Side", qt.Qt.Orientation.Horizontal),
@@ -438,3 +445,10 @@ class EditingCommands:
             self.current.editor.clear_extra_cursors()
         else:
             self.search.close_panel()
+
+    def toggle_guides(self):
+        if self.current:
+            for editor in (self.current.views.primary, self.current.views.secondary):
+                if editor is not None:
+                    editor.indent_guides = self.actions["indent_guides"].isChecked()
+                    editor.viewport().update()
