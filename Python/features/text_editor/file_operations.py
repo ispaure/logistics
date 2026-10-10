@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from commonUtils.text_files import (
+from commonUtils.persistence.text import (
     read_text_file,
     write_text_file,
     decode_bytes,
@@ -128,7 +128,7 @@ class FileOperations:
                 if answer == qt.QMessageBox.StandardButton.Open:
                     self.open_path(path, force=True, encoding=encoding)
             elif ("decode" in error or "codec" in error) and encoding is None:
-                from commonUtils.text_files import ENCODINGS
+                from commonUtils.persistence.text import ENCODINGS
 
                 choice, accepted = qt.QInputDialog.getItem(
                     self,

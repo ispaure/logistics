@@ -26,3 +26,17 @@ owner. Package reorganization follows these twelve commits as a separate phase.
 Full validation before the first cleanup release: 569 commonUtils tests (one
 skip), 741 Logistics tests, 10 release-tool tests, and all 24 historical/current
 archive compression runs passed. The parity check used a fresh output folder.
+
+## Follow-up package organization
+
+Directory indexing moved out of the commonUtils root into `directory/`.
+Atomic writing, text snapshots and recovery storage now live in `persistence/`.
+Public legacy modules remain state-sharing aliases; application/internal imports
+use canonical packages. BlueHole's existing vendored directory implementation
+received the equivalent structural move. Ally Tools checks the shared imports.
+`configUtils.py` was not changed in any repository.
+
+Organization validation: 571 commonUtils tests (one skip), 741 Logistics tests,
+24 full archive-compression parity runs, 12 BlueHole consumer tests plus 42
+vendored directory tests, and 27 Ally Tools tests passed. Relative-import audit,
+lint and whitespace checks passed. Both configUtils copies are byte-identical.

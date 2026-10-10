@@ -80,7 +80,7 @@ class EditorService(qt.QObject):
         if not self.windows:
             self.session.last_window_closed(suspended)
             if self.session.suspended:
-                from commonUtils.session_store import SessionStore
+                from commonUtils.persistence.session import SessionStore
                 from uuid import uuid4
                 self.session.store = SessionStore(self.session.directory / (uuid4().hex + ".json"))
                 self.session.persisted = -1

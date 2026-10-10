@@ -5,8 +5,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from uuid import uuid4
 from commonUtils.ui import pyside as qt
-from commonUtils.session_store import SessionStore
-from commonUtils.text_files import decode_bytes, read_text_file, MAX_BYTES
+from commonUtils.persistence.session import SessionStore
+from commonUtils.persistence.text import decode_bytes, read_text_file, MAX_BYTES
 
 
 def document_record(document):
