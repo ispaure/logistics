@@ -2,7 +2,7 @@
 import hashlib
 import json
 from pathlib import Path
-from tempfile import NamedTemporaryFile
+from commonUtils.persistence import atomic_write_json
 
 from commonUtils.storage import cache_directory
 from commonUtils.settings import get_setting
@@ -48,11 +48,4 @@ class ReadingState:
 
     def save(self, data):
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        text = json.dumps(data, ensure_ascii=False, allow_nan=False)
-        with NamedTemporaryFile(mode='w', encoding='utf-8', dir=self.path.parent, delete=False) as stream:
-            staged = Path(stream.name)
-        try:
-            staged.write_text(text, encoding='utf-8')
-            staged.replace(self.path)
-        finally:
-            staged.unlink(missing_ok=True)
+        atomic_write_json(self.path, data)
