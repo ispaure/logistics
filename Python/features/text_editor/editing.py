@@ -76,6 +76,13 @@ class EditingCommands:
             ),
         ]:
             self.action(self._edit_menu, key, label, callback, shortcut)
+        views = self._view_menu.addMenu("Document Views")
+        for key, label, orientation in [
+            ("split_vertical", "Split Side by Side", qt.Qt.Orientation.Horizontal),
+            ("split_horizontal", "Split Above / Below", qt.Qt.Orientation.Vertical),
+            ("single_view", "Single View", None),
+        ]:
+            self.action(views, key, label, lambda orientation=orientation: self.split_document(orientation))
         compare = self.menuBar().addMenu("&Compare")
         self.action(compare, "compare_disk", "Compare with Disk", self.compare_disk)
         self.action(compare, "compare_file", "Compare with Another File…", self.compare_file)
@@ -410,3 +417,15 @@ class EditingCommands:
             dialog = DiffDialog(model, self, left_name=str(path), right_name=document.title, apply=apply)
             dialog.show()
         self._run(work, done, message="Comparing files…")
+
+    def split_document(self, orientation):
+        if not self.current:
+            return
+        document = self.current
+        had_secondary = document.views.secondary is not None
+        document.views.set_split(orientation)
+        if not had_secondary and document.views.secondary is not None:
+            editor = document.views.secondary
+            editor.cursorPositionChanged.connect(document.changed)
+            editor.zoom_changed.connect(self._preferences_changed)
+        self._active_changed()

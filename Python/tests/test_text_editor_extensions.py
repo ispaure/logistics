@@ -98,3 +98,29 @@ class EditorExtensionTests(unittest.TestCase):
         palette.deleteLater()
         self.window._save_shortcuts({})
         self.assertEqual(shortcut_text(other.actions["transform_trim"]), "")
+
+    def test_synchronized_views_focus_undo_readonly_and_close(self):
+        document = self.window.current
+        primary = document.editor
+        primary.setPlainText("one\ntwo")
+        self.window.split_document(qt.Qt.Orientation.Horizontal)
+        secondary = document.editor
+        self.assertIsNot(primary, secondary)
+        self.assertIs(primary.document(), secondary.document())
+        primary.moveCursor(qt.QTextCursor.MoveOperation.Start)
+        secondary.moveCursor(qt.QTextCursor.MoveOperation.End)
+        secondary.insertPlainText("!")
+        self.assertEqual(primary.toPlainText(), "one\ntwo!")
+        self.assertEqual(primary.textCursor().position(), 0)
+        primary.undo()
+        self.assertEqual(secondary.toPlainText(), "one\ntwo")
+        secondary.setReadOnly(True)
+        self.assertTrue(primary.isReadOnly())
+        primary.setReadOnly(False)
+        self.assertFalse(secondary.isReadOnly())
+        document.views.activate(primary)
+        self.assertIs(document.editor, primary)
+        self.assertIs(self.window.search.editor, primary)
+        self.window.split_document(None)
+        self.assertIs(document.editor, primary)
+        self.assertEqual(primary.toPlainText(), "one\ntwo")
