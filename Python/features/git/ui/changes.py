@@ -24,6 +24,7 @@ class ChangesPanel(qt.QWidget):
     discard_requested = qt.Signal(object)
     commit_requested = qt.Signal(str, bool)
     edit_requested = qt.Signal(str)
+    resolve_requested = qt.Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -136,7 +137,8 @@ class ChangesPanel(qt.QWidget):
 
     def _edit(self, item, column=0):
         data=item.data(0,qt.Qt.ItemDataRole.UserRole) if item else None
-        if data: self.edit_requested.emit(data[0].path)
+        if data:
+            (self.resolve_requested if data[0].conflict else self.edit_requested).emit(data[0].path)
 
     def _menu(self, tree, point):
         item=tree.itemAt(point)
@@ -146,7 +148,9 @@ class ChangesPanel(qt.QWidget):
             menu=qt.QMenu(self)
             menu.addAction('Unstage file' if staged else 'Stage file',self.unstage_selected if staged else self.stage_selected)
             if not staged: menu.addAction('Discard file edits…',self.discard_selected)
-            menu.addAction('Open working file in Text Editor',lambda: self._edit(item))
+            if item.data(0,qt.Qt.ItemDataRole.UserRole)[0].conflict:
+                menu.addAction('Resolve conflict…', lambda: self.resolve_requested.emit(item.data(0,qt.Qt.ItemDataRole.UserRole)[0].path))
+            menu.addAction('Open working file in Text Editor',lambda: self.edit_requested.emit(item.data(0,qt.Qt.ItemDataRole.UserRole)[0].path))
             menu.exec(tree.viewport().mapToGlobal(point))
 
     @staticmethod

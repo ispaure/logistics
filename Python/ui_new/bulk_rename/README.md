@@ -1,6 +1,6 @@
 # Bulk rename
 
-The Logistics bulk rename tool, with a standalone or embeddable Qt window. Browse a folder, select candidates,
+The Logistics bulk rename tool, embedded in the main window to the right of the navigation rail. A standalone window remains available for command-line use. Browse a folder, select candidates,
 combine filename rules, inspect the **New name** column, then **Rename selected**.
 No files change during scanning or preview. Requires Python 3.10+, PySide6 and a
 QApplication; the module launcher creates the application itself.
@@ -113,7 +113,7 @@ layout.addWidget(widget)
 widget.renamed.connect(lambda receipt: browser.refresh())
 ```
 
-`open_bulk_rename()` retains the window until it is closed. `widget.preview_ready`
+`open_bulk_rename()` reveals the retained main-window page when Logistics is running, or retains a standalone window until it is closed. `widget.preview_ready`
 signals a `RenamePlan`; `widget.renamed` signals a successful `RenameResult` after applying or undoing a batch.
 `selected_paths()`, `load_directory(path)`, `apply()` and `undo()` are available.
 An embedding host should honor `widget.can_close()` (false while work is running,
@@ -167,3 +167,12 @@ Internals are separated into Qt-independent `renameUtils.py`, rule controls in
 `rules.py`, worker/UI coordination in `widget.py`, and public window/lifetime code
 in `__init__.py`. The shared engine is documented in
 [commonUtils](../../commonUtils/RENAME.md). Filtered traversal lives in `commonUtils.traversal`; transformations accept explicit `RenameMetadata` for folders and file dates without reading the filesystem.
+
+## Main-window hosting
+
+Logistics keeps one Bulk Rename destination. Browser requests replace its candidate
+selection while retaining rules and filters; they do not create more tabs or windows.
+The latest request wins during scanning/preview; an active rename or undo finishes
+before the new selection loads. Closing Logistics cooperatively stops the worker.
+`open_bulk_rename` uses the registered main-window host when available and otherwise
+opens the standalone window. Pass `standalone=True` to explicitly bypass hosting.

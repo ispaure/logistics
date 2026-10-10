@@ -96,6 +96,7 @@ class EditingCommands:
         compare = self.menuBar().addMenu("&Compare")
         self.action(compare, "compare_disk", "Compare with Disk", self.compare_disk)
         self.action(compare, "compare_file", "Compare with Another File…", self.compare_file)
+        self.action(compare, "merge_disk", "Merge Disk Changes…", self.merge_disk)
         tools = self.menuBar().addMenu("&Tools")
         for language in ("json", "xml"):
             for operation in ("format", "validate"):
@@ -389,6 +390,37 @@ class EditingCommands:
         except Exception as error:
             self.show_error(error)
 
+    def merge_disk(self):
+        from commonUtils.persistence.text import read_text_file
+        from commonUtils.ui.code_editor.merge_model import merge_text
+        from commonUtils.ui.code_editor.merge import MergeDialog
+        document = self.current
+        if not document or not document.path or self.task.busy:
+            self.show_error('Open a saved document to merge disk changes.'); return
+        original = document.editor.toPlainText()
+        snapshot = document.snapshot
+        base = snapshot.text
+        def work():
+            disk = read_text_file(snapshot.path, encoding=snapshot.encoding)
+            return disk, merge_text(base, original, disk.text)
+        def done(payload):
+            disk, model = payload
+            def apply(text):
+                if self.task.busy or document.snapshot is not snapshot or document.editor.isReadOnly() or document.editor.toPlainText() != original:
+                    raise ValueError('The buffer changed or is busy. Reopen the merge.')
+                if read_text_file(document.path, encoding=disk.encoding).original != disk.original:
+                    raise ValueError('The file changed on disk. Reopen the merge.')
+                cursor = qt.QTextCursor(document.editor.document())
+                cursor.beginEditBlock(); cursor.select(qt.QTextCursor.SelectionType.Document)
+                cursor.insertText(text); cursor.endEditBlock()
+                document.snapshot = disk
+                document.external_changed = False
+                document.external_acknowledged = False
+                self._active_changed()
+            dialog = MergeDialog(model, self, apply=apply, left_name='Editor buffer', right_name='File on disk', path=document.path)
+            dialog.show()
+        self._run(work, done, message='Preparing merge…')
+
     def compare_disk(self):
         if self.current and self.current.path:
             self.compare_path(self.current.path)
@@ -425,8 +457,9 @@ class EditingCommands:
             cursor.insertText(replacement)
             cursor.endEditBlock()
             editor.setTextCursor(cursor)
+            return editor.toPlainText()
         def done(model):
-            dialog = DiffDialog(model, self, left_name=str(path), right_name=document.title, apply=apply)
+            dialog = DiffDialog(model, self, left_name=str(path), right_name=document.title, apply=apply, path=document.path)
             dialog.show()
         self._run(work, done, message="Comparing files…")
 

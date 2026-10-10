@@ -8,6 +8,7 @@ from commonUtils.configuration.settings import settings_path
 from features import registry
 from .features import FeaturesPage
 from ui_new.settings.indexing import IndexSettingsPanel
+from ui_new.settings.storage import StorageNotice, StoragePanel
 
 
 class ConfigurationPanel(qt.QWidget):
@@ -19,6 +20,8 @@ class ConfigurationPanel(qt.QWidget):
         self.files.setAccessibleName('Configuration file')
         self.stack = qt.QStackedWidget()
         layout.addWidget(self.files)
+        self.storage_notice = StorageNotice(paths[0], self) if paths else qt.QLabel(self)
+        layout.addWidget(self.storage_notice)
         note = qt.QLabel(description or 'Edit settings by section, or use Source for advanced edits. Save explicitly. Some settings apply to the next '
                         'operation; others require restarting Logistics.')
         note.setWordWrap(True)
@@ -43,6 +46,8 @@ class ConfigurationPanel(qt.QWidget):
             editor_type = INISettingsEditor if path.suffix.lower() == '.ini' else TextFileEditor
             self.editors[path] = editor_type(path, self)
             self.stack.addWidget(self.editors[path])
+        if isinstance(self.storage_notice, StorageNotice):
+            self.storage_notice.set_path(path)
         self.stack.setCurrentWidget(self.editors[path])
 
     def can_close(self):
@@ -56,7 +61,7 @@ class CommonUtilsPanel(ConfigurationPanel):
             'Use [FileBrowser] preview_enabled=false to hide selection details by default in new tabs. '
             'For a startup appearance preference, add [Theme] with mode=system, light or dark.')
         appearance = qt.QHBoxLayout()
-        appearance.addWidget(qt.QLabel('Appearance'))
+        appearance.addWidget(qt.QLabel('Appearance (this session)'))
         self.theme_mode = qt.QComboBox()
         self.theme_mode.setAccessibleName('Appearance mode')
         for label, mode in [('System', 'system'), ('Light', 'light'), ('Dark', 'dark')]:
@@ -214,7 +219,7 @@ class SettingsPage(qt.QWidget):
         with qt.QSignalBlocker(self.sidebar):
             self.sidebar.clear()
             items = {}
-            for key, title in (('features', 'Features'), ('indexing', 'File indexing'), ('configuration', 'Configuration'),
+            for key, title in (('features', 'Features'), ('storage', 'Storage & defaults'), ('indexing', 'File indexing'), ('configuration', 'Configuration'),
                                ('commonutils', 'commonUtils')):
                 item = qt.QTreeWidgetItem([title])
                 item.setData(0, qt.Qt.ItemDataRole.UserRole, key)
@@ -244,6 +249,8 @@ class SettingsPage(qt.QWidget):
         if key not in self.panels:
             if key == 'features':
                 panel = FeaturesPage(self)
+            elif key == 'storage':
+                panel = StoragePanel(self)
             elif key == 'indexing':
                 panel = IndexSettingsPanel(self)
             elif key == 'configuration':

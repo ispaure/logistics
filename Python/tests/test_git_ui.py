@@ -65,6 +65,24 @@ class GitUITests(QtTestCase):
         self.repo.stage(['file.txt'])
         self.repo.commit('First')
 
+    def test_conflict_merge_dialog_saves_and_optionally_stages(self):
+        from commonUtils.ui.code_editor.merge import MergeDialog
+        from features.git.runner import GitError
+        path=self.repo.path/'conflict.txt'
+        def commit(text):
+            path.write_text(text); self.repo.stage([path.name]); self.repo.commit('Change')
+        commit('base\n'); self.repo.create_branch('incoming'); commit('incoming\n')
+        self.repo.switch('main'); commit('local\n')
+        with self.assertRaises(GitError): self.repo.merge('incoming')
+        self.open(); self.page.resolve_conflict(path.name); self.wait()
+        dialog=self.page.findChildren(MergeDialog)[0]
+        self.assertFalse(dialog.apply_button.isEnabled())
+        dialog.widget.choose(0,'both')
+        stage=next(box for box in dialog.findChildren(qt.QCheckBox) if box.text().startswith('Stage resolved'))
+        stage.setChecked(True); dialog.apply_result(); self.wait()
+        self.assertEqual(path.read_text(),'local\nincoming\n')
+        self.assertFalse(any(change.conflict for change in self.repo.status().changes))
+
     def test_workspace_navigation_reparents_preview_and_spans_commit_composer(self):
         self.commit_fixture(); self.open()
         self.assertEqual(self.page.refs.topLevelItem(0).text(0),'WORKSPACE')

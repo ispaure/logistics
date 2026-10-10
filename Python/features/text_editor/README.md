@@ -116,3 +116,13 @@ recovery failure paths. The reusable `test_code*.py`, `test_session_store.py`,
 `test_application_instance.py` cover surrounding Logistics integration. These
 headless Qt checks run on macOS, Windows, Ubuntu, and Fedora 43 in CI; native
 desktop interaction still benefits from manual validation. New UI surfaces have also been rendered and inspected in both themes.
+
+## Merge external changes
+
+**Compare → Merge Disk Changes…** (also **Merge…** in the external-change banner)
+compares the last loaded/saved snapshot with the editor buffer and current disk
+file. The shared three-pane merge widget offers independent changes, per-hunk
+choices and manual result edits with undo/redo. Applying checks that both the
+buffer and disk snapshot are still current, replaces the buffer in one undo block,
+and updates its disk baseline. Save remains explicit; Cancel changes neither.
+Comparisons now refresh after each accepted hunk and use resizable, linked panes.

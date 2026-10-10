@@ -207,7 +207,7 @@ class DestinationRail(qt.QWidget):
         set_painted_icon(button, DestinationIcon, icon or key)
         button.setIconSize(qt.QSize(26, 26))
         button.setFixedSize(46, 42)
-        button.setCheckable(key != 'rename' and not key.startswith('editor:'))
+        button.setCheckable(not key.startswith('editor:'))
         button.setAccessibleName(title)
         button.setToolTip(title)
         button.setText(title)
@@ -229,6 +229,9 @@ class DestinationRail(qt.QWidget):
             if page is self.documents:
                 continue
             if page is self.actions:
+                continue
+            if tabs.tabText(index) == "Bulk Rename":
+                self.pages["rename"] = page
                 continue
             info = core.get(page)
             key = ('browser' if info and info[0] == 0 else

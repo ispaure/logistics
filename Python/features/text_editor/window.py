@@ -54,7 +54,9 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
         keep.clicked.connect(self._keep_buffer)
         compare = qt.QPushButton("Compare")
         compare.clicked.connect(self.compare_disk)
-        for widget in (self.external_notice, compare, reload, keep):
+        merge = qt.QPushButton("Merge…")
+        merge.clicked.connect(self.merge_disk)
+        for widget in (self.external_notice, compare, merge, reload, keep):
             row.addWidget(widget)
         layout.addWidget(self.external_bar)
         self.external_bar.hide()

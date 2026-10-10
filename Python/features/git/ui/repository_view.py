@@ -176,6 +176,7 @@ class RepositoryView(GitJobs, qt.QWidget):
         self.changes.discard_requested.connect(self.discard_dialog)
         self.changes.commit_requested.connect(self.commit)
         self.changes.edit_requested.connect(self.edit_file)
+        self.changes.resolve_requested.connect(self.resolve_conflict)
         self.history.commit_selected.connect(self.preview_commit)
         self.history.parent_requested.connect(self.focus_parent)
         self.history.working_copy_selected.connect(lambda: self.views.setCurrentIndex(0))
@@ -186,6 +187,7 @@ class RepositoryView(GitJobs, qt.QWidget):
         self.preview.stage_button.clicked.connect(self.changes.stage_selected)
         self.preview.unstage_button.clicked.connect(self.changes.unstage_selected)
         self.preview.discard_button.clicked.connect(self.changes.discard_selected)
+        self.preview.compare_button.clicked.connect(self.compare_change)
         status = qt.QHBoxLayout()
         self.status = qt.QLabel('Ready')
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
@@ -468,6 +470,8 @@ class RepositoryView(GitJobs, qt.QWidget):
 
     def preview_change(self, change, staged):
         if self.busy or not self.path: return
+        self._comparison_selection = (change, staged)
+        self.preview.compare_button.setVisible(not change.conflict and change.submodule == "N...")
         self._preview_reload = lambda: self.preview_change(change, staged)
         path = self.path
         ignore_whitespace = self.preview.ignore_whitespace.isChecked()
@@ -480,6 +484,22 @@ class RepositoryView(GitJobs, qt.QWidget):
         self._job('Read file changes', read, lambda text: display(
             ('Staged: ' if staged else 'Working tree: ') + change.path,
             text or ('No differences with whitespace ignored.' if ignore_whitespace else 'No textual differences.')))
+
+    def compare_change(self):
+        if self.busy or not self.path or not getattr(self, '_comparison_selection', None):
+            return
+        from commonUtils.ui.code_editor.diff import DiffDialog, compare_text
+        change, staged = self._comparison_selection
+        path = self.path
+        names = ('HEAD', 'Index') if staged else ('Index', 'Working file')
+        def read(runner):
+            left, right = Repository(path, runner).comparison_inputs(change.path, staged=staged)
+            return compare_text(left, right, *names)
+        def show(model):
+            if self.path == path and not self.closing:
+                dialog = DiffDialog(model, self, left_name=names[0], right_name=names[1], path=path/change.path)
+                dialog.show()
+        self._job('Compare file versions', read, show)
 
     def _reload_preview(self, *args):
         reload = getattr(self, '_preview_reload', None)
@@ -793,6 +813,57 @@ class RepositoryView(GitJobs, qt.QWidget):
     def open_folder(self):
         if self.path: qt.QDesktopServices.openUrl(qt.QUrl.fromLocalFile(str(self.path)))
 
+    def resolve_conflict(self, relative_path):
+        if self.busy or not self.path:
+            return
+        from commonUtils.ui.code_editor.merge_model import merge_text
+        from commonUtils.ui.code_editor.merge import MergeDialog
+        path = self.path
+        def read(runner):
+            inputs = Repository(path, runner).conflict_inputs(relative_path)
+            return inputs, merge_text(inputs.base, inputs.left, inputs.right)
+        def opened(payload):
+            inputs, model = payload
+            if self.path != path or self.closing:
+                return
+            rebase = inputs.operation == 'rebase'
+            dialog = MergeDialog(model, self, path=inputs.path,
+                left_name='Index stage 2 — rebased onto' if rebase else 'Index stage 2 — current branch',
+                right_name='Index stage 3 — commit being replayed' if rebase else 'Index stage 3 — incoming changes')
+            stage = qt.QCheckBox('Stage resolved file after saving', dialog)
+            dialog.layout().insertWidget(1, stage)
+            def apply(text):
+                if self.busy or self.path != path or self.closing:
+                    raise ValueError('Repository changed or is busy. Reopen the merge.')
+                stage_requested = stage.isChecked()
+                dialog.applying = True
+                dialog.widget.setEnabled(False); stage.setEnabled(False)
+                dialog.apply_button.setEnabled(False)
+                dialog.widget.status.setText('Saving merge result…')
+                def saved(result):
+                    from shiboken6 import isValid
+                    if isValid(dialog):
+                        dialog.applying = False
+                        dialog.accept()
+                self._operation('Save merge result', lambda repo: repo.save_conflict(inputs, text, stage=stage_requested), saved)
+                return False
+            def finished():
+                from shiboken6 import isValid
+                if isValid(dialog) and dialog.applying:
+                    dialog.applying = False
+                    dialog.widget.setEnabled(True); stage.setEnabled(True)
+                    dialog._ready()
+                    dialog.widget.status.setText(self.status.text())
+            self.idle.connect(finished)
+            def disconnected():
+                from shiboken6 import isValid
+                if isValid(self):
+                    self.idle.disconnect(finished)
+            dialog.destroyed.connect(disconnected)
+            dialog.apply_callback = apply; dialog._ready()
+            dialog.show()
+        self._job('Read merge inputs', read, opened)
+
     def edit_file(self, relative_path):
         if self.busy or not self.path: return
         from features import registry
@@ -819,6 +890,7 @@ class RepositoryView(GitJobs, qt.QWidget):
             self._message('Select a commit in History first.', error=True)
             return
         first, second, path = selected.oid, self.snapshot.status.oid, self.path
+        self.preview.hide_file_actions()
         self._preview_reload = self.compare_to_head
         ignore_whitespace = self.preview.ignore_whitespace.isChecked()
         self._job('Compare revisions', lambda runner: Repository(path, runner).compare(

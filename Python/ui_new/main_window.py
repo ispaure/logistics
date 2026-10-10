@@ -57,6 +57,7 @@ class MainWindow(pyside.Window):
         self.actions.changed.connect(self._actions_changed)
         self.actions.idle.connect(self._retry_close)
         self._closing = False
+        self.bulk_rename = None
 
         self._build_layout()
         self._core_pages = []
@@ -73,6 +74,8 @@ class MainWindow(pyside.Window):
         self._last_destination = self.tabs.currentWidget()
         register_document_host(self.documents)
         register_process_host(self.actions)
+        from ui_new.bulk_rename import register_bulk_rename_host
+        register_bulk_rename_host(self._show_bulk_rename)
         from .notifications import notification_service, Toast
         self.toast = Toast(notification_service(), self.dlg)
         self.dlg.statusBar().addWidget(self.toast, 1)
@@ -180,6 +183,8 @@ class MainWindow(pyside.Window):
             entries.append((80, 'Open documents', self.documents))
         if self.actions.count:
             entries.append((85, 'Folder Actions', self.actions))
+        if self.bulk_rename is not None:
+            entries.append((86, 'Bulk Rename', self.bulk_rename))
         for registered in pages:
             contribution = registered.contribution
             if contribution.page_id in seen:
@@ -229,6 +234,19 @@ class MainWindow(pyside.Window):
             self.tabs.addTab(self.documents, 'Open documents')
         self.tabs.setCurrentWidget(self.documents)
         self.dlg.show(); self.dlg.raise_(); self.dlg.activateWindow()
+
+    def _show_bulk_rename(self, directory=None, *, paths=()):
+        from ui_new.bulk_rename import BulkRenameWidget
+        if self.bulk_rename is None:
+            self.bulk_rename = BulkRenameWidget(directory, self.dlg, paths=paths)
+            self.bulk_rename.idle.connect(self._retry_close)
+            self.tabs.addTab(self.bulk_rename, 'Bulk Rename')
+        elif directory is not None or paths:
+            self.bulk_rename.set_inputs(directory, paths=paths)
+        self.tabs.setCurrentWidget(self.bulk_rename)
+        self.dlg.show(); self.dlg.raise_(); self.dlg.activateWindow()
+        self._refresh_sidebar()
+        return self.bulk_rename
 
     def _show_actions(self):
         if self.tabs.indexOf(self.actions) < 0:
@@ -294,6 +312,8 @@ class MainWindow(pyside.Window):
         ready = prepare_close_all(self.dlg.close)
         ready = self.documents.prepare_close() and ready
         ready = self.actions.prepare_close() and ready
+        if self.bulk_rename is not None:
+            ready = self.bulk_rename.prepare_close() and ready
         if self.documents.close_veto:
             self._closing = False
             self.documents.closing = False

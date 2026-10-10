@@ -74,6 +74,8 @@ class IndexSettingsPanel(qt.QWidget):
         note.setWordWrap(True)
         layout.addWidget(note)
         self.editor = IndexSettingsEditor(path or Path(__file__).resolve().parents[2]/'configFile.ini', self)
+        from .storage import StorageNotice
+        layout.addWidget(StorageNotice(path or Path(__file__).resolve().parents[2]/"configFile.ini", self, scope="application"))
         layout.addWidget(self.editor, 1)
 
     def can_close(self):

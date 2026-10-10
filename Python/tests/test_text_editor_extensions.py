@@ -73,12 +73,43 @@ class EditorExtensionTests(unittest.TestCase):
         self.assertEqual(editor.toPlainText(), "😀 original\n")
         editor.undo()
         self.assertEqual(editor.toPlainText(), "😀 edited\n")
+        dialog.close()
+        self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+        self.window.compare_disk(); self.wait()
+        dialog = self.window.findChildren(DiffDialog)[0]
         editor.insertPlainText("stale")
         before = editor.toPlainText()
         dialog.apply_current()
         self.assertIn("changed after comparison", dialog.status.text())
         self.assertEqual(editor.toPlainText(), before)
         self.assertEqual(path.read_text(), "😀 original\n")
+
+    def test_merge_disk_uses_ancestor_and_applies_one_undoable_buffer_edit(self):
+        from commonUtils.ui.code_editor.merge import MergeDialog
+        path = self.root / 'merge.txt'; path.write_text('a\nb\nc\n')
+        self.window.open_path(path); self.wait()
+        document = self.window.current
+        document.editor.setPlainText('left\nb\nc\n')
+        path.write_text('a\nb\nright\n')
+        self.window.merge_disk(); self.wait()
+        dialog = self.window.findChildren(MergeDialog)[0]
+        dialog.widget.apply_nonconflicting(); dialog.apply_result()
+        self.assertEqual(document.editor.toPlainText(), 'left\nb\nright\n')
+        self.assertEqual(path.read_text(), 'a\nb\nright\n')
+        self.assertEqual(document.snapshot.original, path.read_bytes())
+        document.editor.undo(); self.assertEqual(document.editor.toPlainText(), 'left\nb\nc\n')
+
+    def test_merge_disk_rejects_external_change_during_review(self):
+        from commonUtils.ui.code_editor.merge import MergeDialog
+        path=self.root/'merge.txt'; path.write_text('base\n')
+        self.window.open_path(path); self.wait()
+        self.window.current.editor.setPlainText('local\n'); path.write_text('disk\n')
+        self.window.merge_disk(); self.wait()
+        dialog=self.window.findChildren(MergeDialog)[0]; dialog.widget.choose(0,'right')
+        path.write_text('new disk\n'); dialog.apply_result()
+        self.assertIn('changed on disk',dialog.widget.status.text())
+        self.assertEqual(self.window.current.editor.toPlainText(),'local\n')
+        dialog.close()
 
     def test_shortcuts_persist_propagate_conflicts_and_palette(self):
         from commonUtils.ui.command_palette import CommandPalette, shortcut_text
