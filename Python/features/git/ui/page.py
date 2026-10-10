@@ -73,7 +73,7 @@ class GitPage(qt.QWidget):
         self.toolbar.setFont(toolbar_font)
         actions = qt.QHBoxLayout(self.toolbar)
         actions.setContentsMargins(8, 6, 8, 6)
-        actions.setSpacing(2)
+        actions.setSpacing(1)
         self.action_buttons = {}
         for title, icon, callback in (
                 ('Commit', 'commit', self.focus_commit), ('Pull…', 'pull', self.pull_dialog),
@@ -120,7 +120,7 @@ class GitPage(qt.QWidget):
         sidebar_layout.setSpacing(4)
         self.refs = qt.QTreeWidget()
         self.refs.setHeaderHidden(True)
-        self.refs.setMinimumWidth(170)
+        self.refs.setMinimumWidth(156)
         self.refs.setIconSize(qt.QSize(14,14))
         self.refs.setIndentation(14)
         self.refs.setUniformRowHeights(False)
@@ -171,7 +171,7 @@ class GitPage(qt.QWidget):
         history_view.setSizes([440, 300])
         self.views.addTab(history_view, 'History')
         self.content.addWidget(self.views)
-        self.content.setSizes([210, 1040])
+        self.content.setSizes([192, 1058])
         self.content.setStretchFactor(0, 0)
         self.content.setStretchFactor(1, 1)
         layout.addWidget(self.content, 1)
@@ -183,6 +183,7 @@ class GitPage(qt.QWidget):
         self.changes.edit_requested.connect(self.edit_file)
         self.history.commit_selected.connect(self.preview_commit)
         self.history.parent_requested.connect(self.focus_parent)
+        self.history.working_copy_selected.connect(lambda: self.views.setCurrentIndex(0))
         self.history.blob_selected.connect(self.preview_blob)
         self.history.load_more.connect(self.load_more)
         self.views.currentChanged.connect(self._view_changed)
@@ -424,6 +425,7 @@ class GitPage(qt.QWidget):
         self.repository_label.setToolTip(str(snapshot.root))
         self.changes.set_changes(status.changes)
         self.history.head_oid = status.oid
+        self.history.uncommitted_count = len(status.changes)
         self.history.set_commits(snapshot.commits, snapshot.more_history and self.history_limit < 5000)
         self._render_navigation(snapshot)
         self.operation_label.setText(f'{snapshot.operation} in progress — resolve conflicts, stage files, then Continue.')
@@ -598,7 +600,11 @@ class GitPage(qt.QWidget):
         self._select_navigation(index)
         if index == 1:
             if self.history.selected_commit() is None and self.history.table.topLevelItemCount():
-                self.history.table.setCurrentItem(self.history.table.topLevelItem(0))
+                for i in range(self.history.table.topLevelItemCount()):
+                    item = self.history.table.topLevelItem(i)
+                    if item.data(1, qt.Qt.ItemDataRole.UserRole):
+                        self.history.table.setCurrentItem(item)
+                        break
             elif self.history.selected_commit(): self.preview_commit(self.history.selected_commit())
         else:
             for tree in (self.changes.staged_files, self.changes.unstaged_files):
@@ -772,7 +778,8 @@ class GitPage(qt.QWidget):
                 self.history.table.setCurrentItem(None)
                 for index in range(self.history.table.topLevelItemCount()):
                     item = self.history.table.topLevelItem(index)
-                    if item.data(1, qt.Qt.ItemDataRole.UserRole).oid == oid:
+                    commit = item.data(1, qt.Qt.ItemDataRole.UserRole)
+                    if commit and commit.oid == oid:
                         self.history.table.setCurrentItem(item)
                         break
             self.preview.show_text(ref.name, 'Select a file to review its changes.')

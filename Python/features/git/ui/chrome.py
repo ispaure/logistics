@@ -14,7 +14,7 @@ QWidget#gitWorkspace QHeaderView::section { padding: 2px 4px; }
 QWidget#gitWorkspace QWidget#gitSidebar { background: palette(alternate-base); }
 QWidget#gitWorkspace QWidget#gitSidebar QTreeWidget { background: transparent; border: none; }
 QWidget#gitWorkspace QWidget#gitSidebar QTreeWidget::item:selected { background: #ed851b; color: white; }
-QWidget#gitWorkspace QWidget#gitToolbar QToolButton { padding: 5px; border: none; }
+QWidget#gitWorkspace QWidget#gitToolbar QToolButton { padding: 4px; border: none; }
 QWidget#gitWorkspace QTabWidget::pane { border: none; }
 QWidget#gitWorkspace QTabBar::tab { padding: 4px 16px; }
 QWidget#gitWorkspace QLabel#fileSection { font-weight: bold; }
@@ -69,7 +69,7 @@ def toolbar_button(title, icon, callback, parent):
     button.setIcon(action_icon(icon))
     button.setIconSize(qt.QSize(28,28))
     button.setToolButtonStyle(qt.Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
-    button.setMinimumWidth(60)
+    button.setMinimumWidth(54)
     button.clicked.connect(callback)
     return button
 

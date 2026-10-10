@@ -4,6 +4,9 @@ from datetime import datetime
 from html import escape
 import re
 from ..graph import layout_graph
+from ..models import Commit
+
+WORKING_COPY_ROLE = qt.Qt.ItemDataRole.UserRole + 1
 
 
 class GraphDelegate(qt.QStyledItemDelegate):
@@ -13,6 +16,7 @@ class GraphDelegate(qt.QStyledItemDelegate):
         super().paint(painter, option, index)
         row = index.data(qt.Qt.ItemDataRole.UserRole)
         if row is None: return
+        working_copy = index.siblingAtColumn(1).data(WORKING_COPY_ROLE)
         painter.save()
         painter.setClipRect(option.rect)
         painter.setRenderHint(qt.QPainter.RenderHint.Antialiasing)
@@ -23,9 +27,9 @@ class GraphDelegate(qt.QStyledItemDelegate):
             painter.setPen(qt.QPen(qt.QColor(self.COLORS[source % len(self.COLORS)]), 2))
             painter.drawLine(qt.QPointF(x(source), rect.top()), qt.QPointF(x(target), center))
         for source, target in row.outgoing:
-            painter.setPen(qt.QPen(qt.QColor(self.COLORS[target % len(self.COLORS)]), 2))
+            painter.setPen(qt.QPen(qt.QColor('#a0a5ad' if working_copy else self.COLORS[target % len(self.COLORS)]), 2))
             painter.drawLine(qt.QPointF(x(source), center), qt.QPointF(x(target), rect.bottom() + 1))
-        color = qt.QColor(self.COLORS[row.lane % len(self.COLORS)])
+        color = qt.QColor('#a0a5ad' if working_copy else self.COLORS[row.lane % len(self.COLORS)])
         painter.setPen(qt.QPen(color, 2))
         painter.setBrush(option.palette.base())
         painter.drawEllipse(qt.QPointF(x(row.lane), center), 4, 4)
@@ -67,6 +71,7 @@ class HistoryPanel(qt.QWidget):
     blob_selected = qt.Signal(object)
     load_more = qt.Signal()
     parent_requested = qt.Signal(str)
+    working_copy_selected = qt.Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -88,6 +93,7 @@ class HistoryPanel(qt.QWidget):
         layout.addLayout(filters)
         self.head_oid = ''
         self.commits = []
+        self.uncommitted_count = 0
         self.table = qt.QTreeWidget()
         self.table.setHeaderLabels(['Graph', 'Description', 'Commit', 'Author', 'Date'])
         self.table.setRootIsDecorated(False)
@@ -148,12 +154,24 @@ class HistoryPanel(qt.QWidget):
         selected = self.selected_commit()
         oid = selected.oid if selected else ''
         self.commits = commits
-        graph = layout_graph(commits)
+        graph_commits = commits
+        if self.uncommitted_count:
+            parents = (self.head_oid,) if re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', self.head_oid) else ()
+            graph_commits = [Commit('working-copy', parents, '', '', 'Uncommitted changes'), *commits]
+        graph = layout_graph(graph_commits)
         width = min(260, max((row.width for row in graph), default=1) * 14 + 22)
         self.table.setColumnWidth(0, max(80, width))
         with qt.QSignalBlocker(self.table):
             self.table.clear()
-            for commit, row in zip(commits, graph):
+            for commit, row in zip(graph_commits, graph):
+                if commit.oid == 'working-copy':
+                    item = qt.QTreeWidgetItem(['', 'Uncommitted changes', '*', '*', 'Today'])
+                    item.setData(0, qt.Qt.ItemDataRole.UserRole, row)
+                    item.setData(1, WORKING_COPY_ROLE, True)
+                    item.setToolTip(1, f'{self.uncommitted_count} changed files — open File status')
+                    font = self.table.font(); font.setBold(True); item.setFont(1, font)
+                    self.table.addTopLevelItem(item)
+                    continue
                 subject = commit.subject + (f'  · {commit.decorations}' if commit.decorations else '')
                 item = qt.QTreeWidgetItem(['', subject, commit.oid[:8], commit.author, commit.date.replace('T',' ')[:19]])
                 item.setData(0, qt.Qt.ItemDataRole.UserRole, row)
@@ -168,7 +186,8 @@ class HistoryPanel(qt.QWidget):
     def select_ref(self, oid):
         for i in range(self.table.topLevelItemCount()):
             item=self.table.topLevelItem(i)
-            if item.data(1,qt.Qt.ItemDataRole.UserRole).oid == oid:
+            commit = item.data(1,qt.Qt.ItemDataRole.UserRole)
+            if commit and commit.oid == oid:
                 self.table.setCurrentItem(item); self.table.scrollToItem(item)
                 return True
         return False
@@ -202,6 +221,9 @@ class HistoryPanel(qt.QWidget):
         return item.data(1, qt.Qt.ItemDataRole.UserRole) if item else None
 
     def _selected(self, item, previous):
+        if item and item.data(1, WORKING_COPY_ROLE):
+            self.working_copy_selected.emit()
+            return
         # Removing the selected file can briefly select another old item. That
         # must not launch a file read ahead of the new commit's metadata read.
         with qt.QSignalBlocker(self.tree): self.tree.clear()
@@ -223,6 +245,9 @@ class HistoryPanel(qt.QWidget):
         for i in range(self.table.topLevelItemCount()):
             item = self.table.topLevelItem(i)
             commit = item.data(1, qt.Qt.ItemDataRole.UserRole)
+            if not commit:
+                item.setHidden(text not in 'uncommitted changes')
+                continue
             item.setHidden((limited and commit.oid not in reachable) or text not in f'{commit.subject} {commit.author} {commit.oid} {commit.decorations}'.casefold())
 
     def set_tree(self, entries):
