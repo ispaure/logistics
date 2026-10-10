@@ -1,5 +1,5 @@
 """One Logistics process per user, including launches from different checkouts."""
-from commonUtils.storage import temporary_directory
+from commonUtils.filesystem.storage import temporary_directory
 from commonUtils.ui import pyside as qt
 
 

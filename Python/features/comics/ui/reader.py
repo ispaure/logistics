@@ -2,7 +2,7 @@
 
 import time
 from pathlib import Path
-from commonUtils.debugUtils import Severity, log
+from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.ui import pyside as qt
 from features.comics.pages import ComicPages
 from features.comics.reading import comic_siblings, visible_pages

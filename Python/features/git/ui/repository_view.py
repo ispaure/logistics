@@ -410,7 +410,7 @@ class RepositoryView(GitJobs, qt.QWidget):
 
     def open_terminal(self):
         if not self.path: return
-        from commonUtils.wrappers.cmdShellWrapper.terminal import exec_cmd_new_window
+        from commonUtils.integrations.wrappers.cmdShellWrapper.terminal import exec_cmd_new_window
         try:
             if exec_cmd_new_window('', str(self.path)) is False: self._message('Terminal could not be opened.', error=True)
         except OSError as error: self._message(str(error), error=True)

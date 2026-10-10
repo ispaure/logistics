@@ -1,6 +1,6 @@
 """Lazy settings and browser contributions for the standalone Books feature."""
 from pathlib import Path
-from commonUtils.features import BrowserExtension, FileActivation, FileType, SelectionAction
+from commonUtils.ui.features import BrowserExtension, FileActivation, FileType, SelectionAction
 from features.contributions import Feature, SettingsContribution, DocumentLauncherContribution
 
 
@@ -36,7 +36,7 @@ def register():
                    browser=BrowserExtension(
                        actions=(SelectionAction('read', 'Read EPUB…', kind, read, is_available=single, order=5),
                                 SelectionAction('metadata', 'Edit metadata…',
-                                    (kind, 'features.comics.cbz:CBZFile', 'commonUtils.dirUtils:Directory'),
+                                    (kind, 'features.comics.cbz:CBZFile', 'commonUtils.filesystem.directories:Directory'),
                                     edit, order=10, shared_key='books.edit_metadata')),
                        activation=(FileActivation(kind, read),), create_controller=create_controller),
                    settings=[SettingsContribution('Reader defaults', 'books_reader', create_settings,

@@ -6,7 +6,7 @@ import os
 from collections.abc import Collection
 from pathlib import Path
 
-from commonUtils.osUtils import OS, get_os
+from commonUtils.runtime.platform import OS, get_os
 
 from models.logistics_folder import LogisticsFolder
 

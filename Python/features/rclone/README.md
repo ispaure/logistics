@@ -50,7 +50,7 @@ The [software manifest](../../software_manifest.json) is the sole source for
 versions, HTTPS URLs, archive/executable hashes and platform/architecture paths.
 Use its authoritative path rather than legacy binaries or a second download path.
 See [updating pins](../../../CONFIGURATION.md#public-software-provisioning) and
-[shared provisioning recipes](../../commonUtils/RECIPES.md#provision-a-pinned-executable-or-installer)
+[shared provisioning recipes](../../commonUtils/docs/RECIPES.md#provision-a-pinned-executable-or-installer)
 for reusable verification, staging and worker behavior.
 
 ## Validation

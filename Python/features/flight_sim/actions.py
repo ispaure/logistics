@@ -6,9 +6,9 @@ from pathlib import Path
 
 import config
 
-from commonUtils import fileUtils
-from commonUtils.debugUtils import Severity, log
-from commonUtils.fileTypes import txtType
+from commonUtils.filesystem import files as fileUtils
+from commonUtils.runtime.diagnostics import Severity, log
+from commonUtils.formats import txtType
 
 from features.flight_sim import detection
 

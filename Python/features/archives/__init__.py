@@ -2,9 +2,9 @@
 
 
 def register():
-    from commonUtils.features import BrowserExtension, SelectionAction, FileActivation
-    from commonUtils.fileUtils import File
-    from commonUtils.dirUtils import Directory
+    from commonUtils.ui.features import BrowserExtension, SelectionAction, FileActivation
+    from commonUtils.filesystem.files import File
+    from commonUtils.filesystem.directories import Directory
     from features.contributions import Feature, DocumentLauncherContribution
     return Feature(id='archives', label='Archives',
                    document_launchers=[DocumentLauncherContribution('archive', 'Archives', launch, 'archives', 50)],

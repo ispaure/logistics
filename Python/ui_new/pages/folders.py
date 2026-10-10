@@ -416,7 +416,7 @@ class FoldersPage(pyside.QWidget):
         generation = self._detail_generation
         features = tuple(self._folder_features)
         def work(report, cancelled):
-            from commonUtils.operations import check_cancelled
+            from commonUtils.runtime.operations import check_cancelled
             found = []
             for registered in features:
                 check_cancelled(cancelled)

@@ -8,7 +8,7 @@ import shlex
 import shutil
 import sys
 
-from commonUtils.osUtils import OS, get_os
+from commonUtils.runtime.platform import OS, get_os
 
 DEFAULT_ARGUMENTS = (
     '--write-info-json', '--write-thumbnail', '--add-metadata', '--no-overwrites',

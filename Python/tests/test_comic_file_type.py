@@ -7,9 +7,9 @@ from unittest.mock import patch
 import unittest
 import zipfile
 
-from commonUtils.dirUtils import Directory
-from commonUtils.fileUtils import File
-from commonUtils.fileTypes.registry import file_from_path
+from commonUtils.filesystem.directories import Directory
+from commonUtils.filesystem.files import File
+from commonUtils.formats.registry import file_from_path
 from features.comics import register_file_types
 from features.comics.cbz import CBZFile
 

@@ -7,7 +7,7 @@ import stat
 from tempfile import TemporaryDirectory
 
 from commonUtils.archives.zip_access import open_archive, is_encrypted, validate_members, password_bytes
-from commonUtils.streams import stream_signature
+from commonUtils.runtime.streams import stream_signature
 from services.zip_passwords import configured_password, remember_verified_password
 from .archive_io import archive_unchanged
 from .selection import selected_comics

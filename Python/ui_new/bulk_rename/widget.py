@@ -9,7 +9,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.operation_progress import OperationProgress
 from commonUtils.ui.file_browser.controls import navigation_button
 from commonUtils.filesystem import format_size
-from commonUtils.renameUtils import RenameRules, plan_renames, apply_renames, undo_renames
+from commonUtils.filesystem.rename import RenameRules, plan_renames, apply_renames, undo_renames
 from commonUtils.filesystem.traversal import natural_path_key, scan_directory
 from .rules import RenameRuleControls
 from .preview import RenamePreviewDelegate, preview_tooltip
@@ -315,7 +315,7 @@ class BulkRenameWidget(qt.QWidget):
         items = []
         for path in paths:
             if cancelled():
-                from commonUtils.renameUtils import RenameCancelled
+                from commonUtils.filesystem.rename import RenameCancelled
                 raise RenameCancelled('Folder scan cancelled')
             path = path.parent.resolve() / path.name
             info = path.lstat()

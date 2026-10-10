@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 from typing import List
-from commonUtils.fileTypes import txtType
+from commonUtils.formats import txtType
 
 
 class CompressionStats:

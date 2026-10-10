@@ -7,14 +7,15 @@ CBR to CBZ conversion helpers for the Logistics Comics feature.
 
 from pathlib import Path
 from typing import List
-from commonUtils.storage import temporary_workspace
+from commonUtils.filesystem.storage import temporary_workspace
 
 import config
 
-from commonUtils import dirUtils, fileUtils, zipUtils
-from commonUtils.debugUtils import Severity, log
+from commonUtils.filesystem import directories as dirUtils, files as fileUtils
+from commonUtils.archives import legacy as zipUtils
+from commonUtils.runtime.diagnostics import Severity, log
 from .archive_io import replace_archive, archive_unchanged
-from commonUtils.operations import run_batch
+from commonUtils.runtime.operations import run_batch
 
 
 show_verbose = True

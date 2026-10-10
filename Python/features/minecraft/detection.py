@@ -2,7 +2,7 @@
 Detection helpers for the Logistics Minecraft feature.
 """
 
-from commonUtils.dirUtils import Directory
+from commonUtils.filesystem.directories import Directory
 from models.local_folder import LocalFolder
 
 from features.minecraft.server import MinecraftServer

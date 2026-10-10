@@ -10,8 +10,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import TypeVar
 
-from commonUtils.debugUtils import Severity, log
-from commonUtils.features import Feature as CommonFeature
+from commonUtils.runtime.diagnostics import Severity, log
+from commonUtils.ui.features import Feature as CommonFeature
 from features.contributions import (
     BrowserExtensionContribution,
     DebugActionContribution,
@@ -57,7 +57,7 @@ def reset_feature_defaults():
     """Enable all available features and save the default choice atomically."""
     before = set(_disabled_features)
     feature_map = _get_feature_map()
-    from commonUtils.fileTypes.registry import file_types
+    from commonUtils.formats.registry import file_types
     def activate(name, enabled):
         definition = get_feature_definition(feature_map[name])
         if definition is not None:
@@ -332,7 +332,7 @@ def _activate_features(features):
     # Validate all hooks before starting any work.
     _get_startup_hooks(features, 'register_file_types')
     _get_startup_hooks(features, 'initialize')
-    from commonUtils.fileTypes.registry import file_types, register_builtin_file_types
+    from commonUtils.formats.registry import file_types, register_builtin_file_types
     register_builtin_file_types()
     for feature in features:
         definition = get_feature_definition(feature)
@@ -443,7 +443,7 @@ def set_feature_enabled(name, enabled):
     members = groups[leaders[name]]
     if all(is_feature_enabled(member) == enabled for member in members):
         return
-    from commonUtils.fileTypes.registry import file_types
+    from commonUtils.formats.registry import file_types
     before = set(_disabled_features)
     def activate(current, value):
         definition = get_feature_definition(feature_map[current])

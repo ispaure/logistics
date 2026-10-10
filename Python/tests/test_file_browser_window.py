@@ -79,7 +79,7 @@ class BrowserWindowTests(QtTestCase):
 
     def test_default_page_starts_at_home_with_filesystem_boundary_and_scoped_extra_tabs(self):
         from ui_new.file_browser import FileBrowserPage
-        from commonUtils.directory_index import DirectoryCache
+        from commonUtils.filesystem.index import DirectoryCache
         cache_temp = TemporaryDirectory()
         self.addCleanup(cache_temp.cleanup)
         with DirectoryCache(database=Path(cache_temp.name) / 'index.sqlite3') as directory_cache:
@@ -381,8 +381,8 @@ class BrowserWindowTests(QtTestCase):
                 time.sleep(.01)
 
     def test_comics_toggle_updates_existing_browser_and_restores_same_controller(self):
-        from commonUtils.fileUtils import File
-        from commonUtils.fileTypes.registry import file_from_path
+        from commonUtils.filesystem.files import File
+        from commonUtils.formats.registry import file_from_path
         from features.comics.cbz import CBZFile
         window = FileBrowserWindow(self.root)
         window.show()

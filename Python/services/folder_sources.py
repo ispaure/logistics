@@ -6,7 +6,7 @@ from features import registry
 from features.contributions import LocalFolderSource, RemoteFolderSource
 from models.local_folder import LocalFolder
 from services.folder_entries import get_folder_entries
-from commonUtils.operations import check_cancelled
+from commonUtils.runtime.operations import check_cancelled
 
 
 @dataclass(frozen=True)

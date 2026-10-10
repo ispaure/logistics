@@ -352,7 +352,7 @@ class Repository:
     def comparison_inputs(self, relative_path, *, staged=False):
         """Read full text snapshots for review; never reconstruct files from a patch."""
         from commonUtils.persistence.text import decode_bytes, read_text_file
-        from commonUtils.text_merge import bounded
+        from commonUtils.persistence.merge import bounded
         root = self.root().resolve()
         path = root / relative_path
         if path.is_symlink() or not path.resolve().is_relative_to(root):
@@ -420,7 +420,7 @@ class Repository:
 
     def save_conflict(self, inputs, text, *, stage=False):
         from commonUtils.persistence.text import write_text_file
-        from commonUtils.text_merge import bounded
+        from commonUtils.persistence.merge import bounded
         bounded(text)
         self._check_text_attributes(inputs.relative_path)
         root = self.root().resolve()

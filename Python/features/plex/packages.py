@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 from uuid import uuid4
 from zipfile import ZipFile, ZIP_DEFLATED
 
-from commonUtils.osUtils import OS
+from commonUtils.runtime.platform import OS
 
 REGISTRY_KEY = r'HKEY_CURRENT_USER\Software\Plex, Inc.\Plex Media Server'
 PLIST_NAME = 'com.plexapp.plexmediaserver.plist'

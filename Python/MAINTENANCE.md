@@ -38,7 +38,7 @@ Optional `[Resources] software_path` and `credentials_path` entries in
 `configFile.ini` override them independently (relative to the checkout, or absolute).
 Dropbox is never selected implicitly. Public binaries/installers are pinned in
 `software_manifest.json`; `services.software` supplies project policy to the shared
-`commonUtils.downloads` and `commonUtils.ui.download` provisioning code. Download
+`commonUtils.runtime.streams.downloads` and `commonUtils.ui.download` provisioning code. Download
 hashes and extracted executable hashes must both be updated when changing releases.
 Other integrations still require their existing private software resources.
 
@@ -78,7 +78,7 @@ settings are intentionally tied to their operating systems.
 
 ## Shared workers and API changes
 
-Recent helpers are consolidated around `commonUtils.streams`,
+Recent helpers are consolidated around `commonUtils.runtime.streams`,
 `commonUtils.ui.operations.Operation` and `OperationProgress`. Download dialogs
 reuse the same progress/cancellation widget; browser workers use the generic
 worker module. New callers should use these canonical imports. Feature declarations
@@ -93,4 +93,4 @@ into an archive rewrite that must finish its current transaction.
 Other integrations still have synchronous work; this change does not imply that
 all Folders actions or external processes have cancellation support. See the
 [UI ownership guide](features/UI_ARCHITECTURE.md#long-running-workflows-and-safe-closing)
-and [commonUtils recipes](commonUtils/RECIPES.md) before extending a workflow.
+and [commonUtils recipes](commonUtils/docs/RECIPES.md) before extending a workflow.

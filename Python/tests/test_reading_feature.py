@@ -9,7 +9,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import Mock, patch
 from books_fixture import make_book
 from commonUtils.ui import pyside as qt
-from commonUtils.features import Feature, ActionContext
+from commonUtils.ui.features import Feature, ActionContext
 from features import books, comics, images, registry
 from features.books.file_type import EPUBFile
 from features.comics.cbz import CBZFile

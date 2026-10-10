@@ -7,7 +7,7 @@ User-facing actions for the Logistics Images feature.
 
 from pathlib import Path
 
-from commonUtils.wrappers import piexifWrapper
+from commonUtils.integrations.wrappers import piexifWrapper
 
 from features.images import processing
 
@@ -65,7 +65,7 @@ def compress_folders(target_dirs, *, recursive=True, always_keep_compressed=Fals
                      exclude_webp=True, report=lambda done, total, message: None,
                      cancelled=lambda: False):
     """Cancellable folder workflow with per-image outcomes and system-folder policy."""
-    from commonUtils.operations import run_batch
+    from commonUtils.runtime.operations import run_batch
     from commonUtils.filesystem.traversal import scan_directory, natural_path_key
     from services.folder_safety import require_safe_folder
     if not processing.validate_compression_options(always_keep_compressed, preserve_animated_and_multipage_originals):

@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from commonUtils.osUtils import OS
+from commonUtils.runtime.platform import OS
 from features.perforce import actions, detection, ui_contributions
 from models.folder_entry import FolderEntry
 from models.local_folder import LocalFolder

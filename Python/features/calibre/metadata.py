@@ -5,7 +5,7 @@ import re
 import unicodedata
 import xml.etree.ElementTree as ET
 
-from commonUtils import dirUtils
+from commonUtils.filesystem import directories as dirUtils
 
 
 

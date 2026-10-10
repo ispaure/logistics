@@ -17,9 +17,9 @@ from typing import Any
 from urllib.parse import quote
 
 from commonUtils import ui
-from commonUtils.debugUtils import Severity, log
-from commonUtils.dirUtils import Directory
-from commonUtils.osUtils import OS, get_os
+from commonUtils.runtime.diagnostics import Severity, log
+from commonUtils.filesystem.directories import Directory
+from commonUtils.runtime.platform import OS, get_os
 
 
 # ----------------------------------------------------------------------------------------------------------------------

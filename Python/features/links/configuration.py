@@ -4,7 +4,7 @@ Configuration access for the Logistics Links feature.
 
 from pathlib import Path
 
-from commonUtils.fileTypes.iniType import INIFile
+from commonUtils.formats.iniType import INIFile
 
 
 URLS_SECTION = 'URLs'

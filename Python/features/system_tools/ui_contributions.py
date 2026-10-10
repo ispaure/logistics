@@ -2,7 +2,7 @@
 Debug UI contributions exposed by System Tools.
 """
 
-from commonUtils.osUtils import OS, get_os
+from commonUtils.runtime.platform import OS, get_os
 
 from features.contributions import DebugActionContribution, Feature
 from features.system_tools import actions

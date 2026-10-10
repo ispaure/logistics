@@ -1,6 +1,6 @@
 import phue
 
-from commonUtils.debugUtils import print_debug_msg
+from commonUtils.runtime.diagnostics import print_debug_msg
 from features.smart_home import configuration
 
 

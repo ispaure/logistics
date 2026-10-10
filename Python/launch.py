@@ -1,4 +1,4 @@
-from commonUtils.debugUtils import Severity, log
+from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils import ui
 from commonUtils.ui import pyside
 from commonUtils.ui.theme import apply_theme

@@ -47,7 +47,7 @@ emptying a field removes it. Unknown elements/attributes, namespace declarations
 comments, processing instructions and existing `Pages` records survive metadata-only
 edits. Image bytes remain unchanged. New known fields follow schema order without
 reordering existing nodes. XML formatting and ZIP container bytes may change on a
-real edit. Use [XMLFile](../../commonUtils/XML.md) for generic XML mechanics;
+real edit. Use [XMLFile](../../commonUtils/docs/XML.md) for generic XML mechanics;
 `ComicInfoXML` owns ComicInfo field mappings and validation.
 
 Number/AlternateNumber accept strings (including fractions and suffixes); counts,
@@ -130,7 +130,7 @@ the dialog. Report per-item failures as well as worker errors and distinguish
 unprocessed files from failures/cancellation. Compression continues after failures;
 organization retains its stop-on-first-error policy. Shared lifecycle guidance lives
 in [UI architecture](../UI_ARCHITECTURE.md#long-running-workflows-and-safe-closing)
-and [commonUtils recipes](../../commonUtils/RECIPES.md).
+and [commonUtils recipes](../../commonUtils/docs/RECIPES.md).
 
 CBR conversion deletes its source only after building/verifying the CBZ and refuses
 existing destinations; actual extraction requires patool's external RAR extractor.

@@ -6,9 +6,9 @@ import json
 import os
 from pathlib import Path
 
-from commonUtils.debugUtils import Severity, log
-from commonUtils.fileUtils import get_user_home_dir
-from commonUtils.osUtils import OS, get_os
+from commonUtils.runtime.diagnostics import Severity, log
+from commonUtils.filesystem.files import get_user_home_dir
+from commonUtils.runtime.platform import OS, get_os
 from models.local_folder import LocalFolder
 
 

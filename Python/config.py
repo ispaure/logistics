@@ -1,8 +1,9 @@
 from configparser import ConfigParser
 from pathlib import Path
-from commonUtils import configUtils, fileUtils
-from commonUtils.osUtils import OS, get_os
-from commonUtils.storage import temporary_directory
+from commonUtils.configuration import legacy as configUtils
+from commonUtils.filesystem import files as fileUtils
+from commonUtils.runtime.platform import OS, get_os
+from commonUtils.filesystem.storage import temporary_directory
 
 
 def get_config_file_path() -> Path:

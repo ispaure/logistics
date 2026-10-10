@@ -4,7 +4,7 @@ Detection helpers for the Logistics Flight Simulator feature.
 
 from pathlib import Path
 
-from commonUtils import fileUtils
+from commonUtils.filesystem import files as fileUtils
 
 
 def get_xp12_dir() -> Path:

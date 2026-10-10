@@ -2,7 +2,7 @@
 UI contributions exposed by the Logistics Perforce feature.
 """
 
-from commonUtils.osUtils import OS, get_os
+from commonUtils.runtime.platform import OS, get_os
 
 from features.contributions import Feature, FolderFeatureContribution, UIAction
 from features.perforce import actions, detection

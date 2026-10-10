@@ -13,7 +13,7 @@ import zipfile
 from xml.etree import ElementTree
 
 from PIL import Image
-from commonUtils import fileUtils
+from commonUtils.filesystem import files as fileUtils
 from features.comics import actions, archive_io, cbz, conversion, metadata
 
 

@@ -2,12 +2,12 @@
 UI contributions exposed by the Logistics Comics feature.
 """
 
-from commonUtils.osUtils import OS, get_os
+from commonUtils.runtime.platform import OS, get_os
 
 from features.comics import actions, detection
 from features.comics.library_config import has_library_configuration
-from commonUtils.dirUtils import Directory
-from commonUtils.features import FileType, BrowserExtension, SelectionAction, FileActivation
+from commonUtils.filesystem.directories import Directory
+from commonUtils.ui.features import FileType, BrowserExtension, SelectionAction, FileActivation
 from features.contributions import DocumentLauncherContribution, Feature, FolderFeatureContribution, UIAction, WorkflowContribution
 from models.folder_entry import FolderEntry
 

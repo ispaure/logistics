@@ -4,7 +4,7 @@ UI contributions exposed by the Logistics Plex feature.
 
 from pathlib import Path
 
-from commonUtils.osUtils import OS, get_os
+from commonUtils.runtime.platform import OS, get_os
 
 from features.contributions import (
     DebugActionContribution,

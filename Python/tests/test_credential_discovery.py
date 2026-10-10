@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
-from commonUtils import marcUtils
+from commonUtils.runtime import helpers as marcUtils
 from features.rclone import credentials
 
 

@@ -128,7 +128,7 @@ class FeatureRegistryTests(unittest.TestCase):
         install.assert_not_called()
 
     def test_toggle_filters_contributions_and_dependencies_and_initializes_once(self):
-        from commonUtils.fileTypes.registry import file_types
+        from commonUtils.formats.registry import file_types
         events = []
         base = feature('toggle_base', initialize=lambda: events.append('base'))
         child = feature('toggle_child', ('toggle_base',), initialize=lambda: events.append('child'),
@@ -151,8 +151,8 @@ class FeatureRegistryTests(unittest.TestCase):
         file_types.set_owner_enabled('toggle_child', True)
 
     def test_owned_file_types_toggle_and_late_registration_stays_disabled(self):
-        from commonUtils.fileUtils import File
-        from commonUtils.fileTypes.registry import register_file_type, file_types, file_from_path
+        from commonUtils.filesystem.files import File
+        from commonUtils.formats.registry import register_file_type, file_types, file_from_path
         class OwnedFile(File):
             pass
         handles = []
@@ -173,8 +173,8 @@ class FeatureRegistryTests(unittest.TestCase):
             file_types.unregister(handle)
 
     def test_failed_enable_restores_state_and_deactivates_partial_registration(self):
-        from commonUtils.fileUtils import File
-        from commonUtils.fileTypes.registry import register_file_type, file_types, file_from_path
+        from commonUtils.filesystem.files import File
+        from commonUtils.formats.registry import register_file_type, file_types, file_from_path
         handles = []
         bad = feature('toggle_bad', register_file_types=lambda: handles.append(register_file_type(File, 'toggle_bad')),
                       initialize=Mock(side_effect=RuntimeError('cannot initialize')))
@@ -190,8 +190,8 @@ class FeatureRegistryTests(unittest.TestCase):
             file_types.unregister(handle)
 
     def test_first_enable_registers_active_formats_before_initializer(self):
-        from commonUtils.fileUtils import File
-        from commonUtils.fileTypes.registry import register_file_type, file_types, file_from_path
+        from commonUtils.filesystem.files import File
+        from commonUtils.formats.registry import register_file_type, file_types, file_from_path
         class OwnedFile(File):
             pass
         handles = []
@@ -212,9 +212,9 @@ class FeatureRegistryTests(unittest.TestCase):
             file_types.unregister(handle)
 
     def test_unified_declaration_owns_identity_dependencies_types_and_ui(self):
-        from commonUtils.features import FileType, BrowserExtension, SelectionAction
-        from commonUtils.fileUtils import File
-        from commonUtils.fileTypes.registry import file_types, file_from_path
+        from commonUtils.ui.features import FileType, BrowserExtension, SelectionAction
+        from commonUtils.filesystem.files import File
+        from commonUtils.formats.registry import file_types, file_from_path
         class UnifiedFile(File):
             pass
         initialized = []
@@ -245,7 +245,7 @@ class FeatureRegistryTests(unittest.TestCase):
             file_types.unregister(handle)
 
     def test_unified_missing_dependency_never_loads_deferred_format(self):
-        from commonUtils.features import FileType
+        from commonUtils.ui.features import FileType
         definition = Feature(id='blocked_unified', requires=('missing',),
                              file_types=[FileType('missing.package:FileClass', 'blocked_unified')])
         module = feature('package', register=lambda: definition)

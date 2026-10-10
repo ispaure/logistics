@@ -6,8 +6,8 @@ from pathlib import Path
 
 import config
 
-from commonUtils import dirUtils
-from commonUtils.debugUtils import Severity, log
+from commonUtils.filesystem import directories as dirUtils
+from commonUtils.runtime.diagnostics import Severity, log
 
 from features.rclone import sync as rclone_sync
 from models.local_folder import LocalFolder

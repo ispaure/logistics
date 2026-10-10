@@ -5,7 +5,7 @@ Detection helpers for the Logistics Perforce feature.
 from pathlib import Path
 import shutil
 
-from commonUtils import configUtils
+from commonUtils.configuration import legacy as configUtils
 
 from models.local_folder import LocalFolder
 

@@ -4,8 +4,9 @@ Detection helpers for the Logistics Comics feature.
 
 from pathlib import Path
 
-from commonUtils import configUtils, fileUtils
-from commonUtils.osUtils import OS, get_os
+from commonUtils.configuration import legacy as configUtils
+from commonUtils.filesystem import files as fileUtils
+from commonUtils.runtime.platform import OS, get_os
 
 from models.local_folder import LocalFolder
 

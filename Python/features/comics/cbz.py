@@ -17,14 +17,14 @@ __status__ = 'Production'
 
 from pathlib import Path
 from typing import *
-from commonUtils import fileUtils, dirUtils
-from commonUtils.debugUtils import *
+from commonUtils.filesystem import files as fileUtils, directories as dirUtils
+from commonUtils.runtime.diagnostics import *
 from features.images import processing as imageUtils
 import os
 import zipfile
-from commonUtils.storage import temporary_directory, temporary_workspace
+from commonUtils.filesystem.storage import temporary_directory, temporary_workspace
 from PIL import Image
-from commonUtils.fileTypes import zipType
+from commonUtils.formats import zipType
 from .comicinfo import ComicInfoXML
 from .compression_stats import CompressionStats, CompressionLog
 from .sanitization import CBZSanitizationMixin

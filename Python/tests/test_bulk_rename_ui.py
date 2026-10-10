@@ -12,7 +12,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
 from ui_new.bulk_rename import BulkRenameWidget, open_bulk_rename
-from commonUtils.renameUtils import RenameRules
+from commonUtils.filesystem.rename import RenameRules
 
 
 class BulkRenameWidgetTests(QtTestCase):
@@ -284,7 +284,7 @@ class BulkRenameWidgetTests(QtTestCase):
         self.app.processEvents()
 
     def test_closing_busy_widget_requests_cancel_and_waits_for_rollback(self):
-        from commonUtils import renameUtils
+        from commonUtils.filesystem import rename as renameUtils
         self.widget.controls.fields['prefix'].setText('new_')
         self.wait_idle()
         entered, release = Event(), Event()
@@ -311,7 +311,7 @@ class BulkRenameWidgetTests(QtTestCase):
         self.assertFalse(list(self.root.glob('.bulk-rename-*')))
 
     def test_parent_window_close_waits_for_child_rename_to_cancel(self):
-        from commonUtils import renameUtils
+        from commonUtils.filesystem import rename as renameUtils
         host = qt.QMainWindow()
         host.show()
         window = open_bulk_rename(paths=[self.first, self.second], parent=host)

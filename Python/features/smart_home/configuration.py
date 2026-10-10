@@ -4,7 +4,7 @@ Configuration access for the Logistics Smart Home feature.
 
 from pathlib import Path
 
-from commonUtils.fileTypes.iniType import INIFile
+from commonUtils.formats.iniType import INIFile
 
 
 PHILIPS_HUE_SECTION = 'PhilipsHue'

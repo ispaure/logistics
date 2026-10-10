@@ -21,10 +21,10 @@ import os
 import errno
 import shutil
 import stat
-import commonUtils.fileUtils as fileUtils
-from commonUtils import dirUtils
+import commonUtils.filesystem.files as fileUtils
+from commonUtils.filesystem import directories as dirUtils
 from PIL import Image, ImageStat, ImageOps, ImageCms
-from commonUtils.debugUtils import *
+from commonUtils.runtime.diagnostics import *
 from typing import *
 
 

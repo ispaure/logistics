@@ -1,6 +1,6 @@
 import math
-from commonUtils.logUtils import *
-from commonUtils import logUtils
+from commonUtils.runtime.logging import *
+from commonUtils.runtime import logging as logUtils
 from features.aviation_tools.mathUtils.mathStuff import *
 
 

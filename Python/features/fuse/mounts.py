@@ -10,8 +10,8 @@ from pathlib import Path
 
 import config
 
-from commonUtils.debugUtils import Severity, log
-from commonUtils.osUtils import OS, get_os
+from commonUtils.runtime.diagnostics import Severity, log
+from commonUtils.runtime.platform import OS, get_os
 
 from features.rclone import configuration, executable
 from .commands import (

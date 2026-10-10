@@ -5,8 +5,8 @@ import shutil
 import subprocess
 
 import config
-from commonUtils import zipUtils
-from commonUtils.osUtils import OS, get_os
+from commonUtils.archives import legacy as zipUtils
+from commonUtils.runtime.platform import OS, get_os
 
 
 def launch_library(path: Path) -> None:

@@ -1,4 +1,4 @@
-from commonUtils import logUtils
+from commonUtils.runtime import logging as logUtils
 
 
 def convert_isa_str_to_temp(isa: str) -> float:

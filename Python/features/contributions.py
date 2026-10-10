@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Generic, TypeVar
 
 from models.folder_entry import FolderEntry
-from commonUtils.features import Feature as CommonFeature
+from commonUtils.ui.features import Feature as CommonFeature
 
 
 @dataclass(frozen=True)

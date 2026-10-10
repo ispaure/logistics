@@ -4,9 +4,9 @@ rclone synchronization for the Logistics rclone feature.
 
 from pathlib import Path
 
-from commonUtils.osUtils import OS, get_os
-from commonUtils.wrappers import cmdShellWrapper
-from commonUtils.debugUtils import Severity, log
+from commonUtils.runtime.platform import OS, get_os
+from commonUtils.integrations.wrappers import cmdShellWrapper
+from commonUtils.runtime.diagnostics import Severity, log
 
 from . import executable
 

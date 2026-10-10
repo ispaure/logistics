@@ -2,7 +2,7 @@
 
 This is the Logistics integration guide for adding information panels, thumbnails,
 right-click actions and double-click behavior. Reusable APIs and standalone examples
-live in the [commonUtils feature guide](../commonUtils/FEATURES.md) and
+live in the [commonUtils feature guide](../commonUtils/docs/FEATURES.md) and
 [browser reference](../commonUtils/ui/README.md). Keep feature READMEs focused on
 their domain rules and link here for browser wiring.
 
@@ -30,7 +30,7 @@ In `features/<feature>/files.py`, keep constructors cheap and put format-specifi
 loading behind file hooks:
 
 ```python
-from commonUtils.fileUtils import File
+from commonUtils.filesystem.files import File
 from commonUtils.filesystem import BrowserDetails, BrowserPanel
 
 class ProjectFile(File):
@@ -47,8 +47,8 @@ class ProjectFile(File):
 In `features/<feature>/ui_contributions.py`, declare rules and operations separately:
 
 ```python
-from commonUtils.dirUtils import Directory
-from commonUtils.features import BrowserExtension, FileActivation, FileType, SelectionAction
+from commonUtils.filesystem.directories import Directory
+from commonUtils.ui.features import BrowserExtension, FileActivation, FileType, SelectionAction
 from features.contributions import Feature
 
 PROJECT_TYPE = 'features.project.files:ProjectFile'
@@ -81,7 +81,7 @@ Export `register` from the feature's `__init__.py`. Deferred `module:Class` refe
 allow discovery before dependencies/UI imports. The registry registers owned types
 before initialization; the general browser installs the declaration automatically.
 For replacing an existing type rather than introducing a format, use the separate
-[`file_type_overrides` declaration](../commonUtils/fileTypes/README.md#replace-an-existing-type-with-your-subclass)
+[`file_type_overrides` declaration](../commonUtils/formats/README.md#replace-an-existing-type-with-your-subclass)
 with a subclass of the original type.
 
 ## Panels, selection and activation
@@ -120,7 +120,7 @@ handlers receive it as `context.controller`. `context.host` is the dialog parent
 and `context.browser` the shared component. Do not put widgets or worker state in
 the globally cached feature declaration. A feature-specific host may pass its
 existing controller to `Feature.install_browser`; retain the returned binding.
-The [shared guide](../commonUtils/FEATURES.md) documents explicit installation.
+The [shared guide](../commonUtils/docs/FEATURES.md) documents explicit installation.
 
 Session toggles deactivate owned type rules, actions, activation and folder fields.
 Cached browser objects are re-resolved after registry revisions; existing file

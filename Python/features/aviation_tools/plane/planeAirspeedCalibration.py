@@ -1,5 +1,5 @@
-from commonUtils import spreadsheetUtils as shUtils
-from commonUtils.fileTypes.csvType import CSVFile
+from commonUtils.formats import spreadsheets as shUtils
+from commonUtils.formats.csvType import CSVFile
 
 
 class AirspeedCalibrationEntry:

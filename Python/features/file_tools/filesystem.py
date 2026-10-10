@@ -7,8 +7,8 @@ Filesystem maintenance and diagnostic operations for the Logistics File Tools fe
 
 from pathlib import Path
 
-from commonUtils import dirUtils
-from commonUtils.debugUtils import Severity, log
+from commonUtils.filesystem import directories as dirUtils
+from commonUtils.runtime.diagnostics import Severity, log
 
 
 # Some entries appear visually identical but use different Unicode representations.
@@ -93,7 +93,7 @@ def delete_pyc_files(target_dir: str | Path, recursive: bool = True) -> int:
 def scan_weird_characters(target_dir, recursive=True, *, cancelled=lambda: False,
                           report=lambda done, total, message: None):
     """Inspect paths without following directory links or printing results."""
-    from commonUtils.operations import check_cancelled
+    from commonUtils.runtime.operations import check_cancelled
     paths = _scan_targets(target_dir, recursive=recursive, cancelled=cancelled)
     matches = []
     for index, path in enumerate(paths):
@@ -109,7 +109,7 @@ def scan_pyc_files(target_dir, recursive=True, *, cancelled=lambda: False,
                    report=lambda done, total, message: None):
     """Return a read-only snapshot of regular bytecode files and their identities."""
     from services.folder_safety import require_safe_folder
-    from commonUtils.operations import check_cancelled
+    from commonUtils.runtime.operations import check_cancelled
     targets = (target_dir,) if isinstance(target_dir, (str, Path)) else target_dir
     roots = tuple(require_safe_folder(root, recursive=recursive) for root in targets)
     paths = _scan_targets(roots, mask='*.pyc', recursive=recursive, cancelled=cancelled)
@@ -130,7 +130,7 @@ def _pyc_identity(path):
 def cleanup_pyc_files(target_dir, recursive=True, *, cancelled=lambda: False,
                       report=lambda done, total, message: None, candidates=None):
     """Delete only reviewed bytecode identities, preserving links and changed files."""
-    from commonUtils.operations import run_batch
+    from commonUtils.runtime.operations import run_batch
     from services.folder_safety import require_safe_folder
     targets = (target_dir,) if isinstance(target_dir, (str, Path)) else target_dir
     roots = tuple(require_safe_folder(root, recursive=recursive) for root in targets)

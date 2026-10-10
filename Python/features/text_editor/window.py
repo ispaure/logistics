@@ -4,7 +4,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.document_host import close_document
 from commonUtils.ui.operation_progress import OperationProgress
 from commonUtils.ui.reader_menus import RecentFiles
-from commonUtils.storage import cache_directory
+from commonUtils.filesystem.storage import cache_directory
 from commonUtils.ui.code_editor.syntax import LANGUAGES
 from .file_operations import FileOperations
 from .editing import EditingCommands
