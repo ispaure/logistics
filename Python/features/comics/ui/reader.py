@@ -18,6 +18,8 @@ FILE_SWITCH_INTERVAL = .4
 
 
 class ComicReaderWindow(qt.QMainWindow):
+    document_editor_name = 'Comic Reader'
+    document_editor_id = 'comic'
     """Coordinate asynchronous requests while retaining the last successful display.
 
     page is the latest requested index; shown_page and images describe what is

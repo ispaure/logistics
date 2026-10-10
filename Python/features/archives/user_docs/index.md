@@ -142,3 +142,8 @@ For encrypting CBZ contents in place, use the [Comics guide](../../comics/user_d
 
 Read [Using Logistics](../../../../USER_GUIDE.md) for navigation, resources and
 feature controls. Use Back/Forward in this viewer to return to a previous guide.
+
+
+Use the persistent Archives icon or its + button in the left Documents tree to
+open an archive. Each opened archive keeps its own session and toolbar; it stays
+listed under Archives when undocked, with a Bring back button for reattachment.

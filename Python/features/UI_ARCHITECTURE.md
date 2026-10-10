@@ -342,3 +342,20 @@ the shared `Workspace`; `RepositoryView` owns each repository's toolbar, draft,
 preview, log and sequential job owner. Horizontal tab drags reorder; dragging out
 detaches the existing pane. Qt toolbar actions remain available in overflow menus
 on narrow panes. Switching tabs does not discard drafts or move command targets.
+
+
+Document navigation stays visible beside a scrollable icon rail, even when no
+files are open. Features contribute `DocumentLauncherContribution` entries with
+a stable editor ID, title, icon and lazy opener. Their windows declare
+`document_editor_id` and `document_editor_name`; the rail groups retained windows
+by that ID and reveals the original window/buffer when selected. Closed documents
+retire their rows; detached documents retain a Bring back action. Bulk Rename is
+a persistent utility entry outside the document hierarchy. Archive readers use
+retained document windows, with independent sessions per archive.
+
+Floating workspace docks use regular Qt Window flags, native borders and
+minimize/maximize controls, rather than tool-window flags. The native handle has
+no transient parent. Closing remains cooperative and never owns application
+quit; dragging the inner tab header or double-clicking it restores docking.
+The OS controls snapping/taskbar presentation; macOS groups application windows
+under the Logistics Dock icon.

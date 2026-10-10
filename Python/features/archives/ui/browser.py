@@ -3,7 +3,6 @@ from pathlib import Path
 from weakref import WeakSet
 from commonUtils.ui import pyside as qt
 from commonUtils.archives import is_supported_archive
-from .page import ArchivePage
 from .window import ArchiveWindow
 
 
@@ -24,30 +23,18 @@ class ArchiveBrowserController(qt.QObject):
         return page
 
     def workspace(self, *, separate=False):
-        """Use a live contributed page in this window, or a retained standalone host."""
+        """Create or reveal a retained archive document host."""
         if self.closing:
             return None
-        if not separate:
-            for page in self.host.window().findChildren(ArchivePage):
-                if page.closing:
-                    continue
-                parent = page.parentWidget()
-                while parent is not None:
-                    if isinstance(parent, qt.QTabWidget) and parent.indexOf(page) >= 0:
-                        parent.setCurrentWidget(page)
-                        self.host.window().show()
-                        self.host.window().raise_()
-                        return self._connect(page)
-                    parent = parent.parentWidget()
-            if self._window is not None and not self._window.page.closing:
-                self._window.show()
-                self._window.raise_()
-                return self._connect(self._window.page)
+        from commonUtils.ui.document_host import show_document, document_is_open
+        if not separate and self._window is not None and not self._window.page.closing and document_is_open(self._window):
+            show_document(self._window)
+            return self._connect(self._window.page)
         window = ArchiveWindow()
         if not separate:
             self._window = window
             window.destroyed.connect(lambda: self._window_closed(window))
-        window.show()
+        show_document(window)
         return self._connect(window.page)
 
     def _window_closed(self, window):
@@ -63,14 +50,18 @@ class ArchiveBrowserController(qt.QObject):
         return True
 
     def open(self, paths, *, extract=False):
+        if self.closing:
+            return
         supported = [path for path in paths if is_supported_archive(path)]
-        for index, path in enumerate(supported):
-            page = self.workspace(separate=index > 0)
+        for path in supported:
+            from .window import open_archive_window
+            if extract:
+                page = self.workspace(separate=True)
+            else:
+                page = self._connect(open_archive_window(path).page)
+                continue
             if self._ready(page):
-                if extract:
-                    page.extract_path(path)
-                else:
-                    page.open_archive(path)
+                page.extract_path(path)
 
     def create(self, paths):
         page = self.workspace()
@@ -90,7 +81,7 @@ class ArchiveBrowserController(qt.QObject):
             browser.refresh_changed((path.parent,))
 
     def prepare_close(self):
-        # Independent hosts own and cancel their own workers. The contributed
-        # main page participates directly in the main-window close protocol.
+        # Retained document hosts own and cancel their own workers; closing a
+        # browser does not discard documents kept by the main document host.
         self.closing = True
         return True

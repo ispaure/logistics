@@ -11,6 +11,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils import archives
 from features.archives import register
 from features.archives.ui.page import ArchivePage
+from features.archives.ui.window import _windows
 from features import registry
 from features.contributions import BrowserExtensionContribution, RegisteredContribution
 from ui_new.file_browser import BrowserView
@@ -48,12 +49,18 @@ class ArchiveBrowserTests(QtTestCase):
         self.host.resize(1200, 750)
         self.host.show()
         self.addCleanup(self.host.deleteLater)
+        self.addCleanup(self.close_archive_documents)
         self.wait()
+
+    def close_archive_documents(self):
+        for window in tuple(_windows):
+            window.close()
+        self.app.processEvents()
 
     def wait(self):
         deadline = time.monotonic() + 10
         self.app.processEvents()
-        while self.browser.busy or self.browser.folder_busy or self.browser.views.cover_busy or self.page.busy:
+        while self.browser.busy or self.browser.folder_busy or self.browser.views.cover_busy or self.page.busy or any(window.page.busy for window in tuple(_windows)):
             self.assertLess(time.monotonic(), deadline)
             self.app.processEvents()
             time.sleep(.005)
@@ -78,8 +85,9 @@ class ArchiveBrowserTests(QtTestCase):
                 self.browser._activate(index)
                 self.wait()
             fallback.assert_not_called()
-            self.assertIs(self.tabs.currentWidget(), self.page)
-            self.assertEqual(self.page.path, path)
+            opened = next(window for window in _windows if window.page.path == path)
+            self.assertTrue(opened.isVisible())
+            self.assertIsNone(self.page.path)
 
     def test_cbz_keeps_reader_activation_and_offers_explicit_archive_actions(self):
         handled = []
@@ -132,7 +140,7 @@ class ArchiveBrowserTests(QtTestCase):
         self.assertIs(self.binding.controller, controller)
         self.browser._activate(self.browser.model.index(str(self.zip)))
         self.wait()
-        self.assertEqual(self.page.path, self.zip)
+        self.assertTrue(any(window.page.path == self.zip for window in _windows))
 
     def test_encrypted_direct_extraction_retries_credentials_in_the_same_flow(self):
         encrypted = self.root / 'protected.zip'
@@ -157,10 +165,10 @@ class ArchiveBrowserTests(QtTestCase):
         self.wait()
         menu = self.menu(folder)
         self.addCleanup(menu.deleteLater)
-        with patch.object(self.page, 'new_archive') as create:
+        with patch.object(ArchivePage, 'new_archive') as create:
             next(action for action in menu.actions() if action.text() == 'Create archive…').trigger()
         create.assert_called_once_with(sources=(folder,))
-        self.assertIs(self.tabs.currentWidget(), self.page)
+        self.assertTrue(any(window.page is self.binding.controller._window.page for window in _windows))
 
     def test_archive_details_use_the_file_hook_in_the_browser_worker(self):
         self.select(self.zip)
@@ -180,8 +188,7 @@ class ArchiveBrowserTests(QtTestCase):
         self.addCleanup(other.deleteLater)
         controller = self.binding.controller
         controller.open([self.zip])
-        window = controller._window
-        self.assertIsNotNone(window)
+        window = next(window for window in _windows if window._requested_path == self.zip)
         deadline = time.monotonic() + 5
         while window.page.busy:
             self.assertLess(time.monotonic(), deadline)

@@ -3,7 +3,7 @@
 from commonUtils.features import BrowserExtension, FileActivation, SelectionAction
 from commonUtils.fileUtils import File
 from commonUtils.persistence.text import is_text_path
-from features.contributions import Feature, SettingsContribution
+from features.contributions import Feature, SettingsContribution, DocumentLauncherContribution
 from pathlib import Path
 
 
@@ -47,6 +47,7 @@ def register():
     return Feature(
         id="text_editor",
         label="Text Editor",
+        document_launchers=[DocumentLauncherContribution("text", "Text Editor", launch, "text", 10)],
         browser=BrowserExtension(
             actions=(
                 SelectionAction(
@@ -73,3 +74,11 @@ def register():
             )
         ],
     )
+
+
+def launch(parent):
+    from .service import EditorService
+    service = getattr(parent, '_text_editor_service', None)
+    if service is None:
+        service = parent._text_editor_service = EditorService(parent)
+    return service.open()

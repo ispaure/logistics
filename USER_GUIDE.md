@@ -269,3 +269,16 @@ keeps the original file location and encoding; explicit status controls convert
 encoding or line endings. Disk changes and unsaved tabs are checked before data
 can be discarded. Markdown retains its existing reader as well as this source
 editing option. See the [Text Editor guide](Python/features/text_editor/user_docs/index.md).
+
+
+The left side always shows Documents grouped by editor: Text Editor,
+Markdown/Obsidian, EPUB Reader, Comic Reader and Archives. Use an editor icon or
+its + button to open a document; click a nested document to return to it. Detached
+documents stay in the list with a Bring back button. Bulk Rename has a separate
+persistent utility icon. The icon column scrolls when there are more tools than
+fit on screen.
+
+Undocked tabs become normal windows with native minimize/maximize controls.
+Use the inner tab header to drag them back, or double-click it to reattach.
+Window snapping and taskbar presentation follow the OS; macOS keeps Logistics
+windows under its application Dock icon.

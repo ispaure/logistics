@@ -8,7 +8,7 @@ from features.comics import actions, detection
 from features.comics.library_config import has_library_configuration
 from commonUtils.dirUtils import Directory
 from commonUtils.features import FileType, BrowserExtension, SelectionAction, FileActivation
-from features.contributions import Feature, FolderFeatureContribution, UIAction, WorkflowContribution
+from features.contributions import DocumentLauncherContribution, Feature, FolderFeatureContribution, UIAction, WorkflowContribution
 from models.folder_entry import FolderEntry
 
 
@@ -165,6 +165,7 @@ def register() -> Feature:
     from features.comics.browser_support import folder_fields
     return Feature(
         id='comics', label='Books & Comics', requires=('images',),
+        document_launchers=[DocumentLauncherContribution('comic', 'Comic Reader', _launch_reader, 'comic', 40)],
         file_types=[FileType(comic_type, extensions=('cbz',))],
         browser=BrowserExtension(
             actions=[SelectionAction('edit_metadata', 'Edit metadata…',
@@ -196,3 +197,11 @@ def register() -> Feature:
 def _edit_shared_metadata(context):
     from features.books.metadata_actions import edit_metadata
     return edit_metadata(context)
+
+
+def _launch_reader(parent):
+    from commonUtils.ui import pyside as qt
+    path, _ = qt.QFileDialog.getOpenFileName(parent, 'Open comic', '', 'Comic archives (*.cbz)')
+    if path:
+        from .reader import open_reader
+        return open_reader(path)

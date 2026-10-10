@@ -1,4 +1,4 @@
-"""Compact destination rail with on-demand tools and document lists."""
+"""Scrollable destination icons and persistent, editor-grouped documents."""
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.icons import set_painted_icon
 
@@ -26,10 +26,26 @@ class DestinationIcon(qt.QIconEngine):
             if self.name == 'actions':
                 painter.drawArc(qt.QRectF(8, 10, 10, 8), 30 * 16, 280 * 16)
                 painter.drawPolyline(qt.QPolygonF([qt.QPointF(16, 9), qt.QPointF(19, 11), qt.QPointF(16, 13)]))
+        elif self.name == 'rename':
+            font = painter.font(); font.setPointSizeF(8); font.setBold(True); painter.setFont(font)
+            painter.drawText(qt.QRectF(1, 3, 22, 18), qt.Qt.AlignmentFlag.AlignCenter, 'A→B')
         elif self.name == 'hub':
             for y in (3, 10, 17):
                 painter.drawRoundedRect(qt.QRectF(3, y, 18, 4), 1, 1)
                 painter.drawPoint(qt.QPointF(17, y+2))
+        elif self.name == 'comic':
+            for x in (3, 13):
+                for y in (3, 13):
+                    painter.drawRect(qt.QRectF(x, y, 8, 8))
+        elif self.name == 'epub':
+            painter.drawRoundedRect(qt.QRectF(3, 4, 18, 16), 2, 2)
+            painter.drawLine(qt.QLineF(12, 4, 12, 20))
+            for y in (8, 12, 16):
+                painter.drawLine(qt.QLineF(5, y, 10, y))
+                painter.drawLine(qt.QLineF(14, y, 19, y))
+        elif self.name in ('text', 'markdown'):
+            painter.drawRoundedRect(qt.QRectF(3, 3, 18, 18), 2, 2)
+            painter.drawText(qt.QRectF(3, 3, 18, 18), qt.Qt.AlignmentFlag.AlignCenter, '</>' if self.name == 'text' else 'M↓')
         elif self.name == 'documents':
             painter.drawRoundedRect(qt.QRectF(6, 3, 15, 18), 1, 1)
             painter.drawPolyline(qt.QPolygonF([qt.QPointF(3, 6), qt.QPointF(3, 21), qt.QPointF(17, 21)]))
@@ -107,9 +123,33 @@ class DestinationRail(qt.QWidget):
         self.actions = None
         self.buttons = {}
         self.pages = {}
-        self.setFixedWidth(60)
+        self.setFixedWidth(320)
         self.setAccessibleName('Main destinations')
-        layout = qt.QVBoxLayout(self)
+        outer = qt.QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        icon_scroll = qt.QScrollArea(self)
+        icon_scroll.setWidgetResizable(True)
+        icon_scroll.setFixedWidth(60)
+        icon_scroll.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        icon_scroll.setFrameShape(qt.QFrame.Shape.NoFrame)
+        icons = qt.QWidget()
+        icon_scroll.setWidget(icons)
+        outer.addWidget(icon_scroll)
+        panel = qt.QWidget(self)
+        panel_layout = qt.QVBoxLayout(panel)
+        panel_layout.setContentsMargins(4, 10, 4, 4)
+        panel_layout.addWidget(qt.QLabel('Documents'))
+        self.document_tree = qt.QTreeWidget(panel)
+        self.document_tree.setHeaderHidden(True)
+        self.document_tree.setAccessibleName('Documents grouped by editor')
+        self.document_tree.setIndentation(16)
+        self.document_tree.itemClicked.connect(self._select_tree_document)
+        panel_layout.addWidget(self.document_tree)
+        outer.addWidget(panel, 1)
+        self.launchers = {}
+        self.editor_buttons = {}
+        self.editor_groups = {}
+        layout = qt.QVBoxLayout(icons)
         layout.setContentsMargins(6, 10, 6, 10)
         layout.setSpacing(8)
         for key, title in [('browser', 'File Browser'), ('hub', 'Folder Hub'),
@@ -133,18 +173,10 @@ class DestinationRail(qt.QWidget):
         self.buttons['tools'].setMenu(self.tools_menu)
         self.buttons['tools'].setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
         self.buttons['documents'].clicked.connect(self.show_documents)
-        self.document_popup = qt.QFrame(self, qt.Qt.WindowType.Popup)
-        self.document_popup.setFrameShape(qt.QFrame.Shape.StyledPanel)
-        self.document_popup.setAccessibleName('Open documents')
-        popup_layout = qt.QVBoxLayout(self.document_popup)
-        popup_layout.addWidget(qt.QLabel('Open documents'))
-        self.document_list = qt.QListWidget()
-        self.document_list.setObjectName('documentSwitchList')
-        self.document_list.setStyleSheet('QListWidget#documentSwitchList::item { padding: 0px; margin: 0px; }')
-        self.document_list.setMinimumWidth(350)
-        self.document_list.setMaximumWidth(480)
-        popup_layout.addWidget(self.document_list)
-        self.buttons['documents'].hide()
+        self.buttons['documents'].show()
+        self.bulk_rename_button = self._button('rename', 'Bulk Rename')
+        layout.insertWidget(layout.count()-2, self.bulk_rename_button)
+        self.bulk_rename_button.clicked.connect(self._open_bulk_rename)
         self.buttons['actions'].hide()
 
     def _button(self, key, title, icon=None):
@@ -152,12 +184,12 @@ class DestinationRail(qt.QWidget):
         set_painted_icon(button, DestinationIcon, icon or key)
         button.setIconSize(qt.QSize(26, 26))
         button.setFixedSize(46, 42)
-        button.setCheckable(True)
+        button.setCheckable(key != 'rename' and not key.startswith('editor:'))
         button.setAccessibleName(title)
         button.setToolTip(title)
         button.setText(title)
         button.setToolButtonStyle(qt.Qt.ToolButtonStyle.ToolButtonIconOnly)
-        if key not in ('tools', 'documents'):
+        if key not in ('tools', 'documents', 'rename') and not key.startswith('editor:'):
             button.clicked.connect(lambda checked=False, name=key: self.selected.emit(self.pages.get(name)))
         self.buttons[key] = button
         return button
@@ -206,7 +238,8 @@ class DestinationRail(qt.QWidget):
         for key in ('browser', 'hub', 'settings'):
             self.buttons[key].setVisible(key in self.pages)
         self.buttons['tools'].setVisible(bool(self.tools_menu.actions()))
-        self.buttons['documents'].setVisible(bool(self.documents.count))
+        self.buttons['documents'].setVisible(True)
+        self._refresh_editors()
         if self.actions is not None:
             self.pages['actions'] = self.actions
             button = self.buttons['actions']
@@ -218,42 +251,20 @@ class DestinationRail(qt.QWidget):
         detached = sum(record['detached'] and not record['closed'] for record in self.documents.records.values())
         self.buttons['documents'].setToolTip(f'Open documents ({self.documents.count}; {detached} detached)')
         self.set_current(tabs.currentWidget())
-        if self.document_popup.isVisible():
-            self._populate_documents()
+        self._populate_document_tree()
 
     def set_current(self, page):
         is_tool = page is not None and page not in self.pages.values() and page is not self.documents
         for key, button in self.buttons.items():
+            if key.startswith('editor:') or key == 'rename':
+                button.setChecked(False)
+                continue
             button.setChecked(is_tool if key == 'tools' else
                               page is (self.documents if key == 'documents' else self.pages.get(key)))
         for action in self.tools_menu.actions():
             action.setChecked(action.data() is page)
 
-    def _populate_documents(self):
-        self.document_list.clear()
-        for window, label, tab, detached in self.documents.document_entries():
-            item = qt.QListWidgetItem(self.document_list)
-            row = qt.QWidget()
-            layout = qt.QHBoxLayout(row)
-            layout.setContentsMargins(6, 4, 6, 4)
-            title = qt.QPushButton(label)
-            title.setFlat(True)
-            title.setStyleSheet('QPushButton { border: none; text-align: left; padding: 4px; }')
-            title.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Preferred)
-            path = getattr(tab, 'path', None) if tab is not None else window.windowFilePath() or getattr(window, 'path', None)
-            title.setToolTip(label + (' — detached' if detached else '') + (f'\n{path}' if path else ''))
-            title.clicked.connect(lambda checked=False, view=window, buffer=tab: self._open_document(view, tab=buffer))
-            layout.addWidget(title, 1)
-            if detached:
-                back = qt.QPushButton('Bring back')
-                back.clicked.connect(lambda checked=False, view=window, buffer=tab: self._open_document(view, tab=buffer, attach=True))
-                layout.addWidget(back)
-            item.setSizeHint(qt.QSize(0, max(40, row.sizeHint().height())))
-            self.document_list.setItemWidget(item, row)
-        self.document_list.setFixedHeight(min(420, max(80, self.document_list.count()*44+8)))
-
     def _open_document(self, window, *, attach=False, tab=None):
-        self.document_popup.hide()
         if tab is not None:
             window.tabs.setCurrentWidget(tab)
         if attach:
@@ -262,8 +273,82 @@ class DestinationRail(qt.QWidget):
             self.documents.present(window)
 
     def show_documents(self):
-        self._populate_documents()
-        button = self.buttons['documents']
-        self.document_popup.adjustSize()
-        self.document_popup.move(button.mapToGlobal(qt.QPoint(button.width()+8, 0)))
-        self.document_popup.show()
+        activate = getattr(self.documents, 'activate', None)
+        if activate is not None:
+            activate()
+        self._populate_document_tree()
+        self.document_tree.setFocus()
+
+    def _refresh_editors(self):
+        from features import registry
+        from features.contributions import DocumentLauncherContribution
+        entries = [DocumentLauncherContribution('markdown', 'Markdown / Obsidian', self._open_markdown, 'markdown', 20)]
+        entries.extend(entry.contribution for entry in registry.get_document_launchers())
+        self.launchers = {entry.editor_id: entry for entry in sorted(entries, key=lambda item: item.order)}
+        for key, button in self.editor_buttons.items():
+            button.setVisible(key in self.launchers)
+        for key, entry in self.launchers.items():
+            if key not in self.editor_buttons:
+                button = self._button('editor:'+key, entry.name, entry.icon)
+                button.clicked.connect(lambda checked=False, editor=key: self._launch_editor(editor))
+                self.workspace_destinations.addWidget(button)
+                self.editor_buttons[key] = button
+            self.editor_buttons[key].show()
+
+    def _launch_editor(self, key):
+        self.launchers[key].open_document(self.documents)
+        self._populate_document_tree()
+
+    def _open_markdown(self, parent):
+        from commonUtils.ui.markdown.window import open_markdown
+        path, _ = qt.QFileDialog.getOpenFileName(parent, 'Open Markdown', '', 'Markdown (*.md *.markdown);;All files (*)')
+        if path:
+            return open_markdown(path, allow_edit=True)
+
+    def _open_bulk_rename(self):
+        from ui_new.bulk_rename import open_bulk_rename
+        return open_bulk_rename(parent=self.window())
+
+    def _populate_document_tree(self):
+        expanded = {key: item.isExpanded() for key, item in self.editor_groups.items()}
+        self.document_tree.clear()
+        self.editor_groups = {}
+        for key, launcher in self.launchers.items():
+            group = qt.QTreeWidgetItem(self.document_tree, [launcher.name])
+            group.setData(0, qt.Qt.ItemDataRole.UserRole, ('editor', key))
+            row = qt.QWidget()
+            row.setAutoFillBackground(True)
+            layout = qt.QHBoxLayout(row); layout.setContentsMargins(0, 0, 0, 0)
+            label = qt.QLabel(launcher.name)
+            layout.addWidget(label, 1)
+            button = qt.QToolButton(); button.setText('+'); button.setToolTip('Open '+launcher.name)
+            button.setAccessibleName('Open '+launcher.name)
+            button.clicked.connect(lambda checked=False, editor=key: self._launch_editor(editor))
+            layout.addWidget(button)
+            group.setSizeHint(0, qt.QSize(0, 30))
+            self.document_tree.setItemWidget(group, 0, row)
+            group.setExpanded(expanded.get(key, True))
+            self.editor_groups[key] = group
+        for window, label, tab, detached in getattr(self.documents, 'document_entries', lambda: [])():
+            key = getattr(window, 'document_editor_id', 'other')
+            if key not in self.editor_groups:
+                self.editor_groups[key] = qt.QTreeWidgetItem(self.document_tree, [getattr(window, 'document_editor_name', 'Other documents')])
+                self.editor_groups[key].setExpanded(True)
+            item = qt.QTreeWidgetItem(self.editor_groups[key], [label + (' ↗' if detached else '')])
+            item.setData(0, qt.Qt.ItemDataRole.UserRole, ('document', window, tab))
+            item.setToolTip(0, label + (' — detached; click to reveal window' if detached else ''))
+            if detached:
+                back = qt.QToolButton(); back.setText('Bring back')
+                back.clicked.connect(lambda checked=False, view=window, buffer=tab: self._open_document(view, tab=buffer, attach=True))
+                row = qt.QWidget(); row.setAutoFillBackground(True); layout = qt.QHBoxLayout(row); layout.setContentsMargins(0, 0, 0, 0)
+                title = qt.QPushButton(label); title.setFlat(True)
+                title.clicked.connect(lambda checked=False, view=window, buffer=tab: self._open_document(view, tab=buffer))
+                layout.addWidget(title, 1); layout.addWidget(back)
+                self.document_tree.setItemWidget(item, 0, row)
+
+    def _select_tree_document(self, item, column):
+        data = item.data(0, qt.Qt.ItemDataRole.UserRole)
+        if not data:
+            return
+        if data[0] == 'document':
+            self._open_document(data[1], tab=data[2])

@@ -459,6 +459,8 @@ class BooksPage(Bookmarks, qt.QWidget):
 
 
 class BookWindow(qt.QMainWindow):
+    document_editor_name = 'EPUB Reader'
+    document_editor_id = 'epub'
     """Independent reader window retained by its browser controller."""
     idle = qt.Signal()
 

@@ -178,6 +178,16 @@ class BrowserExtensionContribution:
     install: Callable[[Any], Any]
 
 
+@dataclass(frozen=True)
+class DocumentLauncherContribution:
+    """Persistent document category with a lazy, feature-owned opener."""
+    editor_id: str
+    name: str
+    open_document: Callable[[Any], Any]
+    icon: str = 'documents'
+    order: int = 0
+
+
 @dataclass
 class FeatureContributions:
     """All optional contribution types exposed by one feature."""
@@ -188,6 +198,7 @@ class FeatureContributions:
     server_providers: list[ServerProviderContribution] = field(default_factory=list)
     debug_actions: list[DebugActionContribution] = field(default_factory=list)
     workflows: list[WorkflowContribution] = field(default_factory=list)
+    document_launchers: list[DocumentLauncherContribution] = field(default_factory=list)
     pages: list[PageContribution] = field(default_factory=list)
     settings: list[SettingsContribution] = field(default_factory=list)
     browser_extensions: list[BrowserExtensionContribution] = field(default_factory=list)

@@ -335,12 +335,39 @@ class MainWindowTests(QtTestCase):
         window.tabs.setCurrentIndex(0)
         window.tabs.currentWidget().refresh.assert_called_once_with()
 
+    def test_persistent_document_tree_groups_editors_and_keeps_utility_entry(self):
+        from features.contributions import DocumentLauncherContribution
+        from commonUtils.ui.document_host import show_document
+        opener = Mock()
+        launcher = RegisteredContribution('text_editor', 'Text Editor',
+            DocumentLauncherContribution('text', 'Text Editor', opener, 'text'))
+        with patch.object(main_window.registry, 'get_document_launchers', return_value=[launcher]):
+            window = self.window(); window.dlg.show(); window._refresh_sidebar()
+            self.assertTrue(window.sidebar.document_tree.isVisible())
+            self.assertTrue(window.sidebar.buttons['documents'].isVisible())
+            self.assertTrue(window.sidebar.bulk_rename_button.isVisible())
+            window.sidebar.editor_buttons['text'].click()
+            opener.assert_called_once_with(window.documents)
+            first = qt.QMainWindow(); first.document_editor_id = 'text'; first.setWindowTitle('notes.txt')
+            second = qt.QMainWindow(); second.document_editor_id = 'markdown'; second.setWindowTitle('guide.md')
+            show_document(first); show_document(second); self.app.processEvents()
+            groups = window.sidebar.editor_groups
+            self.assertEqual(groups['text'].child(0).text(0), 'notes.txt')
+            self.assertEqual(groups['markdown'].child(0).text(0), 'guide.md')
+            window.sidebar.document_tree.itemClicked.emit(groups['text'].child(0), 0)
+            self.assertIs(window.documents.workspace.active_view.document, first)
+            first.close(); second.close(); self.app.processEvents()
+            self.assertEqual(window.documents.count, 0)
+            self.assertTrue(window.sidebar.document_tree.isVisible())
+            self.assertIn('text', window.sidebar.editor_groups)
+            window.dlg.close()
+
     def test_sidebar_groups_tools_and_keeps_documents_when_features_change(self):
         from ui_new.documents import show_document
         contribution = self.contribution('Calculator', 'calculator')
         window = self.window([contribution]); window.dlg.show(); self.app.processEvents()
         self.assertTrue(window.tabs.tabBar().isHidden())
-        self.assertLessEqual(window.sidebar.width(), 64)
+        self.assertEqual(window.sidebar.width(), 320)
         self.assertEqual([action.text() for action in window.sidebar.tools_menu.actions()], ['Calculator', 'Debug'])
         self.assertFalse(window.sidebar.tools_menu.isVisible())
         reader = qt.QMainWindow(); reader.setWindowTitle('Open reader')
@@ -352,8 +379,7 @@ class MainWindowTests(QtTestCase):
         self.assertIs(window.tabs.currentWidget(), window.documents)
         self.assertTrue(window.sidebar.buttons['documents'].isChecked())
         window.sidebar.show_documents()
-        self.assertEqual(window.sidebar.document_list.count(), 1)
-        window.sidebar.document_popup.hide()
+        self.assertEqual(sum(item.childCount() for item in window.sidebar.editor_groups.values()), 1)
         reader.close(); self.app.processEvents()
         window.dlg.close(); self.app.processEvents()
 
@@ -470,9 +496,9 @@ class MainWindowTests(QtTestCase):
         editor.new_document()
         show_document(editor); self.app.processEvents()
         window.sidebar.show_documents()
-        self.assertEqual(window.sidebar.document_list.count(), 2)
-        row = window.sidebar.document_list.itemWidget(window.sidebar.document_list.item(0))
-        row.findChild(qt.QPushButton).click(); self.app.processEvents()
+        self.assertEqual(sum(item.childCount() for item in window.sidebar.editor_groups.values()), 2)
+        item = window.sidebar.editor_groups['text'].child(0)
+        window.sidebar.document_tree.itemClicked.emit(item, 0); self.app.processEvents()
         self.assertIs(editor.current, first)
         self.assertIs(window.tabs.currentWidget(), window.documents)
         # new_document creates another editor window sharing the session lock.
@@ -497,9 +523,9 @@ class MainWindowTests(QtTestCase):
         self.assertIs(window.tabs.currentWidget(), browser)
         self.assertTrue(window.sidebar.buttons['documents'].isVisible())
         window.sidebar.show_documents()
-        self.assertEqual(window.sidebar.document_list.count(), 1)
-        row = window.sidebar.document_list.itemWidget(window.sidebar.document_list.item(0))
-        next(button for button in row.findChildren(qt.QPushButton) if button.text() == 'Bring back').click()
+        self.assertEqual(sum(item.childCount() for item in window.sidebar.editor_groups.values()), 1)
+        row = window.sidebar.document_tree.itemWidget(window.sidebar.editor_groups['other'].child(0), 0)
+        next(button for button in row.findChildren(qt.QToolButton) if button.text() == 'Bring back').click()
         self.app.processEvents()
         self.assertIs(window.tabs.currentWidget(), window.documents)
         self.assertFalse(reader.isWindow())

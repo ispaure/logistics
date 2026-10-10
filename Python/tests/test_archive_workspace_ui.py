@@ -128,30 +128,11 @@ class ArchiveWorkspaceUITests(QtTestCase):
         self.assertEqual(options['sources'], [self.root / 'source'])
         self.assertIsNone(options['password'])
 
-    def test_navigation_position_between_sync_and_git(self):
-        from ui_new.sidebar import DestinationRail
-        documents = qt.QWidget()
-        documents.count = 0
-        documents.records = {}
-        rail = DestinationRail(documents)
-        self.addCleanup(rail.deleteLater)
-        tabs = qt.QTabWidget()
-        self.addCleanup(tabs.deleteLater)
-        git = qt.QWidget()
-        git.setProperty('navigation_icon', 'git')
-        git.setProperty('navigation_position', 'workspace')
-        git.setProperty('navigation_order', 20)
-        self.page.setProperty('navigation_icon', 'archives')
-        tabs.addTab(git, 'Git')
-        tabs.addTab(self.page, 'Archives')
-        rail.refresh(tabs, [])
-        buttons = [rail.workspace_destinations.itemAt(i).widget().text() for i in range(rail.workspace_destinations.count())]
-        self.assertEqual(buttons, ['Archives', 'Git'])
-        outer = rail.layout()
-        sync_index = next(i for i in range(outer.count()) if outer.itemAt(i).widget() is rail.buttons['actions'])
-        workspace_index = next(i for i in range(outer.count()) if outer.itemAt(i).layout() is rail.workspace_destinations)
-        self.assertLess(sync_index, workspace_index)
-        self.assertEqual(register().pages[0].navigation_icon, 'archives')
+    def test_archive_contributes_document_launcher(self):
+        declaration = register()
+        self.assertEqual(declaration.pages, [])
+        self.assertEqual(declaration.document_launchers[0].editor_id, 'archive')
+        self.assertEqual(declaration.document_launchers[0].icon, 'archives')
 
     def test_tar_disables_zip_editing(self):
         tar = self.root / 'sample.tar.gz'
@@ -232,17 +213,21 @@ class ArchiveWorkspaceUITests(QtTestCase):
             self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
             time.sleep(.005)
 
-    def test_browser_action_reuses_main_workspace(self):
+    def test_browser_action_opens_retained_archive_document(self):
         from features.archives import _manage
         from commonUtils.features import ActionContext
         from commonUtils.fileUtils import File
+        from features.archives.ui.window import _windows
         host = qt.QWidget()
-        tabs = qt.QTabWidget(host)
-        tabs.addTab(qt.QWidget(), 'Browser')
-        tabs.addTab(self.page, 'Archives')
-        context = ActionContext(host, host, None, (File(self.path),))
         self.addCleanup(host.deleteLater)
+        context = ActionContext(host, host, None, (File(self.path),))
         _manage(context)
-        self.wait()
-        self.assertIs(tabs.currentWidget(), self.page)
-        self.assertEqual(self.page.path, self.path)
+        window = next(window for window in _windows if not window.page.closing)
+        self.addCleanup(window.close)
+        deadline = time.monotonic() + 5
+        while window.page.busy:
+            self.assertLess(time.monotonic(), deadline)
+            self.app.processEvents(); time.sleep(.005)
+        self.assertEqual(window.page.path, self.path)
+        _manage(context)
+        self.assertEqual(len([view for view in _windows if not view.page.closing]), 1)

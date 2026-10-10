@@ -13,9 +13,9 @@ comic-reader activation remain independent of Archives.
 
 | Location | Responsibility |
 | --- | --- |
-| `__init__.py` | Lazy page, controller, action and activation declarations |
+| `__init__.py` | Lazy document launcher, controller, action and activation declarations |
 | `ui/browser.py` | Per-browser routing, independent hosts and mutation refresh |
-| `ui/page.py` | Commands, operation outcomes and main-window lifecycle |
+| `ui/page.py` | Per-document commands, operation outcomes and lifecycle |
 | `ui/session.py` | Background jobs, configured/session credentials, GUI retries and cancellation |
 | `ui/chrome.py` | Workspace toolbar, location, status and shortcuts |
 | `ui/create.py`, `ui/dialogs.py` | Source/options capture, destination and removal prompts |
@@ -33,19 +33,16 @@ callers retain their defaults and extraction behavior.
 
 Enabled browser bindings install `ArchiveBrowserController` through
 `BrowserExtension.create_controller`. ZIP and supported TAR activation opens the
-manager in the current main window's contributed page. CBZ activation stays with
-Comics, with explicit Archives actions available in the comic library and generic
+manager as a retained document in the main Documents workspace (or a standalone
+window when no main document host exists). CBZ activation stays with Comics,
+with explicit Archives actions available in the comic library and generic
 browsers. Ordinary files and folders offer creation actions; supported archives
-also offer **Open archive manager…** and **Extract archive…**. Multiple selected
-archives can use separate retained windows.
+also offer **Open archive manager…** and **Extract archive…**.
 
-Routing uses the invoking host and a live contributed tab. It does not search
-unrelated application windows or resurrect hidden disabled pages. Standalone and
-detached browsers use independent hosts when no local contributed page exists.
-Controllers retain and reuse their standalone host; independent windows own
-and cancel their workers, while the main page participates in main-window
-`prepare_close`/`idle` handling. Feature toggles remove actions and activation
-without deleting existing jobs or open windows.
+Each archive has its own retained window/session; reopening the same archive
+reveals its existing document. Document hosts own cooperative worker shutdown.
+Feature toggles remove launchers, actions and activation without deleting
+existing jobs or open documents.
 
 Successful creation, editing and extraction emit `archive_changed` on the GUI
 thread. The invoking binding invalidates the affected file and reconciles its
@@ -64,16 +61,15 @@ Closing cancels work and prevents queued retries or refreshes from restarting it
 The contents widget only displays validated entries and decoded previews and
 emits requests; it does not own jobs, credentials or filesystem writes.
 
-Workspace navigation order 15 places Archives after sync actions and before Git
-(20). The rail paints a palette-aware zipper icon. The page preserves Logistics'
-shared theme and works in light and dark modes.
+The document category has a palette-aware zipper icon. Archive documents
+preserve Logistics' shared theme and work in light and dark modes.
 
 ## Validation
 
 Shared tests cover archive formats, staging, traversal/collision checks, source
 changes, encryption, cancellation, file hooks and the passive contents view.
 `test_archive_workspace_ui.py` covers Logistics jobs, credentials, shutdown,
-source options and rail placement. `test_archive_browser.py` installs the actual
+source options and document-category registration. `test_archive_browser.py` installs the actual
 feature into a Logistics `BrowserView` and checks activation, CBZ reader precedence,
 selection menus, direct extraction, refresh, toggles and standalone routing.
 The existing browser and Comics regression suites check compatibility.
@@ -131,3 +127,10 @@ Use the [project test commands](../../../README.md#development).
 commonUtils ZIP and archive tests check source validation, cancellation, verification
 and publication.
 Keep this workflow's chunk-level cancellation separate from Comics' per-comic boundary.
+
+
+Archives opened from the browser or persistent left-side Archives entry appear
+as retained documents. Each archive has its own session and controls, stays
+listed under Archives when detached, and can be brought back into Documents.
+Opening an already-open archive reveals that document instead of replacing
+another archive's state.
