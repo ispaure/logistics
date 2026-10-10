@@ -47,10 +47,11 @@ def build_controls(page):
     page.open_button.hide()  # Retain the legacy handle; File > Open owns this action.
     page.previous = tool(page, page.previous_page_action, 'Previous page', 'previous')
     page.next = tool(page, page.next_page_action, 'Next page', 'next')
-    page.title = ReaderLabel('EPUB reader')
+    page.title = ReaderLabel('EPUB reader', page)
     page.title.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
     page.title.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Preferred)
-    header.addWidget(page.title, 1)
+    page.title.hide()
+    header.addStretch(1)
     header.addWidget(tool(page, page.sidebar_action, 'Show or hide contents and bookmarks', 'sidebar'))
     page.appearance_button = tool(page, page.appearance_action, 'Reading appearance', 'appearance')
     header.addWidget(page.appearance_button)
