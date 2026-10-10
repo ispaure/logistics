@@ -76,6 +76,43 @@ class EditingCommands:
             ),
         ]:
             self.action(self._edit_menu, key, label, callback, shortcut)
+        self.action(self._edit_menu, "next_occurrence", "Add Next Occurrence", lambda: self.edit("add_next_occurrence"), "Ctrl+Alt+D")
+        self.action(self._edit_menu, "rectangle", "Rectangular Selection from Selection", lambda: self.edit("rectangular_selection"))
+        self.action(self._edit_menu, "clear_cursors", "Clear Extra Cursors", lambda: self.edit("clear_extra_cursors"))
+        folding = self._view_menu.addMenu("Code Folding")
+        for key, label, method in [("fold_current", "Toggle Current Fold", "fold_current"),
+                                   ("fold_all", "Fold All", "fold_all"),
+                                   ("unfold_all", "Unfold All", "unfold_all")]:
+            self.action(folding, key, label, lambda method=method: self.edit(method))
+        self.action(self._view_menu, "indent_guides", "Indentation Guides", self.toggle_guides, checkable=True)
+        self.actions["indent_guides"].setChecked(True)
+        views = self._view_menu.addMenu("Document Views")
+        for key, label, orientation in [
+            ("split_vertical", "Split Side by Side", qt.Qt.Orientation.Horizontal),
+            ("split_horizontal", "Split Above / Below", qt.Qt.Orientation.Vertical),
+            ("single_view", "Single View", None),
+        ]:
+            self.action(views, key, label, lambda orientation=orientation: self.split_document(orientation))
+        compare = self.menuBar().addMenu("&Compare")
+        self.action(compare, "compare_disk", "Compare with Disk", self.compare_disk)
+        self.action(compare, "compare_file", "Compare with Another File…", self.compare_file)
+        tools = self.menuBar().addMenu("&Tools")
+        for language in ("json", "xml"):
+            for operation in ("format", "validate"):
+                self.action(tools, operation + "_" + language,
+                            operation.title() + " " + language.upper(),
+                            lambda language=language, operation=operation:
+                            self.structured_text(language, operation))
+        transforms = self._edit_menu.addMenu("Text Transformations")
+        for key, label in [
+            ("sort", "Sort Lines Ascending"), ("sort_reverse", "Sort Lines Descending"),
+            ("unique", "Remove Duplicate Lines"), ("trim", "Trim Trailing Whitespace"),
+            ("upper", "UPPERCASE"), ("lower", "lowercase"), ("title", "Title Case"),
+            ("tabs_to_spaces", "Tabs to Spaces"), ("spaces_to_tabs", "Leading Spaces to Tabs"),
+            ("number", "Number Lines…"),
+        ]:
+            self.action(transforms, "transform_" + key, label,
+                        lambda key=key: self.transform_text(key))
         for key, label in [
             ("wrap", "Word Wrap"),
             ("numbers", "Line Numbers"),
@@ -107,7 +144,7 @@ class EditingCommands:
         )
         self.escape = qt.QShortcut(qt.QKeySequence("Escape"), self)
         self.escape.setContext(qt.Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        self.escape.activated.connect(self.search.close_panel)
+        self.escape.activated.connect(self.escape_editor)
         self.encoding_button = self._status_button("Encoding", self.choose_encoding)
         self.endings_button = self._status_button("Line endings", self.choose_endings)
         self.indent_button = self._status_button("Indentation", self.choose_indentation)
@@ -215,6 +252,7 @@ class EditingCommands:
             self.current.encoding = value
             self.current.bom_override = b"" if value == "utf-8" else None
             self.current.editor.document().setModified(True)
+            self.current.changed.emit()
             self._active_changed()
 
     def choose_endings(self):
@@ -234,6 +272,7 @@ class EditingCommands:
                 value
             ]
             self.current.editor.document().setModified(True)
+            self.current.changed.emit()
             self._active_changed()
 
     def choose_indentation(self):
@@ -314,3 +353,108 @@ class EditingCommands:
 
     def _preferences_changed(self):
         pass
+
+    def transform_text(self, command):
+        if not self.current:
+            return
+        start = 1
+        if command == "number":
+            start, accepted = qt.QInputDialog.getInt(self, "Number Lines", "Starting number:", 1)
+            if not accepted:
+                return
+        self.current.editor.transform(command, start=start)
+
+    def structured_text(self, language, operation):
+        from commonUtils.ui.code_editor.formatting import format_text, validate_text
+        if not self.current:
+            return
+        editor = self.current.editor
+        if editor.isReadOnly() and operation == "format":
+            return
+        cursor = editor.textCursor()
+        if not cursor.hasSelection():
+            cursor.select(qt.QTextCursor.SelectionType.Document)
+        text = cursor.selectedText().replace("\u2029", "\n")
+        try:
+            if operation == "validate":
+                validate_text(text, language)
+                self.statusBar().showMessage(language.upper() + " is valid", 5000)
+            else:
+                result = format_text(text, language, editor.indent_width)
+                if text != result:
+                    cursor.beginEditBlock()
+                    cursor.insertText(result)
+                    cursor.endEditBlock()
+                    editor.setTextCursor(cursor)
+        except Exception as error:
+            self.show_error(error)
+
+    def compare_disk(self):
+        if self.current and self.current.path:
+            self.compare_path(self.current.path)
+        else:
+            self.show_error("Save the document first, or compare with another file.")
+
+    def compare_file(self):
+        path, _ = qt.QFileDialog.getOpenFileName(self, "Compare with another file", "", "All files (*)")
+        if path:
+            self.compare_path(path)
+
+    def compare_path(self, path):
+        from commonUtils.text_files import read_text_file
+        from commonUtils.ui.code_editor.diff import compare_text, DiffDialog, apply_change
+        if not self.current or self.task.busy:
+            return
+        document = self.current
+        right = document.editor.toPlainText()
+        encoding = document.snapshot.encoding if document.path and str(document.path) == str(path) else None
+        def work():
+            left = read_text_file(path, encoding=encoding).text
+            return compare_text(left, right, str(path), document.title)
+        def apply(model, index):
+            editor = document.editor
+            if self.task.busy or editor.isReadOnly():
+                raise ValueError("The buffer is busy or read-only.")
+            start, end, replacement = apply_change(model, index, editor.toPlainText())
+            current = editor.toPlainText()
+            cursor = qt.QTextCursor(editor.document())
+            cursor.setPosition(len(current[:start].encode("utf-16-le")) // 2)
+            cursor.setPosition(len(current[:end].encode("utf-16-le")) // 2,
+                               qt.QTextCursor.MoveMode.KeepAnchor)
+            cursor.beginEditBlock()
+            cursor.insertText(replacement)
+            cursor.endEditBlock()
+            editor.setTextCursor(cursor)
+        def done(model):
+            dialog = DiffDialog(model, self, left_name=str(path), right_name=document.title, apply=apply)
+            dialog.show()
+        self._run(work, done, message="Comparing files…")
+
+    def split_document(self, orientation):
+        if not self.current:
+            return
+        document = self.current
+        had_secondary = document.views.secondary is not None
+        document.views.set_split(orientation)
+        if not had_secondary and document.views.secondary is not None:
+            editor = document.views.secondary
+            editor.cursorPositionChanged.connect(document.changed)
+            editor.focused.connect(document.changed)
+            editor.verticalScrollBar().valueChanged.connect(self.service.session.changed)
+            editor.horizontalScrollBar().valueChanged.connect(self.service.session.changed)
+            editor.zoom_changed.connect(self._preferences_changed)
+        self.service.session.changed()
+        self._active_changed()
+
+    def escape_editor(self):
+        if self.current and self.current.editor.extra_cursors:
+            self.current.editor.clear_extra_cursors()
+        else:
+            self.search.close_panel()
+
+    def toggle_guides(self):
+        if self.current:
+            for editor in (self.current.views.primary, self.current.views.secondary):
+                if editor is not None:
+                    editor.indent_guides = self.actions["indent_guides"].isChecked()
+                    editor.viewport().update()

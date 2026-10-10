@@ -80,11 +80,19 @@ class SyntaxSettings:
         if not hasattr(document, "highlighter"):
             document.highlighter = SyntaxHighlighter(editor)
             editor.zoom_changed.connect(self._preferences_changed)
+        editor.folding.configure(document.language)
+        editor.folding.rebuild()
         document.highlighter.configure(
             document.language
             if options["syntax_highlighting_bool"] and not document.simple
             else "text"
         )
+        self._sync_comment_prefix(document)
+
+    def _sync_comment_prefix(self, document):
+        prefix = document.views.primary.comment_prefix
+        if document.views.secondary is not None:
+            document.views.secondary.comment_prefix = prefix
 
     def choose_language(self):
         if not self.current:
@@ -108,11 +116,15 @@ class SyntaxSettings:
         )
         if ok:
             self.current.language = choices[value]
+            self.current.editor.folding.configure(self.current.language)
+            self.current.editor.folding.rebuild()
             self.current.highlighter.configure(
                 self.current.language
                 if self.options["syntax_highlighting_bool"] and not self.current.simple
                 else "text"
             )
+            self._sync_comment_prefix(self.current)
+            self.current.changed.emit()
             self._active_changed()
 
     def toggle_syntax(self):

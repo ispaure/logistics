@@ -9,9 +9,10 @@ from commonUtils.ui.code_editor.syntax import LANGUAGES
 from .file_operations import FileOperations
 from .editing import EditingCommands
 from .syntax_settings import SyntaxSettings
+from .commands import CommandControls
 
 
-class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWindow):
+class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperations, qt.QMainWindow):
     idle = qt.Signal()
     saved = qt.Signal(object)
     closed = qt.Signal()
@@ -49,7 +50,9 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
         reload.clicked.connect(self.reload_document)
         keep = qt.QPushButton("Keep Buffer")
         keep.clicked.connect(self._keep_buffer)
-        for widget in (self.external_notice, reload, keep):
+        compare = qt.QPushButton("Compare")
+        compare.clicked.connect(self.compare_disk)
+        for widget in (self.external_notice, compare, reload, keep):
             row.addWidget(widget)
         layout.addWidget(self.external_bar)
         self.external_bar.hide()
@@ -65,6 +68,7 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
         self._build_status()
         self._build_editing(layout)
         self._build_syntax_controls()
+        self._build_command_controls()
         if create_blank:
             from .document import Document
             self._add_document(Document())
@@ -119,6 +123,8 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
             ("close_all", "Close All", self.close_all, None),
         ]:
             self.action(file, key, label, callback, shortcut)
+        self.action(file, "restore_session", "Restore Editor Session…", lambda: self.service.session.restore_selected(self))
+        self.action(file, "suspend_session", "Keep Session and Close Editors", self.service.suspend)
         self.recent_menu = file.addMenu("Open Recent")
         self.recent_menu.aboutToShow.connect(self._recent_menu)
         edit = self.menuBar().addMenu("&Edit")
@@ -174,6 +180,8 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
         if hasattr(self, "search"):
             self.search.set_editor(document.editor if document else None)
         if document:
+            if document.editor.hasFocus():
+                self.service.window = self
             cursor = document.editor.textCursor()
             self.position.setText(
                 f"Ln {cursor.blockNumber() + 1}, Col {cursor.positionInBlock() + 1} · {document.editor.blockCount()} lines · {document.encoding.upper()}"
@@ -186,6 +194,8 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
                         document.language, document.language
                     )
                 )
+            if "indent_guides" in self.actions:
+                self.actions["indent_guides"].setChecked(document.editor.indent_guides)
             if "comment" in self.actions:
                 self.actions["comment"].setEnabled(
                     document.editor.comment_prefix is not None
