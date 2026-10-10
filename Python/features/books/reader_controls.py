@@ -150,6 +150,8 @@ def build_controls(page):
     page.text.pageTurn.connect(page.turn_page)
     page.text.paginationChanged.connect(page._position_changed)
     reading_layout.addWidget(page.text, 1)
+    from .spread import BookSpread
+    page.spread = BookSpread(page, reading_layout)
     page.empty_panel = qt.QWidget()
     empty = qt.QVBoxLayout(page.empty_panel)
     empty.setContentsMargins(32, 32, 32, 32)
@@ -208,3 +210,7 @@ def build_controls(page):
     page.progress_label.setAlignment(qt.Qt.AlignmentFlag.AlignRight | qt.Qt.AlignmentFlag.AlignVCenter)
     footer.addWidget(page.progress_label)
     layout.addLayout(footer)
+    from .progress import BookProgress
+    page.book_progress = BookProgress(page)
+    page.book_progress.requested.connect(page.seek_book)
+    layout.addWidget(page.book_progress)

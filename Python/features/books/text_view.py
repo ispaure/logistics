@@ -21,6 +21,17 @@ class BookText(qt.QTextBrowser):
         self.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._page = 0
         self._adjusting_range = False
+        self.spread_owner = None
+        self.companion = None
+        self.read_pointer = None
+        self._resize_anchor = None
+        self.resize_settle = qt.QTimer(self)
+        self.resize_settle.setSingleShot(True)
+        self.resize_settle.setInterval(150)
+        self.resize_settle.timeout.connect(lambda: setattr(self, '_resize_anchor', None))
+        self.layout_settle = qt.QTimer(self)
+        self.layout_settle.setSingleShot(True)
+        self.layout_settle.timeout.connect(self._restore_layout)
         self.verticalScrollBar().rangeChanged.connect(self._page_range_changed)
 
     @property
@@ -33,6 +44,8 @@ class BookText(qt.QTextBrowser):
 
     @property
     def page_index(self):
+        if self.spread_owner is not None:
+            return self._page
         return min(self.page_count - 1, self._page)
 
     def _page_range_changed(self, *args):
@@ -40,12 +53,15 @@ class BookText(qt.QTextBrowser):
             return
         self._adjusting_range = True
         try:
-            self.verticalScrollBar().setRange(0, (self.page_count - 1) * self.page_height)
+            last = self.page_count if self.spread_owner is not None else self.page_count - 1
+            self.verticalScrollBar().setRange(0, last * self.page_height)
             self.verticalScrollBar().setValue(self.page_index * self.page_height)
         finally:
             self._adjusting_range = False
 
     def repaginate(self):
+        if self.spread_owner is not None:
+            return
         # Qt's paginated layout breaks between text lines instead of clipping a
         # sentence at the bottom of a screen. The scrollbar is an internal page
         # offset only; users navigate via page turns.
@@ -60,6 +76,10 @@ class BookText(qt.QTextBrowser):
         self._page = max(0, min(index, self.page_count - 1))
         self._page_range_changed()
         self.viewport().update()
+        if self.companion is not None and self.companion.isVisible():
+            self.companion._page = self._page + 1
+            self.companion._page_range_changed()
+            self.companion.viewport().update()
         self.paginationChanged.emit()
 
     def location(self):
@@ -75,15 +95,29 @@ class BookText(qt.QTextBrowser):
         self.show_page(int(y // self.page_height))
 
     def resizeEvent(self, event):
-        offset = self.location() if self.book else 0
+        if self.spread_owner is not None:
+            super().resizeEvent(event)
+            self.spread_owner.layout_settle.start(0)
+            return
+        if self._resize_anchor is None:
+            self._resize_anchor = self.read_pointer if self.read_pointer is not None else self.location()
+        offset = self._resize_anchor
         super().resizeEvent(event)
         self.repaginate()
         if self.book:
             self.show_location(offset)
+        self.resize_settle.start()
+        self.layout_settle.start(0)
         # Font/theme changes and splitter resizing can invalidate the backing
         # store after this resize callback. Repaint the newly paginated page once
         # the parent layout has also settled.
         qt.QTimer.singleShot(0, self.viewport(), self.viewport().update)
+
+    def _restore_layout(self):
+        offset = self._resize_anchor if self._resize_anchor is not None else self.location()
+        self.repaginate()
+        if self.book:
+            self.show_location(offset)
 
     def keyPressEvent(self, event):
         if event.key() in (qt.Qt.Key.Key_Up, qt.Qt.Key.Key_Down):

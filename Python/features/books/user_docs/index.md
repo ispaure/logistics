@@ -112,3 +112,9 @@ are not opened automatically.
 EPUB files remain ZIP archives; the reader does not unpack them into a temporary
 folder. Archive and resource size limits protect against accidentally opening
 unreasonably large or corrupt books.
+
+Wide reading panes display two consecutive pages; narrower panes display one.
+Page turns advance past the displayed pages, and resizing follows the current
+text location. The bottom track shows estimated whole-book progress, weighted
+by chapter resource size. Taller ticks mark higher-level contents entries;
+click anywhere on the track to jump to that part of the book.

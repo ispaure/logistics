@@ -44,6 +44,7 @@ class ReaderTests(unittest.TestCase):
         for key in (qt.Qt.Key.Key_Up, qt.Qt.Key.Key_Down):
             QTest.keyClick(self.page.text, key)
         self.assertEqual(self.page.text.verticalScrollBar().value(), before)
+
         self.page.turn_page.assert_not_called()
         turns = Mock()
         self.page.text.pageTurn.connect(turns)
@@ -59,6 +60,34 @@ class ReaderTests(unittest.TestCase):
         QTest.keyClick(self.page.query, qt.Qt.Key.Key_Right)
         self.assertEqual(self.page.query.cursorPosition(), 2)
 
+
+    def test_book_track_has_nested_markers_and_click_seeks_to_another_chapter(self):
+        from PySide6.QtTest import QTest
+        track = self.page.book_progress
+        self.assertEqual([marker[1] for marker in track.markers], [0, 1, 0])
+        self.assertGreater(track.markers[1][0], track.markers[0][0])
+        QTest.mouseClick(track, qt.Qt.MouseButton.LeftButton,
+                         pos=qt.QPoint(track.width() - 6, 12))
+        self.app.processEvents()
+        self.assertEqual(self.page._current, 1)
+        self.assertGreater(track.fraction, track.boundaries[1])
+
+    def test_wide_spread_turns_two_pages_and_resize_retains_the_text_anchor(self):
+        from PySide6.QtTest import QTest
+        self.page.text.setHtml(''.join(f'<p>Paragraph {i}: ' + 'Readable text. ' * 30 + '</p>'
+                                       for i in range(100)))
+        self.page.resize(1600, 650); QTest.qWait(200)
+        self.assertTrue(self.page.spread.enabled)
+        self.assertTrue(self.page.spread.second.isVisible())
+        self.page.text.show_page(2)
+        self.page.turn_page(1)
+        self.assertEqual(self.page.text.page_index, 4)
+        self.assertEqual(self.page.spread.second.page_index, 5)
+        anchor = self.page.text.location()
+        self.page.resize(950, 650); QTest.qWait(200)
+        self.assertFalse(self.page.spread.enabled)
+        cursor = qt.QTextCursor(self.page.text.document()); cursor.setPosition(anchor)
+        self.assertTrue(self.page.text.viewport().rect().contains(self.page.text.cursorRect(cursor).center()))
     def wait_idle(self, page):
         loop = qt.QEventLoop()
         page.idle.connect(loop.quit)

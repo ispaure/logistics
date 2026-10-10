@@ -110,6 +110,9 @@ class BooksPage(qt.QWidget):
         self.title.setText('EPUB reader')
         self.status.setText('Open an EPUB to start reading.')
         self.progress_label.clear()
+        self.book_progress.setEnabled(False)
+        self.book_progress.fraction = 0
+        self.book_progress.update()
         self.reading_area.setStyleSheet('')
         self._set_busy(False)
 
@@ -133,7 +136,7 @@ class BooksPage(qt.QWidget):
         for widget in (self.metadata_button, self.chapters, self.bookmark_button, self.bookmarks, self.remove_bookmark):
             widget.setEnabled(enabled)
         self.previous.setEnabled(enabled and (self._current > 0 or self.text.page_index > 0))
-        self.next.setEnabled(enabled and (self.text.page_index + 1 < self.text.page_count
+        self.next.setEnabled(enabled and (self.text.page_index + self.spread.step < self.text.page_count
                                          or self._current + 1 < len(self.book.spine if self.book else [])))
         self.remove_bookmark.setEnabled(enabled and bool(self._bookmarks))
         self.previous_action.setEnabled(enabled and self._current > 0)
@@ -142,6 +145,7 @@ class BooksPage(qt.QWidget):
         self.next_page_action.setEnabled(self.next.isEnabled())
         self.text.setVisible(self.book is not None)
         self.empty_panel.setVisible(self.book is None)
+        self.spread.update()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -224,6 +228,7 @@ class BooksPage(qt.QWidget):
         for control in (self.font_family, self.font_size, self.theme, self.spacing, self.reading_width):
             control.blockSignals(False)
         self._populate_chapters()
+        self.book_progress.set_book(book)
         self._populate_bookmarks()
         path = state.get('path')
         self._current = book.spine.index(path) if path in book.spine else 0
@@ -273,7 +278,7 @@ class BooksPage(qt.QWidget):
     def turn_page(self, direction):
         if not self.book or self.worker or self._loading:
             return
-        target = self.text.page_index + direction
+        target = self.text.page_index + direction * self.spread.step
         if 0 <= target < self.text.page_count:
             self.text.show_page(target)
         elif direction > 0 and self._current + 1 < len(self.book.spine):
@@ -286,6 +291,14 @@ class BooksPage(qt.QWidget):
                 self._current += 1
                 self.status.setText(str(error))
 
+    def seek_book(self, chapter, fraction):
+        if self.book is not None and not self.worker and not self._loading:
+            self._current = chapter
+            try:
+                self._render(position=fraction)
+            except (OSError, BookError) as error:
+                self.status.setText(str(error))
+
     def _render(self, *, position=0, fragment='', location=None):
         if not self.book:
             return
@@ -295,6 +308,7 @@ class BooksPage(qt.QWidget):
         self.text.setMaximumWidth(self.reading_width.value())
         html = chapter_html(self.book, path, foreground=foreground, spacing=self.spacing.value())
         self._loading = True
+        self.text._resize_anchor = location if isinstance(location, int) else 0
         self._render_revision += 1
         revision = self._render_revision
         base = qt.QUrl()
@@ -310,6 +324,7 @@ class BooksPage(qt.QWidget):
         self.text.setFont(font)
         self.text.document().setDefaultFont(font)
         self.text.setHtml(html)
+        self.spread.update()
         self._path = path
         item = self._chapter_items.get((path, fragment))
         if item is None:
@@ -330,6 +345,8 @@ class BooksPage(qt.QWidget):
             elif isinstance(position, (int, float)) and isfinite(position):
                 self.text.show_page(round(max(0, min(1, position)) * (self.text.page_count - 1)))
             self._loading = False
+            self.text._resize_anchor = None
+            self.text.resize_settle.stop()
             self._position_changed()
         qt.QTimer.singleShot(0, self, restore)
 
@@ -372,7 +389,13 @@ class BooksPage(qt.QWidget):
 
     def _position_changed(self, *args):
         if self.book:
-            self.progress_label.setText(f'Page {self.text.page_index + 1} / {self.text.page_count}')
+            self.book_progress.set_position(self._current,
+                min(1, (self.text.page_index + self.spread.step) / self.text.page_count))
+            last = min(self.text.page_count, self.text.page_index + self.spread.step)
+            pages = str(self.text.page_index + 1)
+            if self.spread.enabled and last > self.text.page_index + 1:
+                pages += f'–{last}'
+            self.progress_label.setText(f'Page {pages} / {self.text.page_count}')
             self.progress_label.setMinimumWidth(self.progress_label.fontMetrics().horizontalAdvance(self.progress_label.text()) + 4)
             self.progress_label.setToolTip(f'Location {self._current + 1}:{self.text.location()} · '
                                           'Pages adapt to your font and window size; saved locations follow the text.')
