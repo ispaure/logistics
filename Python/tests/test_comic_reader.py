@@ -266,11 +266,39 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
 
     def wait(self, window):
         deadline = time.monotonic() + 10
-        while (window.busy or window.catalog_busy or window.browser.cover_busy or window.reader_busy or window.folder_busy) and time.monotonic() < deadline:
+        idle_since = None
+        while True:
+            # Mode switches defer selection and cover work to the next Qt
+            # event turn. Drain those callbacks before deciding we are idle.
             self.app.processEvents()
-            time.sleep(.01)
-        self.app.processEvents()
-        self.assertFalse(window.busy or window.catalog_busy or window.reader_busy)
+            active = {name: getattr(window, name) for name in
+                      ('busy', 'catalog_busy', 'reader_busy', 'folder_busy')}
+            active['cover_busy'] = window.browser.cover_busy
+            now = time.monotonic()
+            if any(active.values()):
+                idle_since = None
+            elif idle_since is None:
+                idle_since = now
+            elif now - idle_since >= .05:
+                return
+            self.assertLess(now, deadline, f'Comic browser did not settle: {active}')
+            time.sleep(.005)
+
+    def test_wait_drains_deferred_work_before_asserting_idle(self):
+        from types import SimpleNamespace
+        from commonUtils.ui import pyside as qt
+        window = SimpleNamespace(busy=False, catalog_busy=False, reader_busy=False,
+                                 folder_busy=False, browser=SimpleNamespace(cover_busy=False))
+        completed = []
+        def finish():
+            window.busy = False
+            completed.append(True)
+        def start():
+            window.busy = True
+            qt.QTimer.singleShot(0, finish)
+        qt.QTimer.singleShot(0, start)
+        self.wait(window)
+        self.assertEqual(completed, [True])
 
     def test_closing_reader_restores_library_without_changing_location(self):
         from features.comics.ui.library import ComicLibraryWindow
