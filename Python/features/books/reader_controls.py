@@ -43,7 +43,7 @@ def build_controls(page):
     header = qt.QHBoxLayout()
     header.setSpacing(READER_SPACING)
     page.open_button = tool(page, page.menus.open_action, 'Open EPUB')
-    header.addWidget(page.open_button)
+    page.open_button.hide()  # Retain the legacy handle; File > Open owns this action.
     page.previous = tool(page, page.previous_page_action, 'Previous page', 'previous')
     page.next = tool(page, page.next_page_action, 'Next page', 'next')
     page.title = ReaderLabel('EPUB reader')

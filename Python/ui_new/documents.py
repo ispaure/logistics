@@ -31,14 +31,17 @@ class DocumentWorkspace(Workspace):
         self.close_action.setEnabled(False)  # Keep each reader/editor's own close shortcut.
         self._drop_target.widget().setText('Drag a reader or editor tab here to bring it back.')
 
+    def reveal_for_drop(self, point):
+        if self.page.window().frameGeometry().contains(point):
+            self.page.activate()
+
     def eventFilter(self, watched, event):
         if (event.type() == qt.QEvent.Type.MouseMove and event.buttons() & qt.Qt.MouseButton.LeftButton
                 and isinstance(watched, DockTabHeader) and watched.parentWidget().isFloating()):
             # Reveal the original docking area as a native floating window moves
             # over the main application, even when another destination is active.
             point = watched.mapToGlobal(event.position().toPoint())
-            if self.page.window().frameGeometry().contains(point):
-                self.page.activate()
+            self.reveal_for_drop(point)
         return super().eventFilter(watched, event)
 
 

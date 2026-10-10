@@ -24,7 +24,7 @@ class ReaderControls(qt.QWidget):
         header.setSpacing(READER_SPACING)
         if self.menus is not None:
             self.open_button = reader_button(self, 'Open comic', action=self.menus.shared.open_action)
-            header.addWidget(self.open_button)
+            self.open_button.hide()  # File > Open already exposes the same action.
         self.previous_file_button = self._button('Previous file', 'previous-file')
         self.next_file_button = self._button('Next file', 'next-file')
         self.file_controls = qt.QHBoxLayout()

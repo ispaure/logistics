@@ -8,7 +8,7 @@ class BookProgress(qt.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(24)
+        self.setFixedHeight(20)
         self.setAccessibleName('Whole book progress; click to jump')
         self.boundaries = [0, 1]
         self.markers = []
@@ -41,22 +41,36 @@ class BookProgress(qt.QWidget):
     def paintEvent(self, event):
         painter = qt.QPainter(self)
         painter.setRenderHint(qt.QPainter.RenderHint.Antialiasing)
-        track = qt.QRectF(4, 11, max(1, self.width() - 8), 6)
+        track = self._track_rect()
         painter.setPen(qt.Qt.PenStyle.NoPen)
         painter.setBrush(self.palette().color(qt.QPalette.ColorRole.Mid))
         painter.drawRoundedRect(track, 3, 3)
         filled = qt.QRectF(track); filled.setWidth(track.width() * self.fraction)
         painter.setBrush(self.palette().color(qt.QPalette.ColorRole.Highlight))
         painter.drawRoundedRect(filled, 3, 3)
-        painter.setPen(qt.QPen(self.palette().color(qt.QPalette.ColorRole.Text), 1))
         for fraction, depth, label, fragment in self.markers:
-            height = max(5, 16 - depth * 4)
+            height = self._marker_height(depth)
+            role = qt.QPalette.ColorRole.Highlight if fraction <= self.fraction else qt.QPalette.ColorRole.Mid
+            painter.setPen(qt.QPen(self.palette().color(role), 1))
             x = track.left() + track.width() * fraction
-            painter.drawLine(qt.QPointF(x, 14 - height / 2), qt.QPointF(x, 14 + height / 2))
+            painter.drawLine(qt.QPointF(x, track.center().y() - height / 2), qt.QPointF(x, track.center().y() + height / 2))
+
+        painter.setPen(qt.Qt.PenStyle.NoPen)
+        painter.setBrush(self.palette().color(qt.QPalette.ColorRole.Highlight))
+        painter.drawEllipse(qt.QPointF(track.left() + track.width() * self.fraction,
+                                      track.center().y()), 5, 5)
+
+    def _track_rect(self):
+        return qt.QRectF(6, self.height() / 2 - 3, max(1, self.width() - 12), 6)
+
+    @staticmethod
+    def _marker_height(depth):
+        return max(8, 14 - depth * 4)
 
     def mouseReleaseEvent(self, event):
         if event.button() == qt.Qt.MouseButton.LeftButton and self.isEnabled():
-            fraction = max(0, min(1, (event.position().x() - 4) / max(1, self.width() - 8)))
+            track = self._track_rect()
+            fraction = max(0, min(1, (event.position().x() - track.left()) / track.width()))
             chapter = min(len(self.boundaries) - 2, bisect_right(self.boundaries, fraction) - 1)
             start, end = self.boundaries[chapter:chapter + 2]
             self.requested.emit(chapter, (fraction - start) / (end - start))
