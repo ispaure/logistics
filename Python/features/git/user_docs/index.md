@@ -16,7 +16,11 @@ from Logistics.
   destination. You can choose a branch and initialize submodules recursively.
 - **Init…** creates Git metadata in a selected folder while keeping existing files.
 
-Repository tabs remember recent repositories. **+ Repositories → Manage bookmarks…** pins or
+Each open repository has its own tab. Switching tabs preserves commit drafts,
+previews and operation logs. Drag horizontally to reorder, or outside the tab bar
+to detach; its toolbar and repository controls travel with it. Use **+** for a new
+pane. On narrow panes, the toolbar overflow menu keeps actions reachable.
+Recent repositories are available under **+ Repositories → Bookmarks**. **+ Repositories → Manage bookmarks…** pins or
 removes bookmarks. Open, Clone and Init are in the same menu. Removing a bookmark keeps all repository files on disk.
 Bare repositories can be remote destinations; open working repositories in the UI.
 
@@ -50,8 +54,7 @@ be recovered through Git. Untracked files, conflicts, renames, and submodule cha
 need their own handling and are excluded from this action.
 
 **Amend last commit** replaces the branch tip. Review the confirmation before
-amending published history. Failed commits retain their message draft. Switching
-repositories or closing the app asks before discarding a draft.
+amending published history. Failed commits retain their message draft. Closing a repository tab or the app asks before discarding a draft.
 
 ## History and branches
 

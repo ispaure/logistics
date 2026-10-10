@@ -14,7 +14,7 @@ from features.git.repository import Repository, initialize
 from features.git.preferences import Preferences
 from features.git.graph import layout_graph
 from features.git.models import Commit
-from features.git.ui.page import GitPage
+from features.git.ui.repository_view import RepositoryView
 from ui_new.sidebar import DestinationRail
 
 
@@ -34,7 +34,7 @@ class GitUITests(QtTestCase):
         self.repo.run(['config', 'commit.gpgsign', 'false'])
         self.repo.run(['config', 'core.hooksPath', str(self.root / 'no-hooks')])
         self.repo.run(['symbolic-ref', 'HEAD', 'refs/heads/main'])
-        self.page = GitPage(preferences_path=self.root / 'git.json')
+        self.page = RepositoryView(preferences_path=self.root / 'git.json')
         self.page.resize(1250, 800)
         self.page.show()
         self.addCleanup(self.release_page)
@@ -68,7 +68,7 @@ class GitUITests(QtTestCase):
     def test_workspace_navigation_reparents_preview_and_spans_commit_composer(self):
         self.commit_fixture(); self.open()
         self.assertEqual(self.page.refs.topLevelItem(0).text(0),'WORKSPACE')
-        self.assertEqual(self.page.repository_tabs.tabText(0),'repo (Git)')
+        self.assertEqual(self.page.view_title, 'repo (Git)')
         self.assertTrue(self.page.views.tabBar().isHidden())
         self.page._navigation_selected(self.page.workspace_items[1],0); self.wait()
         self.assertIs(self.page.preview.parentWidget(),self.page.history_preview_host)
@@ -484,7 +484,7 @@ class GitUITests(QtTestCase):
         def submitted(dialog):
             captured.extend(edit.text() for edit in dialog.findChildren(qt.QLineEdit))
             return False
-        with patch('features.git.ui.page.FormDialog.submitted', submitted):
+        with patch('features.git.ui.repository_view.FormDialog.submitted', submitted):
             self.page.remote_dialog('origin'); self.wait()
         self.assertIn('/example/remote.git', captured)
 
