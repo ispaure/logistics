@@ -9,9 +9,10 @@ from commonUtils.ui.code_editor.syntax import LANGUAGES
 from .file_operations import FileOperations
 from .editing import EditingCommands
 from .syntax_settings import SyntaxSettings
+from .commands import CommandControls
 
 
-class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWindow):
+class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperations, qt.QMainWindow):
     idle = qt.Signal()
     saved = qt.Signal(object)
     closed = qt.Signal()
@@ -67,6 +68,7 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
         self._build_status()
         self._build_editing(layout)
         self._build_syntax_controls()
+        self._build_command_controls()
         if create_blank:
             from .document import Document
             self._add_document(Document())
