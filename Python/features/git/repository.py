@@ -6,8 +6,9 @@ used as options; paths use literal pathspecs and explicit argument boundaries.
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import os
 
-from .models import Status, Commit, Ref, parse_status, parse_log, parse_refs, parse_tree
+from .models import Status, Commit, Ref, parse_status, parse_log, parse_refs, parse_tree, TreeEntry
 from .runner import GitError, GitRunner, redact
 
 
@@ -36,6 +37,7 @@ class Snapshot:
     stashes: list[tuple[str, str]]
     operation: str = ''
     more_history: bool = False
+    submodule_paths: tuple[str, ...] = ()
 
 
 class Repository:
@@ -85,7 +87,10 @@ class Repository:
             ref, subject = line.split(b'\0', 1)
             stashes.append((ref.decode('ascii'), subject.decode('utf-8', 'replace')))
         remotes = self.run(['remote']).stdout.decode('utf-8', 'replace').splitlines()
-        return Snapshot(root, status, commits[:limit], refs, remotes, stashes, self.operation(), len(commits) > limit)
+        config = self.run(['config', '--file', '.gitmodules', '--null', '--get-regexp', r'^submodule\..*\.path$'], check=False)
+        if config.returncode not in (0,1): raise GitError(config.stderr)
+        submodule_paths = tuple(os.fsdecode(record.partition(b'\n')[2]) for record in config.stdout.split(b'\0') if b'\n' in record)
+        return Snapshot(root, status, commits[:limit], refs, remotes, stashes, self.operation(), len(commits) > limit, submodule_paths)
 
     def diff(self, path, *, staged=False):
         result = self.run(['diff', '--no-ext-diff', '--no-textconv', *(['--cached'] if staged else []),
@@ -108,6 +113,23 @@ class Repository:
                            '--'], check=False, limit=1024 * 1024)
         if result.returncode: raise GitError(result.stderr)
         return result.stdout.decode('utf-8', 'replace') + ('\n[Commit preview truncated]' if result.truncated else '')
+
+    def _commit_comparison(self, oid):
+        oid = self.object_id(oid)
+        parents = self.run(['rev-list', '--parents', '-n', '1', oid]).stdout.decode('ascii').split()
+        # Merge review deliberately compares the first parent, like the history UI.
+        return [parents[1], oid] if len(parents) > 1 else [oid]
+
+    def commit_files(self, oid):
+        data = self.run(['diff-tree', '--root', '-r', '--no-commit-id', '--name-status', '-z',
+                         '--no-renames', *self._commit_comparison(oid), '--']).stdout.split(b'\0')
+        return [TreeEntry(data[i].decode('ascii'), 'change', oid, os.fsdecode(data[i+1]))
+                for i in range(0,len(data)-1,2)]
+
+    def commit_file_diff(self, oid, path):
+        result = self.run(['diff-tree', '--root', '-r', '--no-commit-id', '--patch', '--no-ext-diff',
+                           '--no-textconv', *self._commit_comparison(oid), '--', path], limit=1024*1024)
+        return result.stdout.decode('utf-8','replace') + ('\n[Diff truncated to 1 MiB]' if result.truncated else '')
 
     @staticmethod
     def object_id(oid):
