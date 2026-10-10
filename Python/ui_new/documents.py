@@ -157,6 +157,11 @@ class DocumentsPage(qt.QWidget):
         if 0 <= index < len(attached):
             attached[index].close()
 
+    def document_close_finished(self, window, accepted):
+        """A rejected close must not turn a subsequent docking hide into retirement."""
+        if not accepted:
+            self._close_events.discard(window)
+
     def eventFilter(self, watched, event):
         if watched in self.records:
             if event.type() == qt.QEvent.Type.Close:
