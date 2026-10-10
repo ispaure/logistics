@@ -48,14 +48,10 @@ class GitPage(qt.QWidget):
         self.setStyleSheet(WORKSPACE_STYLE)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        palette = self.palette()
-        for role, color in ((qt.QPalette.ColorRole.Window,'#282935'),(qt.QPalette.ColorRole.WindowText,'#e0e0e4'),
-                (qt.QPalette.ColorRole.Base,'#22232f'),(qt.QPalette.ColorRole.AlternateBase,'#30313c'),
-                (qt.QPalette.ColorRole.Text,'#e0e0e4'),(qt.QPalette.ColorRole.Button,'#3b3c46'),
-                (qt.QPalette.ColorRole.ButtonText,'#e0e0e4'),(qt.QPalette.ColorRole.PlaceholderText,'#92949f'),
-                (qt.QPalette.ColorRole.Highlight,'#454650'),(qt.QPalette.ColorRole.HighlightedText,'#ffffff')):
-            palette.setColor(role,qt.QColor(color))
-        self.setPalette(palette)
+        toolbar_font = qt.QFont(self.font())
+        content_font = qt.QFont(toolbar_font)
+        content_font.setPointSizeF(max(8.0, toolbar_font.pointSizeF() - 1.0))
+        self.setFont(content_font)
         self.repositories = qt.QComboBox(self)
         self.repositories.hide()
         self.repositories.currentIndexChanged.connect(self._repository_selected)
@@ -73,6 +69,8 @@ class GitPage(qt.QWidget):
         self.repository_label.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.repository_label.hide()
         self.toolbar = qt.QWidget()
+        self.toolbar.setObjectName('gitToolbar')
+        self.toolbar.setFont(toolbar_font)
         actions = qt.QHBoxLayout(self.toolbar)
         actions.setContentsMargins(8, 6, 8, 6)
         actions.setSpacing(2)
@@ -118,10 +116,13 @@ class GitPage(qt.QWidget):
         sidebar = qt.QWidget()
         sidebar.setObjectName('gitSidebar')
         sidebar_layout = qt.QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(6, 8, 6, 4)
+        sidebar_layout.setContentsMargins(4, 4, 4, 4)
+        sidebar_layout.setSpacing(4)
         self.refs = qt.QTreeWidget()
         self.refs.setHeaderHidden(True)
-        self.refs.setMinimumWidth(190)
+        self.refs.setMinimumWidth(170)
+        self.refs.setIconSize(qt.QSize(14,14))
+        self.refs.setIndentation(14)
         self.refs.setUniformRowHeights(False)
         self.refs.setAccessibleName('Git workspace navigation and references')
         self.refs.itemClicked.connect(self._navigation_selected)
@@ -139,7 +140,9 @@ class GitPage(qt.QWidget):
         self.changes = ChangesPanel()
         self.history = HistoryPanel()
         self.preview = Preview()
-        self.preview.editor.setPalette(self.palette())
+        code_font = qt.QFont(self.preview.editor.font())
+        code_font.setPointSizeF(max(8.0, code_font.pointSizeF() - 1.0))
+        self.preview.editor.setFont(code_font)
         self.change_split = qt.QSplitter(qt.Qt.Orientation.Horizontal)
         self.change_split.addWidget(self.changes)
         self.change_preview_host = qt.QWidget()
@@ -221,6 +224,12 @@ class GitPage(qt.QWidget):
                                 ('Worktrees…', self.repository_tools.worktrees_dialog), ('Submodules…', self.repository_tools.submodules_dialog),
                                 ('Subtrees…', self.repository_tools.subtree_dialog), ('Open repository folder', self.open_folder)):
             self.more_menu.addAction(title, callback)
+        # Widgets assembled without a parent can retain the application font when
+        # reparented into splitters. Apply content sizing after the layout is built.
+        for widget in self.findChildren(qt.QWidget):
+            if widget is self.toolbar or self.toolbar.isAncestorOf(widget): continue
+            if widget is self.preview.editor or self.preview.editor.isAncestorOf(widget): continue
+            widget.setFont(content_font)
 
     @property
     def busy(self): return self.worker is not None

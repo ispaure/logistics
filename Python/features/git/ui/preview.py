@@ -20,10 +20,13 @@ class Preview(qt.QWidget):
         super().__init__(parent)
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
         self.title = qt.QLabel('Select a changed file or commit')
         self.title.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.title.setWordWrap(True)
         row = qt.QHBoxLayout()
+        row.setContentsMargins(4,2,4,2)
+        row.setSpacing(4)
         row.addWidget(self.title,1)
         self.file_buttons=[]
         for label,name in (('Stage file','stage_button'),('Unstage file','unstage_button'),('Discard file…','discard_button')):
