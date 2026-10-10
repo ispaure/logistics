@@ -87,6 +87,12 @@ class SyntaxSettings:
             if options["syntax_highlighting_bool"] and not document.simple
             else "text"
         )
+        self._sync_comment_prefix(document)
+
+    def _sync_comment_prefix(self, document):
+        prefix = document.views.primary.comment_prefix
+        if document.views.secondary is not None:
+            document.views.secondary.comment_prefix = prefix
 
     def choose_language(self):
         if not self.current:
@@ -117,6 +123,8 @@ class SyntaxSettings:
                 if self.options["syntax_highlighting_bool"] and not self.current.simple
                 else "text"
             )
+            self._sync_comment_prefix(self.current)
+            self.current.changed.emit()
             self._active_changed()
 
     def toggle_syntax(self):
