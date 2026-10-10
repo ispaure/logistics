@@ -102,6 +102,7 @@ class MainWindow(pyside.Window):
         self.dlg.statusBar().addWidget(self.toast, 1)
         self._toast_status_guard = _ToastStatusGuard(self.toast, self.dlg.statusBar())
         self._refresh_sidebar()
+        self._update_window_title()
 
     def _build_layout(self):
         central_widget = pyside.QWidget()
@@ -332,10 +333,16 @@ class MainWindow(pyside.Window):
         if self._closing and isValid(self.dlg):
             self.dlg.close()
 
+    def _update_window_title(self):
+        index = self.tabs.currentIndex()
+        name = self.tabs.tabText(index) if index >= 0 else ''
+        self.dlg.setWindowTitle(f'Logistics: {name}' if name else 'Logistics')
+
     def _tab_changed(self, _index):
         """Refresh the active page when that page exposes a refresh method."""
 
         current_widget = self.tabs.currentWidget()
+        self._update_window_title()
         self.sidebar.set_current(current_widget)
         from commonUtils.ui.workspace_menus import sync_native_menus
         document = self.documents.workspace.active_view if current_widget is self.documents else None

@@ -25,6 +25,84 @@ class GitBackendTests(unittest.TestCase):
         self.repo.run(['config', 'core.hooksPath', str(self.root / 'no-hooks')])
         self.repo.run(['symbolic-ref', 'HEAD', 'refs/heads/main'])
 
+    def test_repository_settings_save_template_remotes_and_inherit_identity(self):
+        from unittest.mock import patch
+        global_config = self.root / 'global.gitconfig'
+        global_config.write_text('[user]\n name = Inherited Author\n email = inherited@example.invalid\n')
+        with patch.dict(os.environ, {'GIT_CONFIG_GLOBAL': str(global_config)}):
+            settings = self.repo.settings()
+            local = dict(settings['local'], **{'user.name': None, 'user.email': None})
+            saved = self.repo.save_settings({'local': local, 'template_mode': 'custom',
+                'template_text': 'Summary\n\nDetails\n', 'remotes': {'origin': '/example/remote.git'}})
+            self.assertEqual(saved['template_text'], 'Summary\n\nDetails\n')
+            self.assertIsNone(saved['local']['user.name'])
+            self.assertEqual(saved['effective']['user.name'], 'Inherited Author')
+            self.assertEqual(saved['remotes'], {'origin': '/example/remote.git'})
+            self.assertEqual(self.repo.snapshot().template_text, saved['template_text'])
+            local = dict(saved['local'], **{'commit.template': ''})
+            saved = self.repo.save_settings({'local': local, 'template_mode': 'none',
+                'template_text': '', 'remotes': {}})
+            self.assertEqual(saved['template_text'], '')
+            self.assertEqual(saved['remotes'], {})
+            self.assertEqual(global_config.read_text(), '[user]\n name = Inherited Author\n email = inherited@example.invalid\n')
+
+    def test_settings_refuse_to_overwrite_external_changes(self):
+        original = self.repo.settings()
+        self.repo.remote_add('external', '/example/external.git')
+        with self.assertRaisesRegex(GitError, 'changed while the dialog was open'):
+            self.repo.save_settings({'original': original, 'local': original['local'],
+                'template_mode': 'inherit', 'template_text': '', 'remotes': {}})
+        self.assertEqual(self.repo.remote_details('external'), '/example/external.git')
+
+    def test_missing_template_does_not_prevent_opening_repository(self):
+        self.repo.run(['config', 'commit.template', str(self.root / 'missing-template')])
+        snapshot = self.repo.snapshot()
+        self.assertEqual(snapshot.template_text, '')
+        self.assertIn('Could not read commit template', snapshot.template_warning)
+
+    def test_search_history_fields_dates_and_deleted_paths(self):
+        first = self.commit('nested/special[1].txt', 'first', 'First message\n\nUnique body text')
+        self.repo.create_branch('feature/topic')
+        self.repo.run(['config', 'user.name', 'Other+Author'])
+        self.repo.run(['config', 'user.email', 'other@example.invalid'])
+        second = self.commit('new.txt', 'other', 'Second message')
+        self.repo.switch('main')
+        for query, mode, expected in [('unique body', 'Commit Message', {first}),
+                                      (first[:8], 'Commit SHA', {first}),
+                                      ('feature/topic', 'Branch', {first, second}),
+                                      ('special[1]', 'File Changes', {first}),
+                                      ('Other+Author', 'User', {second}),
+                                      ('other@example.invalid', 'User', {second})]:
+            with self.subTest(mode=mode, query=query):
+                self.assertEqual({commit.oid for commit in self.repo.search_history(query, mode)}, expected)
+        (self.repo.path / 'nested/special[1].txt').unlink()
+        self.repo.stage(['nested/special[1].txt']); self.repo.commit('Delete file')
+        deleted = self.repo.status().oid
+        self.assertEqual({c.oid for c in self.repo.search_history('special[1]', 'File Changes')}, {first, deleted})
+        self.assertEqual(self.repo.search_history('', since='2099-01-01', until='2099-12-31'), [])
+        with self.assertRaisesRegex(GitError, 'From date'):
+            self.repo.search_history('', since='2099-01-01', until='1980-01-01')
+
+    def test_hunk_stage_unstage_discard_and_stale_preview(self):
+        lines = [f'Line {i}\n' for i in range(50)]
+        self.commit('file.txt', ''.join(lines), 'Base')
+        lines[2] = 'first changed\n'; lines[40] = 'last changed\n'
+        path = self.repo.path / 'file.txt'; path.write_text(''.join(lines))
+        patch = self.repo.diff('file.txt')
+        self.repo.apply_hunk('file.txt', 0, patch)
+        staged = self.repo.diff('file.txt', staged=True)
+        self.assertIn('+first changed', staged)
+        self.assertNotIn('last changed', staged)
+        self.assertEqual(path.read_text(), ''.join(lines))
+        self.repo.apply_hunk('file.txt', 0, staged, staged=True)
+        self.assertEqual(self.repo.diff('file.txt', staged=True), '')
+        with self.assertRaisesRegex(GitError, 'changed since the preview'):
+            self.repo.apply_hunk('file.txt', 0, staged, staged=True)
+        self.repo.apply_hunk('file.txt', 1, self.repo.diff('file.txt'), discard=True)
+        self.assertIn('first changed', path.read_text())
+        self.assertNotIn('last changed', path.read_text())
+        self.assertEqual(self.repo.diff('file.txt', staged=True), '')
+
     def write(self, name='file.txt', content='one\n'):
         path = self.repo.path / name
         path.parent.mkdir(parents=True, exist_ok=True)

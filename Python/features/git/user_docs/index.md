@@ -7,8 +7,9 @@ Enable or disable it under Settings like other features.
 
 ## Get started
 
-Install **Git 2.40 or newer**. Logistics uses `git` from your PATH; **Settings**
-lets you choose another executable and checks its version. Git is supplied separately
+Install **Git 2.40 or newer**. Logistics uses `git` from your PATH; **Settings → Advanced → Git executable…**
+lets you choose another executable and checks its version. Before opening a repository,
+Settings opens that executable chooser directly. Git is supplied separately
 from Logistics.
 
 - **Open…** selects an existing working repository, including a linked worktree.
@@ -20,7 +21,7 @@ Each open repository has its own tab. Switching tabs preserves commit drafts,
 previews and operation logs. Drag horizontally to reorder, or outside the tab bar
 to detach; its toolbar and repository controls travel with it. Use **+** for a new
 pane. On narrow panes, the toolbar overflow menu keeps actions reachable.
-Recent repositories are available under **+ Repositories → Bookmarks**. **+ Repositories → Manage bookmarks…** pins or
+Recent repositories are available under **+ → Bookmarks**. **+ → Manage bookmarks…** pins or
 removes bookmarks. Open, Clone and Init are in the same menu. Removing a bookmark keeps all repository files on disk.
 Bare repositories can be remote destinations; open working repositories in the UI.
 
@@ -39,7 +40,7 @@ Binary files show an explanation instead of text.
 
 1. Check files or use **Stage file** beside the diff. **Stage all** includes untracked files and deletions.
 2. Use **Unstage** to remove selected changes from the index while keeping working files.
-3. Enter a commit subject and optional description, then **Commit staged changes**.
+3. Enter a commit subject and optional description, then **Commit**. The button is disabled until files are staged.
 4. If Git needs an author name/email, use **More… → Commit identity…**. This saves
    repository settings, shared with linked worktrees, without changing global identity.
 
@@ -56,10 +57,28 @@ need their own handling and are excluded from this action.
 **Amend last commit** replaces the branch tip. Review the confirmation before
 amending published history. Failed commits retain their message draft. Closing a repository tab or the app asks before discarding a draft.
 
+Enable **Push changes immediately to origin/{branch}** to push after a successful
+commit. This option requires an `origin` remote and an attached local branch.
+If pushing fails, the commit remains saved; retry with **Push**.
+
+The toolbar's **Commit** badge counts changed files, including untracked files.
+**Pull** and **Push** count incoming and outgoing commits against the configured
+upstream, using the last fetched remote state. **Fetch** updates that state and
+has no numeric badge. Zero counts are hidden.
+
+Each diff hunk has its own card. In File status, use **Stage Hunk** or **Unstage Hunk**
+to change only that hunk's staging, or **Discard Hunk…** to discard an unstaged hunk
+after confirmation. A changed preview must be refreshed before applying it.
+Hunk actions require a complete, unfiltered patch for an ordinary tracked text
+file; use file actions for untracked files, conflicts, renames, mode changes,
+submodules and files with content conversion filters. History and Search cards
+are read-only.
+
 ## History and branches
 
 When files have pending changes, **Uncommitted changes** appears above the commit
-history. Select it to open File status for staging and review. It disappears after
+history. Select it to review its files and diffs without leaving History. Use
+File status for staging. It disappears after
 the working tree and index become clean and the workspace refreshes.
 
 Choose **History** in the left WORKSPACE section to see the commit graph, subjects, branch/tag decorations, authors,
@@ -77,12 +96,13 @@ unstaging a file still affects all its changes. File badges identify added (+),
 modified (M), deleted (−), renamed (→), untracked (?) and conflicted (!) files.
 Use **Full tree at commit** to browse every historical file and read its contents.
 Submodule entries show the recorded child commit. File actions stage, unstage or
-discard whole files; hunk actions are a future addition.
+discard whole files.
 
 History starts with 200 commits. **Load 200 more commits** expands it up to 5,000.
-**Search** focuses the history search. The branch selector can show all loaded
-branches or only ancestors of the current branch. Search filters the loaded page by message, author, hash, or ref. The graph is hidden
-while filtering so omitted rows cannot imply false ancestry. **Find in preview**
+History’s branch selector shows all loaded branches or only ancestors of the
+current branch. Its quick filter matches loaded messages, authors, hashes and
+refs, hiding the graph so omitted rows cannot imply false ancestry. **Search**
+opens the separate repository-wide search view described below. **Find in preview**
 searches the displayed text; Enter moves to the next match.
 
 **Branch…** creates a branch at HEAD or the selected history commit and optionally
@@ -167,3 +187,34 @@ rebase editing, reset/clean, merge-tool launching, LFS management, sparse/partia
 cloning, worktree removal, and hosting-provider features are future additions.
 
 **Compare sides…** beside a pending file opens full versions (Index / Working file, or HEAD / Index for staged files) in linked, resizable panes. This review does not stage or modify files.
+
+## Repository settings and terminal
+
+Use the toolbar’s **Settings** button for the current repository. **Commit
+Template** selects inherited, disabled or custom starting text; an existing draft
+is kept. **Remotes** stages additions, URL edits and removals until OK.
+**Security** controls commit signing using your existing Git signing tools.
+**Advanced** selects inherited or repository-specific author identity, opens
+`.gitignore` in the enabled Text Editor, and offers the personal Git executable
+chooser. Local settings are shared with linked worktrees; global Git settings
+are kept. Cancel discards pending dialog changes.
+
+The toolbar’s **Terminal** opens a terminal at the root of the active repository.
+Open, Clone, Init and bookmark commands live in the repository tab’s **+** menu.
+
+## Search repository history
+
+Select **Search** in the Git sidebar. The search bar offers **Commit Message**
+(including the message body), **Commit SHA** (a full hash or prefix of at least
+four characters), **Branch** (commits reachable from matching local/remote
+branches), **File Changes** (changed filename or path text, including deleted
+paths), and **User** (author name or email). Text matches are case-insensitive.
+**From** and **To** include both endpoint days, using local time and Git commit
+timestamps. Search reads repository history rather than only the rows loaded
+in History; results load in batches of 200, up to 5,000. Very large file-path
+searches can reach the Git output limit; narrow the date range in that case.
+
+Selecting a result shows its commit details, changed files and diff below the
+results. In **History**, selecting **Uncommitted changes** stays in History and
+shows the current files and their changes against HEAD, including both staged
+and unstaged changes.

@@ -43,25 +43,56 @@ def status_icon(status):
 
 
 
-def action_icon(name):
-    pixmap = qt.QPixmap(28, 28)
-    pixmap.fill(qt.Qt.GlobalColor.transparent)
-    painter = qt.QPainter(pixmap)
+def action_icon(name, count=0):
+    # Supply native-resolution artwork rather than enlarging a 28px bitmap on Retina.
+    icon = qt.QIcon()
+    for scale in (1, 2, 3, 4):
+        pixmap = qt.QPixmap(28 * scale, 28 * scale)
+        pixmap.setDevicePixelRatio(scale)
+        pixmap.fill(qt.Qt.GlobalColor.transparent)
+        painter = qt.QPainter(pixmap)
+        _draw_action(painter, name)
+        if count:
+            label = str(count) if count < 100 else '99+'
+            width = max(11, 5 * len(label) + 4)
+            rect = qt.QRectF(28 - width, 0, width, 12)
+            painter.setPen(qt.Qt.PenStyle.NoPen)
+            painter.setBrush(qt.QColor('#216ab4'))
+            painter.drawRoundedRect(rect, 3, 3)
+            font = qt.QFont(); font.setPixelSize(9); font.setBold(True)
+            painter.setFont(font); painter.setPen(qt.QColor('white'))
+            painter.drawText(rect, qt.Qt.AlignmentFlag.AlignCenter, label)
+        painter.end()
+        icon.addPixmap(pixmap)
+    return icon
+
+
+def _draw_action(painter, name):
     painter.setRenderHint(qt.QPainter.RenderHint.Antialiasing)
-    painter.setPen(qt.QPen(qt.QColor('#36abe2'), 1.4))
+    painter.setPen(qt.QPen(qt.QColor('#36abe2'), 1.8, qt.Qt.PenStyle.SolidLine,
+                               qt.Qt.PenCapStyle.RoundCap, qt.Qt.PenJoinStyle.RoundJoin))
     def line(x1,y1,x2,y2): painter.drawLine(qt.QPointF(x1,y1), qt.QPointF(x2,y2))
     if name in ('commit','pull','push','fetch'):
         painter.drawEllipse(qt.QRectF(4,4,20,20))
-        if name == 'commit': line(9,14,19,14); line(14,9,14,19)
+        if name == 'commit': line(8,14,12,18); line(12,18,20,10)
         elif name in ('pull','push'):
             top, end = (8,20) if name == 'pull' else (20,8)
             line(14,top,14,end); line(10,end + (-4 if name == 'pull' else 4),14,end); line(18,end + (-4 if name == 'pull' else 4),14,end)
         else:
             painter.drawArc(qt.QRectF(8,8,12,12),30*16,250*16); line(20,8,20,13); line(20,13,16,12)
     elif name in ('branch','merge'):
-        line(8,6,8,22); line(8,17,20,10); line(20,10,20,6)
+        line(8,6,8,22)
+        if name == 'branch': line(8,17,20,10); line(20,10,20,6)
+        else: line(20,6,20,11); line(20,11,8,19)
         for x,y in ((8,5),(8,23),(20,5)): painter.drawEllipse(qt.QRectF(x-2,y-2,4,4))
-        if name == 'merge': line(12,14,12,19); line(12,19,17,19)
+        if name == 'merge': line(8,19,13,16); line(8,19,13,21)
+    elif name == 'template':
+        painter.drawRoundedRect(qt.QRectF(6,3,16,22),1,1)
+        for y in (9,13,17,21): line(10,y,18,y)
+    elif name == 'security':
+        painter.drawRoundedRect(qt.QRectF(6,12,16,12),2,2)
+        painter.drawArc(qt.QRectF(9,3,10,16),0,180*16)
+        line(9,10,9,12); line(19,10,19,12); line(14,16,14,20)
     elif name == 'terminal':
         painter.drawRoundedRect(qt.QRectF(3,6,22,16),2,2); line(7,10,11,14); line(11,14,7,18); line(14,18,20,18)
     elif name == 'remote':
@@ -75,11 +106,10 @@ def action_icon(name):
             line(14+7*math.cos(angle),14+7*math.sin(angle),14+11*math.cos(angle),14+11*math.sin(angle))
     elif name == 'stash':
         painter.drawRect(qt.QRectF(4,6,20,17))
-        for x,y in ((9,11),(18,11),(9,18),(18,18)): painter.drawEllipse(qt.QRectF(x-2,y-2,4,4))
+        line(4,11,24,11); line(11,15,17,15)
     else:
         for x in (7,14,21): painter.drawEllipse(qt.QRectF(x-1,13,2,2))
-    painter.end()
-    return qt.QIcon(pixmap)
+
 
 
 def toolbar_button(title, icon, callback, parent):
