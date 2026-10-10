@@ -26,13 +26,13 @@ The generic `ui_new` package owns only application-level presentation:
 
 New features expose `register() -> Feature(...)` from their package `__init__.py`.
 Import `Feature` from `features.contributions`: it extends the reusable
-`commonUtils.features.Feature` with Logistics Debug actions, folder/server/source
+`commonUtils.ui.features.Feature` with Logistics Debug actions, folder/server/source
 contributions, workflows and pages. File types and browser capabilities are declared
-on that same object. See [the commonUtils author guide](../commonUtils/FEATURES.md).
+on that same object. See [the commonUtils author guide](../commonUtils/docs/FEATURES.md).
 
 ```python
-from commonUtils.features import FileType, BrowserExtension, SelectionAction, FileActivation
-from commonUtils.dirUtils import Directory
+from commonUtils.ui.features import FileType, BrowserExtension, SelectionAction, FileActivation
+from commonUtils.filesystem.directories import Directory
 from features.contributions import Feature, WorkflowContribution
 
 def register():
@@ -162,7 +162,7 @@ does not become part of logical folder identity or filesystem layout.
 [File browser development](FILE_BROWSER.md) is the central Logistics guide for
 file types, preview panels, context menus, activation, controllers and safe closing.
 The reusable API and standalone examples live in the
-[commonUtils author guide](../commonUtils/FEATURES.md).
+[commonUtils author guide](../commonUtils/docs/FEATURES.md).
 
 ### Persistent feature controls
 
@@ -206,7 +206,7 @@ Shared background primitives live in commonUtils, while the feature owns inputs,
 password prompts, transaction boundaries and result presentation. Use
 `commonUtils.ui.operation_progress.OperationProgress` for progress/cancellation
 controls and `commonUtils.ui.operations.Operation` for simpler background callbacks.
-[Workflow recipes](../commonUtils/RECIPES.md) demonstrate both the callback contract
+[Workflow recipes](../commonUtils/docs/RECIPES.md) demonstrate both the callback contract
 and safe owner lifetimes.
 
 Capture validated inputs on the GUI thread; callbacks must not read widgets,

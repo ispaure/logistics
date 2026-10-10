@@ -6,7 +6,7 @@ from collections.abc import Iterable
 
 import config
 
-from commonUtils import configUtils
+from commonUtils.configuration import legacy as configUtils
 from models import folder_discovery
 from models.folder_entry import FolderEntry
 from models.local_folder import LocalFolder

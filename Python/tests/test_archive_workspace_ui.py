@@ -105,7 +105,7 @@ class ArchiveWorkspaceUITests(QtTestCase):
             started.set()
             while not cancelled():
                 time.sleep(.002)
-            from commonUtils.operations import check_cancelled
+            from commonUtils.runtime.operations import check_cancelled
             check_cancelled(cancelled)
         self.page._run('test', long_job, self.path)
         self.assertTrue(started.wait(1))
@@ -201,7 +201,7 @@ class ArchiveWorkspaceUITests(QtTestCase):
             started.set()
             while not cancelled():
                 time.sleep(.002)
-            from commonUtils.operations import check_cancelled
+            from commonUtils.runtime.operations import check_cancelled
             check_cancelled(cancelled)
         window.page._run('test', long_job, self.path)
         self.assertTrue(started.wait(1))
@@ -215,8 +215,8 @@ class ArchiveWorkspaceUITests(QtTestCase):
 
     def test_browser_action_opens_retained_archive_document(self):
         from features.archives import _manage
-        from commonUtils.features import ActionContext
-        from commonUtils.fileUtils import File
+        from commonUtils.ui.features import ActionContext
+        from commonUtils.filesystem.files import File
         from features.archives.ui.window import _windows
         host = qt.QWidget()
         self.addCleanup(host.deleteLater)

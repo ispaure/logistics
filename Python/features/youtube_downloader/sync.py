@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from commonUtils.debugUtils import Severity, log
+from commonUtils.runtime.diagnostics import Severity, log
 from models.local_folder import LocalFolder
 from . import detection
 

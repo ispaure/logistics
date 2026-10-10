@@ -4,9 +4,9 @@ Detection helpers for the Logistics Obsidian feature.
 
 from pathlib import Path
 from typing import List
-from commonUtils.fileUtils import File
-from commonUtils.dirUtils import Directory
-from commonUtils.debugUtils import log, Severity
+from commonUtils.filesystem.files import File
+from commonUtils.filesystem.directories import Directory
+from commonUtils.runtime.diagnostics import log, Severity
 from models.local_folder import LocalFolder
 
 

@@ -2,8 +2,8 @@
 
 from pathlib import Path
 from typing import List
-from commonUtils import fileUtils, dirUtils
-from commonUtils.debugUtils import Severity, log
+from commonUtils.filesystem import files as fileUtils, directories as dirUtils
+from commonUtils.runtime.diagnostics import Severity, log
 from features.images import processing as imageUtils
 
 tool_name = "features.comics.cbz"

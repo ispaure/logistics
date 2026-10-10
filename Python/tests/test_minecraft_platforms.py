@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from commonUtils.osUtils import OS
+from commonUtils.runtime.platform import OS
 from features.minecraft import server
 
 

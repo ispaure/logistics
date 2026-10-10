@@ -8,7 +8,7 @@ from pathlib import Path
 
 from services import software
 
-from commonUtils.osUtils import OS, get_os
+from commonUtils.runtime.platform import OS, get_os
 
 
 

@@ -3,8 +3,8 @@ Debug UI contributions exposed by Images.
 """
 
 from features.contributions import DebugActionContribution, Feature, WorkflowContribution
-from commonUtils.features import BrowserExtension, SelectionAction
-from commonUtils.dirUtils import Directory
+from commonUtils.ui.features import BrowserExtension, SelectionAction
+from commonUtils.filesystem.directories import Directory
 
 def _open_compress(context):
     from features.images.ui.dialogs import ImageCompressDialog

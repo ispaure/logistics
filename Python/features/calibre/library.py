@@ -3,8 +3,8 @@
 from pathlib import Path
 from subprocess import TimeoutExpired
 
-from commonUtils.dirUtils import Directory
-from commonUtils.debugUtils import Severity, log
+from commonUtils.filesystem.directories import Directory
+from commonUtils.runtime.diagnostics import Severity, log
 from .export import build_export_plan, execute_export_plan
 from .launching import launch_library
 

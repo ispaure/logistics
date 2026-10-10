@@ -4,7 +4,7 @@ Base model for folders managed by Logistics.
 
 from pathlib import Path
 
-from commonUtils import dirUtils
+from commonUtils.filesystem import directories as dirUtils
 
 
 class LogisticsFolder(dirUtils.Directory):

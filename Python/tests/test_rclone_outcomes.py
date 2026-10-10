@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from commonUtils.wrappers.cmdShellWrapper import CommandResult
+from commonUtils.integrations.wrappers.cmdShellWrapper import CommandResult
 from features.rclone import sync
 
 

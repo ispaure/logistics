@@ -13,7 +13,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from commonUtils.osUtils import OS
+from commonUtils.runtime.platform import OS
 from features.plex import database, packages, actions, detection
 
 

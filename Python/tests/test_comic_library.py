@@ -649,7 +649,7 @@ class SelectionEdgeTests(ComicFixture, unittest.TestCase):
 
 class GenericXMLTests(QtTestCase):
     def test_full_document_and_namespace_extensions_are_preserved(self):
-        from commonUtils.fileTypes.xmlType import XMLFile
+        from commonUtils.formats.xmlType import XMLFile
         data = (b'<?xml version="1.0"?><!--before--><?before yes?>'
                 b'<c:Record xmlns:c="urn:root" xmlns:x="urn:extra" xmlns:unused="urn:unused" '
                 b'x:kind="unused:Type"><c:Title keep="yes">Old</c:Title>'
@@ -672,7 +672,7 @@ class GenericXMLTests(QtTestCase):
             self.assertIn(preserved, result)
 
     def test_generic_file_loading_is_separate_from_lines(self):
-        from commonUtils.fileTypes.xmlType import XMLFile
+        from commonUtils.formats.xmlType import XMLFile
         with TemporaryDirectory() as temp:
             path = Path(temp) / 'record.xml'
             path.write_text('<Record><Title>Old</Title></Record>')
@@ -697,7 +697,7 @@ class GenericXMLTests(QtTestCase):
         self.assertEqual(document.month, '')
 
     def test_direct_dom_changes_are_serialized(self):
-        from commonUtils.fileTypes.xmlType import XMLFile
+        from commonUtils.formats.xmlType import XMLFile
         document = XMLFile.from_bytes(b'<Root><Item>Old</Item></Root>')
         document.xml_root.setAttribute('added', 'yes')
         self.assertEqual(ET.fromstring(document.to_bytes()).get('added'), 'yes')

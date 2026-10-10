@@ -4,7 +4,7 @@ Detection helpers for the Logistics YouTube downloader feature.
 
 from pathlib import Path, PureWindowsPath
 
-from commonUtils import configUtils
+from commonUtils.configuration import legacy as configUtils
 
 from models.local_folder import LocalFolder
 

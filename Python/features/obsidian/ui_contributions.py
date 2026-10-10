@@ -5,7 +5,7 @@ UI contributions exposed by the Logistics Obsidian feature.
 from features.obsidian import detection
 from features.contributions import Feature, FolderFeatureContribution, UIAction, WorkflowContribution
 from models.folder_entry import FolderEntry
-from commonUtils.dirUtils import Directory
+from commonUtils.filesystem.directories import Directory
 
 
 def _is_available(entry: FolderEntry) -> bool:

@@ -6,9 +6,9 @@ import stat
 from tempfile import TemporaryDirectory
 import zipfile
 
-from commonUtils import zipUtils
+from commonUtils.archives import legacy as zipUtils
 from commonUtils.archives.zip_access import validate_members, open_archive
-from commonUtils.streams import stream_signature
+from commonUtils.runtime.streams import stream_signature
 
 
 def _file_signature(snapshot):

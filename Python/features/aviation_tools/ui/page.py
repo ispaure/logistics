@@ -220,7 +220,7 @@ class DatasetBrowser(QWidget):
         self._load_dataset()
 
     def _load_dataset(self, _index=0):
-        from commonUtils.fileTypes.csvType import CSVFile
+        from commonUtils.formats.csvType import CSVFile
         path = self.dataset.currentData()
         rows = CSVFile(path).read_csv()
         self.table.clear()

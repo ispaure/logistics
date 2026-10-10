@@ -10,10 +10,10 @@ from unittest.mock import patch
 import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 
-from commonUtils.dirUtils import Directory
+from commonUtils.filesystem.directories import Directory
 from features.calibre import metadata, launching, actions, library
 from features.calibre.export import build_export_plan, execute_export_plan
-from commonUtils.osUtils import OS
+from commonUtils.runtime.platform import OS
 
 
 class CalibreExportTests(QtTestCase):

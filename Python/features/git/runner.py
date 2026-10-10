@@ -12,9 +12,7 @@ from tempfile import TemporaryFile
 from threading import Event
 from time import monotonic
 
-from commonUtils.wrappers.cmdShellWrapper.process import (
-    get_process_group_kwargs, terminate_process_tree,
-)
+from commonUtils.integrations.wrappers.cmdShellWrapper.process import get_process_group_kwargs, terminate_process_tree
 
 
 def redact(text: str) -> str:

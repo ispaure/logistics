@@ -1,9 +1,9 @@
 """Feature INI defaults layered with private, schema-compatible user preferences."""
 
 from pathlib import Path
-from commonUtils.fileTypes.iniType import INIFile
+from commonUtils.formats.iniType import INIFile
 from commonUtils.configuration.settings import get_setting
-from commonUtils.storage import cache_directory
+from commonUtils.filesystem.storage import cache_directory
 
 DEFAULTS = {
     "font_family_str": "",

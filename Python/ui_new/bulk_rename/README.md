@@ -138,7 +138,7 @@ until any rename worker has cancelled and rolled back safely.
 
 ```python
 from pathlib import Path
-from commonUtils.renameUtils import RenameRules, plan_renames, apply_renames, undo_renames
+from commonUtils.filesystem.rename import RenameRules, plan_renames, apply_renames, undo_renames
 
 rules = RenameRules(prefix='Photo_', number_mode='suffix', number_padding=3,
                     extension_mode='lower')
@@ -166,7 +166,7 @@ Invalid/stale plans raise before disk changes. Failures during a transaction ret
 Internals are separated into Qt-independent `renameUtils.py`, rule controls in
 `rules.py`, worker/UI coordination in `widget.py`, and public window/lifetime code
 in `__init__.py`. The shared engine is documented in
-[commonUtils](../../commonUtils/RENAME.md). Filtered traversal lives in `commonUtils.traversal`; transformations accept explicit `RenameMetadata` for folders and file dates without reading the filesystem.
+[commonUtils](../../commonUtils/docs/RENAME.md). Filtered traversal lives in `commonUtils.filesystem.traversal`; transformations accept explicit `RenameMetadata` for folders and file dates without reading the filesystem.
 
 ## Main-window hosting
 

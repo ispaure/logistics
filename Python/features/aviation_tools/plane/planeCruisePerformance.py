@@ -1,6 +1,6 @@
-from commonUtils import spreadsheetUtils as shUtils
-from commonUtils.fileTypes.csvType import CSVFile
-from commonUtils import logUtils
+from commonUtils.formats import spreadsheets as shUtils
+from commonUtils.formats.csvType import CSVFile
+from commonUtils.runtime import logging as logUtils
 from features.aviation_tools.mathUtils import weatherUtils
 from features.aviation_tools.mathUtils import mathStuff
 

@@ -43,7 +43,7 @@ Standalone publication prefers an exclusive hard link from the completed candida
 
 Low-level EXIF read/write behavior remains in:
 
-`commonUtils.wrappers.piexifWrapper`
+`commonUtils.integrations.wrappers.piexifWrapper`
 
 because that wrapper is reusable code and is not specific to Logistics UI behavior.
 

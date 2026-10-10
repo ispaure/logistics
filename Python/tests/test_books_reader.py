@@ -298,7 +298,7 @@ class ReaderTests(QtTestCase):
         self.assertEqual(dialog.changes()['title'], ['Revised title', 'Titre français'])
 
     def test_lazy_feature_registration_and_browser_controller(self):
-        from commonUtils.fileTypes.registry import FileTypeRegistry
+        from commonUtils.formats.registry import FileTypeRegistry
         from features.books.file_type import EPUBFile
         definition = register()
         self.assertEqual(definition.id, 'books')

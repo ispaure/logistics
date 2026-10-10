@@ -4,7 +4,7 @@ import math
 from pathlib import Path
 import sys
 
-from commonUtils.osUtils import OS
+from commonUtils.runtime.platform import OS
 
 READY_MARKER = '__LOGISTICS_RCLONE_MOUNT_READY__'
 

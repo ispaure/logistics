@@ -5,8 +5,8 @@ from pathlib import Path
 import shutil
 import sys
 
-from commonUtils.debugUtils import Severity, log
-from commonUtils.wrappers.cmdShellWrapper import run_command
+from commonUtils.runtime.diagnostics import Severity, log
+from commonUtils.integrations.wrappers.cmdShellWrapper import run_command
 from features.youtube_downloader.settings import DownloadSettings, download_arguments, find_ffmpeg
 from .sync import push_seasons, push_config, pull_config
 

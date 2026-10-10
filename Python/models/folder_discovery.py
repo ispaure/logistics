@@ -6,7 +6,7 @@ from pathlib import Path
 
 import config
 
-from commonUtils import dirUtils
+from commonUtils.filesystem import directories as dirUtils
 
 from .local_folder import LocalFolder
 

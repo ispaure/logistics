@@ -4,7 +4,7 @@ from collections import defaultdict
 import os
 from pathlib import Path
 
-from commonUtils.fileTypes.jsonType import JSONFile
+from commonUtils.formats.jsonType import JSONFile
 
 from .library import ComicDocument
 from commonUtils.archives.zip_access import is_encrypted

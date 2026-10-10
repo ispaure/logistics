@@ -1,5 +1,5 @@
 """Feature-owned EPUB type; browser activation is supplied by Books."""
-from commonUtils.fileUtils import File
+from commonUtils.filesystem.files import File
 
 
 class EPUBFile(File):

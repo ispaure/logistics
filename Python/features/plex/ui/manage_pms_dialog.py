@@ -5,7 +5,7 @@ Plex Media Server backup and restore workflow for the Logistics feature UI.
 from pathlib import Path
 
 from commonUtils import ui
-from commonUtils.osUtils import OS, get_os
+from commonUtils.runtime.platform import OS, get_os
 from commonUtils.ui import pyside
 
 from features.plex import actions, detection

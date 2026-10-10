@@ -5,8 +5,8 @@ from pathlib import Path
 import re
 from xml.etree import ElementTree
 from typing import TYPE_CHECKING, List
-from commonUtils.debugUtils import Severity, log
-from commonUtils.fileTypes import xmlType
+from commonUtils.runtime.diagnostics import Severity, log
+from commonUtils.formats import xmlType
 if TYPE_CHECKING:
     from .cbz import CBZImageFile
 

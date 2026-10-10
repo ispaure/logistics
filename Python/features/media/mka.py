@@ -8,10 +8,11 @@ MKA media file operations for the Logistics Media feature.
 from pathlib import Path
 from typing import List
 
-from commonUtils import dirUtils, fileUtils, spreadsheetUtils
-from commonUtils.debugUtils import Severity, log
-from commonUtils.fileTypes import csvType
-from commonUtils.renameUtils import RenamePlan, plan_named_renames, apply_renames
+from commonUtils.filesystem import directories as dirUtils, files as fileUtils
+from commonUtils.formats import spreadsheets as spreadsheetUtils
+from commonUtils.runtime.diagnostics import Severity, log
+from commonUtils.formats import csvType
+from commonUtils.filesystem.rename import RenamePlan, plan_named_renames, apply_renames
 
 
 TOOL_NAME = 'Batch Rename MKA from CSV'

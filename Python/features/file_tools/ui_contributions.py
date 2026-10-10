@@ -1,6 +1,6 @@
 """Folder context-menu tools owned by the File Tools feature."""
-from commonUtils.features import BrowserExtension, SelectionAction
-from commonUtils.dirUtils import Directory
+from commonUtils.ui.features import BrowserExtension, SelectionAction
+from commonUtils.filesystem.directories import Directory
 from features.contributions import Feature
 
 

@@ -1,7 +1,7 @@
 """Page-spread decisions and naturally ordered neighbouring comic files."""
 
 from pathlib import Path
-from commonUtils.dirUtils import Directory
+from commonUtils.filesystem.directories import Directory
 from .pages import natural_key
 
 SPREAD_GAP = 8

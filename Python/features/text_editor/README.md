@@ -26,7 +26,7 @@ reuses an untouched blank document or opens another pane without an extra Untitl
 buffer. Each pane retains its existing `OperationProgress` worker and
 `RecentFiles` implementation.
 
-Reusable Qt-independent file IO lives in `commonUtils.text_files`. The shared
+Reusable Qt-independent file IO lives in `commonUtils.persistence.text`. The shared
 `commonUtils.ui.code_editor` package supplies the gutter, code editing, search
 and syntax components; it imports no Logistics modules. Existing public text,
 INI, Markdown, EPUB and comic APIs retain their behavior. No file-type registry

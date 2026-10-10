@@ -7,8 +7,8 @@ Actions for the Logistics Perforce feature.
 
 import shlex
 
-from commonUtils.osUtils import OS, get_os
-from commonUtils.wrappers import cmdShellWrapper
+from commonUtils.runtime.platform import OS, get_os
+from commonUtils.integrations.wrappers import cmdShellWrapper
 
 from features.perforce import detection
 from models.local_folder import LocalFolder

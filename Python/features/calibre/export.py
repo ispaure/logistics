@@ -7,7 +7,7 @@ from pathlib import Path
 import shutil
 from tempfile import NamedTemporaryFile
 
-from commonUtils.dirUtils import Directory
+from commonUtils.filesystem.directories import Directory
 from . import metadata
 
 

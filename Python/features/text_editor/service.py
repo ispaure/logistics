@@ -14,7 +14,7 @@ class EditorService(qt.QObject):
         self.history_path = history_path
         self.preferences_path = preferences_path
         from pathlib import Path
-        from commonUtils.storage import cache_directory
+        from commonUtils.filesystem.storage import cache_directory
         from .session import EditorSession
         directory = Path(preferences_path).parent if preferences_path else cache_directory(create=False) / "TextEditor"
         self.session = EditorSession(self, directory / "sessions")

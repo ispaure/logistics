@@ -8,8 +8,8 @@ Dropbox conflicting-copy detection and cleanup for Logistics.
 from pathlib import Path
 from typing import List
 
-from commonUtils import dirUtils, fileUtils
-from commonUtils.debugUtils import Severity, log
+from commonUtils.filesystem import directories as dirUtils, files as fileUtils
+from commonUtils.runtime.diagnostics import Severity, log
 
 
 # ----------------------------------------------------------------------------------------------------------------------

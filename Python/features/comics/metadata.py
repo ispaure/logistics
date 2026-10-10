@@ -1,18 +1,19 @@
 """Transactional, line-preserving ComicInfo.xml author and series edits."""
 
 from pathlib import Path
-from commonUtils.storage import temporary_workspace
+from commonUtils.filesystem.storage import temporary_workspace
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape
 
 import config
-from commonUtils import dirUtils, zipUtils
-from commonUtils.debugUtils import Severity, log
-from commonUtils.fileTypes import txtType
+from commonUtils.filesystem import directories as dirUtils
+from commonUtils.archives import legacy as zipUtils
+from commonUtils.runtime.diagnostics import Severity, log
+from commonUtils.formats import txtType
 from .archive_io import replace_archive, validate_archive_members
 from services.zip_passwords import resolve_password
 from commonUtils.archives.zip_access import authenticate
-from commonUtils.operations import BatchResult, run_batch
+from commonUtils.runtime.operations import BatchResult, run_batch
 
 
 def get_temp_loc_edit_comicinfoxml() -> Path:

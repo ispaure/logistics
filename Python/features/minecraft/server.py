@@ -3,10 +3,12 @@ from enum import Enum
 from pathlib import Path
 import webbrowser
 
-from commonUtils import appUtils, configUtils, dirUtils, fileUtils
-from commonUtils.debugUtils import *
-from commonUtils.fileTypes import txtType
-from commonUtils.osUtils import *
+from commonUtils.integrations import applications as appUtils
+from commonUtils.configuration import legacy as configUtils
+from commonUtils.filesystem import directories as dirUtils, files as fileUtils
+from commonUtils.runtime.diagnostics import *
+from commonUtils.formats import txtType
+from commonUtils.runtime.platform import *
 
 
 class MinecraftServerType(Enum):

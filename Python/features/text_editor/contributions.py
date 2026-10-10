@@ -1,7 +1,7 @@
 """Lazy browser and page factories, independent of all media/Markdown features."""
 
-from commonUtils.features import BrowserExtension, FileActivation, SelectionAction
-from commonUtils.fileUtils import File
+from commonUtils.ui.features import BrowserExtension, FileActivation, SelectionAction
+from commonUtils.filesystem.files import File
 from commonUtils.persistence.text import is_text_path
 from features.contributions import Feature, SettingsContribution, DocumentLauncherContribution
 from pathlib import Path
@@ -32,8 +32,8 @@ def text_selection(context):
 
 
 def activate_text(context):
-    from commonUtils.fileTypes.markdownType import MarkdownFile
-    from commonUtils.fileTypes.txtType import TXTFile
+    from commonUtils.formats.markdownType import MarkdownFile
+    from commonUtils.formats.txtType import TXTFile
 
     item = context.item
     return (

@@ -6,7 +6,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from types import ModuleType
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
-from commonUtils.fileTypes.registry import file_types
+from commonUtils.formats.registry import file_types
 from features import registry
 from features.contributions import FeatureContributions
 from ui_new.pages.features import FeaturesPage

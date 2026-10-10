@@ -1,5 +1,5 @@
 """Compact reusable controls for the filename transformation pipeline."""
-from commonUtils.renameUtils import RenameRules
+from commonUtils.filesystem.rename import RenameRules
 from commonUtils.ui import pyside as qt
 
 

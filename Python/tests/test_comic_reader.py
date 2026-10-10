@@ -569,7 +569,7 @@ class FolderStatsTests(QtTestCase):
 
 class DesktopActionTests(QtTestCase):
     def test_platform_reveal_commands_and_linux_fallback(self):
-        from commonUtils.osUtils import OS
+        from commonUtils.runtime.platform import OS
         from commonUtils.ui import desktop_actions
         path = Path('/tmp/test name.cbz').absolute()
         with patch.object(desktop_actions, 'get_os', return_value=OS.MAC), patch.object(desktop_actions.subprocess, 'run') as run:

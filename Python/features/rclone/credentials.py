@@ -8,9 +8,11 @@ from tempfile import TemporaryDirectory
 
 import config
 
-from commonUtils import dirUtils, fileUtils, ui, zipUtils
-from commonUtils.debugUtils import Severity, log, print_debug_msg
-from commonUtils.fileTypes import txtType
+from commonUtils.filesystem import directories as dirUtils, files as fileUtils
+from commonUtils import ui
+from commonUtils.archives import legacy as zipUtils
+from commonUtils.runtime.diagnostics import Severity, log, print_debug_msg
+from commonUtils.formats import txtType
 
 from . import configuration
 
@@ -44,7 +46,7 @@ def get_credential_package_directories() -> tuple[Path, ...]:
     The optional Dropbox location is read-only discovery: never create it, copy
     packages, or use it as a software source.
     """
-    from commonUtils.marcUtils import get_marc_dropbox_root
+    from commonUtils.runtime.helpers import get_marc_dropbox_root
     local = config.LogisticsConfig().path_logistics_remote_cred
     dropbox = get_marc_dropbox_root() / 'Software/GIT/logistics/RemoteCredentials'
     roots = [local]

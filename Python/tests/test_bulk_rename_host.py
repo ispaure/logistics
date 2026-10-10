@@ -6,7 +6,7 @@ from time import monotonic, sleep
 from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from commonUtils.renameUtils import RenameRules
+from commonUtils.filesystem.rename import RenameRules
 from ui_new import main_window
 from ui_new.bulk_rename import open_bulk_rename
 

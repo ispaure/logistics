@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from commonUtils import renameUtils
-from commonUtils.dirUtils import Directory
+from commonUtils.filesystem import rename as renameUtils
+from commonUtils.filesystem.directories import Directory
 from features.media import mka
 
 

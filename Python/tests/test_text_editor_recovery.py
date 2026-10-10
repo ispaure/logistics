@@ -6,8 +6,8 @@ from time import monotonic, sleep
 import unittest
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
-from commonUtils.session_store import SessionStore
-from commonUtils.text_files import decode_bytes
+from commonUtils.persistence.session import SessionStore
+from commonUtils.persistence.text import decode_bytes
 from features.text_editor.document import Document
 from features.text_editor.service import EditorService
 from features.text_editor.session import document_record, load_document_record

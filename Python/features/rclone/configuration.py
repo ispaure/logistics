@@ -4,8 +4,8 @@ rclone configuration handling for the Logistics rclone feature.
 
 from pathlib import Path
 
-from commonUtils import fileUtils
-from commonUtils.fileTypes import txtType
+from commonUtils.filesystem import files as fileUtils
+from commonUtils.formats import txtType
 
 
 def get_rclone_config_dir() -> Path:

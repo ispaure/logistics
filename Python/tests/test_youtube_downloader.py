@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from commonUtils.osUtils import OS
-from commonUtils.wrappers.cmdShellWrapper import CommandResult
+from commonUtils.runtime.platform import OS
+from commonUtils.integrations.wrappers.cmdShellWrapper import CommandResult
 from features.youtube_downloader import settings, downloader, detection
 
 

@@ -6,8 +6,8 @@ import subprocess
 from pathlib import Path
 
 from commonUtils import ui
-from commonUtils.debugUtils import Severity, log
-from commonUtils.osUtils import OS, get_os
+from commonUtils.runtime.diagnostics import Severity, log
+from commonUtils.runtime.platform import OS, get_os
 from models.remote_folder import RemoteFolder
 
 from features.fuse import detection, mounts

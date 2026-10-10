@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 import unittest
 
-from commonUtils.osUtils import OS
+from commonUtils.runtime.platform import OS
 from features.fuse import mounts, commands, detection, actions, ui_contributions
 from models.folder_entry import FolderEntry
 

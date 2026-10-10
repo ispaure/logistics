@@ -8,7 +8,7 @@ import time
 import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
-from commonUtils.operations import OperationCancelled
+from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.ui import pyside as qt
 from features.file_tools import filesystem
 from features.file_tools.ui.dialogs import WeirdCharactersDialog, DeletePycDialog

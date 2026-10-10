@@ -11,12 +11,13 @@ from typing import List
 
 import config
 
-from commonUtils import dirUtils, fileUtils, linkUtils, zipUtils
-from commonUtils.debugUtils import Severity, log
-from commonUtils.wrappers import cmdShellWrapper
+from commonUtils.filesystem import directories as dirUtils, files as fileUtils, links as linkUtils
+from commonUtils.archives import legacy as zipUtils
+from commonUtils.runtime.diagnostics import Severity, log
+from commonUtils.integrations.wrappers import cmdShellWrapper
 
 from features.comics import detection
-from commonUtils.operations import run_batch
+from commonUtils.runtime.operations import run_batch
 from models.local_folder import LocalFolder
 
 

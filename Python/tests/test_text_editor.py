@@ -247,9 +247,9 @@ class TextEditorTests(QtTestCase):
     def test_feature_has_no_dependencies_and_preserves_markdown_activation(self):
         from features import registry, text_editor
         from features.text_editor.contributions import activate_text
-        from commonUtils.features import ActionContext
-        from commonUtils.fileTypes.markdownType import MarkdownFile
-        from commonUtils.fileUtils import File
+        from commonUtils.ui.features import ActionContext
+        from commonUtils.formats.markdownType import MarkdownFile
+        from commonUtils.filesystem.files import File
 
         self.assertEqual(registry.get_feature_dependencies(text_editor), ())
         path = self.root / "note.md"
@@ -349,8 +349,8 @@ class TextEditorTests(QtTestCase):
     def test_real_browser_activation_and_disable_reenable_reuse_buffers(self):
         from features.text_editor import register
         from features.text_editor.service import EditorService
-        from commonUtils.fileUtils import File
-        from commonUtils.fileTypes.markdownType import MarkdownFile
+        from commonUtils.filesystem.files import File
+        from commonUtils.formats.markdownType import MarkdownFile
         from ui_new.file_browser import FileBrowserWindow
         from features import registry
 

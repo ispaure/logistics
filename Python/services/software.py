@@ -4,9 +4,9 @@ import json
 from pathlib import Path
 
 import config
-from commonUtils.streams.downloads import DownloadSpec
-from commonUtils.fileTypes.iniType import INIFile
-from commonUtils.osUtils import Arch, OS, get_arch, get_os
+from commonUtils.runtime.streams.downloads import DownloadSpec
+from commonUtils.formats.iniType import INIFile
+from commonUtils.runtime.platform import Arch, OS, get_arch, get_os
 
 
 MANIFEST_PATH = Path(__file__).resolve().parents[1] / 'software_manifest.json'
