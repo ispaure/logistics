@@ -73,6 +73,11 @@ the graph above a files/metadata pane and the preview. The same CodeEdit preview
 moves between hosts, keeping a single selection/search implementation. Content uses
 a font one point smaller than the host; the toolbar retains the host font. Compact
 row spacing follows Qt font metrics, and controls inherit the application theme.
+Changed files appear as flat repository-relative paths with their own filename
+filter. Commit metadata shows the message and linked parent hashes; following a
+parent focuses it in history, loading additional history when necessary (up to
+5,000 commits). The local CodeEdit subclass adds old/new line numbers and visible
+hunk/addition/deletion bands, while keeping ordinary blob previews unchanged.
 
 Commit file lists use NUL-delimited first-parent comparisons, including root
 commits and deletions; full historical trees remain available separately. File
