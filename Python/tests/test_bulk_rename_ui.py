@@ -119,7 +119,7 @@ class BulkRenameWidgetTests(QtTestCase):
         self.wait_idle()
         self.wait_folder_visible(parent)
         self.assertEqual(self.widget.directory, parent)
-        self.assertTrue(self.widget.folder_tree.isExpanded(unrelated_index))
+        self.assertTrue(self.widget.folder_tree.isExpanded(self.widget.folder_model.index(str(unrelated))))
 
     def test_empty_folder_stays_visible_and_async_loads_do_not_reopen_collapsed_branches(self):
         empty = self.root / 'Empty'
