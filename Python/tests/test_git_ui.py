@@ -49,11 +49,12 @@ class GitUITests(QtTestCase):
 
     def wait(self, timeout=10):
         deadline = monotonic() + timeout
-        while self.page.busy:
-            self.assertLess(monotonic(), deadline, 'Git worker did not finish')
+        while True:
             self.app.processEvents()
+            if not self.page.busy and not self.page.file_timer.isActive() and not self.page._refresh_pending:
+                break
+            self.assertLess(monotonic(), deadline, 'Git worker did not finish')
             sleep(.005)
-        self.app.processEvents()
 
     def open(self):
         self.page.open_repository(self.repo.path)

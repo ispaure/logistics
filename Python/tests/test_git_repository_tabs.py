@@ -32,10 +32,13 @@ class GitRepositoryTabsTests(QtTestCase):
 
     def wait(self, timeout=10):
         deadline = monotonic() + timeout
-        while any(dock.widget().busy for dock in self.page.workspace.docks):
+        while True:
+            self.app.processEvents()
+            if not any(dock.widget().busy or dock.widget().file_timer.isActive() or dock.widget()._refresh_pending
+                       for dock in self.page.workspace.docks):
+                break
             self.assertLess(monotonic(), deadline)
-            self.app.processEvents(); sleep(.005)
-        for _ in range(5): self.app.processEvents()
+            sleep(.005)
 
     def test_repository_panes_keep_drafts_controls_and_reordered_identity(self):
         first = self.page.open_repository(self.first_path); self.wait()
