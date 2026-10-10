@@ -136,9 +136,10 @@ class DocumentsPage(qt.QWidget):
             return
         dock = record['dock']
         if isValid(window):
-            window.setParent(None, record['flags'])
-            if record['native'] is not None:
-                window.menuBar().setNativeMenuBar(record['native'])
+            # Closed readers stay as hidden children while workers retire. Restoring
+            # a native window/menu here races Cocoa's pending menu destruction.
+            window.hide()
+            window.setParent(self, qt.Qt.WindowType.Widget)
         record['container'] = record['dock'] = None
         dock.hide()
         if dock in self.workspace.docks:
