@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .archive_io import archive_unchanged
 from .library import ComicDocument
-from commonUtils.zip_access import ArchivePasswordError
+from commonUtils.archives.zip_access import ArchivePasswordError
 
 
 def normalize_targets(targets):

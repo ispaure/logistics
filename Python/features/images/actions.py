@@ -66,7 +66,7 @@ def compress_folders(target_dirs, *, recursive=True, always_keep_compressed=Fals
                      cancelled=lambda: False):
     """Cancellable folder workflow with per-image outcomes and system-folder policy."""
     from commonUtils.operations import run_batch
-    from commonUtils.traversal import scan_directory, natural_path_key
+    from commonUtils.filesystem.traversal import scan_directory, natural_path_key
     from services.folder_safety import require_safe_folder
     if not processing.validate_compression_options(always_keep_compressed, preserve_animated_and_multipage_originals):
         raise ValueError('Preserve originals and always keep compressed images cannot be combined')

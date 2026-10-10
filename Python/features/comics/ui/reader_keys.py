@@ -1,7 +1,7 @@
 """Window-scoped navigation with a steady hold cadence independent of OS repeats."""
 
 from commonUtils.ui import pyside as qt
-from commonUtils.settings import get_wheel_navigation_settings
+from commonUtils.configuration.settings import get_wheel_navigation_settings
 from commonUtils.ui.page_wheel import PageWheel
 from shiboken6 import isValid
 

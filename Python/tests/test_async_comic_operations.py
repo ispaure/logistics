@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from PIL import Image
 from commonUtils.ui import pyside as qt
-from commonUtils.zip_access import create_archive, open_archive, archive_manifest, is_encrypted
+from commonUtils.archives.zip_access import create_archive, open_archive, archive_manifest, is_encrypted
 from commonUtils.operations import OperationCancelled, BatchResult
 from features.comics import cbz, archive_io
 from features.comics.ui.dialogs import CompressCbzDialog, ComicAuthorDialog, ComicSeriesDialog, ConvertCbrDialog, CbzIndividualFoldersDialog

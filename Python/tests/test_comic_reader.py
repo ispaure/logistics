@@ -107,7 +107,7 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
                 qt.Qt.KeyboardModifier.NoModifier, qt.Qt.ScrollPhase.ScrollUpdate, False)
             self.app.sendEvent(reader.canvas, event)
             self.wait_reader(reader)
-        with patch('commonUtils.settings.settings_path', return_value=path):
+        with patch('commonUtils.configuration.settings.settings_path', return_value=path):
             with patch('commonUtils.ui.page_wheel.monotonic', return_value=10):
                 wheel(pixel=-3)
                 self.assertEqual(reader.page, 0)
@@ -131,7 +131,7 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
         reader = self.native_reader()
         path = self.root / 'settings.ini'
         path.write_text('[WheelNavigation]\nimmediate_notches=false\nsensitivity=1\n')
-        with patch('commonUtils.settings.settings_path', return_value=path), patch(
+        with patch('commonUtils.configuration.settings.settings_path', return_value=path), patch(
                 'commonUtils.ui.page_wheel.monotonic', return_value=10):
             for expected in (0, 1):
                 event = qt.QWheelEvent(qt.QPointF(), qt.QPointF(), qt.QPoint(), qt.QPoint(0, -60),

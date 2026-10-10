@@ -8,7 +8,7 @@ import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
-from commonUtils.zip_access import archive_manifest, open_archive
+from commonUtils.archives.zip_access import archive_manifest, open_archive
 from services.zip_passwords import clear_passwords
 from features.archives.ui.create_zip import CreateZipDialog
 

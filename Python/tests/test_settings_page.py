@@ -72,7 +72,7 @@ class SettingsPageTests(QtTestCase):
                 page.sidebar.setCurrentItem(item)
                 self.assertIs(page.stack.currentWidget().stack.currentWidget(), editor)
                 self.assertTrue(editor.save())
-                from commonUtils.settings import get_wheel_navigation_settings
+                from commonUtils.configuration.settings import get_wheel_navigation_settings
                 self.assertEqual(get_wheel_navigation_settings(path=path).sensitivity, 10)
 
     def test_configuration_file_switch_retains_unsaved_edits(self):

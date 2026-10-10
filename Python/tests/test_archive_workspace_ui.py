@@ -158,7 +158,7 @@ class ArchiveWorkspaceUITests(QtTestCase):
     def test_image_preview_displays_and_does_not_force_large_panel(self):
         from io import BytesIO
         from PIL import Image
-        from commonUtils.zip_access import open_archive
+        from commonUtils.archives.zip_access import open_archive
         image = BytesIO()
         Image.new('RGB', (1600, 900), 'orange').save(image, 'PNG')
         path = self.root / 'image.zip'

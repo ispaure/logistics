@@ -5,7 +5,7 @@ from pathlib import Path
 from commonUtils.persistence import atomic_write_json
 
 from commonUtils.storage import cache_directory
-from commonUtils.settings import get_setting
+from commonUtils.configuration.settings import get_setting
 
 THEMES = {'light': ('#ffffff', '#202124'), 'dark': ('#111111', '#eeeeee'),
           'sepia': ('#f4ecd8', '#46392c'), 'slate': ('#202630', '#dde5ee')}

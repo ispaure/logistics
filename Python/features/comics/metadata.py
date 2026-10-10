@@ -11,7 +11,7 @@ from commonUtils.debugUtils import Severity, log
 from commonUtils.fileTypes import txtType
 from .archive_io import replace_archive, validate_archive_members
 from services.zip_passwords import resolve_password
-from commonUtils.zip_access import authenticate
+from commonUtils.archives.zip_access import authenticate
 from commonUtils.operations import BatchResult, run_batch
 
 

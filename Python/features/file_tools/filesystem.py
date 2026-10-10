@@ -153,7 +153,7 @@ def cleanup_pyc_files(target_dir, recursive=True, *, cancelled=lambda: False,
 
 
 def _scan_targets(target_dirs, **options):
-    from commonUtils.traversal import scan_directory, natural_path_key
+    from commonUtils.filesystem.traversal import scan_directory, natural_path_key
     if isinstance(target_dirs, (str, Path)):
         target_dirs = (target_dirs,)
     paths = set()

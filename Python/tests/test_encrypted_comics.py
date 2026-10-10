@@ -10,7 +10,7 @@ import zipfile
 import pyzipper
 from PIL import Image
 
-from commonUtils.zip_access import ArchivePasswordError, archive_manifest, open_archive, is_encrypted
+from commonUtils.archives.zip_access import ArchivePasswordError, archive_manifest, open_archive, is_encrypted
 from features.comics.cbz import CBZFile, compress_selected_cbz
 from features.comics.library import ComicDocument
 from features.comics.pages import ComicPages

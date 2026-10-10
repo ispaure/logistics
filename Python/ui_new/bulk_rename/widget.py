@@ -10,7 +10,7 @@ from commonUtils.ui.operation_progress import OperationProgress
 from commonUtils.ui.file_browser.controls import navigation_button
 from commonUtils.filesystem import format_size
 from commonUtils.renameUtils import RenameRules, plan_renames, apply_renames, undo_renames
-from commonUtils.traversal import natural_path_key, scan_directory
+from commonUtils.filesystem.traversal import natural_path_key, scan_directory
 from .rules import RenameRuleControls
 from .preview import RenamePreviewDelegate, preview_tooltip
 

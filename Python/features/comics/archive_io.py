@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 import zipfile
 
 from commonUtils import zipUtils
-from commonUtils.zip_access import validate_members, open_archive
+from commonUtils.archives.zip_access import validate_members, open_archive
 from commonUtils.streams import stream_signature
 
 

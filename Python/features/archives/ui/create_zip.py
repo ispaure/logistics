@@ -5,7 +5,7 @@ from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.operation_progress import OperationProgress
 from commonUtils.operations import OperationCancelled
-from commonUtils.zip_access import create_archive, password_bytes
+from commonUtils.archives.zip_access import create_archive, password_bytes
 from services.zip_passwords import configured_password
 from services.password_prompt import confirmed_password
 
