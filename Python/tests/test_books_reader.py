@@ -18,6 +18,9 @@ from features.books.preferences import ReadingState
 class ReaderTests(unittest.TestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
+        standalone_host = patch.object(self.app, "_commonutils_document_host", None, create=True)
+        standalone_host.start()
+        self.addCleanup(standalone_host.stop)
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.folder = Path(self.temp.name)
@@ -60,6 +63,20 @@ class ReaderTests(unittest.TestCase):
         QTest.keyClick(self.page.query, qt.Qt.Key.Key_Right)
         self.assertEqual(self.page.query.cursorPosition(), 2)
 
+
+    def test_book_progress_knob_is_visible_above_track_and_minor_markers_are_shorter(self):
+        from features.books.progress import BookProgress
+        track = BookProgress(); track.resize(212, 20)
+        palette = track.palette()
+        palette.setColor(qt.QPalette.ColorRole.Window, qt.QColor('white'))
+        palette.setColor(qt.QPalette.ColorRole.Highlight, qt.QColor('#2266ee'))
+        track.setPalette(palette); track.setAutoFillBackground(True)
+        track.setEnabled(True); track.fraction = .5
+        image = track.grab().toImage()
+        self.assertEqual(image.pixelColor(106, 6), qt.QColor('#2266ee'))
+        self.assertEqual(track._marker_height(1), 10)
+        self.assertLess(track._marker_height(2), track._marker_height(1))
+        track.deleteLater()
 
     def test_book_track_has_nested_markers_and_click_seeks_to_another_chapter(self):
         from PySide6.QtTest import QTest

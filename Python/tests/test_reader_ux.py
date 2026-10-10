@@ -58,6 +58,16 @@ class ReaderUXTests(unittest.TestCase):
             self.comic.close()
             self.app.processEvents()
 
+    def test_reader_controls_keep_file_open_in_menu_and_compact_page_margins(self):
+        self.assertTrue(self.book.open_button.isHidden())
+        self.assertTrue(self.comic.controls.open_button.isHidden())
+        self.assertTrue(self.book.menus.open_action.isEnabled())
+        self.assertTrue(self.comic.menus.shared.open_action.isEnabled())
+        for controls in (self.book, self.comic.controls):
+            margins = controls.layout().contentsMargins()
+            self.assertEqual((margins.top(), margins.bottom()), (2, 3))
+            self.assertEqual(controls.layout().spacing(), 4)
+
     def test_open_dialogs_and_recent_files_are_format_specific(self):
         self.assertEqual(self.book.menus.open_action.text(), 'Open EPUB…')
         with patch.object(qt.QFileDialog, 'getOpenFileName', return_value=('', '')) as dialog:
