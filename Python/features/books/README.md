@@ -25,6 +25,8 @@ See the [user guide](user_docs/index.md) for reading controls, settings and back
   `commonUtils.ui.reader_chrome` supplies palette-aware icons, uniform controls,
   elided titles/status and native fullscreen state synchronization. Navigation
   and format-specific controls remain in their own reader modules.
+  Shared read-aloud controls start at the top of the visible EPUB page, highlight
+  the current word and provide approximate 15-second backward/forward jumps.
 - `text_view.py`: screen-height QTextDocument pagination with discrete arrow-key
   turns. The hidden scrollbar represents page offsets, including a short final
   page. Saved locations use a UTF-16 document offset within the spine chapter;

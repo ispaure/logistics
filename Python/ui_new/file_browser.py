@@ -102,19 +102,7 @@ class BrowserView(_BrowserHost, qt.QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         self.drive_selector = None
         if filesystem_scope and sys.platform == 'win32':
-            controls = qt.QHBoxLayout()
-            self.drive_selector = qt.QComboBox()
-            self.drive_selector.setAccessibleName('Browse drive')
-            self.drive_selector.setToolTip('Choose the drive to browse')
-            for info in qt.QDir.drives():
-                path = info.absoluteFilePath()
-                self.drive_selector.addItem(path, str(Path(path)))
-            self.drive_selector.setCurrentIndex(self.drive_selector.findData(str(Path(initial.anchor))))
-            self.drive_selector.currentIndexChanged.connect(lambda index: self._open_location(
-                self.drive_selector.itemData(index)) if index >= 0 else None)
-            controls.addWidget(self.drive_selector)
-            controls.addStretch()
-            layout.addLayout(controls)
+            self.file_browser.navigation.breadcrumbs.enable_drive_menu(self._open_location)
         self.folder_sizes = qt.QCheckBox('Background indexing', self)
         self.folder_sizes.setToolTip('Pause or resume this tab’s indexing subscription. Cached search and sizes stay available; other tabs may continue indexing.')
         self.folder_sizes.setChecked(True)

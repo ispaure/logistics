@@ -1,5 +1,6 @@
 """Compact destination rail with on-demand tools and document lists."""
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.icons import set_painted_icon
 
 
 class DestinationIcon(qt.QIconEngine):
@@ -110,7 +111,7 @@ class DestinationRail(qt.QWidget):
 
     def _button(self, key, title):
         button = ActivityButton(self) if key == 'actions' else qt.QToolButton(self)
-        button.setIcon(qt.QIcon(DestinationIcon(key)))
+        set_painted_icon(button, DestinationIcon, key)
         button.setIconSize(qt.QSize(26, 26))
         button.setFixedSize(46, 42)
         button.setCheckable(True)

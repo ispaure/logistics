@@ -1,9 +1,10 @@
 """Reader menus and visual controls; loading and navigation remain in the window."""
+from commonUtils.ui.icons import set_painted_icon
 
 from commonUtils.ui import pyside as qt
 from .reader_pages import PageCanvas
 from commonUtils.ui.reader_menus import ReaderMenus as SharedReaderMenus
-from commonUtils.ui.reader_chrome import ReaderLabel, ReaderFullscreen, reader_button, reader_icon, READER_MARGINS, READER_SPACING
+from commonUtils.ui.reader_chrome import ReaderLabel, ReaderFullscreen, ReaderIcon, reader_button, READER_MARGINS, READER_SPACING
 
 
 class ReaderControls(qt.QWidget):
@@ -85,8 +86,8 @@ class ReaderControls(qt.QWidget):
                                   'previous-file', 'next-file')
 
     def _set_direction_icons(self, previous, following, rtl, backward_icon, forward_icon):
-        previous.setIcon(reader_icon(forward_icon if rtl else backward_icon))
-        following.setIcon(reader_icon(backward_icon if rtl else forward_icon))
+        set_painted_icon(previous, ReaderIcon, forward_icon if rtl else backward_icon)
+        set_painted_icon(following, ReaderIcon, backward_icon if rtl else forward_icon)
 
     def show_progress(self, start, displayed, count):
         end = displayed[-1]
