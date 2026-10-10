@@ -114,8 +114,19 @@ worker ownership, shutdown retries, drafts, editor reuse, and sidebar ordering.
 
 ## Next increments
 
-Hunk staging, side-by-side diffs, interactive rebase, external merge-tool launching,
+Hunk staging, interactive rebase editing, external merge-tool launching,
 reset/clean previews, sparse/partial clones, LFS controls, graph refinement, and
 hosting-provider integration remain separate follow-ups. Background remote fetch
 and automatic filesystem polling are not enabled. Refresh on destination entry,
 after operations, after integrated editor saves, or explicitly with Refresh.
+
+## Shared diff and merge UI
+
+Pending files offer **Compare sides…** using full text snapshots. Conflict files
+open **Resolve conflict…** on double-click or from their context menu. The Git
+adapter reads ancestor/local/incoming blobs from index stages, rejects truncated
+or unsuitable inputs, and uses commonUtils' merge model/widget. Apply performs a
+conflict-checked atomic save, optionally stages the result, and refreshes Git state.
+Binary, delete/modify, symlink, submodule and conversion-filter conflicts retain
+manual handling. `preview.py` imports its shared renderer from
+`commonUtils.ui.code_editor.diff_bands`; Git patch parsing stays in `diff_view.py`.

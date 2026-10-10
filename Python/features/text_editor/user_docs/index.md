@@ -133,7 +133,7 @@ Commands and search follow the focused view. **Single View** removes the extra v
 **Compare → Compare with Disk / Another File** opens a read-only side-by-side view
 and a unified diff. Previous/Next visits changes. **Use Left Change** copies the
 selected disk/file change into your buffer in one undo step; it never saves the
-file. Reopen comparison after applying a change. Applying changes is blocked if the
+file. The comparison refreshes after each applied change. Applying changes is blocked if the
 buffer changed after comparison. The disk-change banner also offers Compare.
 Comparison is limited to 1 MiB and 5,000 lines per side.
 
@@ -142,3 +142,12 @@ shortcuts. **Configure Shortcuts…** saves bindings globally for editor panes,
 rejects conflicting bindings and offers Restore Defaults. Clear a binding in the
 shortcut field to remove it. Shortcut choices are saved separately from normal
 editor preferences.
+
+### Merge changes from disk
+
+When another application edits an open file, choose **Merge…** in the notice or
+**Compare → Merge Disk Changes…**. The editor buffer is on the left, the disk file
+on the right, and the result in the center. Apply non-conflicting changes, then
+choose either side for conflicts or edit the result and mark that change resolved.
+Use Undo/Redo to revise choices. Apply puts the result in your buffer; save when
+ready. If the buffer or disk changes during review, reopen the merge.

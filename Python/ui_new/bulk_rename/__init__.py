@@ -1,6 +1,15 @@
 """Reusable bulk rename widget/window. Requires an existing QApplication."""
 from commonUtils.ui import pyside as qt
 from .widget import BulkRenameWidget
+import weakref
+
+_host = None
+
+
+def register_bulk_rename_host(callback):
+    global _host
+    _host = weakref.WeakMethod(callback)
+
 
 
 class BulkRenameWindow(qt.QMainWindow):
@@ -68,8 +77,14 @@ class BulkRenameWindow(qt.QMainWindow):
 _windows = set()
 
 
-def open_bulk_rename(directory=None, *, paths=(), parent=None):
+def open_bulk_rename(directory=None, *, paths=(), parent=None, standalone=False):
     """Open a retained window for a directory, or just the explicitly supplied paths."""
+    if not standalone and _host is not None:
+        callback = _host()
+        if callback is not None:
+            from shiboken6 import isValid
+            if isValid(callback.__self__.dlg):
+                return callback(directory, paths=paths)
     window = BulkRenameWindow(directory, parent, paths=paths)
     _windows.add(window)
     window.destroyed.connect(lambda: _windows.discard(window))
@@ -84,7 +99,17 @@ def bulk_rename_actions(selected, context):
         return ()
     def run(ctx):
         window = open_bulk_rename(paths=[item.path for item in ctx.selection], parent=ctx.widget.window())
-        window.renamer.renamed.connect(lambda receipt: ctx.browser.refresh())
+        renamer = window if isinstance(window, BulkRenameWidget) else window.renamer
+        browsers = getattr(renamer, "_refresh_browsers", None)
+        if not isinstance(browsers, weakref.WeakSet):
+            browsers = renamer._refresh_browsers = weakref.WeakSet()
+            def refresh(receipt):
+                from shiboken6 import isValid
+                for browser in tuple(browsers):
+                    if not isinstance(browser, qt.QObject) or isValid(browser):
+                        browser.refresh()
+            renamer.renamed.connect(refresh)
+        browsers.add(ctx.browser)
         return window
     return (BrowserAction('bulk.rename', 'Bulk Rename…', run, source='Files', category='rename', order=10),)
 

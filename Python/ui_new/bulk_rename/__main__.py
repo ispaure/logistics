@@ -12,7 +12,7 @@ def main():
     parser.add_argument('--paths', nargs='+', type=Path, help='Start with only these explicitly selected paths')
     args = parser.parse_args()
     app = qt.QApplication.instance() or qt.QApplication(sys.argv[:1])
-    window = open_bulk_rename(args.directory or (None if args.paths else Path.cwd()), paths=args.paths or ())
+    window = open_bulk_rename(args.directory or (None if args.paths else Path.cwd()), paths=args.paths or (), standalone=True)
     window.show()
     return app.exec()
 

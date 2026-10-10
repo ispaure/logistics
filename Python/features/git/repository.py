@@ -40,6 +40,20 @@ class Snapshot:
     submodule_paths: tuple[str, ...] = ()
 
 
+
+@dataclass(frozen=True)
+class ConflictInputs:
+    path: Path
+    relative_path: str
+    index_state: bytes
+    base: str
+    left: str
+    right: str
+    working: object
+    existed: bool
+    operation: str
+
+
 class Repository:
     def __init__(self, path, runner=None):
         self.path = Path(path).expanduser().absolute()
@@ -328,6 +342,101 @@ class Repository:
         args = ['subtree', action, f'--prefix={prefix}', remote_url(url), argument(branch)]
         if squash and action != 'push': args.append('--squash')
         return self.run(args, timeout=1800)
+
+
+    def _check_text_attributes(self, relative_path):
+        attrs = self.run(['check-attr', '-z', 'filter', 'working-tree-encoding', '--', relative_path]).stdout.split(b'\0')
+        if any(attrs[i] not in (b'unspecified', b'unset') for i in range(2, len(attrs)-1, 3)):
+            raise GitError('This file uses a Git conversion filter or working-tree encoding; use its configured merge tool or unified preview.')
+
+    def comparison_inputs(self, relative_path, *, staged=False):
+        """Read full text snapshots for review; never reconstruct files from a patch."""
+        from commonUtils.persistence.text import decode_bytes, read_text_file
+        from commonUtils.text_merge import bounded
+        root = self.root().resolve()
+        path = root / relative_path
+        if path.is_symlink() or not path.resolve().is_relative_to(root):
+            raise GitError('Comparison supports regular text files within the repository.')
+        self._check_text_attributes(relative_path)
+        entries = self.run(['ls-files', '--stage', '-z', '--', relative_path]).stdout.split(b'\0')
+        index = ''
+        for entry in filter(None, entries):
+            metadata, _, name = entry.partition(b'\t')
+            mode, oid, stage = metadata.split()
+            if stage != b'0' or mode not in (b'100644', b'100755'):
+                raise GitError('Use Resolve conflict for unmerged files; submodules and symlinks use the unified preview.')
+            data = self.run(['cat-file', 'blob', oid.decode('ascii')], limit=1024*1024)
+            if data.truncated: raise GitError('Comparison exceeds the 1 MiB limit.')
+            index = decode_bytes(data.stdout).text
+        if staged:
+            head = ''
+            if self.status().oid != '(initial)':
+                tree = self.run(['ls-tree', '-z', 'HEAD', '--', relative_path]).stdout
+                if tree:
+                    metadata = tree.split(b'\t', 1)[0]
+                    mode, kind, oid = metadata.split()
+                    if mode not in (b'100644', b'100755'): raise GitError('Use the unified preview for this file type.')
+                    data = self.run(['cat-file', 'blob', oid.decode('ascii')], limit=1024*1024)
+                    if data.truncated: raise GitError('Comparison exceeds the 1 MiB limit.')
+                    head = decode_bytes(data.stdout).text
+            left, right = head, index
+        else:
+            left, right = index, read_text_file(path).text if path.exists() else ''
+        bounded(left); bounded(right)
+        return left, right
+
+    def conflict_inputs(self, relative_path):
+        from commonUtils.persistence.text import decode_bytes, read_text_file, TextSnapshot
+        root = self.root().resolve()
+        path = root / relative_path
+        if path.is_symlink() or not path.resolve().is_relative_to(root):
+            raise GitError('Merge supports regular files within the repository.')
+        state = self.run(['ls-files', '--unmerged', '-z', '--', relative_path]).stdout
+        stages = {}
+        for record in state.split(b'\0'):
+            if not record:
+                continue
+            metadata, _, name = record.partition(b'\t')
+            mode, oid, stage = metadata.split()
+            if mode not in (b'100644', b'100755'):
+                raise GitError('Resolve symbolic links and submodules with Git or the file browser.')
+            stages[int(stage)] = oid.decode('ascii')
+        if not stages:
+            raise GitError('This file no longer has unresolved index entries. Refresh the repository.')
+        if 2 not in stages or 3 not in stages:
+            raise GitError('This is a delete/modify conflict. Choose whether to keep or delete the file with Git, then stage it.')
+        self._check_text_attributes(relative_path)
+        texts = []
+        for stage in (1, 2, 3):
+            if stage not in stages:
+                texts.append(''); continue
+            result = self.run(['cat-file', 'blob', stages[stage]], limit=1024*1024)
+            if result.truncated:
+                raise GitError('Merge input exceeds the 1 MiB limit.')
+            texts.append(decode_bytes(result.stdout).text)
+        working = read_text_file(path) if path.exists() else TextSnapshot(path, b'', '')
+        return ConflictInputs(path, relative_path, state, *texts, working, path.exists(), self.operation())
+
+
+    def save_conflict(self, inputs, text, *, stage=False):
+        from commonUtils.persistence.text import write_text_file
+        from commonUtils.text_merge import bounded
+        bounded(text)
+        self._check_text_attributes(inputs.relative_path)
+        root = self.root().resolve()
+        if inputs.path.is_symlink() or not inputs.path.resolve().is_relative_to(root):
+            raise GitError("The working file location changed. Reopen the merge.")
+        current = self.run(['ls-files', '--unmerged', '-z', '--', inputs.relative_path]).stdout
+        if current != inputs.index_state:
+            raise GitError('The Git conflict changed. Reopen the merge before applying.')
+        content = inputs.working.encode(text)
+        write_text_file(inputs.path, content, expected=inputs.working.original if inputs.existed else None)
+        if stage:
+            current = self.run(['ls-files', '--unmerged', '-z', '--', inputs.relative_path]).stdout
+            if current != inputs.index_state or inputs.path.read_bytes() != content:
+                raise GitError('Result saved, but the file or index changed before staging. Review it and stage manually.')
+            self.stage([inputs.relative_path])
+        return inputs.path
 
 
 def clone(url, destination, runner=None, recursive=False, branch=''):

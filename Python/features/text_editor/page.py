@@ -16,6 +16,9 @@ class TextEditorPage(qt.QWidget):
         description = qt.QLabel(
             "Edit scripts, configuration, Markdown and other text in an independent window. Documents share tabs across all Logistics browsers."
         )
+        from .preferences import Preferences
+        from ui_new.settings.storage import StorageNotice
+        layout.addWidget(StorageNotice(Preferences().path, self, scope="personal"))
         description.setWordWrap(True)
         button = qt.QPushButton("Open Text Editor")
         button.clicked.connect(lambda: self.service.open())

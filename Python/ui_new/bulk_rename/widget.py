@@ -45,6 +45,7 @@ class BulkRenameWidget(qt.QWidget):
         self._pending_preview = False
         self._items = {}
         self._closing = False
+        self._pending_inputs = None
         self._folder_reveal_pending = None
         self._loaded_tree_directories = set()
         self._tree_anchor = self.directory.anchor
@@ -196,9 +197,45 @@ class BulkRenameWidget(qt.QWidget):
         self.preview_timer.timeout.connect(self._preview)
         self._update_actions()
         if paths:
-            qt.QTimer.singleShot(0, lambda: self._load_paths(paths))
+            qt.QTimer.singleShot(0, lambda: self._load_paths(paths) if self._generation == 0 else None)
         else:
-            qt.QTimer.singleShot(0, lambda: self.load_directory(self.directory))
+            qt.QTimer.singleShot(0, lambda: self.load_directory(self.directory) if self._generation == 0 else None)
+
+    def set_inputs(self, directory=None, *, paths=()):
+        """Replace the candidates while retaining all rule/filter controls.
+
+        Latest request wins. Disk writes finish before the view is replaced.
+        """
+        paths = tuple(Path(path).absolute() for path in paths)
+        self._pending_inputs = (directory, paths)
+        self.preview_timer.stop()
+        self._pending_preview = False
+        self.plan = None
+        self._generation += 1
+        self.rename_button.setEnabled(False)
+        if self.progress.busy:
+            if self._state in ('scan', 'preview'):
+                self.progress.request_cancel()
+            return
+        self._replace_inputs()
+
+    def _replace_inputs(self):
+        directory, paths = self._pending_inputs
+        self._pending_inputs = None
+        self.receipt = None
+        self.table.clear(); self._items = {}
+        if paths:
+            self.directory = paths[0].parent
+            self.path_edit.setText(str(self.directory))
+            self._load_paths(paths)
+        else:
+            self.load_directory(directory or self.directory)
+
+    def prepare_close(self):
+        self._pending_preview = False
+        self._pending_inputs = None
+        self.preview_timer.stop()
+        return self.can_close()
 
     def selected_paths(self):
         return tuple(item.data(0, qt.Qt.ItemDataRole.UserRole) for item in self.table.selectedItems())
@@ -435,6 +472,9 @@ class BulkRenameWidget(qt.QWidget):
                     self.receipt = None
                 self.renamed.emit(result)
                 self.status.setText(message)
+        if self._pending_inputs is not None and not self._closing:
+            self._replace_inputs()
+            return
         if self._pending_preview:
             self._pending_preview = False
             self.preview_timer.start()

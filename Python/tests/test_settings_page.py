@@ -80,6 +80,21 @@ class SettingsPageTests(QtTestCase):
             self.assertIs(panel.custom['custom'], custom)
             factory.assert_called_once()
 
+    def test_storage_scope_and_personal_override_paths_are_explicit(self):
+        from ui_new.settings.storage import StorageNotice, StoragePanel, APPLICATION_ROOT
+        application=StorageNotice(APPLICATION_ROOT/'Python'/'configFile.ini')
+        self.assertEqual(application.scope,'application')
+        self.assertIn('this installation',application.text())
+        with TemporaryDirectory() as temporary:
+            personal=StorageNotice(Path(temporary)/'preferences.ini',scope='personal')
+            self.assertEqual(personal.scope,'personal')
+            self.assertIn(str(Path(temporary)/'preferences.ini'),personal.text())
+        panel=StoragePanel()
+        rows=[panel.table.topLevelItem(i) for i in range(panel.table.topLevelItemCount())]
+        self.assertTrue(any(row.text(0)=='Personal' and 'take precedence' in row.text(1) for row in rows))
+        self.assertTrue(any(row.text(0)=='Application' and 'indexing' in row.text(1) for row in rows))
+        application.deleteLater(); personal.deleteLater(); panel.deleteLater()
+
     def test_commonutils_settings_expose_ini_and_preserve_edits(self):
         with TemporaryDirectory() as temporary:
             path = Path(temporary) / 'settings.ini'

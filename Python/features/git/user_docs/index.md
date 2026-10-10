@@ -119,8 +119,14 @@ The stash context menu offers Apply, Pop, and Drop. Apply keeps the saved stash;
 Pop removes it after a successful application. Review the confirmation before Drop.
 
 A failed merge, pull/rebase, cherry-pick, or revert can leave conflicts. The workspace
-refreshes and shows the current operation and conflict files. Edit conflicts in the
-Text Editor or another editor, stage the resolved files, then use **Continue**.
+refreshes and shows the current operation and conflict files. Double-click a conflicted
+text file or choose **Resolve conflict…** to open the shared three-pane merge editor.
+Apply independent changes, choose either side, keep both, or edit the center result
+and mark the selected change resolved. Apply checks for external file/index changes.
+Optionally check **Stage resolved file after saving**, then use **Continue**.
+During rebase the side labels identify the rebased-onto revision and replayed commit.
+Binary, delete/modify, symlink, submodule and conversion-filter conflicts require
+manual resolution with Git or another appropriate editor.
 **Abort…** asks Git to restore the operation's starting state. Conflicts from stash
 application are resolved/staged manually; there is no separate stash Continue action.
 
@@ -156,6 +162,8 @@ Git operations, and integrated editor saves also refresh it. There is no schedul
 fetch or filesystem polling. Text previews are limited to 1 MiB and show truncation;
 oversized structured responses report an error rather than silently losing entries.
 
-This version has unified text diffs and whole-file staging. Hunk staging, interactive
+This version has unified text diffs, side-by-side working/index comparisons, three-way text conflict resolution and whole-file staging. Hunk staging, interactive
 rebase editing, reset/clean, merge-tool launching, LFS management, sparse/partial
 cloning, worktree removal, and hosting-provider features are future additions.
+
+**Compare sides…** beside a pending file opens full versions (Index / Working file, or HEAD / Index for staged files) in linked, resizable panes. This review does not stage or modify files.

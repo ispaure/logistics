@@ -72,7 +72,7 @@ def present_diff(patch):
             filename = ''
         elif line.startswith(('diff --cc ', 'diff --combined ')):
             recognized = True
-            view.notes.append('Combined merge diff; select Raw to review the conflict or open it in Text Editor')
+            view.notes.append('Combined merge diff; double-click the conflicted file to Resolve conflict, or select Raw for review')
         elif line.startswith(('--- ', '+++ ')):
             path = line[4:]
             if path != '/dev/null': filename = path.removeprefix('a/').removeprefix('b/')

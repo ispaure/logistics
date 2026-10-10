@@ -23,6 +23,9 @@ class FeaturesPage(qt.QWidget):
         content_layout.addWidget(title)
         description = qt.QLabel('Choose which features to use. Required dependencies are enabled together. '
                                 'Choices are saved for your next launch; existing windows and jobs can finish.')
+        from features.preferences import preferences_path
+        from ui_new.settings.storage import StorageNotice
+        content_layout.addWidget(StorageNotice(preferences_path(), self, scope="personal"))
         description.setWordWrap(True)
         content_layout.addWidget(description)
         reset = qt.QPushButton('Reset to defaults')
