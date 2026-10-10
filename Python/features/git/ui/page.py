@@ -394,6 +394,7 @@ class GitPage(qt.QWidget):
             if different:
                 self.history.tree.clear()
                 self.preview.show_text('Select a changed file or commit', '')
+                self._preview_reload = None
                 self.changes.amend.setChecked(False)
             self.path = snapshot.root
             self.preferences.remember(self.path)
@@ -627,7 +628,9 @@ class GitPage(qt.QWidget):
                 if item:
                     self.preview_change(*item.data(0,qt.Qt.ItemDataRole.UserRole))
                     break
-            else: self.preview.show_text('Select a changed file', '')
+            else:
+                self._preview_reload = None
+                self.preview.show_text('Select a changed file', '')
 
     def load_more(self):
         self.history_limit = min(5000, self.history_limit + 200)
@@ -779,6 +782,7 @@ class GitPage(qt.QWidget):
 
     def show_ref_commit(self, ref):
         # Tags can point to annotated tag objects: resolve to a commit first.
+        self._preview_reload = None
         path = self.path
         full_tree = bool(self.history.file_mode.currentIndex())
         def read(runner):

@@ -35,3 +35,25 @@ class DiffViewTests(unittest.TestCase):
         self.assertIn('+++ real code', view.text)
         self.assertEqual(view.lines[1].new, '1')
         self.assertIn('truncated', view.summary)
+
+    def test_raw_patch_retains_exact_text_and_same_line_positions(self):
+        patch = 'diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -2 +2 @@\n-before\n+after\n'
+        view = present_diff(patch)
+        self.assertEqual(view.raw_text, patch)
+        self.assertEqual([(line.old, line.new, line.kind) for line in view.raw_lines if line.kind == 'remove'], [('2', '', 'remove')])
+        self.assertEqual([(line.old, line.new, line.kind) for line in view.raw_lines if line.kind == 'add'], [('', '2', 'add')])
+
+    def test_multiple_files_and_combined_merge_diffs_remain_identifiable(self):
+        patch = ('diff --git a/first b/first\n--- a/first\n+++ b/first\n@@ -1 +1 @@\n-a\n+b\n'
+                 'diff --git a/second b/second\n--- a/second\n+++ b/second\n@@ -1 +1 @@\n-c\n+d\n')
+        view = present_diff(patch)
+        self.assertIn('first', view.hunks[0][1])
+        self.assertIn('second', view.hunks[1][1])
+        combined = 'diff --cc file\nindex 123,456..789\n@@@ -1,1 -1,1 +1,2 @@@\n++conflict\n'
+        view = present_diff(combined)
+        self.assertIn('Combined merge diff', view.text)
+        self.assertEqual(view.raw_text, combined)
+
+    def test_incomplete_hunks_show_notice_instead_of_claiming_complete_review(self):
+        view = present_diff('diff --git a/a b/a\n@@ -1,4 +1,4 @@\n context\n[Diff truncated]')
+        self.assertIn('Incomplete patch', view.summary)

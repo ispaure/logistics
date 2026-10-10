@@ -261,10 +261,13 @@ class GitUITests(QtTestCase):
         self.page.history.file_mode.setCurrentIndex(1); self.wait()
         self.assertEqual(editor.toPlainText(), 'second\nthird\n')
         self.assertEqual(editor.diff_rows, [])
-        editor.setPlainText('@@ -8,1 +9,1 @@\n-old\n+new\n@@ -30,1 +31,1 @@\n context')
+        from features.git.diff_view import present_diff
+        editor.set_diff(present_diff('@@ -8,1 +9,1 @@\n-old\n+new\n@@ -30,1 +31,1 @@\n context'))
         self.assertIn(('8', '', 'remove'), editor.diff_rows)
         self.assertIn(('', '9', 'add'), editor.diff_rows)
         self.assertIn(('30', '31', ''), editor.diff_rows)
+        self.page.preview.show_text('Ordinary text', '@@ -8 +9 @@\n-old\n+new')
+        self.assertEqual(editor.diff_rows, [])
 
     def test_clean_staged_diff_raw_toggle_hunk_navigation_and_whitespace_review(self):
         self.commit_fixture()

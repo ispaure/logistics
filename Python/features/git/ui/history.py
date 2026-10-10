@@ -12,12 +12,14 @@ WORKING_COPY_ROLE = qt.Qt.ItemDataRole.UserRole + 1
 
 class GraphDelegate(qt.QStyledItemDelegate):
     COLORS = GRAPH_COLORS
+    LIGHT_COLORS = ('#0072B2', '#D55E00', '#927000', '#00845F', '#A45686', '#A96C00', '#34538D')
 
     def paint(self, painter, option, index):
         super().paint(painter, option, index)
         row = index.data(qt.Qt.ItemDataRole.UserRole)
         if row is None: return
         working_copy = index.siblingAtColumn(1).data(WORKING_COPY_ROLE)
+        colors = self.COLORS if option.palette.base().color().lightness() < 128 else self.LIGHT_COLORS
         painter.save()
         painter.setClipRect(option.rect)
         painter.setRenderHint(qt.QPainter.RenderHint.Antialiasing)
@@ -25,12 +27,12 @@ class GraphDelegate(qt.QStyledItemDelegate):
         center = rect.center().y()
         def x(lane): return rect.left() + 12 + lane * 14
         for source, target in row.incoming:
-            painter.setPen(qt.QPen(qt.QColor(self.COLORS[source % len(self.COLORS)]), 2))
+            painter.setPen(qt.QPen(qt.QColor(colors[source % len(colors)]), 2))
             painter.drawLine(qt.QPointF(x(source), rect.top()), qt.QPointF(x(target), center))
         for source, target in row.outgoing:
-            painter.setPen(qt.QPen(qt.QColor('#a0a5ad' if working_copy else self.COLORS[target % len(self.COLORS)]), 2))
+            painter.setPen(qt.QPen(qt.QColor('#a0a5ad' if working_copy else colors[target % len(colors)]), 2))
             painter.drawLine(qt.QPointF(x(source), center), qt.QPointF(x(target), rect.bottom() + 1))
-        color = qt.QColor('#a0a5ad' if working_copy else self.COLORS[row.lane % len(self.COLORS)])
+        color = qt.QColor('#a0a5ad' if working_copy else colors[row.lane % len(colors)])
         painter.setPen(qt.QPen(color, 2))
         painter.setBrush(option.palette.base() if working_copy else qt.QBrush(color))
         painter.drawEllipse(qt.QPointF(x(row.lane), center), 4, 4)
