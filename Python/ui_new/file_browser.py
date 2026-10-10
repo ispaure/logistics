@@ -169,7 +169,7 @@ class FileBrowserPage(_WorkspaceHost, qt.QWidget):
         super().__init__(parent)
         self.workspace = Workspace(lambda path: BrowserView(
             root_path=path or root_path or Path.home(),
-            filesystem_scope=root_path is None and (path is None or not self.workspace.docks)), self)
+            filesystem_scope=root_path is None and (path is None or not self.workspace.docks)), self, keep_one_tab=True)
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.workspace)
@@ -185,7 +185,7 @@ class FileBrowserWindow(_WorkspaceHost, qt.QMainWindow):
         self.setWindowTitle(f'File Browser — {Path(root_path).name}')
         self.resize(1200, 800)
         self.workspace = Workspace(lambda path: BrowserView(root_path=path or (
-            self.file_browser.navigation.directory if self.workspace.active_view else root_path)), self)
+            self.file_browser.navigation.directory if self.workspace.active_view else root_path)), self, keep_one_tab=True)
         self.workspace.active_changed.connect(lambda view: self.setWindowTitle(
             f'File Browser — {view.view_title}' if view else 'File Browser'))
         self.setCentralWidget(self.workspace)
