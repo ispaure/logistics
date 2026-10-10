@@ -1,16 +1,8 @@
-"""One owned worker per reader; payload delivery happens after thread completion."""
-from commonUtils.ui import pyside as qt
+"""EPUB work uses the shared finish-safe result contract."""
+from commonUtils.ui.operations import ResultWorker
 
 
-class BookTask(qt.QThread):
+class BookTask(ResultWorker):
     def __init__(self, operation, parent=None):
-        super().__init__(parent)
         self.operation = operation
-        self.result = None
-        self.error = None
-
-    def run(self):
-        try:
-            self.result = self.operation(self.isInterruptionRequested)
-        except Exception as error:
-            self.error = str(error)
+        super().__init__(lambda: operation(self.isInterruptionRequested), parent)
