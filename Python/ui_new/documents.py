@@ -111,8 +111,7 @@ class DocumentsPage(qt.QWidget):
             from commonUtils.ui.workspace_window import WorkspaceWindow
             main = self.workspace
             policy = replace(main.policy, max_tabs=None if allow_new_tabs else 1)
-            container = WorkspaceWindow(main, policy=policy, allow_new_tabs=allow_new_tabs,
-                                        close_returns_tabs=allow_new_tabs)
+            container = WorkspaceWindow(main, policy=policy, allow_new_tabs=allow_new_tabs)
             main.detached_windows.append(container)
             container.destroyed.connect(lambda: main.detached_windows.remove(container)
                                         if container in main.detached_windows else None)

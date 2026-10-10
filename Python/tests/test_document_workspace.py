@@ -71,6 +71,32 @@ class DocumentWorkspaceTests(QtTestCase):
         self.assertFalse(document_is_open(first))
         self.assertEqual(self.page.attached_count, 1)
 
+    def test_detached_window_close_closes_local_documents_and_respects_veto(self):
+        from commonUtils.ui.markdown import open_markdown
+        for initially_detached in (False, True):
+            with self.subTest(initially_detached=initially_detached):
+                attached = qt.QMainWindow(); show_document(attached)
+                first = open_markdown(None, allow_edit=True, detached=initially_detached)
+                self.settle()
+                dock = self.page.records[first]['dock']
+                container = dock.window() if initially_detached else self.page.workspace.detach_dock(dock)
+                second = qt.QMainWindow()
+                self.page.launch_document(container.workspace, lambda parent: show_document(second))
+                self.settle()
+                with patch.object(first.viewer, 'can_close', return_value=False):
+                    self.assertFalse(container.close()); self.settle()
+                    self.assertTrue(document_is_open(first))
+                    self.assertFalse(document_is_open(second))
+                    self.assertTrue(container.isVisible())
+                    self.assertIs(dock.workspace, container.workspace)
+                    self.assertEqual(self.page.attached_count, 1)
+                with patch.object(first.viewer, 'can_close', return_value=True):
+                    container.close(); self.settle()
+                self.assertFalse(document_is_open(first))
+                self.assertTrue(document_is_open(attached))
+                self.assertEqual(self.page.count, 1)
+                attached.close(); self.settle()
+
     def test_detached_menus_follow_tabs_before_show_and_survive_repeated_transfers(self):
         # Exercise actual adoption/activation rather than calling menu sync directly.
         for platform in ('darwin', 'win32', 'linux'):
@@ -100,7 +126,7 @@ class DocumentWorkspaceTests(QtTestCase):
                     self.assertEqual([a.text() for a in bar.actions()], ['File'])
                     self.assertTrue(self.page.workspace.adopt(first_dock)); self.settle()
                     self.assertEqual([a.text() for a in bar.actions()], ['View'])
-                    container.close(); self.settle()
+                    container.dock_to_main(); self.settle()
                     self.assertIs(second_dock.workspace, self.page.workspace)
                 first.close(); second.close(); self.settle()
 
@@ -403,7 +429,7 @@ class DocumentWorkspaceTests(QtTestCase):
             self.assertEqual(self.page.workspace.detached_windows, [])
             editor.close(); first.close(); self.settle()
 
-    def test_cancelled_detached_creation_and_container_close_preserve_documents(self):
+    def test_cancelled_detached_creation_preserves_document_until_container_close(self):
         window = qt.QMainWindow(); window.setCentralWidget(qt.QLineEdit('Retained'))
         show_document(window); self.settle()
         self.page.detach_current(); self.settle()
@@ -412,9 +438,9 @@ class DocumentWorkspaceTests(QtTestCase):
         self.assertEqual(detached.docks, [dock])
         self.assertIsNone(self.page._creation_workspace)
         detached.window().close(); self.settle()
-        self.assertIs(dock.workspace, self.page.workspace)
-        self.assertEqual(self.page.attached_count, 1)
-        self.assertEqual(window.centralWidget().text(), 'Retained')
+        self.assertFalse(document_is_open(window))
+        self.assertEqual(self.page.count, 0)
+        self.assertEqual(self.page.workspace.docks, [])
 
     def test_readers_can_split_and_browser_tabs_keep_their_own_workspace(self):
         from commonUtils.ui.workspace import Workspace
