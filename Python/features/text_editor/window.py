@@ -16,6 +16,8 @@ class DocumentTabs(qt.QTabWidget):
         self.setTabsClosable(True)
         self.setMovable(True)
         self.setDocumentMode(True)
+        self.tabBar().setExpanding(True)
+        self.tabBar().setElideMode(qt.Qt.TextElideMode.ElideRight)
         self.tabBar().installEventFilter(self)
 
     def eventFilter(self, watched, event):
