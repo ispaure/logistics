@@ -82,15 +82,14 @@ def action_icon(name):
 
 
 def toolbar_button(title, icon, callback, parent):
-    button = qt.QToolButton(parent)
-    button.setText(title.removesuffix('…'))
+    # Real actions remain available in Qt's overflow menu on narrow/floating panes.
+    action = qt.QAction(action_icon(icon), title.removesuffix('…'), parent)
+    action.setToolTip(title)
+    action.triggered.connect(callback)
+    parent.addAction(action)
+    button = parent.widgetForAction(action)
     button.setAccessibleName(title)
-    button.setToolTip(title)
-    button.setIcon(action_icon(icon))
-    button.setIconSize(qt.QSize(28,28))
-    button.setToolButtonStyle(qt.Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
     button.setMinimumWidth(54)
-    button.clicked.connect(callback)
     return button
 
 

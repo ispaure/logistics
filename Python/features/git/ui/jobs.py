@@ -1,6 +1,6 @@
 """Git job ownership, completion, refresh scheduling and cooperative shutdown.
 
-GitPage supplies presentation methods; repository commands retain domain policy.
+RepositoryView supplies presentation methods; repository commands retain domain policy.
 """
 from .worker import GitWorker
 from ..repository import Repository

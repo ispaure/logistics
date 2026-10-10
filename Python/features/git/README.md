@@ -14,18 +14,22 @@ See the [user guide](user_docs/index.md) for the interface and authentication se
   last repository, and subtree mappings in `git.json` beside Logistics preferences.
 - `graph.py`: lane geometry for a bounded, topologically ordered commit DAG.
 - `ui/worker.py`: retained cancellable Qt worker; no widgets accessed from its thread.
-- `ui/page.py`: workspace state, forms, and sequential job dispatch.
+- `ui/page.py`: shared dock-backed workspace and retained repository-pane lookup.
+- `ui/repository_view.py`: per-repository controls, snapshots, drafts, forms and previews.
+- `ui/jobs.py`: sequential per-repository worker dispatch and shutdown.
 - `ui/chrome.py`, `navigation.py`: scoped styling, vector toolbar icons and reference navigation.
 - `ui/repository_tools.py`: worktree/submodule/subtree dialogs using that dispatcher.
 - `ui/changes.py`, `history.py`, `preview.py`, `dialogs.py`: focused widgets.
 
-The feature reuses commonUtils' Qt facade, painted sidebar icons, `CodeEdit`, and
+The feature reuses commonUtils' dock-backed `Workspace`, Qt facade, painted sidebar icons, `CodeEdit`, and
 platform process-group/cancellation helpers. Editing uses the optional existing
-Text Editor service and the application's document host. commonUtils is unchanged.
+Text Editor service and the application's document host. Docking and tab reordering are shared with browser and document panes.
 
 ## Execution and lifecycle
 
-One worker can run at a time in a workspace, covering both reads and writes.
+One worker can run at a time per repository pane, covering both reads and writes.
+Different repositories can work independently; opening an already-retained repository
+reveals its existing pane. Switching tabs preserves its draft, preview and log.
 Every worker gets a fresh runner, a cancellation event, and a captured repository
 path. Repository selection and mutation controls stay disabled until completion.
 Refresh requests made while busy are coalesced. Writes refresh even on failure
@@ -34,7 +38,7 @@ or cancellation: an unsuccessful merge can still create a valid conflict state.
 The main window connects contributed pages' `idle` signals to deferred closing.
 `prepare_close()` requests cancellation and returns false until the worker ends;
 the thread remains owned until Qt's `finished` signal arrives. No thread is forcibly
-terminated. Commit-message drafts can veto closing or repository switching.
+terminated. Commit-message drafts can veto closing a repository tab or the application.
 
 Machine stdout and diagnostics are kept separate. Temporary files prevent pipe
 deadlocks and excessive memory capture; stderr progress streams on POSIX and is
@@ -65,7 +69,10 @@ workspace position with order 10. Other feature destinations retain their locati
 
 ## Workspace layout
 
-Repository bookmarks appear as tabs beneath an icon toolbar. A reference tree
+Open repositories have reorderable, detachable tabs. Each retained pane owns its
+toolbar, including Commit/Pull/Push/Fetch/Branch, remote/folder/terminal actions and
+settings. Real toolbar actions remain accessible through Qt's overflow menu in
+narrow or floating panes. Bookmarks are available in the pane's repository menu. A reference tree
 provides File status, History and Search, hierarchical branches/remotes, tags,
 stashes, configured submodules and saved subtrees. File status uses two separately
 resizable lists, a shared diff preview and a bottom commit composer. History puts

@@ -336,3 +336,9 @@ callbacks are weak and checked for a live Qt owner.
 
 Notifications are passive results. Password prompts, destructive confirmations
 and save/discard/cancel decisions remain feature-owned dialogs.
+
+Git follows the same pane ownership model: `GitPage` retains repository panes in
+the shared `Workspace`; `RepositoryView` owns each repository's toolbar, draft,
+preview, log and sequential job owner. Horizontal tab drags reorder; dragging out
+detaches the existing pane. Qt toolbar actions remain available in overflow menus
+on narrow panes. Switching tabs does not discard drafts or move command targets.
