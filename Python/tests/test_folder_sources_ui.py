@@ -39,7 +39,7 @@ class FolderSourceTests(QtTestCase):
             return ['New']
         self.remote([], 'profile').side_effect = names
         page = FoldersPage()
-        self.addCleanup(page.deleteLater)
+        self.addCleanup(self.close_page, page)
         self.addCleanup(release.set)
         self.until(entered.is_set)
         tick = []
@@ -64,7 +64,7 @@ class FolderSourceTests(QtTestCase):
         contribution = FolderFeatureContribution('Slow', available, get_actions=lambda entry: [])
         with patch('features.registry.get_folder_features', return_value=[RegisteredContribution('slow', 'Slow', contribution)]):
             page = FoldersPage()
-            self.addCleanup(page.deleteLater); self.addCleanup(release.set)
+            self.addCleanup(self.close_page, page); self.addCleanup(release.set)
             self.until(entered.is_set)
             self.assertNotEqual(threads[0], self.app.thread())
             self.assertFalse(page.prepare_close())
@@ -105,9 +105,17 @@ class FolderSourceTests(QtTestCase):
 
     def page(self):
         page = FoldersPage()
-        self.addCleanup(page.deleteLater)
+        self.addCleanup(self.close_page, page)
         self.wait(page)
         return page
+
+    def close_page(self, page):
+        # Selection changes can start detail work after wait() returns. Cancel
+        # and drain it before scheduling QObject destruction.
+        page.prepare_close()
+        self.wait(page)
+        page.close()
+        page.deleteLater()
 
     def wait(self, page):
         from time import monotonic, sleep
