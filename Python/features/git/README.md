@@ -70,7 +70,9 @@ provides File status, History and Search, hierarchical branches/remotes, tags,
 stashes, configured submodules and saved subtrees. File status uses two separately
 resizable lists, a shared diff preview and a bottom commit composer. History puts
 the graph above a files/metadata pane and the preview. The same CodeEdit preview
-moves between hosts, keeping a single selection/search implementation.
+moves between hosts, keeping a single selection/search implementation. Content uses
+a font one point smaller than the host; the toolbar retains the host font. Compact
+row spacing follows Qt font metrics, and controls inherit the application theme.
 
 Commit file lists use NUL-delimited first-parent comparisons, including root
 commits and deletions; full historical trees remain available separately. File

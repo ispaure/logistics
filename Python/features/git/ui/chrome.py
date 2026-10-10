@@ -4,31 +4,22 @@ import math
 from urllib.parse import urlsplit, urlunsplit
 from commonUtils.ui import pyside as qt
 
+# Keep the application's palette, native controls and theme. Only density and
+# the repository navigation accent belong to this workspace.
 WORKSPACE_STYLE = '''
-QWidget#gitWorkspace QLabel, QWidget#gitWorkspace QCheckBox { color: #e0e0e4; }
-QWidget#gitWorkspace QLineEdit, QWidget#gitWorkspace QComboBox { background: #353640; color: #dedee2; border: 1px solid #555762; border-radius: 3px; padding: 3px; }
-QWidget#gitWorkspace QPushButton { background: #3e404b; color: #e0e0e4; border: 1px solid #62646e; border-radius: 3px; padding: 4px 9px; }
-QWidget#gitWorkspace QPushButton:disabled { color: #858792; border-color: #454650; }
-QWidget#gitWorkspace QScrollBar { background: #30313b; }
-QWidget#gitWorkspace QScrollBar::handle { background: #626470; border-radius: 4px; min-height: 20px; min-width: 20px; }
-QWidget#gitWorkspace { background: #282935; color: #e0e0e4; }
-QWidget#gitWorkspace QTreeWidget, QWidget#gitWorkspace QPlainTextEdit {
-    background: #22232f; color: #e0e0e4; border: 0; }
-QWidget#gitWorkspace QTreeWidget::item { height: 24px; }
-QWidget#gitWorkspace QTreeWidget::item:selected { background: #454650; }
-QWidget#gitWorkspace QWidget#gitSidebar { background: #42434b; }
-QWidget#gitWorkspace QWidget#gitSidebar QTreeWidget { background: transparent; }
+QWidget#gitWorkspace QTreeWidget::item,
+QWidget#gitWorkspace QTreeWidget::item:hover,
+QWidget#gitWorkspace QTreeWidget::item:selected { padding: 1px 4px; margin: 0; }
+QWidget#gitWorkspace QHeaderView::section { padding: 2px 4px; }
+QWidget#gitWorkspace QWidget#gitSidebar { background: palette(alternate-base); }
+QWidget#gitWorkspace QWidget#gitSidebar QTreeWidget { background: transparent; border: none; }
 QWidget#gitWorkspace QWidget#gitSidebar QTreeWidget::item:selected { background: #ed851b; color: white; }
-QWidget#gitWorkspace QHeaderView::section { background: #30313c; color: #dddddf; border: 0; padding: 5px; }
-QWidget#gitWorkspace QToolButton { color: #c3c5cd; border: 0; padding: 5px; background: transparent; }
-QWidget#gitWorkspace QToolButton:hover { background: #464854; border-radius: 4px; }
-QWidget#gitWorkspace QToolButton:disabled { color: #777983; }
-QWidget#gitWorkspace QSplitter::handle { background: #171821; }
-QWidget#gitWorkspace QTabWidget::pane { border: 0; }
-QWidget#gitWorkspace QTabBar::tab { background: #20212a; color: #bfc0c7; padding: 7px 35px; }
-QWidget#gitWorkspace QTabBar::tab:selected { background: #3b3c46; color: white; }
-QWidget#gitWorkspace QLabel#fileSection { background: #55565f; color: #f0f0f0; padding: 5px 8px; }
+QWidget#gitWorkspace QWidget#gitToolbar QToolButton { padding: 5px; border: none; }
+QWidget#gitWorkspace QTabWidget::pane { border: none; }
+QWidget#gitWorkspace QTabBar::tab { padding: 4px 16px; }
+QWidget#gitWorkspace QLabel#fileSection { font-weight: bold; }
 '''
+
 
 
 def action_icon(name):

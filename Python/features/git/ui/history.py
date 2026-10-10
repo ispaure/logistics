@@ -38,14 +38,14 @@ class DescriptionDelegate(qt.QStyledItemDelegate):
         self.initStyleOption(background,index)
         background.text = ''
         option.widget.style().drawControl(qt.QStyle.ControlElement.CE_ItemViewItem,background,painter,option.widget)
-        painter.save(); painter.setClipRect(option.rect)
+        painter.save(); painter.setClipRect(option.rect); painter.setFont(option.font)
         x=option.rect.left()+4
         metrics=option.fontMetrics
         for ref in commit.decorations.split(', '):
             if not ref: continue
             label=ref.removeprefix('HEAD -> ')
-            width=min(metrics.horizontalAdvance(label)+10,150)
-            rect=qt.QRect(x,option.rect.top()+3,width,option.rect.height()-6)
+            width=min(metrics.horizontalAdvance(label)+14,150)
+            rect=qt.QRect(x,option.rect.top()+1,width,option.rect.height()-2)
             painter.setPen(qt.Qt.PenStyle.NoPen)
             painter.setBrush(qt.QColor('#cb671e' if '/' in label else '#216ab4'))
             painter.drawRoundedRect(rect,3,3)
@@ -68,11 +68,14 @@ class HistoryPanel(qt.QWidget):
         super().__init__(parent)
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
         self.search = qt.QLineEdit()
         self.search.setPlaceholderText('Filter loaded commits by message, author, hash, or ref')
         self.search.setAccessibleName('Search loaded history')
         self.search.textChanged.connect(self._filter)
         filters = qt.QHBoxLayout()
+        filters.setContentsMargins(4,2,4,2)
+        filters.setSpacing(4)
         self.branch_filter = qt.QComboBox()
         self.branch_filter.addItems(['All branches','Current branch'])
         self.branch_filter.currentIndexChanged.connect(self._filter)
@@ -103,6 +106,7 @@ class HistoryPanel(qt.QWidget):
         file_host = qt.QWidget()
         files_layout = qt.QVBoxLayout(file_host)
         files_layout.setContentsMargins(0,0,0,0)
+        files_layout.setSpacing(2)
         self.file_mode = qt.QComboBox()
         self.file_mode.addItems(['Changed files (first parent)','Full tree at commit'])
         self.file_mode.currentIndexChanged.connect(lambda: self.commit_selected.emit(self.selected_commit()) if self.selected_commit() else None)
