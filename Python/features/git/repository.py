@@ -57,7 +57,7 @@ class Repository:
                                     'refs/heads', 'refs/remotes', 'refs/tags']).stdout)
 
     def history(self, limit=200):
-        if not 1 <= limit <= 5000: raise GitError('History limit must be between 1 and 5000.')
+        if not 1 <= limit <= 5001: raise GitError('History limit must be between 1 and 5001.')
         return parse_log(self.run(['log', '--all', '--topo-order', f'--max-count={limit}',
                                   '--format=%H%x00%P%x00%an%x00%aI%x00%s%x00%D%x00%x00']).stdout)
 
@@ -72,6 +72,7 @@ class Repository:
         return ''
 
     def snapshot(self, limit=200):
+        self.runner.version()
         root = self.root()
         self.path = root
         status = self.status()
@@ -241,6 +242,7 @@ class Repository:
 
 def clone(url, destination, runner=None, recursive=False, branch=''):
     runner = runner or GitRunner()
+    runner.version()
     destination = Path(destination).expanduser().absolute()
     if destination.exists() and (not destination.is_dir() or any(destination.iterdir())):
         raise GitError('Choose a new or empty destination directory.')

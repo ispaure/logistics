@@ -48,6 +48,14 @@ class DestinationIcon(qt.QIconEngine):
             painter.drawLine(qt.QLineF(8, 8, 8, 14))
             painter.drawEllipse(qt.QPointF(17, 10), .8, .8)
             painter.drawEllipse(qt.QPointF(19, 13), .8, .8)
+        elif self.name == 'git':
+            painter.drawLine(qt.QLineF(7, 6, 7, 18))
+            path = qt.QPainterPath(qt.QPointF(7, 15))
+            path.cubicTo(7, 10, 17, 15, 17, 7)
+            painter.drawPath(path)
+            for x, y in ((7, 4), (7, 20), (17, 5)):
+                painter.setBrush(palette.color(qt.QPalette.ColorRole.Window))
+                painter.drawEllipse(qt.QPointF(x, y), 2.5, 2.5)
         elif self.name == 'tools':
             for x in (4, 14):
                 for y in (4, 14):
@@ -102,11 +110,17 @@ class DestinationRail(qt.QWidget):
                            ('documents', 'Open documents'), ('actions', 'Folder Actions'), ('tools', 'Tools')]:
             button = self._button(key, title)
             layout.addWidget(button)
+            if key == 'hub':
+                self.workspace_destinations = qt.QVBoxLayout()
+                self.workspace_destinations.setContentsMargins(0, 0, 0, 0)
+                self.workspace_destinations.setSpacing(8)
+                layout.addLayout(self.workspace_destinations)
         self.feature_destinations = qt.QVBoxLayout()
         self.feature_destinations.setContentsMargins(0, 0, 0, 0)
         self.feature_destinations.setSpacing(8)
         layout.addLayout(self.feature_destinations)
         self.feature_buttons = set()
+        self.workspace_buttons = set()
         layout.addStretch()
         layout.addWidget(self._button('settings', 'Settings'))
         self.tools_menu = qt.QMenu(self)
@@ -148,6 +162,7 @@ class DestinationRail(qt.QWidget):
         for key in self.feature_buttons:
             self.buttons[key].hide()
         self.tools_menu.clear()
+        workspace_entries = []
         for index in range(tabs.count()):
             page = tabs.widget(index)
             if page is self.documents:
@@ -162,9 +177,16 @@ class DestinationRail(qt.QWidget):
             if key is None and icon:
                 key = f'feature:{id(page)}'
                 if key not in self.buttons:
-                    self.feature_destinations.addWidget(self._button(key, tabs.tabText(index), icon))
+                    button = self._button(key, tabs.tabText(index), icon)
+                    if page.property('navigation_position') == 'workspace':
+                        self.workspace_destinations.addWidget(button)
+                        self.workspace_buttons.add(key)
+                    else:
+                        self.feature_destinations.addWidget(button)
                     self.feature_buttons.add(key)
                 self.buttons[key].show()
+                if key in self.workspace_buttons:
+                    workspace_entries.append((page.property('navigation_order') or 100, tabs.tabText(index), self.buttons[key]))
             if key:
                 self.pages[key] = page
             else:
@@ -173,6 +195,8 @@ class DestinationRail(qt.QWidget):
                 action.setCheckable(True)
                 action.setChecked(page is tabs.currentWidget())
                 action.triggered.connect(lambda checked=False, target=page: self.selected.emit(target))
+        for position, (_, _, button) in enumerate(sorted(workspace_entries, key=lambda entry: (entry[0], entry[1].casefold()))):
+            self.workspace_destinations.insertWidget(position, button)
         for key in ('browser', 'hub', 'settings'):
             self.buttons[key].setVisible(key in self.pages)
         self.buttons['tools'].setVisible(bool(self.tools_menu.actions()))
