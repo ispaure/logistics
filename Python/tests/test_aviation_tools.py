@@ -4,6 +4,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 
 from commonUtils.ui import pyside as qt
@@ -15,7 +16,7 @@ from features.aviation_tools.ui.page import AviationToolsPage, Calculator, Datas
 from ui_new import main_window
 
 
-class AviationToolsTests(unittest.TestCase):
+class AviationToolsTests(QtTestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = qt.QApplication.instance() or qt.QApplication([])

@@ -63,3 +63,18 @@ on Windows.
 Fixtures close SQLite connections explicitly and use legal native filenames and
 paths. Tests that execute a POSIX shell or require POSIX executable permission
 bits run only on POSIX hosts; archive and password checks run on every platform.
+
+## Stalled tests
+
+The suite runner writes a traceback for every Python thread after 60 seconds,
+repeating while the process is alive. The outer platform runner still enforces
+its five-minute suite timeout and uploads the diagnostic log. To run a single
+suite with these diagnostics, use the project interpreter:
+
+```sh
+QT_QPA_PLATFORM=offscreen PYTHONPATH=Python .venv/bin/python Python/tests/run_regressions.py Python/tests
+```
+
+Qt tests use `QtTestCase` to stop workers and release new windows between tests.
+A full-suite pass remains required; isolated tests alone can hide shared-state
+or lifecycle failures.

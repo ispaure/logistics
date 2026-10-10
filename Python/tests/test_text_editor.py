@@ -7,12 +7,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import monotonic, sleep
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
 from features.text_editor.window import EditorWindow
 
 
-class TextEditorTests(unittest.TestCase):
+class TextEditorTests(QtTestCase):
     def test_editor_contributes_settings_and_browser_actions_without_a_navigation_tab(self):
         from features.text_editor.contributions import register
         feature = register()

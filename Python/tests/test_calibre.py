@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 
 from commonUtils.dirUtils import Directory
 from features.calibre import metadata, launching, actions, library
@@ -15,7 +16,7 @@ from features.calibre.export import build_export_plan, execute_export_plan
 from commonUtils.osUtils import OS
 
 
-class CalibreExportTests(unittest.TestCase):
+class CalibreExportTests(QtTestCase):
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -206,7 +207,7 @@ class CalibreExportTests(unittest.TestCase):
         echo.assert_not_called()
 
 
-class CalibreLaunchTests(unittest.TestCase):
+class CalibreLaunchTests(QtTestCase):
     def test_windows_launch_uses_bundled_executable_without_a_shell(self):
         root = Path('/bundled software')
         with patch.object(launching, 'get_os', return_value=OS.WIN), patch.object(
@@ -268,7 +269,7 @@ class CalibreLaunchTests(unittest.TestCase):
         start.assert_not_called()
 
 
-class CalibreDialogFailureTests(unittest.TestCase):
+class CalibreDialogFailureTests(QtTestCase):
     def test_management_dialog_reports_export_failure(self):
         from features.calibre.ui.manage_dialog import CalibreManageDialog
         from commonUtils.ui import pyside as qt

@@ -5,12 +5,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from features.rclone.progress import RcloneProgressParser
 from features.rclone.sync import build_sync_arguments, rclone_sync
 from commonUtils.ui import pyside as qt
 
 
-class RcloneProgressTests(unittest.TestCase):
+class RcloneProgressTests(QtTestCase):
     def test_parser_reads_progress_and_builtin_attempts_without_inventing_success(self):
         parser = RcloneProgressParser()
         update = parser(json.dumps({'stats': {'bytes': 50, 'totalBytes': 100, 'speed': 10, 'transfers': 1, 'totalTransfers': 2}}))

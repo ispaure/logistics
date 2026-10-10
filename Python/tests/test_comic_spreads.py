@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import time
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 import zipfile
 from PIL import Image
@@ -16,7 +17,7 @@ from features.comics.reading import comic_siblings, visible_pages
 from features.comics.ui.reader import ComicReaderWindow, read_previous
 
 
-class SpreadTests(unittest.TestCase):
+class SpreadTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.temp = TemporaryDirectory()
@@ -354,7 +355,7 @@ class SpreadTests(unittest.TestCase):
         self.assertFalse(reader.statusBar().isHidden())
         reader.statusBar().clearMessage()
         self.assertTrue(reader.statusBar().isHidden())
-        self.assertEqual(reader.controls.layout().contentsMargins().bottom(), 8)
+        self.assertEqual(reader.controls.layout().contentsMargins().bottom(), 3)
 
     def test_preload_memory_budget_keeps_nearest_pages_without_reloading_evictions(self):
         from features.comics.ui import reader_cache

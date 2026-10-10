@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from zipfile import ZipFile
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from books_fixture import make_book
 from commonUtils.ui import pyside as qt
@@ -15,7 +16,7 @@ from features.books.metadata_editor import MetadataEditor
 from features.books.preferences import ReadingState
 
 
-class ReaderTests(unittest.TestCase):
+class ReaderTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         standalone_host = patch.object(self.app, "_commonutils_document_host", None, create=True)

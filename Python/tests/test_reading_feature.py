@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import ModuleType, SimpleNamespace
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import Mock, patch
 from books_fixture import make_book
 from commonUtils.ui import pyside as qt
@@ -14,7 +15,7 @@ from features.books.file_type import EPUBFile
 from features.comics.cbz import CBZFile
 
 
-class ReadingFeatureTests(unittest.TestCase):
+class ReadingFeatureTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
 

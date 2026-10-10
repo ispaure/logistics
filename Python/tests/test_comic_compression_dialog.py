@@ -4,6 +4,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 import time
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
@@ -11,7 +12,7 @@ from features.comics.ui.dialogs import CompressCbzDialog
 from features.comics.compression_stats import CompressionStats
 
 
-class CompressionDialogTests(unittest.TestCase):
+class CompressionDialogTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.temp = TemporaryDirectory()

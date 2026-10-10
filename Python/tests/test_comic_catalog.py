@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 import zipfile
 
@@ -13,7 +14,7 @@ from features.comics.catalog import LibraryCatalog, split_values
 from features.comics.library import ComicDocument
 
 
-class CatalogTests(unittest.TestCase):
+class CatalogTests(QtTestCase):
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -171,7 +172,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(split_values(' A, B\nC\r\nA, , B '), ['A', 'B', 'C'])
 
 
-class PopupTests(unittest.TestCase):
+class PopupTests(QtTestCase):
     def setUp(self):
         from commonUtils.ui import pyside as qt
         self.app = qt.QApplication.instance() or qt.QApplication([])

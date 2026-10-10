@@ -22,14 +22,14 @@ representative fixtures and platform checks before behavior changes.
   sync are separated. Linux uses system FFmpeg. Mocked tests cover quoting,
   failures and batch status. Keep package-updating policy separate from downloads;
   consider explicit updates and declared dependencies rather than automatic pip.
-  Move long-running update/download/package operations into cancellable workers.
+  Downloads, explicit updates and season transfers now use cancellable workers.
 - **FUSE:** command construction, timeout handling, recovery and conservative
   cleanup now have simulated-state coverage. Actual mounting still requires
   macOS, Windows and Linux driver validation. Windows stale-mount recovery and
   verifying which credential owns an already-mounted same-named remote remain
   separate follow-ups; filesystem locations are shared across credentials.
-- **Media renaming:** add plan-validation fixtures for duplicate destinations and
-  CSV titles containing path separators before extending the rename workflow.
+- **Media renaming:** CSV plans use the shared rollback-capable rename engine.
+  Fixtures cover duplicate chapter numbers, invalid filenames and failed publication.
 
 ## Folder discovery and presentation
 
@@ -42,10 +42,12 @@ Dropbox is never selected implicitly. Public binaries/installers are pinned in
 hashes and extracted executable hashes must both be updated when changing releases.
 Other integrations still require their existing private software resources.
 
-Source listings are read once per page refresh, but refresh and folder feature
-detectors still run on the GUI thread. If a large or unavailable source causes
-visible delays, move discovery into a worker with cancellation and stale-result
-handling. Preserve backend-owned credential context and selections when doing so.
+Source listings are read once per page refresh in a worker. Feature availability
+and action discovery also run off the GUI thread; widget factories remain on it.
+Repeated refreshes and selection changes cancel obsolete work and discard stale
+results. Providers must be noninteractive and must not touch widgets. Cancellation
+is checked between providers; filesystem calls must return before shutdown finishes.
+Backend-owned credential context and selections are retained.
 
 The folder merge service identifies managed local folders by name. Dedicated
 local sources can show same-named paths separately, but expanding managed local

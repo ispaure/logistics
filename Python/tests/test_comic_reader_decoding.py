@@ -7,6 +7,7 @@ from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 import zipfile
 
@@ -37,7 +38,7 @@ class MissingQtDecoder:
         return [qt.QByteArray(b'png'), qt.QByteArray(b'jpeg')]
 
 
-class ReaderDecodingTests(unittest.TestCase):
+class ReaderDecodingTests(QtTestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = qt.QApplication.instance() or qt.QApplication([])

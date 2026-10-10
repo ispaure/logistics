@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import time
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from PIL import Image
 from commonUtils.ui import pyside as qt
@@ -13,7 +14,7 @@ from features.images.ui.dialogs import ImageCompressDialog
 from features import registry
 
 
-class ImageFolderToolTests(unittest.TestCase):
+class ImageFolderToolTests(QtTestCase):
     def setUp(self):
         self.temp = TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name).resolve()

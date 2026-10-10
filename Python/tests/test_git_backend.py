@@ -48,7 +48,8 @@ class GitBackendTests(unittest.TestCase):
         self.assertEqual(self.repo.status().changes[0].index, '?')
 
     def test_status_handles_unicode_spaces_newlines_and_literal_pathspec(self):
-        names = ['space name.txt', 'é漢.txt', ':literal.txt', 'line\nbreak.txt', '-dash.txt']
+        names = ['space name.txt', 'é漢.txt', '[literal].txt', '-dash.txt']
+        if os.name != 'nt': names += [':literal.txt', 'line\nbreak.txt']
         for name in names: self.write(name)
         self.assertEqual({c.path for c in self.repo.status().changes}, set(names))
         self.repo.stage(names)

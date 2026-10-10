@@ -27,14 +27,14 @@ def main():
     results = args.results_dir.resolve()
     results.mkdir(parents=True, exist_ok=True)
     report = {'platform': platform.platform(), 'python': sys.version,
-              'dependencies': {name: version(name) for name in ('Pillow', 'PySide6', 'pyzipper')}, 'checks': []}
+              'dependencies': {name: version(name) for name in ('Pillow', 'PySide6', 'pyzipper', 'yt-dlp')}, 'checks': []}
     env = dict(os.environ, PYTHONPATH=str(REPO / 'Python'), QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1', PYTHONUTF8='1')
     # Qt expands Windows 8.3 aliases; give fixtures matching native long paths.
     native_temp = str(Path(tempfile.gettempdir()).resolve())
     env.update(TEMP=native_temp, TMP=native_temp, TMPDIR=native_temp)
     checks = [
-        ('commonutils', ['-X', 'faulthandler', '-m', 'unittest', 'discover', '-s', 'Python/commonUtils/tests', '-v'], 300),
-        ('logistics', ['-X', 'faulthandler', '-m', 'unittest', 'discover', '-s', 'Python/tests', '-v'], 300),
+        ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests'], 300),
+        ('logistics', ['Python/tests/run_regressions.py', 'Python/tests'], 300),
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(results / 'parity')], 600),
     ]
     for name, command, timeout in checks:

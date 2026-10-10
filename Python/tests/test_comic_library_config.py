@@ -6,11 +6,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import time
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 
 from features.comics.library_config import configured_libraries, has_library_configuration
 
 
-class LibraryConfigurationTests(unittest.TestCase):
+class LibraryConfigurationTests(QtTestCase):
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

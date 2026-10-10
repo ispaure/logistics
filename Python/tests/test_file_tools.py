@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 from threading import Event
 import time
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from commonUtils.operations import OperationCancelled
 from commonUtils.ui import pyside as qt
@@ -15,7 +16,7 @@ from features import registry
 from ui_new.file_browser import FileBrowserWindow
 
 
-class _FileToolsFixture(unittest.TestCase):
+class _FileToolsFixture(QtTestCase):
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

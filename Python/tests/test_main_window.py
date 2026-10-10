@@ -4,13 +4,14 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from unittest.mock import Mock, patch
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 
 from commonUtils.ui import pyside as qt
 from features.contributions import PageContribution, RegisteredContribution
 from ui_new import main_window
 
 
-class MainWindowTests(unittest.TestCase):
+class MainWindowTests(QtTestCase):
     def test_floating_document_mouse_drop_reveals_documents_and_splits_beside_its_neighbor(self):
         from commonUtils.ui.document_host import show_document
         window = self.window(); window.dlg.show(); window.dlg.activateWindow()

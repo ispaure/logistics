@@ -8,6 +8,7 @@ from zipfile import ZipFile
 from unittest.mock import patch
 import time
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from PIL import Image
 from PySide6.QtTest import QTest
 from commonUtils.ui import pyside as qt
@@ -18,7 +19,7 @@ from features.comics.ui.reader import ComicReaderWindow
 from books_fixture import make_book
 
 
-class ReaderUXTests(unittest.TestCase):
+class ReaderUXTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.tmp = TemporaryDirectory()

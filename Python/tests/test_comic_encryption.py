@@ -4,13 +4,14 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 import zipfile
 from commonUtils.zip_access import open_archive, is_encrypted
 from features.comics.encryption import plan_encryption, execute_encryption, encrypt_comic
 
 
-class ComicEncryptionTests(unittest.TestCase):
+class ComicEncryptionTests(QtTestCase):
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

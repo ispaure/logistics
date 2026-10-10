@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from zipfile import ZipFile
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 from PySide6.QtTest import QTest
 from commonUtils.ui import pyside as qt
 from features.books.epub import EPUBBook
@@ -22,7 +23,7 @@ def replace_members(path, changes):
             archive.writestr(name, data)
 
 
-class BookPaginationTests(unittest.TestCase):
+class BookPaginationTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.tmp = TemporaryDirectory()
