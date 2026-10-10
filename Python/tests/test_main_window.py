@@ -402,14 +402,25 @@ class MainWindowTests(QtTestCase):
             self.assertTrue(window.sidebar.buttons['documents'].isChecked())
             self.assertIs(window.tabs.currentWidget(), current)
             button = window.sidebar.editor_buttons['text']
-            self.assertEqual([action.text() for action in button.menu().actions()], ['New', 'Open…'])
-            button.menu().actions()[0].trigger()
+            self.assertIsNone(button.menu())
+            group = window.sidebar.editor_groups['text']
+            self.assertFalse(group.flags() & qt.Qt.ItemFlag.ItemIsSelectable)
+            row = window.sidebar.document_tree.itemWidget(group, 0)
+            self.assertEqual([item.text() for item in row.findChildren(qt.QToolButton)], ['New', 'Open…'])
+            from PySide6.QtTest import QTest
+            for passive in row.findChildren(qt.QLabel):
+                QTest.mouseClick(passive, qt.Qt.MouseButton.LeftButton)
+            creator.assert_not_called()
+            opener.assert_not_called()
+            self.assertTrue(window.sidebar.document_overlay.isVisible())
+            self.assertTrue(group.isExpanded())
+            QTest.mouseClick(window.sidebar.editor_new_buttons['text'], qt.Qt.MouseButton.LeftButton)
             creator.assert_called_once_with(window.documents)
             opener.assert_not_called()
             self.assertFalse(window.sidebar.document_overlay.isVisible())
             self.assertFalse(window.sidebar.buttons['documents'].isChecked())
             window.sidebar.show_documents()
-            button.menu().actions()[1].trigger()
+            QTest.mouseClick(window.sidebar.editor_buttons['text'], qt.Qt.MouseButton.LeftButton)
             opener.assert_called_once_with(window.documents)
             self.assertIs(window.tabs.currentWidget(), current)
             window.sidebar.show_documents(); window.sidebar.show_documents()
