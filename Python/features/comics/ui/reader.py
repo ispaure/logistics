@@ -247,7 +247,8 @@ class ComicReaderWindow(qt.QMainWindow):
         self.busy = False
         self.operation.deleteLater()
         if self.closing:
-            self.close()
+            from commonUtils.ui.document_host import close_document
+            close_document(self)
         elif self.pending_file is not None:
             path, from_end, page, password = self.pending_file
             self.pending_file = None
@@ -364,7 +365,8 @@ class ComicReaderWindow(qt.QMainWindow):
 
     def _cache_idle(self):
         if self.closing:
-            self.close()
+            from commonUtils.ui.document_host import close_document
+            close_document(self)
 
     def shutdown(self):
         self.keys.stop()

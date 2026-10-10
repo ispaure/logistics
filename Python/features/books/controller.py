@@ -19,7 +19,9 @@ class BooksController(qt.QObject):
         def removed():
             if window in self.windows:
                 self.windows.remove(window)
-            self.idle.emit()
+            from shiboken6 import isValid
+            if isValid(self):
+                self.idle.emit()
         window.destroyed.connect(removed)
         if edit:
             window.idle.connect(self.idle)

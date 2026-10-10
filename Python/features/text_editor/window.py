@@ -1,6 +1,7 @@
 """One text document per host tab or standalone editor window."""
 
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.document_host import close_document
 from commonUtils.ui.operation_progress import OperationProgress
 from commonUtils.ui.reader_menus import RecentFiles
 from commonUtils.storage import cache_directory
@@ -112,7 +113,7 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
             (
                 "close",
                 "Close Document",
-                self.close,
+                lambda: close_document(self),
                 qt.QKeySequence.StandardKey.Close,
             ),
             ("close_all", "Close All", self.close_all, None),

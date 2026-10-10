@@ -126,6 +126,28 @@ class DocumentWorkspaceTests(unittest.TestCase):
         self.assertTrue(controller.prepare_close()); self.settle()
         self.assertFalse(document_is_open(window))
 
+    def test_epub_survives_deleted_origin_controller_and_closes_from_its_tab(self):
+        from books_fixture import make_book
+        from features.books.controller import BooksController
+        from time import monotonic, sleep
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary)/'sample.epub'; make_book(path)
+            origin = qt.QWidget()
+            controller = BooksController(origin)
+            document = controller.open(path)
+            deadline = monotonic() + 5
+            while document.reader.worker is not None:
+                self.assertLess(monotonic(), deadline); self.app.processEvents(); sleep(.005)
+            self.assertTrue(controller.prepare_close())
+            origin.deleteLater()
+            self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+            self.assertFalse(isValid(controller))
+            self.page.records[document]['dock'].tab_header.close_button.click()
+            self.settle()
+            self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+            self.assertEqual(self.page.count, 0)
+            self.assertTrue(self.host.isVisible())
+
     def test_closed_main_host_does_not_reopen_when_a_standalone_document_opens(self):
         self.host.hide()
         window = qt.QMainWindow()
