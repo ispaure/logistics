@@ -24,6 +24,7 @@ class BookText(qt.QTextBrowser):
         self.spread_owner = None
         self.companion = None
         self.read_pointer = None
+        self._read_scroll = 0
         self._resize_anchor = None
         self.resize_settle = qt.QTimer(self)
         self.resize_settle.setSingleShot(True)
@@ -55,7 +56,10 @@ class BookText(qt.QTextBrowser):
         try:
             last = self.page_count if self.spread_owner is not None else self.page_count - 1
             self.verticalScrollBar().setRange(0, last * self.page_height)
-            self.verticalScrollBar().setValue(self.page_index * self.page_height)
+            value = self._read_scroll if self.read_pointer is not None else self.page_index * self.page_height
+            if self.spread_owner is not None and self.spread_owner.read_pointer is not None:
+                value = self.spread_owner.verticalScrollBar().value() + self.page_height
+            self.verticalScrollBar().setValue(value)
         finally:
             self._adjusting_range = False
 
@@ -85,13 +89,15 @@ class BookText(qt.QTextBrowser):
     def location(self):
         return self.cursorForPosition(qt.QPoint(0, 0)).position()
 
-    def show_location(self, offset):
+    def show_location(self, offset, *, center=False):
         offset = max(0, min(int(offset), self.document().characterCount() - 1))
         block = self.document().findBlock(offset)
         line = block.layout().lineForTextPosition(offset - block.position())
         y = self.document().documentLayout().blockBoundingRect(block).top()
         if line.isValid():
             y += line.y()
+        if center:
+            self._read_scroll = max(0, int(y - self.page_height / 2))
         self.show_page(int(y // self.page_height))
 
     def resizeEvent(self, event):
@@ -105,7 +111,7 @@ class BookText(qt.QTextBrowser):
         super().resizeEvent(event)
         self.repaginate()
         if self.book:
-            self.show_location(offset)
+            self.show_location(offset, center=self.read_pointer is not None)
         self.resize_settle.start()
         self.layout_settle.start(0)
         # Font/theme changes and splitter resizing can invalidate the backing
@@ -117,7 +123,7 @@ class BookText(qt.QTextBrowser):
         offset = self._resize_anchor if self._resize_anchor is not None else self.location()
         self.repaginate()
         if self.book:
-            self.show_location(offset)
+            self.show_location(offset, center=self.read_pointer is not None)
 
     def keyPressEvent(self, event):
         if event.key() in (qt.Qt.Key.Key_Up, qt.Qt.Key.Key_Down):
