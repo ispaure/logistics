@@ -185,6 +185,7 @@ class GitUITests(QtTestCase):
         rail.refresh(tabs, [(0, 'Browser', browser), (5, 'Hub', hub)])
         self.assertEqual([rail.workspace_destinations.itemAt(i).widget().text() for i in range(2)], ['Sync', 'Git'])
         self.assertLess(rail.layout().indexOf(rail.workspace_destinations), rail.layout().indexOf(rail.buttons['tools']))
+        self.assertLess(rail.layout().indexOf(rail.buttons['actions']), rail.layout().indexOf(rail.workspace_destinations))
         tabs.removeTab(tabs.indexOf(sync)); rail.refresh(tabs, [(0, 'Browser', browser), (5, 'Hub', hub)])
         self.assertFalse(rail.buttons[f'feature:{id(sync)}'].isVisible())
         # Return the fixture page to a top-level owner before destroying tabs.

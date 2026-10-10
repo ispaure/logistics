@@ -110,7 +110,7 @@ class DestinationRail(qt.QWidget):
                            ('documents', 'Open documents'), ('actions', 'Folder Actions'), ('tools', 'Tools')]:
             button = self._button(key, title)
             layout.addWidget(button)
-            if key == 'hub':
+            if key == 'actions':
                 self.workspace_destinations = qt.QVBoxLayout()
                 self.workspace_destinations.setContentsMargins(0, 0, 0, 0)
                 self.workspace_destinations.setSpacing(8)
