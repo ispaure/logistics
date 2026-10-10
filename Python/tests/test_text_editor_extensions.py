@@ -79,3 +79,22 @@ class EditorExtensionTests(unittest.TestCase):
         self.assertIn("changed after comparison", dialog.status.text())
         self.assertEqual(editor.toPlainText(), before)
         self.assertEqual(path.read_text(), "😀 original\n")
+
+    def test_shortcuts_persist_propagate_conflicts_and_palette(self):
+        from commonUtils.ui.command_palette import CommandPalette, shortcut_text
+        self.window._save_shortcuts({"transform_trim": "Ctrl+Alt+T"})
+        other = self.service.open()
+        self.assertEqual(shortcut_text(other.actions["transform_trim"]), "Ctrl+Alt+T")
+        with self.assertRaises(ValueError):
+            self.window._save_shortcuts({"transform_trim": "Ctrl+S"})
+        self.assertEqual(shortcut_text(self.window.actions["transform_trim"]), "Ctrl+Alt+T")
+        editor = self.window.current.editor
+        editor.setPlainText("value  ")
+        palette = CommandPalette(self.window.actions, self.window)
+        palette.query.setText("trim whitespace")
+        self.assertEqual(palette.results.count(), 1)
+        palette.run_current()
+        self.assertEqual(editor.toPlainText(), "value")
+        palette.deleteLater()
+        self.window._save_shortcuts({})
+        self.assertEqual(shortcut_text(other.actions["transform_trim"]), "")
