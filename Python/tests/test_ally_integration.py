@@ -68,7 +68,7 @@ class AllyIntegrationTests(unittest.TestCase):
                     activate(self.logistics, self.ally)
             else:
                 activate(self.logistics, self.ally)
-        self.assertEqual(run.call_args.args[0][-1], f'mklink /J "{self.link}" "{self.source}"')
+            self.assertEqual(run.call_args.args[0], f'cmd /d /s /c "mklink /J "{self.link}" "{self.source}""')
         self.assertTrue(run.call_args.kwargs['check'])
 
     @unittest.skipIf(os.name == 'nt', 'Bash launchers')

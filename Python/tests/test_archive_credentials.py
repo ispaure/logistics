@@ -34,7 +34,8 @@ class ArchiveCredentialsTests(unittest.TestCase):
                 destination = Path(destination); seen.append(destination)
                 self.assertEqual(destination.parent,temp)
                 self.assertTrue(destination.name.startswith('logistics-credentials-'))
-                self.assertEqual(destination.stat().st_mode & 0o777,0o700)
+                if __import__('os').name != 'nt':
+                    self.assertEqual(destination.stat().st_mode & 0o777,0o700)
                 return unzip(source,destination,password)
             with patch.object(credentials.config,'LogisticsConfig',return_value=SimpleNamespace(temp_path=temp)), \
                  patch.object(credentials.configuration,'get_credential_config_path',return_value=output), \

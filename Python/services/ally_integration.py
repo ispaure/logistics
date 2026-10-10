@@ -23,7 +23,9 @@ def activate(logistics_root, ally_root):
         raise RuntimeError(f'Refusing to replace a real file or directory: {link}')
     if os.name == 'nt':
         # Directory junctions do not require Developer Mode or administrator rights.
-        subprocess.run(['cmd', '/d', '/c', f'mklink /J "{link}" "{source}"'], check=True)
+        # Pass cmd its native command line. list2cmdline adds backslash escapes
+        # around a whole command argument, which cmd's mklink does not understand.
+        subprocess.run(f'cmd /d /s /c "mklink /J "{link}" "{source}""', check=True)
     else:
         link.symlink_to(source, target_is_directory=True)
     os.environ['LOGISTICS_ALLY_ROOT'] = str(ally_root)

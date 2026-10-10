@@ -104,7 +104,7 @@ def _save_metadata(book, changes, cancelled):
                             destination.write(chunk)
         EPUBBook(staged)  # Do not replace the original with an unreadable package.
         shutil.copymode(book.path, staged)
-        with staged.open('rb') as stream:
+        with staged.open('r+b') as stream:
             os.fsync(stream.fileno())
         check()
         backup = book.path.with_name(book.path.name + '.bak')

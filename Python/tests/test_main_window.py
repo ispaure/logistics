@@ -475,6 +475,9 @@ class MainWindowTests(QtTestCase):
         row.findChild(qt.QPushButton).click(); self.app.processEvents()
         self.assertIs(editor.current, first)
         self.assertIs(window.tabs.currentWidget(), window.documents)
+        editor.close()
+        self.app.processEvents()
+        self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
         window.dlg.close(); self.app.processEvents()
 
     def test_all_detached_documents_keep_sidebar_return_route_without_empty_page(self):
