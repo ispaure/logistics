@@ -76,6 +76,13 @@ class EditingCommands:
             ),
         ]:
             self.action(self._edit_menu, key, label, callback, shortcut)
+        tools = self.menuBar().addMenu("&Tools")
+        for language in ("json", "xml"):
+            for operation in ("format", "validate"):
+                self.action(tools, operation + "_" + language,
+                            operation.title() + " " + language.upper(),
+                            lambda language=language, operation=operation:
+                            self.structured_text(language, operation))
         transforms = self._edit_menu.addMenu("Text Transformations")
         for key, label in [
             ("sort", "Sort Lines Ascending"), ("sort_reverse", "Sort Lines Descending"),
@@ -334,3 +341,28 @@ class EditingCommands:
             if not accepted:
                 return
         self.current.editor.transform(command, start=start)
+
+    def structured_text(self, language, operation):
+        from commonUtils.ui.code_editor.formatting import format_text, validate_text
+        if not self.current:
+            return
+        editor = self.current.editor
+        if editor.isReadOnly() and operation == "format":
+            return
+        cursor = editor.textCursor()
+        if not cursor.hasSelection():
+            cursor.select(qt.QTextCursor.SelectionType.Document)
+        text = cursor.selectedText().replace("\u2029", "\n")
+        try:
+            if operation == "validate":
+                validate_text(text, language)
+                self.statusBar().showMessage(language.upper() + " is valid", 5000)
+            else:
+                result = format_text(text, language, editor.indent_width)
+                if text != result:
+                    cursor.beginEditBlock()
+                    cursor.insertText(result)
+                    cursor.endEditBlock()
+                    editor.setTextCursor(cursor)
+        except Exception as error:
+            self.show_error(error)
