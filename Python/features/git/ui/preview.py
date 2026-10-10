@@ -8,6 +8,7 @@ from commonUtils.ui.code_editor.diff_bands import diff_colors, DiffEdit, DiffHig
 
 
 class Preview(qt.QWidget):
+    hunk_requested = qt.Signal(object, int, str)
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = qt.QVBoxLayout(self)
@@ -36,6 +37,7 @@ class Preview(qt.QWidget):
         layout.addWidget(self.summary)
         self.raw_patch = None
         self.diff_view = None
+        self.hunk_context = None
         controls = qt.QHBoxLayout()
         controls.setContentsMargins(2, 0, 2, 0)
         controls.setSpacing(4)
@@ -53,8 +55,7 @@ class Preview(qt.QWidget):
             setattr(self, name, button); controls.addWidget(button)
         self.wrap = qt.QCheckBox('Wrap')
         self.wrap.setToolTip('Wrap long lines without horizontal scrolling')
-        self.wrap.toggled.connect(lambda enabled: self.editor.setLineWrapMode(
-            qt.QPlainTextEdit.LineWrapMode.WidgetWidth if enabled else qt.QPlainTextEdit.LineWrapMode.NoWrap))
+        self.wrap.toggled.connect(self._set_wrap)
         controls.addWidget(self.wrap)
         self.raw = qt.QCheckBox('Raw')
         self.raw.setToolTip('Show the original Git patch, including headers')
@@ -70,6 +71,10 @@ class Preview(qt.QWidget):
         self.editor.setAccessibleName('Git diff or historical file preview')
         self.highlighter = DiffHighlighter(self.editor)
         layout.addWidget(self.editor, 1)
+        from .hunks import HunkCards
+        self.cards = HunkCards(self)
+        layout.addWidget(self.cards, 1)
+        self.cards.hide()
         self._set_diff_controls(False)
 
     def changeEvent(self, event):
@@ -88,15 +93,17 @@ class Preview(qt.QWidget):
 
     def show_text(self, title, text):
         self.title.setText(title)
-        self.raw_patch = self.diff_view = None
+        self.raw_patch = self.diff_view = self.hunk_context = None
+        self.cards.hide(); self.editor.show()
         self.summary.hide()
         self._set_diff_controls(False)
         self.editor.setPlainText(text)
         self.highlighter.rehighlight()
 
-    def show_diff(self, title, patch):
+    def show_diff(self, title, patch, *, hunk_context=None):
         self.title.setText(title)
         self.raw_patch = patch
+        self.hunk_context = hunk_context
         self.diff_view = present_diff(patch)
         self.summary.setText(self.diff_view.summary)
         self.summary.show()
@@ -114,6 +121,15 @@ class Preview(qt.QWidget):
         if self.raw_patch is None: return
         self.editor.set_diff(self.diff_view, raw=self.raw.isChecked())
         self.highlighter.rehighlight()
+        separated = not self.raw.isChecked() and bool(self.diff_view.hunks)
+        self.cards.setVisible(separated)
+        self.editor.setVisible(not separated)
+        if separated: self.cards.render(self.diff_view, self.hunk_context)
+
+    def _set_wrap(self, enabled):
+        self.editor.setLineWrapMode(qt.QPlainTextEdit.LineWrapMode.WidgetWidth if enabled
+                                   else qt.QPlainTextEdit.LineWrapMode.NoWrap)
+        self.cards.set_wrap(enabled)
 
     def move_hunk(self, step):
         if self.raw_patch is None: return
@@ -126,8 +142,28 @@ class Preview(qt.QWidget):
         target = (choices[0] if step > 0 else choices[-1]) if choices else (positions[0] if step > 0 else positions[-1])
         self.editor.setTextCursor(qt.QTextCursor(self.editor.document().findBlockByNumber(target)))
         self.editor.centerCursor()
+        if not self.raw.isChecked() and self.cards.cards:
+            index = positions.index(target)
+            self.cards.ensureWidgetVisible(self.cards.cards[index])
 
     def find_next(self):
+        if self.cards.isVisible():
+            editors = self.cards.editors
+            start = getattr(self, '_search_card', 0) % max(1, len(editors))
+            for offset in range(len(editors)):
+                index = (start + offset) % len(editors)
+                if offset:
+                    cursor = editors[index].textCursor(); cursor.movePosition(qt.QTextCursor.MoveOperation.Start)
+                    editors[index].setTextCursor(cursor)
+                if editors[index].find(self.search.text()):
+                    self._search_card = index
+                    self.cards.ensureWidgetVisible(editors[index]); return
+            for index, editor in enumerate(editors):
+                cursor = editor.textCursor(); cursor.movePosition(qt.QTextCursor.MoveOperation.Start)
+                editor.setTextCursor(cursor)
+                if editor.find(self.search.text()):
+                    self._search_card = index; self.cards.ensureWidgetVisible(editor); return
+            return
         if not self.editor.find(self.search.text()):
             cursor = self.editor.textCursor()
             cursor.movePosition(qt.QTextCursor.MoveOperation.Start)

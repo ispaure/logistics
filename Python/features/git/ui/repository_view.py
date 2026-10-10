@@ -6,6 +6,7 @@ after writes, including conflicts and cancelled network operations.
 """
 from pathlib import Path
 import sys
+import shlex
 
 from commonUtils.ui import pyside as qt
 from ..preferences import Preferences
@@ -14,6 +15,7 @@ from ..runner import redact
 from .changes import ChangesPanel
 from .dialogs import FormDialog
 from .history import HistoryPanel
+from .search import SearchPanel
 from .preview import Preview
 from .jobs import GitJobs
 from .repository_tools import RepositoryTools
@@ -36,6 +38,7 @@ class RepositoryView(GitJobs, qt.QWidget):
         self.snapshot = None
         self.path = None
         self.history_limit = 200
+        self._template_message = ''
         self.closing = False
         self._refresh_pending = False
         self.repository_tools = RepositoryTools(self)
@@ -56,18 +59,12 @@ class RepositoryView(GitJobs, qt.QWidget):
         content_font = qt.QFont(toolbar_font)
         content_font.setPointSizeF(max(8.0, toolbar_font.pointSizeF() - 1.0))
         self.setFont(content_font)
-        self.repository_menu = qt.QToolButton()
-        self.repository_menu.setText('+ Repositories')
-        self.repository_menu.setAccessibleName('Open, clone or manage repositories')
-        self.repository_menu.setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
-        menu = qt.QMenu(self.repository_menu)
-        for title, callback in (('Open…',self.open_dialog),('Clone…',self.clone_dialog),
-                               ('Init…',self.init_dialog),('Manage bookmarks…',self.manage_repositories)):
-            menu.addAction(title,callback)
-        self.bookmark_menu = menu.addMenu("Bookmarks")
+        self.repository_menu = qt.QMenu(self)
+        for title, callback in (('Open…', self.open_dialog), ('Clone…', self.clone_dialog),
+                               ('Init…', self.init_dialog), ('Manage bookmarks…', self.manage_repositories)):
+            self.repository_menu.addAction(title, callback)
+        self.bookmark_menu = self.repository_menu.addMenu('Bookmarks')
         self.bookmark_menu.aboutToShow.connect(self._repositories)
-        self.repository_menu.setMenu(menu)
-        self.repository_buttons = [self.repository_menu]
         self.repository_label = qt.QLabel()
         self.repository_label.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.repository_label.setWordWrap(True)
@@ -78,7 +75,6 @@ class RepositoryView(GitJobs, qt.QWidget):
         self.toolbar.setToolButtonStyle(qt.Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         self.toolbar.setObjectName('gitToolbar')
         self.toolbar.setFont(toolbar_font)
-        self.toolbar.addWidget(self.repository_menu)
         self.action_buttons = {}
         for title, icon, callback in (
                 ('Commit', 'commit', self.focus_commit), ('Pull…', 'pull', self.pull_dialog),
@@ -134,6 +130,7 @@ class RepositoryView(GitJobs, qt.QWidget):
         self.views.tabBar().hide()
         self.changes = ChangesPanel()
         self.history = HistoryPanel()
+        self.search_results = SearchPanel()
         self.preview = Preview()
         code_font = qt.QFont(self.preview.editor.font())
         code_font.setPointSizeF(max(9.0, code_font.pointSizeF()))
@@ -165,6 +162,18 @@ class RepositoryView(GitJobs, qt.QWidget):
         history_view.addWidget(self.history_bottom)
         history_view.setSizes([440, 300])
         self.views.addTab(history_view, 'History')
+        search_view = qt.QSplitter(qt.Qt.Orientation.Vertical)
+        search_view.addWidget(self.search_results)
+        search_bottom = qt.QSplitter(qt.Qt.Orientation.Horizontal)
+        search_bottom.addWidget(self.search_results.details)
+        search_preview_host = qt.QWidget()
+        self.search_preview_layout = qt.QVBoxLayout(search_preview_host)
+        self.search_preview_layout.setContentsMargins(0, 0, 0, 0)
+        search_bottom.addWidget(search_preview_host)
+        search_bottom.setSizes([450, 550])
+        search_view.addWidget(search_bottom)
+        search_view.setSizes([440, 300])
+        self.views.addTab(search_view, 'Search')
         self.content.addWidget(self.views)
         self.content.setSizes([192, 1058])
         self.content.setStretchFactor(0, 0)
@@ -179,7 +188,12 @@ class RepositoryView(GitJobs, qt.QWidget):
         self.changes.resolve_requested.connect(self.resolve_conflict)
         self.history.commit_selected.connect(self.preview_commit)
         self.history.parent_requested.connect(self.focus_parent)
-        self.history.working_copy_selected.connect(lambda: self.views.setCurrentIndex(0))
+        self.history.working_copy_selected.connect(self.preview_working_copy)
+        self.search_results.search_requested.connect(self.search_history)
+        self.search_results.commit_selected.connect(lambda commit: self.preview_commit(commit, self.search_results))
+        self.search_results.blob_selected.connect(self.preview_blob)
+        self.search_results.parent_requested.connect(self._search_parent)
+        self.search_results.load_more.connect(self.load_more_search)
         self.preview.ignore_whitespace.toggled.connect(self._reload_preview)
         self.history.blob_selected.connect(self.preview_blob)
         self.history.load_more.connect(self.load_more)
@@ -188,6 +202,7 @@ class RepositoryView(GitJobs, qt.QWidget):
         self.preview.unstage_button.clicked.connect(self.changes.unstage_selected)
         self.preview.discard_button.clicked.connect(self.changes.discard_selected)
         self.preview.compare_button.clicked.connect(self.compare_change)
+        self.preview.hunk_requested.connect(self.apply_hunk)
         status = qt.QHBoxLayout()
         self.status = qt.QLabel('Ready')
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
@@ -236,7 +251,7 @@ class RepositoryView(GitJobs, qt.QWidget):
 
     def _set_busy(self, busy):
         available = self.snapshot is not None
-        for button in self.repository_buttons: button.setEnabled(not busy)
+        self.repository_menu.setEnabled(not busy)
         self.toolbar.setEnabled(not busy)
         for title, button in self.action_buttons.items():
             button.defaultAction().setEnabled(not busy and (available or title == 'Settings'))
@@ -275,7 +290,7 @@ class RepositoryView(GitJobs, qt.QWidget):
         return self._discard_draft()
 
     def _discard_draft(self):
-        if not self.changes.message.toPlainText().strip(): return True
+        if not self.changes.message.toPlainText().strip() or self.changes.message.toPlainText() == self._template_message: return True
         if not self._confirm('Discard commit message?', 'The uncommitted message draft will be discarded. Files and staged changes are kept.'):
             return False
         self.changes.message.clear()
@@ -353,15 +368,50 @@ class RepositoryView(GitJobs, qt.QWidget):
         self.repository_label.setText(f'  {name} · {branch}{tracking}')
         self.repository_label.setToolTip(str(snapshot.root))
         self.changes.set_changes(status.changes)
+        self.changes.set_push_target(status.branch, 'origin' in snapshot.remotes and status.branch not in ('', '(detached)'))
+        from .chrome import action_icon
+        for title, icon, count, description in (
+                ('Commit', 'commit', len(status.changes), 'uncommitted files'),
+                ('Pull…', 'pull', status.behind if status.upstream else 0, 'incoming commits'),
+                ('Push…', 'push', status.ahead if status.upstream else 0, 'outgoing commits')):
+            button = self.action_buttons[title]
+            button.setProperty('badge_count', count)
+            button.defaultAction().setIcon(action_icon(icon, count))
+            button.defaultAction().setToolTip(f'{title} · {count} {description}')
+        if not self.changes.amend.isChecked():
+            self._apply_template({'template_text': snapshot.template_text})
+        if snapshot.template_warning:
+            self._append_log(snapshot.template_warning + '\n')
         self.history.head_oid = status.oid
         self.history.uncommitted_count = len(status.changes)
         self.history.set_commits(snapshot.commits, snapshot.more_history and self.history_limit < 5000)
+        self.search_results.stale = True
+        if self.views.currentIndex() == 2:
+            self._search_pending = True
+        if self.views.currentIndex() == 1 and self.history.working_copy_is_selected():
+            self.preview_working_copy()
         self._render_navigation(snapshot)
         self.operation_label.setText(f'{snapshot.operation} in progress — resolve conflicts, stage files, then Continue.')
         self.operation_bar.setVisible(snapshot.operation in ('merge', 'rebase', 'cherry-pick', 'revert'))
         self.changes.amend.setEnabled(bool(snapshot.commits) and not snapshot.operation)
         if snapshot.operation: self.changes.amend.setChecked(False)
         self._set_busy(self.busy)
+        pending = getattr(self, '_refresh_preview_pending', None)
+        if pending is not None:
+            self._refresh_preview_pending = None
+            relative, staged = pending
+            change = next((change for change in status.changes if change.path == relative), None)
+            if self.views.currentIndex() == 0 and change is not None:
+                side = staged if (change.staged if staged else change.unstaged) else not staged
+                tree = self.changes.staged_files if side else self.changes.unstaged_files
+                with qt.QSignalBlocker(tree):
+                    for i in range(tree.topLevelItemCount()):
+                        item = tree.topLevelItem(i)
+                        if item.data(0, qt.Qt.ItemDataRole.UserRole)[0].path == relative:
+                            tree.setCurrentItem(item); break
+                self.preview_change(change, side)
+            elif self.views.currentIndex() == 0:
+                self.preview.show_text(relative, 'No remaining changes.')
 
     def _render_navigation(self, snapshot):
         from .navigation import populate_navigation
@@ -378,13 +428,12 @@ class RepositoryView(GitJobs, qt.QWidget):
         if not value: return
         kind, name, ref = value
         if kind == 'view':
-            if name == 2: self._focus_search_pending = True
-            self.views.setCurrentIndex(0 if name == 0 else 1)
+            self.views.setCurrentIndex(name)
             if name == 2:
-                if not self.busy:
-                    self._focus_search_pending = False
-                    self.history.search.setFocus()
-                self.refs.setCurrentItem(item)
+                if self.busy:
+                    self._focus_search_pending = True
+                else:
+                    self.search_results.search.setFocus()
         elif kind in ('branch', 'remote_branch', 'tag'):
             self.show_ref_commit(ref)
 
@@ -412,8 +461,9 @@ class RepositoryView(GitJobs, qt.QWidget):
     def open_terminal(self):
         if not self.path: return
         from commonUtils.integrations.wrappers.cmdShellWrapper.terminal import exec_cmd_new_window
+        command = 'cd' if sys.platform == 'win32' else f'cd -- {shlex.quote(str(self.path))} && pwd'
         try:
-            if exec_cmd_new_window('', str(self.path)) is False: self._message('Terminal could not be opened.', error=True)
+            if exec_cmd_new_window(command, str(self.path)) is False: self._message('Terminal could not be opened.', error=True)
         except OSError as error: self._message(str(error), error=True)
 
     def open_dialog(self):
@@ -440,7 +490,27 @@ class RepositoryView(GitJobs, qt.QWidget):
             self._job('Initialize repository', lambda runner: initialize(path, runner), lambda path: self.open_repository(path))
 
     def settings_dialog(self):
-        dialog = FormDialog('Git settings', self, scope='personal')
+        from .settings import RepositorySettingsDialog
+        if self.path is None:
+            self.executable_dialog()
+            return
+        path = self.path
+        def show(settings):
+            dialog = RepositorySettingsDialog(settings, self)
+            if dialog.exec() == qt.QDialog.DialogCode.Accepted:
+                values = dialog.values()
+                self._operation('Save repository settings', lambda repo: repo.save_settings(values),
+                                lambda result: self._apply_template(result))
+        self._job('Read repository settings', lambda runner: Repository(path, runner).settings(), show)
+
+    def _apply_template(self, settings):
+        message = self.changes.message.toPlainText()
+        if not message.strip() or message == self._template_message:
+            self._template_message = settings['template_text']
+            self.changes.message.setPlainText(self._template_message)
+
+    def executable_dialog(self):
+        dialog = FormDialog('Git executable', self, scope='personal')
         executable = dialog.text('Git executable', self.preferences.executable)
         executable.setToolTip('Git 2.40 or newer. Authentication uses Git helpers or SSH agents.')
         if dialog.submitted():
@@ -482,10 +552,29 @@ class RepositoryView(GitJobs, qt.QWidget):
             return repo.untracked_preview(change.path) if change.index == '?' else repo.diff(
                 change.path, staged=staged, ignore_whitespace=ignore_whitespace)
         self.preview.set_file_actions(staged, change.index != '?' and not change.conflict)
-        display = self.preview.show_text if change.index == '?' else self.preview.show_diff
-        self._job('Read file changes', read, lambda text: display(
-            ('Staged: ' if staged else 'Working tree: ') + change.path,
-            text or ('No differences with whitespace ignored.' if ignore_whitespace else 'No textual differences.')))
+        def show(text):
+            title = ('Staged: ' if staged else 'Working tree: ') + change.path
+            text = text or ('No differences with whitespace ignored.' if ignore_whitespace else 'No textual differences.')
+            if change.index == '?':
+                self.preview.show_text(title, text)
+            else:
+                allowed = not (ignore_whitespace or change.conflict or change.original_path or change.submodule != 'N...'
+                               or any(line.startswith(('old mode ', 'new mode ', 'rename ', 'copy ')) for line in text.splitlines()))
+                context = {'root': str(path), 'path': change.path, 'staged': staged, 'patch': text,
+                           'allowed': allowed, 'reason': '' if allowed else
+                           'Use the complete file action, or turn off Ignore whitespace for hunk actions.'}
+                self.preview.show_diff(title, text, hunk_context=context)
+        self._job('Read file changes', read, show)
+
+    def apply_hunk(self, context, index, action):
+        if self.busy or not self.path or str(self.path) != context['root'] or not context['allowed']: return
+        if action == 'discard' and not self._confirm('Discard this hunk?',
+                'Discard only these unstaged edits? They cannot be recovered through Git.'):
+            return
+        def applied(result):
+            self._refresh_preview_pending = (context['path'], context['staged'])
+        self._operation(action.capitalize() + ' hunk', lambda repo: repo.apply_hunk(
+            context['path'], index, context['patch'], staged=context['staged'], discard=action == 'discard'), applied)
 
     def compare_change(self):
         if self.busy or not self.path or not getattr(self, '_comparison_selection', None):
@@ -507,21 +596,22 @@ class RepositoryView(GitJobs, qt.QWidget):
         reload = getattr(self, '_preview_reload', None)
         if reload and not self.busy: reload()
 
-    def preview_commit(self, commit):
-        if self.busy or not self.path: return
+    def preview_commit(self, commit, panel=None):
+        if self.busy or not self.path or commit is None: return
+        panel = panel or self.history
         self._preview_reload = None
         path = self.path
-        full_tree = bool(self.history.file_mode.currentIndex())
+        full_tree = bool(panel.file_mode.currentIndex())
         def read(runner):
             repo = Repository(path, runner)
             return repo.commit_metadata(commit.oid), (repo.tree(commit.oid) if full_tree else repo.commit_files(commit.oid))
         def show(result):
             details, entries = result
             self.preview.show_text(commit.oid + ' · ' + commit.subject, 'Select a file to review its changes.')
-            self.history.set_tree(entries)
-            self.history.set_metadata(details)
+            panel.set_tree(entries)
+            panel.set_metadata(details)
             self.preview.hide_file_actions()
-            self.history.select_first_file()
+            panel.select_first_file()
         self._job('Read commit', read, show)
 
     def focus_parent(self, oid):
@@ -538,6 +628,10 @@ class RepositoryView(GitJobs, qt.QWidget):
         self._job('Load parent history', lambda runner: Repository(path, runner).history(5000), show)
 
     def preview_blob(self, entry):
+        if entry.kind == 'working':
+            change = next((change for change in self.snapshot.status.changes if change.path == entry.path), None)
+            if change is not None: self.preview_working_file(change)
+            return
         if self.busy or not self.path: return
         self._preview_reload = lambda: self.preview_blob(entry)
         if entry.kind == 'change':
@@ -556,12 +650,19 @@ class RepositoryView(GitJobs, qt.QWidget):
                   lambda text: self.preview.show_text(entry.path + ' · ' + entry.oid[:8], text))
 
     def _view_changed(self, index):
-        target = self.history_preview_layout if index == 1 else self.change_preview_layout
+        target = (self.change_preview_layout, self.history_preview_layout, self.search_preview_layout)[index]
         target.addWidget(self.preview)
         self.preview.hide_file_actions()
         self._select_navigation(index)
-        if index == 1:
-            if self.history.selected_commit() is None and self.history.table.topLevelItemCount():
+        if index == 2:
+            if self.search_results.stale:
+                self.search_history()
+            elif self.search_results.selected_commit():
+                self.preview_commit(self.search_results.selected_commit(), self.search_results)
+        elif index == 1:
+            if self.history.working_copy_is_selected():
+                self.preview_working_copy()
+            elif self.history.selected_commit() is None and self.history.table.topLevelItemCount():
                 for i in range(self.history.table.topLevelItemCount()):
                     item = self.history.table.topLevelItem(i)
                     if item.data(1, qt.Qt.ItemDataRole.UserRole):
@@ -578,6 +679,70 @@ class RepositoryView(GitJobs, qt.QWidget):
                 self._preview_reload = None
                 self.preview.show_text('Select a changed file', '')
 
+    def preview_working_copy(self):
+        if not self.snapshot: return
+        from ..models import TreeEntry
+        changes = self.snapshot.status.changes
+        self._preview_reload = None
+        self.history.set_tree([TreeEntry(change.index + change.worktree, 'working', '', change.path)
+                               for change in changes])
+        self.history.metadata.setPlainText(f'Uncommitted changes\n{len(changes)} changed files in {self.path}')
+        self.preview.show_text('Uncommitted changes', 'Select a file to review its changes.')
+        self.preview.hide_file_actions()
+        self.history.select_first_file()
+
+    def preview_working_file(self, change):
+        if self.busy or not self.path: return
+        path = self.path
+        plain = change.index == '?' or self.snapshot.status.oid in ('', '(initial)')
+        ignore = self.preview.ignore_whitespace.isChecked()
+        self._preview_reload = lambda: self.preview_working_file(change)
+        self.preview.hide_file_actions()
+        def read(runner):
+            repo = Repository(path, runner)
+            return repo.untracked_preview(change.path) if plain else repo.diff(
+                change.path, against_head=True, ignore_whitespace=ignore)
+        display = self.preview.show_text if plain else self.preview.show_diff
+        self._job('Read uncommitted file', read, lambda text: display('Uncommitted: ' + change.path,
+                  text or 'No textual differences.'))
+
+    def search_history(self):
+        panel = self.search_results
+        if not self.path or self.closing: return
+        panel.timer.stop()
+        if self.views.currentIndex() != 2:
+            panel.stale = True
+            return
+        if self.busy:
+            self._search_pending = True
+            return
+        self._search_pending = False
+        panel.stale = False
+        query, mode, since, until = panel.query()
+        token = panel.query(), panel.limit
+        path = self.path
+        def show(commits):
+            if self.path != path or token != (panel.query(), panel.limit):
+                self._search_pending = True
+                return
+            panel.set_commits(commits[:panel.limit], len(commits) > panel.limit and panel.limit < 5000)
+            with qt.QSignalBlocker(panel.table): panel.table.setCurrentItem(None)
+            panel.tree.clear()
+            panel.metadata.clear()
+            if self.views.currentIndex() == 2:
+                self.preview.show_text('Search results', 'Select a commit to review its files.')
+                panel.select_ref(commits[0].oid) if commits else None
+        self._job('Search repository history', lambda runner: Repository(path, runner).search_history(
+            query, mode, since, until, panel.limit), show)
+
+    def _search_parent(self, oid):
+        self.search_results.mode.setCurrentText('Commit SHA')
+        self.search_results.search.setText(oid)
+
+    def load_more_search(self):
+        self.search_results.limit = min(5000, self.search_results.limit + 200)
+        self.search_history()
+
     def load_more(self):
         self.history_limit = min(5000, self.history_limit + 200)
         self.refresh()
@@ -589,10 +754,19 @@ class RepositoryView(GitJobs, qt.QWidget):
             return
         if amend and not self._confirm('Amend last commit?', 'Replace the current branch tip with a new commit. Published history may need coordinated recovery.'):
             return
+        push = self.changes.push_immediately.isChecked()
+        branch = self.snapshot.status.branch if self.snapshot else ''
+        def action(repo):
+            if push and repo.status().branch != branch:
+                from ..runner import GitError
+                raise GitError('The active branch changed. Refresh before committing and pushing.')
+            return repo.commit(message, amend)
         def committed(result):
             self.changes.message.clear()
             self.changes.amend.setChecked(False)
-        self._operation('Amend commit' if amend else 'Commit staged changes', lambda repo: repo.commit(message, amend), committed)
+            if push:
+                self._operation('Push committed changes', lambda repo: repo.push_current_to_origin(branch))
+        self._operation('Amend commit' if amend else 'Commit staged changes', action, committed)
 
     def discard_dialog(self, changes):
         if not changes:

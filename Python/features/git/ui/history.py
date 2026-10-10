@@ -154,6 +154,7 @@ class HistoryPanel(qt.QWidget):
         self.details.setSizes([180,170])
 
     def set_commits(self, commits, more=False):
+        working_selected = self.working_copy_is_selected()
         selected = self.selected_commit()
         oid = selected.oid if selected else ''
         self.commits = commits
@@ -171,9 +172,10 @@ class HistoryPanel(qt.QWidget):
                     item = qt.QTreeWidgetItem(['', 'Uncommitted changes', '*', '*', 'Today'])
                     item.setData(0, qt.Qt.ItemDataRole.UserRole, row)
                     item.setData(1, WORKING_COPY_ROLE, True)
-                    item.setToolTip(1, f'{self.uncommitted_count} changed files — open File status')
+                    item.setToolTip(1, f'{self.uncommitted_count} changed files — review in History')
                     font = self.table.font(); font.setBold(True); item.setFont(1, font)
                     self.table.addTopLevelItem(item)
+                    if working_selected: self.table.setCurrentItem(item)
                     continue
                 subject = commit.subject + (f'  · {commit.decorations}' if commit.decorations else '')
                 item = qt.QTreeWidgetItem(['', subject, commit.oid[:8], commit.author, commit.date.replace('T',' ')[:19]])
@@ -218,6 +220,10 @@ class HistoryPanel(qt.QWidget):
         rows = ''.join(f'<tr><td style="color:{muted}; padding-right:8px">{label}:</td><td>{value}</td></tr>'
                        for label, value in fields)
         self.metadata.setHtml(f'<p>{message}</p><table cellspacing="2">{rows}</table>')
+
+    def working_copy_is_selected(self):
+        item = self.table.currentItem()
+        return bool(item and item.data(1, WORKING_COPY_ROLE))
 
     def selected_commit(self):
         item = self.table.currentItem()

@@ -39,6 +39,8 @@ class Snapshot:
     more_history: bool = False
     submodule_paths: tuple[str, ...] = ()
     display_name: str = ''
+    template_text: str = ''
+    template_warning: str = ''
 
 
 
@@ -79,6 +81,54 @@ class Repository:
         return parse_log(self.run(['log', '--all', '--topo-order', f'--max-count={limit}',
                                   '--format=%H%x00%P%x00%an%x00%aI%x00%s%x00%D%x00%x00']).stdout)
 
+    def search_history(self, query, mode='Commit Message', since='1980-01-01', until='2100-01-01', limit=200):
+        from datetime import date, datetime, time
+        try:
+            first, last = date.fromisoformat(since), date.fromisoformat(until)
+        except ValueError as exc:
+            raise GitError('Choose valid search dates.') from exc
+        if first > last: raise GitError('From date must be on or before To date.')
+        if not 1 <= limit <= 5000: raise GitError('Search limit must be between 1 and 5000.')
+        if mode not in ('Commit Message', 'Commit SHA', 'Branch', 'File Changes', 'User'):
+            raise GitError('Unknown search field.')
+        # Numeric bounds avoid Git's approximate-date parser misreading distant years.
+        start = int(datetime.combine(first, time.min).timestamp())
+        end = int(datetime.combine(last, time(23, 59, 59)).timestamp())
+        bounds = [f'--max-age={start}', f'--min-age={end}']
+        refs = ['--all']
+        options = []
+        query = query.strip()
+        if query and mode == 'Branch':
+            refs = [ref.name for ref in self.refs() if ref.name.startswith(('refs/heads/', 'refs/remotes/'))
+                    and query.casefold() in ref.name.casefold()]
+            if not refs: return []
+        elif query and mode == 'Commit SHA':
+            if not re.fullmatch(r'[a-fA-F0-9]{4,64}', query): return []
+            hashes = self.run(['rev-list', '--all', *bounds]).stdout.decode('ascii').splitlines()
+            refs = [oid for oid in hashes if oid.startswith(query.lower())][:limit + 1]
+            if not refs: return []
+            options = ['--no-walk']
+        elif query and mode == 'File Changes':
+            # Double NUL marks a header; filenames are NUL-separated and never empty.
+            data = self.run(['log', '--all', *bounds, '--diff-merges=first-parent',
+                             '--format=%x00%x00%H', '--name-only', '--no-renames', '-z']).stdout
+            records = re.split(rb'\0\0([a-f0-9]{40}|[a-f0-9]{64})\0', data)
+            refs = []
+            for i in range(1, len(records), 2):
+                paths = records[i + 1].removeprefix(b'\n').split(b'\0')
+                if any(query.casefold() in os.fsdecode(path).casefold() for path in paths if path):
+                    refs.append(records[i].decode('ascii'))
+                    if len(refs) > limit: break
+            if not refs: return []
+            options = ['--no-walk']
+        elif query and mode == 'User':
+            options = ['--regexp-ignore-case', '--extended-regexp', '--author=' + re.escape(query)]
+        elif query:
+            options = ['--regexp-ignore-case', '--fixed-strings', '--grep=' + query]
+        if not self.refs(): return []
+        return parse_log(self.run(['log', *refs, *bounds, *options, f'--max-count={limit + 1}',
+                                  '--format=%H%x00%P%x00%an%x00%aI%x00%s%x00%D%x00%x00']).stdout)
+
     def operation(self):
         for marker, name in (('rebase-merge', 'rebase'), ('rebase-apply', 'rebase'),
                              ('MERGE_HEAD', 'merge'), ('CHERRY_PICK_HEAD', 'cherry-pick'),
@@ -110,15 +160,46 @@ class Repository:
         if superproject:
             parent = Path(os.fsdecode(superproject))
             display_name = parent.name + '/' + root.relative_to(parent).as_posix()
-        return Snapshot(root, status, commits[:limit], refs, remotes, stashes, self.operation(), len(commits) > limit, submodule_paths, display_name)
+        template, warning = self.read_template()
+        return Snapshot(root, status, commits[:limit], refs, remotes, stashes, self.operation(), len(commits) > limit, submodule_paths, display_name, template, warning)
 
-    def diff(self, path, *, staged=False, ignore_whitespace=False):
-        result = self.run(['diff', '--no-ext-diff', '--no-textconv', *(['--cached'] if staged else []),
+    def diff(self, path, *, staged=False, ignore_whitespace=False, against_head=False):
+        result = self.run(['diff', '--no-ext-diff', '--no-textconv', '--src-prefix=a/', '--dst-prefix=b/', *(['HEAD'] if against_head else ['--cached'] if staged else []),
                            *(['--ignore-all-space'] if ignore_whitespace else []),
                            '--', path], check=False, limit=1024 * 1024)
         if result.returncode: raise GitError(result.stderr)
         text = result.stdout.decode('utf-8', 'replace')
         return text + ('\n[Diff truncated to 1 MiB]' if result.truncated else '')
+
+    def apply_hunk(self, relative_path, index, expected_patch, *, staged=False, discard=False):
+        from tempfile import TemporaryDirectory
+        from .patches import single_hunk
+        if discard and staged: raise GitError('Unstage this hunk before discarding it.')
+        root = self.root().resolve()
+        path = root / relative_path
+        if Path(relative_path).is_absolute() or '..' in Path(relative_path).parts or path.is_symlink() or not path.resolve().is_relative_to(root):
+            raise GitError('Hunks require a regular file within this repository.')
+        change = next((change for change in self.status().changes if change.path == relative_path), None)
+        if change is None or change.conflict or change.original_path or change.submodule != 'N...' or change.index == '?':
+            raise GitError('Use file actions for untracked files, conflicts, renames and submodules.')
+        self._check_text_attributes(relative_path)
+        entries = self.run(['ls-files', '--stage', '-z', '--', relative_path]).stdout
+        if not entries:
+            entries = self.run(['ls-tree', '-z', 'HEAD', '--', relative_path]).stdout
+        if not entries.startswith((b'100644 ', b'100755 ')):
+            raise GitError('Hunk actions support regular text files only.')
+        result = self.run(['diff', '--no-ext-diff', '--no-textconv', '--src-prefix=a/', '--dst-prefix=b/',
+                           *(['--cached'] if staged else []), '--', relative_path], limit=1024 * 1024)
+        if result.truncated: raise GitError('A truncated patch cannot be applied. Use file actions.')
+        if result.stdout.decode('utf-8', 'replace') != expected_patch:
+            raise GitError('This file changed since the preview was loaded. Refresh before applying a hunk.')
+        patch = single_hunk(result.stdout, index)
+        with TemporaryDirectory(prefix='logistics-hunk-') as folder:
+            patch_path = Path(folder) / 'hunk.patch'
+            patch_path.write_bytes(patch)
+            options = [*(['--reverse'] if staged or discard else []), *([] if discard else ['--cached']), '--whitespace=nowarn']
+            self.run(['apply', '--check', *options, '--', str(patch_path)])
+            return self.run(['apply', *options, '--', str(patch_path)])
 
     def untracked_preview(self, path):
         file = self.path / path
@@ -235,6 +316,95 @@ class Repository:
         self.run(['config', '--local', '--', 'user.name', name.strip()])
         return self.run(['config', '--local', '--', 'user.email', email.strip()])
 
+    SETTINGS_KEYS = ('commit.template', 'commit.gpgsign', 'user.signingkey',
+                     'gpg.format', 'user.name', 'user.email')
+
+    def config_value(self, key, *, local=False):
+        result = self.run(['config', *(['--local'] if local else []), '--get', key], check=False)
+        if result.returncode == 1:
+            return None
+        if result.returncode:
+            raise GitError(result.stderr)
+        return result.stdout.decode('utf-8', 'replace').removesuffix('\n')
+
+    def template_text(self):
+        path = self.run(['config', '--path', '--get', 'commit.template'], check=False)
+        if path.returncode == 1 or not path.stdout.strip():
+            return ''
+        if path.returncode:
+            raise GitError(path.stderr)
+        template = Path(path.stdout.decode('utf-8', 'replace').removesuffix('\n'))
+        if not template.is_absolute():
+            template = self.path / template
+        try:
+            with template.open('rb') as stream:
+                data = stream.read(1024 * 1024 + 1)
+            if len(data) > 1024 * 1024:
+                raise GitError('Commit template exceeds 1 MiB.')
+            return data.decode('utf-8', 'replace')
+        except OSError as exc:
+            raise GitError(f'Could not read commit template: {exc}') from exc
+
+    def read_template(self):
+        try:
+            return self.template_text(), ''
+        except GitError as exc:
+            return '', str(exc)
+
+    def settings(self):
+        template, warning = self.read_template()
+        return {
+            'root': str(self.path),
+            'local': {key: self.config_value(key, local=True) for key in self.SETTINGS_KEYS},
+            'effective': {key: self.config_value(key) for key in self.SETTINGS_KEYS},
+            'template_text': template,
+            'template_warning': warning,
+            'remotes': {name: self.remote_details(name) for name in
+                        self.run(['remote']).stdout.decode('utf-8', 'replace').splitlines()},
+        }
+
+    def save_settings(self, values):
+        local = values['local']
+        if set(local) != set(self.SETTINGS_KEYS):
+            raise GitError('Unexpected repository setting.')
+        for key in ('user.name', 'user.email'):
+            value = local[key]
+            if value is not None and (not value.strip() or any(ord(c) < 32 for c in value)):
+                raise GitError('Enter an author name and email without control characters.')
+        remotes = values['remotes']
+        current = {name: self.remote_details(name) for name in
+                   self.run(['remote']).stdout.decode('utf-8', 'replace').splitlines()}
+        original = values.get('original')
+        if original is not None:
+            current_local = {key: self.config_value(key, local=True) for key in self.SETTINGS_KEYS}
+            if current != original['remotes'] or current_local != original['local']:
+                raise GitError('Repository settings changed while the dialog was open. Reopen Settings before saving.')
+        for name, url in remotes.items():
+            if current.get(name) != url:
+                argument(name, 'Remote name'); remote_url(url)
+        if values['template_mode'] == 'custom' and values.get('template_changed', True):
+            from commonUtils.persistence import atomic_write_bytes
+            result = self.run(['rev-parse', '--git-path', 'logistics-commit-template.txt'])
+            path = Path(result.stdout.decode('utf-8', 'replace').removesuffix('\n'))
+            if not path.is_absolute(): path = self.path / path
+            data = values['template_text'].encode('utf-8')
+            if len(data) > 1024 * 1024: raise GitError('Commit template exceeds 1 MiB.')
+            atomic_write_bytes(path, data)
+            local = dict(local, **{'commit.template': str(path.resolve())})
+        for key, value in local.items():
+            if value == self.config_value(key, local=True): continue
+            if value is None:
+                result = self.run(['config', '--local', '--unset-all', key], check=False)
+                if result.returncode not in (0, 5): raise GitError(result.stderr)
+            else:
+                self.run(['config', '--local', '--replace-all', key, value])
+        for name in current:
+            if name not in remotes: self.remote_remove(name)
+        for name, url in remotes.items():
+            if name not in current: self.remote_add(name, url)
+            elif self.remote_details(name) != url: self.remote_set_url(name, url)
+        return self.settings()
+
     def switch(self, name):
         return self.run(['switch', argument(name, 'Branch name')])
 
@@ -289,6 +459,11 @@ class Repository:
                 raise GitError('This branch does not have one branch upstream configured.')
             args += [argument(remote, 'Upstream remote'), f'HEAD:{target}']
         return self.run(args, timeout=1800)
+
+    def push_current_to_origin(self, expected_branch):
+        if self.status().branch != expected_branch or expected_branch == '(detached)':
+            raise GitError('The branch changed after committing. The commit is saved; push it manually.')
+        return self.push('origin', expected_branch)
 
     def stash_save(self, message, include_untracked=False):
         return self.run(['stash', 'push', *(['--include-untracked'] if include_untracked else []), '-m', message or 'Logistics stash'])

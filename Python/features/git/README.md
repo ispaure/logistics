@@ -72,7 +72,7 @@ workspace position with order 10. Other feature destinations retain their locati
 Open repositories have reorderable, detachable tabs. Each retained pane owns its
 toolbar, including Commit/Pull/Push/Fetch/Branch, remote/folder/terminal actions and
 settings. Real toolbar actions remain accessible through Qt's overflow menu in
-narrow or floating panes. Bookmarks are available in the pane's repository menu. A reference tree
+narrow or floating panes. Open, Clone, Init and bookmarks are available from the repository tab’s **+** menu. A reference tree
 provides File status, History and Search, hierarchical branches/remotes, tags,
 stashes, configured submodules and saved subtrees. File status uses two separately
 resizable lists, a shared diff preview and a bottom commit composer. History puts
@@ -86,13 +86,18 @@ parent focuses it in history, loading additional history when necessary (up to
 5,000 commits). The local CodeEdit subclass adds old/new line numbers and visible
 hunk/addition/deletion bands, while keeping ordinary blob previews unchanged.
 `diff_view.py` presents unified patches independently of Qt. The preview hides
-patch headers by default and supplies hunk navigation, wrapping, whitespace-only
+patch headers by default, displays separate hunk cards, and supplies hunk navigation, wrapping, whitespace-only
 filtering, and an explicit raw view. Status badges combine color with symbols;
 graph lanes use Okabe–Ito hues and filled commit dots.
 
 Commit file lists use NUL-delimited first-parent comparisons, including root
 commits and deletions; full historical trees remain available separately. File
 staging checkboxes dispatch through the same serialized command boundary.
+Hunk actions verify the current patch and use Git's checked patch application
+to stage, unstage or discard one complete hunk. Special file changes use whole-file
+actions. The commit composer can push a successful commit to `origin` on the
+current branch; a failed push preserves that commit. Toolbar badges show changed
+files and upstream ahead/behind counts from the latest fetched state.
 
 ## Validation
 
@@ -130,3 +135,39 @@ conflict-checked atomic save, optionally stages the result, and refreshes Git st
 Binary, delete/modify, symlink, submodule and conversion-filter conflicts retain
 manual handling. `preview.py` imports its shared renderer from
 `commonUtils.ui.code_editor.diff_bands`; Git patch parsing stays in `diff_view.py`.
+
+## Repository settings
+
+The toolbar’s Settings button opens settings for the active repository: commit
+template, remotes, signing and author identity. Changes are staged in the dialog
+and written through the pane’s existing Git worker when OK is clicked. Cancel
+keeps Git configuration unchanged. Linked worktrees share local configuration;
+inherited/global settings are never rewritten. Repository changes are not a
+transaction: if a Git command fails, earlier successful changes may remain; the
+operation log reports the error and the pane refreshes.
+
+Custom templates are stored in Git metadata, outside tracked files, and populate
+an empty commit composer. Existing drafts are kept. Signing uses existing Git
+keys and tools; Logistics does not create keys or manage signing agents.
+Advanced also exposes the repository’s `.gitignore` editor and the separate
+personal Git executable setting. Automatic background fetch, custom message
+replacements and other application-specific preferences from third-party Git
+clients are not implemented by this dialog.
+
+Terminal opens at the current repository root. Toolbar artwork is painted at
+1×, 2×, 3× and 4× resolution so Retina displays do not enlarge low-resolution
+bitmaps. Repository settings UI lives in `ui/settings.py`; command behavior
+stays in `repository.py`, with worker ownership in `ui/jobs.py`.
+
+## History search
+
+`ui/search.py` owns a dedicated Search view with field and date controls, reusing
+the history file/metadata widgets. `Repository.search_history()` performs native
+Git searches across reachable history, with bounded output and result paging.
+File-path searches parse NUL-separated names, preserving unusual filenames.
+Queries use the existing serialized/cancellable pane worker; changes during a
+job queue a new search and stale results are discarded.
+
+Uncommitted changes stay in History and use its existing lower file/diff panes.
+Their previews compare tracked working files to HEAD; untracked files and
+unborn repositories use the bounded file preview.

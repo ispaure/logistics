@@ -46,10 +46,14 @@ class GitJobs:
             self._refresh_pending = False
             self._refresh(error)
         if not self.busy:
-            if getattr(self, '_focus_search_pending', False):
-                self._focus_search_pending = False
-                self.history.search.setFocus()
-            self.idle.emit()
+            if getattr(self, '_search_pending', False):
+                self._search_pending = False
+                self.search_history()
+            if not self.busy:
+                if getattr(self, '_focus_search_pending', False):
+                    self._focus_search_pending = False
+                    self.search_results.search.setFocus()
+                self.idle.emit()
 
     def _operation(self, label, action, after=None):
         if self.path is None: return

@@ -52,13 +52,26 @@ class ChangesPanel(qt.QWidget):
         composer_layout.addWidget(self.message)
         row = qt.QHBoxLayout()
         self.amend = qt.QCheckBox('Amend last commit')
-        self.commit_button = qt.QPushButton('Commit staged changes')
+        self.push_immediately = qt.QCheckBox('Push changes immediately to origin')
+        self.push_immediately.setEnabled(False)
+        self.commit_button = qt.QPushButton('Commit')
+        self.commit_button.setEnabled(False)
         self.commit_button.clicked.connect(lambda: self.commit_requested.emit(self.message.toPlainText(), self.amend.isChecked()))
+        row.addWidget(self.push_immediately)
         row.addWidget(self.amend)
         row.addStretch()
         row.addWidget(self.commit_button)
         composer_layout.addLayout(row)
         self.changes = []
+
+    def set_push_target(self, branch, available):
+        label = 'Push changes immediately to origin/' + branch if available else 'Push changes immediately to origin'
+        if self.push_immediately.text() != label or not available:
+            self.push_immediately.setChecked(False)
+        self.push_immediately.setText(label)
+        self.push_immediately.setEnabled(available)
+        self.push_immediately.setToolTip('Push this branch after a successful commit.' if available else
+                                        'Requires an origin remote and an attached branch.')
 
     def _file_list(self, title, staged):
         host = qt.QWidget()
@@ -97,6 +110,7 @@ class ChangesPanel(qt.QWidget):
                 data=current.data(0,qt.Qt.ItemDataRole.UserRole)
                 if data: key=(data[0].path,data[1])
         self.changes = changes
+        self.commit_button.setEnabled(any(change.staged for change in changes) and not any(change.conflict for change in changes))
         for tree, staged in ((self.staged_files,True),(self.unstaged_files,False)):
             with qt.QSignalBlocker(tree):
                 tree.clear()

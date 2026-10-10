@@ -73,6 +73,16 @@ class GitRepositoryTabsTests(QtTestCase):
         self.assertEqual(second.changes.message.toPlainText(), 'second draft')
         self.assertEqual(first.changes.message.toPlainText(), 'first draft')
 
+    def test_new_tab_shows_repository_menu_without_toolbar_dropdown(self):
+        self.wait()
+        view = self.page.workspace.active_view
+        self.page.workspace.request_new_view()
+        self.assertTrue(view.repository_menu.isVisible())
+        view.repository_menu.close()
+        self.assertEqual([action.text() for action in view.repository_menu.actions()],
+                         ['Open…', 'Clone…', 'Init…', 'Manage bookmarks…', 'Bookmarks'])
+        self.assertFalse(any(button.text() == '+ Repositories' for button in view.toolbar.findChildren(qt.QToolButton)))
+
     def test_narrow_floating_pane_keeps_actions_in_toolbar_overflow(self):
         view = self.page.open_repository(self.first_path); self.wait()
         dock = self.page.workspace.active_dock

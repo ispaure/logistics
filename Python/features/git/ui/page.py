@@ -16,9 +16,19 @@ class GitPage(qt.QWidget):
         self.preferences = Preferences(preferences_path)
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self.workspace = Workspace(self._create_view, self, dock_group=self)
+        self.workspace = Workspace(self._create_view, self, dock_group=self, new_view=self._repository_menu)
         layout.addWidget(self.workspace)
         self.workspace.add_view(self.preferences.last_repository or None)
+
+    def _repository_menu(self, workspace):
+        view = workspace.active_view
+        if view is None and workspace.docks:
+            view = workspace.docks[0].widget()
+        if view is None:
+            view = workspace.add_view()
+        if not view.busy and not view.closing:
+            view._repositories()
+            view.repository_menu.popup(qt.QCursor.pos())
 
     def _create_view(self, path):
         view = RepositoryView(preferences=self.preferences, repository_opener=self.open_repository,
