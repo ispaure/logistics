@@ -11,7 +11,7 @@ def populate_navigation(page, snapshot):
         for title in ('WORKSPACE','BRANCHES','TAGS','REMOTES','STASHES','SUBMODULES','SUBTREES'):
             item = qt.QTreeWidgetItem([title])
             item.setFlags(item.flags() & ~qt.Qt.ItemFlag.ItemIsSelectable)
-            item.setSizeHint(0,qt.QSize(0,tree.fontMetrics().height()+6))
+            item.setSizeHint(0,qt.QSize(0,tree.fontMetrics().height()+(6 if title == 'WORKSPACE' else 14)))
             item.setForeground(0,tree.palette().brush(qt.QPalette.ColorRole.PlaceholderText))
             item.setIcon(0,action_icon({'WORKSPACE':'folder','BRANCHES':'branch','TAGS':'commit','REMOTES':'remote','STASHES':'stash','SUBMODULES':'folder','SUBTREES':'branch'}[title]))
             font = item.font(0); font.setBold(True); item.setFont(0,font)

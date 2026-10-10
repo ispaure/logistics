@@ -55,6 +55,10 @@ repositories or closing the app asks before discarding a draft.
 
 ## History and branches
 
+When files have pending changes, **Uncommitted changes** appears above the commit
+history. Select it to open File status for staging and review. It disappears after
+the working tree and index become clean and the workspace refreshes.
+
 Choose **History** in the left WORKSPACE section to see the commit graph, subjects, branch/tag decorations, authors,
 dates, and hashes. Select a commit for its metadata and changed files below the graph;
 select a changed file for its patch. Merge changed files compare the first parent.
