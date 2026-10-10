@@ -3,6 +3,8 @@ import json
 import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from weakref import WeakSet
+from .options import validate_options
 
 
 class Preferences:
@@ -16,11 +18,14 @@ class Preferences:
         self.last_repository = ''
         self.subtrees = {}
         self.warning = ''
+        self.options = validate_options({})
+        self.views = WeakSet()
         try:
             data = json.loads(self.path.read_text(encoding='utf-8'))
             if not isinstance(data, dict): raise ValueError('Expected an object')
             self.executable = str(data.get('executable') or 'git')
             self.last_repository = str(data.get('last_repository', ''))
+            self.options = validate_options(data.get('options', {}))
             repositories = data.get('repositories', [])
             if not isinstance(repositories, list): raise ValueError('Invalid repository list')
             for entry in repositories:
@@ -43,7 +48,8 @@ class Preferences:
             with NamedTemporaryFile('w', encoding='utf-8', dir=self.path.parent, delete=False) as stream:
                 temporary = Path(stream.name)
                 json.dump({'executable': self.executable, 'repositories': self.repositories,
-                           'last_repository': self.last_repository, 'subtrees': self.subtrees}, stream, indent=2)
+                           'last_repository': self.last_repository, 'subtrees': self.subtrees,
+                           'options': validate_options(self.options)}, stream, indent=2)
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(temporary, self.path)

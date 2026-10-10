@@ -41,6 +41,8 @@ class Snapshot:
     display_name: str = ''
     template_text: str = ''
     template_warning: str = ''
+    template_configured: bool = False
+    tracked_paths: tuple[str, ...] = ()
 
 
 
@@ -79,7 +81,7 @@ class Repository:
     def history(self, limit=200):
         if not 1 <= limit <= 5001: raise GitError('History limit must be between 1 and 5001.')
         return parse_log(self.run(['log', '--all', '--topo-order', f'--max-count={limit}',
-                                  '--format=%H%x00%P%x00%an%x00%aI%x00%s%x00%D%x00%x00']).stdout)
+                                  '--format=%H%x00%P%x00%an%x00' + ('%aI' if self.runner.author_date else '%cI') + '%x00%s%x00%D%x00%x00']).stdout)
 
     def search_history(self, query, mode='Commit Message', since='1980-01-01', until='2100-01-01', limit=200):
         from datetime import date, datetime, time
@@ -127,7 +129,7 @@ class Repository:
             options = ['--regexp-ignore-case', '--fixed-strings', '--grep=' + query]
         if not self.refs(): return []
         return parse_log(self.run(['log', *refs, *bounds, *options, f'--max-count={limit + 1}',
-                                  '--format=%H%x00%P%x00%an%x00%aI%x00%s%x00%D%x00%x00']).stdout)
+                                  '--format=%H%x00%P%x00%an%x00' + ('%aI' if self.runner.author_date else '%cI') + '%x00%s%x00%D%x00%x00']).stdout)
 
     def operation(self):
         for marker, name in (('rebase-merge', 'rebase'), ('rebase-apply', 'rebase'),
@@ -161,15 +163,17 @@ class Repository:
             parent = Path(os.fsdecode(superproject))
             display_name = parent.name + '/' + root.relative_to(parent).as_posix()
         template, warning = self.read_template()
-        return Snapshot(root, status, commits[:limit], refs, remotes, stashes, self.operation(), len(commits) > limit, submodule_paths, display_name, template, warning)
+        tracked = tuple(os.fsdecode(path) for path in self.run(['ls-files', '-z']).stdout.split(b'\0') if path)
+        return Snapshot(root, status, commits[:limit], refs, remotes, stashes, self.operation(), len(commits) > limit, submodule_paths, display_name, template, warning,
+                        self.config_value('commit.template', local=True) is not None, tracked)
 
     def diff(self, path, *, staged=False, ignore_whitespace=False, against_head=False):
         result = self.run(['diff', '--no-ext-diff', '--no-textconv', '--src-prefix=a/', '--dst-prefix=b/', *(['HEAD'] if against_head else ['--cached'] if staged else []),
                            *(['--ignore-all-space'] if ignore_whitespace else []),
-                           '--', path], check=False, limit=1024 * 1024)
+                           '--', path], check=False, limit=self.runner.diff_limit)
         if result.returncode: raise GitError(result.stderr)
         text = result.stdout.decode('utf-8', 'replace')
-        return text + ('\n[Diff truncated to 1 MiB]' if result.truncated else '')
+        return text + ('\n[Diff truncated to configured preview limit]' if result.truncated else '')
 
     def apply_hunk(self, relative_path, index, expected_patch, *, staged=False, discard=False):
         from tempfile import TemporaryDirectory
@@ -189,11 +193,12 @@ class Repository:
         if not entries.startswith((b'100644 ', b'100755 ')):
             raise GitError('Hunk actions support regular text files only.')
         result = self.run(['diff', '--no-ext-diff', '--no-textconv', '--src-prefix=a/', '--dst-prefix=b/',
-                           *(['--cached'] if staged else []), '--', relative_path], limit=1024 * 1024)
+                           *(['--cached'] if staged else []), '--', relative_path], limit=self.runner.diff_limit)
         if result.truncated: raise GitError('A truncated patch cannot be applied. Use file actions.')
         if result.stdout.decode('utf-8', 'replace') != expected_patch:
             raise GitError('This file changed since the preview was loaded. Refresh before applying a hunk.')
         patch = single_hunk(result.stdout, index)
+        if discard: self.backup_files([relative_path])
         with TemporaryDirectory(prefix='logistics-hunk-') as folder:
             patch_path = Path(folder) / 'hunk.patch'
             patch_path.write_bytes(patch)
@@ -238,8 +243,9 @@ class Repository:
     def commit_file_diff(self, oid, path, *, ignore_whitespace=False):
         result = self.run(['diff-tree', '--root', '-r', '--no-commit-id', '--patch', '--no-ext-diff',
                            '--no-textconv', *(['--ignore-all-space'] if ignore_whitespace else []),
-                           *self._commit_comparison(oid), '--', path], limit=1024*1024)
-        return result.stdout.decode('utf-8','replace') + ('\n[Diff truncated to 1 MiB]' if result.truncated else '')
+                           *self._commit_comparison(oid), '--', path], check=False, limit=self.runner.diff_limit)
+        if result.returncode: raise GitError(result.stderr)
+        return result.stdout.decode('utf-8','replace') + ('\n[Diff truncated to configured preview limit]' if result.truncated else '')
 
     @staticmethod
     def object_id(oid):
@@ -269,6 +275,7 @@ class Repository:
         if not message.strip(): raise GitError('Enter a commit message.')
         if self.operation() in ('rebase', 'cherry-pick', 'revert'):
             raise GitError('Use Continue to finish the current operation.')
+        self.check_submodules()
         return self.run(['commit', *(['--amend'] if amend else []), '-m', message], timeout=600)
 
     def create_branch(self, name, switch=True, start_oid=None):
@@ -440,8 +447,10 @@ class Repository:
         if strategy not in options: raise GitError('Unknown pull strategy.')
         return self.run(['pull', '--progress', *options[strategy]], timeout=1800)
 
-    def push(self, remote=None, branch=None):
-        args = ['push', '--progress', '--no-follow-tags']
+    def push(self, remote=None, branch=None, *, force_with_lease=False):
+        self.check_submodules()
+        args = ['push', '--progress', '--no-follow-tags', *(['--tags'] if self.runner.push_tags else []),
+                *(['--force-with-lease'] if force_with_lease else [])]
         if remote:
             if not branch: raise GitError('Select a branch to publish.')
             self.run(['check-ref-format', 'refs/heads/' + argument(branch)])
@@ -475,10 +484,32 @@ class Repository:
 
     def discard(self, paths):
         if not paths: raise GitError('Select tracked files to discard.')
+        self.backup_files(paths)
         return self.run(['restore', '--worktree', '--', *paths])
 
     def merge(self, ref):
-        return self.run(['merge', '--no-edit', argument(ref)], timeout=600)
+        return self.run(['merge', '--no-edit', *(['--no-ff'] if self.runner.no_ff else []), argument(ref)], timeout=600)
+
+    def check_submodules(self):
+        if self.runner.check_submodules and any(change.submodule.startswith('S') and change.submodule[2:] != '..' for change in self.status().changes):
+            raise GitError('A submodule has uncommitted changes. Commit or discard them in the submodule before committing or pushing the parent.')
+
+    def backup_files(self, paths):
+        if not self.runner.keep_backups: return
+        from uuid import uuid4
+        import json
+        import shutil
+        root = self.root().resolve()
+        metadata = self.run(['rev-parse', '--path-format=absolute', '--git-path', 'logistics-backups']).stdout.decode().strip()
+        folder = Path(metadata) / uuid4().hex
+        folder.mkdir(parents=True, exist_ok=False, mode=0o700)
+        manifest = {}
+        for index, relative in enumerate(paths):
+            path = root / relative
+            if path.is_symlink() or not path.resolve().is_relative_to(root): raise GitError('Backups require files inside this repository.')
+            if path.is_file():
+                name = f'{index}.backup'; shutil.copy2(path, folder / name); (folder / name).chmod(0o600); manifest[name] = relative
+        (folder / 'paths.json').write_text(json.dumps(manifest, ensure_ascii=True, indent=2), encoding='utf-8')
 
     def cherry_pick(self, oid):
         return self.run(['cherry-pick', self.object_id(oid)], timeout=600)
@@ -510,8 +541,8 @@ class Repository:
     def submodules(self):
         return self.run(['submodule', 'status', '--recursive']).stdout.decode('utf-8', 'replace')
 
-    def update_submodules(self):
-        return self.run(['submodule', 'update', '--init', '--recursive', '--progress'], timeout=1800)
+    def update_submodules(self, recursive=True):
+        return self.run(['submodule', 'update', '--init', *(['--recursive'] if recursive else []), '--progress'], timeout=1800)
 
     def add_submodule(self, url, path):
         return self.run(['submodule', 'add', '--', remote_url(url), argument(path, 'Submodule path')], timeout=1800)

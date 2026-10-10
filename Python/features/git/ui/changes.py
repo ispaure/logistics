@@ -3,6 +3,18 @@ from commonUtils.ui import pyside as qt
 from .chrome import status_icon
 
 
+class CommitMessage(qt.QPlainTextEdit):
+    column_guide = 0
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self.column_guide:
+            painter = qt.QPainter(self.viewport())
+            painter.setPen(self.palette().color(qt.QPalette.ColorRole.Mid))
+            x = round(self.document().documentMargin() + self.fontMetrics().horizontalAdvance('M') * self.column_guide - self.horizontalScrollBar().value())
+            painter.drawLine(x, 0, x, self.viewport().height())
+
+
 class FileList(qt.QTreeWidget):
     """Checkbox presses stage directly without starting a competing preview read."""
     def mousePressEvent(self, event):
@@ -45,7 +57,7 @@ class ChangesPanel(qt.QWidget):
         composer_layout = qt.QVBoxLayout(self.composer)
         composer_layout.setContentsMargins(6, 4, 6, 4)
         composer_layout.setSpacing(4)
-        self.message = qt.QPlainTextEdit()
+        self.message = CommitMessage()
         self.message.setPlaceholderText('Commit message\n\nOptional description')
         self.message.setAccessibleName('Commit message')
         self.message.setMaximumHeight(56)
@@ -63,11 +75,13 @@ class ChangesPanel(qt.QWidget):
         row.addWidget(self.commit_button)
         composer_layout.addLayout(row)
         self.changes = []
+        self.default_push = False
+        self.stage_on_double_click = False
 
     def set_push_target(self, branch, available):
         label = 'Push changes immediately to origin/' + branch if available else 'Push changes immediately to origin'
         if self.push_immediately.text() != label or not available:
-            self.push_immediately.setChecked(False)
+            self.push_immediately.setChecked(available and self.default_push)
         self.push_immediately.setText(label)
         self.push_immediately.setEnabled(available)
         self.push_immediately.setToolTip('Push this branch after a successful commit.' if available else
@@ -152,6 +166,9 @@ class ChangesPanel(qt.QWidget):
     def _edit(self, item, column=0):
         data=item.data(0,qt.Qt.ItemDataRole.UserRole) if item else None
         if data:
+            if self.stage_on_double_click and not data[0].conflict:
+                (self.unstage_requested if data[1] else self.stage_requested).emit([data[0].path])
+                return
             (self.resolve_requested if data[0].conflict else self.edit_requested).emit(data[0].path)
 
     def _menu(self, tree, point):

@@ -171,3 +171,17 @@ job queue a new search and stale results are discarded.
 Uncommitted changes stay in History and use its existing lower file/diff panes.
 Their previews compare tracked working files to HEAD; untracked files and
 unborn repositories use the bounded file preview.
+
+## Application preferences
+
+`ui/application_settings.py` owns the General, Accounts, Commit, Diff, Git,
+Mercurial status, Custom Actions, Update and Advanced pages.
+`ui/application_preferences.py` applies changes to retained panes and connects
+watching, periodic fetch, custom actions and external tools to the existing job
+boundary. `options.py` validates the persisted schema and constructs command-scoped
+Git defaults; only the explicit global-identity action writes global Git config.
+`accounts.py` invokes approved native credential helpers directly, using sensitive
+stdin with captured output suppressed, and delegates GitHub browser login to GCM.
+Secrets are excluded from the account schema. Backend discard backups and submodule
+checks remain in `repository.py`. The shared diff editor only adds a reusable
+per-editor color override; application settings stay in this feature.
