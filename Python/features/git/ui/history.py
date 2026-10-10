@@ -1,5 +1,8 @@
 """Commit graph, searchable history, and historical tree browsing widgets."""
 from commonUtils.ui import pyside as qt
+from datetime import datetime
+from html import escape
+import re
 from ..graph import layout_graph
 
 
@@ -63,6 +66,7 @@ class HistoryPanel(qt.QWidget):
     commit_selected = qt.Signal(object)
     blob_selected = qt.Signal(object)
     load_more = qt.Signal()
+    parent_requested = qt.Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -110,20 +114,33 @@ class HistoryPanel(qt.QWidget):
         self.file_mode = qt.QComboBox()
         self.file_mode.addItems(['Changed files (first parent)','Full tree at commit'])
         self.file_mode.currentIndexChanged.connect(lambda: self.commit_selected.emit(self.selected_commit()) if self.selected_commit() else None)
-        files_layout.addWidget(self.file_mode)
+        file_filters = qt.QHBoxLayout()
+        file_filters.setContentsMargins(2, 2, 2, 2)
+        file_filters.setSpacing(4)
+        file_filters.addWidget(self.file_mode)
+        self.file_search = qt.QLineEdit()
+        self.file_search.setPlaceholderText('Search files by name or path')
+        self.file_search.setClearButtonEnabled(True)
+        self.file_search.setAccessibleName('Search commit files')
+        self.file_search.textChanged.connect(self._filter_files)
+        file_filters.addWidget(self.file_search, 1)
+        files_layout.addLayout(file_filters)
         self.tree = qt.QTreeWidget()
         self.tree.setHeaderLabels(['Files', 'Status / type'])
         self.tree.setAccessibleName('Historical file tree')
+        self.tree.setUniformRowHeights(True)
         self.tree.header().setSectionResizeMode(0, qt.QHeaderView.ResizeMode.Stretch)
         self.tree.header().setStretchLastSection(False)
         self.tree.header().setSectionResizeMode(1, qt.QHeaderView.ResizeMode.ResizeToContents)
         self.tree.currentItemChanged.connect(self._blob)
         files_layout.addWidget(self.tree,1)
         self.details.addWidget(file_host)
-        self.metadata = qt.QPlainTextEdit()
+        self.metadata = qt.QTextBrowser()
         self.metadata.setReadOnly(True)
         self.metadata.setAccessibleName('Selected commit metadata')
-        self.metadata.setLineWrapMode(qt.QPlainTextEdit.LineWrapMode.WidgetWidth)
+        self.metadata.setOpenLinks(False)
+        self.metadata.setOpenExternalLinks(False)
+        self.metadata.anchorClicked.connect(self._parent_link)
         self.details.addWidget(self.metadata)
         self.details.setSizes([180,170])
 
@@ -153,14 +170,41 @@ class HistoryPanel(qt.QWidget):
             item=self.table.topLevelItem(i)
             if item.data(1,qt.Qt.ItemDataRole.UserRole).oid == oid:
                 self.table.setCurrentItem(item); self.table.scrollToItem(item)
-                return
+                return True
+        return False
+
+    def _parent_link(self, url):
+        oid = url.toString()
+        if re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', oid):
+            self.parent_requested.emit(oid)
+
+    def set_metadata(self, details):
+        subject, _, body = details['message'].strip().partition('\n')
+        message = '<b>' + escape(subject) + '</b>'
+        if body: message += '<br>' + escape(body).replace('\n', '<br>')
+        parents = ', '.join(f'<a href="{oid}">{oid[:10]}</a>'
+                            for oid in details['parents'].split()
+                            if re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', oid))
+        try:
+            date = datetime.fromisoformat(details['date']).astimezone().strftime('%B %d, %Y at %H:%M:%S %Z')
+        except ValueError:
+            date = details['date']
+        muted = self.palette().color(qt.QPalette.ColorRole.PlaceholderText).name()
+        fields = [('Commit', escape(details['oid'])), ('Parents', parents or 'None (root commit)'),
+                  ('Author', escape(f"{details['author']} <{details['email']}>")),
+                  ('Date', escape(date)), ('Labels', escape(details['labels'].strip()) or '—')]
+        rows = ''.join(f'<tr><td style="color:{muted}; padding-right:8px">{label}:</td><td>{value}</td></tr>'
+                       for label, value in fields)
+        self.metadata.setHtml(f'<p>{message}</p><table cellspacing="2">{rows}</table>')
 
     def selected_commit(self):
         item = self.table.currentItem()
         return item.data(1, qt.Qt.ItemDataRole.UserRole) if item else None
 
     def _selected(self, item, previous):
-        self.tree.clear()
+        # Removing the selected file can briefly select another old item. That
+        # must not launch a file read ahead of the new commit's metadata read.
+        with qt.QSignalBlocker(self.tree): self.tree.clear()
         if item: self.commit_selected.emit(item.data(1, qt.Qt.ItemDataRole.UserRole))
 
     def _filter(self, *args):
@@ -185,10 +229,12 @@ class HistoryPanel(qt.QWidget):
         with qt.QSignalBlocker(self.tree):
             self.tree.clear()
             folders = {}
+            hierarchical = bool(self.file_mode.currentIndex())
+            self.tree.setRootIsDecorated(hierarchical)
             for entry in entries:
                 parent = None
                 parts = entry.path.split('/')
-                for depth in range(1, len(parts)):
+                for depth in range(1, len(parts)) if hierarchical else ():
                     key = '/'.join(parts[:depth])
                     if key not in folders:
                         folder = qt.QTreeWidgetItem([parts[depth - 1], 'directory'])
@@ -196,14 +242,29 @@ class HistoryPanel(qt.QWidget):
                         else: self.tree.addTopLevelItem(folder)
                         folders[key] = folder
                     parent = folders[key]
-                item = qt.QTreeWidgetItem([parts[-1], 'submodule' if entry.kind == 'commit' else entry.mode if entry.kind == 'change' else entry.kind])
+                item = qt.QTreeWidgetItem([parts[-1] if hierarchical else entry.path, 'submodule' if entry.kind == 'commit' else entry.mode if entry.kind == 'change' else entry.kind])
                 item.setData(0, qt.Qt.ItemDataRole.UserRole, entry)
                 item.setToolTip(0, entry.path)
                 if parent: parent.addChild(item)
                 else: self.tree.addTopLevelItem(item)
+        self._filter_files()
+
+    def _filter_files(self):
+        query = self.file_search.text().casefold()
+        def visible(item):
+            entry = item.data(0, qt.Qt.ItemDataRole.UserRole)
+            children = [visible(item.child(i)) for i in range(item.childCount())]
+            matches = query in entry.path.casefold() if entry else any(children)
+            item.setHidden(not matches)
+            if query and children: item.setExpanded(True)
+            return matches
+        with qt.QSignalBlocker(self.tree):
+            for i in range(self.tree.topLevelItemCount()):
+                visible(self.tree.topLevelItem(i))
 
     def select_first_file(self):
         def first(item):
+            if item.isHidden(): return None
             if item.data(0,qt.Qt.ItemDataRole.UserRole): return item
             for i in range(item.childCount()):
                 found=first(item.child(i))

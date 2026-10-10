@@ -141,7 +141,7 @@ class GitPage(qt.QWidget):
         self.history = HistoryPanel()
         self.preview = Preview()
         code_font = qt.QFont(self.preview.editor.font())
-        code_font.setPointSizeF(max(8.0, code_font.pointSizeF() - 1.0))
+        code_font.setPointSizeF(max(9.0, code_font.pointSizeF()))
         self.preview.editor.setFont(code_font)
         self.change_split = qt.QSplitter(qt.Qt.Orientation.Horizontal)
         self.change_split.addWidget(self.changes)
@@ -182,6 +182,7 @@ class GitPage(qt.QWidget):
         self.changes.commit_requested.connect(self.commit)
         self.changes.edit_requested.connect(self.edit_file)
         self.history.commit_selected.connect(self.preview_commit)
+        self.history.parent_requested.connect(self.focus_parent)
         self.history.blob_selected.connect(self.preview_blob)
         self.history.load_more.connect(self.load_more)
         self.views.currentChanged.connect(self._view_changed)
@@ -553,15 +554,28 @@ class GitPage(qt.QWidget):
         full_tree = bool(self.history.file_mode.currentIndex())
         def read(runner):
             repo = Repository(path, runner)
-            return repo.commit_details(commit.oid), (repo.tree(commit.oid) if full_tree else repo.commit_files(commit.oid))
+            return repo.commit_metadata(commit.oid), (repo.tree(commit.oid) if full_tree else repo.commit_files(commit.oid))
         def show(result):
-            text, entries = result
-            self.preview.show_text(commit.oid + ' · ' + commit.subject, text)
+            details, entries = result
+            self.preview.show_text(commit.oid + ' · ' + commit.subject, 'Select a file to review its changes.')
             self.history.set_tree(entries)
-            self.history.metadata.setPlainText(text.split("\ndiff --git ", 1)[0])
+            self.history.set_metadata(details)
             self.preview.hide_file_actions()
             self.history.select_first_file()
         self._job('Read commit', read, show)
+
+    def focus_parent(self, oid):
+        if self.busy or not self.path: return
+        self.history.search.clear()
+        self.history.branch_filter.setCurrentIndex(0)
+        if self.history.select_ref(oid): return
+        path = self.path
+        def show(commits):
+            self.history_limit = 5000
+            self.history.set_commits(commits, False)
+            if not self.history.select_ref(oid):
+                self.status.setText('Parent is outside the 5,000-commit history limit.')
+        self._job('Load parent history', lambda runner: Repository(path, runner).history(5000), show)
 
     def preview_blob(self, entry):
         if self.busy or not self.path: return
@@ -749,9 +763,9 @@ class GitPage(qt.QWidget):
         def read(runner):
             repo = Repository(path, runner)
             oid = repo.run(['rev-parse', '--verify', ref.name + '^{commit}']).stdout.decode('ascii').strip()
-            return oid, repo.commit_details(oid), (repo.tree(oid) if full_tree else repo.commit_files(oid))
+            return oid, repo.commit_metadata(oid), (repo.tree(oid) if full_tree else repo.commit_files(oid))
         def show(result):
-            oid, text, entries = result
+            oid, details, entries = result
             self.history.search.clear()
             self.history.branch_filter.setCurrentIndex(0)
             with qt.QSignalBlocker(self.history.table):
@@ -761,9 +775,9 @@ class GitPage(qt.QWidget):
                     if item.data(1, qt.Qt.ItemDataRole.UserRole).oid == oid:
                         self.history.table.setCurrentItem(item)
                         break
-            self.preview.show_text(ref.name, text)
+            self.preview.show_text(ref.name, 'Select a file to review its changes.')
             self.history.set_tree(entries)
-            self.history.metadata.setPlainText(text.split("\ndiff --git ", 1)[0])
+            self.history.set_metadata(details)
             self.preview.hide_file_actions()
             with qt.QSignalBlocker(self.views): self.views.setCurrentIndex(1)
             self.history_preview_layout.addWidget(self.preview)

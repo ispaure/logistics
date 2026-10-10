@@ -58,6 +58,11 @@ repositories or closing the app asks before discarding a draft.
 Choose **History** in the left WORKSPACE section to see the commit graph, subjects, branch/tag decorations, authors,
 dates, and hashes. Select a commit for its metadata and changed files below the graph;
 select a changed file for its patch. Merge changed files compare the first parent.
+Changed files are listed by full repository-relative path. **Search files by name
+or path** filters this list independently of the history search. Below the list,
+the commit message and identity fields summarize the selection; click a parent
+hash to select and scroll to that commit in history. Diff hunks show old/new line
+numbers and colored addition/deletion rows.
 Use **Full tree at commit** to browse every historical file and read its contents.
 Submodule entries show the recorded child commit. File actions stage, unstage or
 discard whole files; hunk actions are a future addition.

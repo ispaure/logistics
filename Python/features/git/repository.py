@@ -114,6 +114,13 @@ class Repository:
         if result.returncode: raise GitError(result.stderr)
         return result.stdout.decode('utf-8', 'replace') + ('\n[Commit preview truncated]' if result.truncated else '')
 
+    def commit_metadata(self, oid):
+        """Read message and identity separately from potentially large patches."""
+        data = self.run(['show', '-s', '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%B%x00%D',
+                         self.object_id(oid), '--'], limit=1024 * 1024).stdout
+        fields = data.decode('utf-8', 'replace').split('\0', 6)
+        return dict(zip(('oid', 'parents', 'author', 'email', 'date', 'message', 'labels'), fields))
+
     def _commit_comparison(self, oid):
         oid = self.object_id(oid)
         parents = self.run(['rev-list', '--parents', '-n', '1', oid]).stdout.decode('ascii').split()
