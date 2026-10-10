@@ -80,20 +80,13 @@ class SettingsPageTests(QtTestCase):
             self.assertIs(panel.custom['custom'], custom)
             factory.assert_called_once()
 
-    def test_storage_scope_and_personal_override_paths_are_explicit(self):
-        from ui_new.settings.storage import StorageNotice, StoragePanel, APPLICATION_ROOT
-        application=StorageNotice(APPLICATION_ROOT/'Python'/'configFile.ini')
-        self.assertEqual(application.scope,'application')
-        self.assertIn('this installation',application.text())
-        with TemporaryDirectory() as temporary:
-            personal=StorageNotice(Path(temporary)/'preferences.ini',scope='personal')
-            self.assertEqual(personal.scope,'personal')
-            self.assertIn(str(Path(temporary)/'preferences.ini'),personal.text())
-        panel=StoragePanel()
-        rows=[panel.table.topLevelItem(i) for i in range(panel.table.topLevelItemCount())]
-        self.assertTrue(any(row.text(0)=='Personal' and 'take precedence' in row.text(1) for row in rows))
-        self.assertTrue(any(row.text(0)=='Application' and 'indexing' in row.text(1) for row in rows))
-        application.deleteLater(); personal.deleteLater(); panel.deleteLater()
+    def test_settings_categories_have_no_storage_summary(self):
+        with patch.object(registry, 'get_feature_states', return_value=[]):
+            page = SettingsPage(); self.addCleanup(page.deleteLater)
+            names = [page.sidebar.topLevelItem(i).text(0) for i in range(page.sidebar.topLevelItemCount())]
+            self.assertNotIn('Storage & defaults', names)
+            personal = page.panels['features'].sections
+            self.assertEqual(personal.tabs.tabText(0), 'Personal')
 
     def test_commonutils_settings_expose_ini_and_preserve_edits(self):
         with TemporaryDirectory() as temporary:
@@ -141,6 +134,7 @@ class SettingsPageTests(QtTestCase):
                             for entry in contributions.remote_folder_sources))
         self.assertEqual(len(contributions.remote_folder_sources), 1)
         self.assertTrue(contributions.settings[0].separate_tab)
+        self.assertEqual(contributions.settings[0].scope, 'personal')
 
     def test_feature_guide_is_in_header_and_available_when_disabled(self):
         from ui_new.pages.settings import FeatureSettingsPanel
@@ -158,7 +152,7 @@ class SettingsPageTests(QtTestCase):
                 self.assertLess(panel.guide_button.y(), 60)
                 with patch('ui_new.pages.settings.open_markdown') as opened:
                     panel.guide_button.click()
-                opened.assert_called_once_with(guide, parent=panel.window())
+                opened.assert_called_once_with(guide, parent=panel.window(), detached=True, allow_new_tabs=False)
                 self.assertIn('Alt', panel.guide_button.toolTip())
                 panel.close()
 
@@ -168,23 +162,24 @@ class SettingsPageTests(QtTestCase):
             path = Path(temporary) / 'config.ini'; path.write_text('[Test]\nkey=value\n')
             factory = Mock(side_effect=lambda parent: qt.QLineEdit('credential state', parent))
             tab = RegisteredContribution('test', 'Test', SettingsContribution(
-                'Credential packages', 'credentials', factory, separate_tab=True))
+                'Credential packages', 'credentials', factory, separate_tab=True, scope='personal'))
             ini = RegisteredContribution('test', 'Test', SettingsContribution(
                 'INI', 'ini', lambda parent: qt.QLabel('Configuration', parent), config_files=(path,)))
             state = self.state()
             with patch.object(registry, 'get_settings', return_value=[tab, ini]) as entries:
                 panel = FeatureSettingsPanel(state); self.addCleanup(panel.deleteLater)
                 panel.show(); self.app.processEvents()
-                self.assertEqual([panel.settings_tabs.tabText(i) for i in range(2)], ['INI files', 'Credential packages'])
+                self.assertEqual([panel.settings_tabs.tabText(i) for i in range(2)], ['Application Settings', 'Personal'])
                 widget = panel.custom['credentials']
-                self.assertTrue(widget.isHidden())
+                self.assertFalse(widget.isVisible())
                 editor = panel.config.editors[path]
                 editor.text.insertPlainText('# unsaved\n')
                 panel.settings_tabs.setCurrentIndex(1)
                 widget.setText('retained')
                 panel.refresh(state)
-                self.assertIs(panel.settings_tabs.currentWidget(), widget)
-                self.assertTrue(panel.body.isHidden())
+                self.assertIs(panel.sections.pages['personal'].direct, widget)
+                self.assertTrue(widget.isVisible())
+                self.assertFalse(panel.body.isVisible())
                 state.enabled = False; entries.return_value = []
                 panel.refresh(state)
                 self.assertEqual(panel.settings_tabs.count(), 1)
@@ -199,6 +194,31 @@ class SettingsPageTests(QtTestCase):
                 editor.text.document().setModified(False)
                 panel.close()
 
+
+    def test_ini_files_are_combined_once_per_scope_with_retained_buffers(self):
+        from ui_new.pages.settings import FeatureSettingsPanel
+        with TemporaryDirectory() as temporary:
+            paths = [Path(temporary) / name for name in ('app.ini', 'another.ini', 'personal.ini')]
+            for path in paths:
+                path.write_text('[Section]\nkey=value\n')
+            contributions = [RegisteredContribution('test', 'Test', SettingsContribution(
+                str(index), str(index), config_files=(path,), scope='personal' if index == 2 else 'application'))
+                for index, path in enumerate(paths)]
+            with patch.object(registry, 'get_settings', return_value=contributions):
+                panel = FeatureSettingsPanel(self.state()); self.addCleanup(panel.deleteLater)
+                self.assertEqual([panel.settings_tabs.tabText(i) for i in range(2)], ['Application Settings', 'Personal'])
+                for scope in ('application', 'personal'):
+                    inner = panel.sections.pages[scope].tabs
+                    self.assertEqual(inner.count(), 1)
+                    self.assertEqual(inner.tabText(0), 'INI files')
+                app = panel.configs['application']
+                self.assertEqual(app.files.count(), 2)
+                editor = app.editors[paths[0]]
+                editor.text.insertPlainText('# pending\n')
+                panel.refresh(self.state())
+                self.assertIs(app.editors[paths[0]], editor)
+                self.assertTrue(editor.is_modified)
+                editor.text.document().setModified(False)
 
     def test_settings_api_rejects_duplicate_identity(self):
         contribution = RegisteredContribution('test', 'Test', SettingsContribution('Custom', 'custom', lambda parent: None))
@@ -251,7 +271,7 @@ class SettingsPageTests(QtTestCase):
                 panel = FeatureSettingsPanel(self.state()); self.addCleanup(panel.deleteLater)
                 panel.resize(850, 800); panel.show(); self.app.processEvents()
                 self.assertLess(panel.custom['config'].height(), 50)
-                self.assertGreater(panel.config.height(), 600)
+                self.assertGreater(panel.config.height(), 500)
                 self.assertTrue(panel.status.isHidden())
                 panel.close()
 

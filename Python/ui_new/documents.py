@@ -1,9 +1,11 @@
 """Retained readers/editors hosted in the main window, with optional detachment."""
 from contextlib import contextmanager
+from dataclasses import replace
+import sys
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.document_host import show_document, register_document_host, document_is_open, close_document, request_document_close, CloseOutcome
 from shiboken6 import isValid
-from commonUtils.ui.workspace import Workspace, DockTabHeader
+from commonUtils.ui.workspace import Workspace
 from commonUtils.ui.workspace_policy import WorkspacePolicy
 
 
@@ -22,7 +24,7 @@ class DocumentPane(qt.QWidget):
             self.workspace_controls.setContentsMargins(4, 0, 4, 0)
             self.workspace_controls.addStretch()
             self.workspace_controls_widget.hide()
-            if (isinstance(window, qt.QMainWindow) and window.menuBar().actions()
+            if (sys.platform != 'darwin' and isinstance(window, qt.QMainWindow) and window.menuBar().actions()
                     and window.menuBar().cornerWidget() is None):
                 window.menuBar().setCornerWidget(self.workspace_controls_widget)
             else:
@@ -48,19 +50,6 @@ class DocumentWorkspace(Workspace):
                          new_view=page.new_document_menu)
         self.close_action.setEnabled(False)  # Keep each reader/editor's own close shortcut.
         self._drop_target.widget().setText('Open a document with +, or drop a detached reader or editor here to bring it back.')
-
-    def reveal_for_drop(self, point):
-        if self.page.window().frameGeometry().contains(point):
-            self.page.activate()
-
-    def eventFilter(self, watched, event):
-        if (event.type() == qt.QEvent.Type.MouseMove and event.buttons() & qt.Qt.MouseButton.LeftButton
-                and isinstance(watched, DockTabHeader) and watched.parentWidget().isFloating()):
-            # Reveal the original docking area as a native floating window moves
-            # over the main application, even when another destination is active.
-            point = watched.mapToGlobal(event.position().toPoint())
-            self.reveal_for_drop(point)
-        return super().eventFilter(watched, event)
 
 
 class DocumentsPage(qt.QWidget):
@@ -96,7 +85,7 @@ class DocumentsPage(qt.QWidget):
                 for title, tab in entries:
                     yield window, title, tab, record['detached']
 
-    def present(self, window):
+    def present(self, window, *, detached=False, allow_new_tabs=True):
         destination = self._creation_workspace or self.workspace
         record = self.records.get(window)
         if self._creation_workspace is None and record and record['detached'] and not record['closed']:
@@ -118,6 +107,17 @@ class DocumentsPage(qt.QWidget):
                     signal.connect(self.idle)
             if isinstance(window, qt.QDialog):
                 window.finished.connect(lambda result, view=window: self._dialog_finished(view))
+        if detached and record['dock'] is None:
+            from commonUtils.ui.workspace_window import WorkspaceWindow
+            main = self.workspace
+            policy = replace(main.policy, max_tabs=None if allow_new_tabs else 1)
+            container = WorkspaceWindow(main, policy=policy, allow_new_tabs=allow_new_tabs,
+                                        close_returns_tabs=allow_new_tabs)
+            main.detached_windows.append(container)
+            container.destroyed.connect(lambda: main.detached_windows.remove(container)
+                                        if container in main.detached_windows else None)
+            destination = container.workspace
+            container.show()
         record['closed'] = False
         record['detached'] = destination.is_detached
         if not destination.is_detached:
@@ -125,6 +125,8 @@ class DocumentsPage(qt.QWidget):
         if record['dock'] is None:
             if record['native'] is not None:
                 window.menuBar().setNativeMenuBar(False)
+                if sys.platform == "darwin":
+                    window.menuBar().hide()
             pane = destination.add_view(window)
             dock = next(item for item in destination.docks if item.widget() is pane)
             record['container'], record['dock'] = pane, dock
@@ -136,6 +138,8 @@ class DocumentsPage(qt.QWidget):
         record['dock'].show(); record['dock'].raise_()
         record['dock'].workspace._activate(record['dock'])
         window.show()
+        from commonUtils.ui.workspace_menus import sync_native_menus
+        sync_native_menus(record["dock"].window(), window)
         self.changed.emit()
 
     def _docking_changed(self, window, floating):

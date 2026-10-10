@@ -106,9 +106,7 @@ def _create_page(parent=None):
 
 def _software_settings_note(parent):
     from commonUtils.ui import pyside as qt
-    note = qt.QLabel('Download settings below are grouped by platform. To change rclone versions, '
-                    'update the version, URL, ZIP member, destination and both hashes together. '
-                    'SHA-256 checks remain required; saving does not download or replace rclone.', parent)
+    note = qt.QLabel('When changing a version, update its URLs and SHA-256 hashes together.', parent)
     note.setWordWrap(True)
     return note
 
@@ -148,6 +146,7 @@ def get_contributions() -> Feature:
                 create_widget=_create_page,
                 order=10,
                 separate_tab=True,
+                scope="personal",
             ),
             SettingsContribution(
                 'Software downloads', 'software_downloads', _software_settings_note,

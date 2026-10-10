@@ -36,6 +36,41 @@ class DocumentWorkspaceTests(QtTestCase):
     def settle(self):
         for _ in range(5): self.app.processEvents()
 
+    def test_mac_menus_follow_active_document_and_restore_host_actions(self):
+        from commonUtils.ui.workspace_menus import sync_native_menus
+        original = self.host.menuBar().addMenu('Host').menuAction()
+        first = qt.QMainWindow(); first.menuBar().addMenu('File')
+        second = qt.QMainWindow(); second.menuBar().addMenu('View')
+        show_document(first); show_document(second)
+        with patch('commonUtils.ui.workspace_menus.sys.platform', 'darwin'):
+            sync_native_menus(self.host, first)
+            self.assertEqual([action.text() for action in self.host.menuBar().actions()], ['File'])
+            self.assertFalse(first.menuBar().isVisible())
+            sync_native_menus(self.host, second)
+            self.assertEqual([action.text() for action in self.host.menuBar().actions()], ['View'])
+            sync_native_menus(self.host)
+            self.assertEqual(self.host.menuBar().actions(), [original])
+
+    def test_default_detached_document_is_single_and_closes_locally(self):
+        first = qt.QMainWindow(); first.setCentralWidget(qt.QLabel('Guide'))
+        first.menuBar().addMenu('File')
+        show_document(first, detached=True, allow_new_tabs=False)
+        self.settle()
+        dock = self.page.records[first]['dock']
+        container = dock.window()
+        workspace = dock.workspace
+        self.assertTrue(workspace.is_detached)
+        self.assertFalse(workspace.allow_new_tabs)
+        self.assertFalse(workspace.new_action.isEnabled())
+        self.assertEqual(dock.tab_header.height(), 0)
+        second = qt.QMainWindow(); second.setCentralWidget(qt.QLabel('Another'))
+        show_document(second)
+        self.assertFalse(workspace.adopt(self.page.records[second]['dock']))
+        self.assertIsNone(workspace.add_view(qt.QMainWindow()))
+        container.close(); self.settle()
+        self.assertFalse(document_is_open(first))
+        self.assertEqual(self.page.attached_count, 1)
+
     def test_documents_open_embedded_and_detach_reattach_without_losing_state(self):
         window = qt.QMainWindow(); window.setWindowTitle('Document')
         edit = qt.QLineEdit('retained'); window.setCentralWidget(edit)

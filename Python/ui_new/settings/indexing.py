@@ -66,17 +66,14 @@ class IndexSettingsPanel(qt.QWidget):
         layout = qt.QVBoxLayout(self)
         title = qt.QLabel('File indexing')
         layout.addWidget(title)
-        note = qt.QLabel('The index stores search results and folder sizes. Saved results open immediately; '
-                        'automatic scan depth follows the options below. Refresh index manually checks the current '
-                        'folder and all its subfolders. Large trees take longer. Pausing a tab keeps its cached '
-                        'results available; other tabs may continue shared work. Network locations are not indexed. '
-                        'Save explicitly; changes apply to the next index request in any tab.')
+        note = qt.QLabel('Save to apply changes to the next index request. Hover over an option for details.')
         note.setWordWrap(True)
         layout.addWidget(note)
         self.editor = IndexSettingsEditor(path or Path(__file__).resolve().parents[2]/'configFile.ini', self)
-        from .storage import StorageNotice
-        layout.addWidget(StorageNotice(path or Path(__file__).resolve().parents[2]/"configFile.ini", self, scope="application"))
-        layout.addWidget(self.editor, 1)
+        from commonUtils.ui.settings_sections import ScopedSettings, SettingsSection
+        self.sections = ScopedSettings(self)
+        self.sections.set_sections([SettingsSection('application', 'ini', 'INI files', self.editor, nested=True)])
+        layout.addWidget(self.sections, 1)
 
     def can_close(self):
         return self.editor.can_close()

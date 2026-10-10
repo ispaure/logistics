@@ -439,8 +439,9 @@ class RepositoryView(GitJobs, qt.QWidget):
             self._job('Initialize repository', lambda runner: initialize(path, runner), lambda path: self.open_repository(path))
 
     def settings_dialog(self):
-        dialog = FormDialog('Git settings', self, 'Use the installed Git executable. Credentials remain managed by Git helpers or your SSH agent. Git 2.40 or newer is required.')
+        dialog = FormDialog('Git settings', self, scope='personal')
         executable = dialog.text('Git executable', self.preferences.executable)
+        executable.setToolTip('Git 2.40 or newer. Authentication uses Git helpers or SSH agents.')
         if dialog.submitted():
             value = executable.text().strip() or 'git'
             def verified(result):

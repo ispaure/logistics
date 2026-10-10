@@ -1,5 +1,6 @@
 """General browser host enriched by available Logistics feature contributions."""
 
+from dataclasses import replace
 from pathlib import Path
 import sys
 from commonUtils.ui import pyside as qt
@@ -185,14 +186,15 @@ class FileBrowserPage(_WorkspaceHost, qt.QWidget):
 
 
 class FileBrowserWindow(_WorkspaceHost, qt.QMainWindow):
-    def __init__(self, root_path, parent=None):
+    def __init__(self, root_path, parent=None, *, allow_new_tabs=True):
         super().__init__(parent)
         self.setWindowFlag(qt.Qt.WindowType.Window, True)
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle(f'File Browser: {Path(root_path).name}')
         self.resize(1200, 800)
         self.workspace = Workspace(lambda path: BrowserView(root_path=path or root_path), self,
-                                   keep_one_tab=True, policy=BROWSER_POLICY,
+                                   keep_one_tab=True, allow_new_tabs=allow_new_tabs,
+                                   policy=replace(BROWSER_POLICY, max_tabs=None if allow_new_tabs else 1),
                                    new_view=_new_browser_tab, setup_container=_browser_container)
         self.workspace.active_changed.connect(self._update_title)
         self.workspace.tabs_changed.connect(self._update_title)
@@ -209,11 +211,11 @@ class FileBrowserWindow(_WorkspaceHost, qt.QMainWindow):
 _windows = []
 
 
-def open_file_browser(parent=None):
+def open_file_browser(parent=None, *, allow_new_tabs=True):
     root_path = qt.QFileDialog.getExistingDirectory(parent, 'Open File Browser', str(Path.home()))
     if not root_path:
         return None
-    window = FileBrowserWindow(root_path, parent)
+    window = FileBrowserWindow(root_path, parent, allow_new_tabs=allow_new_tabs)
     _windows.append(window)
     window.destroyed.connect(lambda: _windows.remove(window) if window in _windows else None)
     window.show()
