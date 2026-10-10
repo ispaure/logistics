@@ -218,11 +218,17 @@ class BrowserWindowTests(QtTestCase):
         child = self.root/'renamed'; child.mkdir()
         detached.active_view.file_browser.navigate(child); self.wait(detached.active_view)
         self.assertEqual(detached_window.windowTitle(), 'File Browser: renamed')
-        detached_window.close(); self.wait(window)
-        self.app.processEvents()
-        self.assertIn(browser, window.index_status.connected)
-        self.assertEqual(len(window.workspace.docks), 3)
-        self.assertFalse(browser.stopping)
+        from shiboken6 import isValid
+        detached_window.close()
+        deadline = time.monotonic() + 5
+        while isValid(detached_window):
+            self.assertLess(time.monotonic(), deadline)
+            self.app.processEvents()
+            self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+            time.sleep(.01)
+        self.assertNotIn(browser, window.index_status.connected)
+        self.assertEqual(window.workspace.docks, [original])
+        self.assertFalse(original.widget().file_browser.stopping)
 
     def test_busy_tab_disappears_immediately_and_retains_its_controller(self):
         class BusyExtension(qt.QObject):
