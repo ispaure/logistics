@@ -45,6 +45,76 @@ class MainWindowTests(unittest.TestCase):
         self.assertEqual(first.centralWidget().text(), 'Keep this content')
         first.close(); second.close(); self.app.processEvents()
 
+    def test_document_x_closes_only_its_document_attached_or_floating(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from commonUtils.ui.markdown import open_markdown
+        window = self.window(); window.dlg.show()
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'note.md'; path.write_text('# Note')
+            for floating in (False, True):
+                document = open_markdown(path)
+                for _ in range(5): self.app.processEvents()
+                dock = window.documents.records[document]['dock']
+                if floating:
+                    dock.setFloating(True)
+                for _ in range(5): self.app.processEvents()
+                with patch.object(window, 'can_close', wraps=window.can_close) as close_main:
+                    dock.tab_header.close_button.click()
+                    for _ in range(10): self.app.processEvents()
+                    close_main.assert_not_called()
+                self.assertTrue(window.dlg.isVisible())
+                self.assertFalse(window._closing)
+                self.assertEqual(window.documents.count, 0)
+                self.assertEqual(window.documents.workspace.docks, [])
+
+    def test_grouped_document_x_closes_clicked_document_then_last_document(self):
+        from commonUtils.ui.document_host import show_document
+        from PySide6.QtTest import QTest
+        window = self.window(); window.dlg.show()
+        first = qt.QMainWindow(); first.setCentralWidget(qt.QLineEdit('First'))
+        second = qt.QMainWindow(); second.setCentralWidget(qt.QLineEdit('Second'))
+        show_document(first); show_document(second)
+        for _ in range(5): self.app.processEvents()
+        workspace = window.documents.workspace
+        dock = window.documents.records[first]['dock']
+        bar = next(bar for bar in workspace.findChildren(qt.QTabBar)
+                   if bar.parent() is workspace and bar.count())
+        index = next(i for i in range(bar.count()) if workspace._tab_dock(bar, i) is dock)
+        button = bar.tabButton(index, qt.QTabBar.ButtonPosition.LeftSide)
+        with patch.object(window, 'can_close', wraps=window.can_close) as close_main:
+            QTest.mouseClick(button, qt.Qt.MouseButton.LeftButton)
+            for _ in range(10): self.app.processEvents()
+            self.assertEqual(window.documents.count, 1)
+            self.assertTrue(second.isVisible())
+            self.assertEqual(second.centralWidget().text(), 'Second')
+            window.documents.records[second]['dock'].tab_header.close_button.click()
+            for _ in range(10): self.app.processEvents()
+            close_main.assert_not_called()
+        self.assertTrue(window.dlg.isVisible())
+        self.assertEqual(window.documents.count, 0)
+        first.deleteLater(); second.deleteLater()
+
+    def test_browser_x_keeps_last_tab_and_closes_only_clicked_neighbor(self):
+        from PySide6.QtTest import QTest
+        window = self.browser_window(); page = window.tabs.widget(0)
+        self.wait_browser(page)
+        workspace = page.workspace
+        first = workspace.active_dock
+        self.assertTrue(workspace.keep_one_tab)
+        self.assertFalse(first.close())
+        workspace.add_view(); self.wait_browser(page)
+        workspace._refresh_tab_headers()
+        bar = next(bar for bar in workspace.findChildren(qt.QTabBar)
+                   if bar.parent() is workspace and bar.count())
+        index = next(i for i in range(bar.count()) if workspace._tab_dock(bar, i) is first)
+        QTest.mouseClick(bar.tabButton(index, qt.QTabBar.ButtonPosition.LeftSide), qt.Qt.MouseButton.LeftButton)
+        for _ in range(10): self.app.processEvents()
+        self.assertEqual(len(workspace.docks), 1)
+        self.assertFalse(workspace.active_dock.close())
+        self.assertTrue(window.dlg.isVisible())
+        self.assertFalse(window._closing)
+
     def test_sync_job_appears_in_the_rail_and_marks_background_completion(self):
         import sys, time
         from commonUtils.ui.process_progress import open_process
