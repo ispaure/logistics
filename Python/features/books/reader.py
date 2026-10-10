@@ -279,6 +279,8 @@ class BooksPage(qt.QWidget):
         if not self.book or self.worker or self._loading:
             return
         self.speech.stop()
+        self.text._resize_anchor = None
+        self.text.resize_settle.stop()
         target = self.text.page_index + direction * self.spread.step
         if 0 <= target < self.text.page_count:
             self.text.show_page(target)

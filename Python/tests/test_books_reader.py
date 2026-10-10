@@ -72,6 +72,26 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(self.page._current, 1)
         self.assertGreater(track.fraction, track.boundaries[1])
 
+    def test_section_markers_allow_comments_and_processing_instructions(self):
+        from test_books_pagination import replace_members
+        replace_members(self.path, {'OPS/Text/one.xhtml':
+            '<html xmlns="http://www.w3.org/1999/xhtml"><!-- comment --><?reader note?>'
+            '<body><p>Beginning.</p><!-- invisible --><h2 id="nested">Section</h2></body></html>'})
+        book = EPUBBook(self.path)
+        self.assertGreater(book.section_offsets[('OPS/Text/one.xhtml', 'nested')], 0)
+
+    def test_manual_page_turn_discards_an_earlier_resize_anchor(self):
+        from PySide6.QtTest import QTest
+        self.page.text.setHtml('<p>' + 'A long reading passage. ' * 500 + '</p>')
+        self.page.text.repaginate()
+        self.page.text._resize_anchor = 0
+        self.page.text.show_page(2)
+        self.page.turn_page(1)
+        anchor = self.page.text.location()
+        self.page.resize(900, 650); QTest.qWait(200)
+        cursor = qt.QTextCursor(self.page.text.document()); cursor.setPosition(anchor)
+        self.assertTrue(self.page.text.viewport().rect().contains(self.page.text.cursorRect(cursor).center()))
+
     def test_wide_spread_turns_two_pages_and_resize_retains_the_text_anchor(self):
         from PySide6.QtTest import QTest
         self.page.text.setHtml(''.join(f'<p>Paragraph {i}: ' + 'Readable text. ' * 30 + '</p>'

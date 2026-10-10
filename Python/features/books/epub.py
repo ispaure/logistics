@@ -115,10 +115,12 @@ class EPUBBook:
                 for target in {entry.path for entry in self.chapters if entry.fragment}:
                     document = parse_xml(self._read(archive, target))
                     body = next((node for node in document.iter()
-                                 if node.tag.rsplit('}', 1)[-1] == 'body'), document)
+                                 if isinstance(node.tag, str) and node.tag.rsplit('}', 1)[-1] == 'body'), document)
                     offsets, length = {}, 0
                     def visit(node):
                         nonlocal length
+                        if not isinstance(node.tag, str):
+                            return
                         anchor = node.get('id') or node.get('name')
                         if anchor:
                             offsets[anchor] = length
