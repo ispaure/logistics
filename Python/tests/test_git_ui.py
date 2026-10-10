@@ -213,8 +213,8 @@ class GitUITests(QtTestCase):
 
     def test_subtree_help_exit_129_still_opens_dialog(self):
         self.commit_fixture(); self.open()
-        with patch('features.git.ui.page.FormDialog.submitted', return_value=False) as accepted:
-            self.page.subtree_dialog(); self.wait()
+        with patch('features.git.ui.repository_tools.FormDialog.submitted', return_value=False) as accepted:
+            self.page.repository_tools.subtree_dialog(); self.wait()
             if 'unavailable' in self.page.status.text(): self.skipTest('git subtree not installed')
             accepted.assert_called_once()
 
@@ -229,6 +229,52 @@ class GitUITests(QtTestCase):
         self.assertEqual(service.open.call_count, 2)
         service.open.assert_called_with(self.repo.root() / 'file.txt')
         service.saved.connect.assert_called_once()
+
+    def test_refresh_requested_during_read_job_runs_after_it(self):
+        from threading import Event
+        self.commit_fixture(); self.open()
+        release = Event()
+        self.page._job('Background read', lambda runner: release.wait(2))
+        (self.repo.path / 'file.txt').write_text('external edit\n')
+        self.page.refresh()
+        self.assertTrue(self.page._refresh_pending)
+        release.set(); self.wait()
+        self.assertEqual(len(self.page.snapshot.status.changes), 1)
+        self.assertFalse(self.page._refresh_pending)
+
+    def test_all_repository_tool_dialogs_use_workspace_as_parent(self):
+        self.commit_fixture(); self.open()
+        for method in (self.page.repository_tools.worktrees_dialog, self.page.repository_tools.submodules_dialog):
+            with patch('features.git.ui.repository_tools.FormDialog.submitted', return_value=False) as submitted:
+                method(); self.wait(); submitted.assert_called_once()
+
+    def test_tag_preview_selects_its_commit_instead_of_current_head(self):
+        self.commit_fixture()
+        first = self.repo.status().oid
+        self.repo.create_tag('first', oid=first)
+        (self.repo.path / 'file.txt').write_text('second\n')
+        self.repo.stage(['file.txt']); self.repo.commit('Second')
+        self.open()
+        ref = next(r for r in self.page.snapshot.refs if r.name == 'refs/tags/first')
+        self.page.show_ref_commit(ref); self.wait()
+        self.assertEqual(self.page.history.selected_commit().oid, first)
+        self.assertEqual(self.page.preview.title.text(), 'refs/tags/first')
+        self.assertIn('First', self.page.preview.editor.toPlainText())
+
+    def test_edit_remote_reads_and_prefills_current_url(self):
+        self.repo.remote_add('origin', '/example/remote.git')
+        self.open()
+        captured = []
+        def submitted(dialog):
+            captured.extend(edit.text() for edit in dialog.findChildren(qt.QLineEdit))
+            return False
+        with patch('features.git.ui.page.FormDialog.submitted', submitted):
+            self.page.remote_dialog('origin'); self.wait()
+        self.assertIn('/example/remote.git', captured)
+
+    def test_carriage_return_progress_cannot_grow_log_without_bound(self):
+        for _ in range(20): self.page._append_log('x' * 65536)
+        self.assertLessEqual(self.page.log.document().characterCount(), 1024 * 1024)
 
 
 class GitPreferencesTests(unittest.TestCase):

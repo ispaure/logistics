@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 
-from .models import parse_status, parse_log, parse_refs, parse_tree
+from .models import Status, Commit, Ref, parse_status, parse_log, parse_refs, parse_tree
 from .runner import GitError, GitRunner, redact
 
 
@@ -20,7 +20,8 @@ def argument(value, label='Value'):
 
 def remote_url(value):
     value = argument(value.strip(), 'Repository URL')
-    if re.search(r'https?://[^/\s]*@', value) or re.search(r'https?://[^\s]*\?', value):
+    if (re.search(r'https?://[^/\s]*@', value) or re.search(r'https?://[^\s]*\?', value)
+            or re.search(r'[a-z][a-z0-9+.-]{0,31}://[^/\s]*:[^/\s]*@', value)):
         raise GitError('Use a repository URL without credentials or query tokens. Configure a Git credential helper or SSH agent.')
     return value
 
@@ -28,9 +29,9 @@ def remote_url(value):
 @dataclass
 class Snapshot:
     root: Path
-    status: object
-    commits: list
-    refs: list
+    status: Status
+    commits: list[Commit]
+    refs: list[Ref]
     remotes: list[str]
     stashes: list[tuple[str, str]]
     operation: str = ''
@@ -47,7 +48,7 @@ class Repository:
 
     def root(self):
         result = self.run(['rev-parse', '--show-toplevel'])
-        return Path(result.stdout.decode('utf-8', 'surrogateescape').rstrip('\r\n'))
+        return Path(result.stdout.removesuffix(b'\n').decode('utf-8', 'surrogateescape'))
 
     def status(self):
         return parse_status(self.run(['status', '--porcelain=v2', '--branch', '-z']).stdout)
@@ -138,10 +139,49 @@ class Repository:
             raise GitError('Use Continue to finish the current operation.')
         return self.run(['commit', *(['--amend'] if amend else []), '-m', message], timeout=600)
 
-    def create_branch(self, name, switch=True):
+    def create_branch(self, name, switch=True, start_oid=None):
         name = argument(name.strip(), 'Branch name')
         self.run(['check-ref-format', '--branch', name])
-        return self.run(['switch', '-c', name] if switch else ['branch', name])
+        args = ['switch', '-c', name] if switch else ['branch', name]
+        if start_oid: args.append(self.object_id(start_oid))
+        return self.run(args)
+
+    def compare(self, first, second):
+        result = self.run(['diff', '--no-ext-diff', '--no-textconv', '--stat', '--patch',
+                           self.object_id(first), self.object_id(second), '--'], check=False, limit=1024 * 1024)
+        if result.returncode: raise GitError(result.stderr)
+        return result.stdout.decode('utf-8', 'replace') + ('\n[Comparison truncated]' if result.truncated else '')
+
+    def create_tag(self, name, message='', oid=None):
+        name = argument(name.strip(), 'Tag name')
+        self.run(['check-ref-format', 'refs/tags/' + name])
+        args = ['tag', '-a', name, '-m', message] if message.strip() else ['tag', name]
+        if oid: args.append(self.object_id(oid))
+        return self.run(args)
+
+    def delete_tag(self, name):
+        return self.run(['tag', '-d', argument(name, 'Tag name')])
+
+    def push_tag(self, remote, name):
+        return self.run(['push', '--progress', argument(remote), 'refs/tags/' + argument(name)], timeout=1800)
+
+    def reflog(self):
+        entries = []
+        result = self.run(['reflog', '--max-count=100', '--format=%H%x00%gd%x00%gs'])
+        for record in result.stdout.splitlines():
+            oid, ref, message = record.split(b'\0', 2)
+            entries.append((oid.decode('ascii'), ref.decode('utf-8', 'replace'), message.decode('utf-8', 'replace')))
+        return entries
+
+    def identity(self):
+        return tuple(self.run(['config', '--get', key], check=False).stdout.decode('utf-8', 'replace').strip()
+                     for key in ('user.name', 'user.email'))
+
+    def set_identity(self, name, email):
+        if not name.strip() or not email.strip() or any(ord(c) < 32 for c in name + email):
+            raise GitError('Enter an author name and email without control characters.')
+        self.run(['config', '--local', '--', 'user.name', name.strip()])
+        return self.run(['config', '--local', '--', 'user.email', email.strip()])
 
     def switch(self, name):
         return self.run(['switch', argument(name, 'Branch name')])
@@ -152,6 +192,11 @@ class Repository:
     def rename_branch(self, old, new):
         self.run(['check-ref-format', '--branch', argument(new, 'Branch name')])
         return self.run(['branch', '-m', argument(old), new])
+
+    def set_upstream(self, branch, ref):
+        if not ref.startswith('refs/remotes/') or ref.endswith('/HEAD'):
+            raise GitError('Choose an explicit remote branch as the upstream.')
+        return self.run(['branch', '--set-upstream-to=' + argument(ref), argument(branch)])
 
     def remote_add(self, name, url):
         return self.run(['remote', 'add', argument(name.strip(), 'Remote name'), remote_url(url)])
@@ -174,10 +219,23 @@ class Repository:
         return self.run(['pull', '--progress', *options[strategy]], timeout=1800)
 
     def push(self, remote=None, branch=None):
-        args = ['push', '--progress']
+        args = ['push', '--progress', '--no-follow-tags']
         if remote:
             if not branch: raise GitError('Select a branch to publish.')
-            args += ['--set-upstream', argument(remote), f'HEAD:refs/heads/{argument(branch)}']
+            self.run(['check-ref-format', 'refs/heads/' + argument(branch)])
+            args += ['--set-upstream', argument(remote), f'HEAD:refs/heads/{branch}']
+        else:
+            status = self.status()
+            if status.branch == '(detached)' or not status.upstream:
+                raise GitError('Publish the current branch to configure its upstream before pushing.')
+            # An unqualified push may obey push.default=matching or push refspecs
+            # and update other branches. This action always targets this branch's
+            # configured upstream explicitly.
+            remote = self.run(['config', '--get', f'branch.{status.branch}.remote']).stdout.decode('utf-8', 'replace').strip()
+            target = self.run(['config', '--get', f'branch.{status.branch}.merge']).stdout.decode('utf-8', 'replace').strip()
+            if not target.startswith('refs/heads/') or '\n' in target:
+                raise GitError('This branch does not have one branch upstream configured.')
+            args += [argument(remote, 'Upstream remote'), f'HEAD:{target}']
         return self.run(args, timeout=1800)
 
     def stash_save(self, message, include_untracked=False):
