@@ -20,6 +20,26 @@ QWidget#gitWorkspace QTabBar::tab { padding: 4px 16px; }
 QWidget#gitWorkspace QLabel#fileSection { font-weight: bold; }
 '''
 
+# Okabe–Ito hues: use shape/letters as well as color for status information.
+GRAPH_COLORS = ('#56B4E9', '#D55E00', '#F0E442', '#009E73', '#CC79A7', '#E69F00', '#0072B2')
+
+
+def status_icon(status):
+    code = status[:1]
+    color = {'A': '#009E73', '?': '#56B4E9', 'M': '#E69F00', 'D': '#D55E00',
+             'R': '#56B4E9', 'C': '#CC79A7', '!': '#D55E00', 'U': '#D55E00'}.get(code, '#8b96a5')
+    pixmap = qt.QPixmap(16, 16); pixmap.fill(qt.Qt.GlobalColor.transparent)
+    painter = qt.QPainter(pixmap)
+    painter.setRenderHint(qt.QPainter.RenderHint.Antialiasing)
+    painter.setPen(qt.Qt.PenStyle.NoPen); painter.setBrush(qt.QColor(color))
+    painter.drawRoundedRect(qt.QRectF(1, 1, 14, 14), 3, 3)
+    painter.setPen(qt.QColor('#101820'))
+    font = qt.QFont(); font.setPixelSize(11); font.setBold(True); painter.setFont(font)
+    mark = {'A': '+', 'D': '−', 'M': 'M', 'R': '→', 'C': 'C', 'U': '!'}.get(code, code or '·')
+    painter.drawText(qt.QRect(1, 0, 14, 16), qt.Qt.AlignmentFlag.AlignCenter, mark)
+    painter.end()
+    return qt.QIcon(pixmap)
+
 
 
 def action_icon(name):

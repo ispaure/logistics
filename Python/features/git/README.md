@@ -78,6 +78,10 @@ filter. Commit metadata shows the message and linked parent hashes; following a
 parent focuses it in history, loading additional history when necessary (up to
 5,000 commits). The local CodeEdit subclass adds old/new line numbers and visible
 hunk/addition/deletion bands, while keeping ordinary blob previews unchanged.
+`diff_view.py` presents unified patches independently of Qt. The preview hides
+patch headers by default and supplies hunk navigation, wrapping, whitespace-only
+filtering, and an explicit raw view. Status badges combine color with symbols;
+graph lanes use Okabe–Ito hues and filled commit dots.
 
 Commit file lists use NUL-delimited first-parent comparisons, including root
 commits and deletions; full historical trees remain available separately. File

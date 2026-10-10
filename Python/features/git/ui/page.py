@@ -184,6 +184,7 @@ class GitPage(qt.QWidget):
         self.history.commit_selected.connect(self.preview_commit)
         self.history.parent_requested.connect(self.focus_parent)
         self.history.working_copy_selected.connect(lambda: self.views.setCurrentIndex(0))
+        self.preview.ignore_whitespace.toggled.connect(self._reload_preview)
         self.history.blob_selected.connect(self.preview_blob)
         self.history.load_more.connect(self.load_more)
         self.views.currentChanged.connect(self._view_changed)
@@ -542,16 +543,26 @@ class GitPage(qt.QWidget):
 
     def preview_change(self, change, staged):
         if self.busy or not self.path: return
+        self._preview_reload = lambda: self.preview_change(change, staged)
         path = self.path
+        ignore_whitespace = self.preview.ignore_whitespace.isChecked()
         def read(runner):
             repo = Repository(path, runner)
-            return repo.untracked_preview(change.path) if change.index == '?' else repo.diff(change.path, staged=staged)
+            return repo.untracked_preview(change.path) if change.index == '?' else repo.diff(
+                change.path, staged=staged, ignore_whitespace=ignore_whitespace)
         self.preview.set_file_actions(staged, change.index != '?' and not change.conflict)
-        self._job('Read file changes', read, lambda text: self.preview.show_text(
-            ('Staged: ' if staged else 'Working tree: ') + change.path, text or 'No textual diff. Check submodule or file-mode status.'))
+        display = self.preview.show_text if change.index == '?' else self.preview.show_diff
+        self._job('Read file changes', read, lambda text: display(
+            ('Staged: ' if staged else 'Working tree: ') + change.path,
+            text or ('No differences with whitespace ignored.' if ignore_whitespace else 'No textual differences.')))
+
+    def _reload_preview(self, *args):
+        reload = getattr(self, '_preview_reload', None)
+        if reload and not self.busy: reload()
 
     def preview_commit(self, commit):
         if self.busy or not self.path: return
+        self._preview_reload = None
         path = self.path
         full_tree = bool(self.history.file_mode.currentIndex())
         def read(runner):
@@ -581,10 +592,14 @@ class GitPage(qt.QWidget):
 
     def preview_blob(self, entry):
         if self.busy or not self.path: return
+        self._preview_reload = lambda: self.preview_blob(entry)
         if entry.kind == 'change':
             path = self.path
-            self._job('Read commit file diff', lambda runner: Repository(path, runner).commit_file_diff(entry.oid, entry.path),
-                      lambda text: self.preview.show_text(entry.path, text or 'No textual diff (binary or file mode change).'))
+            ignore_whitespace = self.preview.ignore_whitespace.isChecked()
+            self._job('Read commit file diff', lambda runner: Repository(path, runner).commit_file_diff(
+                entry.oid, entry.path, ignore_whitespace=ignore_whitespace),
+                lambda text: self.preview.show_diff(entry.path,
+                    text or ('No differences with whitespace ignored.' if ignore_whitespace else 'No textual differences.')))
             return
         if entry.kind == 'commit':
             self.preview.show_text(entry.path, f'Submodule commit: {entry.oid}\nOpen its repository to browse its files.')
@@ -876,8 +891,11 @@ class GitPage(qt.QWidget):
             self._message('Select a commit in History first.', error=True)
             return
         first, second, path = selected.oid, self.snapshot.status.oid, self.path
-        self._job('Compare revisions', lambda runner: Repository(path, runner).compare(first, second),
-                  lambda text: self.preview.show_text(f'{first[:8]} → HEAD {second[:8]}', text or 'No differences.'))
+        self._preview_reload = self.compare_to_head
+        ignore_whitespace = self.preview.ignore_whitespace.isChecked()
+        self._job('Compare revisions', lambda runner: Repository(path, runner).compare(
+            first, second, ignore_whitespace=ignore_whitespace),
+            lambda text: self.preview.show_diff(f'{first[:8]} → HEAD {second[:8]}', text or 'No differences.'))
 
     def tag_dialog(self):
         dialog = FormDialog('Create tag', self, 'Leave the message empty for a lightweight tag. Tags are created locally; use the tag context menu to push one.')

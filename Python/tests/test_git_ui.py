@@ -266,6 +266,41 @@ class GitUITests(QtTestCase):
         self.assertIn(('', '9', 'add'), editor.diff_rows)
         self.assertIn(('30', '31', ''), editor.diff_rows)
 
+    def test_clean_staged_diff_raw_toggle_hunk_navigation_and_whitespace_review(self):
+        self.commit_fixture()
+        lines = [f'line {i}\n' for i in range(40)]
+        (self.repo.path / 'file.txt').write_text(''.join(lines))
+        self.repo.stage(['file.txt']); self.repo.commit('Lines')
+        lines[2] = 'changed 2\n'; lines[30] = 'changed 30\n'
+        (self.repo.path / 'file.txt').write_text(''.join(lines))
+        self.repo.stage(['file.txt']); self.open()
+        tree = self.page.changes.staged_files
+        self.assertFalse(tree.topLevelItem(0).icon(0).isNull())
+        tree.setCurrentItem(tree.topLevelItem(0)); self.wait()
+        preview = self.page.preview
+        self.assertEqual(len(preview.diff_view.hunks), 2)
+        self.assertIn('Hunk 1', preview.editor.toPlainText())
+        self.assertNotIn('diff --git', preview.editor.toPlainText())
+        self.assertNotIn('@@', preview.editor.toPlainText())
+        preview.next_hunk.click()
+        self.assertEqual(preview.editor.textCursor().blockNumber(), preview.diff_view.hunks[1][0])
+        preview.previous_hunk.click()
+        self.assertEqual(preview.editor.textCursor().blockNumber(), preview.diff_view.hunks[0][0])
+        preview.raw.setChecked(True)
+        self.assertIn('diff --git', preview.editor.toPlainText())
+        preview.raw.setChecked(False)
+        preview.wrap.setChecked(True)
+        self.assertEqual(preview.editor.lineWrapMode(), qt.QPlainTextEdit.LineWrapMode.WidgetWidth)
+        self.repo.commit('Changes')
+        (self.repo.path / 'file.txt').write_text(''.join(line.rstrip('\n') + '  \n' for line in lines))
+        self.repo.stage(['file.txt']); self.page.refresh(); self.wait()
+        tree.setCurrentItem(tree.topLevelItem(0)); self.wait()
+        preview.ignore_whitespace.setChecked(True); self.wait()
+        self.assertIn('No differences with whitespace ignored.', preview.editor.toPlainText())
+        self.assertTrue(self.repo.status().changes[0].staged)
+        preview.ignore_whitespace.setChecked(False); self.wait()
+        self.assertIn('Hunk 1', preview.editor.toPlainText())
+
     def test_diff_and_staged_unstaged_selection(self):
         self.commit_fixture(); self.open()
         (self.repo.path / 'file.txt').write_text('second\n')

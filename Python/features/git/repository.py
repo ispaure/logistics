@@ -92,8 +92,9 @@ class Repository:
         submodule_paths = tuple(os.fsdecode(record.partition(b'\n')[2]) for record in config.stdout.split(b'\0') if b'\n' in record)
         return Snapshot(root, status, commits[:limit], refs, remotes, stashes, self.operation(), len(commits) > limit, submodule_paths)
 
-    def diff(self, path, *, staged=False):
+    def diff(self, path, *, staged=False, ignore_whitespace=False):
         result = self.run(['diff', '--no-ext-diff', '--no-textconv', *(['--cached'] if staged else []),
+                           *(['--ignore-all-space'] if ignore_whitespace else []),
                            '--', path], check=False, limit=1024 * 1024)
         if result.returncode: raise GitError(result.stderr)
         text = result.stdout.decode('utf-8', 'replace')
@@ -133,9 +134,10 @@ class Repository:
         return [TreeEntry(data[i].decode('ascii'), 'change', oid, os.fsdecode(data[i+1]))
                 for i in range(0,len(data)-1,2)]
 
-    def commit_file_diff(self, oid, path):
+    def commit_file_diff(self, oid, path, *, ignore_whitespace=False):
         result = self.run(['diff-tree', '--root', '-r', '--no-commit-id', '--patch', '--no-ext-diff',
-                           '--no-textconv', *self._commit_comparison(oid), '--', path], limit=1024*1024)
+                           '--no-textconv', *(['--ignore-all-space'] if ignore_whitespace else []),
+                           *self._commit_comparison(oid), '--', path], limit=1024*1024)
         return result.stdout.decode('utf-8','replace') + ('\n[Diff truncated to 1 MiB]' if result.truncated else '')
 
     @staticmethod
@@ -175,8 +177,9 @@ class Repository:
         if start_oid: args.append(self.object_id(start_oid))
         return self.run(args)
 
-    def compare(self, first, second):
+    def compare(self, first, second, *, ignore_whitespace=False):
         result = self.run(['diff', '--no-ext-diff', '--no-textconv', '--stat', '--patch',
+                           *(['--ignore-all-space'] if ignore_whitespace else []),
                            self.object_id(first), self.object_id(second), '--'], check=False, limit=1024 * 1024)
         if result.returncode: raise GitError(result.stderr)
         return result.stdout.decode('utf-8', 'replace') + ('\n[Comparison truncated]' if result.truncated else '')

@@ -5,12 +5,13 @@ from html import escape
 import re
 from ..graph import layout_graph
 from ..models import Commit
+from .chrome import GRAPH_COLORS, status_icon
 
 WORKING_COPY_ROLE = qt.Qt.ItemDataRole.UserRole + 1
 
 
 class GraphDelegate(qt.QStyledItemDelegate):
-    COLORS = ('#579dd9', '#bf79ce', '#61b38d', '#d6a251', '#db7c80', '#6dafba')
+    COLORS = GRAPH_COLORS
 
     def paint(self, painter, option, index):
         super().paint(painter, option, index)
@@ -31,7 +32,7 @@ class GraphDelegate(qt.QStyledItemDelegate):
             painter.drawLine(qt.QPointF(x(source), center), qt.QPointF(x(target), rect.bottom() + 1))
         color = qt.QColor('#a0a5ad' if working_copy else self.COLORS[row.lane % len(self.COLORS)])
         painter.setPen(qt.QPen(color, 2))
-        painter.setBrush(option.palette.base())
+        painter.setBrush(option.palette.base() if working_copy else qt.QBrush(color))
         painter.drawEllipse(qt.QPointF(x(row.lane), center), 4, 4)
         painter.restore()
 
@@ -269,6 +270,7 @@ class HistoryPanel(qt.QWidget):
                     parent = folders[key]
                 item = qt.QTreeWidgetItem([parts[-1] if hierarchical else entry.path, 'submodule' if entry.kind == 'commit' else entry.mode if entry.kind == 'change' else entry.kind])
                 item.setData(0, qt.Qt.ItemDataRole.UserRole, entry)
+                if entry.kind == 'change': item.setIcon(0, status_icon(entry.mode))
                 item.setToolTip(0, entry.path)
                 if parent: parent.addChild(item)
                 else: self.tree.addTopLevelItem(item)
