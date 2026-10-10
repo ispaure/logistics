@@ -49,7 +49,9 @@ class EditorWindow(SyntaxSettings, EditingCommands, FileOperations, qt.QMainWind
         reload.clicked.connect(self.reload_document)
         keep = qt.QPushButton("Keep Buffer")
         keep.clicked.connect(self._keep_buffer)
-        for widget in (self.external_notice, reload, keep):
+        compare = qt.QPushButton("Compare")
+        compare.clicked.connect(self.compare_disk)
+        for widget in (self.external_notice, compare, reload, keep):
             row.addWidget(widget)
         layout.addWidget(self.external_bar)
         self.external_bar.hide()

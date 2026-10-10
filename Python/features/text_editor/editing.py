@@ -76,6 +76,9 @@ class EditingCommands:
             ),
         ]:
             self.action(self._edit_menu, key, label, callback, shortcut)
+        compare = self.menuBar().addMenu("&Compare")
+        self.action(compare, "compare_disk", "Compare with Disk", self.compare_disk)
+        self.action(compare, "compare_file", "Compare with Another File…", self.compare_file)
         tools = self.menuBar().addMenu("&Tools")
         for language in ("json", "xml"):
             for operation in ("format", "validate"):
@@ -366,3 +369,44 @@ class EditingCommands:
                     editor.setTextCursor(cursor)
         except Exception as error:
             self.show_error(error)
+
+    def compare_disk(self):
+        if self.current and self.current.path:
+            self.compare_path(self.current.path)
+        else:
+            self.show_error("Save the document first, or compare with another file.")
+
+    def compare_file(self):
+        path, _ = qt.QFileDialog.getOpenFileName(self, "Compare with another file", "", "All files (*)")
+        if path:
+            self.compare_path(path)
+
+    def compare_path(self, path):
+        from commonUtils.text_files import read_text_file
+        from commonUtils.ui.code_editor.diff import compare_text, DiffDialog, apply_change
+        if not self.current or self.task.busy:
+            return
+        document = self.current
+        right = document.editor.toPlainText()
+        encoding = document.snapshot.encoding if document.path and str(document.path) == str(path) else None
+        def work():
+            left = read_text_file(path, encoding=encoding).text
+            return compare_text(left, right, str(path), document.title)
+        def apply(model, index):
+            editor = document.editor
+            if self.task.busy or editor.isReadOnly():
+                raise ValueError("The buffer is busy or read-only.")
+            start, end, replacement = apply_change(model, index, editor.toPlainText())
+            current = editor.toPlainText()
+            cursor = qt.QTextCursor(editor.document())
+            cursor.setPosition(len(current[:start].encode("utf-16-le")) // 2)
+            cursor.setPosition(len(current[:end].encode("utf-16-le")) // 2,
+                               qt.QTextCursor.MoveMode.KeepAnchor)
+            cursor.beginEditBlock()
+            cursor.insertText(replacement)
+            cursor.endEditBlock()
+            editor.setTextCursor(cursor)
+        def done(model):
+            dialog = DiffDialog(model, self, left_name=str(path), right_name=document.title, apply=apply)
+            dialog.show()
+        self._run(work, done, message="Comparing files…")
