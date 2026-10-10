@@ -48,6 +48,13 @@ class GitRunner:
         self.progress = progress or (lambda text: None)
         self.timeout = timeout
 
+    def version(self):
+        text = self.run(['--version']).stdout.decode('utf-8', 'replace').strip()
+        match = re.search(r'git version (\d+)\.(\d+)', text)
+        if not match or tuple(map(int, match.groups())) < (2, 40):
+            raise GitError(f'Git 2.40 or newer is required; found {text or "an unknown version"}.')
+        return text
+
     def run(self, arguments, *, cwd=None, check=True, limit=8 * 1024 * 1024, timeout=None):
         if self.cancel.is_set(): raise GitCancelled('Operation cancelled.')
         program = shutil.which(self.executable)

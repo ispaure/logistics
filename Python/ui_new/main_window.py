@@ -110,7 +110,7 @@ class MainWindow(pyside.Window):
                 page.browse_requested.connect(self._browse_folder)
         for registered in pages:
             contribution = registered.contribution
-            page = contribution.create_page(self.dlg)
+            page = self._create_feature_page(contribution)
             page.setProperty('navigation_icon', contribution.navigation_icon)
             self._feature_pages[(registered.feature_name, contribution.page_id)] = page
             tabs.append(
@@ -153,6 +153,13 @@ class MainWindow(pyside.Window):
         self.dlg.close()
         self.dlg.deleteLater()
 
+    def _create_feature_page(self, contribution):
+        page = contribution.create_page(self.dlg)
+        idle = getattr(page, 'idle', None)
+        if idle is not None and callable(getattr(idle, 'connect', None)):
+            idle.connect(self._retry_close)
+        return page
+
     def _features_changed(self):
         pyside.QTimer.singleShot(0, self._sync_feature_pages)
 
@@ -175,7 +182,7 @@ class MainWindow(pyside.Window):
             seen.add(contribution.page_id)
             key = (registered.feature_name, contribution.page_id)
             if key not in self._feature_pages:
-                self._feature_pages[key] = contribution.create_page(self.dlg)
+                self._feature_pages[key] = self._create_feature_page(contribution)
                 self._feature_pages[key].setProperty('navigation_icon', contribution.navigation_icon)
             entries.append((contribution.order, contribution.name, self._feature_pages[key]))
         with pyside.QSignalBlocker(self.tabs):

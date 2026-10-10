@@ -190,6 +190,74 @@ class GitBackendTests(unittest.TestCase):
         with patch.dict(os.environ, {'GIT_DIR': str(self.root / 'missing')}):
             self.assertEqual(self.repo.status().branch, 'main')
 
+    def test_submodule_add_status_and_recursive_update(self):
+        self.commit()
+        source = Repository(initialize(self.root / 'child'))
+        for key, value in [('user.name', 'Test'), ('user.email', 'test@example.invalid'), ('commit.gpgsign', 'false'), ('core.hooksPath', str(self.root/'no-hooks'))]:
+            source.run(['config', key, value])
+        (source.path / 'child.txt').write_text('child\n')
+        source.stage(['child.txt']); source.commit('Child')
+        class LocalTransportRunner(GitRunner):
+            def run(self, args, **kwargs):
+                return super().run(['-c', 'protocol.file.allow=always', *args], **kwargs)
+        self.repo.runner = LocalTransportRunner()
+        self.repo.add_submodule(str(source.path), 'modules/child repo')
+        self.assertIn('modules/child repo', self.repo.submodules())
+        self.repo.stage(['.gitmodules', 'modules/child repo']); self.repo.commit('Add submodule')
+        self.repo.update_submodules()
+        child = Repository(self.repo.path / 'modules/child repo')
+        self.assertEqual(child.status().oid, source.status().oid)
+        self.assertFalse(self.repo.status().changes)
+
+    def test_subtree_add_pull_and_push(self):
+        help_result = self.repo.run(['subtree', '-h'], check=False)
+        if 'git subtree' not in help_result.stderr + help_result.stdout.decode('utf-8', 'replace'):
+            self.skipTest('git subtree not installed')
+        self.commit()
+        source = Repository(initialize(self.root / 'upstream'))
+        for key, value in [('user.name', 'Test'), ('user.email', 'test@example.invalid'), ('commit.gpgsign', 'false'), ('core.hooksPath', str(self.root/'no-hooks'))]:
+            source.run(['config', key, value])
+        source.run(['symbolic-ref', 'HEAD', 'refs/heads/main'])
+        (source.path / 'child.txt').write_text('first\n')
+        source.stage(['child.txt']); source.commit('Child')
+        self.repo.subtree('add', 'vendor/child', str(source.path), 'main', squash=True)
+        self.assertEqual((self.repo.path/'vendor/child/child.txt').read_text(), 'first\n')
+        (source.path / 'child.txt').write_text('updated\n')
+        source.stage(['child.txt']); source.commit('Update child')
+        self.repo.subtree('pull', 'vendor/child', str(source.path), 'main', squash=True)
+        self.assertEqual((self.repo.path/'vendor/child/child.txt').read_text(), 'updated\n')
+        (self.repo.path/'vendor/child/child.txt').write_text('published\n')
+        self.repo.stage(['vendor/child/child.txt']); self.repo.commit('Vendor fix')
+        bare = self.root / 'subtree-remote.git'
+        self.repo.runner.run(['init', '--bare', '--', str(bare)])
+        self.repo.subtree('push', 'vendor/child', str(bare), 'main')
+        result = self.repo.runner.run(['--git-dir', str(bare), 'show', 'main:child.txt'])
+        self.assertEqual(result.stdout, b'published\n')
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX child-process fixture')
+    def test_cancels_running_process_and_children(self):
+        from threading import Thread
+        from time import monotonic, sleep
+        cancel = Event()
+        progress = []
+        outcome = []
+        runner = GitRunner(cancel=cancel, progress=progress.append)
+        def run():
+            try:
+                runner.run(['-c', 'alias.slow=!echo started >&2; sleep 30', 'slow'], cwd=self.repo.path)
+            except GitCancelled: outcome.append('cancelled')
+        thread = Thread(target=run)
+        thread.start()
+        deadline = monotonic() + 5
+        try:
+            while not progress:
+                self.assertLess(monotonic(), deadline)
+                sleep(.01)
+        finally:
+            cancel.set(); thread.join(5)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(outcome, ['cancelled'])
+
 
 class GitParsingTests(unittest.TestCase):
     def test_redaction(self):
