@@ -24,5 +24,5 @@ class RenameMkaDialog(ToolDialog):
         if target is None or not self._confirm():
             return
 
-        mka.rename_from_csv(target)
-        self.accept()
+        if mka.rename_from_csv(target):
+            self.accept()

@@ -27,13 +27,12 @@ def launch_server(folder: LocalFolder) -> bool:
     data_path = detection.get_data_path(folder)
     port = detection.get_port(folder)
 
-    if p4d_path is None or data_path is None or port is None:
+    if not p4d_path or not data_path or not port:
         return False
 
-    command = f'./{p4d_path} -C1 -r ./{data_path} -p {port}'
-    cmdShellWrapper.exec_cmd(command, in_new_window=True, cwd=folder.path)
-
-    return True
+    command = shlex.join([str((folder.path / p4d_path).resolve()), '-C1', '-r',
+                          str((folder.path / data_path).resolve()), '-p', port])
+    return cmdShellWrapper.exec_cmd(command, in_new_window=True, cwd=folder.path) is not False
 
 
 def open_console(folder: LocalFolder) -> bool:

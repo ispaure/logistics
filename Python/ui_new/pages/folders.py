@@ -5,6 +5,7 @@ Generic folder sources, selection, and feature actions.
 from collections import Counter
 
 from commonUtils.ui import pyside
+from commonUtils.ui.operation_progress import OperationProgress
 
 from features import registry
 from features.contributions import UIAction
@@ -32,6 +33,15 @@ class FoldersPage(pyside.QWidget):
         self._remote_names = set()
         self._selected_entry_key = None
         self._folder_features = []
+        self._refresh_generation = 0
+        self._refresh_pending = False
+        self._closing = False
+        self.discovery = OperationProgress(self)
+        self.discovery.completed.connect(self._discovered)
+        self.details = OperationProgress(self)
+        self.details.completed.connect(self._details_ready)
+        self._detail_generation = 0
+        self._detail_pending = None
 
         self.folder_tree = pyside.QTreeWidget()
         self.folder_tree.setHeaderHidden(True)
@@ -77,6 +87,7 @@ class FoldersPage(pyside.QWidget):
         left_layout.addWidget(self.credential_label)
         left_layout.addWidget(self.credential_combo)
         left_layout.addWidget(self.folder_tree)
+        left_layout.addWidget(self.discovery)
 
         splitter = pyside.QSplitter(pyside.Qt.Orientation.Horizontal)
         splitter.addWidget(left_widget)
@@ -95,20 +106,49 @@ class FoldersPage(pyside.QWidget):
     def refresh(self):
         """Refresh source groups while preserving the selected credential and folder."""
 
+        if self._closing:
+            return
+        self._refresh_generation += 1
+        if self.discovery.busy:
+            self._refresh_pending = True
+            self.discovery.request_cancel()
+            return
+        self._start_discovery()
+
+    def _start_discovery(self):
+        generation = self._refresh_generation
+        # Resolve declarations on the GUI thread; only provider I/O runs in the worker.
+        remotes = tuple(registry.get_remote_folder_sources())
+        locals_ = tuple(registry.get_local_folder_sources())
+        self._folder_features = sorted(registry.get_folder_features(),
+            key=lambda registered: (registered.contribution.order, registered.contribution.name.casefold()))
+        self.discovery.start(lambda report, cancelled: (generation, discover_folder_sources(
+            remote_providers=remotes, local_providers=locals_, cancelled=cancelled)), message='Loading folder sources…')
+
+    def _discovered(self, result, error):
+        if self._closing:
+            self.window().close()
+            return
+        if self._refresh_pending:
+            self._refresh_pending = False
+            self._start_discovery()
+            return
+        if error or result is None or result[0] != self._refresh_generation:
+            return
+        try:
+            self._apply_sources(result[1])
+        except Exception as error:
+            self.discovery.message.setText(f'Folder display failed: {error}')
+            return
+        self.discovery.hide()
+
+    def _apply_sources(self, sources):
         selected_source_key = self._source_key(self.source_tabs.currentIndex())
         selected_credential = self.credential_combo.currentData()
-        sources = discover_folder_sources()
         self._remote_sources = sources.remote_sources
         self._local_sources = sources.local_sources
         self._remote_names = sources.represented_remote_names
         self._local_folders = sources.local_folders
-        self._folder_features = sorted(
-            registry.get_folder_features(),
-            key=lambda registered: (
-                registered.contribution.order,
-                registered.contribution.name.casefold()
-            )
-        )
         with pyside.QSignalBlocker(self.source_tabs):
             self._rebuild_source_tabs(selected_source_key)
         self.source_tabs.setVisible(self.source_tabs.count() > 0)
@@ -316,6 +356,10 @@ class FoldersPage(pyside.QWidget):
         self._show_entry(entry)
 
     def _show_empty_state(self):
+        self._detail_generation += 1
+        self._detail_pending = None
+        self.details.request_cancel()
+        self._tools_status = None
         widget = pyside.QWidget()
         layout = pyside.QVBoxLayout(widget)
         layout.setContentsMargins(24, 24, 24, 24)
@@ -356,37 +400,63 @@ class FoldersPage(pyside.QWidget):
 
         layout.addWidget(title_label)
         layout.addWidget(self._create_general_section(entry))
-
-        for registered in self._folder_features:
-            contribution = registered.contribution
-
-            if not contribution.is_available(entry):
-                continue
-
-            if contribution.create_widget is not None:
-                feature_widget = contribution.create_widget(entry, self)
-
-                if feature_widget is not None:
-                    layout.addWidget(feature_widget)
-
-                continue
-
-            actions = contribution.get_actions(entry)
-
-            if not actions:
-                continue
-
-            layout.addWidget(
-                self._create_action_section(
-                    contribution.name,
-                    actions,
-                    entry.name,
-                    horizontal=contribution.actions_horizontal
-                )
-            )
-
+        self._tools_status = pyside.QLabel('Checking folder tools…')
+        layout.addWidget(self._tools_status)
         layout.addStretch()
         self.detail_scroll.setWidget(widget)
+        self._detail_generation += 1
+        self._detail_pending = entry
+        if self.details.busy:
+            self.details.request_cancel()
+        else:
+            self._start_details()
+
+    def _start_details(self):
+        entry, self._detail_pending = self._detail_pending, None
+        generation = self._detail_generation
+        features = tuple(self._folder_features)
+        def work(report, cancelled):
+            from commonUtils.operations import check_cancelled
+            found = []
+            for registered in features:
+                check_cancelled(cancelled)
+                contribution = registered.contribution
+                if contribution.is_available(entry):
+                    actions = None if contribution.create_widget else contribution.get_actions(entry)
+                    found.append((contribution, actions))
+            check_cancelled(cancelled)
+            return generation, entry, found
+        self.details.start(work, show_progress=False)
+
+    def _details_ready(self, result, error):
+        if self._closing:
+            if not self.discovery.busy:
+                self.window().close()
+            return
+        if self._detail_pending is not None:
+            self._start_details()
+            return
+        if result is None or result[0] != self._detail_generation:
+            if error and self._tools_status is not None:
+                self._tools_status.setText(f'Folder tools unavailable: {error}')
+            return
+        _, entry, found = result
+        layout = self.detail_scroll.widget().layout()
+        self._tools_status.hide()
+        try:
+            for contribution, actions in found:
+                if contribution.create_widget is not None:
+                    widget = contribution.create_widget(entry, self)
+                elif actions:
+                    widget = self._create_action_section(contribution.name, actions, entry.name,
+                                                         horizontal=contribution.actions_horizontal)
+                else:
+                    continue
+                if widget is not None:
+                    layout.insertWidget(layout.count() - 1, widget)
+        except Exception as error:
+            self._tools_status.setText(f'Folder tools unavailable: {error}')
+            self._tools_status.show()
 
     def _create_general_section(self, entry):
         group = pyside.QGroupBox('General')
@@ -478,3 +548,17 @@ class FoldersPage(pyside.QWidget):
 
     def _execute_action(self, action: UIAction, entry_name: str):
         return execute_action(action, self, subject=entry_name, refresh=self.refresh)
+
+    def prepare_close(self):
+        self._closing = True
+        self._refresh_pending = False
+        self._detail_pending = None
+        for task in (self.discovery, self.details):
+            task.request_cancel()
+        return not (self.discovery.busy or self.details.busy)
+
+    def closeEvent(self, event):
+        if self.prepare_close():
+            event.accept()
+        else:
+            event.ignore()

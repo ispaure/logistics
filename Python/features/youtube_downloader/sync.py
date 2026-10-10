@@ -27,17 +27,21 @@ def _season_paths(folder, directory):
                 yield season
 
 
-def push_seasons(folder: LocalFolder, config_path: str | Path):
+def push_seasons(folder: LocalFolder, config_path: str | Path, *, cancelled=None, executable_path=None):
     directory = _config_directory(folder)
     if directory is None:
         return False
     from features.rclone.sync import rclone_sync
 
     for source in _season_paths(folder, directory):
+        if cancelled is not None and cancelled():
+            return False
         relative = source.resolve().relative_to(Path(folder.path).resolve()).as_posix()
         destination = f'{folder.name}:{relative}'
         log(Severity.INFO, 'YouTube Sync', f'Pushing {source} to {destination}')
-        if rclone_sync(source, destination, config_path=config_path, wait_for_output=True) is False:
+        if rclone_sync(source, destination, config_path=config_path, wait_for_output=True,
+                       **({'cancelled': cancelled} if cancelled is not None else {}),
+                       **({'executable_path': executable_path} if executable_path is not None else {})) is False:
             return False
     return True
 

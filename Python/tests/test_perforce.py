@@ -14,6 +14,17 @@ from models.local_folder import LocalFolder
 
 
 class PerforceConsoleTests(unittest.TestCase):
+    def test_server_paths_and_port_keep_argument_boundaries_and_launch_failure(self):
+        import shlex
+        with TemporaryDirectory(prefix="p4 server ' ") as tmp:
+            root = Path(tmp)
+            (root/'remoteConfig.ini').write_text('[Perforce]\np4d_path=bin/p4 daemon\ndata_path=server data\nport=27182\n')
+            with patch.object(actions, 'get_os', return_value=OS.LINUX), patch.object(
+                    actions.cmdShellWrapper, 'exec_cmd', return_value=False) as launch:
+                self.assertFalse(actions.launch_server(LocalFolder(root)))
+            self.assertEqual(shlex.split(launch.call_args.args[0]),
+                [str((root/'bin/p4 daemon').resolve()), '-C1', '-r', str((root/'server data').resolve()), '-p', '27182'])
+
     @unittest.skipUnless(os.name == 'posix', 'POSIX shell integration requires a POSIX host')
     def test_console_forwards_arguments_and_keeps_connection_in_interactive_shell(self):
         with TemporaryDirectory(prefix="p4 console ' ") as tmp:

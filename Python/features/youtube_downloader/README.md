@@ -69,18 +69,18 @@ season, so deleted files do not cause number reuse. Legacy unnumbered MP4 files
 use a count fallback; metadata sidecars and directories are excluded. Seasons
 use at least two digits (`s01`, `s10`). Season sync includes only `Season <digits>` folders.
 
-Batch processing validates the directory before any update, handles `.ini`
+Batch processing validates the directory before downloading, handles `.ini`
 extensions case-insensitively, continues after individual failures and returns
-whether all commands succeeded. An empty config directory does not trigger an
-update. Each command's nonzero exit is reported. `--ignore-errors` remains a
+whether all commands succeeded. Normal batches never update installed packages. Each command's nonzero exit is reported. `--ignore-errors` remains a
 default yt-dlp option, so successful exit does not guarantee every playlist item
 was downloaded.
 
-The updater attempts `python -m pip install --upgrade yt-dlp` in the running
-environment, with a three-minute timeout. Update failures are logged and downloads
-still proceed. Neither pip nor yt-dlp is declared in the project dependencies;
-provision them separately. Downloads retain console output and run synchronously;
-long-running UI actions still need a future background-worker/cancellation pass.
+The launcher installs a pinned yt-dlp dependency. The separate **Update yt-dlp**
+action uses uv (or pip as a fallback), with a three-minute timeout. A later locked
+launcher sync restores the project pin. Downloads, updates and season transfers
+run through `OperationProgress` and the shared shell-free `run_command` API.
+Closing or cancelling stops the process tree and waits for worker completion;
+callbacks must not access Qt widgets. GUI failures remain visible in the dialog.
 
 ## Validation
 

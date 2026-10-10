@@ -35,6 +35,11 @@ Before any files are renamed, Logistics validates the entire batch:
 - Every chapter has a matching CSV row.
 - CSV chapter numbering matches the MKA chapter number.
 - Every CSV row contains a chapter name.
+- Destination filenames are portable, stay in their original folder, and are unique
+  including case and Unicode equivalents.
 - No destination filename already exists.
 
-Only after the complete rename plan passes validation are files renamed.
+Only after the complete rename plan passes validation are files renamed. The shared
+`plan_named_renames` / `apply_renames` engine revalidates source stamps and destinations
+before execution, stages the batch, and rolls it back if publication fails. Any
+unresolved recovery paths are reported rather than overwritten.

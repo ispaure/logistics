@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 import unittest
+from commonUtils.tests.qt_test_case import QtTestCase
 
 from commonUtils.ui import pyside as qt
 from features.contributions import (
@@ -15,9 +16,61 @@ from features.contributions import (
 from models.local_folder import LocalFolder
 from ui_new.main_window import MainWindow
 from ui_new.pages.folders import FoldersPage
+from services.folder_sources import discover_folder_sources
 
 
-class FolderSourceTests(unittest.TestCase):
+class FolderSourceTests(QtTestCase):
+    def until(self, condition):
+        from time import monotonic, sleep
+        deadline = monotonic() + 5
+        while not condition():
+            self.assertLess(monotonic(), deadline)
+            self.app.processEvents(); sleep(.005)
+
+    def test_slow_source_does_not_block_gui_and_stale_refresh_is_discarded(self):
+        from threading import Event
+        entered, release = Event(), Event()
+        reads = []
+        def names():
+            reads.append(qt.QThread.currentThread())
+            if len(reads) == 1:
+                entered.set(); release.wait(5)
+                return ['Old']
+            return ['New']
+        self.remote([], 'profile').side_effect = names
+        page = FoldersPage()
+        self.addCleanup(page.deleteLater)
+        self.addCleanup(release.set)
+        self.until(entered.is_set)
+        tick = []
+        qt.QTimer.singleShot(0, lambda: tick.append(True))
+        self.until(lambda: bool(tick))
+        self.assertTrue(page.discovery.busy)
+        page.refresh()
+        release.set(); self.wait(page)
+        self.assertEqual([entry.name for entry in self.entries(page)], ['New'])
+        self.assertTrue(all(thread != self.app.thread() for thread in reads))
+
+    def test_feature_detection_runs_off_gui_thread_and_close_waits_for_it(self):
+        from threading import Event
+        from features.contributions import FolderFeatureContribution
+        entered, release = Event(), Event()
+        threads = []
+        def available(entry):
+            threads.append(qt.QThread.currentThread())
+            entered.set(); release.wait(5)
+            return True
+        self.local_folders = [self.folder('Local')]
+        contribution = FolderFeatureContribution('Slow', available, get_actions=lambda entry: [])
+        with patch('features.registry.get_folder_features', return_value=[RegisteredContribution('slow', 'Slow', contribution)]):
+            page = FoldersPage()
+            self.addCleanup(page.deleteLater); self.addCleanup(release.set)
+            self.until(entered.is_set)
+            self.assertNotEqual(threads[0], self.app.thread())
+            self.assertFalse(page.prepare_close())
+            release.set(); self.wait(page)
+            self.assertTrue(page.prepare_close())
+
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.temp = TemporaryDirectory()
@@ -53,7 +106,16 @@ class FolderSourceTests(unittest.TestCase):
     def page(self):
         page = FoldersPage()
         self.addCleanup(page.deleteLater)
+        self.wait(page)
         return page
+
+    def wait(self, page):
+        from time import monotonic, sleep
+        deadline = monotonic() + 5
+        while page.discovery.busy or page.details.busy:
+            self.assertLess(monotonic(), deadline, 'Folder discovery did not finish')
+            self.app.processEvents(); sleep(.005)
+        self.app.processEvents()
 
     def tab(self, page, name):
         names = [page.source_tabs.tabText(index) for index in range(page.source_tabs.count())]
@@ -77,6 +139,7 @@ class FolderSourceTests(unittest.TestCase):
         page.credential_combo.setCurrentIndex(0)
         read_names.assert_called_once_with()
         page.refresh()
+        self.wait(page)
         self.assertEqual(read_names.call_count, 2)
         self.assertEqual({entry.name for entry in self.entries(page)}, {'Shared', 'Remote-Only'})
         page.close()
@@ -89,18 +152,19 @@ class FolderSourceTests(unittest.TestCase):
             self.addCleanup(window.dlg.deleteLater)
             self.addCleanup(window.tabs.widget(0).file_browser.shutdown)
             window.dlg.show()
-            self.app.processEvents()
+            self.wait(window._core_pages[1][2])
             read_names.assert_called_once_with()
             known_index = next(index for index in range(window.tabs.count())
                                if window.tabs.tabText(index) == 'Folder Hub')
             self.assertEqual(window.tabs.tabText(0), 'File Browser')
             window.tabs.setCurrentIndex(known_index)
-            self.app.processEvents()
             page = window.tabs.widget(known_index)
+            self.wait(page)
             self.assertGreater(page.source_tabs.height(), 0)
             self.assertEqual(read_names.call_count, 2)
             window.tabs.setCurrentIndex(0)
             window.tabs.setCurrentIndex(known_index)
+            self.wait(page)
             self.assertEqual(read_names.call_count, 3)
             window.dlg.close()
 
@@ -123,6 +187,7 @@ class FolderSourceTests(unittest.TestCase):
         page.folder_tree.setCurrentItem(page._entry_items[page._entry_key(entry)])
         selected_key = page._selected_entry_key
         page.refresh()
+        self.wait(page)
         self.assertEqual(page._selected_entry_key, selected_key)
         self.assertEqual(page.folder_tree.currentItem().data(0, qt.Qt.ItemDataRole.UserRole).remote_context, Path('two'))
         page.credential_combo.setCurrentIndex(2)
@@ -135,6 +200,7 @@ class FolderSourceTests(unittest.TestCase):
         page = self.page()
         page.source_tabs.setCurrentIndex(1)
         page.refresh()
+        self.wait(page)
         self.assertEqual(page.source_tabs.tabData(page.source_tabs.currentIndex())[1], 'two')
         self.assertEqual([entry.name for entry in self.entries(page)], ['Two'])
 
@@ -145,6 +211,7 @@ class FolderSourceTests(unittest.TestCase):
         page.credential_combo.setCurrentIndex(1)
         self.remotes.pop(0)
         page.refresh()
+        self.wait(page)
         self.assertEqual(page.source_tabs.tabText(page.source_tabs.currentIndex()), 'Two')
         self.assertIsNone(page.credential_combo.currentData())
         self.assertEqual([entry.name for entry in self.entries(page)], ['Two'])
@@ -173,6 +240,7 @@ class FolderSourceTests(unittest.TestCase):
         self.assertFalse(page.source_tabs.isVisible())
         self.remote(['New'], 'profile')
         page.refresh()
+        self.wait(page)
         self.app.processEvents()
         self.assertTrue(page.source_tabs.isVisible())
         self.assertGreater(page.source_tabs.height(), 0)
@@ -187,7 +255,7 @@ class FolderSourceTests(unittest.TestCase):
                 page.source_tabs.blockSignals(originally_blocked)
                 with patch.object(page, '_rebuild_source_tabs', side_effect=ValueError('bad source')):
                     with self.assertRaisesRegex(ValueError, 'bad source'):
-                        page.refresh()
+                        page._apply_sources(discover_folder_sources())
                 self.assertEqual(page.source_tabs.signalsBlocked(), originally_blocked)
         page.source_tabs.blockSignals(False)
 
