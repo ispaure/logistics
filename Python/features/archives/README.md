@@ -3,11 +3,42 @@
 Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
 and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
-This feature contributes **Archives → Create encrypted ZIP…** to all Logistics
+This feature contributes an **Archives** workspace and browser actions for
+opening the manager, creating archives, and **Archives → Create encrypted ZIP…** to all Logistics
 file browsers, including the Debug tab browser and comic library. Comics password support belongs to Comics and does not depend on this action
 being enabled. `__init__.py:register()` declares the action; `ui/create_zip.py`
 owns the dialog and captures input for shared ZIP workers. Browser wiring belongs
 to [the central guide](../FILE_BROWSER.md).
+
+## Workspace architecture
+
+`__init__.py` contributes a lazy `archives.workspace` page and browser actions.
+`ui/page.py` uses the generic `OperationProgress` worker and the Logistics password
+service. It exposes `idle`, `can_close` and `prepare_close` for the main-window
+lifecycle. Its workspace navigation order is 15, between sync actions and Git (20).
+The rail paints a palette-aware zipper icon. Standalone browsers use the retained
+host in `ui/window.py`, which defers closure until its worker stops.
+
+`ui/create.py` captures a source basket, format, ZIP compression preset and optional
+confirmed AES password. `backend.py` owns ZIP/TAR metadata, bounded text/image previews,
+selected extraction and safe ZIP rebuilding. Shared ZIP creation, verification,
+streaming, cancellation and metadata copying come from commonUtils. The shared
+ZIP API accepts optional compression/level parameters and cancellable authentication;
+existing callers keep their defaults.
+
+Extraction stages the full selection, then reserves a new output directory with
+exclusive `mkdir`. Validation happens before writing entry payloads. Failures and
+cancellation discard the staging directory. Publication never replaces an existing
+folder. ZIP edits preserve encryption, verify decrypted hashes and check the input
+file identity before atomic replacement. They reject mixed protection and duplicate
+additions. TAR creation uses bounded cancellable reads, rejects links/special files,
+verifies staged hashes and refuses changed sources. No external executable is needed.
+Supported format boundaries and shortcut keys are in the user guide.
+
+Tests: `test_archive_workspace.py` exercises filesystem safety and ZIP/TAR operations;
+`test_archive_workspace_ui.py` covers navigation, filtering, password retries,
+shutdown, source options and rail placement. Shared ZIP tests cover presets and
+cancellation during authentication.
 
 ## Password configuration
 
