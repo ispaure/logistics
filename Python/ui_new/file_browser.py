@@ -87,6 +87,7 @@ class _BrowserHost:
 
 
 class BrowserView(_BrowserHost, qt.QWidget):
+    close_in_background = True
     title_changed = qt.Signal(str)
     idle = qt.Signal()
     def __init__(self, parent=None, *, root_path=None, filesystem_scope=False):
