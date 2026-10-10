@@ -6,9 +6,7 @@ from features.contributions import Feature, SettingsContribution, DocumentLaunch
 
 def create_settings(parent=None):
     from commonUtils.ui import pyside as qt
-    label = qt.QLabel('Defaults apply when opening a book without saved reading preferences. '
-                     'The reader also saves preferences and position per book in commonUtils/Cache/Books. '
-                     'Metadata saves keep an original backup beside the EPUB.', parent)
+    label = qt.QLabel('Defaults apply to books without saved reading preferences.', parent)
     label.setWordWrap(True)
     return label
 

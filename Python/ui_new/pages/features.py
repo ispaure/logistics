@@ -21,11 +21,7 @@ class FeaturesPage(qt.QWidget):
         font = title.font(); font.setPointSize(font.pointSize() + 5); font.setBold(True)
         title.setFont(font)
         content_layout.addWidget(title)
-        description = qt.QLabel('Choose which features to use. Required dependencies are enabled together. '
-                                'Choices are saved for your next launch; existing windows and jobs can finish.')
-        from features.preferences import preferences_path
-        from ui_new.settings.storage import StorageNotice
-        content_layout.addWidget(StorageNotice(preferences_path(), self, scope="personal"))
+        description = qt.QLabel('Choose features for the next launch. Dependencies are enabled together.')
         description.setWordWrap(True)
         content_layout.addWidget(description)
         reset = qt.QPushButton('Reset to defaults')
@@ -40,7 +36,10 @@ class FeaturesPage(qt.QWidget):
         content_layout.addWidget(self.status)
         content_layout.addStretch()
         self.scroll.setWidget(self.content)
-        layout.addWidget(self.scroll)
+        from commonUtils.ui.settings_sections import ScopedSettings, SettingsSection
+        self.sections = ScopedSettings(self)
+        self.sections.set_sections([SettingsSection('personal', 'features', 'Features', self.scroll)])
+        layout.addWidget(self.sections)
         self.toggles = {}
         self.states = {}
         self._unsubscribe = registry.subscribe(self._features_changed)

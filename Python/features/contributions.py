@@ -157,14 +157,23 @@ class SettingsContribution:
 
     Factories run lazily on selection, only for enabled features. The widget may
     expose refresh() and can_close() to participate in the host lifecycle.
-    separate_tab places the custom widget beside the INI files in its own tab.
+    scope identifies where custom settings are saved; config_scope overrides
+    scope for raw config files. separate_tab gives the custom panel its own section.
     """
     name: str
     settings_id: str
-    create_widget: Callable[[Any], Any]
+    create_widget: Callable[[Any], Any] | None = None
     order: int = 0
     config_files: tuple[Any, ...] = ()
     separate_tab: bool = False
+    scope: str = 'application'
+    config_scope: str | None = None
+
+    def __post_init__(self):
+        if self.scope not in ('application', 'personal'):
+            raise ValueError('Settings scope must be application or personal')
+        if self.config_scope not in (None, 'application', 'personal'):
+            raise ValueError('Config scope must be application or personal')
 
 
 @dataclass(frozen=True)

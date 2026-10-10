@@ -14,11 +14,8 @@ class TextEditorPage(qt.QWidget):
         self.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         layout = qt.QVBoxLayout(self)
         description = qt.QLabel(
-            "Edit scripts, configuration, Markdown and other text in an independent window. Documents share tabs across all Logistics browsers."
+            "Open a document to change editor preferences."
         )
-        from .preferences import Preferences
-        from ui_new.settings.storage import StorageNotice
-        layout.addWidget(StorageNotice(Preferences().path, self, scope="personal"))
         description.setWordWrap(True)
         button = qt.QPushButton("Open Text Editor")
         button.clicked.connect(lambda: self.service.open())

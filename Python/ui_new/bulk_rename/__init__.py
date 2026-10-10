@@ -44,7 +44,7 @@ class BulkRenameWindow(qt.QMainWindow):
     def _show_help(self):
         from pathlib import Path
         from commonUtils.ui.markdown import open_markdown
-        open_markdown(Path(__file__).with_name('README.md'), parent=self)
+        open_markdown(Path(__file__).with_name('README.md'), parent=self, detached=True, allow_new_tabs=False)
 
     def eventFilter(self, watched, event):
         if (watched is self._owner and event.type() == qt.QEvent.Type.Close

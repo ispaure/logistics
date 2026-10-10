@@ -63,13 +63,12 @@ class RclonePage(pyside.QWidget):
 
         title = pyside.QLabel('Credential packages')
         title_font = title.font()
-        title_font.setPointSize(title_font.pointSize() + 7)
+        title_font.setPointSize(title_font.pointSize() + 3)
         title_font.setBold(True)
         title.setFont(title_font)
 
         description = pyside.QLabel(
-            'Load each credential ZIP into its own same-named rclone .conf. '
-            'Credential ZIP packages remain unchanged and can be loaded again later.'
+            'Load an encrypted ZIP into a same-named rclone config.'
         )
         description.setWordWrap(True)
 
@@ -101,13 +100,13 @@ class RclonePage(pyside.QWidget):
         label.setFont(label_font)
 
         help_label = pyside.QLabel(
-            'Available encrypted ZIP packages from the Logistics '
-            'RemoteCredentials folder and Marc’s Dropbox when available.'
+            'Encrypted ZIP packages'
         )
         help_label.setWordWrap(True)
 
         layout.addWidget(label)
-        layout.addWidget(help_label)
+        self.credential_list.setToolTip(help_label.text())
+        help_label.deleteLater()
         layout.addWidget(self.credential_list)
 
         return widget
@@ -156,9 +155,7 @@ class RclonePage(pyside.QWidget):
         config_form.addRow('Folder:', self.config_directory)
 
         clear_help = pyside.QLabel(
-            'Clear every .conf file in this folder, including the legacy '
-            'rclone.conf and all generated credential configs. '
-            'Credential ZIP packages are not deleted.'
+            'Delete all loaded configs. ZIP packages are kept.'
         )
         clear_help.setWordWrap(True)
 

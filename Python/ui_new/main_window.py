@@ -56,6 +56,7 @@ class MainWindow(pyside.Window):
         self.documents.idle.connect(self._retry_close)
         self.actions.changed.connect(self._actions_changed)
         self.actions.idle.connect(self._retry_close)
+        self._docking_preview = False
         self._closing = False
         self.bulk_rename = None
 
@@ -72,6 +73,9 @@ class MainWindow(pyside.Window):
         self.tabs.currentChanged.connect(self._tab_changed)
         self._close_guard = _CloseGuard(self)
         self._last_destination = self.tabs.currentWidget()
+        self._bind_docking_preview(self.documents)
+        for _, _, page in self._core_pages:
+            self._bind_docking_preview(page)
         register_document_host(self.documents)
         register_process_host(self.actions)
         from ui_new.bulk_rename import register_bulk_rename_host
@@ -159,8 +163,39 @@ class MainWindow(pyside.Window):
         self.dlg.close()
         self.dlg.deleteLater()
 
+    def _bind_docking_preview(self, page):
+        from commonUtils.ui.workspace import Workspace
+        for workspace in page.findChildren(Workspace):
+            workspace.drop_reveal = lambda target=page: self._preview_docking(target)
+
+    def _preview_docking(self, page):
+        previous = self.tabs.currentWidget()
+        previous_destination = self._last_destination
+        focus = pyside.QApplication.focusWidget()
+        self._docking_preview = True
+        try:
+            if self.tabs.indexOf(page) < 0:
+                self.tabs.addTab(page, 'Open documents')
+            self.tabs.setCurrentWidget(page)
+        finally:
+            self._docking_preview = False
+        def restore():
+            from shiboken6 import isValid
+            if not isValid(self.tabs) or previous is None or not isValid(previous):
+                return
+            self._docking_preview = True
+            try:
+                self.tabs.setCurrentWidget(previous)
+                self._last_destination = previous_destination
+                if focus is not None and isValid(focus):
+                    focus.setFocus()
+            finally:
+                self._docking_preview = False
+        return restore
+
     def _create_feature_page(self, contribution):
         page = contribution.create_page(self.dlg)
+        self._bind_docking_preview(page)
         idle = getattr(page, 'idle', None)
         if idle is not None and callable(getattr(idle, 'connect', None)):
             idle.connect(self._retry_close)
@@ -283,11 +318,16 @@ class MainWindow(pyside.Window):
         """Refresh the active page when that page exposes a refresh method."""
 
         current_widget = self.tabs.currentWidget()
+        self.sidebar.set_current(current_widget)
+        from commonUtils.ui.workspace_menus import sync_native_menus
+        document = self.documents.workspace.active_view if current_widget is self.documents else None
+        sync_native_menus(self.dlg, getattr(document, 'document', None))
+        if self._docking_preview:
+            return
         if current_widget is self.actions:
             pyside.QTimer.singleShot(0, self.actions, self.actions.acknowledge_current)
         if current_widget is not self.documents:
             self._last_destination = current_widget
-        self.sidebar.set_current(current_widget)
 
         if current_widget is None:
             return

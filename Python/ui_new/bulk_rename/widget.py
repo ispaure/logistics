@@ -107,6 +107,7 @@ class BulkRenameWidget(qt.QWidget):
         self.folder_tree.setModel(self.folder_model)
         self.folder_tree.setUniformRowHeights(True)
         self.folder_tree.setAccessibleName('Folders')
+        self.folder_tree.setHeaderHidden(True)
         self.folder_tree.header().setStretchLastSection(False)
         self.folder_tree.setColumnWidth(0, 240)
         self.folder_tree.setHorizontalScrollMode(qt.QAbstractItemView.ScrollMode.ScrollPerPixel)

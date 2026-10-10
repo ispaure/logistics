@@ -3,7 +3,7 @@ from commonUtils.ui import pyside as qt
 
 
 class FormDialog(qt.QDialog):
-    def __init__(self, title, parent=None, note=''):
+    def __init__(self, title, parent=None, note='', *, scope=None):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setMinimumWidth(480)
@@ -14,7 +14,15 @@ class FormDialog(qt.QDialog):
             label.setTextFormat(qt.Qt.TextFormat.PlainText)
             layout.addWidget(label)
         self.form = qt.QFormLayout()
-        layout.addLayout(self.form)
+        if scope is None:
+            layout.addLayout(self.form)
+        else:
+            from commonUtils.ui.settings_sections import ScopedSettings, SettingsSection
+            body = qt.QWidget(self)
+            body.setLayout(self.form)
+            self.sections = ScopedSettings(self)
+            self.sections.set_sections([SettingsSection(scope, 'settings', 'Settings', body)])
+            layout.addWidget(self.sections)
         self.buttons = qt.QDialogButtonBox(qt.QDialogButtonBox.StandardButton.Ok | qt.QDialogButtonBox.StandardButton.Cancel)
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)

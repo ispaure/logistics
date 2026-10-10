@@ -16,7 +16,7 @@ def get_contributions() -> Feature:
 
     return Feature(
         id='links', label='Links',
-        settings=[SettingsContribution('Configuration', 'links_config', _create_settings,
+        settings=[SettingsContribution('Configuration', 'links_config',
                     config_files=(Path(__file__).with_name('config.ini'),))],
         pages=[
             PageContribution(
@@ -27,8 +27,3 @@ def get_contributions() -> Feature:
             )
         ]
     )
-
-
-def _create_settings(parent=None):
-    from commonUtils.ui import pyside as qt
-    return qt.QLabel('Edit the links configuration below. Changes may require restarting Logistics.', parent)

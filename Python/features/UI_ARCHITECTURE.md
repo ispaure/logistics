@@ -264,8 +264,17 @@ def get_contributions():
 ```
 
 The same `settings` field is supported by unified `Feature` declarations.
-`settings_id` must be unique within its feature. `config_files` adds section-and-key INI editors (with a Source tab)
-below the custom layout. Other text files retain the plain-text editor. Conventional feature `config.ini` files are
+`settings_id` must be unique within its feature. Set `scope='personal'` for user
+settings; the default is `application`. `config_scope` can identify a different
+scope for contributed files (for example personal controls with application INI
+defaults). A file-only contribution can omit `create_widget`.
+
+Settings uses the reusable commonUtils `ScopedSettings` component to show only
+applicable Application Settings/Personal tabs. All `config_files` in a scope
+share one INI files section with a file selector and section/key editors, plus
+Source for advanced edits. `separate_tab=True` gives a custom widget its own
+section only when siblings require nesting; a lone panel appears directly.
+Other text files retain the plain-text editor. Conventional feature `config.ini` files are
 available even while a feature is disabled. Application INI files are in
 **Settings → Configuration**. Editors preserve UTF-8 BOM/newlines, save atomically,
 and refuse to overwrite changes made outside the editor. Settings is distinct

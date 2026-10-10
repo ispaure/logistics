@@ -12,6 +12,29 @@ from ui_new import main_window
 
 
 class MainWindowTests(QtTestCase):
+    def test_abandoned_docking_preview_restores_page_and_destination(self):
+        from commonUtils.ui.document_host import show_document
+        window = self.window(); window.dlg.show()
+        document = qt.QMainWindow(); document.setCentralWidget(qt.QLabel('Document'))
+        show_document(document)
+        dock = window.documents.records[document]['dock']
+        dock.setFloating(True)
+        previous = window._core_pages[0][2]
+        window.tabs.setCurrentWidget(previous)
+        before = window._last_destination
+        from commonUtils.ui.workspace_drag import NativeWindowDrag
+        container = dock.window()
+        drag = NativeWindowDrag(container, container.geometry())
+        container._native_drag = drag
+        point = window.dlg.frameGeometry().center()
+        drag.move(point)
+        self.assertIs(window.tabs.currentWidget(), window.documents)
+        drag.finish(point, cancel=True)
+        self.assertIs(window.tabs.currentWidget(), previous)
+        self.assertIs(window._last_destination, before)
+        self.assertTrue(dock.workspace.is_detached)
+        document.close()
+
     def test_floating_document_mouse_drop_reveals_documents_and_splits_beside_its_neighbor(self):
         from commonUtils.ui.document_host import show_document
         window = self.window(); window.dlg.show(); window.dlg.activateWindow()
