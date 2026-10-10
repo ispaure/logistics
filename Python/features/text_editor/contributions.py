@@ -47,7 +47,7 @@ def register():
     return Feature(
         id="text_editor",
         label="Text Editor",
-        document_launchers=[DocumentLauncherContribution("text", "Text Editor", launch, "text", 10)],
+        document_launchers=[DocumentLauncherContribution("text", "Text Editor", launch, "text", 10, new_document)],
         browser=BrowserExtension(
             actions=(
                 SelectionAction(
@@ -76,9 +76,24 @@ def register():
     )
 
 
-def launch(parent):
+def _service(parent):
     from .service import EditorService
     service = getattr(parent, '_text_editor_service', None)
     if service is None:
         service = parent._text_editor_service = EditorService(parent)
-    return service.open()
+    return service
+
+
+def launch(parent):
+    from commonUtils.ui import pyside as qt
+    path, _ = qt.QFileDialog.getOpenFileName(parent, 'Open text file', '', 'Text files (*.txt *.log *.py *.json *.ini *.csv);;All files (*)')
+    if path:
+        return _service(parent).open(path)
+
+
+def new_document(parent):
+    from .window import EditorWindow
+    from commonUtils.ui.document_host import show_document
+    window = EditorWindow(service=_service(parent))
+    show_document(window)
+    return window

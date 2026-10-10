@@ -343,6 +343,7 @@ class MainWindowTests(QtTestCase):
             DocumentLauncherContribution('text', 'Text Editor', opener, 'text'))
         with patch.object(main_window.registry, 'get_document_launchers', return_value=[launcher]):
             window = self.window(); window.dlg.show(); window._refresh_sidebar()
+            window.sidebar.show_documents()
             self.assertTrue(window.sidebar.document_tree.isVisible())
             self.assertTrue(window.sidebar.buttons['documents'].isVisible())
             self.assertTrue(window.sidebar.bulk_rename_button.isVisible())
@@ -358,8 +359,43 @@ class MainWindowTests(QtTestCase):
             self.assertIs(window.documents.workspace.active_view.document, first)
             first.close(); second.close(); self.app.processEvents()
             self.assertEqual(window.documents.count, 0)
+            window.sidebar.show_documents()
             self.assertTrue(window.sidebar.document_tree.isVisible())
             self.assertIn('text', window.sidebar.editor_groups)
+            window.dlg.close()
+
+    def test_document_overlay_new_open_and_cancel_keep_current_page(self):
+        from features.contributions import DocumentLauncherContribution
+        opener, creator = Mock(), Mock()
+        launcher = RegisteredContribution('text_editor', 'Text Editor',
+            DocumentLauncherContribution('text', 'Text Editor', opener, 'text', 10, creator))
+        with patch.object(main_window.registry, 'get_document_launchers', return_value=[launcher]):
+            window = self.window(); window.dlg.show(); window._refresh_sidebar()
+            current = window.tabs.currentWidget()
+            self.assertFalse(window.sidebar.document_overlay.isVisible())
+            self.assertFalse(window.sidebar.buttons['documents'].isChecked())
+            window.sidebar.show_documents()
+            self.assertTrue(window.sidebar.document_overlay.isVisible())
+            self.assertTrue(window.sidebar.buttons['documents'].isChecked())
+            self.assertIs(window.tabs.currentWidget(), current)
+            button = window.sidebar.editor_buttons['text']
+            self.assertEqual([action.text() for action in button.menu().actions()], ['New', 'Open…'])
+            button.menu().actions()[0].trigger()
+            creator.assert_called_once_with(window.documents)
+            opener.assert_not_called()
+            self.assertFalse(window.sidebar.document_overlay.isVisible())
+            self.assertFalse(window.sidebar.buttons['documents'].isChecked())
+            window.sidebar.show_documents()
+            button.menu().actions()[1].trigger()
+            opener.assert_called_once_with(window.documents)
+            self.assertIs(window.tabs.currentWidget(), current)
+            window.sidebar.show_documents(); window.sidebar.show_documents()
+            self.assertFalse(window.sidebar.document_overlay.isVisible())
+            window.sidebar.show_documents()
+            from PySide6.QtTest import QTest
+            QTest.keyClick(window.sidebar.document_tree, qt.Qt.Key.Key_Escape)
+            self.app.processEvents()
+            self.assertFalse(window.sidebar.document_overlay.isVisible())
             window.dlg.close()
 
     def test_sidebar_groups_tools_and_keeps_documents_when_features_change(self):
@@ -367,7 +403,7 @@ class MainWindowTests(QtTestCase):
         contribution = self.contribution('Calculator', 'calculator')
         window = self.window([contribution]); window.dlg.show(); self.app.processEvents()
         self.assertTrue(window.tabs.tabBar().isHidden())
-        self.assertEqual(window.sidebar.width(), 320)
+        self.assertEqual(window.sidebar.width(), 60)
         self.assertEqual([action.text() for action in window.sidebar.tools_menu.actions()], ['Calculator', 'Debug'])
         self.assertFalse(window.sidebar.tools_menu.isVisible())
         reader = qt.QMainWindow(); reader.setWindowTitle('Open reader')

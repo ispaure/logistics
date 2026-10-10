@@ -180,12 +180,13 @@ class BrowserExtensionContribution:
 
 @dataclass(frozen=True)
 class DocumentLauncherContribution:
-    """Persistent document category with a lazy, feature-owned opener."""
+    """Feature-owned editor launcher; optional creation enables shared New/Open menus."""
     editor_id: str
     name: str
     open_document: Callable[[Any], Any]
     icon: str = 'documents'
     order: int = 0
+    new_document: Callable[[Any], Any] | None = None
 
 
 @dataclass

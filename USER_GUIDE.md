@@ -271,12 +271,13 @@ can be discarded. Markdown retains its existing reader as well as this source
 editing option. See the [Text Editor guide](Python/features/text_editor/user_docs/index.md).
 
 
-The left side always shows Documents grouped by editor: Text Editor,
-Markdown/Obsidian, EPUB Reader, Comic Reader and Archives. Use an editor icon or
-its + button to open a document; click a nested document to return to it. Detached
-documents stay in the list with a Bring back button. Bulk Rename has a separate
-persistent utility icon. The icon column scrolls when there are more tools than
-fit on screen.
+The Documents icon is always available in the left sidebar. Click it to open a
+compact overlay with Text Editor, Markdown Editor, EPUB Reader, Comic Reader and
+Archives buttons. Text and Markdown offer New and Open; the other readers prompt
+for a file. Open documents appear below their editor heading; click one to return
+to that document or text buffer. Detached documents include a Bring back button.
+Click outside the overlay or press Escape to dismiss it. Bulk Rename keeps its
+own sidebar icon. The sidebar scrolls when more tools are available than fit.
 
 Undocked tabs become normal windows with native minimize/maximize controls.
 Use the inner tab header to drag them back, or double-click it to reattach.
