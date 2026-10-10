@@ -153,3 +153,12 @@ one view and move with its dock when detached or reattached. Each view independe
 subscribes to feature toggles and participates in cooperative shutdown. Browser
 search and storage dialogs use shared directory metadata snapshots/cache; their
 workers are included in `FileBrowser.stop()` and `idle` handling.
+
+
+Archive inspection uses shared `ArchiveFile`/`ZIPFile` information hooks on the
+existing preview worker. The [Archives feature](archives/README.md) installs its
+manager and extraction actions through `SelectionAction`, its ZIP/TAR opening
+through `FileActivation`, and per-view routing through `create_controller`.
+CBZ activation remains with Comics. Successful writes invalidate the affected
+file and reconcile its parent through the existing browser refresh APIs; the
+generic host performs no archive-specific dispatch or password prompting.

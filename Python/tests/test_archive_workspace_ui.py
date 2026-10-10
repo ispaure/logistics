@@ -37,7 +37,7 @@ class ArchiveWorkspaceUITests(QtTestCase):
 
     def wait(self):
         deadline = time.monotonic() + 10
-        while self.page.busy or self.page._retry:
+        while self.page.busy:
             self.assertLess(time.monotonic(), deadline)
             self.app.processEvents()
             time.sleep(.005)
@@ -50,19 +50,19 @@ class ArchiveWorkspaceUITests(QtTestCase):
 
     def test_folder_navigation_search_and_preview(self):
         self.open()
-        self.assertEqual(self.page.files.topLevelItemCount(), 1)
-        self.page._activate(self.page.files.topLevelItem(0))
-        self.assertEqual(self.page.folder, 'source/')
-        self.page.search.setText('notes')
-        self.assertEqual(self.page.files.topLevelItemCount(), 1)
-        item = self.page.files.topLevelItem(0)
+        self.assertEqual(self.page.contents.files.topLevelItemCount(), 1)
+        self.page.contents._activate(self.page.contents.files.topLevelItem(0))
+        self.assertEqual(self.page.contents.folder, 'source/')
+        self.page.contents.search.setText('notes')
+        self.assertEqual(self.page.contents.files.topLevelItemCount(), 1)
+        item = self.page.contents.files.topLevelItem(0)
         self.assertEqual(item.text(0), 'source/nested/notes.txt')
         item.setSelected(True)
         self.page.preview_selected()
         self.wait()
-        self.assertEqual(self.page.preview_text.toPlainText(), 'Nested preview')
-        self.page._up()
-        self.assertEqual(self.page.folder, '')
+        self.assertEqual(self.page.contents.preview_text.toPlainText(), 'Nested preview')
+        self.page.contents.up_folder()
+        self.assertEqual(self.page.contents.folder, '')
 
     def test_invalid_open_keeps_current_archive_and_shows_error(self):
         self.open()
@@ -81,7 +81,7 @@ class ArchiveWorkspaceUITests(QtTestCase):
         def prompt(*args):
             self.assertEqual(qt.QThread.currentThread(), self.app.thread())
             return next(answers)
-        with patch('features.archives.ui.page.ask_password', side_effect=prompt) as ask:
+        with patch('features.archives.ui.session.ask_password', side_effect=prompt) as ask:
             self.page.test()
             self.wait()
             self.assertEqual(ask.call_count, 2)
@@ -92,7 +92,7 @@ class ArchiveWorkspaceUITests(QtTestCase):
         backend.create([self.root / 'source'], encrypted, password='secret')
         self.page.open_archive(encrypted)
         self.wait()
-        with patch('features.archives.ui.page.ask_password', return_value=None):
+        with patch('features.archives.ui.session.ask_password', return_value=None):
             self.page.test()
             self.wait()
         self.assertFalse(self.page.busy)
@@ -162,17 +162,17 @@ class ArchiveWorkspaceUITests(QtTestCase):
         self.assertTrue(self.page.commands['extract'].isEnabled())
 
     def test_empty_archive_and_welcome_state(self):
-        self.assertFalse(self.page.files.isVisible())
-        self.assertTrue(self.page.empty.isVisible())
+        self.assertFalse(self.page.contents.files.isVisible())
+        self.assertTrue(self.page.contents.empty.isVisible())
         empty = self.root / 'empty.zip'
         import zipfile
         with zipfile.ZipFile(empty, 'w'):
             pass
         self.page.open_archive(empty)
         self.wait()
-        self.assertEqual(self.page.files.topLevelItemCount(), 0)
-        self.assertFalse(self.page.empty.isVisible())
-        self.assertTrue(self.page.files.isVisible())
+        self.assertEqual(self.page.contents.files.topLevelItemCount(), 0)
+        self.assertFalse(self.page.contents.empty.isVisible())
+        self.assertTrue(self.page.contents.files.isVisible())
 
     def test_image_preview_displays_and_does_not_force_large_panel(self):
         from io import BytesIO
@@ -185,13 +185,13 @@ class ArchiveWorkspaceUITests(QtTestCase):
             archive.writestr('picture.png', image.getvalue())
         self.page.open_archive(path)
         self.wait()
-        self.page.files.topLevelItem(0).setSelected(True)
+        self.page.contents.files.topLevelItem(0).setSelected(True)
         self.page.preview_selected()
         self.wait()
-        self.assertTrue(self.page.image_scroll.isVisible())
-        self.assertFalse(self.page.preview_text.isVisible())
-        self.assertLess(self.page.preview_panel.width(), 600)
-        self.assertFalse(self.page.preview_image.pixmap().isNull())
+        self.assertTrue(self.page.contents.image_scroll.isVisible())
+        self.assertFalse(self.page.contents.preview_text.isVisible())
+        self.assertLess(self.page.contents.preview_panel.width(), 600)
+        self.assertFalse(self.page.contents.preview_image.pixmap().isNull())
 
     def test_edit_keeps_verified_password_in_session_for_next_action(self):
         encrypted = self.root / 'encrypted.zip'
@@ -200,7 +200,7 @@ class ArchiveWorkspaceUITests(QtTestCase):
         self.wait()
         extra = self.root / 'extra.txt'
         extra.write_text('new')
-        with patch('features.archives.ui.page.ask_password', return_value='secret') as ask:
+        with patch('features.archives.ui.session.ask_password', return_value='secret') as ask:
             self.page._edit(sources=[extra])
             self.wait()
             # Complete the queued refresh after successful editing.

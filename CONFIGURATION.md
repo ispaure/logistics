@@ -174,7 +174,7 @@ An empty `Software/` directory does not provision every optional integration.
 | [rclone](Python/features/rclone/README.md) | Private credential ZIPs; generated configs in `~/.config/rclone` |
 | [FUSE](Python/features/fuse/README.md) | rclone plus platform mount driver/helper |
 | [Comics](Python/features/comics/README.md) | `[LogisticsComics]` library names; optional `[LogisticsZIP]` password |
-| [Archives](Python/features/archives/README.md) | Optional inherited `[LogisticsZIP]` password; otherwise interactive creation prompt |
+| [Archives](Python/features/archives/README.md) | Workspace AES prompts; inherited `[LogisticsZIP]` for unlocking and the encrypted-selection action |
 | [Calibre](Python/features/calibre/README.md) | Immediate child library with `metadata.db`; executable/device prerequisites |
 | [Plex](Python/features/plex/README.md) | Matching `-PMSDATA` remote and platform server-data location |
 | [YouTube Downloader](Python/features/youtube_downloader/README.md) | `[Youtube-Download]` folder config, `[Youtube-DL]` per-channel INIs and FFmpeg |

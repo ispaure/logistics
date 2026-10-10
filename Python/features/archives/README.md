@@ -3,42 +3,80 @@
 Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
 and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
 
-This feature contributes an **Archives** workspace and browser actions for
-opening the manager, creating archives, and **Archives → Create encrypted ZIP…** to all Logistics
-file browsers, including the Debug tab browser and comic library. Comics password support belongs to Comics and does not depend on this action
-being enabled. `__init__.py:register()` declares the action; `ui/create_zip.py`
-owns the dialog and captures input for shared ZIP workers. Browser wiring belongs
-to [the central guide](../FILE_BROWSER.md).
+This feature contributes the **Archives** workspace and declarative browser
+opening, extraction and creation actions. Browser installation follows
+[the central guide](../FILE_BROWSER.md); the generic host contains no archive
+format checks or feature-specific window routing. Comics password support and
+comic-reader activation remain independent of Archives.
 
-## Workspace architecture
+## Responsibilities
 
-`__init__.py` contributes a lazy `archives.workspace` page and browser actions.
-`ui/page.py` uses the generic `OperationProgress` worker and the Logistics password
-service. It exposes `idle`, `can_close` and `prepare_close` for the main-window
-lifecycle. Its workspace navigation order is 15, between sync actions and Git (20).
-The rail paints a palette-aware zipper icon. Standalone browsers use the retained
-host in `ui/window.py`, which defers closure until its worker stops.
+| Location | Responsibility |
+| --- | --- |
+| `__init__.py` | Lazy page, controller, action and activation declarations |
+| `ui/browser.py` | Per-browser routing, independent hosts and mutation refresh |
+| `ui/page.py` | Commands, operation outcomes and main-window lifecycle |
+| `ui/session.py` | Background jobs, configured/session credentials, GUI retries and cancellation |
+| `ui/chrome.py` | Workspace toolbar, location, status and shortcuts |
+| `ui/create.py`, `ui/dialogs.py` | Source/options capture, destination and removal prompts |
+| `ui/create_zip.py` | Existing configured-password encrypted-selection dialog |
+| `ui/window.py` | Retained independent host with deferred worker-safe closure |
+| `commonUtils.archives` | Reusable ZIP/TAR operations and metadata |
+| `commonUtils.ui.archive_view` | Passive contents navigation and previews |
 
-`ui/create.py` captures a source basket, format, ZIP compression preset and optional
-confirmed AES password. `backend.py` owns ZIP/TAR metadata, bounded text/image previews,
-selected extraction and safe ZIP rebuilding. Shared ZIP creation, verification,
-streaming, cancellation and metadata copying come from commonUtils. The shared
-ZIP API accepts optional compression/level parameters and cancellable authentication;
-existing callers keep their defaults.
+`backend.py` keeps compatibility imports; it has no archive implementation.
+The shared [archive guide](../../commonUtils/ARCHIVES.md) documents formats,
+validation, publication, preview bounds and public APIs. Existing low-level ZIP
+callers retain their defaults and extraction behavior.
 
-Extraction stages the full selection, then reserves a new output directory with
-exclusive `mkdir`. Validation happens before writing entry payloads. Failures and
-cancellation discard the staging directory. Publication never replaces an existing
-folder. ZIP edits preserve encryption, verify decrypted hashes and check the input
-file identity before atomic replacement. They reject mixed protection and duplicate
-additions. TAR creation uses bounded cancellable reads, rejects links/special files,
-verifies staged hashes and refuses changed sources. No external executable is needed.
-Supported format boundaries and shortcut keys are in the user guide.
+## Browser flow
 
-Tests: `test_archive_workspace.py` exercises filesystem safety and ZIP/TAR operations;
-`test_archive_workspace_ui.py` covers navigation, filtering, password retries,
-shutdown, source options and rail placement. Shared ZIP tests cover presets and
-cancellation during authentication.
+Enabled browser bindings install `ArchiveBrowserController` through
+`BrowserExtension.create_controller`. ZIP and supported TAR activation opens the
+manager in the current main window's contributed page. CBZ activation stays with
+Comics, with explicit Archives actions available in the comic library and generic
+browsers. Ordinary files and folders offer creation actions; supported archives
+also offer **Open archive manager…** and **Extract archive…**. Multiple selected
+archives can use separate retained windows.
+
+Routing uses the invoking host and a live contributed tab. It does not search
+unrelated application windows or resurrect hidden disabled pages. Standalone and
+detached browsers use independent hosts when no local contributed page exists.
+Controllers retain and reuse their standalone host; independent windows own
+and cancel their workers, while the main page participates in main-window
+`prepare_close`/`idle` handling. Feature toggles remove actions and activation
+without deleting existing jobs or open windows.
+
+Successful creation, editing and extraction emit `archive_changed` on the GUI
+thread. The invoking binding invalidates the affected file and reconciles its
+parent through `refresh_item` and `refresh_changed`, within the browser's library
+scope. Failures and cancellations emit no mutation notification. Passive archive
+information uses `ArchiveFile.browser_panels` on the existing preview worker;
+headers never prompt for a password.
+
+## Workspace lifecycle
+
+`ArchiveSession` owns one `OperationProgress` job, includes queued credential
+retries in its busy state and schedules callbacks with a Qt owner context.
+Passwords are resolved in the worker; entry prompts and retries run on the GUI
+thread. Verified replacements are remembered under their new file identity.
+Closing cancels work and prevents queued retries or refreshes from restarting it.
+The contents widget only displays validated entries and decoded previews and
+emits requests; it does not own jobs, credentials or filesystem writes.
+
+Workspace navigation order 15 places Archives after sync actions and before Git
+(20). The rail paints a palette-aware zipper icon. The page preserves Logistics'
+shared theme and works in light and dark modes.
+
+## Validation
+
+Shared tests cover archive formats, staging, traversal/collision checks, source
+changes, encryption, cancellation, file hooks and the passive contents view.
+`test_archive_workspace_ui.py` covers Logistics jobs, credentials, shutdown,
+source options and rail placement. `test_archive_browser.py` installs the actual
+feature into a Logistics `BrowserView` and checks activation, CBZ reader precedence,
+selection menus, direct extraction, refresh, toggles and standalone routing.
+The existing browser and Comics regression suites check compatibility.
 
 ## Password configuration
 
@@ -88,9 +126,8 @@ destinations are retained. Cancellation is checked once more before publication.
 The dialog stays alive until its worker has stopped; failures and cancellation
 leave it open with an explanation. Completion after publication remains success.
 
-## Validation
-
 Use the [project test commands](../../../README.md#development).
-`test_archive_password_ui.py` checks dialog/password behavior; commonUtils ZIP
-creation tests check source validation, cancellation, verification and publication.
+`test_archive_password_ui.py` checks the legacy dialog/password behavior;
+commonUtils ZIP and archive tests check source validation, cancellation, verification
+and publication.
 Keep this workflow's chunk-level cancellation separate from Comics' per-comic boundary.
