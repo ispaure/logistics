@@ -2,7 +2,7 @@
 
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.code_editor.views import EditorViews
-from commonUtils.text_files import TextSnapshot
+from commonUtils.persistence.text import TextSnapshot
 
 
 class Document(qt.QWidget):

@@ -2,7 +2,7 @@
 
 from commonUtils.features import BrowserExtension, FileActivation, SelectionAction
 from commonUtils.fileUtils import File
-from commonUtils.text_files import is_text_path
+from commonUtils.persistence.text import is_text_path
 from features.contributions import Feature, SettingsContribution
 from pathlib import Path
 

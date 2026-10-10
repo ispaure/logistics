@@ -1,7 +1,7 @@
 """Editor commands and status controls; native text navigation remains Qt-owned."""
 
 from commonUtils.ui import pyside as qt
-from commonUtils.text_files import ENCODINGS
+from commonUtils.persistence.text import ENCODINGS
 from commonUtils.ui.code_editor.search import SearchPanel
 
 
@@ -401,7 +401,7 @@ class EditingCommands:
             self.compare_path(path)
 
     def compare_path(self, path):
-        from commonUtils.text_files import read_text_file
+        from commonUtils.persistence.text import read_text_file
         from commonUtils.ui.code_editor.diff import compare_text, DiffDialog, apply_change
         if not self.current or self.task.busy:
             return
