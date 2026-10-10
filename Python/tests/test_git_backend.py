@@ -87,7 +87,7 @@ class GitBackendTests(unittest.TestCase):
         lines = [f'Line {i}\n' for i in range(50)]
         self.commit('file.txt', ''.join(lines), 'Base')
         lines[2] = 'first changed\n'; lines[40] = 'last changed\n'
-        path = self.repo.path / 'file.txt'; path.write_text(''.join(lines))
+        path = self.repo.path / 'file.txt'; path.write_text(''.join(lines), encoding='utf-8', newline='')
         patch = self.repo.diff('file.txt')
         self.repo.apply_hunk('file.txt', 0, patch)
         staged = self.repo.diff('file.txt', staged=True)
