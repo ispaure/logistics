@@ -11,6 +11,40 @@ from ui_new import main_window
 
 
 class MainWindowTests(unittest.TestCase):
+    def test_floating_document_mouse_drop_reveals_documents_and_splits_beside_its_neighbor(self):
+        from commonUtils.ui.document_host import show_document
+        window = self.window(); window.dlg.show(); window.dlg.activateWindow()
+        first = qt.QMainWindow(); first.setCentralWidget(qt.QLineEdit('Keep this content'))
+        second = qt.QMainWindow(); second.setCentralWidget(qt.QLabel('Neighbor'))
+        show_document(first); show_document(second)
+        for _ in range(5): self.app.processEvents()
+        workspace = window.documents.workspace
+        dock = window.documents.records[first]['dock']
+        dock.setFloating(True)
+        window.tabs.setCurrentWidget(window._core_pages[0][2])
+        self.app.processEvents()
+        header = dock.tab_header
+        def mouse(kind, point):
+            button = qt.Qt.MouseButton.LeftButton
+            event = qt.QMouseEvent(kind, qt.QPointF(header.mapFromGlobal(point)), qt.QPointF(point),
+                button if kind != qt.QEvent.Type.MouseMove else qt.Qt.MouseButton.NoButton,
+                button if kind != qt.QEvent.Type.MouseButtonRelease else qt.Qt.MouseButton.NoButton,
+                qt.Qt.KeyboardModifier.NoModifier)
+            self.app.sendEvent(header, event)
+            for _ in range(5): self.app.processEvents()
+        origin = header.mapToGlobal(header.rect().center())
+        mouse(qt.QEvent.Type.MouseButtonPress, origin)
+        point = workspace.mapToGlobal(qt.QPoint(workspace.width() - 3, workspace.height() // 2))
+        mouse(qt.QEvent.Type.MouseMove, point)
+        mouse(qt.QEvent.Type.MouseButtonRelease, point)
+        neighbor = window.documents.records[second]['dock']
+        self.assertIs(window.tabs.currentWidget(), window.documents)
+        self.assertFalse(dock.isFloating())
+        self.assertNotIn(neighbor, workspace.tabifiedDockWidgets(dock))
+        self.assertGreater(dock.x(), neighbor.x())
+        self.assertEqual(first.centralWidget().text(), 'Keep this content')
+        first.close(); second.close(); self.app.processEvents()
+
     def test_sync_job_appears_in_the_rail_and_marks_background_completion(self):
         import sys, time
         from commonUtils.ui.process_progress import open_process
