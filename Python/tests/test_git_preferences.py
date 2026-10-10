@@ -78,11 +78,13 @@ class PreferenceUITests(QtTestCase):
         self.assertFalse(self.page.preferences.warning)
 
     def test_discard_backs_up_original_bytes(self):
-        self.commit_fixture(); file = self.repo.path / 'file.txt'; file.write_bytes(b'modified\x00bytes')
+        self.commit_fixture(); file = self.repo.path / 'file.txt'
+        original = file.read_bytes()
+        file.write_bytes(b'modified\x00bytes')
         self.open()
         with patch.object(self.page, '_confirm', return_value=True):
             self.page.discard_dialog(self.page.snapshot.status.changes); self.wait()
-        self.assertEqual(file.read_bytes(), b'first\n')
+        self.assertEqual(file.read_bytes(), original)
         folders = list((self.repo.path / '.git' / 'logistics-backups').iterdir())
         self.assertEqual(len(folders), 1)
         manifest = json.loads((folders[0] / 'paths.json').read_text())
