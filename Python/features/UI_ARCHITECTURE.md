@@ -84,8 +84,13 @@ when the user switches to it, rather than triggering a second refresh while
 creating the first tab. Contributed page IDs must be unique; the main window
 validates them before invoking any page factories.
 
-The Folders page uses `services.folder_sources.discover_folder_sources()` to read
-each source provider and its folder list once per refresh. Changing a source or
+The Folders page resolves declarations on the GUI thread, then uses
+`services.folder_sources.discover_folder_sources()` in a worker to read each source
+provider and its folder list once per refresh. Availability detectors and action
+descriptors also run in a worker; widget factories run on the GUI thread. Providers
+and detectors must be noninteractive and must not create or access Qt widgets.
+Refresh/selection changes discard stale results; closing cancels work and waits
+for completion. Changing a source or
 credential uses that snapshot. An explicit refresh reads the providers again;
 there is no process-wide cache of folder listings or contribution sets. Remote
 exclusions are applied before deciding which local folders are represented by

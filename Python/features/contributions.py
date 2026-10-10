@@ -80,7 +80,7 @@ class RemoteFolderSourceContribution:
 
 @dataclass(frozen=True)
 class FolderFeatureContribution:
-    """A feature section that may appear for a logical FolderEntry."""
+    """Detect availability/actions off the GUI thread; create_widget runs on it."""
 
     name: str
     is_available: Callable[[FolderEntry], bool]

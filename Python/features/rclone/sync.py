@@ -6,6 +6,7 @@ from pathlib import Path
 
 from commonUtils.osUtils import OS, get_os
 from commonUtils.wrappers import cmdShellWrapper
+from commonUtils.debugUtils import Severity, log
 
 from . import executable
 
@@ -20,15 +21,18 @@ def rclone_sync(
     dry_run=False,
     track_renames=False,
     bw_limit=None,
-    integrated=True
+    integrated=True,
+    cancelled=lambda: False,
+    executable_path=None
 ):
     """Synchronize using one explicit config.
 
     GUI transfers return True when accepted; the progress window owns their actual
-    exit result. Query and explicitly synchronous callers retain their legacy API.
+    exit result. Synchronous callers wait for the exit status; previews always use dry-run.
     """
 
-    rclone_path = executable.ensure_rclone()
+    # Background callers preflight provisioning on the GUI thread and pass its path.
+    rclone_path = executable_path if executable_path is not None else executable.ensure_rclone()
     if rclone_path is None:
         return False
 
@@ -36,12 +40,12 @@ def rclone_sync(
     destination_path_str = str(destination_path)
     arguments = build_sync_arguments(rclone_path, source_path, destination_path,
         config_path=config_path, track_renames=track_renames, bw_limit=bw_limit,
-        dry_run=dry_run, integrated=integrated and not query and not wait_for_output)
+        dry_run=dry_run or query, integrated=integrated and not query and not wait_for_output)
     import shlex
     import subprocess
     baseline = subprocess.list2cmdline(arguments) if get_os() == OS.WIN else shlex.join(arguments)
 
-    if not Path(destination_path).exists():
+    if not query and not dry_run and not Path(destination_path).exists():
         match get_os():
             case OS.WIN:
                 if len(destination_path_str) > 1 and destination_path_str[1] == ':':
@@ -51,16 +55,17 @@ def rclone_sync(
                 if destination_path_str.startswith('/'):
                     Path(destination_path).mkdir(parents=True, exist_ok=True)
 
-    if query:
-        output_lines = cmdShellWrapper.exec_cmd(
-            baseline,
-            wait_for_output=True
-        )
-        return rclone_sync_process_query(
-            source_path_str,
-            destination_path_str,
-            output_lines
-        )
+    if query or wait_for_output:
+        result = cmdShellWrapper.run_command(arguments, cancelled=cancelled)
+        if not result.success:
+            detail = '\n'.join(result.stderr) or ('Cancelled' if result.cancelled else f'Exit status {result.returncode}')
+            if query:
+                raise RuntimeError(f'rclone preview failed: {detail}')
+            log(Severity.ERROR, 'rclone sync', detail)
+            return False
+        if query:
+            return rclone_sync_process_query(source_path_str, destination_path_str, result.lines)
+        return True
 
     if integrated and not wait_for_output:
         from commonUtils.ui import pyside as qt
@@ -74,12 +79,7 @@ def rclone_sync(
                                   'destination': destination_path_str, 'dry_run': dry_run})
             return True
 
-    cmdShellWrapper.exec_cmd(
-        baseline,
-        wait_for_output=wait_for_output,
-        in_new_window=True
-    )
-    return True
+    return cmdShellWrapper.exec_cmd(baseline, wait_for_output=False, in_new_window=True) is not False
 
 
 def build_sync_arguments(rclone_path, source_path, destination_path, *, config_path,

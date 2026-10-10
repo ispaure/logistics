@@ -18,9 +18,10 @@ Channel names must be a single folder name; seasons must be nonnegative integers
 The download URL must use HTTP or HTTPS. Extra options use shell-style quoting.
 
 FFmpeg must be on PATH; Windows/macOS also check their supplied software locations.
-yt-dlp and pip need to be available in the Logistics Python environment. The tool
-attempts to update yt-dlp before nonempty batches; update failures are reported but
-do not prevent downloads from proceeding.
+The launcher installs the pinned yt-dlp dependency. Normal downloads use that
+installed version. **Update yt-dlp** is a separate action; it uses uv when
+available, otherwise pip. A normal launcher dependency sync restores the version
+pinned by Logistics.
 
 ## Download
 
@@ -32,8 +33,9 @@ Files are stored in sibling channel folders under `Season <number>`. Completion
 lists are kept in `CompleteLists/` beneath the settings directory. Numbering
 continues from the highest existing parsed episode number.
 
-Downloads currently run synchronously; this dialog does not provide a cancellable
-background download job. A successful process exit may still omit individual
+Downloads and season transfers run in the background. **Cancel** stops the running
+process tree and leaves yt-dlp’s resumable partial downloads in place. Closing the
+dialog requests cancellation and waits for the worker to stop. A successful process exit may still omit individual
 playlist items because yt-dlp uses ignore-errors behavior.
 
 Optional remote synchronization requires [rclone](../../rclone/user_docs/index.md)

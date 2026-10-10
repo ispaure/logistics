@@ -6,6 +6,7 @@ from pathlib import Path
 
 from commonUtils import ui
 from commonUtils.ui import pyside
+from commonUtils.ui.operation_progress import OperationProgress
 
 from features import registry
 from features.youtube_downloader import detection, downloader
@@ -38,6 +39,8 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         self.resize(720, 520)
         self.setMinimumSize(640, 480)
 
+        self._closing = False
+        self._buttons = []
         self._build_layout()
 
     def _build_layout(self):
@@ -67,9 +70,12 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         close_layout.addStretch()
 
         close_button = pyside.QPushButton('Close')
-        close_button.clicked.connect(self.accept)
+        close_button.clicked.connect(self.close)
 
         close_layout.addWidget(close_button)
+        self.progress = OperationProgress(self)
+        self.progress.completed.connect(self._completed)
+        root_layout.addWidget(self.progress)
         root_layout.addLayout(close_layout)
 
     def _create_configuration_group(self):
@@ -95,7 +101,7 @@ class YouTubeDownloaderDialog(pyside.QDialog):
 
         explanation = pyside.QLabel(
             'Download all missing videos described by the INI files in the configured YouTube directory. '
-            'Logistics attempts to update yt-dlp before processing the configs.'
+            'Downloads use the installed yt-dlp version. Updating is a separate action.'
         )
         explanation.setWordWrap(True)
 
@@ -104,6 +110,10 @@ class YouTubeDownloaderDialog(pyside.QDialog):
 
         layout.addWidget(explanation)
         layout.addWidget(download_button)
+        update_button = pyside.QPushButton('Update yt-dlp')
+        update_button.clicked.connect(self._update)
+        layout.addWidget(update_button)
+        self._buttons.extend((download_button, update_button))
 
         return group
 
@@ -160,6 +170,7 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         layout.addWidget(push_seasons_button)
         layout.addWidget(push_config_button)
         layout.addWidget(pull_config_button)
+        self._buttons.extend((push_seasons_button, push_config_button, pull_config_button))
 
         return group
 
@@ -170,8 +181,43 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         label.setTextInteractionFlags(pyside.Qt.TextInteractionFlag.TextSelectableByMouse)
         return label
 
+    def _start(self, work, message):
+        if self.progress.busy:
+            return
+        self._button_states = [button.isEnabled() for button in self._buttons]
+        for button in self._buttons:
+            button.setEnabled(False)
+        self.progress.start(work, message=message)
+
     def _download_all(self):
-        downloader.download_all(self.config_path)
+        self._start(lambda report, cancelled: downloader.download_all(
+            self.config_path, report=report, cancelled=cancelled), 'Downloading…')
+
+    def _update(self):
+        self._start(lambda report, cancelled: downloader.update_yt_dlp(cancelled=cancelled), 'Updating yt-dlp…')
+
+    def _completed(self, result, error):
+        for button, enabled in zip(self._buttons, self._button_states):
+            button.setEnabled(enabled)
+        if not error and result is False and not self.progress.cancelled.is_set():
+            self.progress.message.setText('Operation failed. See the log for details.')
+        if self._closing:
+            self.close()
+
+    def done(self, result):
+        if self.progress.busy:
+            self._closing = True
+            self.progress.request_cancel()
+            return
+        super().done(result)
+
+    def closeEvent(self, event):
+        if self.progress.busy:
+            self._closing = True
+            self.progress.request_cancel()
+            event.ignore()
+        else:
+            super().closeEvent(event)
 
     def _push_seasons(self):
         confirmed = ui.display_msg_box_ok_cancel(
@@ -180,7 +226,13 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         )
 
         if confirmed:
-            downloader.push_seasons(self.folder, self.rclone_config_path)
+            from features.rclone.executable import ensure_rclone
+            executable_path = ensure_rclone()
+            if executable_path is None:
+                return
+            self._start(lambda report, cancelled: downloader.push_seasons(
+                self.folder, self.rclone_config_path, cancelled=cancelled,
+                executable_path=executable_path), 'Syncing seasons…')
 
     def _push_config(self):
         confirmed = ui.display_msg_box_ok_cancel(

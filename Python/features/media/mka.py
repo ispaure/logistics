@@ -11,6 +11,7 @@ from typing import List
 from commonUtils import dirUtils, fileUtils, spreadsheetUtils
 from commonUtils.debugUtils import Severity, log
 from commonUtils.fileTypes import csvType
+from commonUtils.renameUtils import RenamePlan, plan_named_renames, apply_renames
 
 
 TOOL_NAME = 'Batch Rename MKA from CSV'
@@ -49,7 +50,7 @@ def _get_chapter_rows(csv_file: csvType.CSVFile):
     return chapter_name_sheet.get_rows()
 
 
-def _build_rename_plan(target_dir: dirUtils.Directory, row_lst) -> list[tuple[fileUtils.File, Path]] | None:
+def _build_rename_plan(target_dir: dirUtils.Directory, row_lst) -> RenamePlan | None:
     """
     Validate all MKA files and return their destination paths.
 
@@ -60,14 +61,14 @@ def _build_rename_plan(target_dir: dirUtils.Directory, row_lst) -> list[tuple[fi
 
     if not mka_file_lst:
         log(Severity.WARNING, TOOL_NAME, 'No .MKA files found in directory')
-        return []
+        return plan_named_renames([])
 
     rename_plan = []
 
     for mka_file in mka_file_lst:
-        file_num_str = mka_file.name_without_ext.replace('Chapter_', '')
+        file_num_str = mka_file.name_without_ext.removeprefix('Chapter_')
 
-        if not file_num_str.isdigit():
+        if not mka_file.name_without_ext.startswith('Chapter_') or not file_num_str.isdigit():
             log(
                 Severity.ERROR,
                 TOOL_NAME,
@@ -108,20 +109,18 @@ def _build_rename_plan(target_dir: dirUtils.Directory, row_lst) -> list[tuple[fi
         chapter_name = cells[1].txt
         log(Severity.INFO, TOOL_NAME, f'Chapter # {file_num_int} name is: "{chapter_name}"')
 
-        chapter_name_sanitized = chapter_name.replace('"', '')
-        destination_path = mka_file.path.parent / f'{file_num_int} - {chapter_name_sanitized}.mka'
-
-        if destination_path.exists() and destination_path != mka_file.path:
-            log(
-                Severity.ERROR,
-                TOOL_NAME,
-                f'Destination file already exists: "{destination_path}"'
-            )
+        chapter_name_sanitized = chapter_name.replace('"', '').strip()
+        if not chapter_name_sanitized:
+            log(Severity.ERROR, TOOL_NAME, f'CSV row {file_num_int} has an empty chapter name')
             return None
+        rename_plan.append((mka_file.path, f'{file_num_int} - {chapter_name_sanitized}.mka'))
 
-        rename_plan.append((mka_file, destination_path))
+    plan = plan_named_renames(rename_plan)
+    if not plan.valid:
+        log(Severity.ERROR, TOOL_NAME, '\n'.join(entry.error for entry in plan.entries if entry.error))
+        return None
+    return plan
 
-    return rename_plan
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -151,17 +150,16 @@ def rename_from_csv(target_dir_path: str | Path) -> bool:
     if rename_plan is None:
         return False
 
-    if not rename_plan:
+    if not rename_plan.changes:
         return False
 
-    for mka_file, destination_path in rename_plan:
-        if not fileUtils.rename_file(mka_file.path, destination_path):
-            log(
-                Severity.ERROR,
-                TOOL_NAME,
-                f'Failed to rename "{mka_file.path}" to "{destination_path}"'
-            )
-            return False
-
-    log(Severity.INFO, TOOL_NAME, f'Successfully renamed {len(rename_plan)} MKA files')
+    result = apply_renames(rename_plan)
+    if not result.success:
+        detail = result.error
+        if result.recovery:
+            detail += '\nManual recovery needed:\n' + '\n'.join(
+                f'{current} → {original}: {error}' for current, original, error in result.recovery)
+        log(Severity.ERROR, TOOL_NAME, f'Rename failed: {detail}')
+        return False
+    log(Severity.INFO, TOOL_NAME, f'Successfully renamed {len(result.entries)} MKA files')
     return True

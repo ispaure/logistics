@@ -1,13 +1,13 @@
 """Downloader config parsing and mocked processes; no downloads or pip updates."""
 
 from pathlib import Path
-import subprocess
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from commonUtils.osUtils import OS
+from commonUtils.wrappers.cmdShellWrapper import CommandResult
 from features.youtube_downloader import settings, downloader, detection
 
 
@@ -81,17 +81,17 @@ class DownloaderTests(unittest.TestCase):
             self.assertEqual(settings.find_ffmpeg(), str(executable))
 
     def test_download_success_and_failed_exit(self):
-        with patch.object(downloader, 'find_ffmpeg', return_value='ffmpeg'), patch.object(downloader.subprocess, 'run') as run, patch.object(downloader, 'log'):
+        with patch.object(downloader, 'find_ffmpeg', return_value='ffmpeg'), patch.object(downloader, 'run_command', return_value=CommandResult(0)) as run, patch.object(downloader, 'log'):
             self.assertTrue(downloader.download(self.directory, self.ini))
             self.assertIsInstance(run.call_args.args[0], list)
-            self.assertTrue(run.call_args.kwargs['check'])
+            self.assertIn('cancelled', run.call_args.kwargs)
             self.assertTrue((self.directory / 'CompleteLists').is_dir())
-            run.side_effect = subprocess.CalledProcessError(1, 'yt_dlp')
+            run.return_value = CommandResult(1, stderr=('Download failed',))
             self.assertFalse(downloader.download(self.directory, self.ini))
 
     def test_invalid_config_does_not_launch_process(self):
         self.write_config(channel='../escape')
-        with patch.object(downloader.subprocess, 'run') as run, patch.object(downloader, 'log'):
+        with patch.object(downloader, 'run_command', return_value=CommandResult(0)) as run, patch.object(downloader, 'log'):
             self.assertFalse(downloader.download(self.directory, self.ini))
         run.assert_not_called()
 
@@ -107,11 +107,11 @@ class DownloaderTests(unittest.TestCase):
         second.write_text(self.ini.read_text())
         with patch.object(downloader, 'update_yt_dlp', return_value=False) as update, patch.object(downloader, 'download', side_effect=[False, True]) as download:
             self.assertFalse(downloader.download_all(self.directory))
-        update.assert_called_once()
+        update.assert_not_called()
         self.assertEqual(download.call_count, 2)
 
     def test_updater_timeout_is_nonfatal(self):
-        with patch.object(downloader.subprocess, 'run', side_effect=subprocess.TimeoutExpired('pip', 180)) as run, patch.object(downloader, 'log'):
+        with patch.object(downloader, 'run_command', return_value=CommandResult(-1, timed_out=True)) as run, patch.object(downloader, 'log'):
             self.assertFalse(downloader.update_yt_dlp())
         self.assertEqual(run.call_args.kwargs['timeout'], 180)
 
