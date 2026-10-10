@@ -22,3 +22,7 @@ Python/features/UI_ARCHITECTURE.md and commonUtils' UI/development guides.
 
 No root README expansion was made. External feature documentation stays with its
 owner. Package reorganization follows these twelve commits as a separate phase.
+
+Full validation before the first cleanup release: 569 commonUtils tests (one
+skip), 741 Logistics tests, 10 release-tool tests, and all 24 historical/current
+archive compression runs passed. The parity check used a fresh output folder.
