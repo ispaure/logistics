@@ -385,7 +385,7 @@ class BrowserWindowTests(QtTestCase):
         self.assertEqual(window.file_browser.activation_handlers, other_handlers)
         self.assertEqual([action.text() for action in window.file_browser.context_menu_for(index).actions()
                           if action.property('source') == 'Archives'],
-                         ['Open archive manager…', 'Create archive…', 'Create encrypted ZIP…'])
+                         ['Open archive manager…', 'Extract archive…', 'Create archive…', 'Create encrypted ZIP…'])
         self.assertEqual(window.file_browser.tabs.count(), 1)
         registry.set_feature_enabled('comics', True)
         self.wait(window)
@@ -429,7 +429,7 @@ class BrowserWindowTests(QtTestCase):
             return menu, actions
         menu, actions = archive_actions()
         self.assertEqual([action.text() for action in actions],
-                         ['Open archive manager…', 'Create archive…', 'Create encrypted ZIP…'])
+                         ['Open archive manager…', 'Extract archive…', 'Create archive…', 'Create encrypted ZIP…'])
         with patch('features.archives.ui.create_zip.CreateZipDialog') as dialog:
             next(action for action in actions if action.text() == 'Create encrypted ZIP…').trigger()
             self.assertEqual(dialog.call_args.args[0], (self.path,))
@@ -445,5 +445,5 @@ class BrowserWindowTests(QtTestCase):
         registry.set_feature_enabled('archives', True)
         self.wait(window)
         menu, actions = archive_actions()
-        self.assertEqual(len(actions), 3)
+        self.assertEqual(len(actions), 4)
         menu.deleteLater()

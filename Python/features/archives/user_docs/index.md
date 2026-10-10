@@ -17,6 +17,25 @@ UTF-8 text without extracting or launching it. Text previews are limited to 256 
 to 16 MiB and 25 megapixels, and generate a thumbnail up to 1000 pixels.
 Binary files can be extracted and opened in another application.
 
+## From the file browser
+
+Double-click a ZIP or supported TAR archive in **File Browser**, a standalone
+browser or the Debug browser to open the manager. Selecting a ZIP or TAR also
+shows an **Archive Contents** information tab, including encrypted archive
+headers without asking for a password.
+
+Right-click a supported archive for **Archives → Open archive manager…** or
+**Extract archive…**. Select files and folders for **Create archive…** or the
+configured-password **Create encrypted ZIP…** action. CBZ double-clicks keep
+opening the comic reader; use its explicit Archives actions to manage or extract
+comic contents. These actions also appear in the Comics library.
+
+The manager uses the invoking window's Archives page. Standalone or detached
+browsers without that page open a separate manager window. Multiple archives can
+open in separate windows. Successful operations refresh the originating browser.
+Disabling Archives removes its actions and activation; existing windows and jobs
+can finish. Passive archive information remains a shared file-browser capability.
+
 ## Create and edit
 
 **Create archive…** opens a source basket: add files and folders, choose a format

@@ -373,7 +373,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         menu = window._context_menu_for(window.model.index(str(other)))
         labels = [action.text() for action in menu.actions()]
         self.assertEqual([action.text() for action in menu.actions() if action.property('source') in ('Books & Comics', 'Archives')],
-                         ['Edit metadata…', 'Compress Comics…', 'Open archive manager…',
+                         ['Edit metadata…', 'Compress Comics…', 'Open archive manager…', 'Extract archive…',
                           'Create archive…', 'Create encrypted ZIP…'])
         self.assertLess(labels.index('Rename'), labels.index('Bulk Rename…'))
         compress = next(action for action in menu.actions() if action.text() == 'Compress Comics…')
