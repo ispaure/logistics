@@ -71,6 +71,53 @@ class DocumentWorkspaceTests(QtTestCase):
         self.assertFalse(document_is_open(first))
         self.assertEqual(self.page.attached_count, 1)
 
+    def test_detached_menus_follow_tabs_before_show_and_survive_repeated_transfers(self):
+        # Exercise actual adoption/activation rather than calling menu sync directly.
+        for platform in ('darwin', 'win32', 'linux'):
+            with self.subTest(platform=platform), patch('commonUtils.ui.workspace_menus.sys.platform', platform):
+                first = qt.QMainWindow(); first.setWindowTitle('First')
+                file = first.menuBar().addMenu('File')
+                clicked = Mock(); save = file.addAction('Save', clicked)
+                second = qt.QMainWindow(); second.menuBar().addMenu('View')
+                show_document(first); show_document(second); self.settle()
+                first_dock = self.page.records[first]['dock']
+                second_dock = self.page.records[second]['dock']
+                for _ in range(5):
+                    container = self.page.workspace.detach_dock(first_dock); self.settle()
+                    bar = container.menuBar()
+                    self.assertEqual([a.text() for a in bar.actions()], ['File'])
+                    if platform == 'darwin' and self.app.platformName() == 'cocoa':
+                        self.assertTrue(bar.isNativeMenuBar())
+                    elif platform != 'darwin':
+                        self.assertFalse(bar.isNativeMenuBar())
+                        self.assertTrue(bar.isVisible())
+                    self.assertFalse(first.menuBar().isVisible())
+                    self.assertIs(bar.actions()[0].menu(), file)
+                    save.trigger(); self.assertTrue(clicked.called)
+                    self.assertTrue(container.workspace.adopt(second_dock)); self.settle()
+                    self.assertEqual([a.text() for a in bar.actions()], ['View'])
+                    first_dock.raise_(); container.workspace._activate(first_dock); self.settle()
+                    self.assertEqual([a.text() for a in bar.actions()], ['File'])
+                    self.assertTrue(self.page.workspace.adopt(first_dock)); self.settle()
+                    self.assertEqual([a.text() for a in bar.actions()], ['View'])
+                    container.close(); self.settle()
+                    self.assertIs(second_dock.workspace, self.page.workspace)
+                first.close(); second.close(); self.settle()
+
+    def test_initial_detached_and_menu_less_documents_restore_container_menus(self):
+        for platform in ('darwin', 'win32', 'linux'):
+            with self.subTest(platform=platform), patch('commonUtils.ui.workspace_menus.sys.platform', platform):
+                document = qt.QMainWindow(); document.menuBar().addMenu('File')
+                show_document(document, detached=True); self.settle()
+                dock = self.page.records[document]['dock']; container = dock.window()
+                self.assertEqual([a.text() for a in container.menuBar().actions()], ['File'])
+                empty = qt.QDialog(); show_document(empty); self.settle()
+                self.assertTrue(container.workspace.adopt(self.page.records[empty]['dock'])); self.settle()
+                self.assertEqual(container.menuBar().actions(), [])
+                dock.raise_(); container.workspace._activate(dock); self.settle()
+                self.assertEqual([a.text() for a in container.menuBar().actions()], ['File'])
+                empty.close(); document.close(); self.settle()
+
     def test_documents_open_embedded_and_detach_reattach_without_losing_state(self):
         window = qt.QMainWindow(); window.setWindowTitle('Document')
         edit = qt.QLineEdit('retained'); window.setCentralWidget(edit)

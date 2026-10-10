@@ -84,6 +84,37 @@ class EditorExtensionTests(unittest.TestCase):
         self.assertEqual(editor.toPlainText(), before)
         self.assertEqual(path.read_text(), "😀 original\n")
 
+    def test_diff_dialog_history_roundtrips_each_hunk_and_blocks_changed_history(self):
+        path = self.root / 'history.txt'; path.write_text('😀 left\nkeep\nend\n')
+        self.window.open_path(path); self.wait()
+        editor = self.window.current.editor; original = '😀 right\nkeep\nend'
+        editor.setPlainText(original)
+        self.window.compare_disk(); self.wait()
+        dialog = self.window.findChildren(DiffDialog)[0]
+        states = [original]
+        while dialog.model.changes:
+            dialog.apply_current(); states.append(editor.toPlainText())
+        self.assertEqual(editor.toPlainText(), path.read_text())
+        for _ in range(10):
+            for state in reversed(states[:-1]):
+                dialog.undo(); self.assertEqual(editor.toPlainText(), state)
+                self.assertEqual(dialog.model.right, state)
+            for state in states[1:]:
+                dialog.redo(); self.assertEqual(editor.toPlainText(), state)
+                self.assertEqual(dialog.model.right, state)
+        editor.setReadOnly(True)
+        before = editor.toPlainText(); dialog.undo()
+        self.assertEqual(editor.toPlainText(), before)
+        self.assertIn('read-only', dialog.status.text())
+        editor.setReadOnly(False)
+        # Same text can have a different undo stack; never undo that newer edit.
+        cursor = editor.textCursor(); cursor.movePosition(qt.QTextCursor.MoveOperation.End)
+        cursor.insertText('external'); editor.undo()
+        self.assertEqual(editor.toPlainText(), before)
+        dialog.undo(); self.assertEqual(editor.toPlainText(), before)
+        self.assertIn('history changed', dialog.status.text())
+        dialog.close()
+
     def test_merge_disk_uses_ancestor_and_applies_one_undoable_buffer_edit(self):
         from commonUtils.ui.code_editor.merge import MergeDialog
         path = self.root / 'merge.txt'; path.write_text('a\nb\nc\n')
@@ -98,6 +129,46 @@ class EditorExtensionTests(unittest.TestCase):
         self.assertEqual(path.read_text(), 'a\nb\nright\n')
         self.assertEqual(document.snapshot.original, path.read_bytes())
         document.editor.undo(); self.assertEqual(document.editor.toPlainText(), 'left\nb\nc\n')
+        document.editor.redo(); self.assertEqual(document.editor.toPlainText(), 'left\nb\nright\n')
+
+    def test_review_shortcuts_do_not_route_to_parent_editor_history(self):
+        from PySide6.QtTest import QTest
+        from commonUtils.ui.code_editor.merge import MergeDialog
+        path = self.root / 'shortcuts.txt'; path.write_text('base\n')
+        self.window.open_path(path); self.wait()
+        editor = self.window.current.editor
+        editor.insertPlainText('local '); local = editor.toPlainText()
+        path.write_text('disk\n'); self.window.merge_disk(); self.wait()
+        dialog = self.window.findChildren(MergeDialog)[0]
+        widget = dialog.widget; widget.choose(0, 'right')
+        dialog.show(); dialog.raise_(); dialog.activateWindow()
+        self.assertTrue(QTest.qWaitForWindowActive(dialog, 2000))
+        widget.editors[0].setFocus(); self.app.processEvents()
+        self.assertTrue(widget.editors[0].hasFocus())
+        QTest.keySequence(widget.editors[0], qt.QKeySequence(qt.QKeySequence.StandardKey.Undo))
+        self.app.processEvents()
+        self.assertEqual(widget.session.text, 'base\n')
+        self.assertEqual(editor.toPlainText(), local)
+        QTest.keySequence(widget.editors[0], qt.QKeySequence(qt.QKeySequence.StandardKey.Redo))
+        self.app.processEvents()
+        self.assertEqual(widget.session.text, 'disk\n')
+        self.assertEqual(editor.toPlainText(), local)
+        dialog.close(); self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+        self.window.compare_disk(); self.wait()
+        dialog = self.window.findChildren(DiffDialog)[0]; dialog.apply_current()
+        dialog.show(); dialog.raise_(); dialog.activateWindow()
+        self.assertTrue(QTest.qWaitForWindowActive(dialog, 2000))
+        dialog.editors[0].setFocus(); self.app.processEvents()
+        self.assertTrue(dialog.editors[0].hasFocus())
+        QTest.keySequence(dialog.editors[0], qt.QKeySequence(qt.QKeySequence.StandardKey.Undo))
+        self.app.processEvents()
+        self.assertEqual(editor.toPlainText(), local)
+        self.assertEqual(dialog.model.right, local)
+        QTest.keySequence(dialog.editors[0], qt.QKeySequence(qt.QKeySequence.StandardKey.Redo))
+        self.app.processEvents()
+        self.assertEqual(editor.toPlainText(), 'disk\n')
+        self.assertEqual(dialog.model.right, 'disk\n')
+        dialog.close()
 
     def test_merge_disk_rejects_external_change_during_review(self):
         from commonUtils.ui.code_editor.merge import MergeDialog

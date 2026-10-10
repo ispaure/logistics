@@ -439,6 +439,7 @@ class EditingCommands:
             return
         document = self.current
         right = document.editor.toPlainText()
+        review_revision = [document.editor.document().revision()]
         encoding = document.snapshot.encoding if document.path and str(document.path) == str(path) else None
         def work():
             left = read_text_file(path, encoding=encoding).text
@@ -448,6 +449,8 @@ class EditingCommands:
             if self.task.busy or editor.isReadOnly():
                 raise ValueError("The buffer is busy or read-only.")
             start, end, replacement = apply_change(model, index, editor.toPlainText())
+            if editor.document().revision() != review_revision[0]:
+                raise ValueError("The buffer history changed. Reopen the diff before applying changes.")
             current = editor.toPlainText()
             cursor = qt.QTextCursor(editor.document())
             cursor.setPosition(len(current[:start].encode("utf-16-le")) // 2)
@@ -457,9 +460,23 @@ class EditingCommands:
             cursor.insertText(replacement)
             cursor.endEditBlock()
             editor.setTextCursor(cursor)
+            review_revision[0] = editor.document().revision()
             return editor.toPlainText()
         def done(model):
-            dialog = DiffDialog(model, self, left_name=str(path), right_name=document.title, apply=apply, path=document.path)
+            def history(action, expected):
+                editor = document.editor
+                if self.task.busy or editor.isReadOnly():
+                    raise ValueError("The buffer is busy or read-only.")
+                if editor.toPlainText() != expected.right:
+                    raise ValueError("The buffer changed after comparison. Reopen the diff before applying changes.")
+                if editor.document().revision() != review_revision[0]:
+                    raise ValueError("The buffer history changed. Reopen the diff before undoing or redoing changes.")
+                action()
+                review_revision[0] = editor.document().revision()
+                return editor.toPlainText()
+            dialog = DiffDialog(model, self, left_name=str(path), right_name=document.title, apply=apply, path=document.path,
+                                undo=lambda expected: history(document.editor.undo, expected),
+                                redo=lambda expected: history(document.editor.redo, expected))
             dialog.show()
         self._run(work, done, message="Comparing files…")
 
