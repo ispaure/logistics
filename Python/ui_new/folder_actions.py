@@ -59,7 +59,9 @@ class FolderActionsPage(DocumentsPage):
             return
         if self.tray is None:
             from .sidebar import DestinationIcon
-            self.tray = qt.QSystemTrayIcon(qt.QIcon(DestinationIcon('actions')), self)
+            from commonUtils.ui.icons import set_painted_icon
+            self.tray = qt.QSystemTrayIcon(self)
+            set_painted_icon(self.tray, DestinationIcon, 'actions')
             self.tray.setToolTip('Logistics folder actions')
             self.tray.messageClicked.connect(self.activate)
             self.tray.show()
