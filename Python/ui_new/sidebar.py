@@ -34,18 +34,37 @@ class DestinationIcon(qt.QIconEngine):
                 painter.drawRoundedRect(qt.QRectF(3, y, 18, 4), 1, 1)
                 painter.drawPoint(qt.QPointF(17, y+2))
         elif self.name == 'comic':
-            for x in (3, 13):
-                for y in (3, 13):
-                    painter.drawRect(qt.QRectF(x, y, 8, 8))
+            painter.drawRoundedRect(qt.QRectF(3, 3, 18, 18), 1.5, 1.5)
+            painter.drawLine(qt.QLineF(3, 12, 21, 12))
+            painter.drawLine(qt.QLineF(11, 12, 11, 21))
+            bubble = qt.QPainterPath()
+            bubble.moveTo(7, 6); bubble.lineTo(17, 6); bubble.lineTo(17, 9)
+            bubble.lineTo(11, 9); bubble.lineTo(9, 11); bubble.lineTo(9, 9)
+            bubble.lineTo(7, 9); bubble.closeSubpath()
+            painter.drawPath(bubble)
         elif self.name == 'epub':
-            painter.drawRoundedRect(qt.QRectF(3, 4, 18, 16), 2, 2)
-            painter.drawLine(qt.QLineF(12, 4, 12, 20))
-            for y in (8, 12, 16):
-                painter.drawLine(qt.QLineF(5, y, 10, y))
-                painter.drawLine(qt.QLineF(14, y, 19, y))
+            book = qt.QPainterPath()
+            book.moveTo(12, 6)
+            book.cubicTo(9, 3, 5, 3, 2, 4); book.lineTo(2, 19)
+            book.cubicTo(6, 18, 9, 19, 12, 21)
+            book.cubicTo(15, 19, 18, 18, 22, 19); book.lineTo(22, 4)
+            book.cubicTo(19, 3, 15, 3, 12, 6); book.closeSubpath()
+            painter.drawPath(book)
+            painter.drawLine(qt.QLineF(12, 6, 12, 21))
+            for y in (9, 13):
+                painter.drawLine(qt.QLineF(5, y, 9, y+1))
+                painter.drawLine(qt.QLineF(15, y+1, 19, y))
         elif self.name in ('text', 'markdown'):
-            painter.drawRoundedRect(qt.QRectF(3, 3, 18, 18), 2, 2)
-            painter.drawText(qt.QRectF(3, 3, 18, 18), qt.Qt.AlignmentFlag.AlignCenter, '</>' if self.name == 'text' else 'M↓')
+            painter.drawRoundedRect(qt.QRectF(2, 3, 20, 18), 2, 2)
+            if self.name == 'text':
+                for points in (((8, 8), (5, 12), (8, 16)), ((16, 8), (19, 12), (16, 16))):
+                    painter.drawPolyline(qt.QPolygonF([qt.QPointF(x, y) for x, y in points]))
+                painter.drawLine(qt.QLineF(14, 7, 10, 17))
+            else:
+                painter.drawPolyline(qt.QPolygonF([qt.QPointF(x, y) for x, y in
+                    ((5, 16), (5, 8), (9, 13), (13, 8), (13, 16))]))
+                painter.drawLine(qt.QLineF(17.5, 8, 17.5, 16))
+                painter.drawPolyline(qt.QPolygonF([qt.QPointF(15.5, 14), qt.QPointF(17.5, 16), qt.QPointF(19.5, 14)]))
         elif self.name == 'documents':
             painter.drawRoundedRect(qt.QRectF(6, 3, 15, 18), 1, 1)
             painter.drawPolyline(qt.QPolygonF([qt.QPointF(3, 6), qt.QPointF(3, 21), qt.QPointF(17, 21)]))
@@ -97,6 +116,13 @@ class DestinationIcon(qt.QIconEngine):
         return pixmap
 
 
+class DestinationGlyph(qt.QLabel):
+    """A palette-aware, passive icon beside a document section's name."""
+
+    def setIcon(self, icon):
+        self.setPixmap(icon.pixmap(qt.QSize(24, 24)))
+
+
 class ActivityButton(qt.QToolButton):
     unread = 0
 
@@ -142,21 +168,16 @@ class DestinationRail(qt.QWidget):
         panel.setStyleSheet("""
             QFrame#documentOverlay { border: 1px solid palette(mid); border-radius: 10px; background: palette(window); }
             QFrame#documentOverlay QTreeWidget { border: none; background: palette(window); }
-            QFrame#documentOverlay QToolButton { border: none; border-radius: 6px; padding: 3px; }
+            QFrame#documentOverlay QToolButton { border: 1px solid palette(mid); border-radius: 6px; padding: 4px; }
             QFrame#documentOverlay QToolButton:hover { background: palette(midlight); }
-            QFrame#documentOverlay QToolButton:pressed { background: palette(highlight); }
+            QFrame#documentOverlay QToolButton:focus { border: 1px solid palette(highlight); }
+            QFrame#documentOverlay QToolButton:pressed { background: palette(highlight); color: palette(highlighted-text); }
             QFrame#documentOverlay QLabel#documentHeading { font-weight: bold; font-size: 14px; }
         """)
-        panel.resize(390, 420)
-        overlay_layout = qt.QHBoxLayout(panel)
-        self.editor_destinations = qt.QVBoxLayout()
-        self.editor_destinations.setSpacing(8)
-        overlay_layout.addLayout(self.editor_destinations)
-        self.editor_destinations.addStretch()
-        content = qt.QWidget(panel)
-        overlay_layout.addWidget(content, 1)
-        panel_layout = qt.QVBoxLayout(content)
-        panel_layout.setContentsMargins(4, 10, 4, 4)
+        panel.resize(420, 420)
+        panel_layout = qt.QVBoxLayout(panel)
+        panel_layout.setContentsMargins(12, 12, 12, 12)
+        panel_layout.setSpacing(10)
         heading = qt.QHBoxLayout()
         title = qt.QLabel('Documents'); title.setObjectName('documentHeading')
         heading.addWidget(title, 1)
@@ -166,11 +187,16 @@ class DestinationRail(qt.QWidget):
         self.document_tree = qt.QTreeWidget(panel)
         self.document_tree.setHeaderHidden(True)
         self.document_tree.setAccessibleName('Documents grouped by editor')
-        self.document_tree.setIndentation(16)
+        self.document_tree.setIndentation(32)
+        self.document_tree.setRootIsDecorated(False)
+        self.document_tree.setItemsExpandable(False)
+        self.document_tree.setExpandsOnDoubleClick(False)
+        self.document_tree.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.document_tree.itemClicked.connect(self._select_tree_document)
         panel_layout.addWidget(self.document_tree)
         self.launchers = {}
         self.editor_buttons = {}
+        self.editor_new_buttons = {}
         self.editor_groups = {}
         layout = qt.QVBoxLayout(icons)
         layout.setContentsMargins(6, 10, 6, 10)
@@ -319,7 +345,7 @@ class DestinationRail(qt.QWidget):
         point = button.mapToGlobal(qt.QPoint(button.width() + 8, 0))
         screen = button.screen().availableGeometry()
         overlay = self.document_overlay
-        overlay.resize(min(390, screen.width()), min(420, screen.height()))
+        overlay.resize(min(420, screen.width()), min(420, screen.height()))
         point.setX(max(screen.left(), min(point.x(), screen.right() - overlay.width() + 1)))
         point.setY(max(screen.top(), min(point.y(), screen.bottom() - overlay.height() + 1)))
         overlay.move(point)
@@ -332,27 +358,6 @@ class DestinationRail(qt.QWidget):
         entries = [DocumentLauncherContribution('markdown', 'Markdown Editor', self._open_markdown, 'markdown', 20, self._new_markdown)]
         entries.extend(entry.contribution for entry in registry.get_document_launchers())
         self.launchers = {entry.editor_id: entry for entry in sorted(entries, key=lambda item: item.order)}
-        for key, button in self.editor_buttons.items():
-            button.setVisible(key in self.launchers)
-        for position, (key, entry) in enumerate(self.launchers.items()):
-            if key not in self.editor_buttons:
-                button = self._button('editor:'+key, entry.name, entry.icon)
-                self._configure_launcher_button(button, key)
-                self.editor_buttons[key] = button
-            self.editor_destinations.insertWidget(position, self.editor_buttons[key])
-            self.editor_buttons[key].show()
-
-    def _configure_launcher_button(self, button, key):
-        launcher = self.launchers[key]
-        if launcher.new_document is not None:
-            menu = qt.QMenu(button)
-            menu.addAction('New', lambda editor=key: self._launch_editor(editor, new=True))
-            menu.addAction('Open…', lambda editor=key: self._launch_editor(editor))
-            button.setMenu(menu)
-            button.setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
-        else:
-            button.clicked.connect(lambda checked=False, editor=key: self._launch_editor(editor))
-
     def _launch_editor(self, key, *, new=False):
         self.document_overlay.hide()
         launcher = self.launchers[key]
@@ -375,25 +380,46 @@ class DestinationRail(qt.QWidget):
         return open_bulk_rename(parent=self.window())
 
     def _populate_document_tree(self):
-        expanded = {key: item.isExpanded() for key, item in self.editor_groups.items()}
         self.document_tree.clear()
         self.editor_groups = {}
+        self.editor_buttons = {}
+        self.editor_new_buttons = {}
         for key, launcher in self.launchers.items():
-            group = qt.QTreeWidgetItem(self.document_tree, [launcher.name])
+            group = qt.QTreeWidgetItem(self.document_tree)
+            group.setData(0, qt.Qt.ItemDataRole.AccessibleTextRole, launcher.name)
             group.setData(0, qt.Qt.ItemDataRole.UserRole, ('editor', key))
+            group.setFlags(group.flags() & ~qt.Qt.ItemFlag.ItemIsSelectable)
             row = qt.QWidget()
             row.setAutoFillBackground(True)
-            layout = qt.QHBoxLayout(row); layout.setContentsMargins(0, 0, 0, 0)
+            row.setBackgroundRole(qt.QPalette.ColorRole.Window)
+            layout = qt.QHBoxLayout(row)
+            layout.setContentsMargins(4, 6, 4, 6)
+            layout.setSpacing(8)
+            glyph = DestinationGlyph(); glyph.setFixedSize(24, 24)
+            set_painted_icon(glyph, DestinationIcon, launcher.icon or key)
+            layout.addWidget(glyph)
             label = qt.QLabel(launcher.name)
+            label.setToolTip(launcher.name)
             layout.addWidget(label, 1)
-            button = qt.QToolButton(); button.setText('New / Open' if launcher.new_document else 'Open…')
-            button.setToolTip('New or open '+launcher.name if launcher.new_document else 'Open '+launcher.name)
-            button.setAccessibleName('New or open '+launcher.name if launcher.new_document else 'Open '+launcher.name)
-            self._configure_launcher_button(button, key)
+            if launcher.new_document:
+                new_button = qt.QToolButton(); new_button.setText('New')
+                new_button.setFixedWidth(48)
+                new_button.setAccessibleName('New '+launcher.name)
+                new_button.setToolTip('Create a new document in '+launcher.name)
+                new_button.clicked.connect(lambda checked=False, editor=key: self._launch_editor(editor, new=True))
+                layout.addWidget(new_button)
+                self.editor_new_buttons[key] = new_button
+            else:
+                layout.addSpacing(48)
+            button = qt.QToolButton(); button.setText('Open…'); button.setFixedWidth(64)
+            button.setAccessibleName('Open '+launcher.name)
+            button.setToolTip('Open a document in '+launcher.name)
+            button.clicked.connect(lambda checked=False, editor=key: self._launch_editor(editor))
             layout.addWidget(button)
-            group.setSizeHint(0, qt.QSize(0, 30))
+            self.editor_buttons[key] = button
+            group.setSizeHint(0, row.sizeHint())
             self.document_tree.setItemWidget(group, 0, row)
-            group.setExpanded(expanded.get(key, True))
+            group.setExpanded(True)
             self.editor_groups[key] = group
         for window, label, tab, detached in getattr(self.documents, 'document_entries', lambda: [])():
             key = getattr(window, 'document_editor_id', 'other')
