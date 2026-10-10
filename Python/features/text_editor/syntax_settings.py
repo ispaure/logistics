@@ -80,6 +80,8 @@ class SyntaxSettings:
         if not hasattr(document, "highlighter"):
             document.highlighter = SyntaxHighlighter(editor)
             editor.zoom_changed.connect(self._preferences_changed)
+        editor.folding.configure(document.language)
+        editor.folding.rebuild()
         document.highlighter.configure(
             document.language
             if options["syntax_highlighting_bool"] and not document.simple
@@ -108,6 +110,8 @@ class SyntaxSettings:
         )
         if ok:
             self.current.language = choices[value]
+            self.current.editor.folding.configure(self.current.language)
+            self.current.editor.folding.rebuild()
             self.current.highlighter.configure(
                 self.current.language
                 if self.options["syntax_highlighting_bool"] and not self.current.simple
