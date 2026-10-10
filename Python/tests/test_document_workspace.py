@@ -81,6 +81,19 @@ class DocumentWorkspaceTests(unittest.TestCase):
             self.assertTrue(self.host.isVisible())
             self.assertEqual(second_window.current.editor.toPlainText(), 'Second')
 
+    def test_closed_document_retires_without_recreating_native_window_or_menu(self):
+        document = qt.QMainWindow()
+        document.menuBar().setNativeMenuBar(True)
+        show_document(document); self.settle()
+        self.page.records[document]['dock'].tab_header.close_button.click()
+        self.settle()
+        self.assertEqual(self.page.count, 0)
+        self.assertFalse(document.isWindow())
+        self.assertIs(document.parentWidget(), self.page)
+        self.assertFalse(document.menuBar().isNativeMenuBar())
+        self.assertFalse(document.isVisible())
+        self.assertTrue(self.host.isVisible())
+
     def test_background_document_is_open_and_dialog_accept_removes_its_tab(self):
         first = qt.QDialog(); first.setWindowTitle('Metadata')
         second = qt.QMainWindow(); second.setWindowTitle('Reader')
