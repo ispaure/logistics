@@ -82,8 +82,15 @@ class HunkCards(qt.QScrollArea):
         self.height_timer.start(0)
 
     def _update_heights(self):
-        for editor in self.editors:
+        for card, editor in zip(self.cards, self.editors):
             self._height(editor)
+            # Give the outer layout the same height as the actual card. Native
+            # styles can otherwise reserve height-for-width space which a
+            # Maximum-policy widget does not occupy, enlarging the visible gap.
+            box = card.layout()
+            height = max(box.totalMinimumSize().height(), box.totalHeightForWidth(card.width()))
+            if card.height() != height:
+                card.setFixedHeight(height)
 
     def eventFilter(self, watched, event):
         if event.type() in (qt.QEvent.Type.Resize, qt.QEvent.Type.FontChange):

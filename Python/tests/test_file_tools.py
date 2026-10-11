@@ -197,6 +197,9 @@ class FileToolsWindowTests(_FileToolsFixture):
         window = FileBrowserWindow(self.root)
         window.show()
         def close():
+            # Join the browser's workers before WA_DeleteOnClose removes their
+            # owner from QtTestCase's top-level window inventory.
+            window.file_browser.shutdown()
             window.close()
             self.app.processEvents()
         self.addCleanup(close)
