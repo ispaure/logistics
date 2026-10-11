@@ -99,3 +99,7 @@ git push origin v1.0.0
 
 GitHub builds **release.zip**, including submodules, and adds it to a release with
 automatic notes. See the release guide for the steps before publishing your first one.
+
+## License
+
+Logistics is available under the [MIT License](LICENSE.md).

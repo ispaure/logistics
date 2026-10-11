@@ -12,7 +12,7 @@ EXCLUDED_DIRS = {
     'build', 'dist', 'htmlcov', 'test-results',
 }
 REQUIRED = {
-    'README.md', 'CONFIGURATION.md', 'USER_GUIDE.md', 'launch_config.ini',
+    'README.md', 'LICENSE.md', 'CONFIGURATION.md', 'USER_GUIDE.md', 'launch_config.ini',
     'LaunchLogistics_MAC.command', 'LaunchLogistics_WIN.bat',
     'LaunchLogistics_LINUX_UV.sh', 'Python/launch.py',
     'Python/pyproject.toml', 'Python/uv.lock',
