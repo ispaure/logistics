@@ -82,6 +82,9 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         self.queue.append((callback, done))
         self.start_next()
 
+    def cancelled(self):
+        return self.closing or bool(self.worker and self.worker.isInterruptionRequested())
+
     def start_next(self):
         if self.worker or not self.queue:
             return

@@ -2,7 +2,7 @@
 from pathlib import Path
 from copy import deepcopy
 from commonUtils.ui import pyside as qt
-from .analysis import analyze, project_files
+from .analysis import analyze, project_files, search_project
 
 
 class Navigation:
@@ -10,6 +10,7 @@ class Navigation:
         self.history = []
         self.history_index = -1
         for label, callback, shortcut in [
+            ('Find in project…', self.find_project, 'Ctrl+Shift+F'),
             ('Definition', lambda: self.query('definition'), 'F12'),
             ('Back', lambda: self.travel(-1), 'Alt+Left'),
             ('Forward', lambda: self.travel(1), 'Alt+Right'),
@@ -76,7 +77,7 @@ class Navigation:
                 if accepted:
                     self.remember()
                     self.open_path(project.root / value)
-            self.run(lambda: project_files(project, query), choose)
+            self.run(lambda: project_files(project, query, cancelled=self.cancelled), choose)
 
     def query(self, kind):
         doc = self.current
@@ -130,3 +131,30 @@ class Navigation:
             else:
                 self.error('No static definition resolved. Dynamic Python references may not be resolvable.')
         self.run(lambda: analyze(project, path, code, line, column, kind), done)
+
+    def find_project(self):
+        query, ok = qt.QInputDialog.getText(self, 'Find in project', 'Text contains (case insensitive)')
+        if not ok or not query:
+            return
+        project = deepcopy(self.project)
+        def done(results):
+            if not results:
+                self.error('No matches in the bounded search (10,000 files, 1 MiB per file).')
+                return
+            labels = [f'{Path(path).relative_to(project.root)}:{line} — {text}' for path, line, text in results]
+            value, ok = qt.QInputDialog.getItem(self, 'Project matches', 'Matches (up to 500)', labels, 0, False)
+            if ok:
+                path, line, text = results[labels.index(value)]
+                self.remember()
+                self.open_path(path)
+                def locate(_):
+                    doc = self.documents.get(Path(path).resolve())
+                    if doc:
+                        block = doc.document().findBlockByNumber(line - 1)
+                        if block.isValid():
+                            cursor = doc.textCursor()
+                            cursor.setPosition(block.position())
+                            doc.setTextCursor(cursor)
+                            doc.centerCursor()
+                self.run(lambda: None, locate)
+        self.run(lambda: search_project(project, query, cancelled=self.cancelled), done)

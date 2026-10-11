@@ -8,4 +8,4 @@ def create_page(parent=None):
 def register():
     from features.contributions import Feature, PageContribution
     return Feature(id='ide', label='IDE', pages=[
-        PageContribution('IDE', 'ide.workspace', create_page, order=16, navigation_icon='text_editor')])
+        PageContribution('IDE', 'ide.workspace', create_page, order=16, navigation_icon='text')])
