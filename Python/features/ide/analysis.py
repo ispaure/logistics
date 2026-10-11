@@ -36,7 +36,8 @@ def project_files(project, query='', *, cancelled=lambda: False, limit=500):
     results = []
     visited = 0
     for root, directories, files in os.walk(project.root, followlinks=False):
-        if cancelled():
+        visited += 1
+        if visited >= 100000 or cancelled():
             break
         relative = Path(root).relative_to(project.root)
         directories[:] = [name for name in directories if name not in project.excluded_paths

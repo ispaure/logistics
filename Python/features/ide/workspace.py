@@ -1,5 +1,5 @@
 """Project-scoped documents, non-detachable groups and cooperative workers."""
-from collections import deque
+from collections import Counter, deque
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.operations import ResultWorker
@@ -18,6 +18,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         super().__init__(parent)
         self.project = project
         self.documents = {}
+        self.pending_opens = Counter()
         self.unavailable = []
         self.restoring = True
         self.groups = []
@@ -95,14 +96,18 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         worker = self.worker = ResultWorker(callback, self)
         def finished():
             self.worker = None
-            if not self.closing and not worker.isInterruptionRequested():
-                if worker.error:
-                    (failed or self.error)(worker.error)
-                else:
-                    done(worker.result)
-            worker.deleteLater()
-            self.start_next()
-            self.idle.emit()
+            try:
+                if not self.closing and not worker.isInterruptionRequested():
+                    if worker.error:
+                        (failed or self.error)(worker.error)
+                    else:
+                        done(worker.result)
+            except Exception as error:
+                self.error(error)
+            finally:
+                worker.deleteLater()
+                self.start_next()
+                self.idle.emit()
         worker.finished.connect(finished)
         worker.start()
 
@@ -140,7 +145,9 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         for path in paths:
             self.open_path(path)
 
-    def open_path(self, path, group=None, position=None, encoding=None):
+    def open_path(self, path, group=None, position=None, encoding=None, restored_record=None):
+        if self.closing:
+            return
         path = Path(path).expanduser().resolve()
         for existing in self.documents:
             try:
@@ -176,16 +183,27 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         if path in self.documents:
             loaded(None)
         else:
+            self.pending_opens[path] += 1
+            def completed():
+                self.pending_opens[path] -= 1
+                if not self.pending_opens[path]:
+                    del self.pending_opens[path]
+            def opened(snapshot):
+                completed()
+                loaded(snapshot)
             def failed(error):
+                completed()
                 if encoding is None and ('decode' in error or 'codec' in error):
                     from commonUtils.persistence.text import ENCODINGS
                     value, ok = qt.QInputDialog.getItem(self, 'Choose original encoding',
                         'Decoding failed; choose the source encoding', ENCODINGS, 0, False)
                     if ok:
-                        self.open_path(path, group, position, value)
+                        self.open_path(path, group, position, value, restored_record)
                         return
+                if restored_record is not None:
+                    self.unavailable.append(restored_record)
                 self.error(error)
-            self.run(lambda: read_text_file(path, encoding=encoding), loaded, failed)
+            self.run(lambda: read_text_file(path, encoding=encoding), opened, failed)
 
     def update_title(self, doc):
         group = self.group_for(doc)
@@ -377,17 +395,29 @@ class ProjectWorkspace(Navigation, qt.QWidget):
                     position = record.get('cursor', 0)
                     position = max(0, position) if isinstance(position, int) else 0
                     if Path(record['path']).is_file():
-                        self.open_path(record['path'], group, position)
+                        self.open_path(record['path'], group, position, restored_record=dict(record, group=index))
                     else:
-                        self.unavailable.append(record)
-        for record in state.get('unavailable', []) if isinstance(state.get('unavailable', []), list) else []:
+                        self.unavailable.append(dict(record, group=index))
+        returned = []
+        for record in (state.get('unavailable', []) if isinstance(state.get('unavailable', []), list) else [])[:1500]:
             if isinstance(record, dict) and isinstance(record.get('path'), str):
                 if Path(record['path']).is_file():
-                    self.open_path(record['path'])
+                    index = record.get('group', 0)
+                    index = index if isinstance(index, int) and 0 <= index < 3 else 0
+                    while len(self.groups) <= index:
+                        self.add_group()
+                    position = record.get('cursor', 0)
+                    self.open_path(record['path'], self.groups[index], max(0, position) if isinstance(position, int) else 0,
+                                   restored_record=record)
+                    returned.append(record)
                 else:
                     self.unavailable.append(record)
         def restored(_):
             self.restoring = False
+            for record in returned:
+                doc = self.documents.get(Path(record['path']).resolve())
+                if doc and isinstance(record.get('scroll', 0), int):
+                    doc.verticalScrollBar().setValue(record.get('scroll', 0))
             for group, entry in zip(self.groups, groups):
                 if not isinstance(entry, dict):
                     continue
@@ -416,6 +446,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
 
     def prepare_close(self):
         self.queue.clear()
+        self.pending_opens.clear()
         if self.worker:
             self.worker.cancel()
         ready = self.search.prepare_close() and self.worker is None

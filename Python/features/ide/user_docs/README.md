@@ -13,8 +13,9 @@ Use `.` for a flat Python project and `src` for a src-layout package.
 Each top-level tab is an independent project. **Reopen** lists registrations.
 Closing a project keeps its registration and layout. **Remove registration** asks
 for confirmation and removes only IDE metadata; it never deletes source files.
-Missing roots and missing open files remain recorded. Fix the root in project
-settings or reopen once its storage is available.
+Missing roots and missing or temporarily unreadable open files remain recorded,
+including their editor group and cursor position. Reopen once its storage is available. Changing a root in settings changes browsing
+and analysis; existing absolute document paths are not automatically relocated.
 
 Configuration is versioned JSON at `IDE/workspace.json` beside Logistics
 preferences: `~/Library/Application Support/Logistics` on macOS,
@@ -29,9 +30,10 @@ Malformed configuration is retained and will not be overwritten automatically.
 The left tree loads directories lazily, hides configured exclusions, and filters
 filenames without recursively crawling the project. **Go to file** searches
 relative paths in a background scan. **Locate file** selects the active document.
-The tree menu creates files/folders, renames closed items, reveals their containing
-folder in the system file manager, refreshes, and deletes files or empty folders
-with confirmation. Close affected documents before renaming or deleting a subtree.
+The tree menu creates files/folders, renames closed items, reveals the selected item
+in the system file manager (with a containing-folder fallback on Linux), refreshes, and deletes files or empty folders
+with confirmation. Close affected documents before renaming or deleting a subtree;
+pending file opens also block these operations.
 Recursive folder deletion is intentionally unavailable.
 
 Editor tabs belong to their project. Drag tabs to reorder them. **Split right**
@@ -73,12 +75,12 @@ changed/closed source buffers are ignored. Dynamic references, unresolved import
 and builtins without navigable source can return no target. Other open files'
 unsaved edits are not overlaid into Jedi's import analysis; save them first.
 
-Quick-open caps traversal at 100,000 file entries and shows at most 500 matches.
+Quick-open caps traversal at 100,000 file/directory entries and shows at most 500 matches.
 Project text search examines up to 10,000 files, skips binary/over-1-MiB files,
 and returns up to 500 matching lines. Scans skip excluded folders and directory
 symlinks. Analysis accepts up to 1 MiB of source. These tools are bounded searches,
 not a complete background project index. Wait for active work before closing a
-project; closing the application retains workers until they stop.
+project or application, then retry closing.
 
 ## Languages and initial limits
 
