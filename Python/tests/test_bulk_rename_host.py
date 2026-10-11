@@ -41,7 +41,16 @@ class BulkRenameHostTests(QtTestCase):
             self.assertFalse(rename.isWindow())
             window._sync_feature_pages()
             self.assertEqual(sum(window.tabs.widget(i) is rename for i in range(window.tabs.count())),1)
+            # Retire native models while their source directory and Python owner
+            # still exist; the outer QtTestCase cleanup runs after this context.
+            deadline = monotonic() + 10
+            while not window.can_close():
+                self.app.processEvents(); sleep(.005)
+                self.assertLess(monotonic(), deadline)
             window.dlg.close()
+            window.dlg.deleteLater()
+            self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+            self.app.processEvents()
 
     def test_latest_selection_wins_during_scan(self):
         from ui_new.bulk_rename.widget import BulkRenameWidget
@@ -50,3 +59,11 @@ class BulkRenameHostTests(QtTestCase):
             widget=BulkRenameWidget(paths=[a]); self.app.processEvents()
             widget.set_inputs(paths=[a]); widget.set_inputs(paths=[b]); self.wait(widget)
             self.assertEqual(widget.selected_paths(),(b.resolve(),))
+            deadline = monotonic() + 10
+            while not widget.prepare_close():
+                self.app.processEvents(); sleep(.005)
+                self.assertLess(monotonic(), deadline)
+            widget.close()
+            widget.deleteLater()
+            self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+            self.app.processEvents()
