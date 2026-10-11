@@ -18,8 +18,9 @@ user guide for the workflow you are changing, then follow this map.
 
 Feature implementation details remain in `Python/features/<feature>/README.md`.
 Canonical user guides live beside their owners under `user_docs/README.md`;
-[the application guide index](../../USER_GUIDE.md) links them all. Core browser and
-Markdown hosting live in `Python/ui_new`, and bulk rename keeps its existing
+[the root feature catalog](../../README.md#what-can-it-do) links them all, and
+[the application user guide](../../USER_GUIDE.md) explains how to open them in
+Settings. Core browser and Markdown hosting live in `Python/ui_new`, and bulk rename keeps its existing
 package there. Do not create duplicate feature packages to document them.
 
 ## Documentation maintenance
@@ -27,7 +28,7 @@ package there. Do not create duplicate feature packages to document them.
 Update feature user guides when behavior, defaults, persistence, dependencies or
 recovery change. Update developer guides for contracts and ownership changes;
 update the root README for setup or major capability changes. New features need
-both a usable guide and the small `user_docs/index.md` entry required by current
+both a usable guide and the small `user_docs/index.md` compatibility entry for
 in-app help. Keep compatibility entry pages as links, not copies of whole manuals.
 
 Check statements against implementation and relevant tests. Mark historical

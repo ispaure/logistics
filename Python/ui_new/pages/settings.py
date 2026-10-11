@@ -102,6 +102,9 @@ class FeatureSettingsPanel(qt.QWidget):
         header = qt.QHBoxLayout()
         header.addWidget(self.title, 1)
         self.guide = Path(registry.__file__).parent / state.name / 'user_docs' / 'index.md'
+        markdown_files = {path.name for path in self.guide.parent.glob('*.md') if path.is_file()}
+        if markdown_files == {'index.md', 'README.md'}:
+            self.guide = self.guide.parent / 'README.md'
         self.guide_button = qt.QPushButton('User Guide')
         self.guide_button.setAccessibleName(f'{state.label} user guide')
         self.guide_button.setEnabled(self.guide.is_file())
