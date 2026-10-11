@@ -91,3 +91,11 @@ busy window requests cancellation and waits for work and rollback to finish.
 
 
 [Application guide](../../../../USER_GUIDE.md)
+
+The file preview and rules share a vertical splitter. Drag its divider to give
+either area more room, or toggle **Rules** to hide/show the rule controls without
+resetting them. The current rules continue to apply when hidden.
+
+**Scope…** contains file/folder, hidden-item, recursive and depth options; use
+Apply filter after changing them. **Rule presets…** contains load/save/reset.
+Rule cards reflow into fewer columns in narrow windows.

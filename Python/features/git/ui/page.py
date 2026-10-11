@@ -2,6 +2,7 @@
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.workspace import Workspace
+from commonUtils.ui.workspace_policy import WorkspacePolicy
 from ..preferences import Preferences
 from .repository_view import RepositoryView
 
@@ -17,7 +18,8 @@ class GitPage(qt.QWidget):
         self.preferences = Preferences(preferences_path)
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self.workspace = Workspace(self._create_view, self, dock_group=self, new_view=self._repository_menu)
+        self.workspace = Workspace(self._create_view, self, dock_group=self, new_view=self._repository_menu,
+            policy=WorkspacePolicy(show_single_tab_in_detached=False, detached_title='Git: {title}'))
         layout.addWidget(self.workspace)
         self.workspace.add_view((self.preferences.last_repository or None) if self.preferences.options['restore_windows'] else None)
 
@@ -32,32 +34,36 @@ class GitPage(qt.QWidget):
             view.repository_menu.popup(qt.QCursor.pos())
 
     def _create_view(self, path):
-        view = RepositoryView(preferences=self.preferences, repository_opener=self.open_repository,
-                              restore_last=False)
+        view = RepositoryView(preferences=self.preferences, restore_last=False)
+        view.repository_opener = lambda path: self.open_repository(path, self._owner(view))
         view.idle.connect(self.idle)
         view.feature_settings_requested.connect(self.feature_settings_requested)
         if path is not None:
             view.open_repository(path)
         return view
 
-    def open_repository(self, path):
+    def _owner(self, view):
+        return next((dock.workspace for dock in self.workspace.all_docks if dock.widget() is view), self.workspace)
+
+    def open_repository(self, path, destination=None):
         path = Path(path).expanduser().resolve()
-        for dock in self.workspace.docks:
+        destination = destination or self.workspace
+        for dock in destination.docks:
             view = dock.widget()
             if view.path == path or view.requested_path == path:
                 dock.show(); dock.raise_()
-                self.workspace._activate(dock)
+                destination._activate(dock)
                 if view.path is None and not view.busy:
                     view.open_repository(path)
                 return view
-        current = self.workspace.active_view
+        current = destination.active_view
         if current is not None and current.path is None and not current.busy and not current.requested_path:
             current.open_repository(path)
             return current
-        return self.workspace.add_view(path)
+        return destination.add_view(path)
 
     def can_close(self):
-        return all(dock.widget().can_close() for dock in self.workspace.docks)
+        return all(dock.widget().can_close() for dock in self.workspace.all_docks)
 
     def prepare_close(self):
         return self.workspace.prepare_close()

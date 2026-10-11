@@ -72,6 +72,10 @@ class IDELayoutTests(QtTestCase):
         self.project(page, 4, window.workspace)
         self.assertEqual(len(window.workspace.docks), 2)
         self.assertEqual(len(page.workspace.docks), 2)
+        elsewhere = page.workspace.active_view
+        self.assertIs(page.open_project(elsewhere.project, window.workspace), elsewhere)
+        self.assertIs(page.dock_for(elsewhere).workspace, window.workspace)
+        self.assertEqual(len(page.views), 4)
         self.assertTrue(page.can_close())
         self.assertTrue(page.prepare_close())
 

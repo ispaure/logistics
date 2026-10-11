@@ -24,7 +24,7 @@ class GitRepositoryTabsTests(QtTestCase):
         self.addCleanup(self.cleanup_page)
 
     def cleanup_page(self):
-        for dock in self.page.workspace.docks:
+        for dock in self.page.workspace.all_docks:
             dock.widget().changes.message.clear()
         self.page.prepare_close(); self.wait()
         self.page.close(); self.page.deleteLater()
@@ -35,7 +35,7 @@ class GitRepositoryTabsTests(QtTestCase):
         while True:
             self.app.processEvents()
             if not any(dock.widget().busy or dock.widget().file_timer.isActive() or dock.widget()._refresh_pending
-                       for dock in self.page.workspace.docks):
+                       for dock in self.page.workspace.all_docks):
                 break
             self.assertLess(monotonic(), deadline)
             sleep(.005)
@@ -75,6 +75,22 @@ class GitRepositoryTabsTests(QtTestCase):
             self.assertFalse(second_dock.close())
         self.assertEqual(second.changes.message.toPlainText(), 'second draft')
         self.assertEqual(first.changes.message.toPlainText(), 'first draft')
+
+    def test_detached_repository_choices_create_in_that_window(self):
+        first = self.page.open_repository(self.first_path)
+        self.wait()
+        dock = self.page.workspace.active_dock
+        window = self.page.workspace.detach_dock(dock)
+        self.wait()
+        window.workspace.request_new_view()
+        self.assertTrue(first.repository_menu.isVisible())
+        first.repository_menu.close()
+        first.repository_opener(self.second_path)
+        self.wait()
+        self.assertEqual(len(window.workspace.docks), 2)
+        self.assertEqual(len(self.page.workspace.docks), 0)
+        self.assertEqual(window.workspace.active_view.path, self.second_path)
+        self.assertIs(first, dock.widget())
 
     def test_new_tab_shows_repository_menu_without_toolbar_dropdown(self):
         self.wait()

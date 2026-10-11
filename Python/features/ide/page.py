@@ -80,6 +80,9 @@ class IDEPage(qt.QWidget):
     def open_project(self, project, destination=None):
         for dock in self.workspace.all_docks:
             if dock.widget().project.id == project.id:
+                if destination is not None and dock.workspace is not destination:
+                    if not destination.adopt(dock):
+                        return None
                 dock.raise_()
                 dock.workspace._activate(dock)
                 dock.window().raise_()
@@ -96,8 +99,8 @@ class IDEPage(qt.QWidget):
         self.changed()
         return view
 
-    def edit_project(self, project):
-        dialog = qt.QDialog(self)
+    def edit_project(self, project, parent=None):
+        dialog = qt.QDialog(parent or self)
         dialog.setWindowTitle('IDE project settings')
         layout = qt.QFormLayout(dialog)
         fields = {}
@@ -124,7 +127,7 @@ class IDEPage(qt.QWidget):
 
     def register_project(self, destination=None):
         from pathlib import Path
-        root = qt.QFileDialog.getExistingDirectory(self, 'Register existing project directory')
+        root = qt.QFileDialog.getExistingDirectory(destination.window() if destination else self, 'Register existing project directory')
         if not root:
             return
         for project in self.store.projects.values():
@@ -132,20 +135,20 @@ class IDEPage(qt.QWidget):
                 self.open_project(project, destination)
                 return
         project = Project(Path(root).name, root)
-        if self.edit_project(project):
+        if self.edit_project(project, destination.window() if destination else self):
             self.store.projects[project.id] = project
             self.open_project(project, destination)
 
     def reopen(self, destination=None):
         projects = list(self.store.projects.values())
         labels = [f'{p.name} — {p.root} [{p.id[:8]}]' for p in projects]
-        value, ok = qt.QInputDialog.getItem(self, 'Reopen project', 'Registered projects', labels, 0, False)
+        value, ok = qt.QInputDialog.getItem(destination.window() if destination else self, 'Reopen project', 'Registered projects', labels, 0, False)
         if ok and value in labels:
             self.open_project(projects[labels.index(value)], destination)
 
     def settings(self, view=None):
         view = view or self.workspace.active_view
-        if view and self.edit_project(view.project):
+        if view and self.edit_project(view.project, view.window()):
             view.reset_root()
             view.title_changed.emit(view.project.name)
             self.changed()

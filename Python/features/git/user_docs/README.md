@@ -281,3 +281,7 @@ Selecting a result shows its commit details, changed files and diff below the
 results. In **History**, selecting **Uncommitted changes** stays in History and
 shows the current files and their changes against HEAD, including both staged
 and unstaged changes.
+
+Repository tabs use the shared detached containers. The + in a detached window
+opens repository choices for that window, and new repository panes stay there.
+Closing Logistics also checks detached panes for drafts and running workers.
