@@ -55,10 +55,14 @@ class BrowserWindowTests(QtTestCase):
 
     def wait(self, window):
         self.app.processEvents()
-        deadline = time.monotonic() + 5
+        # Initial filesystem/index/thumbnail setup can exceed five seconds on
+        # Windows CI. Await completion; this fixture does not assert scan speed.
+        deadline = time.monotonic() + 15
         while (window.file_browser.busy or window.file_browser.folder_busy or
                window.file_browser.views.cover_busy or any(getattr(getattr(extension, 'controller', extension), 'reader_busy', False) for extension in window.extensions)):
-            self.assertLess(time.monotonic(), deadline)
+            self.assertLess(time.monotonic(), deadline,
+                            f'Browser workers did not settle: files={window.file_browser.busy}, '
+                            f'index={window.file_browser.folder_busy}, covers={window.file_browser.views.cover_busy}')
             self.app.processEvents()
             time.sleep(.01)
         self.app.processEvents()
