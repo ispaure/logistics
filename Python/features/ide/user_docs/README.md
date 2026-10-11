@@ -5,12 +5,18 @@ rail. IDE does not require Text Editor, Git or any reader feature to be enabled.
 
 ## Projects
 
-**Register project** selects an existing directory and lets you name it. Settings
+**+ → Register / Open existing project** selects an existing directory and lets you name it. Settings
 accept one source directory per line (relative to the root or absolute), excluded
 names/relative paths, and an optional Python executable or environment path (relative to the project root or absolute).
 Use `.` for a flat Python project and `src` for a src-layout package.
 
-Each top-level tab is an independent project. **Reopen** lists registrations.
+Each full-width top-level tab is an independent project; two or more share the
+available header width, with scrolling for overflow. **+ → Reopen project** lists
+registrations. The + remains available with no projects open. Project tabs use the
+same docking and detached containers as Documents. A detached window's + opens
+projects there; a registration already open elsewhere activates its existing tab.
+A detached single project can hide its header while retaining + at the upper right.
+**Project → Project Settings / Source Paths** configures the active project.
 Closing a project keeps its registration and layout. **Remove registration** asks
 for confirmation and removes only IDE metadata; it never deletes source files.
 Missing roots and missing or temporarily unreadable open files remain recorded,
@@ -37,7 +43,12 @@ with confirmation. Close affected documents before renaming or deleting a subtre
 pending file opens also block these operations.
 Recursive folder deletion is intentionally unavailable.
 
-Editor tabs belong to their project. Drag tabs to reorder them. **Split right**
+The browser and editor panels have font-scaled minimum widths and cannot collapse.
+Editor tabs belong to their project. Drag onto a group header to insert/reorder,
+into its center to merge tabs, or onto its left/right quarter to create a split.
+A preview marks the target. Up to three groups are supported; a side drop at the
+limit is rejected. Escape or releasing outside this project's editor area cancels.
+Empty groups disappear after files move/close. **View → Split Editor Right**
 adds a group showing another view of the current file, up to three groups. You can
 edit either view: text, undo/redo, modified state and disk identity are shared.
 Each view has its own cursor, selection and scroll position. Cursor and scroll
@@ -69,7 +80,11 @@ External edits/removals produce a status message. **Reload** asks before discard
 unsaved text; saving refuses a conflicting disk version. Save As can preserve both.
 Line numbers, bracket matching, indentation, undo/redo and shared line editing come
 from the same CodeEdit used by Text Editor. **Find / Replace** opens its shared
-search panel. Toolbars expose overflowing actions through Qt's overflow control.
+search panel. File operations (including Save All and Close Project) live in **File**,
+editing in **Edit**, group layout in **View**, navigation in **Navigate**, and
+configuration in **Project**. These menus follow the active project/editor and
+use the application's native macOS menu bar or the existing in-window menu on
+Windows/Linux. Keyboard shortcuts remain available.
 
 ## Python navigation and search
 

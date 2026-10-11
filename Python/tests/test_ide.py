@@ -227,8 +227,8 @@ class WorkspaceTests(WorkspaceFixture):
             with patch.object(qt.QMessageBox, 'question') as prompt:
                 view.close_group()
                 prompt.assert_not_called()
-            # The empty source column from Move remains; Close group merged
-            # the duplicate into that column without losing the shared buffer.
+            # Moving the last file prunes its empty source column; merging
+            # duplicate views still preserves the shared buffer.
             view.close_group()
             self.assertEqual(len(view.groups), 1)
             self.assertEqual(view.groups[0].count(), 1)
@@ -478,7 +478,7 @@ class RestoreTests(WorkspaceFixture):
             one = page.open_project(first)
             one.open_path(a)
             self.wait(one)
-            one.move(1)
+            one.split_right()
             two = page.open_project(second)
             two.open_path(b)
             self.wait(two)
@@ -489,11 +489,11 @@ class RestoreTests(WorkspaceFixture):
             page.close()
             b.unlink()
             restored = IDEPage(store_path=state)
-            for i in range(restored.tabs.count()):
-                self.wait(restored.tabs.widget(i))
-            self.assertEqual(restored.tabs.count(), 2)
-            self.assertEqual(len(restored.tabs.widget(0).groups), 2)
-            self.assertEqual(restored.tabs.widget(1).unavailable[0]['path'], str(b))
+            for project_view in restored.views:
+                self.wait(project_view)
+            self.assertEqual(len(restored.views), 2)
+            self.assertEqual(len(restored.views[0].groups), 2)
+            self.assertEqual(restored.views[1].unavailable[0]['path'], str(b))
             self.assertTrue(restored.prepare_close())
             restored.close()
 

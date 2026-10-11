@@ -10,13 +10,17 @@ from .browser import ProjectBrowser
 from .navigation import Navigation
 
 
-class ProjectWorkspace(Navigation, qt.QWidget):
+class ProjectWorkspace(Navigation, qt.QMainWindow):
+    title_changed = qt.Signal(str)
     changed = qt.Signal()
     idle = qt.Signal()
 
     def __init__(self, project, parent=None):
         super().__init__(parent)
+        self.setWindowFlags(qt.Qt.WindowType.Widget)
         self.project = project
+        self.view_title = project.name
+        self.host_page = None
         self.documents = {}
         self.pending_opens = Counter()
         self.unavailable = []
@@ -26,18 +30,19 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         self.worker = None
         self.queue = deque()
         self.closing = False
-        layout = qt.QVBoxLayout(self)
-        self.bar = qt.QToolBar()
-        layout.addWidget(self.bar)
-        for label, callback, shortcut in [
-            ('Open…', self.open_dialog, qt.QKeySequence.StandardKey.Open),
-            ('Save', self.save_current, qt.QKeySequence.StandardKey.Save),
-            ('Save As…', lambda: self.save_current(True), qt.QKeySequence.StandardKey.SaveAs),
-            ('Reload', self.reload_current, None), ('Find / Replace', self.find, qt.QKeySequence.StandardKey.Find),
-            ('Split right', self.split_right, None), ('Move left', lambda: self.move(-1), None),
-            ('Move right', lambda: self.move(1), None), ('Close group', self.close_group, None),
-            ('Close all in group', self.close_all, None), ('Locate file', self.locate, None)]:
-            self.action(label, callback, shortcut)
+        from .menus import build_menus
+        central = qt.QWidget(self)
+        self.setCentralWidget(central)
+        layout = qt.QVBoxLayout(central)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        self.workspace_controls_widget = qt.QWidget(self)
+        self.workspace_controls = qt.QHBoxLayout(self.workspace_controls_widget)
+        self.workspace_controls.setContentsMargins(0, 0, 0, 0)
+        self.workspace_controls.addStretch()
+        self.workspace_controls_widget.hide()
+        layout.addWidget(self.workspace_controls_widget)
+        build_menus(self)
         self.init_navigation()
         self.splitter = qt.QSplitter()
         layout.addWidget(self.splitter, 1)
@@ -48,6 +53,12 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         self.editors = qt.QSplitter()
         self.splitter.addWidget(self.editors)
         self.splitter.setStretchFactor(1, 1)
+        self.splitter.setChildrenCollapsible(False)
+        self.editors.setChildrenCollapsible(False)
+        em = self.fontMetrics().horizontalAdvance('M')
+        self.browser.setMinimumWidth(max(160, em * 18))
+        self.editors.setMinimumWidth(max(220, em * 24))
+        self.splitter.setSizes([max(220, em * 24), 800])
         self.search = SearchPanel(self)
         self.search.hide()
         self.search.idle.connect(self.idle)
@@ -65,7 +76,8 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         self.restore(project.layout)
 
     def action(self, label, callback, shortcut=None):
-        action = self.bar.addAction(label)
+        menu = self.menus['Edit' if label in ('Comment / Uncomment', 'Complete…') else 'Navigate']
+        action = menu.addAction(label)
         action.triggered.connect(lambda checked=False: callback())
         if shortcut is not None:
             action.setShortcut(qt.QKeySequence(shortcut))
@@ -114,8 +126,10 @@ class ProjectWorkspace(Navigation, qt.QWidget):
     def add_group(self):
         if len(self.groups) >= 3:
             return None
+        from commonUtils.ui.scoped_tabs import ScopedTabBar
         group = qt.QTabWidget()
-        group.setMovable(True)
+        group.setTabBar(ScopedTabBar(group, self.editors, lambda: self.groups, self.drop_editor))
+        group.setMinimumWidth(max(160, self.fontMetrics().horizontalAdvance('M') * 16))
         group.setTabsClosable(True)
         group.tabCloseRequested.connect(lambda index: self.close_document(group.widget(index)))
         group.currentChanged.connect(lambda index: self.activate(group))
@@ -291,7 +305,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
             return self.save_document(doc)
         return choice == qt.QMessageBox.StandardButton.Discard
 
-    def close_document(self, doc):
+    def close_document(self, doc, *, prune=True):
         if doc is None or (len(doc.buffer.views) == 1 and not self.confirm_document(doc)):
             return False
         group = self.group_for(doc)
@@ -303,6 +317,8 @@ class ProjectWorkspace(Navigation, qt.QWidget):
             self.documents.pop(doc.path, None)
             self.watch.removePath(str(doc.path))
         doc.release()
+        if prune:
+            self.remove_empty_groups()
         self.activate(self.active_group)
         self.changed.emit()
         return True
@@ -325,7 +341,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         while group.count():
             doc = group.widget(0)
             if self.view_for(doc.path, target):
-                self.close_document(doc)
+                self.close_document(doc, prune=False)
             else:
                 group.removeTab(0)
                 target.addTab(doc, doc.title)
@@ -334,26 +350,60 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         group.deleteLater()
         self.activate(target)
 
-    def move(self, direction):
-        doc = self.current
-        if not doc:
-            return
-        index = self.groups.index(self.active_group) + direction
-        if index == len(self.groups):
-            self.add_group()
-        if 0 <= index < len(self.groups):
-            source = self.group_for(doc)
-            target = self.groups[index]
+    def remove_empty_groups(self):
+        for group in tuple(self.groups):
+            if group.count() == 0 and len(self.groups) > 1:
+                self.groups.remove(group)
+                group.setParent(None)
+                group.deleteLater()
+        if self.active_group not in self.groups:
+            self.activate(self.groups[0])
+
+    def drop_editor(self, doc, target, placement='tabs', index=None):
+        source = self.group_for(doc)
+        if source is None or target not in self.groups or self.closing:
+            return False
+        if placement not in ('left', 'right', 'tabs'):
+            return False
+        if placement != 'tabs':
+            if len(self.groups) >= 3:
+                return False
+            position = self.groups.index(target) + (placement == 'right')
+            target = self.add_group()
+            self.groups.remove(target)
+            self.groups.insert(position, target)
+            self.editors.insertWidget(position, target)
+        if source is target:
+            destination = max(0, min(index if index is not None else target.count()-1, target.count()-1))
+            target.tabBar().moveTab(source.indexOf(doc), destination)
+        else:
             existing = self.view_for(doc.path, target)
             if existing:
                 self.close_document(doc)
                 doc = existing
             else:
                 source.removeTab(source.indexOf(doc))
-                target.addTab(doc, doc.title)
-            target.setCurrentWidget(doc)
-            self.activate(target)
-            doc.setFocus()
+                target.insertTab(target.count() if index is None else index, doc, doc.title)
+        target.setCurrentWidget(doc)
+        self.activate(target)
+        self.remove_empty_groups()
+        doc.setFocus()
+        self.changed.emit()
+        return True
+
+    def move(self, direction):
+        doc = self.current
+        if not doc:
+            return
+        index = self.groups.index(self.active_group) + direction
+        if index == len(self.groups) and len(self.groups) < 3:
+            self.add_group()
+        if 0 <= index < len(self.groups):
+            self.drop_editor(doc, self.groups[index])
+
+    def install_project_menu(self, page):
+        from .menus import install_project_menu
+        install_project_menu(self, page)
 
     def find(self):
         self.search.set_editor(self.current)
@@ -482,6 +532,10 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         return all(self.confirm_document(doc) for doc in list(self.documents.values()))
 
     def prepare_close(self):
+        if self.host_page is not None:
+            if not self.host_page._closing_approved and not self.can_close():
+                return False
+            self.project.layout = self.state()
         self.queue.clear()
         self.pending_opens.clear()
         if self.worker:

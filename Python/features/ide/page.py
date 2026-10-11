@@ -1,6 +1,8 @@
 """Project registration, retained tabs and application close participation."""
 from commonUtils.ui import pyside as qt
 from .projects import Project, ProjectStore
+from commonUtils.ui.workspace import Workspace
+from commonUtils.ui.workspace_policy import WorkspacePolicy
 
 
 class IDEPage(qt.QWidget):
@@ -8,21 +10,22 @@ class IDEPage(qt.QWidget):
 
     def __init__(self, parent=None, *, store_path=None):
         super().__init__(parent)
+        self.setProperty('navigation_position', 'workspace')
+        self.setProperty('navigation_order', 19)
         self.store = ProjectStore(store_path)
         layout = qt.QVBoxLayout(self)
-        bar = qt.QToolBar()
-        layout.addWidget(bar)
-        for text, callback in [('Register project…', self.register_project), ('Reopen…', self.reopen),
-                               ('Project settings…', self.settings), ('Remove registration…', self.remove_registration)]:
-            bar.addAction(text).triggered.connect(callback)
-        self.tabs = qt.QTabWidget()
-        self.tabs.setMovable(True)
-        self.tabs.setTabsClosable(True)
-        self.tabs.tabCloseRequested.connect(self.close_project)
-        layout.addWidget(self.tabs, 1)
-        self.status = qt.QLabel(self.store.error or 'Register an existing directory to begin.')
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        self._closing_approved = False
+        self.workspace = Workspace(self._create_project, self, dock_group=self,
+            policy=WorkspacePolicy(show_single_tab_in_detached=False, detached_title='IDE: {title}'),
+            new_view=self.project_menu, setup_container=self.setup_container)
+        self.setup_container(self.workspace)
+        layout.addWidget(self.workspace, 1)
+        self.workspace._drop_target.widget().setText('Open or reopen a project with +.')
+        self.status = qt.QLabel(self.store.error or '')
         self.status.setWordWrap(True)
-        self.status.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
+        self.status.setVisible(bool(self.store.error))
         layout.addWidget(self.status)
         self.timer = qt.QTimer(self)
         self.timer.setSingleShot(True)
@@ -30,41 +33,66 @@ class IDEPage(qt.QWidget):
         self.timer.timeout.connect(self.persist)
         for identity in self.store.open_ids:
             self.open_project(self.store.projects[identity])
-        for i in range(self.tabs.count()):
-            if self.tabs.widget(i).project.id == self.store.active_id:
-                self.tabs.setCurrentIndex(i)
-        self.tabs.currentChanged.connect(self.changed)
-        self.tabs.tabBar().tabMoved.connect(self.changed)
+        for dock in self.workspace.all_docks:
+            if dock.widget().project.id == self.store.active_id:
+                dock.raise_()
+                dock.workspace._activate(dock)
+
+    def setup_container(self, workspace):
+        workspace.close_action.setEnabled(False)  # Ctrl+W closes the active file.
+        workspace.active_changed.connect(self.changed)
+        workspace.tabs_changed.connect(self.changed)
+
+    @property
+    def views(self):
+        return [dock.widget() for dock in self.workspace.all_docks]
+
+    def dock_for(self, view):
+        return next((dock for dock in self.workspace.all_docks if dock.widget() is view), None)
+
+    def project_menu(self, workspace):
+        menu = qt.QMenu(workspace)
+        menu.addAction('Register / Open existing project…', lambda: self.register_project(workspace))
+        menu.addAction('Reopen project…', lambda: self.reopen(workspace)).setEnabled(bool(self.store.projects))
+        menu.aboutToHide.connect(menu.deleteLater)
+        menu.popup(qt.QCursor.pos())
+        return menu
 
     def changed(self, *args):
+        self._closing_approved = False
         self.timer.start()
 
     def persist(self):
-        self.store.open_ids = [self.tabs.widget(i).project.id for i in range(self.tabs.count())]
-        current = self.tabs.currentWidget()
+        self.store.open_ids = [view.project.id for view in self.views]
+        current = next((view for view in self.views if view.isAncestorOf(qt.QApplication.focusWidget())), None) if qt.QApplication.focusWidget() else None
+        current = current or self.workspace.active_view
         self.store.active_id = current.project.id if current else None
-        for i in range(self.tabs.count()):
-            view = self.tabs.widget(i)
+        for view in self.views:
             view.project.layout = view.state()
         try:
             self.store.save()
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
+            self.status.show()
             return False
         return True
 
-    def open_project(self, project):
-        for i in range(self.tabs.count()):
-            if self.tabs.widget(i).project.id == project.id:
-                self.tabs.setCurrentIndex(i)
-                return self.tabs.widget(i)
+    def open_project(self, project, destination=None):
+        for dock in self.workspace.all_docks:
+            if dock.widget().project.id == project.id:
+                dock.raise_()
+                dock.workspace._activate(dock)
+                dock.window().raise_()
+                return dock.widget()
+        return (destination or self.workspace).add_view(project)
+
+    def _create_project(self, project):
         from .workspace import ProjectWorkspace
         view = ProjectWorkspace(project, self)
+        view.host_page = self
         view.changed.connect(self.changed)
         view.idle.connect(self.idle)
-        self.tabs.addTab(view, project.name)
-        self.tabs.setCurrentWidget(view)
-        self.status.setText('Project settings and layout are saved outside source directories.')
+        view.install_project_menu(self)
         self.changed()
         return view
 
@@ -94,62 +122,59 @@ class IDEPage(qt.QWidget):
         project.root_path = str(project.root)
         return True
 
-    def register_project(self):
+    def register_project(self, destination=None):
         from pathlib import Path
         root = qt.QFileDialog.getExistingDirectory(self, 'Register existing project directory')
         if not root:
             return
         for project in self.store.projects.values():
             if project.root == Path(root).resolve():
-                self.open_project(project)
+                self.open_project(project, destination)
                 return
         project = Project(Path(root).name, root)
         if self.edit_project(project):
             self.store.projects[project.id] = project
-            self.open_project(project)
+            self.open_project(project, destination)
 
-    def reopen(self):
+    def reopen(self, destination=None):
         projects = list(self.store.projects.values())
         labels = [f'{p.name} — {p.root} [{p.id[:8]}]' for p in projects]
         value, ok = qt.QInputDialog.getItem(self, 'Reopen project', 'Registered projects', labels, 0, False)
         if ok and value in labels:
-            self.open_project(projects[labels.index(value)])
+            self.open_project(projects[labels.index(value)], destination)
 
-    def settings(self):
-        view = self.tabs.currentWidget()
+    def settings(self, view=None):
+        view = view or self.workspace.active_view
         if view and self.edit_project(view.project):
             view.reset_root()
-            self.tabs.setTabText(self.tabs.currentIndex(), view.project.name)
+            view.title_changed.emit(view.project.name)
             self.changed()
 
-    def close_project(self, index):
-        view = self.tabs.widget(index)
-        if not view.can_close() or not view.prepare_close():
+    def close_project(self, view=None):
+        view = view or self.workspace.active_view
+        dock = self.dock_for(view)
+        if dock is None:
             return False
-        view.project.layout = view.state()
-        self.tabs.removeTab(index)
-        view.deleteLater()
-        self.persist()
-        return True
+        return dock.close()
 
-    def remove_registration(self):
-        view = self.tabs.currentWidget()
+    def remove_registration(self, view=None):
+        view = view or self.workspace.active_view
         if view and qt.QMessageBox.question(self, 'Remove registration?',
                 f'Remove {view.project.name} from IDE? No project files will be deleted.',
                 qt.QMessageBox.StandardButton.Yes | qt.QMessageBox.StandardButton.Cancel,
                 qt.QMessageBox.StandardButton.Cancel) == qt.QMessageBox.StandardButton.Yes:
             identity = view.project.id
-            if self.close_project(self.tabs.currentIndex()):
+            if self.close_project(view):
                 del self.store.projects[identity]
                 self.persist()
 
     def can_close(self):
-        return all(self.tabs.widget(i).can_close() for i in range(self.tabs.count()))
+        self._closing_approved = all(view.can_close() for view in self.views)
+        return self._closing_approved
 
     def prepare_close(self):
-        ready = all([self.tabs.widget(i).prepare_close() for i in range(self.tabs.count())])
-        if ready:
-            self.timer.stop()
-            self.persist()
-            return True
-        return False
+        if not self._closing_approved and not self.can_close():
+            return False
+        self.timer.stop()
+        self.persist()
+        return self.workspace.prepare_close()

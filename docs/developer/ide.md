@@ -9,9 +9,11 @@ preservation and conflict-checked atomic saves. No editor relocation is needed.
 TextEditor document/service/session objects own standalone windows and recovery;
 IDE owns project-scoped documents instead, without importing that feature.
 
-GitPage retains repository panes in Workspace, which permits detachment. IDE uses
-ordinary movable QTabWidgets for project and editor tabs and QSplitters for groups;
-internal tabs cannot detach. MainWindow's can_close/prepare_close/idle protocol
+GitPage and IDEPage retain their application-level panes in shared Workspace
+containers. IDE project tabs use WorkspacePolicy, including detached local creation
+and full-width headers. Each project is a QMainWindow menu source; its internal
+QTabWidgets use commonUtils ScopedTabBar with the editor splitter as their boundary.
+Internal file gestures never enter the OS-window docking controller. MainWindow's can_close/prepare_close/idle protocol
 remains the shutdown boundary. Shared SearchPanel and ResultWorker require owner
 retention until completion.
 
@@ -76,7 +78,7 @@ merges and moves collapse redundant views without discarding shared edits. The
 last view close asks about unsaved work; project/application close prompts once
 per buffer. Save As changes the shared snapshot/path and every tab title. Undo,
 folding and modified state are shared; cursor, selection and scrolling are local.
-All internal tabs are ordinary QTabWidgets. Browser mutations refuse to rename or
+Internal groups are QTabWidgets with project-confined tab bars. Browser mutations refuse to rename or
 delete paths containing an open document or pending open; only empty directory
 deletion is available. The shared model owns lazy loading and rename validation.
 
@@ -177,7 +179,7 @@ every preferred or optional capability in the mandate:
 | Shared documents | The later shared-view implementation resolves this gap; see the current contracts above. |
 | Responsiveness | Save/reload and filesystem metadata probes remain synchronous; slow/network storage can stall the GUI. A busy workspace vetoes close and requires retry. |
 | Relocated roots | Root settings change browsing/analysis, but do not rebase absolute document paths. Missing registrations are retained. |
-| Browser mutations | Open files must be closed before rename/delete; recursive deletion and drag between groups are absent. Menu moves are available. |
+| Browser mutations | Open files must be closed before rename/delete; recursive deletion is unavailable. Confined drag and menu moves are available. |
 | Intelligence | Manual documentation and completion; no automatic hover, diagnostics, unsaved imported-module overlays or Git handoff. These were optional productivity choices. |
 | Highlighting | Blade mixed-language support remains limited for multiline constructs. |
 | Persistence | Byte comparison detects intervening instance saves but is not a cross-process transaction; simultaneous writers can still race. |
@@ -232,3 +234,19 @@ tests and 26 shared code-editor/component tests pass (79 total). Ruff and diff
 whitespace checks pass. Native Windows/Linux and other commonUtils consumers were
 not validated in this pass. Unrelated workspace/menu edits remain outside these
 commits.
+
+## UI refinement — 2026-10-11
+
+ProjectWorkspace menus route through the existing workspace menu publisher. IDEPage
+creates projects in the requesting container and retains registrations across closes.
+Every project remains a single workspace pane, including its browser and editor
+groups. Internal drops move the existing EditorDocument or merge redundant views;
+empty columns are pruned, while closing a group moves files into a remaining group.
+There is a three-column cap and no external/cross-project file-tab transfer path.
+Project close snapshots layout before dock destruction and honors unsaved-close vetoes.
+Application shutdown covers projects in every detached container. Session restore
+reopens projects in the main container; detached OS-window geometry is not persisted.
+
+Tests cover zero/one/two/three projects, equal widths, local detached creation,
+minimum panel widths, group moves/merges, unsaved state, close vetoes and menu routing.
+Platform and full-suite results are recorded in the UI refinement validation report.
