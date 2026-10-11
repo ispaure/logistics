@@ -173,6 +173,8 @@ class RestoreTests(WorkspaceFixture):
             self.wait(two)
             self.assertIsNot(one.documents[a], two.documents[b])
             self.assertTrue(page.prepare_close())
+            self.assertTrue(any(first.layout['splitter']))
+            self.assertTrue(any(first.layout['editors']))
             page.close()
             b.unlink()
             restored = IDEPage(store_path=state)
