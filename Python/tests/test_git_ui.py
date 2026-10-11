@@ -87,6 +87,10 @@ class GitUITests(QtTestCase):
         self.commit_fixture(); self.open()
         self.assertEqual(self.page.history.tree.columnCount(), 1)
         self.assertTrue(self.page.history.tree.isHeaderHidden())
+        item = self.page.history.table.topLevelItem(0)
+        self.assertEqual(item.data(1, qt.Qt.ItemDataRole.UserRole).oid, self.page.history.head_oid)
+        for column in range(self.page.history.table.columnCount()):
+            self.assertTrue(item.font(column).bold())
         self.assertEqual(ref_badge('tag: v1.0'), ('tag', 'v1.0'))
         self.assertEqual(ref_badge('HEAD -> main'), ('branch', 'main'))
         self.assertEqual(ref_badge('origin/main'), ('branch', 'origin/main'))
@@ -219,10 +223,15 @@ class GitUITests(QtTestCase):
         item = history.table.topLevelItem(0)
         self.assertEqual(item.text(1), 'Uncommitted changes')
         self.assertEqual(item.text(2), '*')
+        head_item = history.table.topLevelItem(1)
+        self.assertEqual(head_item.data(1, qt.Qt.ItemDataRole.UserRole).oid, history.head_oid)
+        for column in range(history.table.columnCount()):
+            self.assertTrue(head_item.font(column).bold())
         self.assertEqual(history.selected_commit().subject, 'First')
         row = item.data(0, qt.Qt.ItemDataRole.UserRole)
         self.assertEqual(row.outgoing, ((0, 0),))
         history.table.setCurrentItem(item); self.wait()
+        self.assertTrue(head_item.font(1).bold())
         self.assertEqual(self.page.views.currentIndex(), 1)
         self.assertIs(self.page.preview.parentWidget(), self.page.history_preview_host)
         self.assertIsNone(history.selected_commit())
@@ -234,6 +243,36 @@ class GitUITests(QtTestCase):
         self.assertNotEqual(history.table.topLevelItem(0).text(1), 'Uncommitted changes')
         (self.repo.path / 'file.txt').unlink(); self.page.refresh(); self.wait()
         self.assertEqual(history.table.topLevelItem(0).text(1), 'Uncommitted changes')
+
+    def test_dirty_detached_head_marks_checked_out_commit_instead_of_branch_tip(self):
+        self.commit_fixture()
+        older = self.repo.status().oid
+        (self.repo.path / 'file.txt').write_text('second\n')
+        self.repo.stage(['file.txt']); self.repo.commit('Branch tip')
+        latest = self.repo.status().oid
+        self.repo.run(['checkout', '--detach', older])
+        (self.repo.path / 'file.txt').write_text('local changes on older commit\n')
+        self.open()
+        history = self.page.history
+        self.assertEqual(history.head_oid, older)
+        self.assertEqual(history.table.topLevelItem(0).text(1), 'Uncommitted changes')
+        items = {item.data(1, qt.Qt.ItemDataRole.UserRole).oid: item
+                 for i in range(1, history.table.topLevelItemCount())
+                 if (item := history.table.topLevelItem(i)).data(1, qt.Qt.ItemDataRole.UserRole)}
+        self.assertIn(latest, items)
+        history.table.setCurrentItem(items[latest]); self.wait()
+        for oid, item in items.items():
+            for column in range(history.table.columnCount()):
+                self.assertEqual(item.font(column).bold(), oid == older)
+        self.assertEqual(self.repo.status().oid, older)
+        # A detached commit with no branch pointing at it must remain visible too.
+        self.repo.stage(['file.txt']); self.repo.commit('Detached commit')
+        detached = self.repo.status().oid
+        self.page.refresh(); self.wait()
+        current = next(history.table.topLevelItem(i) for i in range(history.table.topLevelItemCount())
+                       if history.table.topLevelItem(i).data(1, qt.Qt.ItemDataRole.UserRole).oid == detached)
+        self.assertTrue(current.font(1).bold())
+        self.assertIn('HEAD', current.data(1, qt.Qt.ItemDataRole.UserRole).decorations)
 
     def test_untracked_history_row_in_empty_repository_and_dirty_tag_navigation(self):
         (self.repo.path / 'new.txt').write_text('new\n')

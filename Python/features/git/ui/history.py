@@ -53,9 +53,9 @@ class DescriptionDelegate(qt.QStyledItemDelegate):
         self.initStyleOption(background,index)
         background.text = ''
         option.widget.style().drawControl(qt.QStyle.ControlElement.CE_ItemViewItem,background,painter,option.widget)
-        painter.save(); painter.setClipRect(option.rect); painter.setFont(option.font)
+        painter.save(); painter.setClipRect(option.rect); painter.setFont(background.font)
         x=option.rect.left()+4
-        metrics=option.fontMetrics
+        metrics=background.fontMetrics
         for ref in commit.decorations.split(', '):
             if not ref: continue
             kind, label = ref_badge(ref)
@@ -70,7 +70,8 @@ class DescriptionDelegate(qt.QStyledItemDelegate):
             painter.drawText(rect.adjusted(23,0,-5,0),qt.Qt.AlignmentFlag.AlignVCenter,
                 metrics.elidedText(label,qt.Qt.TextElideMode.ElideRight,width-28))
             x+=width+4
-        painter.setPen(option.palette.text().color())
+        selected = bool(option.state & qt.QStyle.StateFlag.State_Selected)
+        painter.setPen(background.palette.color(qt.QPalette.ColorRole.HighlightedText if selected else qt.QPalette.ColorRole.Text))
         painter.drawText(qt.QRect(x,option.rect.top(),max(0,option.rect.right()-x),option.rect.height()),
             qt.Qt.AlignmentFlag.AlignVCenter,metrics.elidedText(commit.subject,qt.Qt.TextElideMode.ElideRight,max(0,option.rect.right()-x)))
         painter.restore()
@@ -189,6 +190,9 @@ class HistoryPanel(qt.QWidget):
                 item.setData(1, qt.Qt.ItemDataRole.UserRole, commit)
                 item.setToolTip(1, subject)
                 item.setToolTip(2, commit.oid)
+                if commit.oid == self.head_oid:
+                    font = self.table.font(); font.setBold(True)
+                    for column in range(self.table.columnCount()): item.setFont(column, font)
                 self.table.addTopLevelItem(item)
                 if commit.oid == oid: self.table.setCurrentItem(item)
         self.more.setVisible(more)
