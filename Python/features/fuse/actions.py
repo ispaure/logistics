@@ -65,25 +65,36 @@ def mount_and_open_remote(
         launch_installer()
         return False
 
-    try:
-        mount_path = mounts.ensure_remote_mounted(
-            remote_name,
-            config_path,
-            attr_timeout=2,
-            wait_timeout=10
-        )
-    except (OSError, ValueError) as error:
-        ui.display_msg_box_ok('Remote Mount Failed', str(error))
+    # Dependency prompts belong to the GUI thread, before starting the worker.
+    from features.rclone.executable import ensure_rclone
+    rclone_path = ensure_rclone()
+    if rclone_path is None:
         return False
+    from ui_new.dialogs.tool_dialog import ToolDialog
 
-    if mount_path is None:
-        ui.display_msg_box_ok(
-            'Remote Mount Failed',
-            f'Could not mount rclone remote "{remote_name}".\n\n'
-            f'Expected mount location:\n'
-            f'{mounts.get_remote_mount_path(remote_name, config_path)}'
-        )
-        return False
+    class MountDialog(ToolDialog):
+        def __init__(self):
+            super().__init__('Open remote mount', f'Mount {remote_name} and check that it responds.',
+                             'Mount and open', False)
 
-    RemoteFolder(mount_path).open()
+        def _execute(self):
+            if self.busy:
+                return
+            self._run_background(
+                lambda report, cancelled: mounts.ensure_remote_mounted(
+                    remote_name, config_path, attr_timeout=2, wait_timeout=10,
+                    rclone_path=rclone_path, cancelled=cancelled), self._mounted,
+                cancel_text='Cancel after mount attempt')
+
+        def _mounted(self, mount_path):
+            if mount_path is None:
+                self.task.message.setText(f'Mount did not become ready. Expected location: {mounts.get_remote_mount_path(remote_name, config_path)}')
+            else:
+                RemoteFolder(mount_path).open()
+                self.task.message.setText(f'Opened {mount_path}')
+
+    dialog = MountDialog()
+    dialog._execute()
+    dialog.exec()
+    dialog.deleteLater()
     return True

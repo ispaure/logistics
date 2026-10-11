@@ -118,7 +118,8 @@ def mount_remote(
     remote_name: str,
     config_path: str | Path,
     mount_path: Path,
-    timeout=None
+    timeout=None,
+    *, rclone_path=None
 ) -> bool:
     """Start mounting a specific rclone remote at the given path."""
 
@@ -147,7 +148,7 @@ def mount_remote(
 
     log(Severity.INFO, 'mount_remote', f'Mounting "{remote_name}" at path "{mount_path}"...')
 
-    rclone_path = executable.ensure_rclone()
+    rclone_path = rclone_path or executable.ensure_rclone()
     if rclone_path is None:
         return False
 
@@ -266,10 +267,13 @@ def ensure_remote_mounted(
     remote_name: str,
     config_path: str | Path,
     attr_timeout=None,
-    wait_timeout: float = 15
+    wait_timeout: float = 15,
+    *, rclone_path=None, cancelled=lambda: False
 ) -> Path | None:
     """Ensure one rclone remote is mounted, responsive, and ready to open."""
 
+    if cancelled():
+        return None
     wait_timeout = timeout_seconds(wait_timeout)
     mount_path = get_remote_mount_path(remote_name, config_path)
 
@@ -290,7 +294,8 @@ def ensure_remote_mounted(
         remote_name,
         config_path,
         mount_path,
-        timeout=attr_timeout
+        timeout=attr_timeout,
+        **({"rclone_path": rclone_path} if rclone_path is not None else {})
     ):
         return None
 
