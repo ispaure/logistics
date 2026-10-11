@@ -94,7 +94,7 @@ class Navigation:
         project = deepcopy(self.project)
         self.status.setText('Analyzing Python…')
         def done(result):
-            if self.documents.get(path) is not doc or doc.document().revision() != revision or self.current is not doc or doc.textCursor().position() != position:
+            if self.documents.get(path) is not doc or doc.document().revision() != revision or self.current is not doc or doc.textCursor().position() != position or not self.isVisible():
                 self.status.setText('Analysis result superseded by edits or focus changes.')
                 return
             self.status.setText('Python analysis complete.')

@@ -7,7 +7,7 @@ rail. IDE does not require Text Editor, Git or any reader feature to be enabled.
 
 **Register project** selects an existing directory and lets you name it. Settings
 accept one source directory per line (relative to the root or absolute), excluded
-names/relative paths, and an optional Python executable or environment path.
+names/relative paths, and an optional Python executable or environment path (relative to the project root or absolute).
 Use `.` for a flat Python project and `src` for a src-layout package.
 
 Each top-level tab is an independent project. **Reopen** lists registrations.

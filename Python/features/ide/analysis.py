@@ -16,7 +16,7 @@ def analyze(project, path, code, line, column, kind='definition'):
         raise ValueError('Analysis is limited to 1 MiB of text.')
     with _analysis_lock:
         context = jedi.Project(str(project.root), added_sys_path=project.sources(),
-                               environment_path=project.python_interpreter, load_unsafe_extensions=False)
+                               environment_path=project.environment(), load_unsafe_extensions=False)
         script = jedi.Script(code=code, path=str(path), project=context)
         if kind == 'symbols':
             names = script.get_names(all_scopes=True, definitions=True, references=False)

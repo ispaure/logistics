@@ -48,6 +48,8 @@ class ProjectTests(unittest.TestCase):
             restored = ProjectStore(store.path)
             self.assertEqual(restored.open_ids, [project.id])
             self.assertEqual(len(restored.projects[project.id].sources()), 2)
+            project.python_interpreter = '.venv'
+            self.assertEqual(project.environment(), str(project.root / '.venv'))
             restored.active_id = project.id
             restored.save()
             with self.assertRaises(OSError):
@@ -192,6 +194,8 @@ class RestoreTests(WorkspaceFixture):
             view = ProjectWorkspace(Project('test', directory))
             view.open_path(path)
             self.wait(view)
+            view.show()
+            self.app.processEvents()
             pending = []
             with patch.object(view, 'run', side_effect=lambda work, done: pending.append(done)):
                 view.query('definition')
@@ -200,5 +204,40 @@ class RestoreTests(WorkspaceFixture):
                 pending[0]([(str(path), 1, 0, 'value')])
                 opened.assert_not_called()
             view.current.document().setModified(False)
+            self.assertTrue(view.prepare_close())
+            view.close()
+
+
+    def test_modifier_click_definition_and_history(self):
+        from features.ide.workspace import ProjectWorkspace
+        from features.ide.projects import Project
+        from commonUtils.ui import pyside as qt
+        from PySide6.QtTest import QTest
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source, target = root / 'main.py', root / 'models.py'
+            code = 'from models import Thing\nThing()\n'
+            source.write_text(code)
+            target.write_text('class Thing:\n    pass\n')
+            view = ProjectWorkspace(Project('test', str(root)))
+            view.resize(900, 600)
+            view.show()
+            view.open_path(source)
+            self.wait(view)
+            doc = view.current
+            cursor = doc.textCursor()
+            cursor.setPosition(code.index('Thing()') + 2)
+            doc.setTextCursor(cursor)
+            self.app.processEvents()
+            QTest.mouseClick(doc.viewport(), qt.Qt.MouseButton.LeftButton,
+                             qt.Qt.KeyboardModifier.ControlModifier, doc.cursorRect().center())
+            self.wait(view)
+            self.assertEqual(view.current.path, target)
+            view.travel(-1)
+            self.wait(view)
+            self.assertEqual(view.current.path, source)
+            view.travel(1)
+            self.wait(view)
+            self.assertEqual(view.current.path, target)
             self.assertTrue(view.prepare_close())
             view.close()
