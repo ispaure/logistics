@@ -126,8 +126,10 @@ commonUtils contains no project-specific dependency logic.
 ## User documentation
 
 Each distributed feature provides canonical `user_docs/README.md` beside its
-developer `README.md`. Keep `user_docs/index.md` as a short link to it because
-Settings currently resolves that filename. Its User Guide button opens it even when the
+developer `README.md`. Keep `user_docs/index.md` as a compatibility entry page.
+Settings opens `user_docs/README.md` directly when the folder's only Markdown
+files are `README.md` and `index.md`; otherwise it uses `index.md`, allowing an
+index of multiple pages. Its User Guide button works even when the
 feature is disabled or a dependency is missing. Keep these guides focused on
 controls, prerequisites, outcomes and recovery; implementation and validation
 remain in README.md. Missing guides disable only their help button.

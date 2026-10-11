@@ -87,8 +87,13 @@ Open a Markdown file from File Browser for rendered reading, formatted editing o
 exact source editing. Use **Source** for syntax the formatted editor cannot preserve;
 formatted edits can normalize unsupported constructs. Saving is explicit, and
 external disk changes block overwriting. Use **Save As** to keep a separate version.
+In Formatted mode, click link labels to navigate. Syntax markers appear when the
+caret touches an element or a selection overlaps it; hovering keeps them hidden.
 
-Feature **User Guide** buttons open read-only help. Alt/Option while opening help
+Feature **User Guide** buttons open read-only help. When a feature's documentation
+folder contains only `README.md` and `index.md` as Markdown files, the button opens
+`README.md` directly. With additional Markdown pages, it opens `index.md`.
+Alt/Option while opening help
 opts into editing; it can change the documentation file on disk if saved. Local
 links navigate within the guide viewer, while web links open a browser. For shared
 formatting, properties, search and read-aloud controls, use the
