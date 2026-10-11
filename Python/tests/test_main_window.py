@@ -673,7 +673,7 @@ class MainWindowTests(QtTestCase):
         self.assertFalse(window.dlg.isVisible())
 
     def test_main_browser_sizes_start_automatically_and_can_be_paused(self):
-        with patch('commonUtils.directory_index.directory_cache.reconcile_folder',
+        with patch('commonUtils.filesystem.index.directory_cache.reconcile_folder',
                    return_value=Mock(folder_stats=lambda **kwargs: {})) as scan:
             window = self.browser_window()
             browser = window.tabs.widget(0)
@@ -686,7 +686,7 @@ class MainWindowTests(QtTestCase):
             window.dlg.close(); self.app.processEvents()
 
     def test_browser_passes_session_policy_and_refreshes_deeper_contents(self):
-        with patch('commonUtils.directory_index.directory_cache.reconcile_folder',
+        with patch('commonUtils.filesystem.index.directory_cache.reconcile_folder',
                    return_value=Mock(folder_stats=lambda **kwargs: {})) as scan:
             window = self.browser_window()
             page = window.tabs.widget(0)

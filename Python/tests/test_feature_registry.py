@@ -89,7 +89,7 @@ class FeatureRegistryTests(unittest.TestCase):
                 bad = feature('bad', **{hook_name: 'not callable'})
                 with patch.object(registry, '_log_unavailable_features'), patch.object(
                         registry, 'get_available_features', return_value=[good, bad]), patch(
-                        'commonUtils.fileTypes.registry.register_builtin_file_types') as builtins:
+                        'commonUtils.formats.registry.register_builtin_file_types') as builtins:
                     with self.assertRaisesRegex(TypeError, 'callable'):
                         registry.initialize_features()
                 callback.assert_not_called()

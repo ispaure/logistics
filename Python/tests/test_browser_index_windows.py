@@ -33,7 +33,7 @@ class BrowserWindowIndexTests(QtTestCase):
         self.cache = DirectoryCache(database=base / 'cache' / 'index.sqlite3')
         self.addCleanup(self.cache.close)
         self.patches = [patch(name,self.cache) for name in (
-            'commonUtils.directory_index.directory_cache',
+            'commonUtils.filesystem.index.directory_cache',
             'commonUtils.ui.file_browser.index_worker.directory_cache',
             'commonUtils.ui.file_browser.index_search.directory_cache')]
         self.patches.append(patch('ui_new.file_browser.registry.get_browser_extensions', return_value=[]))

@@ -30,16 +30,9 @@ Full validation before the first cleanup release: 569 commonUtils tests (one
 skip), 741 Logistics tests, 10 release-tool tests, and all 24 historical/current
 archive compression runs passed. The parity check used a fresh output folder.
 
-## Follow-up package organization
+## Package organization
 
-Directory indexing moved out of the commonUtils root into `directory/`.
-Atomic writing, text snapshots and recovery storage now live in `persistence/`.
-Public legacy modules remain state-sharing aliases; application/internal imports
-use canonical packages. BlueHole's existing vendored directory implementation
-received the equivalent structural move.
-`configUtils.py` was not changed in any repository.
-
-Organization validation: 571 commonUtils tests (one skip), 741 Logistics tests,
-24 full archive-compression parity runs, 12 BlueHole consumer tests plus 42
-vendored directory tests, external-project checks passed. Relative-import audit,
-lint and whitespace checks passed. Both configUtils copies are byte-identical.
+Directory indexing lives in `commonUtils.filesystem.index`; atomic writing, text
+snapshots and recovery storage live in `commonUtils.persistence`. Consumers import
+the responsibility-based packages directly. Blue Hole vendors the same source.
+Current setup and validation are documented in the shared developer guides.

@@ -83,7 +83,7 @@ class BrowserWindowTests(QtTestCase):
         cache_temp = TemporaryDirectory()
         self.addCleanup(cache_temp.cleanup)
         with DirectoryCache(database=Path(cache_temp.name) / 'index.sqlite3') as directory_cache:
-            for name in ('commonUtils.directory_index.directory_cache',
+            for name in ('commonUtils.filesystem.index.directory_cache',
                          'commonUtils.ui.file_browser.index_worker.directory_cache',
                          'commonUtils.ui.file_browser.index_search.directory_cache'):
                 patcher = patch(name, directory_cache)

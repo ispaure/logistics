@@ -214,7 +214,7 @@ class TextEditorTests(QtTestCase):
         self.assertEqual(path.read_bytes(), b"external")
         self.assertTrue(doc.modified)
         doc.snapshot = __import__(
-            "commonUtils.text_files", fromlist=["read_text_file"]
+            "commonUtils.persistence.text", fromlist=["read_text_file"]
         ).read_text_file(path)
         path.chmod(0o444)
         with patch.object(self.window, "show_error") as error:
