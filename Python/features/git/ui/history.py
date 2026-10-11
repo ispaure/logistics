@@ -80,6 +80,7 @@ class DescriptionDelegate(qt.QStyledItemDelegate):
 class HistoryPanel(qt.QWidget):
     commit_selected = qt.Signal(object)
     blob_selected = qt.Signal(object)
+    edit_requested = qt.Signal(str)
     load_more = qt.Signal()
     parent_requested = qt.Signal(str)
     working_copy_selected = qt.Signal()
@@ -149,6 +150,7 @@ class HistoryPanel(qt.QWidget):
         self.tree.setUniformRowHeights(True)
         self.tree.header().setSectionResizeMode(0, qt.QHeaderView.ResizeMode.Stretch)
         self.tree.currentItemChanged.connect(self._blob)
+        self.tree.itemDoubleClicked.connect(self._edit)
         files_layout.addWidget(self.tree,1)
         self.details.addWidget(file_host)
         self.metadata = qt.QTextBrowser()
@@ -324,3 +326,7 @@ class HistoryPanel(qt.QWidget):
         if item:
             entry = item.data(0, qt.Qt.ItemDataRole.UserRole)
             if entry: self.blob_selected.emit(entry)
+
+    def _edit(self, item, column):
+        entry = item.data(0, qt.Qt.ItemDataRole.UserRole)
+        if entry: self.edit_requested.emit(entry.path)

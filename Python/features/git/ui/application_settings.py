@@ -179,7 +179,7 @@ class GitPreferencesForm(qt.QWidget):
             font = qt.QFont(); font.fromString(self.options['diff_font'])
             accepted, font = qt.QFontDialog.getFont(font, self)
             if accepted: self.options['diff_font'] = font.toString(); self.font_button.setText(font.toString())
-        self.font_button.clicked.connect(choose_font); form.addRow('Diff font', self.font_button)
+        self.font_button.clicked.connect(choose_font); form.addRow('Diff font family (shared code size)', self.font_button)
         self.number(form, 'diff_limit_kb', 'Text preview limit (KiB)', 16, 16384)
         self.text(form, 'diff_ignore_patterns', 'Skip preview patterns (comma separated)')
         self.check(box, 'wrap_diff', 'Wrap diff lines by default')

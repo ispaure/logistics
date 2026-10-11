@@ -17,17 +17,23 @@ class HunkCards(qt.QScrollArea):
         self.setWidget(self.body)
         self.cards = []
         self.editors = []
+        self.height_timer = qt.QTimer(self)
+        self.height_timer.setSingleShot(True)
+        self.height_timer.timeout.connect(self._update_heights)
 
     def render(self, view, context):
         while self.layout.count():
             item = self.layout.takeAt(0)
-            if item.widget(): item.widget().deleteLater()
+            if item.widget():
+                item.widget().hide()
+                item.widget().deleteLater()
         self.cards = []; self.editors = []
         for index, (start, label) in enumerate(view.hunks):
             end = view.hunks[index + 1][0] if index + 1 < len(view.hunks) else len(view.lines)
             lines = view.lines[start + 1:end]
             if lines and not lines[-1].text and not lines[-1].kind: lines = lines[:-1]
             card = qt.QFrame()
+            card.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Maximum)
             card.setFrameShape(qt.QFrame.Shape.StyledPanel)
             box = qt.QVBoxLayout(card)
             box.setContentsMargins(0, 0, 0, 0); box.setSpacing(0)
@@ -55,6 +61,8 @@ class HunkCards(qt.QScrollArea):
             editor.diff_color_overrides = getattr(self.preview, 'diff_color_overrides', {})
             editor.setReadOnly(True); editor.indent_guides = False
             editor.setFont(self.preview.editor.font())
+            from features.code_font import code_font
+            code_font().bind(editor)
             editor.setAccessibleName(label)
             editor.highlighter = DiffHighlighter(editor)
             editor.set_diff(DiffView(lines=lines))
@@ -63,23 +71,47 @@ class HunkCards(qt.QScrollArea):
             box.addWidget(editor)
             self.layout.addWidget(card)
             self.cards.append(card); self.editors.append(editor)
-            editor.textChanged.connect(lambda editor=editor: self._height(editor))
+            editor.installEventFilter(self)
+            editor.document().documentLayout().documentSizeChanged.connect(self._schedule_heights)
             self._height(editor)
         self.layout.addStretch()
+        self._schedule_heights()
+
+    def _schedule_heights(self, *args):
+        # Wait until the scroll area's layout has assigned the final card width.
+        self.height_timer.start(0)
+
+    def _update_heights(self):
+        for editor in self.editors:
+            self._height(editor)
+
+    def eventFilter(self, watched, event):
+        if event.type() in (qt.QEvent.Type.Resize, qt.QEvent.Type.FontChange):
+            self._schedule_heights()
+        return super().eventFilter(watched, event)
 
     def _height(self, editor):
-        lines = (sum(max(1, editor.document().findBlockByNumber(i).layout().lineCount())
-                     for i in range(editor.blockCount())) if self.preview.wrap.isChecked() else editor.blockCount())
-        height = max(1, lines) * editor.fontMetrics().lineSpacing() + 12
-        if not self.preview.wrap.isChecked(): height += editor.horizontalScrollBar().sizeHint().height()
-        editor.setFixedHeight(min(4096, max(48, height)))
+        # Measuring blocks also lays out wrapped text at the current viewport width.
+        height = 0
+        for i in range(editor.blockCount()):
+            block = editor.document().findBlockByNumber(i)
+            editor.blockBoundingRect(block)
+            height += block.layout().boundingRect().height()
+        # A little breathing room also avoids a one-line scroll from Qt's rounding.
+        height += 2 * editor.document().documentMargin() + 2 * editor.frameWidth() + 4
+        if not self.preview.wrap.isChecked() and editor.horizontalScrollBar().maximum() > 0:
+            height += editor.horizontalScrollBar().sizeHint().height()
+        height = min(4096, max(48, int(height + .999)))
+        if editor.height() != height:
+            editor.setFixedHeight(height)
 
     def set_wrap(self, enabled):
         for editor in self.editors:
             editor.setLineWrapMode(qt.QPlainTextEdit.LineWrapMode.WidgetWidth if enabled
                                    else qt.QPlainTextEdit.LineWrapMode.NoWrap)
             self._height(editor)
+        self._schedule_heights()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        for editor in self.editors: self._height(editor)
+        self._schedule_heights()

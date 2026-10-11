@@ -16,6 +16,7 @@ class GitPage(qt.QWidget):
         self.setProperty('navigation_position', 'workspace')
         self.setProperty('navigation_order', 20)
         self.preferences = Preferences(preferences_path)
+        self.working_file_opener = None
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.workspace = Workspace(self._create_view, self, dock_group=self, new_view=self._repository_menu,
@@ -35,6 +36,7 @@ class GitPage(qt.QWidget):
 
     def _create_view(self, path):
         view = RepositoryView(preferences=self.preferences, restore_last=False)
+        view.working_file_opener = lambda path: bool(self.working_file_opener and self.working_file_opener(path))
         view.repository_opener = lambda path: self.open_repository(path, self._owner(view))
         view.menu_controls.menus['File'].addSeparator()
         view.menu_controls.add('File', 'Close Repository Tab', lambda: self._owner(view).close_active())

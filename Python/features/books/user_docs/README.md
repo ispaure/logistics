@@ -57,8 +57,9 @@ Alt+Left/Right moves between chapters.
 Choose **Read aloud** in the toolbar or **View → Read aloud…**. Select a passage
 first to read only that passage; otherwise reading starts at the visible page
 and continues through the current chapter. Choose a language, installed voice
-and speed, then press **Read**. **Pause / Resume** appears when the system engine
-supports it; **Stop** ends playback. Closing the panel, opening another chapter
+and speed, then press **Play**. The same button changes to **Pause** while speaking
+and **Resume** while paused. If the system engine cannot pause/resume, the button
+is disabled during playback; **Stop** ends playback. Closing the panel, opening another chapter
 or closing the reader also stops playback. Turning a page within the same chapter
 lets speech continue.
 
@@ -76,7 +77,8 @@ Each book can have up to 50 bookmarks.
 
 Defaults are available under **Settings → Books & Comics**, using the feature's
 `config.ini`. Saved preferences for a particular book take precedence. Disable
-`remember_position_bool` to stop saving/restoring reading state in new readers.
+`remember_position_bool` to stop saving/restoring reading state in new readers,
+for both books and comics.
 Moving a book to another path starts a separate reading history.
 Shortcuts or symbolic links to the same book share its reading history.
 

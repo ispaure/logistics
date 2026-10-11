@@ -65,6 +65,11 @@ saved preferences. Feature defaults live in `config.ini`; private overrides,
 recent files and window geometry live under the commonUtils Cache/TextEditor
 folder. **Reset Editor Preferences** removes overrides and restores feature defaults.
 
+Code text defaults to 13 points. Text Editor, IDE and Git code panes share the
+saved point size; zooming a code editor updates other open code panes and future
+views. Font families remain local to each feature. Line-number gutters resize
+with the font and the number of lines.
+
 In the main app, Text Editor opens in **Open documents**. Drag its tab outside
 the window to detach it; **Bring back** returns it without losing edits.
 

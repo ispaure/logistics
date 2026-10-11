@@ -418,6 +418,8 @@ class EditingCommands:
                 document.external_acknowledged = False
                 self._active_changed()
             dialog = MergeDialog(model, self, apply=apply, left_name='Editor buffer', right_name='File on disk', path=document.path)
+            from features.code_font import bind_code_views
+            bind_code_views(dialog, self.preferences.path)
             dialog.show()
         self._run(work, done, message='Preparing merge…')
 
@@ -477,6 +479,8 @@ class EditingCommands:
             dialog = DiffDialog(model, self, left_name=str(path), right_name=document.title, apply=apply, path=document.path,
                                 undo=lambda expected: history(document.editor.undo, expected),
                                 redo=lambda expected: history(document.editor.redo, expected))
+            from features.code_font import bind_code_views
+            bind_code_views(dialog, self.preferences.path)
             dialog.show()
         self._run(work, done, message="Comparing files…")
 
@@ -488,6 +492,8 @@ class EditingCommands:
         document.views.set_split(orientation)
         if not had_secondary and document.views.secondary is not None:
             editor = document.views.secondary
+            from features.code_font import code_font
+            code_font(self.preferences.path).bind(editor)
             editor.cursorPositionChanged.connect(document.changed)
             editor.focused.connect(document.changed)
             editor.verticalScrollBar().valueChanged.connect(self.service.session.changed)

@@ -40,6 +40,8 @@ class ApplicationPreferences:
         font = qt.QFont(self._diff_font)
         if options['diff_font']: font.fromString(options['diff_font'])
         self.preview.editor.setFont(font)
+        from features.code_font import code_font
+        code_font().bind(self.preview.editor)
         self.preview.editor.diff_color_overrides = options['diff_colors']
         self.preview.diff_color_overrides = options['diff_colors']
         self.preview.wrap.setChecked(options['wrap_diff'])

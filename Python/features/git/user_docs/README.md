@@ -4,6 +4,11 @@ Use Git to review and commit local work, inspect history, and exchange changes
 with remote repositories. Open **Git** from the navigation rail; enable it in
 **Settings → Features** if it is unavailable.
 
+Code previews and comparison/merge panes share a saved point size with Text
+Editor and IDE, defaulting to 13 points. Ctrl+wheel zoom in a code editor updates
+other open code panes. The Diff font preference selects a family; code size uses
+the shared setting.
+
 ## Get started
 
 Install **Git 2.40 or newer**. Logistics uses `git` from your PATH; **Settings → Advanced → Git executable…**
@@ -57,10 +62,14 @@ Binary files show an explanation instead of text.
 4. If Git needs an author name/email, use **More… → Commit identity…**. This saves
    repository settings, shared with linked worktrees, without changing global identity.
 
-Double-click a changed file, or right-click it and choose **Open working file in
-Text Editor**, to use Logistics' existing Text Editor. Enable that feature in
-Settings first. Saving refreshes Git; the normal document host handles unsaved edits.
-Files resolving outside the repository are opened separately.
+Double-click an ordinary changed file, or right-click it and choose **Open working
+file in editor**. With IDE enabled, files inside a registered IDE project open
+there, reopening closed projects and reusing existing file tabs. If registered
+roots overlap, the most specific root wins. Other files use Text Editor, which
+must be enabled in Settings. Saving refreshes Git. Missing files and paths
+resolving outside the repository cannot be opened through this action.
+Conflicted files still open the Git merge resolver on double-click. The optional
+double-click staging preference continues to stage/unstage ordinary files instead.
 
 **Discard…** restores selected ordinary tracked files from the index. It leaves
 staged changes in place. Review the listed paths: Git history generally cannot
@@ -81,7 +90,10 @@ The toolbar's **Commit** badge counts changed files, including untracked files.
 upstream, using the last fetched remote state. **Fetch** updates that state and
 has no numeric badge. Zero counts are hidden.
 
-Each diff hunk has its own card. In File status, use **Stage Hunk** or **Unstage Hunk**
+Each diff hunk has its own card. Cards stay compact and aligned at the top as the
+window grows; with **Wrap** enabled, their height follows the wrapped code as the
+window width changes. Multiple hunks scroll together when they do not fit.
+In File status, use **Stage Hunk** or **Unstage Hunk**
 to change only that hunk's staging, or **Discard Hunk…** to discard an unstaged hunk
 after confirmation. A changed preview must be refreshed before applying it.
 Hunk actions require a complete, unfiltered patch for an ordinary tracked text
@@ -110,6 +122,10 @@ hunks, **Wrap** to read long lines, and **Raw** to inspect the original patch.
 unstaging a file still affects all its changes. File badges identify added (+),
 modified (M), deleted (−), renamed (→), untracked (?) and conflicted (!) files.
 Use **Full tree at commit** to browse every historical file and read its contents.
+Double-click a file in History (including **Uncommitted changes**), the full tree,
+or Search results to open its current working file through the same IDE/Text Editor
+routing as File status. This edits the current file on disk; files that no longer
+exist cannot be opened, and single-click previews still show historical content.
 Submodule entries show the recorded child commit. File actions stage, unstage or
 discard whole files.
 
@@ -272,7 +288,7 @@ Template** selects inherited, disabled or custom starting text; an existing draf
 is kept. **Remotes** stages additions, URL edits and removals until OK.
 **Security** controls commit signing using your existing Git signing tools.
 **Advanced** selects inherited or repository-specific author identity, opens
-`.gitignore` in the enabled Text Editor, and offers the personal Git executable
+`.gitignore` in IDE or Text Editor using the same project routing, and offers the personal Git executable
 chooser. Local settings are shared with linked worktrees; global Git settings
 are kept. Cancel discards pending dialog changes.
 

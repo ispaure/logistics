@@ -312,6 +312,8 @@ class MainWindow(pyside.Window):
 
     def _create_feature_page(self, contribution):
         page = contribution.create_page(self.dlg)
+        if contribution.page_id == 'git.workspace':
+            page.working_file_opener = self._open_git_file_in_ide
         settings_requested = getattr(page, 'feature_settings_requested', None)
         if settings_requested is not None:
             settings_requested.connect(self._show_feature_settings)
@@ -320,6 +322,19 @@ class MainWindow(pyside.Window):
         if idle is not None and callable(getattr(idle, 'connect', None)):
             idle.connect(self._retry_close)
         return page
+
+    def _open_git_file_in_ide(self, path):
+        page = self._feature_pages.get(('ide', 'ide.workspace'))
+        if page is None or self.tabs.indexOf(page) < 0:
+            return False
+        if not page.open_registered_file(path):
+            return False
+        if self._launch_mode == 'hub':
+            self._reveal_hub()
+            self.tabs.setCurrentWidget(page)
+        else:
+            self._launch('ide')
+        return True
 
     def _show_feature_settings(self, feature):
         settings = next(page for _, _, page in self._core_pages if isinstance(page, SettingsPage))

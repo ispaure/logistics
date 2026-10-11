@@ -56,6 +56,8 @@ class SyntaxSettings:
         )
         font.setPointSize(options["font_size_int"])
         editor.setFont(font)
+        from features.code_font import code_font
+        code_font(self.preferences.path).bind(editor)
         editor.indent_width = options["indent_width_int"]
         editor.use_tabs = options["use_tabs_bool"]
         editor.update_tab_width()
@@ -141,6 +143,10 @@ class SyntaxSettings:
         if not self.current:
             return
         editor = self.current.editor
+        from features.code_font import code_font
+        shared_font = code_font(self.preferences.path)
+        if not shared_font.updating and shared_font.size != round(editor.font().pointSizeF()):
+            shared_font.changed(editor)
         self.options.update(
             font_family_str=editor.font().family(),
             font_size_int=round(editor.font().pointSizeF()),
@@ -174,7 +180,10 @@ class SyntaxSettings:
             return
         self._preference_timer.stop()
         self.options = self.preferences.load()
+        from features.code_font import code_font
+        code_font(self.preferences.path).set_size(self.options['font_size_int'], save=False, notify=False)
         for doc in self.documents:
             self._configure_document(doc)
+        code_font(self.preferences.path).set_size(self.options['font_size_int'], save=False)
         self.actions["syntax"].setChecked(self.options["syntax_highlighting_bool"])
         self._active_changed()

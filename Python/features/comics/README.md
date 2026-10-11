@@ -85,7 +85,12 @@ Spread selection respects landscape/DoublePage pages and manga direction.
 Only the latest queued page load is displayed, and failed loads retain the current
 image with an error. Metadata saves refresh the archive snapshot and direction
 while retaining page position; external archive changes require reopening.
-Closing during a load waits for its worker. Reading progress is session-only.
+Closing during a load waits for its worker. `reading_state.py` saves the last
+successfully displayed page after a short debounce and flushes on file switches,
+close and shutdown. State uses a hashed resolved path in shared Cache/Comics;
+restoration prefers the image entry name, then clamps the saved zero-based index.
+Explicit adjacent-file navigation retains its start/end behavior. The Books
+`Reader.remember_position_bool` setting controls both readers.
 
 `LogisticsComicsData/metadata.json` stores normalized suggestions and compact
 relative-path records using modification time/size. Index only list fields and

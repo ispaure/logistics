@@ -44,6 +44,27 @@ class LaunchModeTests(QtTestCase):
         self.window.dlg.show()
         self.app.processEvents()
 
+    def test_git_file_handoff_reveals_ide_and_respects_disabled_destination(self):
+        window = self.window
+        ide = window._launch_targets()['ide']
+        git = window._launch_targets()['git']
+        ide.open_registered_file = Mock(return_value=False)
+        window._launch('git')
+        self.assertFalse(git.working_file_opener('/project/file.py'))
+        self.assertIs(window.tabs.currentWidget(), git)
+        ide.open_registered_file.return_value = True
+        self.assertTrue(git.working_file_opener('/project/file.py'))
+        self.assertIs(window.tabs.currentWidget(), ide)
+        self.assertEqual(window._launch_mode, 'ide')
+        window._launch('hub')
+        self.assertTrue(git.working_file_opener('/project/file.py'))
+        self.assertEqual(window._launch_mode, 'hub')
+        self.assertIs(window.tabs.currentWidget(), ide)
+        window.tabs.removeTab(window.tabs.indexOf(ide))
+        ide.open_registered_file.reset_mock()
+        self.assertFalse(git.working_file_opener('/project/file.py'))
+        ide.open_registered_file.assert_not_called()
+
     def test_landing_choices_reuse_pages_and_full_hub_restores_sidebar(self):
         window = self.window
         self.assertIs(window.launch_stack.currentWidget(), window.landing)

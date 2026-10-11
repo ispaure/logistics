@@ -25,8 +25,9 @@ See the [user guide](user_docs/README.md) for the interface and authentication s
 - `ui/changes.py`, `history.py`, `preview.py`, `dialogs.py`: focused widgets.
 
 The feature reuses commonUtils' dock-backed `Workspace`, Qt facade, painted sidebar icons, `CodeEdit`, and
-platform process-group/cancellation helpers. Editing uses the optional existing
-Text Editor service and the application's document host. Docking and tab reordering are shared with browser and document panes.
+platform process-group/cancellation helpers. Editing uses the enabled
+IDE through an application callback for registered projects, with the Text Editor
+service and document host as fallback. Docking and tab reordering are shared with browser and document panes.
 
 ## Execution and lifecycle
 
