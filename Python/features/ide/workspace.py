@@ -363,7 +363,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         source = self.group_for(doc)
         if source is None or target not in self.groups or self.closing:
             return False
-        if placement == 'tabs':
+        if placement == 'tabs' or (placement in ('left', 'right') and not target.count()):
             return True
         if placement not in ('left', 'right'):
             return False
@@ -377,6 +377,8 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         if not self.can_drop_editor(doc, target, placement, index):
             return False
         source = self.group_for(doc)
+        if not target.count():
+            placement = 'tabs'
         if placement != 'tabs':
             if source.count() == 1:
                 self.groups.remove(source)
