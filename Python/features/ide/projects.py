@@ -48,8 +48,12 @@ class ProjectStore:
         self.open_ids = []
         self.active_id = None
         self.error = None
-        self.original = self.path.read_bytes() if self.path.exists() else None
+        self.original = None
         try:
+            if self.path.exists():
+                if self.path.stat().st_size > 4 * 1024 * 1024:
+                    raise ValueError('IDE workspace exceeds 4 MiB')
+                self.original = self.path.read_bytes()
             if self.original is not None:
                 data = json.loads(self.original)
                 if data.get('version') != 1:
@@ -58,7 +62,7 @@ class ProjectStore:
                 self.projects = {p.id: p for p in projects}
                 self.open_ids = list(dict.fromkeys(p for p in data['open_ids'] if p in self.projects))
                 self.active_id = data.get('active_id')
-        except (ValueError, TypeError, KeyError, AttributeError) as error:
+        except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
             self.error = str(error)
 
     def save(self):

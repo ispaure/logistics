@@ -19,9 +19,10 @@ class IDEPage(qt.QWidget):
         self.tabs.setMovable(True)
         self.tabs.setTabsClosable(True)
         self.tabs.tabCloseRequested.connect(self.close_project)
-        layout.addWidget(self.tabs)
+        layout.addWidget(self.tabs, 1)
         self.status = qt.QLabel(self.store.error or 'Register an existing directory to begin.')
         self.status.setWordWrap(True)
+        self.status.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         layout.addWidget(self.status)
         self.timer = qt.QTimer(self)
         self.timer.setSingleShot(True)
@@ -63,6 +64,7 @@ class IDEPage(qt.QWidget):
         view.idle.connect(self.idle)
         self.tabs.addTab(view, project.name)
         self.tabs.setCurrentWidget(view)
+        self.status.setText('Project settings and layout are saved outside source directories.')
         self.changed()
         return view
 
@@ -89,6 +91,7 @@ class IDEPage(qt.QWidget):
         for key, widget in fields.items():
             value = widget.toPlainText().splitlines() if key.endswith('_paths') else widget.text().strip()
             setattr(project, key, value if key != 'python_interpreter' else value or None)
+        project.root_path = str(project.root)
         return True
 
     def register_project(self):
@@ -147,5 +150,6 @@ class IDEPage(qt.QWidget):
         ready = all([self.tabs.widget(i).prepare_close() for i in range(self.tabs.count())])
         if ready:
             self.timer.stop()
-            return self.persist()
+            self.persist()
+            return True
         return False

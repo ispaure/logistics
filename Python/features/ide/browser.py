@@ -46,8 +46,11 @@ class ProjectBrowser(qt.QWidget):
         self.tree.setContextMenuPolicy(qt.Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self.menu)
         self.tree.doubleClicked.connect(self.activate)
-        self.tree.expanded.connect(self.changed)
-        self.tree.collapsed.connect(self.changed)
+        self.expanded_paths = set()
+        self.pending_expansion = set()
+        self.tree.expanded.connect(self.expanded)
+        self.tree.collapsed.connect(self.collapsed)
+        self.model.directoryLoaded.connect(self.restore_expansion)
         layout.addWidget(self.tree)
         self.filter.textChanged.connect(self.filter_changed)
         self.reset_root()
@@ -143,3 +146,34 @@ class ProjectBrowser(qt.QWidget):
                 path.unlink()
         except OSError as error:
             self.workspace.error(error)
+
+    def expanded(self, index):
+        self.expanded_paths.add(str(self.path(index)))
+        self.changed.emit()
+
+    def collapsed(self, index):
+        self.expanded_paths.discard(str(self.path(index)))
+        self.changed.emit()
+
+    def restore_expansion(self, *args):
+        for path in list(self.pending_expansion):
+            index = self.proxy.mapFromSource(self.model.index(path))
+            if index.isValid():
+                self.tree.expand(index)
+                self.pending_expansion.discard(path)
+
+    def state(self):
+        return {'expanded': sorted(self.expanded_paths), 'filter': self.filter.text(),
+                'selected': str(self.path())}
+
+    def restore(self, state):
+        if not isinstance(state, dict):
+            return
+        self.filter.setText(state.get('filter', '') if isinstance(state.get('filter', ''), str) else '')
+        expanded = state.get('expanded', [])
+        if isinstance(expanded, list):
+            self.pending_expansion = {p for p in expanded[:1000] if isinstance(p, str)}
+            self.restore_expansion()
+        selected = state.get('selected')
+        if isinstance(selected, str):
+            self.tree.setCurrentIndex(self.proxy.mapFromSource(self.model.index(selected)))

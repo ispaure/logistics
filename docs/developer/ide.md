@@ -50,3 +50,43 @@ isolated stores and temporary source trees, exercising persistence, imports,
 shared buffers, close cancellation, external edits and retained worker shutdown.
 No changes to commonUtils public interfaces or unrelated feature dependencies are
 planned. No source repository configuration directories are created.
+
+## Implemented contracts
+
+IDE is an independent lazy PageContribution (`ide.workspace`). ProjectStore keeps
+UUID registrations and all project layouts in one version-1 atomic workspace JSON
+beside Logistics preferences. It checks the previous bytes before publication to
+reject competing instance writes (this is not a cross-process lock). Corrupt or
+unsupported stores are retained. Store write failures are reported in the page;
+they do not trap the application in an endless shutdown wait after document close
+choices have completed.
+
+ProjectWorkspace owns one canonical EditorDocument per resolved path. Opening an
+existing path activates that view; moving tabs reparents the existing widget.
+Closing a column migrates its tabs. This deliberately avoids duplicate independent
+buffers without introducing multiple views of one file in the initial version.
+All internal tabs are ordinary QTabWidgets. Browser mutations refuse to rename or
+delete any path containing an open document; only empty directory deletion is
+available. The shared model owns lazy filesystem loading and rename validation.
+
+ResultWorker requests are serialized per project; a process-wide lock serializes
+Jedi's caches across projects. GUI inputs are copied before dispatch. Analysis
+results validate source identity, revision, cursor and active view. Search and
+quick-open scans have exclusions, limits and cooperative cancellation. Jedi cannot
+be forcibly interrupted; owners are retained until it returns. SearchPanel keeps
+its own cooperative worker lifecycle. No project code is executed by IDE itself;
+Jedi may start its configured Python environment for introspection.
+
+State captures project order, active project/group/files, tab order, splitter sizes,
+file cursor/scroll locations and tree expansion/filter/selection. Missing file
+records survive saves. Navigation history stays in memory. Opening the same path
+in different projects intentionally creates project-independent buffers; shared
+text IO detects conflicting saves. External watchers report changes and saves
+always revalidate original disk bytes. Buffers are not crash checkpoints.
+
+Jedi 0.19.2 and parso 0.8.7 are MIT/OS-independent Python dependencies pinned in
+uv.lock. Pygments remains 2.19.2. Shared commonUtils changes are limited to language
+detection and a Blade overlay delegating PHP/HTML grammar work to Pygments.
+Future work should move bounded save/reload IO off the GUI thread, add optional
+unsaved-import overlays, and validate native Windows/Linux interaction. Automatic
+diagnostics, automatic hover and Git handoff are outside this initial selection.

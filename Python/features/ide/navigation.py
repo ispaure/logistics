@@ -95,7 +95,9 @@ class Navigation:
         self.status.setText('Analyzing Python…')
         def done(result):
             if self.documents.get(path) is not doc or doc.document().revision() != revision or self.current is not doc or doc.textCursor().position() != position:
+                self.status.setText('Analysis result superseded by edits or focus changes.')
                 return
+            self.status.setText('Python analysis complete.')
             if kind == 'help':
                 qt.QMessageBox.information(self, 'Python documentation', result or 'No documentation resolved.')
             elif kind == 'completion':
