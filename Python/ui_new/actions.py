@@ -31,7 +31,9 @@ def execute_action(
         if not ui.display_msg_box_ok_cancel(title, message):
             return False
 
-    action.callback()
+    result = action.callback()
+    if result is False:
+        return False
     if action.destructive and refresh is not None:
         refresh()
     return True
