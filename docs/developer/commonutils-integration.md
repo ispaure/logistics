@@ -50,3 +50,14 @@ These links follow the shared project's main branch. For an API change, inspect
 the actual pinned checkout as well. Missing shared documentation should be recorded
 against the owning component, not recreated as a second Logistics API manual.
 See the [audit follow-ups](documentation-audit.md#commonutils-documentation-ownership-and-gaps).
+
+## Current import contract
+
+The pinned shared revision now uses direct Python packages. Historical root imports
+such as `commonUtils.fileUtils`, `commonUtils.fileTypes` and `commonUtils.osUtils`
+are no longer supplied by an import adapter. Use the current filesystem, formats,
+runtime and integration packages shown in the
+[shared API guide](https://github.com/ispaure/commonUtils/blob/main/docs/developer/public-apis.md).
+Do not restore the removed compatibility hook to fix a consumer import. This is
+separate from Logistics' retained feature hooks and settings wrappers, which still
+have their own explicit compatibility contracts.

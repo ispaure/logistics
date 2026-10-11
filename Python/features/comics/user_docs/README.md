@@ -53,6 +53,38 @@ return it; switching sidebar destinations retains the open views.
 
 Readers do not modify page images. Applied metadata changes stay saved after Cancel.
 
+## Edit metadata across a collection
+
+Select the comics, or select folders to include their comics recursively, then
+choose **Edit metadata…**. Only fields you explicitly change are written; leaving
+a mixed field alone preserves each book's value. Changing a mixed list field
+replaces that field in every selected comic rather than adding one value to each
+book's existing list. Clear a field to remove it. List fields accept comma-separated
+values or one value per line; suggestion lists also let you choose existing values.
+
+Apply/OK writes metadata inside each CBZ without changing page images. A successful
+save stays applied if you later cancel the dialog. Batch saves are not one transaction:
+if a later file fails, earlier successful saves remain. Review failures before retrying;
+there is no metadata Undo or automatic original-file backup. Files changed by another
+application must be reloaded before saving. ComicRack-only fields such as Series
+complete and Proposed Values are disabled; this editor does not update its database.
+
+## Library suggestions and reading state
+
+Opening a Comics Library indexes collection metadata in the background to offer
+consistent authors, tags, publishers and other supported field suggestions. The
+catalog covers the collection root even when a library tab shows one subfolder.
+It stores a disposable `LogisticsComicsData/metadata.json` inside the collection root;
+large collections take longer to scan. Encrypted comics are excluded from this
+persistent suggestion cache. If the cache cannot be written, session suggestions
+remain usable; indexing errors do not prevent manual metadata entry. Refreshing
+the library updates changed/deleted entries without overwriting pending edits.
+
+Comic reading position is retained for the open reader only; there is no saved
+resume position across application restarts. EPUB reading history belongs to the
+separate [Books reader](../../books/user_docs/README.md#keep-your-place). Reopen a
+comic after an external archive edit so the reader uses its current contents.
+
 ## Compress or convert
 
 Right-click CBZs/folders and choose **Books & Comics → Compress Comics…**, or use the

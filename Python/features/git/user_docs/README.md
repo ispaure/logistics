@@ -49,8 +49,10 @@ Settings first. Saving refreshes Git; the normal document host handles unsaved e
 Files resolving outside the repository are opened separately.
 
 **Discard…** restores selected ordinary tracked files from the index. It leaves
-staged changes in place. Review the listed paths: unstaged edits generally cannot
-be recovered through Git. Untracked files, conflicts, renames, and submodule changes
+staged changes in place. Review the listed paths: Git history generally cannot
+recover uncommitted edits. Logistics enables discard backups by default; see
+[Git preferences](#git-preferences) for their location and manual restoration.
+If you disable that preference, Logistics does not keep those recovery copies. Untracked files, conflicts, renames, and submodule changes
 need their own handling and are excluded from this action.
 
 **Amend last commit** replaces the branch tip. Review the confirmation before
@@ -140,8 +142,8 @@ saved in the feature's `git.json` file. **Revert** discards pending preference e
 existing bookmarks and repository drafts are kept.
 
 - **General** controls the initial project folder, last-repository restoration,
-  terminal choice (Terminal/iTerm on macOS), file-change refresh, optional periodic
-  origin fetch, and staging/branch-switch confirmations. File watching is limited
+  terminal choice (Terminal/iTerm on macOS), file-change refresh (on by default),
+  optional periodic origin fetch (off by default), and staging/branch-switch confirmations. File watching is limited
   to 2,000 existing files/directories; use Refresh for larger repositories or
   changes in previously unwatched nested directories. Global author identity is
   edited only when its explicit checkbox is enabled; local identity overrides remain.
@@ -171,7 +173,7 @@ existing bookmarks and repository drafts are kept.
   `{repo}`, `{file}` and `{commit}` expand within individual arguments. A selected
   file/commit is required for its placeholder. Actions run in the repository,
   through the cancellable worker, without shell expansion.
-- **Advanced** enables discard backups, persistent log visibility, force-with-lease,
+- **Advanced** controls discard backups (on by default), persistent log visibility, force-with-lease,
   diagnostics, a GPG executable and per-host default HTTPS usernames. Backups keep
   the file bytes before whole-file or hunk discard under the repository's Git
   metadata in `logistics-backups/<id>/`, with `paths.json` mapping backup names to

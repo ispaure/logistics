@@ -134,3 +134,12 @@ means fewer words on a screen page. `theme_mode` sets the reading palette, not
 book metadata. `remember_position_bool` enables saved reading state. A book's
 saved appearance overrides defaults; change its appearance in the reader when
 adjusting a book you have already opened. These settings do not rewrite the EPUB.
+
+## If a book will not open
+
+The reader rejects EPUBs with more than 20,000 archive members or more than
+512 MiB of declared uncompressed content. A single resource is limited to 32 MiB;
+an oversized chapter/image can therefore fail even when the overall book is smaller.
+These are uncompressed-content limits, not the `.epub` file's size on disk. Corrupt
+or protected content can also prevent loading. Keep the original and use another
+reader to investigate; Logistics does not repair or remove protection from EPUBs.
