@@ -100,8 +100,9 @@ class CBZSanitizationMixin:
                                 if destination_file_path.exists():
                                     log(Severity.ERROR, sanitize_tool_name, f'Flattening would overwrite {destination_file_path}')
                                     return False
-                                result = fileUtils.move_file(subdir_file.path, destination_file_path)
-                                if not result:
+                                try:
+                                    subdir_file.move_file(destination_file_path)
+                                except OSError:
                                     msg = (f'File move unsuccessful (source: "{subdir_file.path}", '
                                            f'destination: "{destination_file_path}")!')
                                     log(Severity.ERROR, sanitize_tool_name, msg)
@@ -133,8 +134,9 @@ class CBZSanitizationMixin:
                     if destination_path.exists():
                         log(Severity.ERROR, sanitize_tool_name, f'Flattening would overwrite {destination_path}')
                         return False
-                    result = fileUtils.move_file(subdir_file.path, destination_path)
-                    if not result:
+                    try:
+                        subdir_file.move_file(destination_path)
+                    except OSError:
                         msg = (f'File move unsuccessful (source: "{subdir_file.path}", '
                                f'destination: "{destination_path}")!')
                         log(Severity.ERROR, sanitize_tool_name, msg)

@@ -447,6 +447,23 @@ class ComicsTests(unittest.TestCase):
                 self.assertTrue((directory / f'{1:0{width}d}.png').is_file())
                 self.assertEqual(len(list(directory.iterdir())), count)
 
+    def test_flatten_move_failure_keeps_source_and_directory(self):
+        for depth in (1, 2):
+            with self.subTest(depth=depth):
+                extracted = self.root / f'extracted-{depth}'
+                folder = extracted / 'pages'
+                if depth == 2:
+                    folder = folder / 'nested'
+                folder.mkdir(parents=True)
+                page = folder / '01.png'
+                page.write_bytes(image_bytes())
+                comic = cbz.CBZFile(self.archive(name=f'flatten-{depth}.cbz'))
+                with patch.object(fileUtils.File, 'move_file', side_effect=PermissionError('locked')):
+                    self.assertFalse(comic.sanitize_extracted_cbz(extracted))
+                self.assertTrue(page.is_file())
+                self.assertTrue(folder.is_dir())
+                self.assertFalse((extracted / '01.png').exists())
+
     def test_nested_xml_is_not_silently_discarded(self):
         self.assert_compression_rejected({'a/01.png': image_bytes(), 'a/ComicInfo.xml': COMICINFO,
                                          'b/01.png': image_bytes()})
