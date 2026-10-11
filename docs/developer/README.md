@@ -7,6 +7,7 @@ user guide for the workflow you are changing, then follow this map.
 | Task | Guide |
 | --- | --- |
 | Develop the project IDE | [IDE architecture](ide.md) |
+| Review tab, docking and compact layout changes | [UI refinement validation](ui-refinement.md) |
 | Understand startup, windows, workers and cleanup | [Architecture](architecture.md) |
 | Locate a feature, dependencies or enable/disable behavior | [Feature organization](features.md) |
 | Add settings, a page, folder integration or a document launcher | [Extension points](extension-points.md) |

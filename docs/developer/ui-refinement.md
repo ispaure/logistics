@@ -1,0 +1,85 @@
+# UI refinement validation — 2026-10-11
+
+## Delivered behavior
+
+| Owner | Change |
+| --- | --- |
+| IDE projects | Shared Workspace containers, equal-width project headers, overflow, retained independent project state, project detachment and a + menu even when empty. Opening an already-open registration from another container moves its retained pane to the requesting container. |
+| IDE editors | Up to three horizontal groups. Header drops insert/reorder; content center merges; left/right quarters create groups. Existing buffers survive moves; duplicate views merge; empty groups disappear. Escape/outside drops cancel and cannot create a floating window or cross projects. |
+| IDE browser/layout | Font-scaled panel minimum widths, noncollapsible splitters and compact outer spacing. |
+| IDE menus | File, Edit, View, Navigate and Project reuse workspace menu publication; shortcuts operate within the owning project and the current editor. File includes Save All and Close Project. Settings/source paths are contextual project commands. |
+| File Browser | One docked tab retains its header. Detached single-tab containers retain local + controls. The last normal browser tab still cannot close or detach. |
+| Documents | Existing workspace sizing, close ownership and local detached creation retained and regression-tested. |
+| Git | Repository panes use the shared detached-container policy; opening a new repository from a detached pane targets that pane's container. Shutdown checks all containers. Views without an alternate controls row retain their single header so + remains reachable. |
+| Bulk Rename | Compact spacing, resizable/hideable rules, a responsive rule grid, Scope and Rule presets menus, readable minimum filename-column widths. Hiding rules does not disable or reset them. |
+| Text Editor | Full-area document layout with reduced outer padding; existing menus, document ownership and contextual disk-change controls retained. |
+| Markdown | Format menu shares the existing navigation row. Formatting, heading, list and table operations no longer reserve a second toolbar row. |
+
+Shared commonUtils changes are documented in `ui/scoped_tabs.md` and the Markdown
+component guides in that repository. ScopedTabBar reuses workspace drop geometry,
+but never enters the native window-drag controller. Hosts own document lifecycle,
+group limits and close policy. Workspace now emits tab-change notifications after
+reordering and retains the only + control when a view supplies no alternate row.
+
+## Validation
+
+Environment: macOS 26.6.2 ARM64, Python 3.12.2, project PySide6 environment.
+
+- Logistics isolated suite: **857 tests across 79 modules; zero failures**.
+- commonUtils isolated suite: **675 tests across 92 modules; zero failures**, one
+  expected case-sensitive-filesystem skip on this volume.
+- Focused shared workspace/container/gesture stage: 42 tests passed.
+- Markdown: 94 tests across six isolated modules passed.
+- Clean committed snapshot: all 23 IDE tests across two isolated modules passed,
+  using archived Logistics/commonUtils commits without uncommitted source changes.
+- Final focused checks passed for detached Git creation, a 680-pixel-wide Bulk
+  Rename window, retained rules, readable filename columns, browser single-tab
+  policy and reopening a project into the requesting detached container.
+- Native Cocoa/AppKit checks observed File/Edit/View/Navigate/Project menus while
+  switching projects and after detaching a project. Maximize/restore preserved
+  browser panel minimums. These ran in a temporary test application.
+- Visual inspection used Logistics' actual Slate light/dark themes at large and
+  narrow sizes for IDE, Bulk Rename and Markdown. Three IDE editor columns retain
+  usable minima and horizontal editor scrolling at narrow widths.
+- Repository Ruff and both repositories' diff whitespace checks passed.
+
+Commands used the project interpreter, `PYTHONPATH=Python` and
+`QT_QPA_PLATFORM=offscreen`, with `tests/run_regressions.py <test-directory>
+--isolate-modules`. Native menu checks used `QT_QPA_PLATFORM=cocoa` and inspected
+only the temporary test application's AppKit menu. Qt CPU detection required
+running tests outside the filesystem sandbox.
+
+The full working-tree suites and native Cocoa run include existing, concurrently
+edited native-menu/browser/navigation work. Those changes were preserved and were
+not included in this task's commits. The clean committed IDE snapshot was tested
+separately offscreen. Late narrow-layout and new policy tests were also run as
+focused checks after the full-suite run began.
+
+## Limits
+
+- Native Windows/Linux desktop interaction was not tested. Qt routing tests cover
+  their menu branches on macOS; this is not native platform validation.
+- Project sessions reopen into the main container; detached OS-window geometry is
+  not persisted. Each project's editor groups, files and view positions remain
+  part of its existing session state.
+- Internal editor groups remain horizontal and capped at three. Side drops at
+  the cap are rejected; center/header drops can still merge and reorder files.
+- Existing storage, analysis and recovery limits in the IDE guide are unchanged.
+
+## Commits
+
+Logistics:
+
+- `98eefb9` — shared project containers, confined editor snapping, menus and tests.
+- `33561ff` — compact feature layouts, browser policy and detached creation ownership.
+- `0fae34a` — readable filename columns in narrow rename windows.
+- The validation record is committed separately after these implementation stages.
+
+commonUtils (Logistics pins `a6cc899`):
+
+- `6e5f904` — confined tab gestures, shared drop geometry and accessible workspace controls.
+- `fd40356` — Markdown formatting consolidated into its navigation header.
+- `a6cc899` — keyboard focus for Escape cancellation during confined dragging.
+
+The root README's Ally Tools acknowledgement and the reserved Misc/tools rail
+navigation code were preserved.
