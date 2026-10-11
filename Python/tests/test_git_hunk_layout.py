@@ -48,7 +48,10 @@ class HunkLayoutTests(QtTestCase):
                         self.assertEqual([card.height() for card in cards], heights)
                     for card, editor in zip(cards, self.preview.cards.editors):
                         header = card.layout().itemAt(0).widget()
-                        self.assertLessEqual(header.height(), header.sizeHint().height() + 2)
+                        # Native Windows button metrics can wrap the title at
+                        # narrow widths; that required height is not stretching.
+                        needed = max(header.sizeHint().height(), header.heightForWidth(header.width()))
+                        self.assertLessEqual(header.height(), needed + 2)
                         self.assertEqual(editor.verticalScrollBar().maximum(), 0)
                         self.assertLessEqual(card.geometry().right(), self.preview.cards.body.width())
                     for first, second in zip(cards, cards[1:]):
