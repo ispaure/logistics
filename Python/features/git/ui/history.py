@@ -5,9 +5,14 @@ from html import escape
 import re
 from ..graph import layout_graph
 from ..models import Commit
-from .chrome import GRAPH_COLORS, status_icon
+from .chrome import GRAPH_COLORS, status_icon, _draw_action
 
 WORKING_COPY_ROLE = qt.Qt.ItemDataRole.UserRole + 1
+
+
+def ref_badge(ref):
+    ref = ref.removeprefix('HEAD -> ')
+    return ('tag', ref.removeprefix('tag: ')) if ref.startswith('tag: ') else ('branch', ref)
 
 
 class GraphDelegate(qt.QStyledItemDelegate):
@@ -53,15 +58,17 @@ class DescriptionDelegate(qt.QStyledItemDelegate):
         metrics=option.fontMetrics
         for ref in commit.decorations.split(', '):
             if not ref: continue
-            label=ref.removeprefix('HEAD -> ')
-            width=min(metrics.horizontalAdvance(label)+14,150)
+            kind, label = ref_badge(ref)
+            width=min(metrics.horizontalAdvance(label)+30,166)
             rect=qt.QRect(x,option.rect.top()+1,width,option.rect.height()-2)
             painter.setPen(qt.Qt.PenStyle.NoPen)
             painter.setBrush(qt.QColor('#cb671e' if '/' in label else '#216ab4'))
             painter.drawRoundedRect(rect,3,3)
+            painter.save(); painter.translate(x + 5, option.rect.center().y() - 7); painter.scale(.5, .5)
+            _draw_action(painter, kind, 'white'); painter.restore()
             painter.setPen(qt.QColor('white'))
-            painter.drawText(rect.adjusted(5,0,-5,0),qt.Qt.AlignmentFlag.AlignVCenter,
-                metrics.elidedText(label,qt.Qt.TextElideMode.ElideRight,width-10))
+            painter.drawText(rect.adjusted(23,0,-5,0),qt.Qt.AlignmentFlag.AlignVCenter,
+                metrics.elidedText(label,qt.Qt.TextElideMode.ElideRight,width-28))
             x+=width+4
         painter.setPen(option.palette.text().color())
         painter.drawText(qt.QRect(x,option.rect.top(),max(0,option.rect.right()-x),option.rect.height()),
@@ -135,12 +142,11 @@ class HistoryPanel(qt.QWidget):
         file_filters.addWidget(self.file_search, 1)
         files_layout.addLayout(file_filters)
         self.tree = qt.QTreeWidget()
-        self.tree.setHeaderLabels(['Files', 'Status / type'])
+        self.tree.setColumnCount(1)
+        self.tree.setHeaderHidden(True)
         self.tree.setAccessibleName('Historical file tree')
         self.tree.setUniformRowHeights(True)
         self.tree.header().setSectionResizeMode(0, qt.QHeaderView.ResizeMode.Stretch)
-        self.tree.header().setStretchLastSection(False)
-        self.tree.header().setSectionResizeMode(1, qt.QHeaderView.ResizeMode.ResizeToContents)
         self.tree.currentItemChanged.connect(self._blob)
         files_layout.addWidget(self.tree,1)
         self.details.addWidget(file_host)
@@ -271,12 +277,12 @@ class HistoryPanel(qt.QWidget):
                 for depth in range(1, len(parts)) if hierarchical else ():
                     key = '/'.join(parts[:depth])
                     if key not in folders:
-                        folder = qt.QTreeWidgetItem([parts[depth - 1], 'directory'])
+                        folder = qt.QTreeWidgetItem([parts[depth - 1]])
                         if parent: parent.addChild(folder)
                         else: self.tree.addTopLevelItem(folder)
                         folders[key] = folder
                     parent = folders[key]
-                item = qt.QTreeWidgetItem([parts[-1] if hierarchical else entry.path, 'submodule' if entry.kind == 'commit' else entry.mode if entry.kind == 'change' else entry.kind])
+                item = qt.QTreeWidgetItem([parts[-1] if hierarchical else entry.path])
                 item.setData(0, qt.Qt.ItemDataRole.UserRole, entry)
                 if entry.kind == 'change': item.setIcon(0, status_icon(entry.mode))
                 item.setToolTip(0, entry.path)

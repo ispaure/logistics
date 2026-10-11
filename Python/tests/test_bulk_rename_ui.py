@@ -83,6 +83,23 @@ class BulkRenameWidgetTests(QtTestCase):
         self.assertEqual(row.toolTip(1),row.text(1))
         self.assertTrue(self.first.exists())
 
+    def test_root_load_is_observed_even_when_model_finishes_immediately(self):
+        original = qt.QFileSystemModel.setRootPath
+
+        def immediate_load(model, path):
+            index = original(model, path)
+            model.directoryLoaded.emit(path)
+            return index
+
+        with patch.object(qt.QFileSystemModel, 'setRootPath', immediate_load):
+            widget = BulkRenameWidget(self.root)
+        # No event processing: an early root notification must already be saved.
+        self.assertIn(Path(widget._tree_anchor), widget._loaded_tree_directories)
+        widget.preview_timer.stop()
+        widget.close()
+        widget.deleteLater()
+        self.app.processEvents()
+
     def test_navigation_keeps_parent_siblings_and_existing_expanded_branches(self):
         parent = self.root / 'Parent'
         child = parent / 'Child'

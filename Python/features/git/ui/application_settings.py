@@ -4,49 +4,31 @@ import json
 from pathlib import Path
 import sys
 from commonUtils.ui import pyside as qt
-from .chrome import action_icon
 from .dialogs import FormDialog
 from ..options import validate_options, validate_account
 
 
-class GitPreferencesDialog(qt.QDialog):
+class GitPreferencesForm(qt.QWidget):
     def __init__(self, preferences, global_identity, parent):
         super().__init__(parent)
-        self.setWindowTitle('Git preferences')
-        self.resize(1200, 760)
         self.options = deepcopy(preferences.options)
         self.preferences = preferences
         self.credentials = []
         self.global_identity = global_identity
         self.fields = {}
         layout = qt.QVBoxLayout(self)
-        header = qt.QHBoxLayout()
-        self.heading = qt.QLabel('General')
-        font = qt.QFont(self.font()); font.setPointSizeF(font.pointSizeF() + 3); font.setBold(True)
-        self.heading.setFont(font); self.heading.setMinimumWidth(150); header.addWidget(self.heading)
-        self.navigation = qt.QToolBar(); self.navigation.setMovable(False)
-        self.navigation.setToolButtonStyle(qt.Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
-        self.navigation.setIconSize(qt.QSize(24, 24)); header.addWidget(self.navigation, 1); layout.addLayout(header)
-        self.navigation_group = qt.QActionGroup(self); self.navigation_group.setExclusive(True)
-        self.tabs = qt.QTabWidget(); self.tabs.setIconSize(qt.QSize(24, 24))
-        self.tabs.tabBar().hide()
-        self.tabs.currentChanged.connect(lambda index: self.heading.setText(self.tabs.tabText(index)))
+        self.tabs = qt.QTabWidget()
+        self.tabs.setAccessibleName('Git preference sections')
         layout.addWidget(self.tabs, 1)
         self.general(); self.accounts(); self.commit(); self.diff(); self.git()
         self.unsupported('Mercurial', 'Logistics currently supports Git repositories. Mercurial repositories, extensions and embedded runtimes are not supported.')
         self.actions(); self.update_page(); self.advanced()
         self.error = qt.QLabel(); self.error.setWordWrap(True); layout.addWidget(self.error)
-        buttons = qt.QDialogButtonBox(qt.QDialogButtonBox.StandardButton.Ok | qt.QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(self.accept); buttons.rejected.connect(self.reject); layout.addWidget(buttons)
 
-    def page(self, title, icon='settings'):
+    def page(self, title):
         scroll = qt.QScrollArea(); scroll.setWidgetResizable(True)
         body = qt.QWidget(); box = qt.QVBoxLayout(body); box.setContentsMargins(16, 16, 16, 16); box.setSpacing(10)
-        scroll.setWidget(body); index = self.tabs.addTab(scroll, action_icon(icon), title)
-        action = self.navigation.addAction(action_icon(icon), title)
-        action.setCheckable(True); action.setChecked(index == 0); self.navigation_group.addAction(action)
-        action.triggered.connect(lambda checked=False, index=index: self.tabs.setCurrentIndex(index))
-        self.tabs.currentChanged.connect(lambda current, index=index, action=action: action.setChecked(current == index))
+        scroll.setWidget(body); self.tabs.addTab(scroll, title)
         return box
 
     def note(self, box, text):
@@ -77,7 +59,7 @@ class GitPreferencesDialog(qt.QDialog):
         button.clicked.connect(choose); form.addRow(title, row); return edit
 
     def general(self):
-        box = self.page('General', 'folder')
+        box = self.page('General')
         self.modify_global = qt.QCheckBox('Allow Logistics to update global Git author identity'); box.addWidget(self.modify_global)
         form = qt.QFormLayout(); box.addLayout(form)
         self.author = qt.QLineEdit(self.global_identity.get('user.name') or ''); form.addRow('Full name', self.author)
@@ -107,8 +89,8 @@ class GitPreferencesDialog(qt.QDialog):
         row.addStretch(); box.addLayout(row)
 
     def accounts(self):
-        box = self.page('Accounts', 'security')
-        self.note(box, 'Tokens are saved in a native secure Git credential helper. Preferences contain account names only. SSH uses your existing keys and agent. Account changes take effect when you click OK.')
+        box = self.page('Accounts')
+        self.note(box, 'Tokens are saved in a native secure Git credential helper. Preferences contain account names only. SSH uses your existing keys and agent. Account changes take effect when you click Save.')
         self.account_table = self.table(box, ['Username', 'Provider / host', 'Protocol', 'Default'])
         self.render_accounts()
         self.row_buttons(box, [('Add…', lambda: self.account(False)), ('Edit…', lambda: self.account(True)),
@@ -172,7 +154,7 @@ class GitPreferencesDialog(qt.QDialog):
         else: self.error.setText(self.note_browser)
 
     def commit(self):
-        box = self.page('Commit', 'template')
+        box = self.page('Commit')
         self.check(box, 'select_all_commit', 'Select all pending files when opening Commit')
         self.note(box, 'Selection does not stage files. Commit always uses the index.')
         self.check(box, 'push_after_commit', 'Default to pushing to origin after committing')
@@ -191,7 +173,7 @@ class GitPreferencesDialog(qt.QDialog):
         self.row_buttons(box, [('Import…', import_template)])
 
     def diff(self):
-        box = self.page('Diff', 'stash'); form = qt.QFormLayout(); box.addLayout(form)
+        box = self.page('Diff'); form = qt.QFormLayout(); box.addLayout(form)
         self.font_button = qt.QPushButton(self.options['diff_font'] or 'System monospace font')
         def choose_font():
             font = qt.QFont(); font.fromString(self.options['diff_font'])
@@ -224,7 +206,7 @@ class GitPreferencesDialog(qt.QDialog):
         self.options['diff_font'] = ''; self.options['diff_colors'] = {}; self.font_button.setText('System monospace font')
 
     def git(self):
-        box = self.page('Git', 'branch'); form = qt.QFormLayout(); box.addLayout(form)
+        box = self.page('Git'); form = qt.QFormLayout(); box.addLayout(form)
         self.executable = qt.QLineEdit(self.preferences.executable); form.addRow('Git executable', self.executable)
         self.browse(form, 'global_ignore', 'Ignore list for Logistics Git commands')
         self.combo(form, 'pull_strategy', 'Default pull strategy', ['ff-only', 'merge', 'rebase'])
@@ -242,7 +224,7 @@ class GitPreferencesDialog(qt.QDialog):
         box = self.page(title); self.note(box, text); box.addStretch()
 
     def actions(self):
-        box = self.page('Custom Actions', 'merge')
+        box = self.page('Custom Actions')
         self.note(box, 'Actions run without a shell in the active repository. Parameters are a JSON list. Each argument supports {repo}, {file} and {commit}. A shortcut is optional.')
         self.action_table = self.table(box, ['Menu caption', 'Program', 'Arguments', 'Shortcut']); self.render_actions()
         self.row_buttons(box, [('Add…', lambda: self.action(False)), ('Edit…', lambda: self.action(True)), ('Remove', self.remove_action),
@@ -281,7 +263,7 @@ class GitPreferencesDialog(qt.QDialog):
             self.render_actions(); self.action_table.setCurrentItem(self.action_table.topLevelItem(target))
 
     def update_page(self):
-        box = self.page('Update', 'fetch')
+        box = self.page('Update')
         self.note(box, 'Git ships as part of Logistics. Releases and release notes are published together; updating this feature separately is not supported.')
         def releases(): qt.QDesktopServices.openUrl(qt.QUrl('https://github.com/ispaure/logistics/releases'))
         self.row_buttons(box, [('Check releases', releases), ('Show release notes', releases)]); box.addStretch()
@@ -310,7 +292,7 @@ class GitPreferencesDialog(qt.QDialog):
             if index >= 0: self.usernames.takeTopLevelItem(index)
         self.row_buttons(box, [('Add / Edit…', add_username), ('Remove', remove_username)])
 
-    def accept(self):
+    def collect(self):
         try:
             for key, widget in self.fields.items():
                 self.options[key] = widget.isChecked() if isinstance(widget, qt.QCheckBox) else widget.value() if isinstance(widget, qt.QSpinBox) else widget.currentText() if isinstance(widget, qt.QComboBox) else widget.text()
@@ -321,5 +303,141 @@ class GitPreferencesDialog(qt.QDialog):
             if not self.executable.text().strip(): raise ValueError('Choose a Git executable.')
             if self.modify_global.isChecked() and any(not text.strip() or any(ord(c) < 32 for c in text) for text in (self.author.text(), self.email.text())):
                 raise ValueError('Enter an author name and email without control characters.')
-        except (ValueError, TypeError) as error: self.error.setText(str(error)); return
-        super().accept()
+        except (ValueError, TypeError) as error: self.error.setText(str(error)); return False
+        self.error.clear()
+        return True
+
+
+class GitPreferencesPanel(qt.QWidget):
+    """Retained feature settings; worker-owned Git writes and native credentials."""
+    idle = qt.Signal()
+
+    def __init__(self, parent=None, *, preferences_path=None):
+        super().__init__(parent)
+        from ..preferences import Preferences
+        self.preferences = Preferences(preferences_path)
+        self.worker = None
+        self.identity = {}
+        self.form = None
+        self.dirty = False
+        self.box = qt.QVBoxLayout(self)
+        self.box.setContentsMargins(0, 0, 0, 0)
+        self.status = qt.QLabel(); self.status.setWordWrap(True)
+        self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
+        self.box.addWidget(self.status)
+        self.buttons = qt.QWidget()
+        row = qt.QHBoxLayout(self.buttons)
+        self.save_button = qt.QPushButton('Save'); self.save_button.clicked.connect(self.save)
+        self.revert_button = qt.QPushButton('Revert'); self.revert_button.clicked.connect(self.revert)
+        row.addStretch(); row.addWidget(self.revert_button); row.addWidget(self.save_button)
+        self.box.addWidget(self.buttons)
+        self._form()
+        self._load_identity()
+
+    def _form(self):
+        if self.form is not None:
+            self.form.credentials.clear()
+            self.box.removeWidget(self.form); self.form.hide(); self.form.deleteLater()
+        self.form = GitPreferencesForm(self.preferences, self.identity, self)
+        self.box.insertWidget(1, self.form, 1)
+        for widget in self.form.findChildren(qt.QWidget):
+            for signal in ('textChanged', 'toggled', 'valueChanged', 'currentIndexChanged', 'itemChanged'):
+                changed = getattr(widget, signal, None)
+                if changed is not None: changed.connect(self._changed)
+        for table in self.form.findChildren(qt.QTreeWidget):
+            table.model().rowsInserted.connect(self._changed)
+            table.model().rowsRemoved.connect(self._changed)
+        self.dirty = False
+
+    def _changed(self, *args):
+        self.dirty = True
+
+    def _job(self, title, action, after):
+        if self.worker: return
+        from .worker import GitWorker
+        self.status.setText(title + '…'); self.form.setEnabled(False); self.buttons.setEnabled(False)
+        worker = self.worker = GitWorker(self.preferences.executable, action, self)
+        def finished():
+            self.worker = None
+            self.form.setEnabled(True); self.buttons.setEnabled(True)
+            try:
+                if worker.error: self.status.setText(worker.error)
+                else: after(worker.result)
+            except (OSError, ValueError) as error: self.status.setText(str(error))
+            finally: worker.deleteLater(); self.idle.emit()
+        worker.finished.connect(finished); worker.start()
+
+    def _load_identity(self):
+        def loaded(identity):
+            self.identity = identity
+            self.form.global_identity = identity
+            self.form.author.setText(identity['user.name'] or '')
+            self.form.email.setText(identity['user.email'] or '')
+            self.dirty = False
+            self.status.setText(self.preferences.warning)
+        self._job('Read Git identity', lambda runner: {
+            key: runner.run(['config', '--global', '--get', key], check=False).stdout.decode().strip() or None
+            for key in ('user.name', 'user.email')}, loaded)
+
+    def revert(self):
+        if self.worker: return
+        from ..preferences import Preferences
+        self.preferences = Preferences(self.preferences.path)
+        self._form(); self._load_identity()
+
+    def save(self):
+        if self.worker or not self.form.collect(): return
+        form = self.form
+        options = deepcopy(form.options); executable = form.executable.text().strip()
+        credentials = list(form.credentials); form.credentials.clear()
+        identity = dict(self.identity)
+        requested = {'user.name': form.author.text().strip(), 'user.email': form.email.text().strip()} if form.modify_global.isChecked() else None
+        def write(runner):
+            from ..accounts import change_credential, secure_helper
+            from ..runner import GitRunner, GitError
+            try:
+                GitRunner(executable, cancel=runner.cancel).version()
+                runner.executable = executable
+                if requested:
+                    for key in requested:
+                        current = runner.run(['config', '--global', '--get', key], check=False).stdout.decode().strip() or None
+                        if current != identity[key]: raise GitError('Global identity changed. Revert preferences before saving.')
+                for account, token, erase in credentials:
+                    if account['protocol'] == 'https':
+                        account['helper'] = account.get('helper') or secure_helper(runner)
+                        change_credential(runner, account, token, erase=erase)
+                        for saved in options['accounts']:
+                            if (saved['host'], saved['username'], saved['protocol']) == (account['host'], account['username'], account['protocol']):
+                                saved['helper'] = account['helper']
+                if requested:
+                    for key, value in requested.items(): runner.run(['config', '--global', key, value])
+                return options
+            finally: credentials.clear()
+        def saved(options):
+            from ..preferences import Preferences
+            # Re-read bookmarks/repository state that may have changed while this
+            # retained settings page was open. Only preferences are replaced.
+            current = Preferences(self.preferences.path)
+            current.options, current.executable = options, executable
+            current.save()
+            for preferences in list(Preferences.instances):
+                if preferences.path.resolve() != current.path.resolve(): continue
+                preferences.options = deepcopy(options); preferences.executable = executable
+                preferences.repositories = deepcopy(current.repositories)
+                preferences.last_repository = current.last_repository
+                preferences.subtrees = deepcopy(current.subtrees)
+                for view in list(preferences.views): view.apply_preferences(); view.refresh()
+            self.preferences = current
+            if requested: self.identity = requested
+            self._form(); self.status.setText('Git preferences saved.')
+        self._job('Save Git preferences', write, saved)
+
+    def can_close(self):
+        if self.worker: return False
+        if not self.dirty and not self.form.credentials: return True
+        answer = qt.QMessageBox.question(self, 'Unsaved Git preferences', 'Discard unsaved Git preferences?',
+            qt.QMessageBox.StandardButton.Discard | qt.QMessageBox.StandardButton.Cancel,
+            qt.QMessageBox.StandardButton.Cancel)
+        if answer != qt.QMessageBox.StandardButton.Discard: return False
+        self.form.credentials.clear(); self.dirty = False
+        return True

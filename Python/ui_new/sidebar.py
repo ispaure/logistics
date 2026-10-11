@@ -191,14 +191,14 @@ class DestinationRail(qt.QWidget):
         self.actions = None
         self.buttons = {}
         self.pages = {}
-        self.setFixedWidth(60)
+        self.setFixedWidth(54)
         self.setAccessibleName('Main destinations')
         outer = qt.QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         icon_scroll = qt.QScrollArea(self)
         icon_scroll.setWidgetResizable(True)
-        icon_scroll.setFixedWidth(60)
+        icon_scroll.setFixedWidth(54)
         icon_scroll.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         icon_scroll.setFrameShape(qt.QFrame.Shape.NoFrame)
         icons = qt.QWidget()
@@ -245,7 +245,7 @@ class DestinationRail(qt.QWidget):
         self.editor_new_buttons = {}
         self.editor_groups = {}
         layout = qt.QVBoxLayout(icons)
-        layout.setContentsMargins(6, 10, 6, 10)
+        layout.setContentsMargins(5, 10, 5, 10)
         layout.setSpacing(8)
         for key, title in [('browser', 'File Browser'), ('hub', 'Folder Hub'),
                            ('actions', 'Folder Actions'), ('documents', 'Open documents')]:
@@ -276,7 +276,7 @@ class DestinationRail(qt.QWidget):
         layout.addWidget(self._button('tools', 'Misc tools'))
         layout.addStretch()
         footer = qt.QVBoxLayout()
-        footer.setContentsMargins(6, 4, 6, 4)
+        footer.setContentsMargins(5, 4, 5, 4)
         footer.setSpacing(6)
         footer.addWidget(self._button('debug', 'Debug'))
         footer.addWidget(self._button('settings', 'Settings'))
@@ -293,7 +293,7 @@ class DestinationRail(qt.QWidget):
         button = ActivityButton(self) if key == 'actions' else qt.QToolButton(self)
         set_painted_icon(button, DestinationIcon, icon or key)
         button.setIconSize(qt.QSize(26, 26))
-        button.setFixedSize(46, 42)
+        button.setFixedSize(42, 42)
         button.setCheckable(not key.startswith('editor:'))
         button.setAccessibleName(title)
         button.setToolTip(title)

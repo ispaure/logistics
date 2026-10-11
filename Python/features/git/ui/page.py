@@ -8,6 +8,7 @@ from .repository_view import RepositoryView
 
 class GitPage(qt.QWidget):
     idle = qt.Signal()
+    feature_settings_requested = qt.Signal(str)
 
     def __init__(self, parent=None, *, preferences_path=None):
         super().__init__(parent)
@@ -34,6 +35,7 @@ class GitPage(qt.QWidget):
         view = RepositoryView(preferences=self.preferences, repository_opener=self.open_repository,
                               restore_last=False)
         view.idle.connect(self.idle)
+        view.feature_settings_requested.connect(self.feature_settings_requested)
         if path is not None:
             view.open_repository(path)
         return view

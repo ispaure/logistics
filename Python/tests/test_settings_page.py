@@ -21,6 +21,27 @@ class SettingsPageTests(QtTestCase):
         return SimpleNamespace(name='test', label='Test', enabled=True, available=True,
                                dependencies=(), dependents=())
 
+    def test_git_preferences_are_hosted_in_feature_settings(self):
+        from features.git import register
+        from features.git.ui.application_settings import GitPreferencesPanel
+        from time import monotonic, sleep
+        contribution = register().settings[0]
+        self.assertEqual(contribution.scope, 'personal')
+        state = self.state(); state.name = 'git'; state.label = 'Git'
+        with TemporaryDirectory() as folder:
+            factory = lambda parent: GitPreferencesPanel(parent, preferences_path=Path(folder) / 'git.json')
+            entry = RegisteredContribution('git', 'Git', SettingsContribution(contribution.name, contribution.settings_id, factory, scope='personal'))
+            with patch.object(registry, 'get_feature_states', return_value=[state]), patch.object(registry, 'get_settings', return_value=[entry]):
+                settings = SettingsPage(); self.addCleanup(settings.deleteLater)
+                settings.show_feature('git')
+                panel = settings.panels['feature:git'].custom['git.preferences']
+                deadline = monotonic() + 10
+                while panel.worker:
+                    self.assertLess(monotonic(), deadline)
+                    self.app.processEvents(); sleep(.005)
+                self.assertIs(settings.stack.currentWidget(), settings.panels['feature:git'])
+                self.assertNotIsInstance(panel, qt.QDialog)
+
     def test_indexing_has_boolean_rules_and_explicit_save_preserves_other_sections(self):
         from ui_new.settings.indexing import IndexSettingsPanel
         from commonUtils.ui.file_browser.index_policy import index_policy

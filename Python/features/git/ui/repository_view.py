@@ -26,6 +26,7 @@ from .application_preferences import ApplicationPreferences
 
 
 class RepositoryView(ApplicationPreferences, GitJobs, qt.QWidget):
+    feature_settings_requested = qt.Signal(str)
     title_changed = qt.Signal(str)
     view_title = "Repository (Git)"
     idle = qt.Signal()

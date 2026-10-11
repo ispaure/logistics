@@ -11,6 +11,7 @@ from features.git.accounts import change_credential
 from features.git.runner import GitRunner, GitError
 from test_git_ui import GitUITests
 from commonUtils.tests.qt_test_case import QtTestCase
+from commonUtils.ui import pyside as qt
 
 
 class GitPreferenceTests(unittest.TestCase):
@@ -57,25 +58,56 @@ class PreferenceUITests(QtTestCase):
     wait = GitUITests.wait
     open = GitUITests.open
     commit_fixture = GitUITests.commit_fixture
-    def test_dialog_sections_apply_to_runtime_and_persist(self):
-        from features.git.ui.application_settings import GitPreferencesDialog
+    def settings_panel(self):
+        from features.git.ui.application_settings import GitPreferencesPanel
+        panel = GitPreferencesPanel(preferences_path=self.page.preferences.path)
+        self.addCleanup(panel.deleteLater)
+        self.wait_panel(panel)
+        return panel
+
+    def wait_panel(self, panel):
+        from time import monotonic, sleep
+        deadline = monotonic() + 10
+        while panel.worker:
+            self.assertLess(monotonic(), deadline)
+            self.app.processEvents(); sleep(.005)
+        self.wait()
+
+    def test_embedded_sections_apply_to_runtime_and_persist(self):
         self.open()
-        def accept(dialog):
-            self.assertEqual([dialog.tabs.tabText(i) for i in range(dialog.tabs.count())],
-                             ['General', 'Accounts', 'Commit', 'Diff', 'Git', 'Mercurial', 'Custom Actions', 'Update', 'Advanced'])
-            dialog.template.setPlainText('Default message')
-            dialog.fields['fixed_commit_font'].setChecked(True)
-            dialog.fields['stage_double_click'].setChecked(True)
-            dialog.fields['diff_limit_kb'].setValue(64)
-            dialog.accept()
-            return dialog.result()
-        with patch.object(GitPreferencesDialog, 'exec', accept):
-            self.page.application_settings_dialog(); self.wait()
+        panel = self.settings_panel(); form = panel.form
+        self.assertNotIsInstance(panel, qt.QDialog)
+        self.assertEqual([form.tabs.tabText(i) for i in range(form.tabs.count())],
+                         ['General', 'Accounts', 'Commit', 'Diff', 'Git', 'Mercurial', 'Custom Actions', 'Update', 'Advanced'])
+        self.assertFalse(form.tabs.tabBar().isHidden())
+        self.assertTrue(all(form.tabs.tabIcon(i).isNull() for i in range(form.tabs.count())))
+        form.template.setPlainText('Default message')
+        form.fields['fixed_commit_font'].setChecked(True)
+        form.fields['stage_double_click'].setChecked(True)
+        form.fields['diff_limit_kb'].setValue(64)
+        panel.save(); self.wait_panel(panel)
+        self.assertEqual(panel.status.text(), 'Git preferences saved.')
         self.assertEqual(self.page.changes.message.toPlainText(), 'Default message')
         self.assertTrue(self.page.changes.stage_on_double_click)
         self.assertEqual(self.page.changes.message.column_guide, 72)
         self.assertEqual(Preferences(self.page.preferences.path).options['diff_limit_kb'], 64)
         self.assertFalse(self.page.preferences.warning)
+
+    def test_git_preferences_action_requests_feature_settings(self):
+        requested = []
+        self.page.feature_settings_requested.connect(requested.append)
+        self.page.application_settings_dialog()
+        self.assertEqual(requested, ['git'])
+
+    def test_saving_retained_preferences_preserves_new_bookmarks(self):
+        self.open(); panel = self.settings_panel()
+        self.page.preferences.remember(self.root / 'another-repo')
+        self.page.preferences.save()
+        panel.form.fields['stage_double_click'].setChecked(True)
+        panel.save(); self.wait_panel(panel)
+        saved = Preferences(self.page.preferences.path)
+        self.assertEqual(saved.last_repository, str(self.root / 'another-repo'))
+        self.assertTrue(any(entry['path'] == str(self.root / 'another-repo') for entry in saved.repositories))
 
     def test_discard_backs_up_original_bytes(self):
         self.commit_fixture(); file = self.repo.path / 'file.txt'
@@ -102,22 +134,16 @@ class PreferenceUITests(QtTestCase):
 
     def test_global_identity_is_written_only_when_explicitly_enabled(self):
         import os
-        from features.git.ui.application_settings import GitPreferencesDialog
         global_config = self.root / 'global.gitconfig'
         global_config.write_text('[user]\nname = Original\nemail = original@example.invalid\n')
         with patch.dict(os.environ, {'GIT_CONFIG_GLOBAL': str(global_config)}):
-            self.open()
-            def edit(dialog):
-                dialog.author.setText('Changed'); dialog.email.setText('changed@example.invalid')
-                dialog.accept(); return dialog.result()
-            with patch.object(GitPreferencesDialog, 'exec', edit):
-                self.page.application_settings_dialog(); self.wait()
+            self.open(); panel = self.settings_panel()
+            panel.form.author.setText('Changed'); panel.form.email.setText('changed@example.invalid')
+            panel.save(); self.wait_panel(panel)
             self.assertIn('name = Original', global_config.read_text())
-            def enable(dialog):
-                dialog.modify_global.setChecked(True)
-                return edit(dialog)
-            with patch.object(GitPreferencesDialog, 'exec', enable):
-                self.page.application_settings_dialog(); self.wait()
+            panel.form.modify_global.setChecked(True)
+            panel.form.author.setText('Changed'); panel.form.email.setText('changed@example.invalid')
+            panel.save(); self.wait_panel(panel)
             self.assertIn('name = Changed', global_config.read_text())
             self.assertEqual(self.repo.config_value('user.name', local=True), 'UI Test')
 

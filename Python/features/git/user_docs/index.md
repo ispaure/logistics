@@ -9,7 +9,7 @@ Enable or disable it under Settings like other features.
 
 Install **Git 2.40 or newer**. Logistics uses `git` from your PATH; **Settings → Advanced → Git executable…**
 lets you choose another executable and checks its version. Before opening a repository,
-Settings opens Git preferences directly. Git is supplied separately
+Settings selects Git’s feature preferences in Logistics Settings. Git is supplied separately
 from Logistics.
 
 - **Open…** selects an existing working repository, including a linked worktree.
@@ -132,11 +132,13 @@ an opt-in Git preference.
 
 ## Git preferences
 
-Use **More… → Git preferences…**, **+ → Git preferences…**, or repository
-**Settings → Advanced → Git preferences…**. Before opening a repository, the
-toolbar Settings button opens these preferences directly. Preferences apply
-across retained repository panes and are saved in the feature's `git.json` file.
-Cancel leaves preference edits unchanged.
+Open **Logistics Settings → Feature settings → Git → Personal**. Standard tabs
+cover General, Accounts, Commit, Diff, Git, Mercurial, Custom Actions, Update and
+Advanced. **More… → Git preferences…**, **+ → Git preferences…**, and repository
+**Settings → Advanced → Git preferences…** select this same settings page.
+Preferences apply across open repository panes when you click **Save** and are
+saved in the feature's `git.json` file. **Revert** discards pending preference edits;
+existing bookmarks and repository drafts are kept.
 
 - **General** controls the initial project folder, last-repository restoration,
   terminal choice (Terminal/iTerm on macOS), file-change refresh, optional periodic
@@ -148,7 +150,7 @@ Cancel leaves preference edits unchanged.
   tokens go directly through a secure credential helper: macOS Keychain, libsecret
   or Git Credential Manager with a native credential store. Tokens are sent on
   standard input, never saved in preferences or displayed in the operation log.
-  Removing an account also erases its helper credential when you click OK.
+  Removing an account also erases its helper credential when you click Save.
   SSH accounts use existing keys and agents. GitHub browser sign-in opens Git
   Credential Manager in a terminal; install it first, finish its browser prompt,
   then add the username here and choose **Git Credential Manager** authentication.

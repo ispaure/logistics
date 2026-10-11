@@ -174,7 +174,8 @@ unborn repositories use the bounded file preview.
 
 ## Application preferences
 
-`ui/application_settings.py` owns the General, Accounts, Commit, Diff, Git,
+`ui/application_settings.py` contributes an embedded panel to Logistics feature
+settings, with standard tabs for General, Accounts, Commit, Diff, Git,
 Mercurial status, Custom Actions, Update and Advanced pages.
 `ui/application_preferences.py` applies changes to retained panes and connects
 watching, periodic fetch, custom actions and external tools to the existing job
