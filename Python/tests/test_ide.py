@@ -25,3 +25,31 @@ class DocumentTests(QtTestCase):
                 editor.save()
             self.assertEqual(path.read_bytes(), b'external\n')
             editor.close()
+
+
+class ProjectTests(__import__('unittest').TestCase):
+    def test_roundtrip_missing_root_sources_and_conflicting_instance(self):
+        from features.ide.projects import Project, ProjectStore
+        with tempfile.TemporaryDirectory() as directory:
+            store = ProjectStore(Path(directory) / 'IDE' / 'workspace.json')
+            project = Project('Example', str(Path(directory) / 'missing'), source_paths=['.', 'src', 'src'])
+            store.projects[project.id] = project
+            store.open_ids = [project.id]
+            store.save()
+            restored = ProjectStore(store.path)
+            self.assertEqual(restored.open_ids, [project.id])
+            self.assertEqual(len(restored.projects[project.id].sources()), 2)
+            restored.active_id = project.id
+            restored.save()
+            with self.assertRaises(OSError):
+                store.save()
+
+    def test_malformed_store_is_not_overwritten(self):
+        from features.ide.projects import ProjectStore
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'workspace.json'
+            path.write_text('{bad')
+            store = ProjectStore(path)
+            with self.assertRaises(ValueError):
+                store.save()
+            self.assertEqual(path.read_text(), '{bad')
