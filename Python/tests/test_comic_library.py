@@ -129,7 +129,7 @@ class MetadataTests(ComicFixture, unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), before)
 
 
-class WindowTests(ComicFixture, unittest.TestCase):
+class WindowTests(ComicFixture, QtTestCase):
     def setUp(self):
         super().setUp()
         from commonUtils.ui import pyside as qt
