@@ -69,16 +69,16 @@ class FeaturesPage(qt.QWidget):
             font = toggle.font(); font.setBold(True); toggle.setFont(font)
             toggle.setChecked(state.enabled)
             toggle.setEnabled(state.available)
-            toggle.setToolTip('Required feature packages are missing.' if not state.available else
+            toggle.setToolTip((state.error or 'Required feature packages are missing.') if not state.available else
                               'Enable or disable this feature and remember the choice.')
             toggle.toggled.connect(lambda enabled, feature=state: self._toggled(feature, enabled))
             header.addWidget(toggle, 1)
-            text = 'Missing dependency' if not state.available else 'Enabled' if state.enabled else 'Disabled'
+            text = ('Unavailable' if state.error else 'Missing dependency') if not state.available else 'Enabled' if state.enabled else 'Disabled'
             status = qt.QLabel(text)
             self._muted(status)
             header.addWidget(status)
             card_layout.addLayout(header)
-            details = []
+            details = [state.error] if state.error else []
             if state.dependencies:
                 details.append('Requires: ' + ', '.join(labels.get(name, name) for name in state.dependencies))
             if state.dependents:

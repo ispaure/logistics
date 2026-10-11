@@ -3,6 +3,7 @@ Mount management for the Logistics rclone feature.
 """
 
 import os
+import hashlib
 import shutil
 import time
 import subprocess
@@ -47,11 +48,15 @@ def clear_mounts() -> None:
                 continue  # Nonempty or unavailable directories remain untouched.
 
 
-def get_remote_mount_path(remote_name: str) -> Path:
+def get_remote_mount_path(remote_name: str, config_path=None) -> Path:
     """Return the expected local mount path for one rclone remote."""
 
     validate_remote_name(remote_name)
-    return config.LogisticsConfig().path_remote_network_mount / remote_name
+    root = config.LogisticsConfig().path_remote_network_mount
+    if config_path is not None:
+        identity = os.path.normcase(str(Path(config_path).resolve()))
+        root /= hashlib.sha256(os.fsencode(identity)).hexdigest()[:16]
+    return root / remote_name
 
 
 def is_mount_path_mounted(mount_path: Path) -> bool:
@@ -69,10 +74,10 @@ def is_mount_path_mounted(mount_path: Path) -> bool:
     return False
 
 
-def is_remote_mounted(remote_name: str) -> bool:
+def is_remote_mounted(remote_name: str, *, config_path=None) -> bool:
     """Return whether one rclone remote is mounted at its Logistics mount path."""
 
-    return is_mount_path_mounted(get_remote_mount_path(remote_name))
+    return is_mount_path_mounted(get_remote_mount_path(remote_name, config_path))
 
 
 def is_mount_path_ready(mount_path: Path, probe_timeout: float = 2) -> bool:
@@ -100,11 +105,11 @@ def is_mount_path_ready(mount_path: Path, probe_timeout: float = 2) -> bool:
     return result.returncode == 0 and READY_MARKER in result.stdout.splitlines()
 
 
-def is_remote_ready(remote_name: str, probe_timeout: float = 2) -> bool:
+def is_remote_ready(remote_name: str, probe_timeout: float = 2, *, config_path=None) -> bool:
     """Return whether one rclone remote is mounted and its root can be read."""
 
     return is_mount_path_ready(
-        get_remote_mount_path(remote_name),
+        get_remote_mount_path(remote_name, config_path),
         probe_timeout=probe_timeout
     )
 
@@ -178,7 +183,7 @@ def mount_remote(
     return True
 
 
-def unmount_remote(remote_name: str, wait_timeout: float = 5) -> bool:
+def unmount_remote(remote_name: str, wait_timeout: float = 5, *, config_path=None) -> bool:
     """
     Unmount one Logistics rclone mount.
 
@@ -187,7 +192,7 @@ def unmount_remote(remote_name: str, wait_timeout: float = 5) -> bool:
     """
 
     wait_timeout = timeout_seconds(wait_timeout)
-    mount_path = get_remote_mount_path(remote_name)
+    mount_path = get_remote_mount_path(remote_name, config_path)
 
     if not is_mount_path_mounted(mount_path):
         _remove_empty_mount_path(mount_path)
@@ -246,12 +251,12 @@ def unmount_remote(remote_name: str, wait_timeout: float = 5) -> bool:
     return False
 
 
-def wait_until_remote_ready(remote_name: str, timeout: float = 15) -> bool:
+def wait_until_remote_ready(remote_name: str, timeout: float = 15, *, config_path=None) -> bool:
     """Wait until one remote is both mounted and able to service a root directory read."""
 
     deadline = time.monotonic() + timeout_seconds(timeout)
     while (remaining := deadline - time.monotonic()) > 0:
-        if is_remote_ready(remote_name, probe_timeout=min(2, remaining)):
+        if is_remote_ready(remote_name, probe_timeout=min(2, remaining), config_path=config_path):
             return True
         time.sleep(min(0.25, max(0, deadline - time.monotonic())))
     return False
@@ -266,19 +271,19 @@ def ensure_remote_mounted(
     """Ensure one rclone remote is mounted, responsive, and ready to open."""
 
     wait_timeout = timeout_seconds(wait_timeout)
-    mount_path = get_remote_mount_path(remote_name)
+    mount_path = get_remote_mount_path(remote_name, config_path)
 
-    if is_remote_ready(remote_name):
+    if is_remote_ready(remote_name, config_path=config_path):
         return mount_path
 
-    if is_remote_mounted(remote_name):
+    if is_remote_mounted(remote_name, config_path=config_path):
         log(
             Severity.WARNING,
             'ensure_remote_mounted',
             f'Remote "{remote_name}" is mounted but unresponsive; attempting a clean remount'
         )
 
-        if not unmount_remote(remote_name):
+        if not unmount_remote(remote_name, config_path=config_path):
             return None
 
     if not mount_remote(
@@ -289,11 +294,11 @@ def ensure_remote_mounted(
     ):
         return None
 
-    if wait_until_remote_ready(remote_name, timeout=wait_timeout):
+    if wait_until_remote_ready(remote_name, timeout=wait_timeout, config_path=config_path):
         return mount_path
 
-    if is_remote_mounted(remote_name):
-        unmount_remote(remote_name)
+    if is_remote_mounted(remote_name, config_path=config_path):
+        unmount_remote(remote_name, config_path=config_path)
 
     _remove_empty_mount_path(mount_path)
 
@@ -308,7 +313,6 @@ def ensure_remote_mounted(
 def get_rclone_remote_mount_paths(config_path: str | Path) -> list[str]:
     """Return expected mount paths for supported remotes in one config."""
 
-    network_remote_mount_path = config.LogisticsConfig().path_remote_network_mount
     remote_names = configuration.get_rclone_remote_names(config_path)
 
     mount_paths = []
@@ -318,7 +322,7 @@ def get_rclone_remote_mount_paths(config_path: str | Path) -> list[str]:
             continue
 
         validate_remote_name(remote_name)
-        mount_paths.append(str(network_remote_mount_path / remote_name))
+        mount_paths.append(str(get_remote_mount_path(remote_name, config_path)))
 
     return mount_paths
 
@@ -355,7 +359,7 @@ def mount_all_rclone_conf_remotes(
 
     deadline = time.monotonic() + wait_timeout
     for path in mount_paths:
-        if not wait_until_remote_ready(Path(path).name, timeout=max(0, deadline - time.monotonic())):
+        if not wait_until_remote_ready(Path(path).name, timeout=max(0, deadline - time.monotonic()), config_path=config_path):
             return False
     log(Severity.INFO, 'mount_all_rclone_conf_remotes', 'All rclone remotes successfully mounted')
     return True

@@ -94,11 +94,12 @@ def get_folder_entries(
     excluded_remote_names = _get_excluded_remote_names()
     excluded_folder_suffixes = _get_excluded_folder_name_suffixes()
 
-    local_folders_by_name = {
-        folder.name: folder
-        for folder in local_folders
-        if not _is_excluded_folder_name(folder.name, excluded_folder_suffixes)
-    }
+    local_folders_by_name = {}
+    for folder in local_folders:
+        if not _is_excluded_folder_name(folder.name, excluded_folder_suffixes):
+            matches = local_folders_by_name.setdefault(folder.name, [])
+            if all(existing.path != folder.path for existing in matches):
+                matches.append(folder)
 
     remote_names_by_name = {}
 
@@ -124,13 +125,16 @@ def get_folder_entries(
     else:
         folder_names = set(remote_names_by_name)
 
-    return [
-        FolderEntry(
-            name=folder_name,
-            local=local_folders_by_name.get(folder_name),
-            remote_name=remote_names_by_name.get(folder_name),
-            remote_source=remote_source if folder_name in remote_names_by_name else None,
-            remote_context=remote_context if folder_name in remote_names_by_name else None
-        )
-        for folder_name in sorted(folder_names)
-    ]
+    entries = []
+    for name in sorted(folder_names):
+        matches = local_folders_by_name.get(name, [])
+        if name in remote_names_by_name and len(matches) > 1:
+            raise ValueError(f'Multiple local folders named {name!r}; select a specific local source before matching a remote.')
+        for local in matches or [None]:
+            entries.append(FolderEntry(
+                name=name, local=local,
+                remote_name=remote_names_by_name.get(name),
+                remote_source=remote_source if name in remote_names_by_name else None,
+                remote_context=remote_context if name in remote_names_by_name else None,
+            ))
+    return entries

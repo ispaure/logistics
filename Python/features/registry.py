@@ -82,46 +82,11 @@ def reset_feature_defaults():
 # ----------------------------------------------------------------------------------------------------------------------
 # FEATURE DISCOVERY
 
-def get_feature_names() -> list[str]:
-    """
-    Return the package names of features available in the features directory.
-
-    A valid feature is a direct subdirectory containing an __init__.py file.
-    """
-
-    features_path = Path(__file__).parent
-    feature_names = []
-
-    for path in features_path.iterdir():
-        if not path.is_dir():
-            continue
-
-        if path.name == 'emulation':
-            from services.ally_integration import is_active
-            if not is_active(path):
-                continue
-
-        if path.name.startswith('_'):
-            continue
-
-        if not (path / '__init__.py').is_file():
-            continue
-
-        feature_names.append(path.name)
-
-    return sorted(feature_names)
+from .discovery import get_feature_names, load_named_features
 
 
 def load_features() -> list[ModuleType]:
-    """Import and return all physically available Logistics feature modules."""
-
-    features = []
-
-    for package_name in get_feature_names():
-        feature = importlib.import_module(f'{__package__}.{package_name}')
-        features.append(feature)
-
-    return features
+    return load_named_features(get_feature_names(), __package__)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -225,7 +190,7 @@ def _is_feature_available(
 
     feature = feature_map.get(feature_name)
 
-    if feature is None:
+    if feature is None or getattr(feature, 'FEATURE_LOAD_ERROR', None):
         return False
 
     if feature_name in resolving:
@@ -376,6 +341,7 @@ class FeatureState:
     dependencies: tuple[str, ...]
     dependents: tuple[str, ...]
     members: tuple[str, ...] = ()
+    error: str = ''
 
 
 def _feature_groups(feature_map):
@@ -408,7 +374,8 @@ def get_feature_states():
             and any(member in get_feature_dependencies(module) for member in members)))
         states.append(FeatureState(name, _get_feature_label(feature_map[name]),
             all(_is_feature_available(member, feature_map) for member in members),
-            all(member in enabled for member in members), dependencies, dependents, tuple(members)))
+            all(member in enabled for member in members), dependencies, dependents, tuple(members),
+            "; ".join(getattr(feature_map[member], 'FEATURE_LOAD_ERROR', '') for member in members).strip('; ')))
     return states
 
 

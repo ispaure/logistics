@@ -12,6 +12,17 @@ from features.fuse import mounts, commands, detection, actions, ui_contributions
 from models.folder_entry import FolderEntry
 
 
+class MountIdentityTests(unittest.TestCase):
+    def test_same_named_remotes_use_distinct_credential_paths(self):
+        settings = SimpleNamespace(path_remote_network_mount=Path('/mounts'))
+        with patch.object(mounts.config, 'LogisticsConfig', return_value=settings):
+            first = mounts.get_remote_mount_path('Books', Path('/profiles/first.conf'))
+            second = mounts.get_remote_mount_path('Books', Path('/profiles/second.conf'))
+            self.assertNotEqual(first, second)
+            self.assertEqual(first.name, 'Books')
+            self.assertEqual(first, mounts.get_remote_mount_path('Books', Path('/profiles/first.conf')))
+
+
 class FuseTests(unittest.TestCase):
     def setUp(self):
         self.temp = TemporaryDirectory()
@@ -119,7 +130,7 @@ class FuseTests(unittest.TestCase):
                 mounts, 'mount_remote', return_value=True), patch.object(
                 mounts, 'wait_until_remote_ready', return_value=True):
             self.assertEqual(mounts.ensure_remote_mounted('Mount', self.config_path), self.mount_path)
-        unmount.assert_called_once_with('Mount')
+        unmount.assert_called_once_with('Mount', config_path=self.config_path)
 
     def test_failed_readiness_preserves_nonempty_mount_directory(self):
         self.mount_path.mkdir()
@@ -134,7 +145,7 @@ class FuseTests(unittest.TestCase):
     def test_polling_passes_only_remaining_budget_to_probe(self):
         clock = [0.0]
         timeouts = []
-        def probe(name, probe_timeout):
+        def probe(name, probe_timeout, **kwargs):
             timeouts.append(probe_timeout)
             clock[0] += probe_timeout
             return False
