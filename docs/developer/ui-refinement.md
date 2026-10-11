@@ -116,6 +116,14 @@ runs passed all six IDE-layout and five shared-placement tests (the final
 empty-column case was checked offscreen). Ruff and whitespace checks passed.
 Native Windows/Linux interaction remains unverified.
 
+## Release validation follow-up
+
+Windows headless validation exposed a minimum-width constraint in Bulk Rename's
+combined preset/action row. Presets now occupy a separate row, allowing the main
+actions to fit a 680-pixel window with larger font metrics. The existing narrow
+layout regression continues to verify rule reflow, retained values and readable
+filename columns; release platform checks validate the change on each OS.
+
 Fix commits: commonUtils `c043426`, `ea31bcc`; Logistics `9ade07e`, `b4a6700`.
 Concurrent gesture-observer, menu, Markdown and navigation edits remained outside
 these commits.
