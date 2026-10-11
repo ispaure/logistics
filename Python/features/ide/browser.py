@@ -3,13 +3,13 @@ from pathlib import Path
 from subprocess import SubprocessError
 from commonUtils.ui import pyside as qt
 from commonUtils.ui import desktop_actions
-from commonUtils.ui.file_browser.model import BrowserFileSystemModel
+from commonUtils.ui.file_browser.model import BrowserFileSystemModel, ByteSortModel
 from commonUtils.filesystem.transfers import validate_name
 
 
-class ProjectFilter(qt.QSortFilterProxyModel):
-    def __init__(self, project, parent):
-        super().__init__(parent)
+class ProjectFilter(ByteSortModel):
+    def __init__(self, project, filesystem, parent):
+        super().__init__(filesystem, parent)
         self.project = project
         self.query = ''
 
@@ -42,8 +42,8 @@ class ProjectBrowser(qt.QWidget):
         layout.addWidget(self.filter)
         self.model = BrowserFileSystemModel(self)
         self.model.setReadOnly(True)
-        self.proxy = ProjectFilter(project, self)
-        self.proxy.setSourceModel(self.model)
+        self.proxy = ProjectFilter(project, self.model, self)
+        self.proxy.sort(0, qt.Qt.SortOrder.AscendingOrder)
         self.tree = qt.QTreeView()
         self.tree.setModel(self.proxy)
         for column in (1, 2, 3):
