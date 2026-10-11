@@ -108,6 +108,8 @@ class CalibreFolderWidget(pyside.QGroupBox):
             'Mirror EPUB files from this library to BOOX-SD.'
         )
 
+        self._add_action_button('Export books…', lambda: self._export(library), True,
+                                'Review an EPUB mirror in a dedicated folder of your choice.')
         boox_help = pyside.QLabel(
             'BOOX echo mirrors EPUB files from this library to '
             '/Volumes/BOOX-SD/Calibre [EPUBs]/<library>.'
@@ -117,19 +119,19 @@ class CalibreFolderWidget(pyside.QGroupBox):
 
         self.details_layout.addStretch()
 
-    def _echo_to_boox(self, library):
-        confirmed = ui.display_msg_box_ok_cancel(
-            'Echo EPUBs to BOOX-SD',
-            f'Echo EPUB files from "{library.name}" to BOOX-SD?\n\n'
-            'The destination is treated as a mirror. Files that no longer exist '
-            'in the Calibre library may be removed from the destination.'
-        )
+    def _export(self, library, destination=None):
+        from .ui.export_dialog import ExportDialog
+        dialog = ExportDialog(library, destination, self)
+        dialog.exec()
+        dialog.deleteLater()
 
-        if confirmed:
-            try:
-                actions.echo_epubs_to_boox_sd(library)
-            except (OSError, ValueError, RuntimeError) as error:
-                ui.display_msg_box_ok('Calibre Export Failed', str(error))
+    def _echo_to_boox(self, library):
+        from pathlib import Path
+        volume = Path('/Volumes/BOOX-SD')
+        if not volume.is_mount():
+            ui.display_msg_box_ok('Export books', 'BOOX-SD is not mounted. Use Export books to choose another folder.')
+            return
+        self._export(library, volume / 'Calibre [EPUBs]' / library.name)
 
     def _add_action_button(self, name, callback, enabled: bool, tooltip: str):
         button = pyside.QPushButton(name)

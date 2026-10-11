@@ -9,6 +9,7 @@ from tempfile import NamedTemporaryFile
 
 from commonUtils.filesystem.directories import Directory
 from . import metadata
+from commonUtils.runtime.operations import check_cancelled
 
 
 Signature = tuple[int, int, int, int]
@@ -184,12 +185,14 @@ def _validate_destination(plan: ExportPlan) -> None:
         raise RuntimeError(f'Export destination was replaced: {plan.destination_anchor}')
 
 
-def execute_export_plan(plan: ExportPlan) -> ExportResult:
+def execute_export_plan(plan: ExportPlan, *, cancelled=lambda: False, report=lambda done, total, message: None) -> ExportResult:
     """Stage all copies before replacing files; prune only after copies succeed."""
     _validate_plan(plan)
     staged = []
     try:
-        for entry in plan.files:
+        for index, entry in enumerate(plan.files):
+            check_cancelled(cancelled)
+            report(index, len(plan.files), f'Copying {entry.source.name}…')
             if not entry.needs_copy:
                 continue
             _validate_destination(plan)
@@ -201,8 +204,10 @@ def execute_export_plan(plan: ExportPlan) -> ExportResult:
             shutil.copy2(entry.source, temporary)
             if checksum(temporary) != entry.checksum or signature(entry.source) != entry.source_signature:
                 raise RuntimeError(f'Book changed or copy failed: {entry.source}')
+        check_cancelled(cancelled)
         _validate_plan(plan)
         for entry, temporary in staged:
+            check_cancelled(cancelled)
             _validate_destination(plan)
             require_regular_path(entry.destination)
             current = signature(entry.destination) if entry.destination.exists() else None
@@ -210,6 +215,7 @@ def execute_export_plan(plan: ExportPlan) -> ExportResult:
                 raise RuntimeError(f'Export changed during replacement: {entry.destination}')
             os.replace(temporary, entry.destination)
         for path, previous in plan.obsolete:
+            check_cancelled(cancelled)
             _validate_destination(plan)
             require_regular_path(path)
             if signature(path) != previous:
