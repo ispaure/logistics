@@ -34,6 +34,10 @@ git clone --recurse-submodules https://github.com/ispaure/logistics.git
 If you've already cloned it, run `git submodule update --init --recursive` in the
 project folder to fetch any missing shared files.
 
+You can open several Logistics instances. They share indexing work and progress;
+another open instance can resume unfinished indexing if its owner closes. If all
+instances close, queued indexing resumes on the next launch.
+
 ## Find your way around
 
 Start in **File Browser** for any folder, or **Folder Hub** for configured libraries

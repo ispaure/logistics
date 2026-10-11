@@ -9,34 +9,21 @@ from ui_new import __main__ as module_launcher
 
 class LaunchTests(unittest.TestCase):
     def setUp(self):
-        self.lock = Mock()
-        self.lock.tryLock.return_value = True
-        patcher = patch.object(launch, 'instance_lock', return_value=self.lock)
-        patcher.start()
+        patcher = patch.object(launch, 'IndexService')
+        self.service = patcher.start().return_value
         self.addCleanup(patcher.stop)
 
-    def test_duplicate_launch_is_informational_and_successful(self):
-        self.lock.tryLock.return_value = False
-        self.lock.error.return_value = launch.pyside.QLockFile.LockError.LockFailedError
-        with patch.object(launch, 'log'), patch.object(launch.pyside, 'initialize_q_app'), \
-                patch.object(launch.ui, 'display_msg_box_ok') as message, \
-                patch.object(launch.registry, 'initialize_features') as features, \
-                patch.object(launch, 'MainWindow') as window:
+    def test_independent_launches_start_their_own_index_participant(self):
+        with patch.object(launch, 'log'), patch.object(launch.pyside, 'initialize_q_app') as app, \
+                patch.object(launch.registry, 'load_feature_preferences'), \
+                patch.object(launch.registry, 'initialize_features'), \
+                patch.object(launch, 'apply_theme'), patch.object(launch, 'MainWindow') as window:
+            app.return_value.exec.return_value = 0
             self.assertEqual(launch.main(), 0)
-        message.assert_called_once()
-        self.assertIn('already open', message.call_args.args[1])
-        features.assert_not_called()
-        window.assert_not_called()
-        self.lock.unlock.assert_not_called()
-
-    def test_lock_io_errors_are_not_reported_as_already_open(self):
-        self.lock.tryLock.return_value = False
-        self.lock.error.return_value = launch.pyside.QLockFile.LockError.PermissionError
-        with patch.object(launch, 'log'), patch.object(launch.pyside, 'initialize_q_app'), \
-                patch.object(launch.ui, 'display_msg_box_ok') as message:
-            with self.assertRaisesRegex(RuntimeError, 'instance lock'):
-                launch.main()
-        message.assert_not_called()
+            self.assertEqual(launch.main(), 0)
+        self.assertEqual(window.call_count, 2)
+        self.assertEqual(self.service.start.call_count, 2)
+        self.assertEqual(self.service.stop.call_count, 2)
 
     def test_qt_precedes_feature_initialization_and_window_display(self):
         events = []
@@ -52,7 +39,7 @@ class LaunchTests(unittest.TestCase):
                 launch, 'MainWindow',
                 side_effect=lambda: events.append('create window') or window):
             self.assertEqual(launch.main(), 7)
-        self.lock.unlock.assert_called_once_with()
+        self.service.stop.assert_called_once_with()
         self.assertEqual(events, ['create app', 'initialize features', 'create window',
                                   'display window', 'event loop'])
 
@@ -63,7 +50,7 @@ class LaunchTests(unittest.TestCase):
                 launch, 'MainWindow') as create_window:
             with self.assertRaisesRegex(RuntimeError, 'startup failed'):
                 launch.main()
-        self.lock.unlock.assert_called_once_with()
+        self.service.stop.assert_called_once_with()
         create_app.assert_called_once_with()
         create_window.assert_not_called()
         create_app.return_value.exec.assert_not_called()
