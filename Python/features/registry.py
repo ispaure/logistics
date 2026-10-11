@@ -82,7 +82,10 @@ def reset_feature_defaults():
 # ----------------------------------------------------------------------------------------------------------------------
 # FEATURE DISCOVERY
 
-from .discovery import get_feature_names, load_named_features
+from .discovery import get_feature_names as discover_feature_names, load_named_features
+
+def get_feature_names():
+    return discover_feature_names(Path(__file__).parent)
 
 
 def load_features() -> list[ModuleType]:
