@@ -23,6 +23,14 @@ reordering and retains the only + control when a view supplies no alternate row.
 
 ## Validation
 
+Git hunk lists explicitly align cards to the top instead of using a trailing
+stretch item. This keeps the 10-pixel spacing when native button metrics make
+headers wrap. The hunk suite retains native-style coverage and repeats its five
+workflows with the Windows style and a 13-point UI font, reproducing the spacing
+failure on macOS before the fix. All ten focused tests pass locally; an additional
+Windows/Fusion probe passed at UI sizes 9, 11, 13 and 16. These focused results are
+separate from the earlier full-suite results below.
+
 Environment: macOS 26.6.2 ARM64, Python 3.12.2, project PySide6 environment.
 
 - Logistics isolated suite: **857 tests across 79 modules; zero failures**.

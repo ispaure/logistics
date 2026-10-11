@@ -14,6 +14,7 @@ class HunkCards(qt.QScrollArea):
         self.layout = qt.QVBoxLayout(self.body)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(10)
+        self.layout.setAlignment(qt.Qt.AlignmentFlag.AlignTop)
         self.setWidget(self.body)
         self.cards = []
         self.editors = []
@@ -74,7 +75,6 @@ class HunkCards(qt.QScrollArea):
             editor.installEventFilter(self)
             editor.document().documentLayout().documentSizeChanged.connect(self._schedule_heights)
             self._height(editor)
-        self.layout.addStretch()
         self._schedule_heights()
 
     def _schedule_heights(self, *args):

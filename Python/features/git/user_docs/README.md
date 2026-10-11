@@ -91,7 +91,8 @@ upstream, using the last fetched remote state. **Fetch** updates that state and
 has no numeric badge. Zero counts are hidden.
 
 Each diff hunk has its own card. Cards stay compact and aligned at the top as the
-window grows; with **Wrap** enabled, their height follows the wrapped code as the
+window grows, with consistent spacing between cards even when headers wrap;
+with **Wrap** enabled, their height follows the wrapped code as the
 window width changes. Multiple hunks scroll together when they do not fit.
 In File status, use **Stage Hunk** or **Unstage Hunk**
 to change only that hunk's staging, or **Discard Hunk…** to discard an unstaged hunk
