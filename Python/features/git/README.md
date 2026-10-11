@@ -1,7 +1,9 @@
 # Git workspace
 
+For workflows, settings and troubleshooting, see the [user guide](user_docs/README.md).
+
 An optional Logistics feature powered by the installed Git executable (2.40+).
-See the [user guide](user_docs/index.md) for the interface and authentication setup.
+See the [user guide](user_docs/README.md) for the interface and authentication setup.
 
 ## Ownership
 
@@ -57,7 +59,9 @@ There is no automatic retry of write operations.
 
 Branch push uses an explicit `HEAD:<configured-upstream>` refspec and disables
 automatic tag following, avoiding extra branches from `push.default=matching`.
-Tag publishing is a separate action. No UI action performs a force push or reset.
+Tag publishing is separate unless the user opts into pushing tags with a branch.
+Force-with-lease requires a personal preference and per-push confirmation; the UI
+does not expose reset/clean.
 
 ## Navigation
 
@@ -119,11 +123,11 @@ worker ownership, shutdown retries, drafts, editor reuse, and sidebar ordering.
 
 ## Next increments
 
-Interactive rebase editing, external merge-tool launching,
-reset/clean previews, sparse/partial clones, LFS controls, graph refinement, and
-hosting-provider integration remain separate follow-ups. Background remote fetch
-and automatic filesystem polling are not enabled. Refresh on destination entry,
-after operations, after integrated editor saves, or explicitly with Refresh.
+Interactive rebase editing, reset/clean previews, sparse/partial clones and LFS
+controls remain separate work. Personal preferences already enable bounded file
+watching, periodic origin fetch, custom actions and external diff/merge tools.
+Refresh also runs on destination entry, after operations and integrated editor saves,
+or explicitly with Refresh.
 
 ## Shared diff and merge UI
 

@@ -1,8 +1,10 @@
 # Aviation Tools
 
+For workflows, settings and troubleshooting, see the [user guide](user_docs/README.md).
+
 The former `ft` / Flight Tools project is now a Logistics feature with its own
 **Aviation Tools** tab. Developed by Marc-André Voyer.
-See the [user guide](user_docs/index.md) and [UI architecture](../UI_ARCHITECTURE.md).
+See the [user guide](user_docs/README.md) and [UI architecture](../../../docs/developer/features.md).
 
 `register()` contributes a lazy page factory through the normal feature registry.
 No second QApplication, event loop, launcher, dependency environment or copy of

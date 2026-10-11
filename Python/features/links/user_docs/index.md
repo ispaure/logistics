@@ -1,19 +1,5 @@
 # Open configured service shortcuts
 
-The **Links** page opens configured websites in your default browser.
+[Open the links user guide](README.md).
 
-## Configure shortcuts
-
-Edit `Python/features/links/config.ini` to match your services. URL placeholders
-such as `<goat-pc>` or `<yagi-mac>` are resolved using the file's `[ResolveIP]`
-settings. Use your own machine addresses and URLs.
-
-## Open a link
-
-Select the desired shortcut on the Links page. If it does not open, check the
-configured URL, hostname substitution, network access and default browser.
-This feature opens links; it does not start the linked server or check its health.
-
-## More help
-
-See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.
+This entry is retained for Logistics’ in-app help. The linked guide is canonical.

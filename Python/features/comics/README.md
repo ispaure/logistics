@@ -1,10 +1,12 @@
 # Comics Feature
 
+For workflows, settings and troubleshooting, see the [user guide](user_docs/README.md).
+
 Comics owns CBZ reading, metadata editing, compression/encryption, CBR conversion
 and library integration. It requires the Images feature. See the
-[user guide](user_docs/index.md) for controls and configuration, the
+[user guide](user_docs/README.md) for controls and configuration, the
 [compression contract](COMPRESSION.md) for output rules and ComicRack compatibility,
-and [file browser development](../FILE_BROWSER.md) for panels, context menus and
+and [file browser development](../../../docs/developer/file-browser.md) for panels, context menus and
 activation hooks.
 
 ## Implementation map
@@ -33,7 +35,7 @@ its existing controller to coordinate catalog refresh and safe closing. The
 controller owns readers, editors and jobs for its window. Open readers can outlive
 the library; closing a reader raises its originating browser if still visible.
 Shared navigation, generic panels, selection filtering and feature toggles are
-covered by the [central browser guide](../FILE_BROWSER.md).
+covered by the [central browser guide](../../../docs/developer/file-browser.md).
 
 `[LogisticsComics] libraries` names immediate-child library folders in order.
 Without it, existing collections retain whole-root browsing. This section or an
@@ -47,7 +49,7 @@ emptying a field removes it. Unknown elements/attributes, namespace declarations
 comments, processing instructions and existing `Pages` records survive metadata-only
 edits. Image bytes remain unchanged. New known fields follow schema order without
 reordering existing nodes. XML formatting and ZIP container bytes may change on a
-real edit. Use [XMLFile](../../commonUtils/formats/xmlType.md) for generic XML mechanics;
+real edit. Use [XMLFile](https://github.com/ispaure/commonUtils/blob/main/formats/xmlType.md) for generic XML mechanics;
 `ComicInfoXML` owns ComicInfo field mappings and validation.
 
 Number/AlternateNumber accept strings (including fractions and suffixes); counts,
@@ -129,8 +131,8 @@ into compression's ZIP rebuild. Close/Escape waits for completion before destroy
 the dialog. Report per-item failures as well as worker errors and distinguish
 unprocessed files from failures/cancellation. Compression continues after failures;
 organization retains its stop-on-first-error policy. Shared lifecycle guidance lives
-in [UI architecture](../UI_ARCHITECTURE.md#long-running-workflows-and-safe-closing)
-and [commonUtils recipes](../../commonUtils/ui/operation_progress.md).
+in [UI architecture](../../../docs/developer/architecture.md#long-running-workflows-and-safe-closing)
+and [commonUtils recipes](https://github.com/ispaure/commonUtils/blob/main/ui/operation_progress.md).
 
 CBR conversion deletes its source only after building/verifying the CBZ and refuses
 existing destinations; actual extraction requires patool's external RAR extractor.
@@ -147,4 +149,4 @@ encryption and asynchronous cancellation using disposable fixtures. Shared ZIP a
 browser tests belong to commonUtils. The [parity report](ZIP_COMPRESSION_PARITY.md)
 records decrypted full-run comparisons; ZIP container timestamps are not expected
 to match. Tests do not reproduce the ComicRack crash, invoke a real RAR extractor
-or replace native desktop/remote-mount validation. EPUB is not implemented.
+or replace native desktop/remote-mount validation. EPUB reading/editing belongs to the separate Books engine.

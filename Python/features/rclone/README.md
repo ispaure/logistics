@@ -1,10 +1,12 @@
 # rclone Feature
 
+For workflows, settings and troubleshooting, see the [user guide](user_docs/README.md).
+
 rclone owns credential loading, remote folder sources and explicit-config push/pull.
 It has no hard feature dependencies; FUSE and Plex depend on it, while YouTube
-Downloader uses it optionally. See the [user guide](user_docs/index.md) for controls,
+Downloader uses it optionally. See the [user guide](user_docs/README.md) for controls,
 [resource setup](../../../CONFIGURATION.md) for paths/provisioning, and
-[UI architecture](../UI_ARCHITECTURE.md#remote-folder-source-context) for source wiring.
+[UI architecture](../../../docs/developer/features.md#remote-folder-source-context) for source wiring.
 
 ## Credential contract
 
@@ -32,9 +34,9 @@ changes reuse that snapshot. Match local folders to remotes by exact case-sensit
 name. Equal remote names from different credentials remain separate entries; preserve
 the selected config path as opaque backend context through refresh and actions.
 
-Credential labels must not change remote names or paths: managed local folders use
-`Local/<folder>` and FUSE uses `NetworkMount/<remote>`, with no credential component.
-Mount paths are consequently shared across same-named remotes. Generic local-source
+Credential labels do not change remote names: managed local folders use
+`Local/<folder>`. FUSE uses `NetworkMount/<config-path-hash>/<remote>` to isolate
+same-named remotes in different configs. Local sync destinations remain shared. Generic local-source
 merging and selection restoration belong to the core folder services, not rclone UI.
 Mounting belongs to the separate FUSE feature.
 
@@ -46,11 +48,12 @@ discovery must not download software. A cancelled, declined or failed provision
 returns no executable and must stop the command. Downloads do not make transfers
 asynchronous.
 
-The [software manifest](../../software_manifest.json) is the sole source for
-versions, HTTPS URLs, archive/executable hashes and platform/architecture paths.
+The [software manifest](../../software_manifest.json) supplies versions, HTTPS URLs,
+archive/executable hashes and platform/architecture paths, with feature `config.ini`
+overrides for rclone read by the software service.
 Use its authoritative path rather than legacy binaries or a second download path.
 See [updating pins](../../../CONFIGURATION.md#public-software-provisioning) and
-[shared provisioning recipes](../../commonUtils/runtime/streams/downloads.md#provision-a-pinned-executable-or-installer)
+[shared provisioning recipes](https://github.com/ispaure/commonUtils/blob/main/runtime/streams/downloads.md#provision-a-pinned-executable-or-installer)
 for reusable verification, staging and worker behavior.
 
 ## Validation

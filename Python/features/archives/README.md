@@ -1,11 +1,13 @@
 # Archives
 
-Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
-and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
+For workflows, settings and troubleshooting, see the [user guide](user_docs/README.md).
+
+Developer notes. See the [user guide](user_docs/README.md) for controls and setup,
+and [UI architecture](../../../docs/developer/features.md) for shared contribution conventions.
 
 This feature contributes the **Archives** workspace and declarative browser
 opening, extraction and creation actions. Browser installation follows
-[the central guide](../FILE_BROWSER.md); the generic host contains no archive
+[the central guide](../../../docs/developer/file-browser.md); the generic host contains no archive
 format checks or feature-specific window routing. Comics password support and
 comic-reader activation remain independent of Archives.
 
@@ -25,7 +27,7 @@ comic-reader activation remain independent of Archives.
 | `commonUtils.ui.archive_view` | Passive contents navigation and previews |
 
 `backend.py` keeps compatibility imports; it has no archive implementation.
-The shared [archive guide](../../commonUtils/archives/README.md) documents formats,
+The shared [archive guide](https://github.com/ispaure/commonUtils/blob/main/archives/README.md) documents formats,
 validation, publication, preview bounds and public APIs. Existing low-level ZIP
 callers retain their defaults and extraction behavior.
 
@@ -104,7 +106,7 @@ verified by decrypted hashes before publication. Filenames are visible without a
 password. Creating ZIPs is distinct from comic image recompression and does not
 change input bytes.
 
-Reusable ZIP operations live in [commonUtils](../../commonUtils/archives/zip_access.md).
+Reusable ZIP operations live in [commonUtils](https://github.com/ispaure/commonUtils/blob/main/archives/zip_access.md).
 
 The destination must be outside selected folders even when reached through a
 symbolic-link alias. Existing destinations created by another operation during

@@ -1,5 +1,7 @@
 # Text Editor
 
+For workflows, settings and troubleshooting, see the [user guide](user_docs/README.md).
+
 An optional Logistics feature for plain text and code, independent of Books,
 Comics and the shared Markdown reader. Open **Settings → Text Editor → Open Text
 Editor**, or use **Open in Text Editor** in a browser. Each file has one editor
