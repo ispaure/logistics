@@ -236,3 +236,27 @@ class IDELayoutTests(QtTestCase):
         self.assertEqual(len(sizes),2)
         self.assertAlmostEqual(sizes[1]/sizes[0],2,delta=.15)
         view.prepare_close()
+
+    def test_side_drop_into_empty_group_reuses_it_at_group_limit(self):
+        view = ProjectWorkspace(Project('empty target',str(self.root)))
+        view.resize(1100,650)
+        view.show()
+        for name in ('one.py','two.py'):
+            path=self.root/name
+            path.write_text(name)
+            view.open_path(path)
+        self.wait(view)
+        doc=view.current
+        source=view.active_group
+        view.add_group()
+        target=view.add_group()
+        self.settle()
+        bar=source.tabBar()
+        bar.view=doc
+        self.assertEqual(bar.target(target.mapToGlobal(qt.QPoint(2,100)))[1],'tabs')
+        bar.cancel_drag()
+        self.assertTrue(view.drop_editor(doc,target,'right'))
+        self.assertIs(view.group_for(doc),target)
+        self.assertEqual(view.editors.count(),2)
+        self.assertEqual(len(view.groups),2)
+        view.prepare_close()
