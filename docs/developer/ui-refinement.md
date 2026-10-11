@@ -63,7 +63,8 @@ focused checks after the full-suite run began.
   not persisted. Each project's editor groups, files and view positions remain
   part of its existing session state.
 - Internal editor groups remain horizontal and capped at three. Side drops at
-  the cap are rejected; center/header drops can still merge and reorder files.
+  the cap are rejected only when an additional group is needed. Single-file
+  columns can be repositioned; empty target columns are reused.
 - Existing storage, analysis and recovery limits in the IDE guide are unchanged.
 
 ## Commits
@@ -83,3 +84,38 @@ commonUtils (Logistics pins `a6cc899`):
 
 The root README's Ally Tools acknowledgement and the reserved Misc/tools rail
 navigation code were preserved.
+
+## Placement edge-case audit
+
+A follow-up review found and fixed placement defects not caught by the initial
+accept/reject assertions:
+
+- Drag preview bands were QSplitter children and could become hidden layout panes.
+  They now belong to tab widgets, so splitter indices match editor-group order.
+  Previously saved alternating hidden-pane widths are recovered during restore.
+- Native side splitting could move the target group or tabify instead of splitting.
+  The shared helper now preserves the spatial partition, tab order, active tabs
+  and neighboring widths before rebuilding the split. Nested vertical partitions
+  are preserved as well as horizontal rows.
+- Cross-container center drops now use the pointer's anchor instead of the last
+  registered dock in the receiving workspace.
+- A single-file IDE column can move left/right at the three-column cap without
+  creating a fourth column. Drops onto empty columns reuse those columns.
+- Empty header space inserts tabs, and rejected targets show no split preview.
+  Cancellation returns the preview to its owning source before groups can close.
+
+Validation used actual widget rectangles and QSplitter widget order, not just
+successful return values. The shared matrix performs 72 repeated physical side
+placements across left-to-right and right-to-left layouts, plus tab-companion,
+center-transfer, nested-partition and neighboring-width checks.
+
+Results: 47 shared docking tests and 25 IDE tests passed from clean committed
+snapshots. The final empty-column regression passed separately. Eighty application
+regressions passed across MainWindow, Documents, Git tabs and IDE. Native Cocoa
+runs passed all six IDE-layout and five shared-placement tests (the final
+empty-column case was checked offscreen). Ruff and whitespace checks passed.
+Native Windows/Linux interaction remains unverified.
+
+Fix commits: commonUtils `c043426`, `ea31bcc`; Logistics `9ade07e`, `b4a6700`.
+Concurrent gesture-observer, menu, Markdown and navigation edits remained outside
+these commits.
