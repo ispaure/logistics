@@ -4,6 +4,7 @@ Logistics opens File Browser at your home folder. Use it for arbitrary paths;
 **Folder Hub** brings configured local folders and remote integrations together.
 The **Documents** menu lists open editors/readers. Switching destinations keeps
 those documents alive. Feature-specific actions appear only for eligible selections.
+The compact left sidebar keeps full-size destination icons with narrow side margins.
 
 ## Browse, search and inspect storage
 
