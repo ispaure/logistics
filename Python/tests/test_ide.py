@@ -243,3 +243,25 @@ class RestoreTests(WorkspaceFixture):
             self.assertEqual(view.current.path, target)
             self.assertTrue(view.prepare_close())
             view.close()
+
+
+    def test_watcher_distinguishes_own_save_from_external_write(self):
+        from features.ide.workspace import ProjectWorkspace
+        from features.ide.projects import Project
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / 'a.py'
+            path.write_text('original\n')
+            view = ProjectWorkspace(Project('test', directory))
+            view.open_path(path)
+            self.wait(view)
+            view.current.insertPlainText('# edit\n')
+            self.assertTrue(view.save_current())
+            view.external_change(str(path))
+            self.wait(view)
+            self.assertEqual(view.status.text(), 'Saved.')
+            path.write_text('external\n')
+            view.external_change(str(path))
+            self.wait(view)
+            self.assertIn('externally', view.status.text())
+            self.assertTrue(view.prepare_close())
+            view.close()

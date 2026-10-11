@@ -311,10 +311,23 @@ class ProjectWorkspace(Navigation, qt.QWidget):
             self.browser.locate(self.current.path)
 
     def external_change(self, path):
-        if Path(path) in self.documents:
-            self.status.setText(f'File changed or removed externally: {path}. Reload to read it; saving checks for conflicts.')
-        if Path(path).exists():
-            self.watch.addPath(path)
+        path = Path(path)
+        doc = self.documents.get(path)
+        if doc is None:
+            return
+        snapshot = doc.snapshot
+        def changed_on_disk():
+            try:
+                with path.open('rb') as stream:
+                    return stream.read(len(snapshot.original) + 1) != snapshot.original
+            except FileNotFoundError:
+                return True
+        def checked(changed):
+            if self.documents.get(path) is doc and doc.snapshot is snapshot and changed:
+                self.status.setText(f'File changed or removed externally: {path}. Reload to read it; saving checks for conflicts.')
+        self.run(changed_on_disk, checked)
+        if path.exists():
+            self.watch.addPath(str(path))
 
     def reload_current(self):
         doc = self.current
