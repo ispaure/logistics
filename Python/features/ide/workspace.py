@@ -7,9 +7,10 @@ from commonUtils.ui.code_editor.search import SearchPanel
 from commonUtils.persistence.text import read_text_file
 from .documents import EditorDocument
 from .browser import ProjectBrowser
+from .navigation import Navigation
 
 
-class ProjectWorkspace(qt.QWidget):
+class ProjectWorkspace(Navigation, qt.QWidget):
     changed = qt.Signal()
     idle = qt.Signal()
 
@@ -34,6 +35,7 @@ class ProjectWorkspace(qt.QWidget):
             ('Move right', lambda: self.move(1), None), ('Close group', self.close_group, None),
             ('Close all in group', self.close_all, None), ('Locate file', self.locate, None)]:
             self.action(label, callback, shortcut)
+        self.init_navigation()
         self.splitter = qt.QSplitter()
         layout.addWidget(self.splitter)
         self.browser = ProjectBrowser(project, self)
@@ -140,6 +142,7 @@ class ProjectWorkspace(qt.QWidget):
             if doc is None:
                 doc = EditorDocument(snapshot, self)
                 self.documents[path] = doc
+                doc.viewport().installEventFilter(self)
                 target = group if group in self.groups else self.active_group
                 target.addTab(doc, doc.title)
                 doc.document().modificationChanged.connect(lambda _: self.update_title(doc))
