@@ -21,3 +21,13 @@ class SystemToolsTests(unittest.TestCase):
             with patch.object(actions, 'get_os', return_value=OS.MAC), patch.object(actions, 'preferences_path', return_value=preferences), patch.object(actions.cmdShellWrapper, 'exec_cmd', return_value=True) as execute:
                 self.assertTrue(actions.enable_macos_lid_sleep())
                 execute.assert_called_once_with('sudo pmset -b sleep 7 && sudo pmset -b disablesleep 0', in_new_window=True)
+
+    def test_disable_records_battery_sleep_and_separate_global_sleep_flag(self):
+        with TemporaryDirectory() as folder:
+            preferences = Path(folder) / 'features.json'
+            custom = Mock(success=True, stdout=['Battery Power:', ' sleep 7', 'AC Power:', ' sleep 20'])
+            general = Mock(success=True, stdout=['System-wide power settings:', ' SleepDisabled 0'])
+            with patch.object(actions, 'get_os', return_value=OS.MAC), patch.object(actions, 'preferences_path', return_value=preferences), patch.object(actions.cmdShellWrapper, 'run_command', side_effect=[custom, general]), patch.object(actions.cmdShellWrapper, 'exec_cmd', return_value=True):
+                self.assertTrue(actions.disable_macos_lid_sleep())
+            import json
+            self.assertEqual(json.loads(preferences.with_name('battery-power.json').read_text()), {'sleep': 7, 'disablesleep': 0})
