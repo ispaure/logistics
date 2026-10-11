@@ -55,7 +55,7 @@ for reusable verification, staging and worker behavior.
 
 ## Validation
 
-Use the [project test commands](../../../README.md#development).
+Use the [project test commands](../../../DEVELOPMENT.md).
 `test_archive_credentials.py` covers package extraction/config output,
 `test_folder_sources_ui.py` covers source selection/context, and `test_software.py`
 covers provisioning policy. Tests use local fixtures and mocked providers; actual

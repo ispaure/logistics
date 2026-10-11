@@ -138,7 +138,7 @@ a custom host requires equivalent handling. See [worker lifecycle and cancellati
 
 ## Validation
 
-Use disposable fixtures and the [project test commands](../../README.md#development).
+Use disposable fixtures and the [project test commands](../../DEVELOPMENT.md).
 `test_file_browser_window.py` checks general host installation, toggles and closing;
 `test_feature_registry.py` checks discovery/ownership. CommonUtils tests cover
 shared selection, panels, registry revisions and declarations. Feature tests should

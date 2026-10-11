@@ -54,7 +54,7 @@ available to load again. **Clear All .conf Files** removes every config directly
 the rclone config directory, including configs created outside Logistics.
 
 For mounted browsing, see [FUSE](../../fuse/user_docs/index.md). For local software
-and credential paths, see [application setup](../../../../USER_GUIDE.md#resources-and-settings).
+and credential paths, see [application setup](../../../../USER_GUIDE.md#choose-and-configure-tools).
 
 ## More help
 

@@ -122,7 +122,7 @@ destinations are retained. Cancellation is checked once more before publication.
 The dialog stays alive until its worker has stopped; failures and cancellation
 leave it open with an explanation. Completion after publication remains success.
 
-Use the [project test commands](../../../README.md#development).
+Use the [project test commands](../../../DEVELOPMENT.md).
 `test_archive_password_ui.py` checks the legacy dialog/password behavior;
 commonUtils ZIP and archive tests check source validation, cancellation, verification
 and publication.
