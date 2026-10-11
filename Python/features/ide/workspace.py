@@ -145,7 +145,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         for path in paths:
             self.open_path(path)
 
-    def open_path(self, path, group=None, position=None, encoding=None, restored_record=None):
+    def open_path(self, path, group=None, position=None, encoding=None, restored_record=None, on_open=None):
         if self.closing:
             return
         path = Path(path).expanduser().resolve()
@@ -180,11 +180,9 @@ class ProjectWorkspace(Navigation, qt.QWidget):
             target.setCurrentWidget(doc)
             self.activate(target)
             doc.setFocus()
-            if position is not None:
-                cursor = doc.textCursor()
-                cursor.setPosition(min(position, doc.document().characterCount() - 1))
-                doc.setTextCursor(cursor)
-                doc.centerCursor()
+            self.place_view(doc, position=position)
+            if on_open is not None:
+                on_open(doc)
             self.changed.emit()
         if path in self.documents:
             loaded(None)
@@ -204,7 +202,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
                     value, ok = qt.QInputDialog.getItem(self, 'Choose original encoding',
                         'Decoding failed; choose the source encoding', ENCODINGS, 0, False)
                     if ok:
-                        self.open_path(path, group, position, value, restored_record)
+                        self.open_path(path, group, position, value, restored_record, on_open)
                         return
                 if restored_record is not None:
                     self.unavailable.append(restored_record)
@@ -218,16 +216,12 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         group = group or self.active_group
         return next((group.widget(i) for i in range(group.count()) if group.widget(i).path == path), None) if group else None
 
-    def navigation_view(self, path):
-        path = Path(path).resolve()
-        return self.view_for(path) or self.documents.get(path)
-
     def split_right(self):
         source = self.current
         group = self.add_group()
         if source and group:
-            self.open_path(source.path, group, source.textCursor().position())
-            self.current.verticalScrollBar().setValue(source.verticalScrollBar().value())
+            self.navigate_to(source.path, group=group, position=source.textCursor().position(),
+                             scroll=source.verticalScrollBar().value())
 
     def update_buffer_titles(self, buffer):
         for view in buffer.views:
@@ -460,7 +454,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
                 group = self.groups[index] if isinstance(index, int) and 0 <= index < len(self.groups) else self.groups[0]
                 doc = self.view_for(Path(record['path']).resolve(), group)
                 if doc and isinstance(record.get('scroll', 0), int):
-                    doc.verticalScrollBar().setValue(record.get('scroll', 0))
+                    self.place_view(doc, scroll=record.get('scroll', 0))
             for group, entry in zip(self.groups, groups):
                 if not isinstance(entry, dict):
                     continue
@@ -470,7 +464,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
                     if isinstance(record, dict) and isinstance(record.get('path'), str) and isinstance(record.get('scroll', 0), int):
                         opened = self.view_for(Path(record['path']).resolve(), group)
                         if opened:
-                            opened.verticalScrollBar().setValue(record.get('scroll', 0))
+                            self.place_view(opened, scroll=record.get('scroll', 0))
                 if doc and self.group_for(doc) is group:
                     group.setCurrentWidget(doc)
             active = state.get('active_group', 0)

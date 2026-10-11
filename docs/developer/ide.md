@@ -204,22 +204,31 @@ feature overview and root capability row. It also corrected the analysis limit
 the limits of simultaneous configuration writes. Earlier validation sections are
 historical and do not imply a new full-suite run.
 
-Meaningful follow-up refactors, in priority order:
+The three follow-up refactors are now implemented:
 
-1. A small shared CodeEdit view-attachment/detachment API. IDE view construction
-   and commonUtils EditorViews both bind folding, reconnect multicursor tracking
-   and copy editing preferences after setDocument. Centralizing this would reduce
-   lifecycle mistakes. Keep project paths and close policy in Logistics.
-2. Shared highlighter view rebinding. SyntaxHighlighter currently takes a concrete
-   editor for palette events and owns an editor-parented theme timer. A supported
-   rebind operation would avoid IDE recreating it when its original view closes.
-3. Consolidate IDE navigation-to-location and workspace restoration helpers.
-   Definition, project search and history repeat path/cursor/scroll application;
-   one IDE-local helper could handle target group and UTF-16 offsets consistently.
+1. IDE and standalone EditorViews use commonUtils' shared CodeEdit attachment and
+   detachment APIs. Their lifecycle contracts are documented in that repository's
+   code-editor API guide; project paths and close policy remain in Logistics.
+2. IDE rebinds the existing shared highlighter when the original view closes,
+   instead of destroying/recreating it. Its theme timer has highlighter ownership.
+3. IDE Navigation.place_view centralizes cursor clamping, 1-based line/code-point
+   column conversion to Qt UTF-16 offsets, and scroll placement. navigate_to applies
+   locations through open_path's completion callback to the exact opened view.
+   Definitions, project search, history, go-to-line, split creation and session
+   restoration use these helpers, removing the extra queued positioning jobs.
 
 Text snapshot encoding and conflict-checked writes already live in commonUtils;
 do not create another persistence abstraction. Standalone TextEditor's document
 service also owns recovery and window policy, so reusing that whole service for IDE
 would couple distinct workflows. A future async IO refactor should reuse only its
 worker/snapshot boundary, while retaining each feature's close and recovery policy.
-These are recommendations, not additional refactors performed in this update.
+The refactors preserve the documented user workflows and version-1 saved state.
+Regression coverage includes detach/reattach without duplicate folding hooks,
+highlighter rebinding through native view destruction and palette changes, and
+queued navigation with non-BMP characters into distinct target groups.
+
+Refactor validation on macOS/offscreen Qt: 19 IDE tests, 34 standalone Text Editor
+tests and 26 shared code-editor/component tests pass (79 total). Ruff and diff
+whitespace checks pass. Native Windows/Linux and other commonUtils consumers were
+not validated in this pass. Unrelated workspace/menu edits remain outside these
+commits.
