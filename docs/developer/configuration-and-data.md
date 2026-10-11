@@ -42,7 +42,7 @@ preferences are retained under a `.broken-...` name where possible.
 
 ## Compatibility requirements
 
-`features.code_font` owns Logistics' shared code point size (13 by default),
+`features.code_font` owns Logistics' shared code point size (11 by default),
 persisted as `Editor.font_size_int` in Cache/TextEditor/preferences.ini. IDE,
 Text Editor and Git code views register with the QApplication-owned controller;
 zoom propagates within the same preference-path group, including split and review
