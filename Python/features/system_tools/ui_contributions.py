@@ -2,9 +2,11 @@
 Debug UI contributions exposed by System Tools.
 """
 
+from pathlib import Path
+
 from commonUtils.runtime.platform import OS, get_os
 
-from features.contributions import DebugActionContribution, Feature
+from features.contributions import DebugActionContribution, Feature, SettingsContribution
 from features.system_tools import actions
 
 
@@ -13,6 +15,7 @@ def get_contributions() -> Feature:
 
     return Feature(
         id='system_tools', label='System Tools',
+        settings=[SettingsContribution('Configuration', 'system_tools_config', config_files=(Path(__file__).with_name('config.ini'),))],
         debug_actions=[
             DebugActionContribution(
                 name='Windows System Files Repair',
@@ -23,9 +26,9 @@ def get_contributions() -> Feature:
                 order=10
             ),
             DebugActionContribution(
-                name='Repair NTFS on D:/',
+                name='Repair configured NTFS drive',
                 callback=actions.run_repair_ntfs_on_d,
-                description='Launch the configured Windows NTFS repair script for D:.',
+                description='Launch the configured Windows NTFS repair script for the drive selected in feature settings.',
                 destructive=True,
                 enabled=current_os == OS.WIN,
                 order=20

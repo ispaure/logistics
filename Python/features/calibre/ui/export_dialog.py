@@ -31,7 +31,7 @@ class ExportDialog(ToolDialog):
         if self.plan is None:
             target = self._require_directory(self.destination)
             if target is not None:
-                self._run_background(lambda report, cancelled: build_export_plan(self.library.path, Path(target), ['epub']), self._reviewed)
+                self._run_background(lambda report, cancelled: build_export_plan(self.library.path, Path(target), ['epub'], cancelled=cancelled), self._reviewed)
         elif self._confirm():
             plan = self.plan
             def apply(report, cancelled):

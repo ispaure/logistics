@@ -127,7 +127,7 @@ def _build_rename_plan(target_dir: dirUtils.Directory, row_lst) -> RenamePlan | 
 # ----------------------------------------------------------------------------------------------------------------------
 # ACTION
 
-def rename_from_csv(target_dir_path: str | Path) -> bool:
+def plan_from_csv(target_dir_path: str | Path) -> RenamePlan | None:
     """
     Rename top-level Chapter_XX.mka files using chapter names from the directory's single CSV file.
 
@@ -138,16 +138,25 @@ def rename_from_csv(target_dir_path: str | Path) -> bool:
 
     if not target_dir.is_dir():
         log(Severity.ERROR, TOOL_NAME, 'Invalid Directory Path')
-        return False
+        return None
 
     csv_file = _get_csv_file(target_dir)
 
     if csv_file is None:
-        return False
+        return None
 
     row_lst = _get_chapter_rows(csv_file)
     rename_plan = _build_rename_plan(target_dir, row_lst)
 
+    if rename_plan is None:
+        return None
+
+    return rename_plan
+
+
+def rename_from_csv(target_dir_path: str | Path) -> bool:
+    """Validate and apply a top-level CSV chapter rename."""
+    rename_plan = plan_from_csv(target_dir_path)
     if rename_plan is None:
         return False
 

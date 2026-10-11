@@ -2,7 +2,8 @@
 UI contributions exposed by the Logistics Flight Simulator feature.
 """
 
-from features.contributions import DebugActionContribution, Feature
+from features.contributions import DebugActionContribution, Feature, SettingsContribution
+from pathlib import Path
 from features.flight_sim import actions
 
 
@@ -11,6 +12,7 @@ def get_contributions() -> Feature:
 
     return Feature(
         id='flight_sim', label='Flight Simulator',
+        settings=[SettingsContribution('Installation', 'installation', config_files=(Path(__file__).with_name('config.ini'),))],
         debug_actions=[
             DebugActionContribution(
                 name='X-Plane 12: M3 Max Standalone',
