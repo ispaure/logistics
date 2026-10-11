@@ -126,6 +126,11 @@ Native Windows/Linux interaction remains unverified.
 
 ## Release validation follow-up
 
+Git hunk cards publish their measured height-for-width as a fixed card height,
+so native layouts reserve exactly the space the card occupies and keep the
+10-pixel inter-card gap. Focused checks cover 10 hunk layout cases and nine File
+Tools cases; the browser fixture joins its workers before deleting its window.
+
 Windows headless validation exposed a minimum-width constraint in Bulk Rename's
 combined preset/action row. Presets now occupy a separate row, allowing the main
 actions to fit a 680-pixel window with larger font metrics. The existing narrow
