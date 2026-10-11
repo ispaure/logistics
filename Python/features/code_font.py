@@ -53,6 +53,9 @@ def code_font(path=None):
     from commonUtils.ui import pyside as qt
     app = qt.QApplication.instance()
     preferences = Preferences(path)
+    if not preferences.custom:
+        from commonUtils.ui.styling import styling
+        return styling(app).code_font
     key = str(preferences.path.resolve())
     if not hasattr(app, '_logistics_code_fonts'):
         app._logistics_code_fonts = {}

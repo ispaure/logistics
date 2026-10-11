@@ -4,8 +4,10 @@ from features import registry
 
 
 class FeaturesPage(qt.QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, scope=None):
         super().__init__(parent)
+        self.scope = scope or 'personal'
+        self.controlled_scope = scope is not None
         layout = qt.QVBoxLayout(self)
         self.scroll = qt.QScrollArea()
         self.scroll.setFrameShape(qt.QFrame.Shape.NoFrame)
@@ -21,7 +23,7 @@ class FeaturesPage(qt.QWidget):
         font = title.font(); font.setPointSize(font.pointSize() + 5); font.setBold(True)
         title.setFont(font)
         content_layout.addWidget(title)
-        description = qt.QLabel('Choose features for the next launch. Dependencies are enabled together.')
+        description = qt.QLabel('Feature choices save immediately. Software defaults affect future launches; personal choices override them. Dependencies are enabled together.')
         description.setWordWrap(True)
         content_layout.addWidget(description)
         reset = qt.QPushButton('Reset to defaults')
@@ -39,11 +41,20 @@ class FeaturesPage(qt.QWidget):
         from commonUtils.ui.settings_sections import ScopedSettings, SettingsSection
         self.sections = ScopedSettings(self)
         self.sections.set_sections([SettingsSection('personal', 'features', 'Features', self.scroll)])
+        if self.controlled_scope:
+            self.sections.tabs.tabBar().hide()
         layout.addWidget(self.sections)
         self.toggles = {}
+        self.reset_buttons = {}
         self.states = {}
         self._unsubscribe = registry.subscribe(self._features_changed)
         self.destroyed.connect(self._unsubscribe)
+        self.refresh()
+
+    def set_scope(self, scope):
+        self.scope = scope
+        self.controlled_scope = True
+        self.sections.tabs.tabBar().hide()
         self.refresh()
 
     def _features_changed(self):
@@ -54,6 +65,8 @@ class FeaturesPage(qt.QWidget):
             widget = self.cards.takeAt(0).widget()
             widget.hide(); widget.deleteLater()
         self.toggles.clear(); self.states.clear()
+        self.reset_buttons.clear()
+        defaults = registry.default_disabled_features()
         states = sorted(registry.get_feature_states(), key=lambda state: state.label.casefold())
         labels = {state.name: state.label for state in states}
         for state in states:
@@ -68,13 +81,24 @@ class FeaturesPage(qt.QWidget):
             toggle = qt.QCheckBox(state.label)
             toggle.setAccessibleName(f'Enable {state.label}')
             font = toggle.font(); font.setBold(True); toggle.setFont(font)
-            toggle.setChecked(state.enabled)
+            members = getattr(state, 'members', ()) or (state.name,)
+            default_enabled = all(member not in defaults for member in members)
+            enabled = default_enabled if self.scope == 'application' else state.enabled
+            toggle.setChecked(enabled)
             toggle.setEnabled(state.available)
             toggle.setToolTip((error or 'Required feature packages are missing.') if not state.available else
                               'Enable or disable this feature and remember the choice.')
             toggle.toggled.connect(lambda enabled, feature=state: self._toggled(feature, enabled))
             header.addWidget(toggle, 1)
-            text = ('Unavailable' if error else 'Missing dependency') if not state.available else 'Enabled' if state.enabled else 'Disabled'
+            reset = qt.QToolButton()
+            reset.setText('↶')
+            reset.setAccessibleName(f'Reset {state.label} to default')
+            reset.setToolTip('Restore enabled software baseline' if self.scope == 'application' else 'Use software default')
+            reset.setEnabled(not enabled if self.scope == 'application' else enabled != default_enabled)
+            reset.clicked.connect(lambda checked=False, feature=state, value=default_enabled:
+                                  self._toggled(feature, True if self.scope == 'application' else value))
+            header.addWidget(reset)
+            text = ('Unavailable' if error else 'Missing dependency') if not state.available else 'Enabled' if enabled else 'Disabled'
             status = qt.QLabel(text)
             self._muted(status)
             header.addWidget(status)
@@ -91,6 +115,7 @@ class FeaturesPage(qt.QWidget):
                 card_layout.addWidget(note)
             self.cards.addWidget(card)
             self.toggles[state.name] = toggle
+            self.reset_buttons[state.name] = reset
             self.states[state.name] = status
 
     @staticmethod
@@ -99,7 +124,10 @@ class FeaturesPage(qt.QWidget):
 
     def _toggled(self, state, enabled):
         try:
-            registry.set_feature_enabled(state.name, enabled)
+            if self.scope == 'application':
+                registry.set_feature_default(state.name, enabled)
+            else:
+                registry.set_feature_enabled(state.name, enabled)
         except Exception as error:
             self.status.setText(str(error))
             # Retain the emitting checkbox until Qt finishes delivering its signal.
@@ -109,9 +137,13 @@ class FeaturesPage(qt.QWidget):
 
     def _reset_defaults(self):
         try:
-            registry.reset_feature_defaults()
+            if self.scope == 'application':
+                registry.feature_settings_store().save({('FeatureDefaults', 'disabled_list-str'): '[]'}, scope='application')
+                self.refresh()
+            else:
+                registry.reset_feature_defaults()
         except Exception as error:
             self.status.setText(str(error))
             self._features_changed()
         else:
-            self.status.setText('Defaults restored. All available features are enabled.')
+            self.status.setText('Defaults restored.')

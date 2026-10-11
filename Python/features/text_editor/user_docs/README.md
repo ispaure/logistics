@@ -43,7 +43,7 @@ undo/redo, clipboard and selection. Other useful commands:
 | Move selected lines | Alt+Up / Alt+Down |
 | Toggle line comment | Ctrl/Cmd+/ for supported languages |
 | Indent / unindent | Tab / Shift+Tab |
-| Zoom | Ctrl/Cmd+Plus/Minus; Ctrl/Cmd+wheel where supported |
+| Code size | Logistics Settings; Ctrl/Cmd+wheel where supported |
 
 Search stays in a nonmodal panel. It supports case, whole words, regex, wrapping
 and a captured selection scope. Select a region before checking **In selection**.
@@ -58,17 +58,18 @@ indentation and syntax. Click Encoding or Line Endings to convert on the next
 save; conversions are explicit. Click Indentation to select tabs/spaces and width,
 or Syntax to choose a language manually. Plain Text disables highlighting.
 
-View offers font selection, wrapping, line numbers, whitespace, automatic
-indentation and optional bracket/quote pairing. The editor follows Logistics'
-light/dark palette and uses a monospace font by default. New documents inherit your
-saved preferences. Feature defaults live in `config.ini`; private overrides,
-recent files and window geometry live under the commonUtils Cache/TextEditor
-folder. **Reset Editor Preferences** removes overrides and restores feature defaults.
+**View → Logistics Settings…** opens the central Settings window. Wrapping,
+line numbers, whitespace, automatic indentation and bracket/quote pairing are
+under **Feature settings → Text Editor → Options**. Font family and size are under
+**Appearance & shared controls → Styling**. Choose software defaults to edit the
+repository INI, or personal settings for persistent AppData overrides. **↶** on
+any personal field restores inheritance; click **Save Settings** to apply it.
 
-Code text defaults to 11 points. Text Editor, IDE and Git code panes share the
-saved point size; zooming a code editor updates other open code panes and future
-views. Font families remain local to each feature. Line-number gutters resize
-with the font and the number of lines.
+Code text defaults to 11 points. Text Editor, IDE, Git hunks and Markdown code
+blocks share both the family and size. Ctrl/Cmd+wheel changes the personal shared
+code size. Line-number gutters resize with the font. Legacy Cache/TextEditor font
+preferences migrate once; recent files and recovery remain in that cache, while
+systemic settings and window geometry use the persistent personal editor INI.
 
 In the main app, Text Editor opens in **Open documents**. Drag its tab outside
 the window to detach it; **Bring back** returns it without losing edits.

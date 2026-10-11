@@ -4,7 +4,7 @@ Configuration access for the Logistics Links feature.
 
 from pathlib import Path
 
-from commonUtils.formats.iniType import INIFile
+from commonUtils.configuration.layered import effective_settings
 
 
 URLS_SECTION = 'URLs'
@@ -20,11 +20,11 @@ def get_config_file_path() -> Path:
 def get_url(config_key: str) -> str:
     """Return one configured Links URL."""
 
-    ini = INIFile(get_config_file_path()).read()
-    return ini.get(URLS_SECTION, config_key + '_str', fallback=ini.get(URLS_SECTION, config_key))
+    ini = effective_settings(get_config_file_path())
+    return ini.get(URLS_SECTION, config_key + '_str', fallback=ini.get(URLS_SECTION, config_key, fallback=None))
 
 
 def get_resolve_ip(name: str) -> str:
     """Return a hostname replacement; legacy unsuffixed keys remain supported."""
-    ini = INIFile(get_config_file_path()).read()
-    return ini.get(RESOLVE_IP_SECTION, name + '_str', fallback=ini.get(RESOLVE_IP_SECTION, name))
+    ini = effective_settings(get_config_file_path())
+    return ini.get(RESOLVE_IP_SECTION, name + '_str', fallback=ini.get(RESOLVE_IP_SECTION, name, fallback=None))

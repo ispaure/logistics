@@ -1,6 +1,8 @@
 """Feature INI defaults layered with private, schema-compatible user preferences."""
 
 from pathlib import Path
+from configparser import Error
+import logging
 from commonUtils.formats.iniType import INIFile
 from commonUtils.configuration.settings import get_setting
 from commonUtils.filesystem.storage import cache_directory
@@ -22,16 +24,46 @@ DEFAULTS = {
 
 class Preferences:
     def __init__(self, path=None):
+        self.custom = path is not None
         self.path = (
             Path(path)
             if path
             else cache_directory(create=False) / "TextEditor" / "preferences.ini"
         )
+        if not self.custom:
+            from features.settings import settings_store
+            self.store = settings_store(Path(__file__).with_name('config.ini'))
+            legacy = self.path
+            self.path = self.store.personal
+            if legacy.exists() and not self.path.exists():
+                from commonUtils.configuration.layered import read_values, shared_settings
+                try:
+                    saved = read_values(legacy)
+                    editor = {identity: value for identity, value in saved.items()
+                              if identity[0] == 'Editor' and identity[1] not in ('font_family_str', 'font_size_int')}
+                    if editor:
+                        self.store.save(editor)
+                    fonts = {('Styling', 'code_' + key): value for (section, key), value in saved.items()
+                             if section == 'Editor' and key in ('font_family_str', 'font_size_int')}
+                    style = shared_settings()
+                    fonts = {key: value for key, value in fonts.items() if key not in style.overrides()}
+                    if fonts:
+                        style.save(fonts)
+                except (OSError, UnicodeError, Error, ValueError) as error:
+                    logging.getLogger(__name__).warning('Could not migrate editor preferences; original file preserved: %s', error)
+
+    @property
+    def font_path(self):
+        return self.path if self.custom else None
 
     def load(self):
         values = {}
         defaults = Path(__file__).with_name("config.ini")
         for key, fallback in DEFAULTS.items():
+            if not self.custom and key in ('font_family_str', 'font_size_int'):
+                from commonUtils.ui.styling import style_values
+                values[key] = style_values()['code_' + key]
+                continue
             bounds = (
                 {"minimum": 7, "maximum": 48}
                 if key == "font_size_int"
@@ -49,6 +81,8 @@ class Preferences:
             ini.read()
         for key, value in values.items():
             if key not in DEFAULTS:
+                continue
+            if not self.custom and key in ('font_family_str', 'font_size_int'):
                 continue
             ini.set(
                 "Editor",

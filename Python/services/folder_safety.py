@@ -1,5 +1,5 @@
 """Application policy for destructive folder tools, independently of filesystem mechanics."""
-from configparser import ConfigParser, Error as ConfigError
+from configparser import Error as ConfigError
 from pathlib import Path
 import os
 import sys
@@ -30,13 +30,12 @@ def require_safe_folder(folder, *, recursive=True):
     folder = Path(folder).expanduser().resolve(strict=True)
     if not folder.is_dir():
         raise NotADirectoryError(str(folder))
-    policy = ConfigParser(interpolation=None)
     policy_path = get_policy_path()
     if not policy_path.is_file():
         raise ValueError(f'Folder safety configuration is missing: {policy_path}')
     try:
-        with policy_path.open(encoding='utf-8-sig') as source:
-            policy.read_file(source)
+        from commonUtils.configuration.layered import effective_settings
+        policy = effective_settings(policy_path, case_sensitive=False)
     except (OSError, ConfigError) as error:
         raise ValueError(f'Folder safety configuration could not be read: {error}') from error
     protected = list(protected_roots()) if policy.getboolean('FolderSafety', 'protect_system_folders', fallback=True) else []

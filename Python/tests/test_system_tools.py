@@ -8,8 +8,8 @@ from commonUtils.runtime.platform import OS
 
 class SystemToolsTests(unittest.TestCase):
     def test_invalid_drive_never_launches_repair(self):
-        with patch.object(actions, 'get_os', return_value=OS.WIN), patch.object(actions, 'INIFile') as ini, patch.object(actions.cmdShellWrapper, 'exec_cmd') as execute:
-            ini.return_value.read.return_value.get.return_value = 'D: & echo unsafe'
+        with patch.object(actions, 'get_os', return_value=OS.WIN), patch.object(actions, 'effective_settings') as ini, patch.object(actions.cmdShellWrapper, 'exec_cmd') as execute:
+            ini.return_value.get.return_value = 'D: & echo unsafe'
             with self.assertRaises(ValueError):
                 actions.run_repair_ntfs_on_d()
             execute.assert_not_called()

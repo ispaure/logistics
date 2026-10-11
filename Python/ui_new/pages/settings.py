@@ -9,12 +9,16 @@ from features import registry
 from .features import FeaturesPage
 from ui_new.settings.indexing import IndexSettingsPanel
 from commonUtils.ui.settings_sections import ScopedSettings, SettingsSection
+from commonUtils.ui.layered_settings import LayeredSettingsEditor
+from ui_new.settings.configuration import settings_store, initialize_settings, validate_configuration
 
 
 class ConfigurationPanel(qt.QWidget):
-    def __init__(self, paths, parent=None, *, description=None, scoped=True, scope="application"):
+    def __init__(self, paths, parent=None, *, description=None, scoped=True, scope="application", layered=False):
         super().__init__(parent)
         self.editors = {}
+        self.layered, self.scope = layered, scope
+        self._scope_editors = {}
         layout = qt.QVBoxLayout(self)
         body = qt.QWidget(self)
         content = qt.QVBoxLayout(body)
@@ -51,7 +55,15 @@ class ConfigurationPanel(qt.QWidget):
         path = self.files.itemData(index)
         if path is None:
             return
-        if path not in self.editors:
+        identity = path, self.scope
+        if self.layered:
+            if identity not in self._scope_editors:
+                editor = LayeredSettingsEditor(settings_store(path), self, scope=self.scope,
+                    validator=lambda values, path=path: validate_configuration(path, values))
+                self._scope_editors[identity] = editor
+                self.stack.addWidget(editor)
+            self.editors[path] = self._scope_editors[identity]
+        elif path not in self.editors:
             editor_type = INISettingsEditor if path.suffix.lower() == '.ini' else TextFileEditor
             self.editors[path] = editor_type(path, self)
             self.stack.addWidget(self.editors[path])
@@ -59,13 +71,20 @@ class ConfigurationPanel(qt.QWidget):
         self.location.setToolTip(str(path.absolute()))
         self.stack.setCurrentWidget(self.editors[path])
 
+    def set_scope(self, scope):
+        if self.layered and self.scope != scope:
+            self.scope = scope
+            self._select(self.files.currentIndex())
+
     def can_close(self):
-        return all(editor.can_close() for editor in self.editors.values())
+        return all(editor.can_close() for editor in (self._scope_editors.values() if self.layered else self.editors.values()))
 
 
 class CommonUtilsPanel(ConfigurationPanel):
-    def __init__(self, parent=None):
-        super().__init__([settings_path()], parent)
+    def __init__(self, parent=None, *, layered=False, scope='application'):
+        super().__init__([settings_path()], parent, layered=layered, scope=scope, scoped=not layered)
+        if layered:
+            return
         appearance = qt.QHBoxLayout()
         appearance.addWidget(qt.QLabel('Appearance (session)'))
         self.theme_mode = qt.QComboBox()
@@ -85,9 +104,10 @@ class CommonUtilsPanel(ConfigurationPanel):
 
 
 class FeatureSettingsPanel(qt.QWidget):
-    def __init__(self, state, parent=None):
+    def __init__(self, state, parent=None, *, scope=None):
         super().__init__(parent)
         self.feature_name = state.name
+        self.selected_scope = scope
         self.custom = {}
         self.config = None
         self.configs = {}
@@ -122,6 +142,10 @@ class FeatureSettingsPanel(qt.QWidget):
         self.layout.addWidget(self.sections, 1)
         self.refresh(state)
 
+    def set_scope(self, scope):
+        self.selected_scope = scope
+        self.refresh()
+
     def _state(self):
         return next(state for state in registry.get_feature_states() if state.name == self.feature_name)
 
@@ -135,6 +159,9 @@ class FeatureSettingsPanel(qt.QWidget):
             paths[scope].extend(entry.config_files)
             if entry.create_widget is not None and entry.settings_id not in self.custom:
                 self.custom[entry.settings_id] = entry.create_widget(self)
+                central = getattr(self.custom[entry.settings_id], 'use_systemic_editor', None)
+                if self.selected_scope is not None and callable(central):
+                    central()
             refresh = getattr(self.custom.get(entry.settings_id), 'refresh', None)
             if callable(refresh):
                 refresh()
@@ -144,10 +171,14 @@ class FeatureSettingsPanel(qt.QWidget):
                 paths['application'].append(conventional)
         for scope, files in paths.items():
             if files and scope not in self.configs:
-                self.configs[scope] = ConfigurationPanel(files, self, scoped=False)
+                self.configs[scope] = ConfigurationPanel(files, self, scoped=False,
+                    layered=self.selected_scope is not None, scope=self.selected_scope or scope)
             elif files:
                 self.configs[scope].add_paths(files)
         self.config = self.configs.get('application') or self.configs.get('personal')
+        if self.selected_scope is not None:
+            for config in self.configs.values():
+                config.set_scope(self.selected_scope)
         # Keep every editor and custom widget alive during enable/disable updates.
         for body in self.bodies.values():
             content = body.layout()
@@ -159,9 +190,11 @@ class FeatureSettingsPanel(qt.QWidget):
             widget.hide()
         sections = []
         for scope in ('application', 'personal'):
+            if self.selected_scope is not None and scope != self.selected_scope:
+                continue
             inline = [entry for entry in entries if entry.scope == scope and not entry.separate_tab
                       and entry.settings_id in self.custom]
-            config = self.configs.get(scope)
+            config = (self.configs.get('application') or self.configs.get('personal')) if self.selected_scope is not None else self.configs.get(scope)
             if inline or config is not None:
                 if scope not in self.bodies:
                     body = self.bodies[scope] = qt.QWidget(self)
@@ -185,12 +218,14 @@ class FeatureSettingsPanel(qt.QWidget):
                     expands = True
                 content.addStretch(0 if expands else 1)
                 sections.append(SettingsSection(scope, 'ini' if config else 'settings',
-                                                'INI files' if config else 'Settings', body, nested=config is not None))
+                                                'Options' if self.selected_scope is not None else 'INI files' if config else 'Settings', body, nested=config is not None))
             for entry in entries:
                 if entry.scope == scope and entry.separate_tab and entry.settings_id in self.custom:
                     sections.append(SettingsSection(scope, entry.settings_id, entry.name,
                                                     self.custom[entry.settings_id]))
         self.sections.set_sections(sections)
+        if self.selected_scope is not None:
+            self.settings_tabs.tabBar().hide()
         # Tab pages own visibility: showing every retained custom widget would
         # overlap inactive pages when refreshing the feature registry.
         for scope in self.sections.pages.values():
@@ -215,6 +250,15 @@ class FeatureSettingsPanel(qt.QWidget):
 
 
 class SettingsPage(qt.QWidget):
+    def show_category(self, category):
+        iterator = qt.QTreeWidgetItemIterator(self.sidebar)
+        while iterator.value():
+            item = iterator.value()
+            if item.data(0, qt.Qt.ItemDataRole.UserRole) == category:
+                self.sidebar.setCurrentItem(item)
+                return
+            iterator += 1
+
     def show_feature(self, name):
         iterator = qt.QTreeWidgetItemIterator(self.sidebar)
         while iterator.value():
@@ -226,8 +270,20 @@ class SettingsPage(qt.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        initialize_settings()
         self.panels = {}
-        layout = qt.QHBoxLayout(self)
+        layout = qt.QVBoxLayout(self)
+        self.scope_selector = qt.QComboBox()
+        self.scope_selector.setAccessibleName('Configuration scope')
+        self.scope_selector.addItem('Default Software Configuration', 'application')
+        self.scope_selector.addItem('Personal Settings', 'personal')
+        self.scope_selector.setCurrentIndex(1)
+        self.scope_selector.setToolTip('Software configuration edits tracked repository INIs. Personal settings override them in AppData.')
+        scope_row = qt.QHBoxLayout()
+        scope_row.addWidget(self.scope_selector)
+        scope_row.addStretch()
+        layout.addLayout(scope_row)
+        self.scope_selector.currentIndexChanged.connect(self._scope_changed)
         splitter = qt.QSplitter()
         layout.addWidget(splitter)
         self.sidebar = qt.QTreeWidget()
@@ -238,11 +294,18 @@ class SettingsPage(qt.QWidget):
         splitter.addWidget(self.sidebar)
         splitter.addWidget(self.stack)
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([220, 850])
+        splitter.setSizes([280, 850])
         self.sidebar.currentItemChanged.connect(self._selected)
         self._unsubscribe = registry.subscribe(self._changed)
         self.destroyed.connect(self._unsubscribe)
         self.refresh()
+
+    def _scope_changed(self):
+        scope = self.scope_selector.currentData()
+        for panel in self.panels.values():
+            setter = getattr(panel, 'set_scope', None)
+            if setter is not None:
+                setter(scope)
 
     def _changed(self):
         qt.QTimer.singleShot(0, self.refresh)
@@ -254,7 +317,7 @@ class SettingsPage(qt.QWidget):
             self.sidebar.clear()
             items = {}
             for key, title in (('features', 'Features'), ('indexing', 'File indexing'), ('configuration', 'Configuration'),
-                               ('commonutils', 'commonUtils')):
+                               ('commonutils', 'Appearance & shared controls')):
                 item = qt.QTreeWidgetItem([title])
                 item.setData(0, qt.Qt.ItemDataRole.UserRole, key)
                 self.sidebar.addTopLevelItem(item)
@@ -282,18 +345,19 @@ class SettingsPage(qt.QWidget):
             return
         if key not in self.panels:
             if key == 'features':
-                panel = FeaturesPage(self)
+                panel = FeaturesPage(self, scope=self.scope_selector.currentData())
             elif key == 'indexing':
-                panel = IndexSettingsPanel(self)
+                panel = IndexSettingsPanel(self, scope=self.scope_selector.currentData())
             elif key == 'configuration':
                 source = Path(__file__).resolve().parents[2]
                 panel = ConfigurationPanel([source / 'configFile.ini', source / 'maintenance.ini',
-                                            source.parent / 'launch_config.ini'], self)
+                                            source.parent / 'launch_config.ini'], self, layered=True, scoped=False,
+                                            scope=self.scope_selector.currentData())
             elif key == 'commonutils':
-                panel = CommonUtilsPanel(self)
+                panel = CommonUtilsPanel(self, layered=True, scope=self.scope_selector.currentData())
             else:
                 state = next(state for state in registry.get_feature_states() if key == f'feature:{state.name}')
-                panel = FeatureSettingsPanel(state, self)
+                panel = FeatureSettingsPanel(state, self, scope=self.scope_selector.currentData())
             self.panels[key] = panel
             self.stack.addWidget(panel)
         self.stack.setCurrentWidget(self.panels[key])

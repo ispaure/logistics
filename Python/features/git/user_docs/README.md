@@ -6,8 +6,7 @@ with remote repositories. Open **Git** from the navigation rail; enable it in
 
 Code previews and comparison/merge panes share a saved point size with Text
 Editor and IDE, defaulting to 11 points. Ctrl+wheel zoom in a code editor updates
-other open code panes. The Diff font preference selects a family; code size uses
-the shared setting.
+other open code panes. Both code family and size use the shared Styling settings.
 
 ## Get started
 
@@ -164,13 +163,20 @@ an opt-in Git preference.
 
 ## Git preferences
 
-Open **Logistics Settings → Feature settings → Git → Personal**. Standard tabs
-cover General, Accounts, Commit, Diff, Git, Mercurial, Custom Actions, Update and
-Advanced. **More… → Git preferences…**, **+ → Git preferences…**, and repository
+Open **Logistics Settings → Feature settings → Git**. **Options** contains
+systemic defaults and resettable personal overrides, including commit behavior,
+preview limits, diff colors, executable, refresh and command options. Choose
+**Default Software Configuration** or **Personal Settings** at the top left.
+The personal **Git preferences** page contains identity, accounts, custom actions,
+default usernames and release links. **More… → Git preferences…**, **+ → Git preferences…**, and repository
 **Settings → Advanced → Git preferences…** select this same settings page.
-Preferences apply across open repository panes when you click **Save** and are
-saved in the feature's `git.json` file. **Revert** discards pending preference edits;
-existing bookmarks and repository drafts are kept.
+Systemic settings save to the tracked `config.ini` in software mode, or its
+persistent AppData override INI in personal mode. **↶** removes a personal override.
+Identity/account/action data and repository history remain in `git.json`; tokens
+remain in secure credential helpers. Existing JSON systemic options migrate once.
+Shared code family and size are in **Appearance & shared controls → Styling**.
+Saved options apply across open panes. **Revert** discards pending identity/account
+edits; repository bookmarks and drafts are kept.
 
 - **General** controls the initial project folder, last-repository restoration,
   terminal choice (Terminal/iTerm on macOS), file-change refresh (on by default),
@@ -191,7 +197,7 @@ existing bookmarks and repository drafts are kept.
   fixed-width message font and column guide, and an importable plain-text template.
   A nonempty Logistics template overrides an inherited Git template. Explicit
   repository templates, including “None”, take precedence. Existing drafts stay intact.
-- **Diff** controls font, addition/deletion colors, wrapping, bounded text capture,
+- **Diff options** control addition/deletion colors, wrapping, bounded text capture,
   and file patterns skipped for preview. Patterns affect review only. External
   diff/merge tool names use existing Git configuration; invoke them through More
   with a selected file/conflict. Binary files have no internal text preview.

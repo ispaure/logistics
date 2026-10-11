@@ -39,8 +39,10 @@ Selecting an EPUB in File Browser shows its cover and metadata in the **Book
 Metadata** preview panel, just like a comic. Tile thumbnails use the cover too.
 Books without an embedded cover still show their metadata.
 
-Choose the **Aa** button or **View → Reading appearance…** to adjust font, text
-size, line spacing and reading width.
+Choose **Aa** or **View → Logistics Settings…** to open central book settings.
+Line spacing, reading width and reading theme are under **Feature settings →
+Books & Comics → Options**. Font and text size are under **Appearance & shared
+controls → Styling**, shared with Markdown.
 **Light**, **Dark**, **Sepia** and **Slate** change the reading area. Drag the
 divider to resize the sidebar, or use **View → Show sidebar** to hide it.
 The fullscreen button or **View → Full screen** (F11) gives the book more room.
@@ -69,14 +71,17 @@ engine produces a message in the panel. Markdown uses the same controls.
 
 ## Keep your place
 
-Your chapter, text location and reading preferences are saved for each book.
+Your chapter, text location and bookmarks are saved for each book. Appearance
+follows central software defaults and personal overrides, across all books.
 Open the same file again to continue reading. **Navigate → Add bookmark…** adds
 a named place; choose it from the sidebar's **Bookmarks** tab to return, or use
 **Remove** to delete it.
 Each book can have up to 50 bookmarks.
 
-Defaults are available under **Settings → Books & Comics**, using the feature's
-`config.ini`. Saved preferences for a particular book take precedence. Disable
+Settings are available under **Logistics Settings → Feature settings → Books &
+Comics**, using the feature's `config.ini` and personal AppData overrides. Select
+software defaults or personal settings at the top left; **↶** resets personal
+fields to inheritance. Legacy per-book appearance is no longer applied. Disable
 `remember_position_bool` to stop saving/restoring reading state in new readers,
 for both books and comics.
 Moving a book to another path starts a separate reading history.
@@ -129,13 +134,13 @@ Closing the panel, changing chapters, or closing the reader stops playback.
 
 ## Reading defaults
 
-In **Settings → Books & Comics**, `font_family_str` and `font_size_int` select the
-initial typeface and size (8–48). `line_spacing_int` controls spacing as a percentage
-(100–220); `reading_width_int` limits text width (480–1400). Larger text or spacing
-means fewer words on a screen page. `theme_mode` sets the reading palette, not
-book metadata. `remember_position_bool` enables saved reading state. A book's
-saved appearance overrides defaults; change its appearance in the reader when
-adjusting a book you have already opened. These settings do not rewrite the EPUB.
+In **Logistics Settings → Appearance & shared controls → Styling**, the shared
+reading font and size (8–48) apply to EPUB and Markdown. **Feature settings → Books
+& Comics → Options** exposes `line_spacing_int` (100–220), `reading_width_int`
+(480–1400), `theme_mode` and `remember_position_bool`. Larger text or spacing means
+fewer words per page. Appearance is global; positions and bookmarks remain per
+book. Software mode edits the tracked defaults; personal mode writes AppData
+overrides, with ↶ reset. These settings do not rewrite the EPUB.
 
 ## If a book will not open
 

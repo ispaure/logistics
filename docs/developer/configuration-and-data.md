@@ -21,9 +21,11 @@ reconfigure an already running worker or reader.
 
 | Data | Location/owner | Compatibility consequence |
 | --- | --- | --- |
-| Disabled feature names | Logistics `preferences.ini` | Stable feature IDs; load before initialization |
-| Git options, bookmarks and subtree mappings | `git.json` beside Logistics preferences | Preserve malformed files; credentials belong in secure helpers |
-| Editor appearance, recent paths and checkpoints | shared Cache/TextEditor | Recovery files may contain unsaved private text; do not treat as disposable thumbnails |
+| Disabled feature names | configFile.ini and persistent personal override | Stable feature IDs; legacy preferences migrate before initialization |
+| Git options | feature config.ini and personal override | Scalars are exposed in central Settings |
+| Git accounts, actions, bookmarks and subtree mappings | `git.json` beside Logistics preferences | Preserve malformed files; credentials belong in secure helpers |
+| Editor settings | feature config.ini and persistent personal override; shared Styling fonts | Legacy cache settings migrate once |
+| Editor recent paths and checkpoints | shared Cache/TextEditor | Recovery files may contain unsaved private text; do not treat as disposable thumbnails |
 | EPUB reading state/bookmarks | shared Cache/Books, hashed resolved book path | Moving a book changes identity; state does not contain the book |
 | Comic resume positions | shared Cache/Comics, hashed resolved comic path | Last successfully displayed page; restore by image entry name, then bounded index; shares Books' remember-position setting |
 | Browser index/search metadata | shared index/storage service | Partial saved snapshots are not proof of a complete filesystem scan |
@@ -42,12 +44,12 @@ preferences are retained under a `.broken-...` name where possible.
 
 ## Compatibility requirements
 
-`features.code_font` owns Logistics' shared code point size (11 by default),
-persisted as `Editor.font_size_int` in Cache/TextEditor/preferences.ini. IDE,
-Text Editor and Git code views register with the QApplication-owned controller;
-zoom propagates within the same preference-path group, including split and review
-views. Git's serialized diff font supplies the family, not a separate size.
-Unrelated preferences and text recovery data are retained when saving the size.
+commonUtils owns shared code family and point size (11 by default) in
+`ui/settings.ini [Styling]`, layered with persistent personal overrides.
+Production Text Editor, IDE, Git and Markdown code use the QApplication-owned
+styling controller. `features.code_font` retains a compatibility entry point for
+explicit preferences-path consumers. Appearance changes preserve document text,
+modified flags and recovery data.
 
 Stable feature IDs, workflow IDs, configuration keys and public compatibility
 imports are contracts to examine before changing them. Preserve file formats and
@@ -61,3 +63,29 @@ are not public distribution assets. Publication logic must check names, links,
 source changes and existing destinations according to the owning workflow.
 Use the documented platform checks for changes involving file identity, case,
 Unicode normalization, permissions, process termination or native UI behavior.
+
+## Central software/personal configuration
+
+`features.settings` owns the application path mapping and registers repository
+INIs with commonUtils at startup. `ui_new.settings.configuration` retains imports
+for compatibility. Persistent overrides are under the platform Logistics AppData
+root, `configuration/<Python-relative INI path>`; shared controls map to
+`configuration/commonUtils/settings.ini`. The root launcher maps to
+`configuration/launch_config.ini`. Bootstrap wrappers pass that personal path to
+the shared launcher, including before Python dependencies are available.
+
+SettingsPage propagates one application/personal scope to all category panels.
+Each panel retains editors for both scopes and checks all dirty editors on close.
+Feature schemas declare exposed systemic settings; runtime book positions,
+recovery, folder credentials and Git account/action records retain their own
+persistence. The feature-enable baseline is `[FeatureDefaults] disabled_list-str`
+in configFile.ini; old personal feature defaults migrate once with a marker.
+
+Editor cache font/options migrate to persistent INIs. Git scalar JSON options
+migrate to the feature INI while identity/account/action records remain JSON.
+Books use central appearance with position/bookmarks retained per book. Production
+Text Editor binds commonUtils' shared code controller; explicit preferences paths
+retain compatibility for isolated hosts/tests. Typography changes do not write
+source documents. Shared mechanics and font-role API contracts live in the
+[commonUtils configuration guide](https://github.com/ispaure/commonUtils/blob/main/configuration/README.md)
+and [styling guide](https://github.com/ispaure/commonUtils/blob/main/ui/styling.md).

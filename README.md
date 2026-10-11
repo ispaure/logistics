@@ -38,6 +38,10 @@ You can open several Logistics instances. They share indexing work and progress;
 another open instance can resume unfinished indexing if its owner closes. If all
 instances close, queued indexing resumes on the next launch.
 
+Appearance and systemic tool settings share one Logistics Settings window, with
+repository defaults, personal AppData overrides and per-field reset. Fonts cover
+the interface, browser, reading and code; accent colors also tint dark surfaces.
+
 ## Find your way around
 
 The launch page offers **Open full hub with sidebar**, or **File Browser**, **Git**

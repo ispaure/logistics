@@ -1,6 +1,8 @@
 from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.ui import pyside
 from commonUtils.ui.theme import apply_theme
+from commonUtils.ui.styling import apply_styling
+from ui_new.settings.configuration import initialize_settings
 from features import registry
 from ui_new.main_window import MainWindow
 from services.indexing import IndexService
@@ -12,10 +14,14 @@ def main() -> int:
     # Startup errors may show a dialog, so Qt must exist before feature hooks run.
     log(Severity.DEBUG, 'PySide6', 'Create QApplication')
     app = pyside.initialize_q_app()
+    initialize_settings()
     indexing = IndexService()
     try:
         indexing.start()
         apply_theme(app)
+        apply_styling(app)
+        from ui_new.settings.window import open_settings
+        app._commonutils_open_settings = open_settings
         log(Severity.DEBUG, 'Logistics', 'Initialize Features')
         registry.load_feature_preferences()
         registry.initialize_features()
