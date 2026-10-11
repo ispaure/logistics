@@ -77,6 +77,99 @@ class WorkspaceFixture(IDEQtTests):
 
 
 class WorkspaceTests(WorkspaceFixture):
+    def test_pending_open_blocks_browser_mutation_and_callback_failure_drains_queue(self):
+        from features.ide.projects import Project
+        from features.ide.workspace import ProjectWorkspace
+        from unittest.mock import patch
+        from commonUtils.ui import pyside as qt
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / 'a.py'
+            path.write_text('value = 1\n')
+            view = ProjectWorkspace(Project('test', directory))
+            self.wait(view)
+            view.open_path(path)
+            with patch.object(qt.QMessageBox, 'question') as question, patch.object(qt.QInputDialog, 'getText') as prompt:
+                view.browser.delete(path)
+                view.browser.rename(path)
+                question.assert_not_called()
+                prompt.assert_not_called()
+            self.assertTrue(path.exists())
+            self.wait(view)
+            self.assertFalse(view.pending_opens)
+            def broken(_):
+                raise ValueError('completion failed')
+            completed = []
+            view.run(lambda: None, broken)
+            view.run(lambda: None, lambda _: completed.append(True))
+            self.wait(view)
+            self.assertEqual(completed, [True])
+            self.assertIn('completion failed', view.status.text())
+            view.prepare_close()
+            view.close()
+
+    def test_navigation_branch_replaces_forward_history(self):
+        from features.ide.projects import Project
+        from features.ide.workspace import ProjectWorkspace
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            paths = [root / f'{name}.py' for name in 'abcd']
+            for path in paths:
+                path.write_text('value = 1\n')
+            view = ProjectWorkspace(Project('test', directory))
+            view.open_path(paths[0])
+            self.wait(view)
+            for path in paths[1:3]:
+                view.remember()
+                view.open_path(path)
+                self.wait(view)
+            view.travel(-1)
+            self.wait(view)
+            self.assertEqual(view.current.path, paths[1])
+            view.remember()
+            view.open_path(paths[3])
+            self.wait(view)
+            view.travel(-1)
+            self.wait(view)
+            self.assertEqual(view.current.path, paths[1])
+            view.travel(1)
+            self.wait(view)
+            self.assertEqual(view.current.path, paths[3])
+            self.assertNotIn(str(paths[2]), [entry[0] for entry in view.history])
+            view.prepare_close()
+            view.close()
+
+    def test_missing_files_retain_group_cursor_and_browser_state(self):
+        from features.ide.projects import Project
+        from features.ide.workspace import ProjectWorkspace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            path = root / 'offline' / 'a.py'
+            browser = {'expanded': [str(path.parent)], 'selected': str(path)}
+            project = Project('test', directory, excluded_paths=['.'], layout={
+                'browser': browser, 'groups': [{}, {'files': [{'path': str(path), 'cursor': 5}]}]})
+            view = ProjectWorkspace(project)
+            self.wait(view)
+            self.assertTrue(view.browser.tree.rootIndex().isValid())
+            state = view.state()
+            self.assertEqual(state['unavailable'][0]['group'], 1)
+            self.assertEqual(state['browser']['expanded'], browser['expanded'])
+            self.assertEqual(state['browser']['selected'], browser['selected'])
+            view.prepare_close()
+            view.close()
+            path.parent.mkdir()
+            path.write_text('value = 1\n')
+            project.layout = state
+            restored = ProjectWorkspace(project)
+            self.wait(restored)
+            self.assertEqual(restored.groups[1].widget(0).path, path)
+            self.assertEqual(restored.groups[1].widget(0).textCursor().position(), 5)
+            with patch('features.ide.browser.desktop_actions.reveal') as reveal:
+                restored.browser.reveal(path)
+                reveal.assert_called_once_with(path)
+            restored.prepare_close()
+            restored.close()
+
     def test_canonical_buffer_moves_and_group_close_preserves_unsaved_text(self):
         from features.ide.projects import Project
         from features.ide.workspace import ProjectWorkspace
@@ -151,6 +244,24 @@ class NavigationTests(unittest.TestCase):
 
 
 class RestoreTests(WorkspaceFixture):
+    def test_failed_restore_read_keeps_file_record(self):
+        from features.ide.projects import Project
+        from features.ide.workspace import ProjectWorkspace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / 'a.py'
+            path.write_text('value = 1\n')
+            project = Project('test', directory, layout={'groups': [
+                {'files': [{'path': str(path), 'cursor': 4, 'scroll': 2}]}]})
+            with patch('features.ide.workspace.read_text_file', side_effect=OSError('temporarily unreadable')):
+                view = ProjectWorkspace(project)
+                self.wait(view)
+            record = view.state()['unavailable'][0]
+            self.assertEqual(record, {'path': str(path), 'cursor': 4, 'scroll': 2, 'group': 0})
+            self.assertFalse(view.pending_opens)
+            view.prepare_close()
+            view.close()
+
     def test_independent_projects_layout_and_missing_files_survive_restart(self):
         from features.ide.page import IDEPage
         from features.ide.projects import Project
@@ -202,6 +313,13 @@ class RestoreTests(WorkspaceFixture):
             with patch.object(view, 'run', side_effect=lambda work, done: pending.append(done)):
                 view.query('definition')
             view.current.insertPlainText('# changed')
+            with patch.object(view, 'open_path') as opened:
+                pending[0]([(str(path), 1, 0, 'value')])
+                opened.assert_not_called()
+            pending.clear()
+            with patch.object(view, 'run', side_effect=lambda work, done: pending.append(done)):
+                view.query('definition')
+            view.project.source_paths = ['changed-source-root']
             with patch.object(view, 'open_path') as opened:
                 pending[0]([(str(path), 1, 0, 'value')])
                 opened.assert_not_called()

@@ -1,6 +1,8 @@
 """Project tree wrapper around the shared lazy filesystem model."""
 from pathlib import Path
+from subprocess import SubprocessError
 from commonUtils.ui import pyside as qt
+from commonUtils.ui import desktop_actions
 from commonUtils.ui.file_browser.model import BrowserFileSystemModel
 from commonUtils.filesystem.transfers import validate_name
 
@@ -17,6 +19,8 @@ class ProjectFilter(qt.QSortFilterProxyModel):
         try:
             relative = path.relative_to(self.project.root)
         except ValueError:
+            return True
+        if path == self.project.root:
             return True
         if any(part in self.project.excluded_paths for part in relative.parts) or relative.as_posix() in self.project.excluded_paths:
             return False
@@ -48,6 +52,8 @@ class ProjectBrowser(qt.QWidget):
         self.tree.doubleClicked.connect(self.activate)
         self.expanded_paths = set()
         self.pending_expansion = set()
+        self.pending_selection = None
+        self.tree.selectionModel().currentChanged.connect(self.selection_changed)
         self.tree.expanded.connect(self.expanded)
         self.tree.collapsed.connect(self.collapsed)
         self.model.directoryLoaded.connect(self.restore_expansion)
@@ -90,7 +96,7 @@ class ProjectBrowser(qt.QWidget):
         menu = qt.QMenu(self)
         for label, action in [('New file…', lambda: self.create(path, False)), ('New folder…', lambda: self.create(path, True)),
                               ('Rename…', lambda: self.rename(path)), ('Delete…', lambda: self.delete(path)),
-                              ('Reveal in file manager', lambda: qt.QDesktopServices.openUrl(qt.QUrl.fromLocalFile(str(path if path.is_dir() else path.parent)))),
+                              (desktop_actions.reveal_label(), lambda: self.reveal(path)),
                               ('Refresh', self.reset_root)]:
             menu.addAction(label).triggered.connect(action)
         menu.exec(self.tree.viewport().mapToGlobal(position))
@@ -112,7 +118,15 @@ class ProjectBrowser(qt.QWidget):
             self.workspace.error(error)
 
     def affected(self, path):
-        return [doc for doc in self.workspace.documents.values() if doc.path == path.resolve() or path.resolve() in doc.path.parents]
+        paths = set(self.workspace.documents) | set(self.workspace.pending_opens)
+        resolved = path.resolve()
+        return [p for p in paths if p == resolved or resolved in p.parents]
+
+    def reveal(self, path):
+        try:
+            desktop_actions.reveal(path)
+        except (OSError, RuntimeError, SubprocessError) as error:
+            self.workspace.error(error)
 
     def rename(self, path):
         if path == self.project.root:
@@ -122,6 +136,9 @@ class ProjectBrowser(qt.QWidget):
             return
         name, ok = qt.QInputDialog.getText(self, 'Rename', 'New name', text=path.name)
         if ok:
+            if self.affected(path):
+                self.workspace.error('Close the affected files before renaming this file or folder.')
+                return
             self.model.setReadOnly(False)
             try:
                 if not self.model.setData(self.model.index(str(path)), name):
@@ -140,6 +157,11 @@ class ProjectBrowser(qt.QWidget):
                 qt.QMessageBox.StandardButton.Cancel) != qt.QMessageBox.StandardButton.Yes:
             return
         try:
+            # The confirmation dialog runs an event loop: a queued open may have
+            # completed while it was displayed.
+            if self.affected(path):
+                self.workspace.error('Close the affected files before deleting this file or folder.')
+                return
             if path.is_dir() and not path.is_symlink():
                 path.rmdir()
             else:
@@ -153,6 +175,12 @@ class ProjectBrowser(qt.QWidget):
 
     def collapsed(self, index):
         self.expanded_paths.discard(str(self.path(index)))
+        self.pending_expansion.discard(str(self.path(index)))
+        self.changed.emit()
+
+    def selection_changed(self, current, previous):
+        if current.isValid():
+            self.pending_selection = None
         self.changed.emit()
 
     def restore_expansion(self, *args):
@@ -161,10 +189,15 @@ class ProjectBrowser(qt.QWidget):
             if index.isValid():
                 self.tree.expand(index)
                 self.pending_expansion.discard(path)
+        if self.pending_selection:
+            index = self.proxy.mapFromSource(self.model.index(self.pending_selection))
+            if index.isValid():
+                self.tree.setCurrentIndex(index)
+                self.pending_selection = None
 
     def state(self):
-        return {'expanded': sorted(self.expanded_paths), 'filter': self.filter.text(),
-                'selected': str(self.path())}
+        return {'expanded': sorted(self.expanded_paths | self.pending_expansion), 'filter': self.filter.text(),
+                'selected': self.pending_selection or str(self.path())}
 
     def restore(self, state):
         if not isinstance(state, dict):
@@ -176,4 +209,5 @@ class ProjectBrowser(qt.QWidget):
             self.restore_expansion()
         selected = state.get('selected')
         if isinstance(selected, str):
-            self.tree.setCurrentIndex(self.proxy.mapFromSource(self.model.index(selected)))
+            self.pending_selection = selected
+            self.restore_expansion()

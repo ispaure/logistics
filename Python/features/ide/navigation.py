@@ -39,13 +39,16 @@ class Navigation:
 
     def remember(self):
         location = self.location()
+        # A new jump from a historical location replaces the forward branch,
+        # even when the source cursor has not moved.
+        self.history = self.history[:self.history_index + 1]
         if location and (self.history_index < 0 or self.history[self.history_index] != location):
             self.history = self.history[:self.history_index + 1] + [location]
             self.history = self.history[-200:]
             self.history_index = len(self.history) - 1
 
     def travel(self, direction):
-        if direction < 0 and self.history_index == len(self.history) - 1:
+        if direction < 0 and (self.history_index < 0 or self.location() != self.history[self.history_index]):
             self.remember()
         index = self.history_index + direction
         if 0 <= index < len(self.history):
@@ -93,8 +96,13 @@ class Navigation:
         position = cursor.position()
         project = deepcopy(self.project)
         self.status.setText('Analyzing Python…')
+        def stale():
+            return (self.documents.get(path) is not doc or doc.document().revision() != revision
+                    or self.current is not doc or doc.textCursor().position() != position or not self.isVisible()
+                    or any(getattr(self.project, key) != getattr(project, key)
+                           for key in ('root_path', 'source_paths', 'python_interpreter')))
         def done(result):
-            if self.documents.get(path) is not doc or doc.document().revision() != revision or self.current is not doc or doc.textCursor().position() != position or not self.isVisible():
+            if stale():
                 self.status.setText('Analysis result superseded by edits or focus changes.')
                 return
             self.status.setText('Python analysis complete.')
@@ -106,14 +114,14 @@ class Navigation:
                     self.error('No completions resolved.')
                     return
                 value, ok = qt.QInputDialog.getItem(self, 'Complete symbol', 'Completion', labels, 0, False)
-                if ok:
+                if ok and not stale():
                     doc.insertPlainText(result[labels.index(value)][1])
             elif result:
                 labels = [f'{name} — {file}:{line}' for file, line, column, name in result]
                 selection = 0
                 if len(result) > 1 or kind == 'symbols':
                     value, ok = qt.QInputDialog.getItem(self, 'Python targets', 'Target', labels, 0, False)
-                    if not ok:
+                    if not ok or stale():
                         return
                     selection = labels.index(value)
                 file, target_line, target_column, name = result[selection]

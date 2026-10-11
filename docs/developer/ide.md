@@ -132,3 +132,46 @@ Implementation commits in Logistics: `af1e1d5`, `5037a3a`, `1c2d860`, `8acbbd4`,
 `a2b5784`, `990c129`. This validation record is a separate documentation commit.
 Shared commonUtils commits: `7fc93d1` (PHP/Blade support) and `dc134af` (PHP/HTML
 state across lines), with the latter pinned by Logistics.
+
+## Second review — 2026-10-11
+
+A requirement-by-requirement source review and adversarial workflow tests found
+defects not exercised by the initial suite. This pass fixes:
+
+- Back/forward branching after returning from a definition: new jumps replace
+  the old forward branch and preserve the new destination.
+- Restoration dropping unreadable file records and losing the group/cursor of
+  temporarily missing files. These records now retain their placement.
+- Browser rename/delete racing with queued opens, including during modal
+  confirmation. Both open buffers and pending reads protect affected paths.
+- Browser exclusions accepting `.` and thereby filtering out its own root.
+- Pending tree expansion/selection being lost before directories become available;
+  selection changes now also trigger persistence.
+- Reveal opening only a containing folder: IDE now uses shared desktop reveal.
+- Completion callback exceptions preventing worker cleanup and queue progress.
+- Analysis accepting results from an obsolete project source-path/interpreter
+  configuration, or after changes during a target/completion dialog.
+- Scan limits counting only files: empty directory trees now consume the budget.
+
+The implementation covers project registration, independent projects, persistent
+layouts, one-to-three groups, safe close prompts, shared editing/highlighting,
+Python definition/import navigation, history, file/line/symbol navigation, basic
+completion/documentation and bounded project search. It does **not** implement
+every preferred or optional capability in the mandate:
+
+| Area | Remaining limit |
+| --- | --- |
+| Shared documents | One canonical editor widget per file; simultaneous views of the same file are absent. This meets conflict avoidance but not the preferred multiple-view design. |
+| Responsiveness | Save/reload and filesystem metadata probes remain synchronous; slow/network storage can stall the GUI. A busy workspace vetoes close and requires retry. |
+| Relocated roots | Root settings change browsing/analysis, but do not rebase absolute document paths. Missing registrations are retained. |
+| Browser mutations | Open files must be closed before rename/delete; recursive deletion and drag between groups are absent. Menu moves are available. |
+| Intelligence | Manual documentation and completion; no automatic hover, diagnostics, unsaved imported-module overlays or Git handoff. These were optional productivity choices. |
+| Highlighting | Blade mixed-language support remains limited for multiline constructs. |
+| Persistence | Byte comparison detects intervening instance saves but is not a cross-process transaction; simultaneous writers can still race. |
+| Validation | Native Windows/Linux interactions remain unverified. |
+
+Second-pass validation: 14 focused IDE tests pass on macOS with offscreen Qt,
+including four new regression workflows and expanded stale-result coverage. Ruff
+and diff whitespace checks pass. The earlier full-suite counts above are the
+initial implementation's validation, not a claim that all suites were rerun after
+this review. No commonUtils implementation changes were required in this pass.
