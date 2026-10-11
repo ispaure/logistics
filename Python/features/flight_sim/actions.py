@@ -6,31 +6,46 @@ from pathlib import Path
 
 import config
 
-from commonUtils.filesystem import files as fileUtils
-from commonUtils.runtime.diagnostics import Severity, log
-from commonUtils.formats import txtType
 
 from features.flight_sim import detection
 
 
+def _updated_preferences(path, values):
+    original = path.read_bytes()
+    bom = original.startswith(b'\xef\xbb\xbf')
+    lines = original.decode('utf-8-sig').splitlines(keepends=True)
+    for key, value in values.items():
+        if type(value) is not int or value < 0:
+            raise ValueError(f'Invalid X-Plane value for {key}: {value}')
+        matches = [i for i, line in enumerate(lines) if line.startswith(key)]
+        if len(matches) != 1:
+            raise ValueError(f'X-Plane setting is missing or duplicated: {key.strip()}')
+        index = matches[0]
+        line = lines[index]
+        ending = '\r\n' if line.endswith('\r\n') else '\n' if line.endswith('\n') else '\r' if line.endswith('\r') else ''
+        lines[index] = f'{key}{value}{ending}'
+    updated = ''.join(lines).encode('utf-8')
+    return original, (b'\xef\xbb\xbf' + updated if bom else updated)
+
+
+def _publish_preferences(path, original, updated):
+    from commonUtils.persistence import atomic_write_bytes
+    from uuid import uuid4
+    def unchanged():
+        if path.read_bytes() != original:
+            raise RuntimeError(f'Preferences changed outside Logistics: {path}')
+    unchanged()
+    backup = path.with_name(f'{path.name}.previous-{uuid4().hex}')
+    atomic_write_bytes(backup, original, overwrite=False)
+    atomic_write_bytes(path, updated, validate=unchanged)
+    return backup
+
+
 def set_xp12_setting(line_to_look_for: str, value: int):
-    """Set a value in the X-Plane 12 preferences file."""
-
-    prefs_file = txtType.TXTFile(detection.get_xp12_preferences_path())
-    prefs_file.read_lines()
-
-    updated_prefs_line_lst = []
-
-    for prefs_line in prefs_file.line_lst:
-        if prefs_line.startswith(line_to_look_for):
-            updated_prefs_line_lst.append(f'{line_to_look_for}{value}')
-        else:
-            updated_prefs_line_lst.append(prefs_line)
-
-    prefs_file.line_lst = updated_prefs_line_lst
-    prefs_file.write_lines()
-
-    print(f'Successfully Changed XP12 setting "{line_to_look_for}" to "{value}"')
+    path = detection.get_xp12_preferences_path()
+    original, updated = _updated_preferences(path, {line_to_look_for: value})
+    _publish_preferences(path, original, updated)
+    return True
 
 
 def set_xp12_fsr_setting(fsr_value: int):
@@ -62,42 +77,32 @@ def set_xp12_shadow_quality_setting(shadow_quality_value: int):
 
 
 def set_xp12_monitor_preset(preset_path: Path):
-    """Copy an X-Plane 12 window-position preset into the active preferences."""
-
-    if not preset_path.is_file():
-        msg = 'Preset file is missing, cannot apply preset!'
-        log(Severity.ERROR, 'XP12 Preset', msg, popup=True)
-        return
-
-    window_pref_file_path = detection.get_xp12_window_positions_path()
-
-    if not window_pref_file_path.is_file():
-        msg = 'X-Plane 12 window preferences file is missing. Is X-Plane installed?'
-        log(Severity.ERROR, 'XP12 Preset', msg, popup=True)
-        return
-
-    fileUtils.copy_file(preset_path, window_pref_file_path)
-    print(f'XP12 Preset Transferred from {preset_path} to {window_pref_file_path}!')
+    path = detection.get_xp12_window_positions_path()
+    _publish_preferences(path, path.read_bytes(), Path(preset_path).read_bytes())
+    return True
 
 
-def set_all_xp12_settings(
-        preset_path: Path,
-        ssao: int,
-        fsr: int,
-        msaa: int,
-        draw_3d: int,
-        draw_distance: int,
-        shadow_quality: int,
-        vegetation_quality: int):
-
-    set_xp12_monitor_preset(preset_path)
-    set_xp12_ssao_setting(ssao)
-    set_xp12_fsr_setting(fsr)
-    set_xp12_msaa_setting(msaa)
-    set_xp12_draw_3d_setting(draw_3d)
-    set_xp12_draw_distance_setting(draw_distance)
-    set_xp12_shadow_quality_setting(shadow_quality)
-    set_xp12_vegetation_quality_setting(vegetation_quality)
+def set_all_xp12_settings(preset_path: Path, ssao: int, fsr: int, msaa: int,
+                         draw_3d: int, draw_distance: int, shadow_quality: int,
+                         vegetation_quality: int):
+    from commonUtils.persistence import atomic_write_bytes
+    path = detection.get_xp12_preferences_path()
+    window = detection.get_xp12_window_positions_path()
+    values = {'renopt_SSAO_04 ': ssao, 'renopt_FSR_04 ': fsr, 'renopt_MSAA ': msaa,
+              'renopt_draw_3d_04 ': draw_3d, 'renopt_draw_distance04 ': draw_distance,
+              'renopt_shadow_quality_04 ': shadow_quality,
+              'renopt_vegetation_quality_04 ': vegetation_quality}
+    original, updated = _updated_preferences(path, values)
+    old_window, new_window = window.read_bytes(), Path(preset_path).read_bytes()
+    _publish_preferences(path, original, updated)
+    try:
+        _publish_preferences(window, old_window, new_window)
+    except Exception:
+        # Preserve a concurrent editor's changes instead of overwriting them.
+        if path.read_bytes() == updated:
+            atomic_write_bytes(path, original)
+        raise
+    return True
 
 
 def set_xp12_m3_max_flight_desk_internal():
