@@ -9,7 +9,7 @@ on:
       - 'launch_config.ini'
       - 'Scripts/**'
   push:
-    branches: [main]
+    branches: [main, alpha]
   workflow_dispatch:
   workflow_call:
 
@@ -35,7 +35,7 @@ jobs:
   desktop:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -74,7 +74,7 @@ jobs:
   fedora43:
     name: Fedora 43 container
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

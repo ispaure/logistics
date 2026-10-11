@@ -10,7 +10,7 @@ Provides Dropbox-specific maintenance tools for Logistics.
 - Detect Dropbox conflicting-copy files.
 - Determine whether a conflicting copy still has its original file.
 - Report conflicting copies that require manual review.
-- Safely delete conflicting copies only when every detected conflict has a corresponding original.
+- Review candidates and remove only unchanged, byte-identical conflict copies.
 
 ## Structure
 
@@ -22,13 +22,7 @@ Provides Dropbox-specific maintenance tools for Logistics.
 
 The Folders page offers one source per account discovered through Dropbox's platform-specific `info.json`, listing immediate child directories of each account root. Missing or unconfigured installations contribute no sources. Local folders inside detected roots receive a Conflicting Copies workflow.
 
-Conflicting-copy deletion is intentionally conservative.
-
-Before deleting anything, Logistics analyzes all detected conflicting copies in the target directory.
-
-Deletion is aborted when:
-
-- A conflicting copy does not have a corresponding original file.
-- A conflicting filename cannot be interpreted safely.
-
-When either condition occurs, no conflicting copies are deleted.
+Review records identities and hashes without changing files. Apply rechecks the
+conflict and original before deleting the identical copy. Unique edits, missing
+originals, ambiguous names and changed files remain. The dialog retains results
+and runs scanning/deletion on owned workers with cooperative cancellation.

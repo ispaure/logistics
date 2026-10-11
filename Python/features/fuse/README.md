@@ -58,3 +58,7 @@ Linux dependency/installer checks do not require private Software resources.
 deadline handling, recovery failures and link preservation. It also runs the
 directory probe against a temporary local folder. These tests do not mount real
 remotes or validate macFUSE/WinFsp/Linux drivers.
+
+Mount locations include a stable identity derived from the configuration path,
+so same-named remotes in different credential files stay separate. Mount readiness
+runs in a retained progress dialog after dependency prompts on the GUI thread.

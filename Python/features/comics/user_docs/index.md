@@ -94,5 +94,4 @@ To package comics inside a separate outer ZIP, use [Archives](../../archives/use
 
 ## More help
 
-Read [Using Logistics](../../../../USER_GUIDE.md) for navigation, resources and
-feature controls. Use Back/Forward in this viewer to return to a previous guide.
+See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.

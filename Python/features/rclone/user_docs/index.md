@@ -58,8 +58,8 @@ and credential paths, see [application setup](../../../../USER_GUIDE.md#resource
 
 ## More help
 
-Read [Using Logistics](../../../../USER_GUIDE.md) for navigation, resources and
-feature controls. Use Back/Forward in this viewer to return to a previous guide.
+See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.
+
 
 Marc’s existing Dropbox credential folder (`Software/GIT/logistics/RemoteCredentials`)
 is also discovered automatically when present. Hover a package to see its location.

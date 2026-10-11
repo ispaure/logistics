@@ -15,17 +15,16 @@ executable; macOS retains its bundled-archive installation fallback.
 
 ## Export books
 
-Choose the available export action and use a dedicated device/export folder.
-Exports form a complete one-way mirror: obsolete destination files, including
-unrelated formats, are removed after changed books are copied successfully.
-Do not keep unrelated files in that destination.
+Choose **Export books…**, select a dedicated folder and click **Review export**.
+The table lists every copy, update, retained file and deletion. Check it before
+choosing **Apply reviewed export**. The destination is a complete EPUB mirror;
+unrelated files there can be listed for deletion. Keep them in another folder.
 
-The BOOX workflow currently requires `/Volumes/BOOX-SD` to be mounted. Naming or
-path collisions stop planning. Failed copy staging keeps the previous exports;
-failures later in replacement/deletion can leave a partial update. Keep the device
-connected until the operation finishes, then inspect the result before retrying.
+The BOOX shortcut fills in `/Volumes/BOOX-SD` when that device is mounted.
+Other devices and platforms use the folder chooser. Work runs in the background;
+cancellation stops between complete steps. Completed changes remain. Changed
+sources or destinations stop the operation; review again before retrying.
 
 ## More help
 
-Read [Using Logistics](../../../../USER_GUIDE.md) for navigation, resources and
-feature controls. Use Back/Forward in this viewer to return to a previous guide.
+See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.

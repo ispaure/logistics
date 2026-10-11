@@ -8,12 +8,12 @@ Set `bridge_address` in `[PhilipsHue]` in
 `Python/features/smart_home/config.ini`. The configured group names and presets
 must match your Hue setup: the page currently uses Living Room, Bedroom and
 Kitchen. Use **Connect Bridge** to connect/register, following any bridge pairing
-instructions. Changing room names currently requires adapting the integration.
+instructions. Use **Find rooms** to replace the initial room buttons with the bridge’s current rooms.
 
 ## Use lights
 
 Open Smart Home and choose the controls for your group: on/off, brightness or a
-preset. These actions change the real lights. If nothing happens, check the bridge
+preset. These actions change the real lights. Commands run in the background and errors appear beneath the controls. Missing rooms do not receive a command. If a command fails, check the bridge
 address, connectivity, authorization and group names.
 
 ## Tautulli automation
@@ -25,5 +25,4 @@ import path. Adapt the group names to your room before enabling automation.
 
 ## More help
 
-Read [Using Logistics](../../../../USER_GUIDE.md) for navigation, resources and
-feature controls. Use Back/Forward in this viewer to return to a previous guide.
+See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.

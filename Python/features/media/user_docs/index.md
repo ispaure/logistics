@@ -16,7 +16,8 @@ The CSV has chapter number in the first column and chapter name in the second:
 
 1. Choose **Debug → Rename MKA from CSV…**.
 2. Select the chapter folder.
-3. Run the rename and review the result.
+3. Choose **Review names** and check the current/new name table.
+4. Choose **Apply reviewed names** and read the result.
 
 Every MKA must have a matching valid row and a nonempty title. Existing destination
 names stop the plan. All planned names are validated before renaming starts; the
@@ -25,5 +26,4 @@ names. If validation fails, correct the CSV or filenames and retry.
 
 ## More help
 
-Read [Using Logistics](../../../../USER_GUIDE.md) for navigation, resources and
-feature controls. Use Back/Forward in this viewer to return to a previous guide.
+See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.

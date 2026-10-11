@@ -119,7 +119,7 @@ worker ownership, shutdown retries, drafts, editor reuse, and sidebar ordering.
 
 ## Next increments
 
-Hunk staging, interactive rebase editing, external merge-tool launching,
+Interactive rebase editing, external merge-tool launching,
 reset/clean previews, sparse/partial clones, LFS controls, graph refinement, and
 hosting-provider integration remain separate follow-ups. Background remote fetch
 and automatic filesystem polling are not enabled. Refresh on destination entry,

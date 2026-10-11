@@ -140,8 +140,8 @@ For encrypting CBZ contents in place, use the [Comics guide](../../comics/user_d
 
 ## More help
 
-Read [Using Logistics](../../../../USER_GUIDE.md) for navigation, resources and
-feature controls. Use Back/Forward in this viewer to return to a previous guide.
+See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.
+
 
 
 Use the persistent Archives icon or its + button in the left Documents tree to

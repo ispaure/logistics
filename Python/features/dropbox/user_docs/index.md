@@ -15,12 +15,13 @@ sources; install and configure Dropbox separately if you want this source.
 2. Open **Conflicting Copies…**.
 3. Analyze the reported files before choosing cleanup.
 
-Cleanup deletes detected conflicting copies only when every conflict has a
-corresponding original and its name can be interpreted safely. If any conflict
-fails those checks, the whole deletion is aborted. This check does not merge the
-contents of conflicting and original files; keep any edits you need before cleanup.
+The review compares contents, not just filenames. **Delete reviewed identical
+copies** removes only copies that match their originals byte for byte and have
+not changed since review. Copies with unique edits, missing originals or ambiguous
+names stay in place. Changing the folder or recursion option requires a new review.
+Scanning and deletion run in the background. Cancellation leaves completed
+changes in place; the result reports failures and unprocessed copies.
 
 ## More help
 
-Read [Using Logistics](../../../../USER_GUIDE.md) for navigation, resources and
-feature controls. Use Back/Forward in this viewer to return to a previous guide.
+See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.

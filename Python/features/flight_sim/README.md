@@ -21,9 +21,12 @@ The Flight Sim UI only presents controls and delegates behavior to this feature 
 
 ## X-Plane 12
 
-The current implementation targets the Steam installation of X-Plane 12 on macOS.
+Settings accepts an explicit X-Plane 12 installation path. The default retains
+the Steam installation on macOS.
 
-X-Plane preferences are resolved under `Steam/steamapps/common/X-Plane 12/Output/Preferences` within the user's Application Support directory. Preset files are stored under the Logistics General software directory and copied into the active X-Plane preferences when selected.
+X-Plane preferences are resolved under `Steam/steamapps/common/X-Plane 12/Output/Preferences` within the user's Application Support directory. Preset assets live under the Logistics General software directory. Preferences
+are validated as a whole, saved atomically and kept beside recovery copies.
+Combined presets restore the prior preferences if window publication fails.
 
 ## Notes
 

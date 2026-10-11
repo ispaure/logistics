@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
-import tomllib
+
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -21,9 +21,15 @@ def main():
     parser.add_argument('--install', action='store_true', help='Install the project\'s pinned dependencies into this interpreter first')
     args = parser.parse_args()
     if args.install:
-        project = tomllib.loads((REPO / 'Python/pyproject.toml').read_text())
-        subprocess.run([sys.executable, '-m', 'pip', 'install', *project['project']['dependencies'],
-                        *project['tool']['uv']['constraint-dependencies']], check=True)
+        # Export the committed lock rather than resolving transitive versions in CI.
+        subprocess.run([sys.executable, '-m', 'pip', 'install', 'uv==0.12.18'], check=True)
+        with tempfile.TemporaryDirectory() as directory:
+            requirements = Path(directory) / 'requirements.txt'
+            subprocess.run([sys.executable, '-m', 'uv', 'export', '--project', str(REPO / 'Python'),
+                            '--locked', '--no-dev', '--no-emit-project', '--format', 'requirements-txt',
+                            '--output-file', str(requirements)], check=True)
+            subprocess.run([sys.executable, '-m', 'uv', 'pip', 'sync', '--python', sys.executable,
+                            str(requirements)], check=True)
     results = args.results_dir.resolve()
     results.mkdir(parents=True, exist_ok=True)
     report = {'platform': platform.platform(), 'python': sys.version,
@@ -35,7 +41,7 @@ def main():
     checks = [
         ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests'], 300),
         # Windows' Git/process tests keep making progress past five minutes.
-        # Leave room for the whole growing suite, within the job's 20m budget.
+        # Leave room for the growing suite within the platform job's budget.
         ('logistics', ['Python/tests/run_regressions.py', 'Python/tests'], 600),
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(results / 'parity')], 600),
     ]
