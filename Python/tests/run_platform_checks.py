@@ -43,7 +43,7 @@ def main():
         ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests', '--isolate-modules'], 600),
         # Windows' Git/process tests keep making progress past five minutes.
         # Leave room for the growing suite within the platform job's budget.
-        ('logistics', ['Python/tests/run_regressions.py', 'Python/tests'], 600),
+        ('logistics', ['Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules'], 600),
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(results / 'parity')], 600),
     ]
     for name, command, timeout in checks:

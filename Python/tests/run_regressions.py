@@ -4,6 +4,7 @@ import faulthandler
 from pathlib import Path
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 from threading import Event, Thread
 from time import monotonic
 import unittest
@@ -71,6 +72,17 @@ def main():
     stopped = Event()
     reporter = Thread(target=report_stalls, args=(args.traceback_after, stopped, status), daemon=True)
     reporter.start()
+    # Browser tests must not contend with a running application's persistent
+    # directory index. Keep the singleton identity so already-imported aliases
+    # refer to the same private cache throughout this test process.
+    from importlib.util import find_spec
+    cache_directory = None
+    directory_cache = None
+    if find_spec('commonUtils') is not None:
+        from commonUtils.filesystem.index import directory_cache
+        cache_directory = TemporaryDirectory(prefix='logistics-test-index-')
+        directory_cache.database = Path(cache_directory.name) / 'index.sqlite3'
+        directory_cache._legacy_database = None
     try:
         suite = unittest.defaultTestLoader.discover(str(args.directory), pattern=args.pattern)
         result = unittest.TextTestRunner(verbosity=2, resultclass=ProgressResult).run(suite)
@@ -78,6 +90,9 @@ def main():
     finally:
         stopped.set()
         reporter.join(timeout=1)
+        if directory_cache is not None:
+            directory_cache.close()
+            cache_directory.cleanup()
 
 
 if __name__ == '__main__':

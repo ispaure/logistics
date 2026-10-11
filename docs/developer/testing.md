@@ -15,10 +15,10 @@ Run the regression suite from the repository root:
 
 ```sh
 # macOS / Linux
-PYTHONPATH=Python .venv/bin/python -m unittest discover -s Python/tests -v
+PYTHONPATH=Python .venv/bin/python Python/tests/run_regressions.py Python/tests --isolate-modules
 ```
 
-On Windows PowerShell, set `$env:PYTHONPATH = "Python"` and run `.venv/Scripts/python.exe -m unittest discover -s Python/tests -v`.
+On Windows PowerShell, set `$env:PYTHONPATH = "Python"` and run `.venv/Scripts/python.exe Python/tests/run_regressions.py Python/tests --isolate-modules`.
 
 For both repositories' suites and the historical comic compression comparison,
 use the same project interpreter:
@@ -51,3 +51,8 @@ fixture-specific cleanup. Tests must not depend on windows retained by other tes
 Platform checks also run on main pushes and launcher changes. The release workflow
 calls those checks before packaging, so a tag cannot bypass failing application
 regressions. Both headless suites and historical archive parity must pass.
+
+The platform runner isolates both shared and Logistics test modules in separate
+processes to prevent native Qt state from leaking between suites. Each regression
+process uses a private temporary directory index, so browser tests do not compete
+with the running application’s cache or leave test paths in its persistent index.
