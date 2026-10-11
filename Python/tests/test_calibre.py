@@ -17,6 +17,17 @@ from commonUtils.runtime.platform import OS
 
 
 class CalibreExportTests(QtTestCase):
+    def test_cancel_before_copy_keeps_obsolete_exports(self):
+        from commonUtils.runtime.operations import OperationCancelled
+        self.book()
+        self.destination.mkdir()
+        old = self.destination / 'old.epub'; old.write_bytes(b'original')
+        plan = build_export_plan(self.library, self.destination, ['epub'])
+        with self.assertRaises(OperationCancelled):
+            execute_export_plan(plan, cancelled=lambda: True)
+        self.assertEqual(old.read_bytes(), b'original')
+        self.assertEqual(list(self.destination.iterdir()), [old])
+
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

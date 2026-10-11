@@ -1,129 +1,55 @@
-"""
-Dropbox workflow dialogs.
-"""
-
-from pathlib import Path
-
-from commonUtils import ui
-from commonUtils.ui import pyside
-
+"""Review content before removing identical Dropbox conflict copies."""
+from commonUtils.ui import pyside as qt
 from features.dropbox import conflicts
-from ui_new.dialogs.tool_dialog import coerce_initial_path
+from ui_new.dialogs.tool_dialog import ToolDialog, coerce_initial_path
 
 
-class DropboxConflictsDialog(pyside.QDialog):
+class DropboxConflictsDialog(ToolDialog):
     def __init__(self, initial_path=None, parent=None):
-        super().__init__(parent)
+        super().__init__('Dropbox conflicting copies',
+                         'Only byte-identical copies can be removed. Copies with unique edits or missing originals are kept.',
+                         'Review conflicting copies', True, parent)
+        self.candidates = None
+        self.target_dir = self._add_directory_field('Folder:', coerce_initial_path(initial_path))
+        self.recursive = qt.QCheckBox('Include subfolders'); self.recursive.setChecked(True)
+        self.form.addRow(self.recursive)
+        self.results = qt.QTreeWidget()
+        self.results.setHeaderLabels(['Conflicting copy', 'Original', 'Result'])
+        self.results.setRootIsDecorated(False)
+        self.root_layout.insertWidget(self.root_layout.count() - 2, self.results, 1)
+        self.target_dir.textChanged.connect(self._invalidate)
+        self.recursive.toggled.connect(self._invalidate)
+        self.resize(1000, 600)
 
-        self.setWindowTitle('Dropbox Conflicting Copies')
-        self.setMinimumWidth(620)
+    def _invalidate(self):
+        self.candidates = None
+        self.results.clear()
+        self.action_button.setText('Review conflicting copies')
 
-        root_layout = pyside.QVBoxLayout(self)
-        root_layout.setContentsMargins(20, 20, 20, 20)
-        root_layout.setSpacing(14)
-
-        title = pyside.QLabel('Dropbox Conflicting Copies')
-        title_font = title.font()
-        title_font.setPointSize(title_font.pointSize() + 5)
-        title_font.setBold(True)
-        title.setFont(title_font)
-
-        description = pyside.QLabel(
-            'Analyze Dropbox conflicted-copy files or delete them only when the existing safety checks confirm '
-            'that every conflict still has its original.'
-        )
-        description.setWordWrap(True)
-
-        form = pyside.QFormLayout()
-        self.target_dir = pyside.QLineEdit(coerce_initial_path(initial_path))
-
-        browse_button = pyside.QPushButton('Browse...')
-        target_widget = pyside.QWidget()
-        target_layout = pyside.QHBoxLayout(target_widget)
-        target_layout.setContentsMargins(0, 0, 0, 0)
-        target_layout.setSpacing(8)
-        target_layout.addWidget(self.target_dir, 1)
-        target_layout.addWidget(browse_button)
-
-        self.recursive = pyside.QCheckBox('Include subfolders')
-        self.recursive.setChecked(True)
-
-        form.addRow('Target folder:', target_widget)
-        form.addRow('Recursive:', self.recursive)
-
-        report_button = pyside.QPushButton('Print Conflicting Copies')
-        delete_button = pyside.QPushButton('Delete Conflicting Copies')
-        close_button = pyside.QPushButton('Close')
-
-        action_layout = pyside.QHBoxLayout()
-        action_layout.addWidget(report_button)
-        action_layout.addWidget(delete_button)
-
-        close_layout = pyside.QHBoxLayout()
-        close_layout.addStretch()
-        close_layout.addWidget(close_button)
-
-        root_layout.addWidget(title)
-        root_layout.addWidget(description)
-        root_layout.addLayout(form)
-        root_layout.addLayout(action_layout)
-        root_layout.addLayout(close_layout)
-
-        browse_button.clicked.connect(self._browse)
-        report_button.clicked.connect(self._report)
-        delete_button.clicked.connect(self._delete)
-        close_button.clicked.connect(self.accept)
-
-    def _browse(self):
-        start_path = self.target_dir.text().strip() or str(Path.home())
-
-        selected = pyside.QFileDialog.getExistingDirectory(
-            self,
-            'Select Directory',
-            start_path
-        )
-
-        if selected:
-            self.target_dir.setText(selected)
-
-    def _get_target(self):
-        value = self.target_dir.text().strip()
-
-        if value == '':
-            ui.display_msg_box_ok(
-                'Dropbox Conflicting Copies',
-                'Choose a target directory first.'
-            )
-            return None
-
-        return Path(value)
-
-    def _report(self):
-        target = self._get_target()
-
-        if target is None:
+    def _execute(self):
+        if self.busy:
             return
+        if self.candidates is None:
+            target = self._require_directory(self.target_dir)
+            recursive = self.recursive.isChecked()
+            if target is not None:
+                self._run_background(lambda report, cancelled: conflicts.review_conflicts(target, recursive, cancelled=cancelled), self._reviewed)
+        elif self._confirm():
+            candidates = self.candidates
+            self._run_background(lambda report, cancelled: conflicts.delete_reviewed_conflicts(candidates, report=report, cancelled=cancelled), self._deleted)
 
-        conflicts.print_conflicting_copies(
-            target,
-            recursive=self.recursive.isChecked()
-        )
+    def _reviewed(self, candidates):
+        self.candidates = candidates
+        self.results.clear()
+        for item in candidates:
+            self.results.addTopLevelItem(qt.QTreeWidgetItem([
+                str(item.path), str(item.original or ''), 'Identical; removable' if item.identical else 'Kept; unique or unknown contents']))
+        self.action_button.setText('Delete reviewed identical copies')
+        self.action_button.setEnabled(any(item.identical for item in candidates))
+        self.task.message.setText(f'{len(candidates)} conflicts; {sum(item.identical for item in candidates)} identical copies.')
 
-    def _delete(self):
-        target = self._get_target()
-
-        if target is None:
-            return
-
-        confirmed = ui.display_msg_box_ok_cancel(
-            'Delete Conflicting Copies',
-            'Delete Dropbox conflicting-copy files that pass the existing safety checks?'
-        )
-
-        if not confirmed:
-            return
-
-        conflicts.delete_conflicting_copies(
-            target,
-            recursive=self.recursive.isChecked()
-        )
+    def _deleted(self, result):
+        self.candidates = None
+        self.action_button.setText('Review conflicting copies')
+        self.task.message.setText(f'Deleted {len(result.completed)}; failed {len(result.failed)}; unprocessed {len(result.remaining)}. '
+                                  + '; '.join(str(error) for error in result.failed.values()))
