@@ -1,4 +1,3 @@
-from typing import *
 import math
 
 
@@ -9,8 +8,10 @@ class Vector2D:
         :param direction: Direction of the vector in degrees (0 to 360)
         :param magnitude: Magnitude of the vector
         """
-        self.direction = direction
-        self.magnitude = magnitude
+        self.direction = float(direction)
+        self.magnitude = float(magnitude)
+        if not math.isfinite(self.direction) or not math.isfinite(self.magnitude) or self.magnitude < 0:
+            raise ValueError('Vectors require a finite direction and nonnegative magnitude.')
 
 
 def calculate_net_vector_2d_direction(vector_a: Vector2D, vector_b: Vector2D):
@@ -65,16 +66,7 @@ def calculate_net_vector2d_magnitude(vector_a, vector_b):
 
 def invert_direction(direction):
 
-    # Invert Direction
-    inv_direction = direction + 180
-
-    # Resolve if not between 0 and 360
-    if inv_direction < 0:
-        return inv_direction + 360
-    elif inv_direction > 360:
-        return inv_direction - 360
-    else:
-        return inv_direction
+    return (direction + 180) % 360
 
 
 def is_number(input):

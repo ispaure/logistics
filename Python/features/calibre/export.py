@@ -63,7 +63,7 @@ class ExportResult:
     deleted: int
 
 
-def build_export_plan(source: Path, destination: Path, extensions) -> ExportPlan:
+def build_export_plan(source: Path, destination: Path, extensions, *, cancelled=lambda: False) -> ExportPlan:
     """Read and validate the whole mirror before creating or deleting any file."""
     source, destination = Path(source).absolute(), Path(destination).absolute()
     if source.is_symlink() or destination.is_symlink() or source.is_junction() or destination.is_junction():
@@ -83,13 +83,14 @@ def build_export_plan(source: Path, destination: Path, extensions) -> ExportPlan
     if not extensions or any(not extension or not extension.isalnum() for extension in extensions):
         raise ValueError('Choose at least one valid book extension')
 
-    existing = _existing_exports(destination)
+    existing = _existing_exports(destination, cancelled)
     anchor = destination
     while not anchor.exists():
         anchor = anchor.parent
     destination_identity = signature(anchor)[:2]
     expected, warnings = {}, []
     for path, relative_path in _book_exports(source, extensions, warnings):
+        check_cancelled(cancelled)
         require_regular_path(path)
         if not path.is_file():
             raise ValueError(f'Not a regular book file: {path}')
@@ -113,11 +114,12 @@ def build_export_plan(source: Path, destination: Path, extensions) -> ExportPlan
                       tuple(expected.values()), obsolete, tuple(warnings))
 
 
-def _existing_exports(destination: Path) -> dict[str, Path]:
+def _existing_exports(destination: Path, cancelled=lambda: False) -> dict[str, Path]:
     """Read the dedicated mirror without following linked entries."""
     existing = {}
     if destination.exists():
         for root, directories, names in os.walk(destination, onerror=_raise_walk_error):
+            check_cancelled(cancelled)
             for name in (*directories, *names):
                 require_regular_path(Path(root) / name)
             for name in names:

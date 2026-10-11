@@ -25,6 +25,7 @@ class DropboxConflictsDialog(ToolDialog):
         self.candidates = None
         self.results.clear()
         self.action_button.setText('Review conflicting copies')
+        self.action_button.setEnabled(not self.busy)
 
     def _execute(self):
         if self.busy:
@@ -51,5 +52,6 @@ class DropboxConflictsDialog(ToolDialog):
     def _deleted(self, result):
         self.candidates = None
         self.action_button.setText('Review conflicting copies')
+        self.action_button.setEnabled(not self.busy)
         self.task.message.setText(f'Deleted {len(result.completed)}; failed {len(result.failed)}; unprocessed {len(result.remaining)}. '
                                   + '; '.join(str(error) for error in result.failed.values()))

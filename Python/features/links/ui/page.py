@@ -36,6 +36,9 @@ class LinksPage(pyside.QWidget):
 
         root_layout.addWidget(title)
         root_layout.addWidget(description)
+        self.status = pyside.QLabel()
+        self.status.setWordWrap(True)
+        root_layout.addWidget(self.status)
         root_layout.addWidget(self.scroll, 1)
 
     def _populate_links(self):
@@ -70,7 +73,7 @@ class LinksPage(pyside.QWidget):
             for index, link in enumerate(link_group.links):
                 button = pyside.QPushButton(link.label)
                 button.clicked.connect(
-                    lambda _checked=False, config_key=link.config_key: actions.open_config_file_url(config_key)
+                    lambda _checked=False, config_key=link.config_key: self._open_link(config_key)
                 )
 
                 row = index // 4
@@ -83,3 +86,11 @@ class LinksPage(pyside.QWidget):
             group_layout.addLayout(buttons_layout)
 
         return group_box
+
+    def _open_link(self, config_key):
+        try:
+            opened = actions.open_config_file_url(config_key)
+        except (ValueError, OSError) as error:
+            self.status.setText(str(error))
+        else:
+            self.status.setText('Opened in your browser.' if opened else 'The browser could not open this link.')

@@ -9,6 +9,8 @@ from pathlib import Path
 
 import config
 import json
+import re
+from commonUtils.formats.iniType import INIFile
 from commonUtils.persistence import atomic_write_json
 from features.preferences import preferences_path
 
@@ -40,14 +42,17 @@ def run_repair_windows_script() -> bool:
 def run_repair_ntfs_on_d() -> bool:
     """Launch the Windows NTFS repair script for D:."""
 
-    tool_name = 'Repair NTFS on D'
+    tool_name = 'Repair NTFS'
 
     if get_os() != OS.WIN:
         log(Severity.WARNING, tool_name, 'This command is only supported on Windows.')
         return False
 
     script_path = Path(config.LogisticsConfig().path_logistics_scripts, 'repair_ntfs_on_D.bat')
-    command = f'start "" "{script_path}"'
+    drive = INIFile(Path(__file__).with_name('config.ini')).read().get('Windows', 'ntfs_drive', fallback='D:').strip().upper()
+    if re.fullmatch(r'[A-Z]:', drive) is None:
+        raise ValueError('NTFS drive must be a drive letter such as D:.')
+    command = f'start "" "{script_path}" {drive}'
 
     if not script_path.is_file():
         raise FileNotFoundError(script_path)

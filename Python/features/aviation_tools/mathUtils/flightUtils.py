@@ -1,7 +1,6 @@
 import math
-from commonUtils.runtime.logging import *
-from commonUtils.runtime import logging as logUtils
-from features.aviation_tools.mathUtils.mathStuff import *
+from commonUtils.runtime.logging import log_msg
+from features.aviation_tools.mathUtils.mathStuff import (Vector2D, calculate_net_vector_2d_direction, calculate_net_vector2d_magnitude, invert_direction)
 
 
 class Coordinate:
@@ -11,6 +10,10 @@ class Coordinate:
     def __init__(self, latitude: float, longitude: float):
         self.latitude = float(latitude)
         self.longitude = float(longitude)
+        if not math.isfinite(self.latitude) or not -90 <= self.latitude <= 90:
+            raise ValueError('Latitude must be between -90 and 90 degrees.')
+        if not math.isfinite(self.longitude) or not -180 <= self.longitude <= 180:
+            raise ValueError('Longitude must be between -180 and 180 degrees.')
 
     def get_info(self):
         return f'{self.latitude}, {self.longitude}'
@@ -20,6 +23,8 @@ class MagneticDeviation:
     def __init__(self, amount: float, direction: str):
         self.amount = float(amount)
         self.direction = str.lower(direction)
+        if not math.isfinite(self.amount) or self.amount < 0 or self.direction not in ('east', 'west'):
+            raise ValueError('Deviation needs a nonnegative amount and east or west direction.')
 
     def get_info(self):
         info_str = f'{self.amount} {self.direction} '
@@ -46,10 +51,10 @@ def distance_from_coords(coordinate_a: Coordinate, coordinate_b: Coordinate) -> 
     """
     msg = f'Calculate coordinates between: ({coordinate_a.latitude}, {coordinate_a.longitude}) and ({coordinate_b.latitude}, {coordinate_b.longitude})'
     log_msg(msg)
-    result = 3440.065 * math.acos(math.cos(math.radians(90 - coordinate_b.latitude)) * math.cos(math.radians(90 - coordinate_a.latitude)) +
+    cosine = (math.cos(math.radians(90 - coordinate_b.latitude)) * math.cos(math.radians(90 - coordinate_a.latitude)) +
                                   math.sin(math.radians(90 - coordinate_b.latitude)) * math.sin(math.radians(90 - coordinate_a.latitude))
                                   * math.cos(math.radians(coordinate_b.longitude - coordinate_a.longitude)))
-    return float(result)
+    return 3440.065 * math.acos(max(-1.0, min(1.0, cosine)))
 
 
 def true_course_from_coords(coordinate_a: Coordinate, coordinate_b: Coordinate) -> float:
@@ -92,9 +97,9 @@ def magnetic_course(true_course: float, magnetic_deviation: MagneticDeviation) -
     :return: Magnetic Course (in degrees)
     """
     if magnetic_deviation.direction == 'west':
-        return true_course + magnetic_deviation.amount
+        return (true_course + magnetic_deviation.amount) % 360
     elif magnetic_deviation.direction == 'east':
-        return true_course - magnetic_deviation.amount
+        return (true_course - magnetic_deviation.amount) % 360
     else:
         raise ValueError('Magnetic deviation direction must be east or west.')
 
@@ -105,7 +110,7 @@ def flight_altitude_rule(magnetic_course: float):
     :param magnetic_course:
     :return:
     """
-    if magnetic_course < 180:
+    if magnetic_course % 360 < 180:
         return 'Odd + 500FT'
     else:
         return 'Even + 500FT'
@@ -148,7 +153,7 @@ def wind_correction_angle(true_course, true_airspeed, wind_direction, wind_speed
     true_heading_result = true_heading(true_course, true_airspeed, wind_direction, wind_speed)
 
     # Return WCA
-    return float(true_heading_result - true_course)
+    return float((true_heading_result - true_course + 180) % 360 - 180)
 
 
 def true_heading(true_course, true_airspeed, wind_direction, wind_speed):
@@ -189,4 +194,4 @@ def ground_speed(true_course, true_airspeed, wind_direction, wind_speed):
 
 
 def magnetic_heading(true_heading: float, magnetic_deviation: MagneticDeviation):
-    return true_heading + magnetic_deviation.net_result()
+    return (true_heading + magnetic_deviation.net_result()) % 360

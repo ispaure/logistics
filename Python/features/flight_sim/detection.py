@@ -10,6 +10,11 @@ from commonUtils.filesystem import files as fileUtils
 def get_xp12_dir() -> Path:
     """Return the expected X-Plane 12 Steam installation directory."""
 
+    from commonUtils.formats.iniType import INIFile
+    ini = INIFile(Path(__file__).with_name('config.ini')).read()
+    configured = ini.get('XPlane', 'installation_path', fallback='')
+    if configured:
+        return Path(configured).expanduser()
     return Path(fileUtils.get_user_application_support(), 'Steam', 'steamapps', 'common', 'X-Plane 12')
 
 
