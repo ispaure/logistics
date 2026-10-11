@@ -126,6 +126,13 @@ Native Windows/Linux interaction remains unverified.
 
 ## Release validation follow-up
 
+The application opts into shared header menu publication on every desktop.
+The Logistics navigation menu remains alongside feature-owned actions, including
+plain destinations and empty IDE/Git workspaces. Browser views own conventional
+menus and obtain eligible selection contributions from the existing context-menu
+builder. Bulk Rename shares one menu definition between hosted and standalone
+windows; its bottom action area groups secondary commands beside Rename.
+
 Git hunk cards publish their measured height-for-width as a fixed card height,
 so native layouts reserve exactly the space the card occupies and keep the
 10-pixel inter-card gap. Focused checks cover 10 hunk layout cases and nine File

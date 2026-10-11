@@ -119,7 +119,7 @@ class _BrowserHost:
             event.ignore()
 
 
-class BrowserView(_BrowserHost, qt.QWidget):
+class BrowserView(_BrowserHost, qt.QMainWindow):
     close_in_background = True
     title_changed = qt.Signal(str)
     idle = qt.Signal()
@@ -139,7 +139,9 @@ class BrowserView(_BrowserHost, qt.QWidget):
             QWidget#logisticsBrowser QHeaderView::section { padding: 2px 4px; }
             QWidget#logisticsBrowser QTabBar::tab { padding: 4px 16px; }
         ''')
-        layout = qt.QVBoxLayout(self)
+        content = qt.QWidget(self)
+        self.setCentralWidget(content)
+        layout = qt.QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         self.drive_selector = None
@@ -154,6 +156,8 @@ class BrowserView(_BrowserHost, qt.QWidget):
         self.workspace_controls = self.file_browser.workspace_controls
         self.file_browser.views.directory_changed.connect(lambda path: self.title_changed.emit(self.view_title))
         self.file_browser.idle.connect(self.idle)
+        from .browser_menus import BrowserMenus
+        self.header_menus = BrowserMenus(self)
 
     @property
     def view_title(self):
@@ -218,11 +222,13 @@ class FileBrowserWindow(_WorkspaceHost, qt.QMainWindow):
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle(f'File Browser: {Path(root_path).name}')
         self.resize(1200, 800)
+        self.workspace_publish_menus = True
         self.workspace = Workspace(lambda path: BrowserView(root_path=path or root_path), self,
                                    keep_one_tab=True, allow_new_tabs=allow_new_tabs,
                                    policy=replace(BROWSER_POLICY, max_tabs=None if allow_new_tabs else 1),
                                    new_view=_new_browser_tab, setup_container=_browser_container)
         self.workspace.active_changed.connect(self._update_title)
+        self.workspace_menu_document = lambda: self.workspace.active_view
         self.workspace.tabs_changed.connect(self._update_title)
         self.setCentralWidget(self.workspace)
         self.index_status = BrowserIndexStatus(self.workspace)

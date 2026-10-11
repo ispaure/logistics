@@ -16,6 +16,15 @@ sidebar**. The chooser also offers this icon, so
 you can enable an unavailable tool. Switching modes reuses your existing pages
 and workspaces. Each new app launch shows the chooser again.
 
+The window header also keeps a **Logistics** menu in every context. **Go to Tool**
+lists current destinations; **New / Open Document** lists enabled document
+launchers. Settings, tool settings, launch modes and installed guides are grouped
+there. The active tool's menus appear alongside it, including File Browser's
+File, Edit, View, Navigate, Index and Help commands. On macOS these use the native menu bar;
+Windows and Linux show them in the window header without a second embedded bar.
+File Browser's **File → Selected Items** exposes the same eligible commands and
+feature contributions as right-clicking the current selection.
+
 File Browser starts at your home folder. Use it for arbitrary paths;
 **Folder Hub** brings configured local folders and remote integrations together.
 The **Documents** menu lists open editors/readers. Switching destinations keeps

@@ -68,6 +68,41 @@ class BulkRenameWidgetTests(QtTestCase):
         self.app.processEvents()
         self.assertEqual(self.widget.controls.fields['prefix'].text(), 'keep_')
 
+    def test_footer_groups_secondary_actions_beside_rename_at_narrow_width(self):
+        widget = self.widget
+        widget.resize(680, 650)
+        for _ in range(12):
+            self.app.processEvents()
+        for button in (widget.preview_button, widget.reset_button, widget.undo_button, widget.rename_button):
+            self.assertTrue(widget.action_area.isAncestorOf(button))
+            self.assertTrue(button.isVisible())
+            rectangle = qt.QRect(button.mapTo(widget.action_area, qt.QPoint()), button.size())
+            self.assertTrue(widget.action_area.rect().contains(rectangle))
+        self.assertLess(widget.preview_button.y(), widget.reset_button.y())
+        self.assertLess(widget.reset_button.y(), widget.undo_button.y())
+        self.assertGreater(widget.rename_button.height(), widget.undo_button.height())
+        self.assertGreater(widget.rename_button.x(), widget.undo_button.mapTo(widget.action_area, qt.QPoint()).x()
+                           + widget.undo_button.width())
+
+    def test_menu_actions_follow_preview_readiness_and_reuse_rule_controls(self):
+        from ui_new.bulk_rename.menus import build_menus
+        host = qt.QMainWindow()
+        menus = build_menus(host, self.widget)
+        self.addCleanup(host.deleteLater)
+        menus['Rename'].aboutToShow.emit()
+        rename = menus['Rename'].actions()[-1]
+        self.assertFalse(rename.isEnabled())
+        self.widget.controls.fields['prefix'].setText('new_')
+        self.wait_idle()
+        menus['Rename'].aboutToShow.emit()
+        self.assertTrue(rename.isEnabled())
+        self.assertFalse(menus['Rename'].actions()[2].isEnabled())
+        menus['Rename'].actions()[1].trigger()
+        self.wait_idle()
+        self.assertEqual(self.widget.controls.fields['prefix'].text(), '')
+        menus['Rename'].aboutToShow.emit()
+        self.assertFalse(rename.isEnabled())
+
     def wait_folder_visible(self, path):
         deadline = time.monotonic() + 8
         while time.monotonic() < deadline:

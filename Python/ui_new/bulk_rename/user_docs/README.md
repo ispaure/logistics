@@ -99,5 +99,9 @@ resetting them. The current rules continue to apply when hidden.
 **Scope…** contains file/folder, hidden-item, recursive and depth options; use
 Apply filter after changing them. **Rule presets…** contains load/save/reset.
 Rule cards reflow into fewer columns in narrow windows.
-The presets menu sits above the preview, undo and rename buttons so their labels
-remain readable with larger system fonts in narrow windows.
+The bottom action area keeps **Rule presets…** on the left and a stack of
+**Preview**, **Reset rules** and **Undo last rename** beside the larger
+**Rename selected** button on the right. The arrangement stays together in narrow
+windows. The hosted tool and standalone window use the same File, Edit, View,
+Rename and Help menus; unavailable operations are disabled, and Show Rules keeps
+the current rules intact.
