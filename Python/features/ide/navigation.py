@@ -33,6 +33,30 @@ class Navigation:
                 return True
         return super().eventFilter(watched, event)
 
+    @staticmethod
+    def place_view(view, *, position=None, line=None, column=0, scroll=None):
+        """Apply a location to a specific view. Lines are 1-based, columns code points;
+        absolute cursor positions and persisted positions use Qt UTF-16 units.
+        """
+        if line is not None:
+            block = view.document().findBlockByNumber(max(0, line - 1))
+            if block.isValid():
+                offset = len(block.text()[:max(0, column)].encode('utf-16-le')) // 2
+                position = block.position() + offset
+        if position is not None:
+            cursor = view.textCursor()
+            cursor.setPosition(max(0, min(position, view.document().characterCount() - 1)))
+            view.setTextCursor(cursor)
+            view.centerCursor()
+        if scroll is not None:
+            view.verticalScrollBar().setValue(max(0, scroll))
+
+    def navigate_to(self, path, *, group=None, position=None, line=None, column=0, scroll=None):
+        # Apply to the view actually opened, not whichever tab is current when a
+        # separate queued callback eventually runs.
+        self.open_path(path, group=group, on_open=lambda view: self.place_view(
+            view, position=position, line=line, column=column, scroll=scroll))
+
     def location(self):
         doc = self.current
         return (str(doc.path), doc.textCursor().position(), doc.verticalScrollBar().value(), self.group_for(doc)) if doc else None
@@ -54,8 +78,7 @@ class Navigation:
         if 0 <= index < len(self.history):
             self.history_index = index
             path, position, scroll, group = self.history[index]
-            self.open_path(path, group=group if group in self.groups else None, position=position)
-            self.run(lambda: None, lambda _: self.navigation_view(path).verticalScrollBar().setValue(scroll) if self.navigation_view(path) else None)
+            self.navigate_to(path, group=group if group in self.groups else None, position=position, scroll=scroll)
 
     def go_line(self):
         doc = self.current
@@ -63,10 +86,7 @@ class Navigation:
             line, ok = qt.QInputDialog.getInt(self, 'Go to line', 'Line', 1, 1, doc.blockCount())
             if ok:
                 self.remember()
-                cursor = doc.textCursor()
-                cursor.setPosition(doc.document().findBlockByNumber(line - 1).position())
-                doc.setTextCursor(cursor)
-                doc.centerCursor()
+                self.place_view(doc, line=line)
 
     def go_file(self):
         query, ok = qt.QInputDialog.getText(self, 'Go to file', 'Filename or relative path contains')
@@ -79,7 +99,7 @@ class Navigation:
                 value, accepted = qt.QInputDialog.getItem(self, 'Go to file', 'Matches (up to 500)', files, 0, False)
                 if accepted:
                     self.remember()
-                    self.open_path(project.root / value)
+                    self.navigate_to(project.root / value)
             self.run(lambda: project_files(project, query, cancelled=self.cancelled), choose)
 
     def query(self, kind):
@@ -126,18 +146,7 @@ class Navigation:
                     selection = labels.index(value)
                 file, target_line, target_column, name = result[selection]
                 self.remember()
-                self.open_path(file)
-                def locate(_):
-                    target = self.navigation_view(file)
-                    if target:
-                        block = target.document().findBlockByNumber(target_line - 1)
-                        if block.isValid():
-                            cursor = target.textCursor()
-                            offset = len(block.text()[:target_column].encode('utf-16-le')) // 2
-                            cursor.setPosition(block.position() + offset)
-                            target.setTextCursor(cursor)
-                            target.centerCursor()
-                self.run(lambda: None, locate)
+                self.navigate_to(file, line=target_line, column=target_column)
             else:
                 self.error('No static definition resolved. Dynamic Python references may not be resolvable.')
         self.run(lambda: analyze(project, path, code, line, column, kind), done)
@@ -156,15 +165,5 @@ class Navigation:
             if ok:
                 path, line, text = results[labels.index(value)]
                 self.remember()
-                self.open_path(path)
-                def locate(_):
-                    doc = self.navigation_view(path)
-                    if doc:
-                        block = doc.document().findBlockByNumber(line - 1)
-                        if block.isValid():
-                            cursor = doc.textCursor()
-                            cursor.setPosition(block.position())
-                            doc.setTextCursor(cursor)
-                            doc.centerCursor()
-                self.run(lambda: None, locate)
+                self.navigate_to(path, line=line)
         self.run(lambda: search_project(project, query, cancelled=self.cancelled), done)

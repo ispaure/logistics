@@ -19,21 +19,13 @@ class DocumentBuffer(qt.QObject):
     def configure(self):
         editor = self.views[0]
         language = detect_language(self.snapshot.path, self.text.toPlainText())
-        if self.highlighter is not None and self.highlighter.editor is editor:
-            self.highlighter.configure(language)
+        if self.highlighter is None:
+            self.highlighter = SyntaxHighlighter(editor, language)
         else:
-            self._replace_highlighter(editor, language)
+            self.highlighter.rebind_editor(editor)
+            self.highlighter.configure(language)
         for view in self.views:
             view.comment_prefix = editor.comment_prefix
-
-    def _replace_highlighter(self, editor, language):
-        if self.highlighter is not None:
-            self.highlighter.theme_timer.stop()
-            self.highlighter.theme_timer.deleteLater()
-            self.highlighter.editor.removeEventFilter(self.highlighter)
-            self.highlighter.setDocument(None)
-            self.highlighter.deleteLater()
-        self.highlighter = SyntaxHighlighter(editor, language)
 
 
 class EditorDocument(CodeEdit):
@@ -46,17 +38,7 @@ class EditorDocument(CodeEdit):
             self.document().setModified(False)
         else:
             self.buffer = buffer
-            source = buffer.views[0]
-            self.setDocument(buffer.text)
-            buffer.text.contentsChange.connect(self._external_multicursor_change)
-            self.bind_folding()
-            self.setFont(source.font())
-            for name in ('indent_width', 'use_tabs', 'auto_indent', 'auto_pairs', 'line_numbers', 'comment_prefix', 'indent_guides'):
-                setattr(self, name, getattr(source, name))
-            self.setLineWrapMode(source.lineWrapMode())
-            self.setReadOnly(source.isReadOnly())
-            self.update_tab_width()
-            self.update_gutter()
+            self.share_document_from(buffer.views[0])
         self.buffer.views.append(self)
         if self.buffer.highlighter is None:
             self.buffer.configure()
@@ -82,11 +64,7 @@ class EditorDocument(CodeEdit):
             buffer.configure()
         elif not buffer.views:
             buffer.deleteLater()
-        # Explicitly detach Qt's layout/view association before deferred widget
-        # destruction; the shared layout must not retain the departing viewport.
-        replacement = qt.QTextDocument(self)
-        replacement.setDocumentLayout(qt.QPlainTextDocumentLayout(replacement))
-        self.setDocument(replacement)
+        self.detach_document()
         self.deleteLater()
 
     def save(self, path=None, *, expected=None):

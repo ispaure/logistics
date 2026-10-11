@@ -77,6 +77,31 @@ class WorkspaceFixture(IDEQtTests):
 
 
 class WorkspaceTests(WorkspaceFixture):
+    def test_navigation_applies_unicode_location_to_requested_view(self):
+        from features.ide.projects import Project
+        from features.ide.workspace import ProjectWorkspace
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            a, b = root / 'a.py', root / 'b.py'
+            a.write_text('header\n😀target\n')
+            b.write_text('other\n')
+            view = ProjectWorkspace(Project('test', directory))
+            self.wait(view)
+            first = view.active_group
+            second = view.add_group()
+            view.navigate_to(a, group=first, line=2, column=1)
+            view.navigate_to(b, group=second, position=3)
+            self.wait(view)
+            left, right = first.widget(0), second.widget(0)
+            self.assertEqual(left.textCursor().position(), 9)
+            self.assertEqual(right.textCursor().position(), 3)
+            view.place_view(left, position=10000)
+            self.assertEqual(left.textCursor().position(), left.document().characterCount() - 1)
+            view.place_view(left, position=-10)
+            self.assertEqual(left.textCursor().position(), 0)
+            view.prepare_close()
+            view.close()
+
     def test_history_and_analysis_use_the_selected_shared_view(self):
         from features.ide.projects import Project
         from features.ide.workspace import ProjectWorkspace
