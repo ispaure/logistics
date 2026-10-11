@@ -61,13 +61,24 @@ unsupported stores are retained. Store write failures are reported in the page;
 they do not trap the application in an endless shutdown wait after document close
 choices have completed.
 
-ProjectWorkspace owns one canonical EditorDocument per resolved path. Opening an
-existing path activates that view; moving tabs reparents the existing widget.
-Closing a column migrates its tabs. This deliberately avoids duplicate independent
-buffers without introducing multiple views of one file in the initial version.
+ProjectWorkspace owns one canonical file registration per resolved path. Each
+registration points to a representative EditorDocument view; all views share a
+DocumentBuffer containing the QTextDocument, disk snapshot and one highlighter.
+The text document is parented to the buffer, not to a disposable tab. Closing the
+representative promotes a remaining view and reattaches highlighting. A departing
+editor is explicitly detached from the shared Qt layout before deferred deletion.
+This ownership boundary is covered by editing after actual native destruction of
+the original view, not merely checking that a tab disappeared.
+
+Split right creates another view in a new group. Ordinary opens prefer an existing
+view in the active group. Each group contains at most one view per file. Group
+merges and moves collapse redundant views without discarding shared edits. The
+last view close asks about unsaved work; project/application close prompts once
+per buffer. Save As changes the shared snapshot/path and every tab title. Undo,
+folding and modified state are shared; cursor, selection and scrolling are local.
 All internal tabs are ordinary QTabWidgets. Browser mutations refuse to rename or
-delete any path containing an open document; only empty directory deletion is
-available. The shared model owns lazy filesystem loading and rename validation.
+delete paths containing an open document or pending open; only empty directory
+deletion is available. The shared model owns lazy loading and rename validation.
 
 ResultWorker requests are serialized per project; a process-wide lock serializes
 Jedi's caches across projects. GUI inputs are copied before dispatch. Analysis
@@ -78,7 +89,9 @@ its own cooperative worker lifecycle. No project code is executed by IDE itself;
 Jedi may start its configured Python environment for introspection.
 
 State captures project order, active project/group/files, tab order, splitter sizes,
-file cursor/scroll locations and tree expansion/filter/selection. Missing file
+per-view cursor/scroll locations and tree expansion/filter/selection. Repeated
+paths in different group records restore separate views of one buffer; existing
+version-1 stores remain compatible. Missing file
 records survive saves. Navigation history stays in memory. Opening the same path
 in different projects intentionally creates project-independent buffers; shared
 text IO detects conflicting saves. External watchers report changes and saves
@@ -161,7 +174,7 @@ every preferred or optional capability in the mandate:
 
 | Area | Remaining limit |
 | --- | --- |
-| Shared documents | One canonical editor widget per file; simultaneous views of the same file are absent. This meets conflict avoidance but not the preferred multiple-view design. |
+| Shared documents | The later shared-view implementation resolves this gap; see the current contracts above. |
 | Responsiveness | Save/reload and filesystem metadata probes remain synchronous; slow/network storage can stall the GUI. A busy workspace vetoes close and requires retry. |
 | Relocated roots | Root settings change browsing/analysis, but do not rebase absolute document paths. Missing registrations are retained. |
 | Browser mutations | Open files must be closed before rename/delete; recursive deletion and drag between groups are absent. Menu moves are available. |
@@ -175,3 +188,38 @@ including four new regression workflows and expanded stale-result coverage. Ruff
 and diff whitespace checks pass. The earlier full-suite counts above are the
 initial implementation's validation, not a claim that all suites were rerun after
 this review. No commonUtils implementation changes were required in this pass.
+
+## Shared-view implementation and reuse review
+
+The shared-view update adds four workflow tests covering bidirectional editing,
+shared undo/redo and modified indicators, independent cursor/scroll restoration,
+closing and destroying the original view, Save As propagation, external conflicts,
+reload, duplicate merging and one close prompt per modified buffer, plus navigation from the secondary view. All 18 IDE
+tests pass on macOS/offscreen Qt. The 34 standalone Text Editor tests and three
+shared CodeEdit tests also pass. Ruff and diff whitespace checks pass. Native Windows/Linux checks remain outstanding.
+
+The documentation audit updated the user guide, this architecture contract, the
+feature overview and root capability row. It also corrected the analysis limit
+(characters rather than bytes), identified disk-only project search and clarified
+the limits of simultaneous configuration writes. Earlier validation sections are
+historical and do not imply a new full-suite run.
+
+Meaningful follow-up refactors, in priority order:
+
+1. A small shared CodeEdit view-attachment/detachment API. IDE view construction
+   and commonUtils EditorViews both bind folding, reconnect multicursor tracking
+   and copy editing preferences after setDocument. Centralizing this would reduce
+   lifecycle mistakes. Keep project paths and close policy in Logistics.
+2. Shared highlighter view rebinding. SyntaxHighlighter currently takes a concrete
+   editor for palette events and owns an editor-parented theme timer. A supported
+   rebind operation would avoid IDE recreating it when its original view closes.
+3. Consolidate IDE navigation-to-location and workspace restoration helpers.
+   Definition, project search and history repeat path/cursor/scroll application;
+   one IDE-local helper could handle target group and UTF-16 offsets consistently.
+
+Text snapshot encoding and conflict-checked writes already live in commonUtils;
+do not create another persistence abstraction. Standalone TextEditor's document
+service also owns recovery and window policy, so reusing that whole service for IDE
+would couple distinct workflows. A future async IO refactor should reuse only its
+worker/snapshot boundary, while retaining each feature's close and recovery policy.
+These are recommendations, not additional refactors performed in this update.

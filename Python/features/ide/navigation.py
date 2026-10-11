@@ -25,7 +25,7 @@ class Navigation:
     def eventFilter(self, watched, event):
         # Qt maps ControlModifier to Command on macOS, matching StandardKey.
         if event.type() == qt.QEvent.Type.MouseButtonPress and event.button() == qt.Qt.MouseButton.LeftButton and event.modifiers() & qt.Qt.KeyboardModifier.ControlModifier:
-            doc = next((doc for doc in self.documents.values() if doc.viewport() is watched), None)
+            doc = next((doc for doc in self.views() if doc.viewport() is watched), None)
             if doc:
                 doc.setTextCursor(doc.cursorForPosition(event.position().toPoint()))
                 self.activate(self.group_for(doc))
@@ -35,7 +35,7 @@ class Navigation:
 
     def location(self):
         doc = self.current
-        return (str(doc.path), doc.textCursor().position(), doc.verticalScrollBar().value()) if doc else None
+        return (str(doc.path), doc.textCursor().position(), doc.verticalScrollBar().value(), self.group_for(doc)) if doc else None
 
     def remember(self):
         location = self.location()
@@ -53,9 +53,9 @@ class Navigation:
         index = self.history_index + direction
         if 0 <= index < len(self.history):
             self.history_index = index
-            path, position, scroll = self.history[index]
-            self.open_path(path, position=position)
-            self.run(lambda: None, lambda _: self.documents[Path(path)].verticalScrollBar().setValue(scroll) if Path(path) in self.documents else None)
+            path, position, scroll, group = self.history[index]
+            self.open_path(path, group=group if group in self.groups else None, position=position)
+            self.run(lambda: None, lambda _: self.navigation_view(path).verticalScrollBar().setValue(scroll) if self.navigation_view(path) else None)
 
     def go_line(self):
         doc = self.current
@@ -97,7 +97,7 @@ class Navigation:
         project = deepcopy(self.project)
         self.status.setText('Analyzing Python…')
         def stale():
-            return (self.documents.get(path) is not doc or doc.document().revision() != revision
+            return (doc not in self.views() or doc.document().revision() != revision
                     or self.current is not doc or doc.textCursor().position() != position or not self.isVisible()
                     or any(getattr(self.project, key) != getattr(project, key)
                            for key in ('root_path', 'source_paths', 'python_interpreter')))
@@ -128,7 +128,7 @@ class Navigation:
                 self.remember()
                 self.open_path(file)
                 def locate(_):
-                    target = self.documents.get(Path(file).resolve())
+                    target = self.navigation_view(file)
                     if target:
                         block = target.document().findBlockByNumber(target_line - 1)
                         if block.isValid():
@@ -158,7 +158,7 @@ class Navigation:
                 self.remember()
                 self.open_path(path)
                 def locate(_):
-                    doc = self.documents.get(Path(path).resolve())
+                    doc = self.navigation_view(path)
                     if doc:
                         block = doc.document().findBlockByNumber(line - 1)
                         if block.isValid():
