@@ -5,7 +5,7 @@ with remote repositories. Open **Git** from the navigation rail; enable it in
 **Settings → Features** if it is unavailable.
 
 Code previews and comparison/merge panes share a saved point size with Text
-Editor and IDE, defaulting to 9 points. Ctrl+wheel zoom in a code editor updates
+Editor and IDE, defaulting to 11 points. Ctrl+wheel zoom in a code editor updates
 other open code panes. The Diff font preference selects a family; code size uses
 the shared setting.
 
