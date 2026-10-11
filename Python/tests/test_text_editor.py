@@ -414,3 +414,14 @@ class TextEditorTests(QtTestCase):
         for editor in (document.views.primary, document.views.secondary):
             self.assertFalse(editor.document().defaultTextOption().flags() & qt.QTextOption.Flag.ShowTabsAndSpaces)
         self.assertFalse(document.modified)
+
+    def test_production_indentation_control_opens_central_settings(self):
+        self.window.preferences.custom = False
+        try:
+            with patch('ui_new.settings.window.open_settings') as settings, \
+                    patch.object(qt.QInputDialog, 'getInt') as legacy_dialog:
+                self.window.choose_indentation()
+                settings.assert_called_once_with(self.window, 'feature:text_editor')
+                legacy_dialog.assert_not_called()
+        finally:
+            self.window.preferences.custom = True

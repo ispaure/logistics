@@ -276,6 +276,10 @@ class EditingCommands:
             self._active_changed()
 
     def choose_indentation(self):
+        if not self.preferences.custom:
+            from ui_new.settings.window import open_settings
+            open_settings(self, 'feature:text_editor')
+            return
         if not self.current:
             return
         width, ok = qt.QInputDialog.getInt(
