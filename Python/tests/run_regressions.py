@@ -28,6 +28,8 @@ def run_isolated(directory, pattern, interval):
             failed.append(path.name)
             print(f'{path.name}: FAIL ({code})', file=sys.stderr, flush=True)
     print(f'Isolated test files: {len(modules)}; failures: {len(failed)}', flush=True)
+    if failed:
+        print('Failed isolated test files: ' + ', '.join(failed), file=sys.stderr, flush=True)
     return int(bool(failed))
 
 
