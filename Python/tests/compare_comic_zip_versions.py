@@ -37,10 +37,13 @@ import sys
 from unittest.mock import patch
 import zipfile
 import pyzipper
-from commonUtils import zipUtils
+import importlib
 from features.comics import cbz
 
 path, output, password, keep, baseline = sys.argv[1:]
+# The archived baseline has its own original module layout.
+zip_module = 'zipUtils' if baseline == '1' else 'archives.legacy'
+zipUtils = importlib.import_module('commonUtils.' + zip_module)
 path, output = Path(path), Path(output)
 password = None if password == '-' else password
 keep = keep == '1'
