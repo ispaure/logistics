@@ -81,7 +81,7 @@ def mount_and_open_remote(
             'Remote Mount Failed',
             f'Could not mount rclone remote "{remote_name}".\n\n'
             f'Expected mount location:\n'
-            f'{mounts.get_remote_mount_path(remote_name)}'
+            f'{mounts.get_remote_mount_path(remote_name, config_path)}'
         )
         return False
 
