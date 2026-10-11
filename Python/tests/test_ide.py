@@ -92,3 +92,26 @@ class WorkspaceTests(DocumentTests):
             self.assertTrue(view.can_close())
             self.assertTrue(view.prepare_close())
             view.close()
+
+
+class NavigationTests(__import__('unittest').TestCase):
+    def test_import_definition_with_src_layout_and_relative_import(self):
+        from features.ide.projects import Project
+        from features.ide.analysis import analyze, project_files
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package = root / 'src' / 'sample'
+            package.mkdir(parents=True)
+            (package / '__init__.py').write_text('')
+            (package / 'models.py').write_text('class Widget:\n    pass\n')
+            path = package / 'main.py'
+            code = 'from .models import Widget\nvalue = Widget()\n'
+            path.write_text(code)
+            project = Project('Example', directory, source_paths=['src'])
+            result = analyze(project, path, code, 2, 10)
+            self.assertEqual(result[0][:2], (str(package / 'models.py'), 1))
+            code = 'from sample.models import Widget\nvalue = Widget()\n'
+            self.assertEqual(analyze(project, root / 'test.py', code, 2, 10)[0][0], str(package / 'models.py'))
+            (root / '.venv').mkdir()
+            (root / '.venv' / 'hidden.py').write_text('')
+            self.assertFalse(any('.venv' in p for p in project_files(project)))

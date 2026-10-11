@@ -1,0 +1,132 @@
+"""Project navigation UI; snapshots enter workers and stale results are ignored."""
+from pathlib import Path
+from copy import deepcopy
+from commonUtils.ui import pyside as qt
+from .analysis import analyze, project_files
+
+
+class Navigation:
+    def init_navigation(self):
+        self.history = []
+        self.history_index = -1
+        for label, callback, shortcut in [
+            ('Definition', lambda: self.query('definition'), 'F12'),
+            ('Back', lambda: self.travel(-1), 'Alt+Left'),
+            ('Forward', lambda: self.travel(1), 'Alt+Right'),
+            ('Go to line…', self.go_line, 'Ctrl+L'),
+            ('Go to file…', self.go_file, 'Ctrl+P'),
+            ('Symbols…', lambda: self.query('symbols'), 'Ctrl+Shift+O'),
+            ('Complete…', lambda: self.query('completion'), 'Ctrl+Space'),
+            ('Documentation', lambda: self.query('help'), 'Shift+F1'),
+            ('Comment / Uncomment', lambda: self.current.toggle_comment() if self.current else None, 'Ctrl+/')]:
+            self.action(label, callback, shortcut)
+
+    def eventFilter(self, watched, event):
+        # Qt maps ControlModifier to Command on macOS, matching StandardKey.
+        if event.type() == qt.QEvent.Type.MouseButtonPress and event.button() == qt.Qt.MouseButton.LeftButton and event.modifiers() & qt.Qt.KeyboardModifier.ControlModifier:
+            doc = next((doc for doc in self.documents.values() if doc.viewport() is watched), None)
+            if doc:
+                doc.setTextCursor(doc.cursorForPosition(event.position().toPoint()))
+                self.activate(self.group_for(doc))
+                self.query('definition')
+                return True
+        return super().eventFilter(watched, event)
+
+    def location(self):
+        doc = self.current
+        return (str(doc.path), doc.textCursor().position(), doc.verticalScrollBar().value()) if doc else None
+
+    def remember(self):
+        location = self.location()
+        if location and (self.history_index < 0 or self.history[self.history_index] != location):
+            self.history = self.history[:self.history_index + 1] + [location]
+            self.history = self.history[-200:]
+            self.history_index = len(self.history) - 1
+
+    def travel(self, direction):
+        if direction < 0 and self.history_index == len(self.history) - 1:
+            self.remember()
+        index = self.history_index + direction
+        if 0 <= index < len(self.history):
+            self.history_index = index
+            path, position, scroll = self.history[index]
+            self.open_path(path, position=position)
+            self.run(lambda: None, lambda _: self.documents[Path(path)].verticalScrollBar().setValue(scroll) if Path(path) in self.documents else None)
+
+    def go_line(self):
+        doc = self.current
+        if doc:
+            line, ok = qt.QInputDialog.getInt(self, 'Go to line', 'Line', 1, 1, doc.blockCount())
+            if ok:
+                self.remember()
+                cursor = doc.textCursor()
+                cursor.setPosition(doc.document().findBlockByNumber(line - 1).position())
+                doc.setTextCursor(cursor)
+                doc.centerCursor()
+
+    def go_file(self):
+        query, ok = qt.QInputDialog.getText(self, 'Go to file', 'Filename or relative path contains')
+        if ok:
+            project = deepcopy(self.project)
+            def choose(files):
+                if not files:
+                    self.error('No matching files in the bounded project scan.')
+                    return
+                value, accepted = qt.QInputDialog.getItem(self, 'Go to file', 'Matches (up to 500)', files, 0, False)
+                if accepted:
+                    self.remember()
+                    self.open_path(project.root / value)
+            self.run(lambda: project_files(project, query), choose)
+
+    def query(self, kind):
+        doc = self.current
+        if not doc or doc.path.suffix.lower() not in ('.py', '.pyi'):
+            self.error('Python navigation requires a .py or .pyi file.')
+            return
+        cursor = doc.textCursor()
+        line = cursor.blockNumber() + 1
+        # Jedi columns count Unicode characters; QTextCursor counts UTF-16 units.
+        prefix = cursor.block().text().encode('utf-16-le')[:cursor.positionInBlock() * 2]
+        column = len(prefix.decode('utf-16-le'))
+        code, revision, path = doc.toPlainText(), doc.document().revision(), doc.path
+        position = cursor.position()
+        project = deepcopy(self.project)
+        self.status.setText('Analyzing Python…')
+        def done(result):
+            if self.documents.get(path) is not doc or doc.document().revision() != revision or self.current is not doc or doc.textCursor().position() != position:
+                return
+            if kind == 'help':
+                qt.QMessageBox.information(self, 'Python documentation', result or 'No documentation resolved.')
+            elif kind == 'completion':
+                labels = [entry[0] for entry in result]
+                if not labels:
+                    self.error('No completions resolved.')
+                    return
+                value, ok = qt.QInputDialog.getItem(self, 'Complete symbol', 'Completion', labels, 0, False)
+                if ok:
+                    doc.insertPlainText(result[labels.index(value)][1])
+            elif result:
+                labels = [f'{name} — {file}:{line}' for file, line, column, name in result]
+                selection = 0
+                if len(result) > 1 or kind == 'symbols':
+                    value, ok = qt.QInputDialog.getItem(self, 'Python targets', 'Target', labels, 0, False)
+                    if not ok:
+                        return
+                    selection = labels.index(value)
+                file, target_line, target_column, name = result[selection]
+                self.remember()
+                self.open_path(file)
+                def locate(_):
+                    target = self.documents.get(Path(file).resolve())
+                    if target:
+                        block = target.document().findBlockByNumber(target_line - 1)
+                        if block.isValid():
+                            cursor = target.textCursor()
+                            offset = len(block.text()[:target_column].encode('utf-16-le')) // 2
+                            cursor.setPosition(block.position() + offset)
+                            target.setTextCursor(cursor)
+                            target.centerCursor()
+                self.run(lambda: None, locate)
+            else:
+                self.error('No static definition resolved. Dynamic Python references may not be resolvable.')
+        self.run(lambda: analyze(project, path, code, line, column, kind), done)
