@@ -21,15 +21,18 @@ Python 3.10+ support statement and the separate Ally documentation boundary.
 
 Validation completed October 11, 2026:
 
-- Local suites: Logistics 828 tests, commonUtils 637 tests (one skip),
+- Local suites: Logistics 828 tests plus three regression-runner checks,
+  commonUtils 637 tests (one skip),
   Ally Tools 33 tests, Blue Hole 14 adapter tests, and 10 release-tooling tests.
 - All four repositories' GitHub workflows passed. Logistics passed Windows,
   macOS, Ubuntu and Fedora checks, including compression parity.
 - The [source release check](https://github.com/ispaure/logistics/actions/runs/38119613162)
   built a ZIP matching all 792 files in the tested local package. Public and
   private launches were checked locally.
-- One macOS shared-suite process crashed inside Qt. A local full-suite repeat
-  and the debug rerun passed; the native crash's cause remains unconfirmed.
+- macOS intermittently crashed inside Qt when unrelated shared test files reused
+  one application. Shared test files now use fresh processes; assertions, crashes
+  and timeouts still fail validation. The application suite stays in one process.
+  CI also retains native crash reports. The exact native defect is unconfirmed.
   Live Blender, Hue hardware and external services were not exercised.
 - A Windows browser fixture exceeded its five-second startup wait. Its wait
   now allows 20 seconds and reports unfinished workers; the shared-suite CI

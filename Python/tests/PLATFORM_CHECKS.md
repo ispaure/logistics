@@ -66,15 +66,21 @@ bits run only on POSIX hosts; archive and password checks run on every platform.
 
 ## Stalled tests
 
-The suite runner writes a traceback for every Python thread after 60 seconds,
-repeating while the process is alive. The outer platform runner still enforces
-its five-minute suite timeout and uploads the diagnostic log. To run a single
-suite with these diagnostics, use the project interpreter:
+The suite runner reports the active test and completed count every 60 seconds.
+Native crashes also produce Python tracebacks. The outer platform runner allows
+ten minutes per suite and uploads its logs; macOS jobs also collect native Python
+crash reports when available. To run the application suite with these diagnostics:
 
 ```sh
 QT_QPA_PLATFORM=offscreen PYTHONPATH=Python .venv/bin/python Python/tests/run_regressions.py Python/tests
 ```
 
 Qt tests use `QtTestCase` to stop workers and release new windows between tests.
-A full-suite pass remains required; isolated tests alone can hide shared-state
-or lifecycle failures.
+The shared suite runs every test file in a fresh process so unrelated fixtures do
+not share Qt application state. An assertion failure, abnormal exit or timeout
+still fails validation; later files run to provide the remaining results. To run
+the same shared checks locally, replace `Python/tests` above with
+`Python/commonUtils/tests --isolate-modules`.
+
+The full Logistics application suite stays in one process to exercise combined
+startup, document hosting and worker lifetimes. Both complete suites must pass.
