@@ -152,3 +152,7 @@ on the right, and the result in the center. Apply non-conflicting changes, then
 choose either side for conflicts or edit the result and mark that change resolved.
 Use Undo/Redo to revise choices. Apply puts the result in your buffer; save when
 ready. If the buffer or disk changes during review, reopen the merge.
+
+PHP/HTML and Laravel `.blade.php` highlighting are shared with IDE. Python `.pyi`
+stubs use Python highlighting. Blade directives and single-line interpolations are
+supported; multiline Blade template expressions have limited highlighting.

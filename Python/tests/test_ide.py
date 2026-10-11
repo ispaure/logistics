@@ -1,16 +1,19 @@
 import tempfile
+import unittest
 from pathlib import Path
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.persistence.text import read_text_file, FileConflictError
 from features.ide.documents import EditorDocument
 
 
-class DocumentTests(QtTestCase):
+class IDEQtTests(QtTestCase):
     @classmethod
     def setUpClass(cls):
         from commonUtils.ui import pyside as qt
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
+
+class DocumentTests(IDEQtTests):
     def test_shared_editor_preserves_endings_and_refuses_external_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'example.py'
@@ -21,13 +24,19 @@ class DocumentTests(QtTestCase):
             self.assertEqual(path.read_bytes(), b'x = 2\r\n')
             path.write_bytes(b'external\n')
             editor.setPlainText('mine\n')
+            editor.document().setModified(True)
             with self.assertRaises(FileConflictError):
                 editor.save()
             self.assertEqual(path.read_bytes(), b'external\n')
+            self.assertTrue(editor.document().isModified())
+            path.unlink()
+            with self.assertRaises(FileConflictError):
+                editor.save()
+            self.assertFalse(path.exists())
             editor.close()
 
 
-class ProjectTests(__import__('unittest').TestCase):
+class ProjectTests(unittest.TestCase):
     def test_roundtrip_missing_root_sources_and_conflicting_instance(self):
         from features.ide.projects import Project, ProjectStore
         with tempfile.TemporaryDirectory() as directory:
@@ -55,7 +64,7 @@ class ProjectTests(__import__('unittest').TestCase):
             self.assertEqual(path.read_text(), '{bad')
 
 
-class WorkspaceTests(DocumentTests):
+class WorkspaceFixture(IDEQtTests):
     def wait(self, view):
         import time
         deadline = time.monotonic() + 5
@@ -64,6 +73,8 @@ class WorkspaceTests(DocumentTests):
             self.assertLess(time.monotonic(), deadline)
             time.sleep(.001)
 
+
+class WorkspaceTests(WorkspaceFixture):
     def test_canonical_buffer_moves_and_group_close_preserves_unsaved_text(self):
         from features.ide.projects import Project
         from features.ide.workspace import ProjectWorkspace
@@ -85,6 +96,11 @@ class WorkspaceTests(DocumentTests):
             view.close_group()
             self.assertEqual(len(view.groups), 1)
             self.assertTrue(doc.document().isModified())
+            view.add_group()
+            view.add_group()
+            self.assertIsNone(view.add_group())
+            self.assertEqual(len(view.groups), 3)
+            view.activate(view.group_for(doc))
             with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Cancel):
                 self.assertFalse(view.can_close())
                 self.assertFalse(view.close_document(doc))
@@ -94,7 +110,7 @@ class WorkspaceTests(DocumentTests):
             view.close()
 
 
-class NavigationTests(__import__('unittest').TestCase):
+class NavigationTests(unittest.TestCase):
     def test_import_definition_with_src_layout_and_relative_import(self):
         from features.ide.projects import Project
         from features.ide.analysis import analyze, project_files
@@ -130,3 +146,59 @@ class NavigationTests(__import__('unittest').TestCase):
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0][1], 1)
             self.assertEqual(search_project(project, 'needle', cancelled=lambda: True), [])
+
+
+class RestoreTests(WorkspaceFixture):
+    def test_independent_projects_layout_and_missing_files_survive_restart(self):
+        from features.ide.page import IDEPage
+        from features.ide.projects import Project
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            state = root / 'IDE' / 'workspace.json'
+            a, b = root / 'a.py', root / 'b.py'
+            a.write_text('a = 1\n')
+            b.write_text('b = 2\n')
+            page = IDEPage(store_path=state)
+            first, second = Project('first', str(root)), Project('second', str(root))
+            for p in (first, second):
+                page.store.projects[p.id] = p
+            one = page.open_project(first)
+            one.open_path(a)
+            self.wait(one)
+            one.move(1)
+            two = page.open_project(second)
+            two.open_path(b)
+            self.wait(two)
+            self.assertIsNot(one.documents[a], two.documents[b])
+            self.assertTrue(page.prepare_close())
+            page.close()
+            b.unlink()
+            restored = IDEPage(store_path=state)
+            for i in range(restored.tabs.count()):
+                self.wait(restored.tabs.widget(i))
+            self.assertEqual(restored.tabs.count(), 2)
+            self.assertEqual(len(restored.tabs.widget(0).groups), 2)
+            self.assertEqual(restored.tabs.widget(1).unavailable[0]['path'], str(b))
+            self.assertTrue(restored.prepare_close())
+            restored.close()
+
+    def test_stale_analysis_result_does_not_navigate(self):
+        from features.ide.workspace import ProjectWorkspace
+        from features.ide.projects import Project
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / 'a.py'
+            path.write_text('value = 1\nvalue\n')
+            view = ProjectWorkspace(Project('test', directory))
+            view.open_path(path)
+            self.wait(view)
+            pending = []
+            with patch.object(view, 'run', side_effect=lambda work, done: pending.append(done)):
+                view.query('definition')
+            view.current.insertPlainText('# changed')
+            with patch.object(view, 'open_path') as opened:
+                pending[0]([(str(path), 1, 0, 'value')])
+                opened.assert_not_called()
+            view.current.document().setModified(False)
+            self.assertTrue(view.prepare_close())
+            view.close()

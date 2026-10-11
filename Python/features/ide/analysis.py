@@ -8,7 +8,10 @@ _analysis_lock = Lock()
 
 
 def analyze(project, path, code, line, column, kind='definition'):
-    import jedi
+    try:
+        import jedi
+    except ImportError as error:
+        raise RuntimeError('Python intelligence is unavailable. Synchronize the application dependencies; text editing remains available.') from error
     if len(code) > 1024 * 1024:
         raise ValueError('Analysis is limited to 1 MiB of text.')
     with _analysis_lock:

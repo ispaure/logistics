@@ -57,6 +57,7 @@ credentials and settings. External services need their own accounts/software.
 | [Git](Python/features/git/user_docs/README.md) | Clone repositories, browse history, stage and commit changes, manage branches and remotes |
 | [Bulk Rename](Python/ui_new/bulk_rename/user_docs/README.md) | Preview and apply changes to many filenames at once |
 | [Text Editor](Python/features/text_editor/user_docs/README.md) | Edit text and code in tabs, search/replace, and preserve file encodings |
+| [IDE](Python/features/ide/user_docs/README.md) | Keep independent projects and split editor groups, navigate Python definitions, and search project files |
 | [Books](Python/features/books/user_docs/README.md) and [Comics](Python/features/comics/user_docs/README.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
 | [Archives](Python/features/archives/user_docs/README.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
 | [Images](Python/features/images/user_docs/README.md) | Compress images and work with photo metadata |

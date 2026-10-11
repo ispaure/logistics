@@ -21,11 +21,12 @@ class EditorDocument(CodeEdit):
     def title(self):
         return self.path.name + (' *' if self.document().isModified() else '')
 
-    def save(self, path=None):
+    def save(self, path=None, *, expected=None):
         target = Path(path).resolve() if path else self.path
         content = self.snapshot.encode(self.toPlainText())
         write_text_file(target, content,
-                        expected=self.snapshot.original if target == self.path else None)
+                        expected=self.snapshot.original if target == self.path else expected,
+                        allow_overwrite=expected is not None)
         self.snapshot = decode_bytes(content, path=target, encoding=self.snapshot.encoding)
         self.document().setModified(False)
         self.highlighter.configure(detect_language(target, self.toPlainText()))

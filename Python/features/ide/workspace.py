@@ -18,6 +18,8 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         super().__init__(parent)
         self.project = project
         self.documents = {}
+        self.unavailable = []
+        self.restoring = True
         self.groups = []
         self.active_group = None
         self.worker = None
@@ -37,7 +39,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
             self.action(label, callback, shortcut)
         self.init_navigation()
         self.splitter = qt.QSplitter()
-        layout.addWidget(self.splitter)
+        layout.addWidget(self.splitter, 1)
         self.browser = ProjectBrowser(project, self)
         self.browser.opened.connect(self.open_path)
         self.browser.changed.connect(self.changed)
@@ -51,6 +53,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         layout.addWidget(self.search)
         self.status = qt.QLabel()
         self.status.setWordWrap(True)
+        self.status.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         layout.addWidget(self.status)
         self.splitter.splitterMoved.connect(self.changed)
         self.editors.splitterMoved.connect(self.changed)
@@ -76,10 +79,10 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         self.browser.reset_root()
         self.status.setText(str(self.project.root) + ('' if self.project.root.is_dir() else ' — unavailable; registration retained'))
 
-    def run(self, callback, done):
+    def run(self, callback, done, failed=None):
         if self.closing:
             return
-        self.queue.append((callback, done))
+        self.queue.append((callback, done, failed))
         self.start_next()
 
     def cancelled(self):
@@ -88,13 +91,13 @@ class ProjectWorkspace(Navigation, qt.QWidget):
     def start_next(self):
         if self.worker or not self.queue:
             return
-        callback, done = self.queue.popleft()
+        callback, done, failed = self.queue.popleft()
         worker = self.worker = ResultWorker(callback, self)
         def finished():
             self.worker = None
-            if not self.closing:
+            if not self.closing and not worker.isInterruptionRequested():
                 if worker.error:
-                    self.error(worker.error)
+                    (failed or self.error)(worker.error)
                 else:
                     done(worker.result)
             worker.deleteLater()
@@ -137,8 +140,15 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         for path in paths:
             self.open_path(path)
 
-    def open_path(self, path, group=None, position=None):
+    def open_path(self, path, group=None, position=None, encoding=None):
         path = Path(path).expanduser().resolve()
+        for existing in self.documents:
+            try:
+                if path.samefile(existing):
+                    path = existing
+                    break
+            except OSError:
+                continue
         group = group if group in self.groups else self.active_group
         def loaded(snapshot):
             doc = self.documents.get(path)
@@ -151,6 +161,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
                 doc.document().modificationChanged.connect(lambda _: self.update_title(doc))
                 doc.focused.connect(lambda: self.activate(self.group_for(doc)))
                 doc.cursorPositionChanged.connect(self.changed)
+                doc.verticalScrollBar().valueChanged.connect(self.changed)
                 self.watch.addPath(str(path))
             target = self.group_for(doc)
             target.setCurrentWidget(doc)
@@ -165,7 +176,16 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         if path in self.documents:
             loaded(None)
         else:
-            self.run(lambda: read_text_file(path), loaded)
+            def failed(error):
+                if encoding is None and ('decode' in error or 'codec' in error):
+                    from commonUtils.persistence.text import ENCODINGS
+                    value, ok = qt.QInputDialog.getItem(self, 'Choose original encoding',
+                        'Decoding failed; choose the source encoding', ENCODINGS, 0, False)
+                    if ok:
+                        self.open_path(path, group, position, value)
+                        return
+                self.error(error)
+            self.run(lambda: read_text_file(path, encoding=encoding), loaded, failed)
 
     def update_title(self, doc):
         group = self.group_for(doc)
@@ -179,17 +199,37 @@ class ProjectWorkspace(Navigation, qt.QWidget):
 
     def save_document(self, doc, save_as=False):
         target = None
+        expected = None
         if save_as:
-            name, _ = qt.QFileDialog.getSaveFileName(self, 'Save As (choose a new file)', str(doc.path))
+            name, _ = qt.QFileDialog.getSaveFileName(self, 'Save As', str(doc.path), 'All files (*)',
+                options=qt.QFileDialog.Option.DontConfirmOverwrite)
             if not name:
                 return False
             target = Path(name).resolve()
-            if target in self.documents and self.documents[target] is not doc:
-                self.error('That file already has an open buffer.')
-                return False
+            for other in self.documents.values():
+                if other is doc:
+                    continue
+                same = target == other.path
+                try:
+                    same = same or target.samefile(other.path)
+                except OSError:
+                    pass
+                if same:
+                    self.error('That file already has an open buffer.')
+                    return False
         old = doc.path
         try:
-            doc.save(target)
+            if target and target != old and target.exists():
+                from commonUtils.persistence.text import MAX_BYTES
+                with target.open('rb') as stream:
+                    expected = stream.read(MAX_BYTES + 1)
+                if len(expected) > MAX_BYTES:
+                    raise ValueError('Destination exceeds the 16 MiB file limit.')
+                if qt.QMessageBox.question(self, 'Replace file?', str(target),
+                        qt.QMessageBox.StandardButton.Yes | qt.QMessageBox.StandardButton.Cancel,
+                        qt.QMessageBox.StandardButton.Cancel) != qt.QMessageBox.StandardButton.Yes:
+                    return False
+            doc.save(target, expected=expected)
         except (OSError, ValueError) as error:
             self.error(f'Save failed: {error}. Reload or Save As a new file to preserve both versions.')
             return False
@@ -264,7 +304,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
 
     def find(self):
         self.search.set_editor(self.current)
-        self.search.show()
+        self.search.open(replace=True)
 
     def locate(self):
         if self.current:
@@ -290,25 +330,51 @@ class ProjectWorkspace(Navigation, qt.QWidget):
             self.error(error)
 
     def state(self):
-        return {'groups': [{'files': [{'path': str(g.widget(i).path), 'cursor': g.widget(i).textCursor().position()} for i in range(g.count())],
+        if self.restoring:
+            return self.project.layout
+        return {'unavailable': self.unavailable, 'browser': self.browser.state(), 'groups': [{'files': [{'path': str(g.widget(i).path), 'cursor': g.widget(i).textCursor().position(), 'scroll': g.widget(i).verticalScrollBar().value()} for i in range(g.count())],
                             'active': str(g.currentWidget().path) if g.currentWidget() else None} for g in self.groups],
                 'active_group': self.groups.index(self.active_group) if self.active_group in self.groups else 0,
                 'splitter': self.splitter.sizes(), 'editors': self.editors.sizes()}
 
     def restore(self, state):
+        self.browser.restore(state.get('browser', {}))
         groups = state.get('groups', [])
         if not isinstance(groups, list):
-            return
+            groups = []
         for index, entry in enumerate(groups[:3]):
             group = self.groups[0] if index == 0 else self.add_group()
             if not isinstance(entry, dict):
                 continue
-            for record in entry.get('files', []):
+            files = entry.get('files', [])
+            if not isinstance(files, list):
+                continue
+            for record in files[:500]:
                 if isinstance(record, dict) and isinstance(record.get('path'), str):
-                    self.open_path(record['path'], group, record.get('cursor', 0))
+                    position = record.get('cursor', 0)
+                    position = max(0, position) if isinstance(position, int) else 0
+                    if Path(record['path']).is_file():
+                        self.open_path(record['path'], group, position)
+                    else:
+                        self.unavailable.append(record)
+        for record in state.get('unavailable', []) if isinstance(state.get('unavailable', []), list) else []:
+            if isinstance(record, dict) and isinstance(record.get('path'), str):
+                if Path(record['path']).is_file():
+                    self.open_path(record['path'])
+                else:
+                    self.unavailable.append(record)
         def restored(_):
+            self.restoring = False
             for group, entry in zip(self.groups, groups):
-                doc = self.documents.get(Path(entry.get('active') or ''))
+                if not isinstance(entry, dict):
+                    continue
+                active_path = entry.get('active')
+                doc = self.documents.get(Path(active_path).resolve()) if isinstance(active_path, str) else None
+                for record in entry.get('files', []) if isinstance(entry.get('files', []), list) else []:
+                    if isinstance(record, dict) and isinstance(record.get('path'), str) and isinstance(record.get('scroll', 0), int):
+                        opened = self.documents.get(Path(record['path']).resolve())
+                        if opened:
+                            opened.verticalScrollBar().setValue(record.get('scroll', 0))
                 if doc and self.group_for(doc) is group:
                     group.setCurrentWidget(doc)
             active = state.get('active_group', 0)
@@ -326,8 +392,9 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         return all(self.confirm_document(doc) for doc in list(self.documents.values()))
 
     def prepare_close(self):
-        self.closing = True
         self.queue.clear()
         if self.worker:
             self.worker.cancel()
-        return self.search.prepare_close() and self.worker is None
+        ready = self.search.prepare_close() and self.worker is None
+        self.closing = ready
+        return ready
