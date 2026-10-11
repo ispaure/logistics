@@ -102,6 +102,7 @@ Rule cards reflow into fewer columns in narrow windows.
 The bottom action area keeps **Rule presets…** on the left and a stack of
 **Preview**, **Reset rules** and **Undo last rename** beside the larger
 **Rename selected** button on the right. The arrangement stays together in narrow
-windows. The hosted tool and standalone window use the same File, Edit, View,
+windows. Rule presets aligns with the top of the action group, clear of the
+floating settings icon in single-tool mode. The hosted tool and standalone window use the same File, Edit, View,
 Rename and Help menus; unavailable operations are disabled, and Show Rules keeps
 the current rules intact.

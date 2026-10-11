@@ -711,6 +711,25 @@ class MainWindowTests(QtTestCase):
         self.assertEqual([action.text() for action in bar.actions()], ['Logistics', 'File', 'Edit', 'View', 'Navigate', 'Index', 'Help'])
         window.dlg.close(); self.app.processEvents()
 
+    def test_hosted_rename_menus_and_presets_remain_accessible_without_sidebar(self):
+        import time
+        window = self.browser_window()
+        self.wait_browser(window.tabs.widget(0))
+        window._launch('browser')
+        renamer = window._show_bulk_rename(self.root)
+        deadline = time.monotonic() + 8
+        while renamer.progress.busy or renamer.preview_timer.isActive() or renamer.plan is None:
+            self.assertLess(time.monotonic(), deadline)
+            self.app.processEvents(); time.sleep(.005)
+        self.app.processEvents()
+        self.assertEqual([action.text() for action in window.dlg.menuBar().actions()],
+                         ['Logistics', 'File', 'Edit', 'View', 'Rename', 'Help'])
+        self.assertTrue(window.settings_button.isVisible())
+        preset_rect = qt.QRect(renamer.presets_button.mapTo(window.launch_surface, qt.QPoint()),
+                               renamer.presets_button.size())
+        self.assertFalse(preset_rect.intersects(window.settings_button.geometry()))
+        window.dlg.close(); self.app.processEvents()
+
     def test_folder_hub_browse_uses_browser_and_preserves_scoped_views(self):
         window = self.browser_window()
         page = window.tabs.widget(0)
