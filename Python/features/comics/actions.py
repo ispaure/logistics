@@ -81,7 +81,10 @@ def open_yac_reader_library(folder: LocalFolder) -> bool:
     yac_prefs_dir = dirUtils.Directory(yac_prefs_dir_path)
     yac_prefs_dir.make_dir()
 
-    if not fileUtils.copy_file(yac_reader_library_ini, Path(yac_prefs_dir_path, 'YACReaderLibrary.ini')):
+    try:
+        fileUtils.File(yac_reader_library_ini).copy_file(Path(yac_prefs_dir_path, 'YACReaderLibrary.ini'))
+    except OSError as error:
+        log(Severity.ERROR, 'open_yac_reader_library', f'Could not copy preferences: {error}')
         return False
 
     exec_path = Path('/Applications', 'YACReaderLibrary.app', 'Contents', 'MacOS', 'YACReaderLibrary')
@@ -122,7 +125,7 @@ def move_cbz_to_individual_folders(target_dir, *, progress=lambda done, total, m
         new_path = dir_path / file.file_name
         if new_path.exists() or new_path.is_symlink():
             raise FileExistsError(f'Destination already exists: {new_path}. Original kept.')
-        fileUtils.make_dir(dir_path)
+        dir_path.mkdir(parents=True, exist_ok=True)
         file.copy_file(new_path)
         if not file.delete_file():
             raise OSError(f'Copied {file.path}, but failed to delete the original.')
