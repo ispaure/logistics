@@ -1,135 +1,89 @@
+"""Validated Hue group commands; callers decide how to present failures."""
 import phue
-
-from commonUtils.runtime.diagnostics import print_debug_msg
 from features.smart_home import configuration
 
-
-show_verbose = True
-
 COLOR_PRESETS = {
-    'Red': (0, 254),
-    'Orange': (5281, 254),
-    'Yellow': (10000, 254),
-    'Green': (23705, 254),
-    'Aqua': (39358, 254),
-    'Blue': (46014, 254),
-    'Purple': (50800, 254),
-    'Magenta': (59526, 254),
-    'White': (0, 0)
+    'Red': (0, 254), 'Orange': (5281, 254), 'Yellow': (10000, 254),
+    'Green': (23705, 254), 'Aqua': (39358, 254), 'Blue': (46014, 254),
+    'Purple': (50800, 254), 'Magenta': (59526, 254), 'White': (0, 0),
 }
 
 
-def set_group_prop_from_arg_dict(arg_dict):
-    """
-    Set Philips Hue group properties from a dictionary of arguments.
-    """
-    group_name = arg_dict['Room']
-
-    # Set State
-    if 'State' in arg_dict:
-        set_group_state(group_name=group_name, state=arg_dict['State'])
-
-    # Set Brightness
-    if 'Brightness' in arg_dict:
-        set_group_brightness(group_name=group_name, brightness=arg_dict['Brightness'])
-
-    # Manually set Hue and Saturation
-    if 'Hue' in arg_dict and 'Saturation' in arg_dict:
-        set_group_color(group_name=group_name, hue=arg_dict['Hue'], saturation=arg_dict['Saturation'])
-
-    # Set Hue/Saturation from a named color preset
-    if 'Color' in arg_dict:
-        color = arg_dict['Color']
-
-        if color in COLOR_PRESETS:
-            hue, saturation = COLOR_PRESETS[color]
-            set_group_color(group_name=group_name, hue=hue, saturation=saturation)
-
-
-def connect_bridge():
-    get_bridge().connect()
+def get_bridge_address():
+    address = configuration.get_philips_hue_bridge_address()
+    if not address or not address.strip():
+        raise ValueError('Set the Hue bridge address in Smart Home settings.')
+    return address.strip()
 
 
 def get_bridge():
     return phue.Bridge(get_bridge_address())
 
 
-def get_bridge_address():
-    return configuration.get_philips_hue_bridge_address()
+def connect_bridge():
+    get_bridge().connect()
+    return True
+
+
+def _group_id(bridge, name):
+    matches = [key for key, group in bridge.get_group().items() if group['name'] == name]
+    if len(matches) != 1 or not str(matches[0]).isdecimal() or int(matches[0]) <= 0:
+        raise ValueError(f'Hue room is missing or ambiguous: {name}')
+    return int(matches[0])
 
 
 def get_group_id_from_name(name):
-    # Get bridge
+    return _group_id(get_bridge(), name)
+
+
+def get_rooms():
+    return tuple(sorted({group['name'] for key, group in get_bridge().get_group().items()
+                         if str(key).isdecimal() and int(key) > 0}))
+
+
+def _integer(value, minimum, maximum, name):
+    if type(value) is not int or not minimum <= value <= maximum:
+        raise ValueError(f'{name} must be an integer from {minimum} to {maximum}.')
+    return value
+
+
+def set_group_prop_from_arg_dict(arguments):
+    properties = {}
+    if 'State' in arguments:
+        if type(arguments['State']) is not bool:
+            raise ValueError('State must be True or False.')
+        properties['on'] = arguments['State']
+    if 'Brightness' in arguments:
+        properties['bri'] = _integer(arguments['Brightness'], 0, 254, 'Brightness')
+    if ('Hue' in arguments) != ('Saturation' in arguments):
+        raise ValueError('Supply both hue and saturation.')
+    if 'Hue' in arguments:
+        properties['hue'] = _integer(arguments['Hue'], 0, 65535, 'Hue')
+        properties['sat'] = _integer(arguments['Saturation'], 0, 254, 'Saturation')
+    if 'Color' in arguments:
+        try:
+            properties['hue'], properties['sat'] = COLOR_PRESETS[arguments['Color']]
+        except KeyError:
+            raise ValueError(f"Unknown color: {arguments['Color']}") from None
+    if not properties:
+        raise ValueError('Choose a light property to change.')
     bridge = get_bridge()
-
-    # Get all groups
-    groups = bridge.get_group()
-
-    for group in groups:
-        if name == groups[group]['name']:
-            print_debug_msg(f'Found group id matching "{name}"! It is {group}', show_verbose)
-            return group
-
-    # If hasn't returned yet, couldn't find any
-    print_debug_msg(f'Did not find group id matching "{name}"!', show_verbose)
-    return False
+    group = _group_id(bridge, arguments['Room'])
+    responses = bridge.set_group(group, properties)
+    for response in responses or ():
+        for item in response if isinstance(response, list) else [response]:
+            if isinstance(item, dict) and 'error' in item:
+                raise RuntimeError(str(item['error']))
+    return True
 
 
 def set_group_state(group_name, state):
-    """
-    Set the lights to be switched on or off in group.
-
-    :param group_name: Group Name
-    :type group_name: str
-    :param state: True is switched on, False is switched off
-    :type state: bool
-    """
-    # Get bridge to interact with it
-    bridge = get_bridge()
-
-    # Get group id for the group name
-    group_id = int(get_group_id_from_name(group_name))
-
-    # Set the state on group id
-    bridge.set_group(group_id, 'on', state)
+    return set_group_prop_from_arg_dict({'Room': group_name, 'State': state})
 
 
 def set_group_brightness(group_name, brightness):
-    """
-    Set the lights intensity level.
-
-    :param group_name: Group Name
-    :type group_name: str
-    :param brightness: Intensity of light (0 to 254)
-    :type brightness: int
-    """
-    # Get bridge to interact with it
-    bridge = get_bridge()
-
-    # Get group id for the group name
-    group_id = int(get_group_id_from_name(group_name))
-
-    # Set the brightness on group id
-    bridge.set_group(group_id, 'bri', brightness)
+    return set_group_prop_from_arg_dict({'Room': group_name, 'Brightness': brightness})
 
 
 def set_group_color(group_name, hue, saturation):
-    """
-    Set the lights color.
-
-    :param group_name: Group Name
-    :type group_name: str
-    :param hue: Hue of light
-    :type hue: int
-    :param saturation: Saturation of light (0 to 254)
-    :type saturation: int
-    """
-    # Get bridge to interact with it
-    bridge = get_bridge()
-
-    # Get group id for the group name
-    group_id = int(get_group_id_from_name(group_name))
-
-    # Set hue and saturation on group id
-    bridge.set_group(group_id, 'hue', hue)
-    bridge.set_group(group_id, 'sat', saturation)
+    return set_group_prop_from_arg_dict({'Room': group_name, 'Hue': hue, 'Saturation': saturation})
