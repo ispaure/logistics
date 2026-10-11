@@ -117,5 +117,24 @@ class HunkLayoutTests(QtTestCase):
         self.assertTrue(all(card.isHidden() for card in previous_cards))
 
 
+class WindowsStyleHunkLayoutTests(HunkLayoutTests):
+    """Keep the native-style spacing failure reproducible on every CI host."""
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.previous_style = cls.app.style().objectName()
+        cls.previous_font = qt.QFont(cls.app.font())
+        cls.app.setStyle('Windows')
+        font = qt.QFont(cls.previous_font)
+        font.setPointSize(13)
+        cls.app.setFont(font)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.app.setFont(cls.previous_font)
+        cls.app.setStyle(cls.previous_style)
+        super().tearDownClass()
+
+
 if __name__ == '__main__':
     unittest.main()
