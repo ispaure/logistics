@@ -26,15 +26,15 @@ profiles can cause a file to fail safely.
 ## Set JPG comments
 
 Choose **Debug → JPG EXIF - Set Comments…**, select your folder and enter the
-comment. This edits JPG metadata in place. Use a backup for changes you may need
-to undo. WEBP conversion can stop after the current image; completed conversions remain.
+comment. Changes are validated and saved atomically. The first edit keeps the original
+as `<filename>.before-comments` beside the JPEG; retain it if you need to undo. WEBP conversion can stop after the current image; completed conversions remain.
 
 For CBZ page compression, use [Comics](../../comics/user_docs/index.md).
 
 ## More help
 
-Read [Using Logistics](../../../../USER_GUIDE.md) for navigation, resources and
-feature controls. Use Back/Forward in this viewer to return to a previous guide.
+See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.
+
 
 System/application folders are protected by `Python/maintenance.ini`. External drives
 and ordinary user folders are allowed. Additional protected paths and the system

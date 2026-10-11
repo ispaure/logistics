@@ -7,7 +7,7 @@ See the [user guide](user_docs/index.md) and [UI architecture](../UI_ARCHITECTUR
 `register()` contributes a lazy page factory through the normal feature registry.
 No second QApplication, event loop, launcher, dependency environment or copy of
 commonUtils is required. Settings → Features controls the tab with the standard
-session-only feature lifecycle; disabling and enabling retains the page's inputs.
+saved feature lifecycle; disabling and enabling retains the page's inputs.
 
 ## Migrated functionality
 

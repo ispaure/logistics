@@ -63,7 +63,7 @@ neutral pipeline. **Preview** reruns the live preview explicitly.
 ## Applying, cancelling and undo
 
 Scanning, planning and renaming run in background workers using the shared
-[OperationProgress](../README.md#background-work-and-downloads) component.
+[OperationProgress](../../commonUtils/ui/operation_progress.md) component.
 Selection and rule previews update rows together without showing a progress panel
 or moving the main layout. While calculating, **Preview** becomes **Cancel preview**
 in the same space. Scans and rename/undo operations still show full progress.

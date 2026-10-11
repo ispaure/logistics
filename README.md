@@ -41,7 +41,7 @@ folder…** to browse another location. You can search, preview files, switch vi
 and explore folder sizes with the storage charts.
 
 **Folder Hub** brings your configured local folders and remote sources together.
-The icon sidebar opens a dropdown for **Tools** and a document-list popup. Markdown,
+Hover a sidebar icon for its name. The **Documents** icon lists open documents. Markdown,
 the Text Editor and comic/EPUB readers share draggable document tabs, floating
 windows, and side-by-side splits. Double-click a floating tab header to return it.
 **Settings** lets you save feature defaults and edit their configuration. Each

@@ -16,5 +16,4 @@ This feature opens links; it does not start the linked server or check its healt
 
 ## More help
 
-Read [Using Logistics](../../../../USER_GUIDE.md) for navigation, resources and
-feature controls. Use Back/Forward in this viewer to return to a previous guide.
+See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.

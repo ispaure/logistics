@@ -235,7 +235,7 @@ Suggested profiles, **not implemented**:
 
 Three paths independently handle bytes, original-file comparisons, newline/BOM preservation and atomic publication:
 
-- Text Editor uses [text_files.py](Python/commonUtils/text_files.py): `TextSnapshot`, multiple encodings, bounded reads/writes, conflict checks and staged publication.
+- Text Editor uses [text_files.py](Python/commonUtils/persistence/text.py): `TextSnapshot`, multiple encodings, bounded reads/writes, conflict checks and staged publication.
 - Markdown uses [markdown/io.py](Python/commonUtils/ui/markdown/io.py): UTF-8/BOM/newline handling, extension and symlink policy, temporary file and replacement.
 - Configuration uses [TextFileEditor](Python/commonUtils/ui/text_editor.py): direct UTF-8 reads, stored original bytes, newline/BOM handling and `QSaveFile`.
 

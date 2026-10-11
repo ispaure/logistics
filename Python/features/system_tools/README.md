@@ -17,7 +17,7 @@ Provides operating-system maintenance actions for Logistics.
 ## Windows Actions
 
 - Repair Windows system files.
-- Run the bundled NTFS repair script for drive D:.
+- Run the bundled NTFS repair script for the configured drive (default D:).
 
 These actions are available only on Windows.
 
@@ -26,7 +26,9 @@ These actions are available only on Windows.
 - Disable battery-powered lid sleep.
 - Restore battery-powered lid sleep.
 
-These actions are available only on macOS and use `sudo pmset`.
+These actions launch `sudo pmset` in an authentication-capable terminal. The
+first disable saves battery settings; restore uses those saved values. A launch
+return value reports terminal startup, not successful system modification.
 
 ## Safety Notes
 

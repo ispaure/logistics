@@ -33,5 +33,8 @@ push/pull transfers can work without FUSE.
 
 ## More help
 
-Read [Using Logistics](../../../../USER_GUIDE.md) for navigation, resources and
-feature controls. Use Back/Forward in this viewer to return to a previous guide.
+See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.
+
+Mount attempts show a progress dialog. Close/cancel waits for the current attempt;
+an already completed mount remains mounted. Different credential files have
+separate mount locations even when their remote names match.
