@@ -12,6 +12,7 @@ class Navigation:
         for label, callback, shortcut in [
             ('Find in project…', self.find_project, 'Ctrl+Shift+F'),
             ('Definition', lambda: self.query('definition'), 'F12'),
+            ('Find usages…', lambda: self.query('usages'), 'Shift+F12'),
             ('Back', lambda: self.travel(-1), 'Alt+Left'),
             ('Forward', lambda: self.travel(1), 'Alt+Right'),
             ('Go to line…', self.go_line, 'Ctrl+L'),
@@ -25,13 +26,41 @@ class Navigation:
     def eventFilter(self, watched, event):
         # Qt maps ControlModifier to Command on macOS, matching StandardKey.
         if event.type() == qt.QEvent.Type.MouseButtonPress and event.button() == qt.Qt.MouseButton.LeftButton and event.modifiers() & qt.Qt.KeyboardModifier.ControlModifier:
-            doc = next((doc for doc in self.views() if doc.viewport() is watched), None)
+            doc = next((doc for doc in self.views() if hasattr(doc, 'viewport') and doc.viewport() is watched), None)
             if doc:
                 doc.setTextCursor(doc.cursorForPosition(event.position().toPoint()))
                 self.activate(self.group_for(doc))
-                self.query('definition')
+                self.query('usages' if event.modifiers() & qt.Qt.KeyboardModifier.ShiftModifier else 'navigate')
                 return True
         return super().eventFilter(watched, event)
+
+    def query_link(self, doc, request):
+        # Retain only the latest hover while this view has an analysis in flight.
+        if getattr(doc, 'link_busy', False):
+            doc.link_pending = request
+            return
+        doc.link_busy = True
+        token, line, column = request
+        project = deepcopy(self.project)
+        code = doc.toPlainText()
+        def valid():
+            return (doc in self.views() and doc.link_token == token
+                    and doc.path == token[0] and doc.document().revision() == token[1]
+                    and doc.isVisible() and self.isVisible()
+                    and all(getattr(self.project, key) == getattr(project, key)
+                            for key in ('root_path', 'source_paths', 'python_interpreter', 'excluded_paths')))
+        def done(result):
+            if doc not in self.views():
+                return
+            doc.link_busy = False
+            if valid():
+                doc.show_link(token, any(Path(path).is_file() for path, *_ in result))
+            pending = getattr(doc, 'link_pending', None)
+            doc.link_pending = None
+            if pending and pending[0] == doc.link_token:
+                self.query_link(doc, pending)
+        self.run(lambda: analyze(project, token[0], code, line, column), done,
+                 lambda error: done([]))
 
     @staticmethod
     def place_view(view, *, position=None, line=None, column=0, scroll=None):
@@ -120,15 +149,20 @@ class Navigation:
             return (doc not in self.views() or doc.document().revision() != revision
                     or self.current is not doc or doc.textCursor().position() != position or not self.isVisible()
                     or any(getattr(self.project, key) != getattr(project, key)
-                           for key in ('root_path', 'source_paths', 'python_interpreter')))
+                           for key in ('root_path', 'source_paths', 'python_interpreter', 'excluded_paths')))
         def done(result):
             if stale():
                 self.status.setText('Analysis result superseded by edits or focus changes.')
                 return
+            result_kind = kind
+            previews = []
+            if isinstance(result, dict):
+                previews = result.get('previews', [])
+                result_kind, result = result['kind'], result['targets']
             self.status.setText('Python analysis complete.')
-            if kind == 'help':
+            if result_kind == 'help':
                 qt.QMessageBox.information(self, 'Python documentation', result or 'No documentation resolved.')
-            elif kind == 'completion':
+            elif result_kind == 'completion':
                 labels = [entry[0] for entry in result]
                 if not labels:
                     self.error('No completions resolved.')
@@ -136,10 +170,25 @@ class Navigation:
                 value, ok = qt.QInputDialog.getItem(self, 'Complete symbol', 'Completion', labels, 0, False)
                 if ok and not stale():
                     doc.insertPlainText(result[labels.index(value)][1])
+            elif result_kind == 'usages':
+                from .usages import UsagePopup
+                if not hasattr(self, 'usage_popup'):
+                    self.usage_popup = UsagePopup(self)
+                def choose(target):
+                    if stale():
+                        self.error('Usage result superseded by edits or focus changes.')
+                        return
+                    file, target_line, target_column, name = target
+                    self.remember()
+                    self.navigate_to(file, line=target_line, column=target_column)
+                word = qt.QTextCursor(cursor)
+                word.select(qt.QTextCursor.SelectionType.WordUnderCursor)
+                self.usage_popup.present(doc, project, result, previews,
+                                         word.selectedText() or 'symbol', choose)
             elif result:
                 labels = [f'{name} — {file}:{line}' for file, line, column, name in result]
                 selection = 0
-                if len(result) > 1 or kind == 'symbols':
+                if len(result) > 1 or result_kind == 'symbols':
                     value, ok = qt.QInputDialog.getItem(self, 'Python targets', 'Target', labels, 0, False)
                     if not ok or stale():
                         return
@@ -148,8 +197,20 @@ class Navigation:
                 self.remember()
                 self.navigate_to(file, line=target_line, column=target_column)
             else:
-                self.error('No static definition resolved. Dynamic Python references may not be resolvable.')
-        self.run(lambda: analyze(project, path, code, line, column, kind), done)
+                self.error('No static usages found in this project.' if result_kind == 'usages' else
+                           'No static definition resolved. Dynamic Python references may not be resolvable.')
+        def resolve():
+            result = analyze(project, path, code, line, column, kind)
+            resolved_kind = result['kind'] if isinstance(result, dict) else kind
+            if resolved_kind == 'usages':
+                from .usages import usage_previews
+                targets = result['targets'] if isinstance(result, dict) else result
+                return {'kind': 'usages', 'targets': targets,
+                        'previews': usage_previews(targets, path, code)}
+            return result
+        if hasattr(self, 'usage_popup'):
+            self.usage_popup.hide()
+        self.run(resolve, done)
 
     def find_project(self):
         query, ok = qt.QInputDialog.getText(self, 'Find in project', 'Text contains (case insensitive)')

@@ -1,7 +1,8 @@
 # Using IDE
 
 Enable **IDE** in Settings → Features, then select its code icon in the navigation
-rail. IDE does not require Text Editor, Git or any reader feature to be enabled.
+rail, immediately before Git when both are enabled. IDE does not require Text
+Editor, Git or any reader feature to be enabled.
 
 ## Projects
 
@@ -34,6 +35,18 @@ Malformed configuration is retained and will not be overwritten automatically.
 
 ## Files and groups
 
+`.md` and `.markdown` files open in the Markdown editor as ordinary IDE file
+tabs alongside code. Use **Formatted**, **Source**, or **Read** in the tab;
+formatting, tables, properties, contents and Markdown find/replace are available
+there. Formatted edits can normalize Markdown syntax; use Source for precise
+syntax. Callouts and incomplete frontmatter select Source automatically.
+Local Markdown links open another IDE tab without replacing the current file.
+Project Save/Save All, Save As, Reload and unsaved-close prompts apply to these
+tabs too. Markdown Save As requires a `.md` or `.markdown` filename.
+Split views share Markdown source and modified state; each formatted view has
+its own rich undo history. Source undo/redo is shared across views. Saved cursor
+locations and go-to-line use Source mode.
+
 The left tree loads directories lazily, hides configured exclusions, and filters
 filenames without recursively crawling the project. **Go to file** searches
 relative paths in a background scan. **Locate file** selects the active document.
@@ -49,6 +62,9 @@ into its center to merge tabs, or onto its left/right quarter to create a split.
 A preview marks the target. Up to three groups are supported; a side drop at the
 limit is rejected unless moving an existing single-file column, which can be
 repositioned without adding a fourth group. Escape or releasing outside this project's editor area cancels.
+Moving one single-file column beside another reorders the existing columns and
+keeps the file's unsaved text, cursor and undo history. Release finishes the
+originating drag even when the pointer crosses into the other editor.
 Empty groups disappear after files move/close. **View → Split Editor Right**
 adds a group showing another view of the current file, up to three groups. You can
 edit either view: text, undo/redo, modified state and disk identity are shared.
@@ -89,7 +105,18 @@ Windows/Linux. Keyboard shortcuts remain available.
 
 ## Python navigation and search
 
-- **F12** or Ctrl-click (Command-click on macOS): definition of a Python symbol.
+- **F12**: definition of a Python symbol. Ctrl-click (Command-click on macOS)
+  jumps from a reference to its definition; clicking a function or class declaration
+  instead lists its usages in the registered project.
+  Hold Ctrl/Command over Python source for a pointing-hand cursor; a reachable
+  symbol turns blue and underlined after background analysis. Releasing the key
+  or moving off the symbol clears the link feedback.
+- **Shift+F12** or **Navigate → Find usages…**: list usages of the symbol at the
+  caret. Ctrl+Shift-click (Command+Shift-click on macOS) also lists usages. Choose
+  a result to open its file and position; Back returns to where you searched.
+  Results appear in a popup over the editor, with filename, line number and code
+  preview. Filter by file/path or preview text; use arrows and Enter or click a row
+  to open it. Escape or a click outside closes the popup without choosing a result.
 - **Alt+Left / Alt+Right**: back/forward with cursor and approximate scroll position.
 - **Ctrl/Cmd+P**: Go to file; **Ctrl/Cmd+L**: Go to line.
 - **Ctrl/Cmd+Shift+O**: symbols in the current file.
@@ -101,6 +128,10 @@ Windows/Linux. Keyboard shortcuts remain available.
 Jedi analyzes Python on background workers using the configured source paths and
 optional interpreter. It follows common local definitions, imports, classes,
 functions and statically inferable methods. No language server needs installation.
+Usages are semantic references found by Jedi, capped at 200 and filtered to the
+registered project outside its configured exclusions. Declarations and import
+bindings are omitted; imported aliases and dynamic Python can have incomplete
+results. Other files are analyzed from their saved content, so save changes first.
 Missing Jedi disables analysis while editing remains available. Requests for
 changed/closed source buffers are ignored. Dynamic references, unresolved imports
 and builtins without navigable source can return no target. Other open files'

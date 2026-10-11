@@ -1,10 +1,30 @@
 # Files and documents in Logistics
 
-Logistics opens File Browser at your home folder. Use it for arbitrary paths;
+Logistics starts with a launch chooser. Select **Open full hub with sidebar** for
+all destinations, or **File Browser**, **Git**, or **IDE** to use one tool without
+the sidebar. Git and IDE are available when their features are enabled.
+
+The chooser's **Read & edit** cards open Markdown, Text Editor, EPUB Reader,
+Comic Reader and Archives, according to enabled features. Use **Open…** to pick a
+file or **New** where offered to create a document. Cancelling the picker keeps
+the chooser visible. Opened documents use the shared workspace without the sidebar.
+
+In a single-tool view, a small, opaque settings icon floats above the content at
+the bottom-left. Click it to show **Settings**, **Return to tool** (or **Return to
+documents**), **Open documents**, **Choose launch mode**, and **Open full hub with
+sidebar**. The chooser also offers this icon, so
+you can enable an unavailable tool. Switching modes reuses your existing pages
+and workspaces. Each new app launch shows the chooser again.
+
+File Browser starts at your home folder. Use it for arbitrary paths;
 **Folder Hub** brings configured local folders and remote integrations together.
 The **Documents** menu lists open editors/readers. Switching destinations keeps
 those documents alive. Feature-specific actions appear only for eligible selections.
 The compact left sidebar keeps full-size destination icons with narrow side margins.
+File Browser and Folder Hub use the full page width. Indexing and folder-source
+loading appear in compact bottom notice rows, leaving more room for files and
+folders. Hover over a shortened indexing notice to read its full text; use
+**Index details…** when shown to inspect unfinished folders and scan errors.
 
 ## Browse, search and inspect storage
 
@@ -70,6 +90,12 @@ Logistics Undo. Specialized image, comic, archive and cleanup actions have their
 own preservation rules: read the owning guide before applying a batch.
 
 ## Work in several panes
+
+On macOS, the menu bar follows the current destination and focused document pane,
+including detached windows. Switching back to a destination without document
+menus restores the host's menus automatically.
+Docked Markdown and Text Editor tabs refresh the visible macOS menu bar when
+selected; opening or clicking the menu bar is not required.
 
 Browser tabs let several folders remain open. Drag a tab to an edge to split,
 to another pane to combine, or outside the workspace to detach. Double-click a

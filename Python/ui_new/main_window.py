@@ -10,6 +10,7 @@ from ui_new.pages.settings import SettingsPage
 from ui_new.file_browser import FileBrowserPage
 from ui_new.documents import DocumentsPage, register_document_host
 from ui_new.sidebar import DestinationRail
+from ui_new.landing import LandingPage, LaunchSurface
 from ui_new.folder_actions import FolderActionsPage
 from commonUtils.ui.process_host import register_process_host
 
@@ -76,6 +77,8 @@ class MainWindow(pyside.Window):
         self._docking_preview = False
         self._closing = False
         self.bulk_rename = None
+        self._launch_mode = 'landing'
+        self._standalone_page = None
 
         self._build_layout()
         self._core_pages = []
@@ -103,16 +106,111 @@ class MainWindow(pyside.Window):
         self._toast_status_guard = _ToastStatusGuard(self.toast, self.dlg.statusBar())
         self._refresh_sidebar()
         self._update_window_title()
+        self.dlg.workspace_menu_document = self._menu_document
+        self.documents.workspace.active_changed.connect(self._sync_menus)
+        self._sync_menus()
 
     def _build_layout(self):
-        central_widget = pyside.QWidget()
-        layout = pyside.QHBoxLayout(central_widget)
+        central_widget = self.launch_surface = LaunchSurface()
+        outer = pyside.QVBoxLayout(central_widget)
+        outer.setContentsMargins(0, 0, 0, 0)
+        self.launch_stack = pyside.QStackedWidget(central_widget)
+        outer.addWidget(self.launch_stack)
+        self.landing = LandingPage()
+        self.landing.launch_requested.connect(self._launch)
+        self.landing.document_requested.connect(self._launch_document)
+        self.launch_stack.addWidget(self.landing)
+        self.hub = pyside.QWidget()
+        layout = pyside.QHBoxLayout(self.hub)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.sidebar)
         layout.addWidget(self.tabs, 1)
+        self.launch_stack.addWidget(self.hub)
+        self.sidebar.hide()
+
+        self.settings_button = central_widget.settings_button
+        menu = pyside.QMenu(self.settings_button)
+        self.show_settings_action = menu.addAction('Settings', self._show_settings)
+        menu.addSeparator()
+        self.return_to_tool_action = menu.addAction('Return to tool', self._return_to_tool)
+        menu.addAction('Open documents', self._show_documents)
+        menu.addAction('Choose launch mode', self._show_landing)
+        menu.addAction('Open full hub with sidebar', lambda: self._launch('hub'))
+        self.settings_button.setMenu(menu)
+        self.return_to_tool_action.setEnabled(False)
+        central_widget.position_settings()
 
         self.dlg.setCentralWidget(central_widget)
+
+    def _launch_targets(self):
+        browser = next((page for _, _, page in self._core_pages
+                        if isinstance(page, FileBrowserPage)), None)
+        return {
+            'browser': browser,
+            'git': self._feature_pages.get(('git', 'git.workspace')),
+            'ide': self._feature_pages.get(('ide', 'ide.workspace')),
+        }
+
+    def _launch(self, mode):
+        targets = self._launch_targets()
+        page = targets.get(mode)
+        if mode != 'hub' and (page is None or self.tabs.indexOf(page) < 0):
+            return
+        self._launch_mode = mode
+        self._standalone_page = page
+        self.launch_stack.setCurrentWidget(self.hub)
+        self.sidebar.setVisible(mode == 'hub')
+        self.settings_button.setVisible(mode != 'hub')
+        self.return_to_tool_action.setText('Return to tool')
+        self.return_to_tool_action.setEnabled(page is not None)
+        if page is None:
+            page = targets['browser']
+        if page is not None:
+            self.tabs.setCurrentWidget(page)
+        self.launch_surface.position_settings()
+        self._update_window_title()
+        self._sync_menus()
+
+    def _show_landing(self):
+        self._launch_mode = 'landing'
+        self._standalone_page = None
+        self.return_to_tool_action.setEnabled(False)
+        self.sidebar.hide()
+        self.launch_stack.setCurrentWidget(self.landing)
+        self.settings_button.show()
+        self.launch_surface.position_settings()
+        self._update_window_title()
+        self._sync_menus()
+
+    def _show_settings(self):
+        settings = next((page for _, _, page in self._core_pages
+                         if isinstance(page, SettingsPage)), None)
+        if settings is not None:
+            self._reveal_hub()
+            self.tabs.setCurrentWidget(settings)
+
+    def _launch_document(self, key, new=False):
+        launcher = self.sidebar.launchers.get(key)
+        if launcher is None:
+            return
+        callback = launcher.new_document if new else launcher.open_document
+        # The document host reveals successful opens. A cancelled picker keeps
+        # the chooser and the current launch mode intact.
+        if callback is not None:
+            callback(self.documents)
+
+    def _return_to_tool(self):
+        page = self._standalone_page
+        if page is not None and self.tabs.indexOf(page) >= 0:
+            self.tabs.setCurrentWidget(page)
+
+    def _reveal_hub(self):
+        """Hosted documents and jobs may reveal content from the launch screen."""
+        self.launch_stack.setCurrentWidget(self.hub)
+        self.launch_surface.position_settings()
+        self._update_window_title()
+        self._sync_menus()
 
     def _populate_tabs(self):
         """Build core and feature-contributed tabs in one ordered list."""
@@ -226,6 +324,7 @@ class MainWindow(pyside.Window):
     def _show_feature_settings(self, feature):
         settings = next(page for _, _, page in self._core_pages if isinstance(page, SettingsPage))
         settings.show_feature(feature)
+        self._reveal_hub()
         self.tabs.setCurrentWidget(settings)
 
     def _features_changed(self):
@@ -272,9 +371,15 @@ class MainWindow(pyside.Window):
 
     def _refresh_sidebar(self):
         self.sidebar.refresh(self.tabs, self._core_pages)
+        self.landing.set_document_launchers(self.sidebar.launchers)
+        for mode, page in self._launch_targets().items():
+            self.landing.set_available(mode, page is not None and self.tabs.indexOf(page) >= 0)
+        if self._standalone_page is not None and self.tabs.indexOf(self._standalone_page) < 0:
+            self._show_landing()
 
     def _destination_changed(self, page):
         if page is not None and self.tabs.indexOf(page) >= 0:
+            self._reveal_hub()
             self.tabs.setCurrentWidget(page)
 
     def _browse_folder(self, path):
@@ -290,6 +395,12 @@ class MainWindow(pyside.Window):
         self.tabs.setCurrentWidget(page)
 
     def _show_documents(self):
+        if self._launch_mode == 'landing':
+            self._launch_mode = 'documents'
+            self._standalone_page = self.documents
+            self.return_to_tool_action.setText('Return to documents')
+            self.return_to_tool_action.setEnabled(True)
+        self._reveal_hub()
         if self.tabs.currentWidget() is not self.documents:
             self._last_destination = self.tabs.currentWidget()
         if self.tabs.indexOf(self.documents) < 0:
@@ -298,6 +409,7 @@ class MainWindow(pyside.Window):
         self.dlg.show(); self.dlg.raise_(); self.dlg.activateWindow()
 
     def _show_bulk_rename(self, directory=None, *, paths=()):
+        self._reveal_hub()
         from ui_new.bulk_rename import BulkRenameWidget
         if self.bulk_rename is None:
             self.bulk_rename = BulkRenameWidget(directory, self.dlg, paths=paths)
@@ -311,6 +423,7 @@ class MainWindow(pyside.Window):
         return self.bulk_rename
 
     def _show_actions(self):
+        self._reveal_hub()
         if self.tabs.indexOf(self.actions) < 0:
             self.tabs.addTab(self.actions, 'Folder Actions')
         self.tabs.setCurrentWidget(self.actions)
@@ -344,6 +457,8 @@ class MainWindow(pyside.Window):
     def _update_window_title(self):
         index = self.tabs.currentIndex()
         name = self.tabs.tabText(index) if index >= 0 else ''
+        if self.launch_stack.currentWidget() is self.landing:
+            name = ''
         self.dlg.setWindowTitle(f'Logistics: {name}' if name else 'Logistics')
 
     def _tab_changed(self, _index):
@@ -352,11 +467,7 @@ class MainWindow(pyside.Window):
         current_widget = self.tabs.currentWidget()
         self._update_window_title()
         self.sidebar.set_current(current_widget)
-        from commonUtils.ui.workspace_menus import sync_native_menus
-        workspace = getattr(current_widget, 'workspace', None)
-        view = workspace.active_view if workspace is not None else current_widget
-        document = view if isinstance(view, pyside.QMainWindow) else getattr(view, 'document', None)
-        sync_native_menus(self.dlg, document)
+        self._sync_menus()
         if self._docking_preview:
             return
         if current_widget is self.actions:
@@ -371,6 +482,18 @@ class MainWindow(pyside.Window):
 
         if callable(refresh):
             refresh()
+
+    def _menu_document(self):
+        if self.launch_stack.currentWidget() is self.landing:
+            return None
+        page = self.tabs.currentWidget()
+        workspace = getattr(page, 'workspace', None)
+        view = workspace.active_view if workspace is not None else page
+        return view if isinstance(view, pyside.QMainWindow) else getattr(view, 'document', None)
+
+    def _sync_menus(self, *args):
+        from commonUtils.ui.workspace_menus import sync_native_menus
+        sync_native_menus(self.dlg, self._menu_document())
 
     def can_close(self):
         pages = [page for _, _, page in self._core_pages] + list(self._feature_pages.values())

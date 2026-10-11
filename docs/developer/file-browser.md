@@ -14,6 +14,13 @@ workers. `ui_new/file_browser.py:BrowserView` hosts it and installs enabled
 Logistics contributions through `registry.get_browser_extensions()`. Feature-owned
 hosts can add their own controls around the same component.
 
+The Logistics browser host uses zero outer pane margins and `BrowserIndexStatus`
+to compact the shared workspace footer's padding, font, buttons and activity
+track. Embedded, standalone and detached browser workspaces use this same
+presentation; progress subscriptions and index actions remain owned by
+`WorkspaceIndexStatus`. Folder Hub likewise uses zero outer margins and places
+its source-discovery progress in one horizontal row below both panes.
+
 Declare new capabilities in the feature's `register() -> Feature`, importing
 `Feature` from `features.contributions`. That Logistics declaration extends the
 shared declaration with folder/server sources, workflows, pages and Debug actions.

@@ -12,6 +12,113 @@ from ui_new import main_window
 
 
 class MainWindowTests(QtTestCase):
+    def test_document_launcher_then_plus_menu_preserves_native_tab_menus(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from PySide6.QtTest import QTest
+        from features.text_editor.contributions import register
+        from features.text_editor.service import EditorService
+        launcher = RegisteredContribution('text_editor', 'Text Editor', register().document_launchers[0])
+        with TemporaryDirectory() as temporary, patch.object(main_window.registry,
+                'get_document_launchers', return_value=[launcher]), patch(
+                'commonUtils.ui.workspace_menus.sys.platform', 'darwin'):
+            window = self.window(); window.dlg.show(); window.dlg.activateWindow()
+            root = Path(temporary)
+            service = EditorService(window.documents, history_path=root/'recent.json',
+                                    preferences_path=root/'editor.ini')
+            window.documents._text_editor_service = service
+            window.sidebar.show_documents()
+            for _ in range(3): self.app.processEvents()
+            QTest.mouseClick(window.sidebar.editor_new_buttons['markdown'], qt.Qt.MouseButton.LeftButton)
+            for _ in range(3): self.app.processEvents()
+            workspace = window.documents.workspace
+            markdown = workspace.active_view.document
+            def choose_new():
+                menu = next(menu for menu in workspace.findChildren(qt.QMenu)
+                            if any(action.text() == 'Text Editor' for action in menu.actions()))
+                try:
+                    action = next(action for action in menu.actions() if action.text() == 'Text Editor')
+                    action.menu().actions()[0].trigger()
+                finally:
+                    menu.close()
+            qt.QTimer.singleShot(0, workspace, choose_new)
+            QTest.mouseClick(workspace.active_dock.local_new_button, qt.Qt.MouseButton.LeftButton)
+            for _ in range(5): self.app.processEvents()
+            text = workspace.active_view.document
+            self.assertIsNot(text, markdown)
+            native = None
+            if self.app.platformName() == 'cocoa':
+                from cocoa_menus import CocoaMenus
+                native = CocoaMenus()
+                window.dlg.activateWindow(); native.foreground()
+                QTest.qWait(100)
+            bar = next(bar for bar in workspace.findChildren(qt.QTabBar) if bar.parent() is workspace)
+            for document in (markdown, text, markdown, text):
+                dock = window.documents.records[document]['dock']
+                index = next(i for i in range(bar.count()) if workspace._tab_dock(bar, i) is dock)
+                point = bar.mapTo(window.dlg, bar.tabRect(index).center())
+                QTest.mouseClick(window.dlg.windowHandle(), qt.Qt.MouseButton.LeftButton, pos=point)
+                QTest.qWait(50)
+                self.assertIs(workspace.active_view.document, document)
+                commands = [a.text() for a in window.dlg.menuBar().actions()[0].menu().actions()]
+                self.assertEqual('Force Open as Text…' in commands, document is text)
+                if native is not None:
+                    commands = native.contents()['File']
+                    self.assertEqual('Force Open as Text…' in commands, document is text)
+                    self.assertEqual('Tools' in native.contents(), document is text)
+            for document in (markdown, text): document.close()
+            for _ in range(5): self.app.processEvents()
+
+    def test_docked_markdown_and_text_tabs_refresh_main_menu_context(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+        from PySide6.QtTest import QTest
+        from commonUtils.ui.document_host import show_document
+        from commonUtils.ui.markdown.window import MarkdownWindow
+        from features.text_editor.window import EditorWindow
+        with TemporaryDirectory() as temporary, patch('commonUtils.ui.workspace_menus.sys.platform', 'darwin'):
+            root = Path(temporary)
+            window = self.window(); window.dlg.show(); window.dlg.activateWindow()
+            markdown = MarkdownWindow(None, allow_edit=True)
+            text = EditorWindow(history_path=root/'recent.json', preferences_path=root/'editor.ini')
+            for document in (markdown, text): show_document(document)
+            for _ in range(5): self.app.processEvents()
+            workspace = window.documents.workspace
+            bar = next(bar for bar in workspace.findChildren(qt.QTabBar) if bar.parent() is workspace)
+            with patch.object(window, '_menu_document', wraps=window._menu_document) as resolve:
+                for document in (markdown, text, markdown, text):
+                    dock = window.documents.records[document]['dock']
+                    index = next(i for i in range(bar.count()) if workspace._tab_dock(bar, i) is dock)
+                    QTest.mouseClick(bar, qt.Qt.MouseButton.LeftButton, pos=bar.tabRect(index).center())
+                    for _ in range(5): self.app.processEvents()
+                    self.assertIs(workspace.active_view.document, document)
+                    self.assertEqual(window.dlg.menuBar().actions(), document.menuBar().actions())
+                    commands = [a.text() for a in window.dlg.menuBar().actions()[0].menu().actions()]
+                    self.assertEqual('Force Open as Text…' in commands, document is text)
+                self.assertGreaterEqual(resolve.call_count, 4)
+            for document in (markdown, text): document.close()
+            for _ in range(5): self.app.processEvents()
+
+    def test_menus_follow_feature_workspace_and_restore_for_plain_destinations(self):
+        from commonUtils.ui.workspace import Workspace
+        def create(parent):
+            page = qt.QWidget(parent)
+            page.workspace = Workspace(lambda unused: qt.QMainWindow(), page)
+            layout = qt.QVBoxLayout(page); layout.addWidget(page.workspace)
+            document = page.workspace.add_view()
+            document.menuBar().addMenu('Feature tools').addAction('Run')
+            return page
+        contribution = RegisteredContribution('test', 'Test', PageContribution('Tools', 'tools', create, 20))
+        with patch('commonUtils.ui.workspace_menus.sys.platform', 'darwin'):
+            window = self.window([contribution]); window.dlg.show()
+            feature = window._feature_pages[('test', 'tools')]
+            window.tabs.setCurrentWidget(feature)
+            for _ in range(3): self.app.processEvents()
+            self.assertEqual([a.text() for a in window.dlg.menuBar().actions()], ['Feature tools'])
+            window.tabs.setCurrentWidget(window._core_pages[0][2])
+            for _ in range(3): self.app.processEvents()
+            self.assertEqual(window.dlg.menuBar().actions(), [])
+
     def test_notification_footer_releases_space_when_empty(self):
         from ui_new.notifications import notify
         from uuid import uuid4
@@ -290,6 +397,7 @@ class MainWindowTests(QtTestCase):
                 (0, 'Folders', self.page), (100, 'Debug', self.page))), patch.object(
                 main_window.registry, 'get_pages', return_value=contributions):
             window = main_window.MainWindow()
+            window._launch('hub')
         self.addCleanup(window.dlg.deleteLater)
         return window
 
@@ -535,6 +643,7 @@ class MainWindowTests(QtTestCase):
                 main_window.registry, 'get_browser_extensions', return_value=extensions), patch.object(Path, 'home', return_value=self.root):
             window = main_window.MainWindow()
         window.dlg.show()
+        window._launch('hub')
         self.addCleanup(window.dlg.deleteLater)
         return window
 

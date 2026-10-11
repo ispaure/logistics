@@ -102,6 +102,21 @@ class GitRepositoryTabsTests(QtTestCase):
                          ['Open…', 'Clone…', 'Init…', 'Manage bookmarks…', 'Bookmarks', '', 'Git preferences…'])
         self.assertFalse(any(button.text() == '+ Repositories' for button in view.toolbar.findChildren(qt.QToolButton)))
 
+    def test_detached_window_publishes_active_repository_menus(self):
+        first = self.page.open_repository(self.first_path); self.wait()
+        window = self.page.workspace.detach_dock(self.page.workspace.active_dock); self.wait()
+        second = self.page.open_repository(self.second_path, window.workspace); self.wait()
+        self.assertEqual(window.menuBar().actions(), second.menuBar().actions())
+        first_dock = next(d for d in window.workspace.docks if d.widget() is first)
+        first_dock.raise_()
+        window.workspace._activate(first_dock); self.wait()
+        self.assertEqual(window.menuBar().actions(), first.menuBar().actions())
+        with patch.object(first, '_operation') as first_command, patch.object(second, '_operation') as second_command:
+            repository = next(a for a in window.menuBar().actions() if a.text() == 'Repository').menu()
+            next(a for a in repository.actions() if a.text() == 'Fetch').trigger()
+            first_command.assert_called_once()
+            second_command.assert_not_called()
+
     def test_narrow_floating_pane_keeps_actions_in_toolbar_overflow(self):
         view = self.page.open_repository(self.first_path); self.wait()
         dock = self.page.workspace.active_dock

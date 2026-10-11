@@ -40,6 +40,30 @@ Bulk Rename has one retained application page. `models/` carries folder identiti
 `Python/launch.py` owns the application startup sequence. Qt is created before
 feature initialization so startup failures can display their error dialogs.
 
+`ui_new.landing.LandingPage` is the initial launch chooser, outside the destination
+tab host. Full hub reveals the existing rail; File Browser, Git (`git.workspace`)
+and IDE (`ide.workspace`) reuse their pages with the rail hidden. This is a
+presentation mode, not a reduced feature-loading or worker lifecycle: all enabled
+pages still initialize and participate in safe closing. Launch choice is per window
+and is not persisted. Registry refresh updates chooser availability and returns
+to the chooser if the selected standalone feature is disabled.
+
+The chooser's Read & edit grid uses the rail's registered document-launcher
+snapshot, including the core Markdown launcher. Cards dispatch Open/New callbacks
+with `DocumentsPage` as parent; they do not construct editors or readers themselves.
+Registry refresh rebuilds the grid when launcher metadata changes. Successful
+opens reveal the shared document host without a sidebar; cancellation leaves the
+chooser visible. Documents opened from the chooser become the return destination
+for the settings menu. The chooser scrolls vertically at compact window heights.
+
+`LaunchSurface` parents an opaque, 36-pixel settings icon above the central stack,
+positions it on resize, and raises it when revealing content. It is visible on the
+chooser and in sidebar-free views, including Settings and hosted documents/jobs.
+Clicking anywhere on the icon opens its menu, which offers Settings, returns to
+the retained tool/documents, reveals documents, shows the chooser, or enters the full hub.
+The chooser has no document menu context; revealed workspaces use normal menu
+routing and retain their existing document/job ownership.
+
 The registry initializes available features in dependency order: every hard
 dependency completes initialization before its consumer. Optional dependencies
 do not affect availability or impose an initialization order. All enabled features register their file types before any initialization hook runs.
@@ -152,6 +176,13 @@ the shared `Workspace`; `RepositoryView` owns each repository's toolbar, draft,
 preview, log and sequential job owner. Horizontal tab drags reorder; dragging out
 detaches the existing pane. Qt toolbar actions remain available in overflow menus
 on narrow panes. Switching tabs does not discard drafts or move command targets.
+Repository panes are embedded `QMainWindow` instances with a central content
+widget and a non-native source menu bar. `features/git/ui/menus.py` shares toolbar
+and overflow actions with File/Edit/View/Repository/Actions menus and dispatches
+text editing to the focused field. The existing workspace router publishes the
+active pane's menus in the macOS system bar or a detached window header;
+attached Windows/Linux panes keep their own menu bar. Selection and job-state
+guards apply to menu commands as well as the existing controls.
 
 The Documents icon stays visible in the scrollable icon rail, even when no
 files are open. It toggles a Qt popup overlay with editor buttons and a grouped
@@ -170,6 +201,25 @@ no transient parent. Closing remains cooperative and never owns application
 quit; dragging the inner tab header or double-clicking it restores docking.
 The OS controls snapping/taskbar presentation; macOS groups application windows
 under the Logistics Dock icon.
+
+The main window resolves menu context from the selected destination's active
+workspace view (or the page itself for QMainWindow pages). Its
+`workspace_menu_document` callback supplies that context to commonUtils' menu
+router during deferred focus/activation refreshes, so hidden document workspaces
+cannot restore stale menus over a newly selected destination. The shared router
+owns native binding and detached-container menu refresh.
+Document workspace tab activation also explicitly refreshes the main window's
+menu context; the shared router observes native focus-window changes after popups
+close, even when widget focus and main-window activation stay unchanged.
+The launcher/+ regression also inspects AppKit menu commands under Cocoa. These
+checks verify native command routing, not the menu bar drawn by macOS; visible
+refresh must also be checked while alternating docked document tabs without
+opening the menu bar.
+The Cocoa router invalidates the visible native bar after publishing a changed
+menu context or returning to the foreground. This addresses the separate AppKit
+display refresh failure observed while docked Markdown/Text Editor tabs switched
+correctly internally. The redraw applies only to the focused host; see commonUtils'
+workspace guide for the native visibility lifecycle.
 
 ## Multiple application instances and shared indexing
 

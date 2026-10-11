@@ -243,6 +243,19 @@ Every project remains a single workspace pane, including its browser and editor
 groups. Internal drops move the existing EditorDocument or merge redundant views;
 empty columns are pruned, while closing a group moves files into a remaining group.
 There is a three-column cap and no external/cross-project file-tab transfer path.
+Confined gestures are observed across child-widget event receivers until release
+or cancellation, so a destination editor cannot strand the source's drag state.
+The shared component owns that gesture routing; IDE continues to own drop
+validation, column placement and document lifetimes. Regression tests exercise
+repeated two-column side drops through both source and destination receivers,
+header/center merges, split recreation, Escape/outside cancellation and the cap,
+with unsaved buffers, cursors and undo history retained.
+Drag-completion validation on macOS: all 36 IDE tests in six isolated modules,
+eight shared scoped-tab tests, and four shared workspace test modules passed.
+The 12 focused IDE/scoped-tab tests also passed under native Cocoa. The gesture
+matrix covers 48 side drops across three window widths and both event receivers,
+plus 24 QTest press/move/release side drops, merges and cancellation. Native
+Windows/Linux pointer behavior remains unverified.
 Project close snapshots layout before dock destruction and honors unsaved-close vetoes.
 Application shutdown covers projects in every detached container. Session restore
 reopens projects in the main container; detached OS-window geometry is not persisted.
@@ -250,3 +263,84 @@ reopens projects in the main container; detached OS-window geometry is not persi
 Tests cover zero/one/two/three projects, equal widths, local detached creation,
 minimum panel widths, group moves/merges, unsaved state, close vetoes and menu routing.
 Platform and full-suite results are recorded in the UI refinement validation report.
+
+## Modifier navigation feedback
+
+IDE EditorDocument views own a transient hyperlink overlay and an 80-ms pointer/
+modifier poll while hovered. Qt ControlModifier represents Command on macOS and
+Ctrl elsewhere. Only Python/stub views expose the hand cursor and request target
+analysis. The overlay uses ExtraSelection, preserving shared editor selections
+and document formatting; standalone CodeEdit/Text Editor behavior is unchanged.
+Navigation uses the existing serialized worker queue, coalesces pending hovers per
+view, and validates source path/revision, hover range, visibility and project
+configuration before showing a blue underline for targets with existing files.
+Missing intelligence silently leaves the symbol unstyled. Leaving, hiding, editing
+or releasing the modifier clears feedback; closing stops the view timer.
+
+Validation: 24 IDE tests (including hover feedback and stale-result coverage) and
+34 standalone Text Editor tests pass on macOS with offscreen Qt. Ruff and diff
+whitespace checks pass. Native Windows/Linux pointer interaction remains untested.
+
+## Usage navigation
+
+Modifier-click dispatches a `navigate` analysis snapshot. Jedi's public get_names
+API and the declaration-line prefix identify function/class declaration names
+at the clicked line/column (imported names retain definition navigation); those
+request get_references instead of jumping back to themselves. Calls keep normal
+definition navigation, and F12 remains explicit definition navigation. Shift+F12,
+Navigate → Find usages and modifier+Shift-click explicitly request usages.
+References use Jedi's project scope, omit definition/binding names and builtins,
+filter results to the resolved project root and configured exclusions, deduplicate
+and cap at 200. This is a result limit, not a scan/time limit; Jedi can stop early
+and cannot be forcibly interrupted. Imported aliases/dynamic references may be
+incomplete. The current buffer is a snapshot; other modules use saved content.
+An editor-anchored usage popup is shown even for one usage; selection uses existing history and
+UTF-16-aware navigation. The same revision/caret/view/project checks protect late
+results and popup selection. Hover feedback still uses definition resolution and
+does not run project reference searches. Standalone Text Editor is unchanged.
+
+Usage-navigation validation: all 27 IDE tests pass on macOS/offscreen Qt. The
+focused three-test usage suite also passes after refining import-name detection;
+coverage includes cross-file calls, unrelated same-name functions, exclusions,
+unused declarations, the actual modifier-click picker, Back, and stale edits.
+Ruff and whitespace checks pass. Native Windows/Linux remains untested.
+
+## Embedded Markdown tabs
+
+IDE dispatches `.md`/`.markdown` opens to its MarkdownDocument adapter around
+commonUtils MarkdownViewer. Other files retain EditorDocument. MarkdownBuffer
+owns the source QTextDocument independently of tab lifetime; formatted changes
+synchronize to that source immediately, and other views refresh their presentation.
+The shared rich editor itself and its interactive controls remain in commonUtils;
+project identity, file operations, conflict checks, watcher registration and close
+policy remain in IDE. Standard shortcuts route through project menus, while
+Markdown-specific formatting shortcuts remain local. Local document links request
+project opens rather than replacing a tab's identity. Native destruction of a
+Markdown view detaches its source document and stops speech/diagram work; project
+shutdown also stops those services. Navigation/persisted positions use source
+UTF-16 offsets. Rich undo stacks are per view; source undo is shared.
+
+Focused regression coverage checks mixed code/Markdown tabs, untouched CRLF saves,
+formatted split synchronization, source editing after native view destruction,
+external conflicts, close vetoes, link routing, Save As identity and reload.
+
+## Usage popup presentation
+
+UsagePopup is a parent-owned Qt.Popup frame, shown without exec or dialog window
+chrome. Its flat table displays filename, line and a bounded code preview, plus
+project scope, count and a local text filter. Preview reads run in the analysis
+worker, are cached per file for the request, skip files over 1 MiB and use the
+current buffer snapshot for the source file. Preview text is plain text; it cannot
+render HTML from project files. Rows retain exact paths/line/code-point columns
+for existing navigation. Escape/outside clicks dismiss, Enter/single-click opens,
+and edits, origin destruction, owner hiding or app deactivation dismiss stale UI.
+Placement clamps to the application/screen intersection near the source caret.
+The existing analysis cap and semantic limits remain unchanged; no project code
+is executed for previews.
+
+Popup validation: 37 IDE tests pass on macOS/offscreen Qt; the final focused
+five-test usage suite passes, including outside-click/Escape dismissal, filtering,
+Enter navigation, stale edits, and bounded/unsaved source previews. A rendered
+dark-palette popup was inspected for column layout, selection and truncation.
+Ruff and whitespace checks pass. Native Windows/Linux popup behavior remains
+unverified.
