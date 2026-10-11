@@ -396,3 +396,21 @@ class TextEditorTests(QtTestCase):
             self.wait()
         self.assertEqual(path.read_bytes(), b"text")
         self.assertFalse(doc.modified)
+
+    def test_central_reload_preserves_language_and_updates_both_split_views(self):
+        _, document = self.open('example.py', b'print(1)\n')
+        document.language = 'javascript'
+        self.window.split_document(qt.Qt.Orientation.Horizontal)
+        options = dict(self.window.options, whitespace_bool=True, indent_width_int=2)
+        with patch.object(self.window.preferences, 'load', return_value=options):
+            self.window._reload_system_options()
+        self.assertEqual(document.language, 'javascript')
+        for editor in (document.views.primary, document.views.secondary):
+            self.assertEqual(editor.indent_width, 2)
+            self.assertTrue(editor.document().defaultTextOption().flags() & qt.QTextOption.Flag.ShowTabsAndSpaces)
+        options = dict(options, whitespace_bool=False)
+        with patch.object(self.window.preferences, 'load', return_value=options):
+            self.window._reload_system_options()
+        for editor in (document.views.primary, document.views.secondary):
+            self.assertFalse(editor.document().defaultTextOption().flags() & qt.QTextOption.Flag.ShowTabsAndSpaces)
+        self.assertFalse(document.modified)

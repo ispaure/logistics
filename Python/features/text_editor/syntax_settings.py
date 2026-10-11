@@ -57,13 +57,12 @@ class SyntaxSettings:
         if any(options[key] != self.options[key] for key in options if key != 'geometry_str'):
             self.options = options
             for document in self.documents:
-                self._configure_document(document)
+                self._configure_document(document, preserve_language=True)
             self.actions['syntax'].setChecked(options['syntax_highlighting_bool'])
             self._active_changed()
 
-    def _configure_document(self, document):
-        editor = document.editor
-        editor.highlight_occurrences = not document.simple
+    def _configure_editor(self, editor, simple):
+        editor.highlight_occurrences = not simple
         options = self.options
         font = (
             qt.QFont(options["font_family_str"])
@@ -83,26 +82,30 @@ class SyntaxSettings:
         editor.auto_pairs = options["auto_pairs_bool"]
         editor.setLineWrapMode(
             qt.QPlainTextEdit.LineWrapMode.WidgetWidth
-            if options["word_wrap_bool"] and not document.simple
+            if options["word_wrap_bool"] and not simple
             else qt.QPlainTextEdit.LineWrapMode.NoWrap
         )
-        if options["whitespace_bool"]:
-            option = editor.document().defaultTextOption()
-            option.setFlags(
-                option.flags()
-                | qt.QTextOption.Flag.ShowTabsAndSpaces
-                | qt.QTextOption.Flag.ShowLineAndParagraphSeparators
-            )
-            editor.document().setDefaultTextOption(option)
-        document.language = detect_language(document.path, editor.toPlainText()[:256])
+        option = editor.document().defaultTextOption()
+        whitespace = (qt.QTextOption.Flag.ShowTabsAndSpaces |
+                      qt.QTextOption.Flag.ShowLineAndParagraphSeparators)
+        flags = option.flags() & ~whitespace
+        option.setFlags(flags | whitespace if options["whitespace_bool"] else flags)
+        editor.document().setDefaultTextOption(option)
+
+    def _configure_document(self, document, *, preserve_language=False):
+        if not preserve_language:
+            document.language = detect_language(document.path, document.editor.toPlainText()[:256])
         if not hasattr(document, "highlighter"):
-            document.highlighter = SyntaxHighlighter(editor)
-            editor.zoom_changed.connect(self._preferences_changed)
-        editor.folding.configure(document.language)
-        editor.folding.rebuild()
+            document.highlighter = SyntaxHighlighter(document.editor)
+            document.editor.zoom_changed.connect(self._preferences_changed)
+        for editor in (document.views.primary, document.views.secondary):
+            if editor is not None:
+                self._configure_editor(editor, document.simple)
+                editor.folding.configure(document.language)
+                editor.folding.rebuild()
         document.highlighter.configure(
             document.language
-            if options["syntax_highlighting_bool"] and not document.simple
+            if self.options["syntax_highlighting_bool"] and not document.simple
             else "text"
         )
         self._sync_comment_prefix(document)

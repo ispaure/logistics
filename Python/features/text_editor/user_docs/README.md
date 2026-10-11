@@ -65,6 +65,9 @@ under **Feature settings → Text Editor → Options**. Font family and size are
 repository INI, or personal settings for persistent AppData overrides. **↶** on
 any personal field restores inheritance; click **Save Settings** to apply it.
 
+Saved options apply to both split views and keep the document’s chosen syntax
+language. Whitespace marks can be enabled or disabled without editing text.
+
 Code text defaults to 11 points. Text Editor, IDE, Git hunks and Markdown code
 blocks share both the family and size. Ctrl/Cmd+wheel changes the personal shared
 code size. Line-number gutters resize with the font. Legacy Cache/TextEditor font
