@@ -1,7 +1,9 @@
 # Obsidian Feature
 
-Developer notes. See the [user guide](user_docs/index.md) for controls and setup,
-and [UI architecture](../UI_ARCHITECTURE.md) for shared contribution conventions.
+For workflows, settings and troubleshooting, see the [user guide](user_docs/README.md).
+
+Developer notes. See the [user guide](user_docs/README.md) for controls and setup,
+and [UI architecture](../../../docs/developer/features.md) for shared contribution conventions.
 
 Finds Obsidian vaults in a selected local folder and offers an Open Vault action for each on the Folders page.
 

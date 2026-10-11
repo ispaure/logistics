@@ -1,10 +1,12 @@
 # Books & Comics integration
 
+For workflows, settings and troubleshooting, see the [user guide](user_docs/README.md).
+
 EPUB reading and direct metadata editing, independent of Calibre, alongside the
 existing comic tools under one Books & Comics feature toggle.
 Access reading and metadata tools through File Browser; this feature contributes
 no main navigation tab.
-See the [user guide](user_docs/index.md) for reading controls, settings and backups.
+See the [user guide](user_docs/README.md) for reading controls, settings and backups.
 
 ## Structure
 
