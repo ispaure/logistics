@@ -4,14 +4,14 @@ import importlib
 from types import ModuleType
 
 
-def get_feature_names() -> list[str]:
+def get_feature_names(features_path=None) -> list[str]:
     """
     Return the package names of features available in the features directory.
 
     A valid feature is a direct subdirectory containing an __init__.py file.
     """
 
-    features_path = Path(__file__).parent
+    features_path = Path(features_path) if features_path is not None else Path(__file__).parent
     feature_names = []
 
     for path in features_path.iterdir():

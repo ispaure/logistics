@@ -57,6 +57,7 @@ class FeaturesPage(qt.QWidget):
         states = sorted(registry.get_feature_states(), key=lambda state: state.label.casefold())
         labels = {state.name: state.label for state in states}
         for state in states:
+            error = getattr(state, 'error', '')
             card = qt.QFrame()
             card.setObjectName('featureCard')
             card.setStyleSheet('QFrame#featureCard { background: palette(base); border: 1px solid palette(mid); border-radius: 6px; }')
@@ -69,16 +70,16 @@ class FeaturesPage(qt.QWidget):
             font = toggle.font(); font.setBold(True); toggle.setFont(font)
             toggle.setChecked(state.enabled)
             toggle.setEnabled(state.available)
-            toggle.setToolTip((state.error or 'Required feature packages are missing.') if not state.available else
+            toggle.setToolTip((error or 'Required feature packages are missing.') if not state.available else
                               'Enable or disable this feature and remember the choice.')
             toggle.toggled.connect(lambda enabled, feature=state: self._toggled(feature, enabled))
             header.addWidget(toggle, 1)
-            text = ('Unavailable' if state.error else 'Missing dependency') if not state.available else 'Enabled' if state.enabled else 'Disabled'
+            text = ('Unavailable' if error else 'Missing dependency') if not state.available else 'Enabled' if state.enabled else 'Disabled'
             status = qt.QLabel(text)
             self._muted(status)
             header.addWidget(status)
             card_layout.addLayout(header)
-            details = [state.error] if state.error else []
+            details = [error] if error else []
             if state.dependencies:
                 details.append('Requires: ' + ', '.join(labels.get(name, name) for name in state.dependencies))
             if state.dependents:
