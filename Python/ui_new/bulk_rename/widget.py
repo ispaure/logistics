@@ -101,8 +101,8 @@ class BulkRenameWidget(qt.QWidget):
         self.folder_model.setFilter(qt.QDir.Filter.AllDirs | qt.QDir.Filter.NoDotAndDotDot | qt.QDir.Filter.Hidden)
         # Keep a stable filesystem/drive tree. The file list's working directory
         # must never become the tree's view root, hiding that folder and its peers.
-        self.folder_model.setRootPath(self._tree_anchor)
         self.folder_model.directoryLoaded.connect(self._folder_directory_loaded)
+        self.folder_model.setRootPath(self._tree_anchor)
         self.folder_tree = qt.QTreeView()
         self.folder_tree.setModel(self.folder_model)
         self.folder_tree.setUniformRowHeights(True)

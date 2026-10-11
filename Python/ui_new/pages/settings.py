@@ -212,6 +212,15 @@ class FeatureSettingsPanel(qt.QWidget):
 
 
 class SettingsPage(qt.QWidget):
+    def show_feature(self, name):
+        iterator = qt.QTreeWidgetItemIterator(self.sidebar)
+        while iterator.value():
+            item = iterator.value()
+            if item.data(0, qt.Qt.ItemDataRole.UserRole) == f'feature:{name}':
+                self.sidebar.setCurrentItem(item)
+                return
+            iterator += 1
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.panels = {}

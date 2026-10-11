@@ -468,7 +468,7 @@ class MainWindowTests(QtTestCase):
         contribution = self.contribution('Calculator', 'calculator')
         window = self.window([contribution]); window.dlg.show(); self.app.processEvents()
         self.assertTrue(window.tabs.tabBar().isHidden())
-        self.assertEqual(window.sidebar.width(), 60)
+        self.assertEqual(window.sidebar.width(), 54)
         self.assertEqual([action.text() for action in window.sidebar.tools_menu.actions()], ['Calculator'])
         self.assertTrue(window.sidebar.buttons['debug'].isVisible())
         self.assertFalse(window.sidebar.tools_menu.isVisible())

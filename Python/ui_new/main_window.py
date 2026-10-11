@@ -214,11 +214,19 @@ class MainWindow(pyside.Window):
 
     def _create_feature_page(self, contribution):
         page = contribution.create_page(self.dlg)
+        settings_requested = getattr(page, 'feature_settings_requested', None)
+        if settings_requested is not None:
+            settings_requested.connect(self._show_feature_settings)
         self._bind_docking_preview(page)
         idle = getattr(page, 'idle', None)
         if idle is not None and callable(getattr(idle, 'connect', None)):
             idle.connect(self._retry_close)
         return page
+
+    def _show_feature_settings(self, feature):
+        settings = next(page for _, _, page in self._core_pages if isinstance(page, SettingsPage))
+        settings.show_feature(feature)
+        self.tabs.setCurrentWidget(settings)
 
     def _features_changed(self):
         pyside.QTimer.singleShot(0, self._sync_feature_pages)

@@ -67,14 +67,14 @@ def action_icon(name, count=0):
     return icon
 
 
-def _draw_action(painter, name):
+def _draw_action(painter, name, color='#36abe2'):
     painter.setRenderHint(qt.QPainter.RenderHint.Antialiasing)
-    painter.setPen(qt.QPen(qt.QColor('#36abe2'), 1.8, qt.Qt.PenStyle.SolidLine,
+    painter.setPen(qt.QPen(qt.QColor(color), 1.8, qt.Qt.PenStyle.SolidLine,
                                qt.Qt.PenCapStyle.RoundCap, qt.Qt.PenJoinStyle.RoundJoin))
     def line(x1,y1,x2,y2): painter.drawLine(qt.QPointF(x1,y1), qt.QPointF(x2,y2))
     if name in ('commit','pull','push','fetch'):
         painter.drawEllipse(qt.QRectF(4,4,20,20))
-        if name == 'commit': line(8,14,12,18); line(12,18,20,10)
+        if name == 'commit': line(8,14,20,14); line(14,8,14,20)
         elif name in ('pull','push'):
             top, end = (8,20) if name == 'pull' else (20,8)
             line(14,top,14,end); line(10,end + (-4 if name == 'pull' else 4),14,end); line(18,end + (-4 if name == 'pull' else 4),14,end)
@@ -89,6 +89,10 @@ def _draw_action(painter, name):
     elif name == 'template':
         painter.drawRoundedRect(qt.QRectF(6,3,16,22),1,1)
         for y in (9,13,17,21): line(10,y,18,y)
+    elif name == 'tag':
+        painter.drawPolygon(qt.QPolygonF([qt.QPointF(x, y) for x, y in
+            ((4, 4), (14, 4), (25, 15), (15, 25), (4, 14))]))
+        painter.drawEllipse(qt.QPointF(9, 9), 2, 2)
     elif name == 'security':
         painter.drawRoundedRect(qt.QRectF(6,12,16,12),2,2)
         painter.drawArc(qt.QRectF(9,3,10,16),0,180*16)

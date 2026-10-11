@@ -8,7 +8,10 @@ from .options import validate_options
 
 
 class Preferences:
+    instances = WeakSet()
+
     def __init__(self, path=None):
+        self.instances.add(self)
         if path is None:
             from features.preferences import preferences_path
             path = preferences_path().with_name('git.json')

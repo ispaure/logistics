@@ -3,54 +3,12 @@ from copy import deepcopy
 from fnmatch import fnmatch
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from .application_settings import GitPreferencesDialog
 from ..runner import GitError
 
 
 class ApplicationPreferences:
     def application_settings_dialog(self):
-        if self.busy: return
-        def show(identity):
-            dialog = GitPreferencesDialog(self.preferences, identity, self)
-            if dialog.exec() != qt.QDialog.DialogCode.Accepted: return
-            options = deepcopy(dialog.options); executable = dialog.executable.text().strip()
-            credentials = list(dialog.credentials)
-            dialog.credentials.clear()
-            requested_identity = {'user.name': dialog.author.text().strip(), 'user.email': dialog.email.text().strip()} if dialog.modify_global.isChecked() else None
-            def save(runner):
-                from ..accounts import change_credential, secure_helper
-                from ..runner import GitRunner
-                GitRunner(executable, cancel=runner.cancel).version()
-                runner.executable = executable
-                if requested_identity:
-                    for key in requested_identity:
-                        current = runner.run(['config', '--global', '--get', key], check=False).stdout.decode().strip() or None
-                        if current != identity[key]: raise GitError('Global identity changed while preferences were open. Reopen preferences.')
-                try:
-                    for account, token, erase in credentials:
-                        if account['protocol'] == 'https':
-                            helper = account.get('helper') or secure_helper(runner)
-                            account['helper'] = helper
-                            change_credential(runner, account, token, erase=erase)
-                            for saved in options['accounts']:
-                                if (saved['host'], saved['username'], saved['protocol']) == (account['host'], account['username'], account['protocol']): saved['helper'] = helper
-                finally: credentials.clear()
-                if requested_identity:
-                    for key, value in requested_identity.items(): runner.run(['config', '--global', key, value])
-                return options
-            def applied(saved):
-                old_options, old_executable = self.preferences.options, self.preferences.executable
-                self.preferences.options, self.preferences.executable = saved, executable
-                try: self.preferences.save()
-                except OSError:
-                    self.preferences.options, self.preferences.executable = old_options, old_executable
-                    raise
-                for view in list(self.preferences.views):
-                    view.apply_preferences(); view.refresh()
-            self._job('Save Git preferences', save, applied)
-        self._job('Read global Git identity', lambda runner: {
-            key: runner.run(['config', '--global', '--get', key], check=False).stdout.decode().strip() or None
-            for key in ('user.name', 'user.email')}, show)
+        self.feature_settings_requested.emit('git')
 
     def init_preferences(self):
         self.preferences.views.add(self)

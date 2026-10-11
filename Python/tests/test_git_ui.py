@@ -82,6 +82,15 @@ class GitUITests(QtTestCase):
         self.assertEqual(self.page.action_buttons['Push…'].property('badge_count'), 3)
         self.assertEqual(self.page.action_buttons['Pull…'].property('badge_count'), 2)
 
+    def test_history_files_are_one_column_without_header_and_refs_use_icons(self):
+        from features.git.ui.history import ref_badge
+        self.commit_fixture(); self.open()
+        self.assertEqual(self.page.history.tree.columnCount(), 1)
+        self.assertTrue(self.page.history.tree.isHeaderHidden())
+        self.assertEqual(ref_badge('tag: v1.0'), ('tag', 'v1.0'))
+        self.assertEqual(ref_badge('HEAD -> main'), ('branch', 'main'))
+        self.assertEqual(ref_badge('origin/main'), ('branch', 'origin/main'))
+
     def test_commit_then_push_to_origin_and_push_failure_keeps_commit(self):
         from features.git.runner import GitError
         self.open()
