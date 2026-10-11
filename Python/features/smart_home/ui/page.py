@@ -3,6 +3,7 @@ Smart Home page for the Logistics feature UI.
 """
 
 from commonUtils.ui import pyside
+from commonUtils.ui.operation_progress import OperationProgress
 
 from features.smart_home.philips_hue import api as philips_hue
 
@@ -17,7 +18,7 @@ BRIGHTNESS_ACTIONS = (
     ('OFF', {'State': False}),
     ('1%', {'State': True, 'Brightness': 0}),
     ('50%', {'State': True, 'Brightness': 127}),
-    ('100%', {'State': True, 'Brightness': 255}),
+    ('100%', {'State': True, 'Brightness': 254}),
     ('ON', {'State': True}),
 )
 
@@ -35,6 +36,7 @@ COLOR_ACTIONS = (
 
 
 class SmartHomePage(pyside.QWidget):
+    idle = pyside.Signal()
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -42,6 +44,9 @@ class SmartHomePage(pyside.QWidget):
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(pyside.QFrame.Shape.NoFrame)
 
+        self.task = OperationProgress(self)
+        self.task.completed.connect(self._finished)
+        self.task.completed.connect(lambda *args: self.idle.emit())
         self._build_layout()
         self._populate_rooms()
 
@@ -73,21 +78,27 @@ class SmartHomePage(pyside.QWidget):
 
         connect_button = pyside.QPushButton('Connect Bridge')
         connect_button.setToolTip('Connect/register with the configured Philips Hue bridge.')
-        connect_button.clicked.connect(philips_hue.connect_bridge)
+        connect_button.clicked.connect(lambda: self._run(philips_hue.connect_bridge))
+        self.connect_button = connect_button
+        refresh_button = pyside.QPushButton('Find rooms')
+        refresh_button.clicked.connect(lambda: self._run(philips_hue.get_rooms))
 
         header_layout.addWidget(title_container, 1)
         header_layout.addWidget(connect_button)
+        header_layout.addWidget(refresh_button)
+        self.refresh_button = refresh_button
 
         root_layout.addLayout(header_layout)
         root_layout.addWidget(self.scroll, 1)
+        root_layout.addWidget(self.task)
 
-    def _populate_rooms(self):
+    def _populate_rooms(self, rooms=ROOMS):
         content = pyside.QWidget()
         layout = pyside.QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
 
-        for room_name in ROOMS:
+        for room_name in rooms:
             layout.addWidget(self._create_room_group(room_name))
 
         layout.addStretch()
@@ -156,4 +167,34 @@ class SmartHomePage(pyside.QWidget):
             **values,
         }
 
-        philips_hue.set_group_prop_from_arg_dict(arguments)
+        self._run(lambda: philips_hue.set_group_prop_from_arg_dict(arguments))
+
+    def _run(self, callback):
+        if self.task.busy:
+            return
+        self.scroll.setEnabled(False)
+        self.connect_button.setEnabled(False)
+        self.refresh_button.setEnabled(False)
+        self.task.start(lambda report, cancelled: None if cancelled() else callback(),
+                        message='Contacting Hue bridge…')
+
+    def _finished(self, result, error):
+        self.scroll.setEnabled(True)
+        self.connect_button.setEnabled(True)
+        self.refresh_button.setEnabled(True)
+        if not error and isinstance(result, tuple):
+            self._populate_rooms(result)
+            if not result:
+                self.task.message.setText('No rooms found on this bridge.')
+
+    def prepare_close(self):
+        if self.task.busy:
+            self.task.request_cancel()
+            return False
+        return True
+
+    def closeEvent(self, event):
+        if not self.prepare_close():
+            event.ignore()
+        else:
+            super().closeEvent(event)
