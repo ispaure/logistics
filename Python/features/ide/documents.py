@@ -51,6 +51,8 @@ class EditorDocument(CodeEdit):
             self.buffer = buffer
             self.share_document_from(buffer.views[0])
         self.buffer.views.append(self)
+        from features.code_font import code_font
+        code_font().bind(self)
         if self.buffer.highlighter is None:
             self.buffer.configure()
 

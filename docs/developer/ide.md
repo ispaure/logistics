@@ -24,6 +24,10 @@ second browser or recursive UI-thread scan. Historical fileUtils/dirUtils import
 no longer exist in this checkout; use filesystem packages. File snapshots must
 be refreshed after mutations.
 
+ProjectFilter extends the shared ByteSortModel and sorts the name column ascending,
+retaining folder-first natural ordering, dynamic updates and filesystem-index
+mapping while applying project exclusions and the visible filename filter.
+
 Use Logistics preferences_path for platform conventions and atomic JSON for a
 versioned IDE store, outside source trees. UUIDs identify projects. Missing roots
 remain registered. Save layout on a debounce and close, not every cursor movement.
@@ -54,6 +58,19 @@ No changes to commonUtils public interfaces or unrelated feature dependencies ar
 planned. No source repository configuration directories are created.
 
 ## Implemented contracts
+
+GitPage delegates validated working-file opens through an application-owned
+callback. MainWindow routes to the enabled IDE page's open_registered_file,
+which chooses the deepest resolved registered root, reopens its workspace and
+uses normal open_path document reuse. A false result falls back to Text Editor.
+The callback looks up the current page at invocation, including feature changes;
+Git and IDE do not import each other's document services. Detached projects retain
+their existing workspace. Git's existing filesystem watcher refreshes IDE saves.
+Diff and merge workflows remain owned by Git.
+File status, History and Search file double-clicks share RepositoryView.edit_file;
+historical entries supply their repository-relative path to open the current
+working file, while selection retains the historical preview. Folder rows have
+no file activation, and missing or out-of-repository files fail validation.
 
 IDE is an independent lazy PageContribution (`ide.workspace`). ProjectStore keeps
 UUID registrations and all project layouts in one version-1 atomic workspace JSON

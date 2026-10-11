@@ -80,10 +80,20 @@ persistent suggestion cache. If the cache cannot be written, session suggestions
 remain usable; indexing errors do not prevent manual metadata entry. Refreshing
 the library updates changed/deleted entries without overwriting pending edits.
 
-Comic reading position is retained for the open reader only; there is no saved
-resume position across application restarts. EPUB reading history belongs to the
-separate [Books reader](../../books/user_docs/README.md#keep-your-place). Reopen a
+Comics remember the last successfully displayed page when you close the reader or
+restart the app. Opening the same comic, including through **Open recent**, resumes
+there. Previous/Next File still starts at the appropriate end of the neighboring
+comic. Disable `remember_position_bool` under **Settings → Books & Comics** to stop
+saving/restoring positions in new readers, for both comics and EPUBs.
+
+Comic positions live in the commonUtils cache's `Comics` folder (on macOS,
+`~/Library/Application Support/commonUtils/Cache/Comics/`). These small files store
+the page number and image entry name, not page images or passwords. Symbolic links
+to the same file share history; moving a comic starts a separate history. Reopen a
 comic after an external archive edit so the reader uses its current contents.
+The saved image name is used if it still exists; otherwise the saved page number
+is limited to the current page count. EPUB reading history belongs to the
+separate [Books reader](../../books/user_docs/README.md#keep-your-place).
 
 ## Compress or convert
 

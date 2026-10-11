@@ -89,6 +89,21 @@ class IDEPage(qt.QWidget):
                 return dock.widget()
         return (destination or self.workspace).add_view(project)
 
+    def open_registered_file(self, path):
+        """Open in the most specific registered root, including closed projects."""
+        from pathlib import Path
+        path = Path(path).expanduser().resolve()
+        matches = [project for project in self.store.projects.values()
+                   if path.is_relative_to(project.root)]
+        if not matches:
+            return False
+        project = max(matches, key=lambda project: len(project.root.parts))
+        view = self.open_project(project)
+        if view is None:
+            return False
+        view.open_path(path)
+        return True
+
     def _create_project(self, project):
         from .workspace import ProjectWorkspace
         view = ProjectWorkspace(project, self)

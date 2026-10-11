@@ -36,6 +36,7 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         self.setProperty('navigation_order', 20)
         self.preferences = preferences or Preferences(preferences_path)
         self.repository_opener = repository_opener
+        self.working_file_opener = None
         self.requested_path = None
         self.worker = None
         self.snapshot = None
@@ -406,6 +407,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         def show(model):
             if self.path == path and not self.closing:
                 dialog = DiffDialog(model, self, left_name=names[0], right_name=names[1], path=path/change.path)
+                from features.code_font import bind_code_views
+                bind_code_views(dialog)
                 dialog.show()
         self._job('Compare file versions', read, show)
 
@@ -830,6 +833,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
             dialog = MergeDialog(model, self, path=inputs.path,
                 left_name='Index stage 2 — rebased onto' if rebase else 'Index stage 2 — current branch',
                 right_name='Index stage 3 — commit being replayed' if rebase else 'Index stage 3 — incoming changes')
+            from features.code_font import bind_code_views
+            bind_code_views(dialog)
             stage = qt.QCheckBox('Stage resolved file after saving', dialog)
             dialog.layout().insertWidget(1, stage)
             def apply(text):
@@ -866,13 +871,15 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
 
     def edit_file(self, relative_path):
         if self.busy or not self.path: return
-        from features import registry
-        if not registry.is_feature_enabled('text_editor'):
-            self._message('Enable the Text Editor feature in Settings to edit files here.', error=True)
-            return
         path = (self.path / relative_path).resolve()
         if not path.is_relative_to(self.path.resolve()) or not path.is_file():
             self._message('The selected path is not a regular file within this repository.', error=True)
+            return
+        if self.working_file_opener and self.working_file_opener(path):
+            return
+        from features import registry
+        if not registry.is_feature_enabled('text_editor'):
+            self._message('Enable the Text Editor feature in Settings to edit files outside registered IDE projects.', error=True)
             return
         from features.text_editor.service import editor_service
         service = editor_service()

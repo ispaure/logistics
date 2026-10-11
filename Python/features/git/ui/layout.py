@@ -212,6 +212,8 @@ class RepositoryLayout:
         self.search_results.load_more.connect(self.load_more_search)
         self.preview.ignore_whitespace.toggled.connect(self._reload_preview)
         self.history.blob_selected.connect(self.preview_blob)
+        self.history.edit_requested.connect(self.edit_file)
+        self.search_results.edit_requested.connect(self.edit_file)
         self.history.load_more.connect(self.load_more)
         self.views.currentChanged.connect(self._view_changed)
         self.preview.stage_button.clicked.connect(self.changes.stage_selected)

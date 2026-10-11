@@ -25,6 +25,7 @@ reconfigure an already running worker or reader.
 | Git options, bookmarks and subtree mappings | `git.json` beside Logistics preferences | Preserve malformed files; credentials belong in secure helpers |
 | Editor appearance, recent paths and checkpoints | shared Cache/TextEditor | Recovery files may contain unsaved private text; do not treat as disposable thumbnails |
 | EPUB reading state/bookmarks | shared Cache/Books, hashed resolved book path | Moving a book changes identity; state does not contain the book |
+| Comic resume positions | shared Cache/Comics, hashed resolved comic path | Last successfully displayed page; restore by image entry name, then bounded index; shares Books' remember-position setting |
 | Browser index/search metadata | shared index/storage service | Partial saved snapshots are not proof of a complete filesystem scan |
 | Remote credential packages | configured private resource directory | Never commit secrets; package basename identifies generated config |
 | rclone configs | config directory chosen by the rclone integration | Same-named configs/packages can collide; deletion controls act on real configs |
@@ -40,6 +41,13 @@ Logistics preference paths. Feature enablement is saved atomically; malformed
 preferences are retained under a `.broken-...` name where possible.
 
 ## Compatibility requirements
+
+`features.code_font` owns Logistics' shared code point size (13 by default),
+persisted as `Editor.font_size_int` in Cache/TextEditor/preferences.ini. IDE,
+Text Editor and Git code views register with the QApplication-owned controller;
+zoom propagates within the same preference-path group, including split and review
+views. Git's serialized diff font supplies the family, not a separate size.
+Unrelated preferences and text recovery data are retained when saving the size.
 
 Stable feature IDs, workflow IDs, configuration keys and public compatibility
 imports are contracts to examine before changing them. Preserve file formats and

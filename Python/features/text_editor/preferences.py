@@ -7,7 +7,7 @@ from commonUtils.filesystem.storage import cache_directory
 
 DEFAULTS = {
     "font_family_str": "",
-    "font_size_int": 12,
+    "font_size_int": 13,
     "indent_width_int": 4,
     "use_tabs_bool": False,
     "word_wrap_bool": False,

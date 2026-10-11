@@ -35,6 +35,12 @@ Malformed configuration is retained and will not be overwritten automatically.
 
 ## Files and groups
 
+Git's **Open working file in editor** action and ordinary file double-clicks
+open files in registered IDE projects, including closed projects. Existing tabs
+retain unsaved edits. Nested registrations use the most specific project root;
+unregistered files use Text Editor. IDE must be enabled for this routing.
+Diff review and conflict merging remain in the Git tab.
+
 `.md` and `.markdown` files open in the Markdown editor as ordinary IDE file
 tabs alongside code. Use **Formatted**, **Source**, or **Read** in the tab;
 formatting, tables, properties, contents and Markdown find/replace are available
@@ -47,7 +53,9 @@ Split views share Markdown source and modified state; each formatted view has
 its own rich undo history. Source undo/redo is shared across views. Saved cursor
 locations and go-to-line use Source mode.
 
-The left tree loads directories lazily, hides configured exclusions, and filters
+The left tree lists folders before files, with natural filename ordering within
+each group (for example, `file2` before `file10`). It loads directories lazily,
+hides configured exclusions, and filters
 filenames without recursively crawling the project. **Go to file** searches
 relative paths in a background scan. **Locate file** selects the active document.
 The tree menu creates files/folders, renames closed items, reveals the selected item
@@ -102,6 +110,10 @@ editing in **Edit**, group layout in **View**, navigation in **Navigate**, and
 configuration in **Project**. These menus follow the active project/editor and
 use the application's native macOS menu bar or the existing in-window menu on
 Windows/Linux. Keyboard shortcuts remain available.
+
+Code text defaults to 13 points and shares its saved size with Text Editor and
+Git code panes. Ctrl+wheel zoom updates other open code panes and future views.
+Line numbers resize with the font and line count.
 
 ## Python navigation and search
 

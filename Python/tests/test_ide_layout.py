@@ -79,6 +79,34 @@ class IDELayoutTests(QtTestCase):
         self.assertTrue(page.can_close())
         self.assertTrue(page.prepare_close())
 
+    def test_registered_file_reopens_deepest_project_and_reuses_unsaved_view(self):
+        page = self.page()
+        nested = self.root / 'nested'
+        nested.mkdir()
+        path = nested / 'file.py'
+        path.write_text('original\n')
+        broad = Project('Parent', str(self.root))
+        specific = Project('Nested', str(nested))
+        page.store.projects = {broad.id: broad, specific.id: specific}
+        self.assertFalse(page.open_registered_file(self.root.parent / 'outside.py'))
+        self.assertEqual(page.views, [])
+        self.assertTrue(page.open_registered_file(path))
+        view = page.views[0]
+        self.wait(view)
+        self.assertIs(view.project, specific)
+        document = view.current
+        document.setPlainText('unsaved\n')
+        self.assertTrue(page.open_registered_file(path))
+        self.assertIs(view.current, document)
+        self.assertEqual(document.toPlainText(), 'unsaved\n')
+        self.assertEqual(len(page.views), 1)
+        document.document().setModified(False)
+        self.assertTrue(page.close_project(view))
+        self.assertTrue(page.open_registered_file(path))
+        self.wait(page.views[0])
+        self.assertEqual(page.views[0].current.toPlainText(), 'original\n')
+        self.assertTrue(page.prepare_close())
+
     def test_splitter_menus_and_project_close_veto(self):
         page = self.page()
         view = self.project(page, 1)

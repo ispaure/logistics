@@ -181,7 +181,7 @@ class ChangesPanel(qt.QWidget):
             if not staged: menu.addAction('Discard file edits…',self.discard_selected)
             if item.data(0,qt.Qt.ItemDataRole.UserRole)[0].conflict:
                 menu.addAction('Resolve conflict…', lambda: self.resolve_requested.emit(item.data(0,qt.Qt.ItemDataRole.UserRole)[0].path))
-            menu.addAction('Open working file in Text Editor',lambda: self.edit_requested.emit(item.data(0,qt.Qt.ItemDataRole.UserRole)[0].path))
+            menu.addAction('Open working file in editor',lambda: self.edit_requested.emit(item.data(0,qt.Qt.ItemDataRole.UserRole)[0].path))
             menu.exec(tree.viewport().mapToGlobal(point))
 
     @staticmethod
