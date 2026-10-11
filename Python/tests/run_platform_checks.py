@@ -40,7 +40,7 @@ def main():
     env.update(TEMP=native_temp, TMP=native_temp, TMPDIR=native_temp)
     checks = [
         # The full shared suite approaches five minutes on Windows CI.
-        ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests'], 600),
+        ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests', '--isolate-modules'], 600),
         # Windows' Git/process tests keep making progress past five minutes.
         # Leave room for the growing suite within the platform job's budget.
         ('logistics', ['Python/tests/run_regressions.py', 'Python/tests'], 600),
