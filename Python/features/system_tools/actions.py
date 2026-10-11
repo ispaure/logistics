@@ -82,10 +82,17 @@ def disable_macos_lid_sleep() -> bool:
             if line.strip().endswith('Power:'):
                 battery = line.strip() == 'Battery Power:'
             parts = line.split()
-            if battery and len(parts) == 2 and parts[0] in ('sleep', 'disablesleep') and parts[1].isdigit():
+            if battery and len(parts) == 2 and parts[0] == 'sleep' and parts[1].isdigit():
                 values[parts[0]] = int(parts[1])
+        global_settings = cmdShellWrapper.run_command(['pmset', '-g'], timeout=5)
+        if not global_settings.success:
+            return False
+        for line in global_settings.stdout:
+            parts = line.split()
+            if len(parts) == 2 and parts[0] == 'SleepDisabled' and parts[1].isdigit():
+                values['disablesleep'] = int(parts[1])
         if set(values) != {'sleep', 'disablesleep'}:
-            raise ValueError('Could not read the original battery sleep settings.')
+            raise ValueError('Could not read battery sleep and system sleep-disable settings. This action requires a Mac with battery power settings.')
         backup.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(backup, values)
     command = 'sudo pmset -b sleep 0 && sudo pmset -b disablesleep 1' 

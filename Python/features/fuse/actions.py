@@ -87,7 +87,9 @@ def mount_and_open_remote(
                 cancel_text='Cancel after mount attempt')
 
         def _mounted(self, mount_path):
-            if mount_path is None:
+            if self.task.cancelled.is_set():
+                self.task.message.setText('Cancelled. A completed mount remains mounted; no folder was opened.')
+            elif mount_path is None:
                 self.task.message.setText(f'Mount did not become ready. Expected location: {mounts.get_remote_mount_path(remote_name, config_path)}')
             else:
                 RemoteFolder(mount_path).open()

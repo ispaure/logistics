@@ -21,3 +21,7 @@ See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.
 Choose the Windows NTFS drive in **Settings → Features → System Tools → Configuration**.
 Use a drive letter such as `D:`. The terminal shows the selected drive before running
 `chkdsk`; inspect its output to confirm completion.
+
+On Mac laptops, the disable action changes battery idle sleep and the system-wide
+sleep-disable flag. Restore uses the saved values for both. Desktop Macs without
+battery settings cannot use this action.
