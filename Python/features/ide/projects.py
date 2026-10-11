@@ -24,6 +24,11 @@ class Project:
     def sources(self):
         return list(dict.fromkeys(str((self.root / Path(p).expanduser()).resolve()) for p in self.source_paths))
 
+    def environment(self):
+        if not self.python_interpreter:
+            return None
+        return str((self.root / Path(self.python_interpreter).expanduser()).resolve())
+
     @classmethod
     def from_dict(cls, data):
         if not isinstance(data, dict):
