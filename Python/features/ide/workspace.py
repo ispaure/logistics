@@ -128,7 +128,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
             return None
         from commonUtils.ui.scoped_tabs import ScopedTabBar
         group = qt.QTabWidget()
-        group.setTabBar(ScopedTabBar(group, self.editors, lambda: self.groups, self.drop_editor))
+        group.setTabBar(ScopedTabBar(group, self.editors, lambda: self.groups, self.drop_editor, self.can_drop_editor))
         group.setMinimumWidth(max(160, self.fontMetrics().horizontalAdvance('M') * 16))
         group.setTabsClosable(True)
         group.tabCloseRequested.connect(lambda index: self.close_document(group.widget(index)))
@@ -359,15 +359,34 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         if self.active_group not in self.groups:
             self.activate(self.groups[0])
 
-    def drop_editor(self, doc, target, placement='tabs', index=None):
+    def can_drop_editor(self, doc, target, placement='tabs', index=None):
         source = self.group_for(doc)
         if source is None or target not in self.groups or self.closing:
             return False
-        if placement not in ('left', 'right', 'tabs'):
+        if placement == 'tabs':
+            return True
+        if placement not in ('left', 'right'):
             return False
+        # A single-file column is repositioned, not duplicated. Its own edge
+        # would make no layout change and should not show a misleading preview.
+        if source.count() == 1:
+            return source is not target
+        return len(self.groups) < 3
+
+    def drop_editor(self, doc, target, placement='tabs', index=None):
+        if not self.can_drop_editor(doc, target, placement, index):
+            return False
+        source = self.group_for(doc)
         if placement != 'tabs':
-            if len(self.groups) >= 3:
-                return False
+            if source.count() == 1:
+                self.groups.remove(source)
+                position = self.groups.index(target) + (placement == 'right')
+                self.groups.insert(position, source)
+                self.editors.insertWidget(position, source)
+                self.activate(source)
+                doc.setFocus()
+                self.changed.emit()
+                return True
             position = self.groups.index(target) + (placement == 'right')
             target = self.add_group()
             self.groups.remove(target)
@@ -522,6 +541,10 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
             for key, splitter in [('splitter', self.splitter), ('editors', self.editors)]:
                 sizes = state.get(key)
                 if isinstance(sizes, list) and all(isinstance(n, int) and n >= 0 for n in sizes) and any(sizes):
+                    # Earlier drag previews were accidentally QSplitter children.
+                    # Recover the real widths from those alternating hidden panes.
+                    if key == 'editors' and len(sizes) == 2 * splitter.count() and not any(sizes[::2]):
+                        sizes = sizes[1::2]
                     splitter.setSizes(sizes)
         self.run(lambda: None, restored)
 
