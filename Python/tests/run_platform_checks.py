@@ -39,7 +39,8 @@ def main():
     native_temp = str(Path(tempfile.gettempdir()).resolve())
     env.update(TEMP=native_temp, TMP=native_temp, TMPDIR=native_temp)
     checks = [
-        ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests'], 300),
+        # The full shared suite approaches five minutes on Windows CI.
+        ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests'], 600),
         # Windows' Git/process tests keep making progress past five minutes.
         # Leave room for the growing suite within the platform job's budget.
         ('logistics', ['Python/tests/run_regressions.py', 'Python/tests'], 600),

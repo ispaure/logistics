@@ -31,5 +31,8 @@ Validation completed October 11, 2026:
 - One macOS shared-suite process crashed inside Qt. A local full-suite repeat
   and the debug rerun passed; the native crash's cause remains unconfirmed.
   Live Blender, Hue hardware and external services were not exercised.
+- A Windows browser fixture exceeded its five-second startup wait. Its wait
+  now allows 20 seconds and reports unfinished workers; the shared-suite CI
+  budget allows ten minutes rather than five. Completion is still required.
 
 Release tagging follows a validated pushed revision and an agreed version.
