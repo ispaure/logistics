@@ -68,3 +68,31 @@ class CodeFontTests(QtTestCase):
                 self.assertEqual([e.font().pointSize() for e in (ide, text, preview.editor)], [11] * 3)
                 window._preference_timer.stop()
                 window.close()
+
+    def test_production_split_views_bind_shared_styling_controller(self):
+        from features.text_editor.window import EditorWindow
+        from commonUtils.ui.styling import styling
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            window = EditorWindow(history_path=root / 'recent.json', preferences_path=root / 'preferences.ini')
+            self.addCleanup(window.deleteLater)
+            preferences = window.preferences
+            preferences.custom = False
+            controller = styling().code_font
+            original = controller.size
+            try:
+                with patch('features.code_font.Preferences', return_value=preferences):
+                    controller.set_size(17, save=False)
+                    window._configure_document(window.current)
+                    window.split_document(qt.Qt.Orientation.Horizontal)
+                views = window.current.views
+                self.assertIn(views.primary, controller.views)
+                self.assertIn(views.secondary, controller.views)
+                self.assertEqual([editor.font().pointSize() for editor in (views.primary, views.secondary)], [17, 17])
+                controller.set_size(14, save=False)
+                self.assertEqual([editor.font().pointSize() for editor in (views.primary, views.secondary)], [14, 14])
+            finally:
+                controller.set_size(original, save=False)
+                preferences.custom = True
+                window._preference_timer.stop()
+                window.close()
