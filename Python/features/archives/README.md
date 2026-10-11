@@ -131,7 +131,7 @@ and publication.
 Keep this workflow's chunk-level cancellation separate from Comics' per-comic boundary.
 
 
-Archives opened from the browser or persistent left-side Archives entry appear
+Archives opened from the browser or Documents launcher appear
 as retained documents. Each archive has its own session and controls, stays
 listed under Archives when detached, and can be brought back into Documents.
 Opening an already-open archive reveals that document instead of replacing

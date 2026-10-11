@@ -103,10 +103,9 @@ PYTHONPATH=Python .venv/bin/python -m unittest discover -s Python/commonUtils/te
 
 Tests cover byte preservation, legacy and Unicode encodings, conflicts, binary
 handling, queue/window lifetime, shared browser activation, feature toggles,
-search/replace undo, language definitions and theme-safe presentation. macOS Qt
-offscreen testing and rendered layout inspection are available here. Windows and
-Linux behavior uses Qt/stdlib APIs and code review; native desktop validation on
-those platforms remains separate.
+search/replace undo, language definitions and theme-safe presentation. Headless Qt regressions run on macOS, Windows, Ubuntu and Fedora in CI.
+Native desktop interaction, including platform window behavior, requires separate
+manual validation.
 
 
 ## Additional regression checks

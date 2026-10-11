@@ -25,7 +25,7 @@ edited for Save As, but their original permissions are never changed for you.
 UTF-8 and Unicode BOMs are detected automatically. When decoding fails, select
 the original encoding, such as Windows-1252. Likely binary files require explicit
 approval or **Force Open as Text**. Forced opening does not make a binary format
-safe to edit. Very large files are refused, and files over 1 MiB use simpler
+safe to edit. Files above 16 MiB are refused, and files over 1 MiB use simpler
 presentation. Ordinary saves preserve encoding, endings and final-newline behavior.
 
 ## Editing and search
@@ -73,6 +73,7 @@ buffers. Re-enable it to return to those documents. Browser windows do not own
 editor buffers. Application closure still checks modified documents. Open sessions are checkpointed privately while you work and restored when you next
 open Text Editor. Recovery includes unsaved Untitled buffers, edits, encoding and
 line-ending choices, cursor/selection and scroll positions, and both document views.
+It does not restore the outer workspace's dock arrangement or detached-window positions.
 Application shutdown waits for a durable checkpoint and retains editor buffers;
 closing an individual document still asks Save/Discard/Cancel. If checkpointing
 fails, ordinary save prompts remain in effect. Recovery never writes your original

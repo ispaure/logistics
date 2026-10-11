@@ -144,5 +144,7 @@ See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.
 
 
 
-Use **Documents → Archives** to open another archive. Each opened archive keeps its own session and toolbar; it stays
-listed under Archives when undocked, with a Bring back button for reattachment.
+Use **Documents → Archives** to open another archive. Each archive retains its
+session and toolbar while open, including when detached; **Bring back** reattaches
+it. ZIP edits replace the archive after verification and have no Undo or automatic
+backup. Keep a copy before removing entries you may need again.

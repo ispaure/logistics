@@ -22,7 +22,7 @@ more scan time and cache storage than the visited-folder default.
 before a refresh finishes. Disabling automatic scanning does not remove files;
 use explicit refresh when you want current metadata. Shared controls and the
 individual scan settings are documented in the
-[commonUtils browser guide](https://github.com/ispaure/commonUtils/blob/main/ui/file_browser/README.md)
+[commonUtils browser guide](https://github.com/ispaure/commonUtils/blob/main/ui/file_browser/user_docs/README.md)
 and [index reference](https://github.com/ispaure/commonUtils/blob/main/filesystem/index/README.md).
 Logistics adds feature actions and document routing to that browser.
 
@@ -73,7 +73,7 @@ Feature **User Guide** buttons open read-only help. Alt/Option while opening hel
 opts into editing; it can change the documentation file on disk if saved. Local
 links navigate within the guide viewer, while web links open a browser. For shared
 formatting, properties, search and read-aloud controls, use the
-[commonUtils Markdown guide](https://github.com/ispaure/commonUtils/blob/main/ui/markdown/README.md).
+[commonUtils Markdown guide](https://github.com/ispaure/commonUtils/blob/main/ui/markdown/user_docs/README.md).
 For plain-source editing, choose [Text Editor](../../features/text_editor/user_docs/README.md).
 [Obsidian](../../features/obsidian/user_docs/README.md) launches vaults in the external app.
 

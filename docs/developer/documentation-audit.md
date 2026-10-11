@@ -107,11 +107,39 @@ repository following the user's additional scope instruction.
   `test_feature_preferences`, `test_document_launchers`. Qt's CPU probe failed in
   the sandbox; the same tests passed outside it with `QT_QPA_PLATFORM=offscreen`.
 - `git diff --check` passed. Only Markdown is included in the documentation commits;
-  application behavior, dependency files and commonUtils source/pointer are unchanged.
-  Concurrent commonUtils documentation work was observed and deliberately excluded.
+  application behavior, dependency files and commonUtils source/pointer were unchanged
+  in those documentation commits. Concurrent commonUtils documentation work was
+  observed and deliberately excluded.
 - Audit/plan commit: `fdc7feb`; feature and core user-guide commit: `fdbd57d`.
-  Navigation/developer consolidation follows as its own commit.
+  navigation/developer consolidation: `f348634`. A subsequent requested publication
+  recorded the shared documentation revision in `b8fcb22`; later implementation
+  work updated direct imports and the shared pin in `6303cdf`.
 
 No full application, native platform or live external-service suite was run for
 this documentation-only change. Separate external-project documentation and its
 validation live in that project's checkout, not the Logistics feature inventory.
+
+## Second pass — 2026-10-11
+
+Rechecked the current tree after the direct-import commonUtils refactor. Corrections:
+
+- Point user-facing browser and Markdown links at the new shared user manuals.
+- Explain comic metadata batch replacement, partial saves, suggestion indexing/cache,
+  encrypted-cache exclusions and session-only reader position.
+- State editor file-size and restored-layout limits and reconcile native/CI test wording.
+- Explain Git's default-enabled discard backups and file watching, default-disabled
+  periodic fetch, and configurable preview limit; remove speculative rail guidance.
+- Remove the remaining obsolete Archives rail wording and explain in-place edit recovery.
+- Document actual EPUB uncompressed archive/resource limits and direct shared imports.
+
+The shared Markdown user guide now explains speech controls and unavailable engines;
+platform-specific engine installation/voice troubleshooting remains the narrower gap.
+The prior FUSE legacy bulk-helper concern remains present; no source fix was made.
+External feature follow-ups are recorded only in its owning repository.
+
+Second-pass validation: 81 focused tests passed (`test_comic_catalog`,
+`test_comic_library`, `test_git_preferences`, `test_text_editor_recovery`,
+`test_books_epub`) with headless Qt outside the sandbox. All 308 local links across
+95 Markdown files and 47 shared documentation targets passed local checks.
+`git diff --check` passed. Changes remain documentation-only; native applications
+and external services were not exercised.

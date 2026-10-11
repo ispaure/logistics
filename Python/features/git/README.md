@@ -45,7 +45,8 @@ terminated. Commit-message drafts can veto closing a repository tab or the appli
 Machine stdout and diagnostics are kept separate. Temporary files prevent pipe
 deadlocks and excessive memory capture; stderr progress streams on POSIX and is
 shown at completion on Windows. Machine responses are capped at 8 MiB and fail
-explicitly on overflow. Text previews are capped at 1 MiB and show truncation.
+explicitly on overflow. Text previews default to 1 MiB and show truncation; the personal Diff preference
+allows 16–16,384 KiB. The runner receives that limit per job.
 The UI log is bounded by block/character counts and truncates oversized individual
 lines before Qt text layout; URL redaction avoids unbounded regex backtracking.
 Large output may still consume temporary disk space during command execution.
@@ -65,11 +66,11 @@ does not expose reset/clean.
 
 ## Navigation
 
-The page sets `navigation_position=workspace` and `navigation_order=20`. The generic
-sidebar places workspace contributions after Folder Hub and the contextual
-documents/actions icons, before Tools. Active rclone sync jobs use Folder Actions,
-so Git sits below that icon when it appears. A future Sync destination can use the
-workspace position with order 10. Other feature destinations retain their location.
+The declaration contributes `git.workspace` with the `git` navigation icon.
+The shell places the page using its contribution and page navigation properties;
+feature code does not insert controls into the rail. Folder Actions independently
+hosts rclone jobs. Keep exact ordering in the shell rather than treating a proposed
+future destination as part of this feature's contract.
 
 ## Workspace layout
 
