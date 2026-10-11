@@ -229,7 +229,8 @@ class MainWindowTests(QtTestCase):
         first = workspace.active_dock
         self.assertTrue(workspace.keep_one_tab)
         self.assertFalse(first.close())
-        workspace.add_view(); self.wait_browser(page)
+        workspace.request_new_view(); self.wait_browser(page)
+        self.assertEqual(page.file_browser.navigation.directory, self.root)
         workspace._refresh_tab_headers()
         bar = next(bar for bar in workspace.findChildren(qt.QTabBar)
                    if bar.parent() is workspace and bar.count())
@@ -468,7 +469,7 @@ class MainWindowTests(QtTestCase):
         contribution = self.contribution('Calculator', 'calculator')
         window = self.window([contribution]); window.dlg.show(); self.app.processEvents()
         self.assertTrue(window.tabs.tabBar().isHidden())
-        self.assertEqual(window.sidebar.width(), 54)
+        self.assertEqual(window.sidebar.width(), 46)
         self.assertEqual([action.text() for action in window.sidebar.tools_menu.actions()], ['Calculator'])
         self.assertTrue(window.sidebar.buttons['debug'].isVisible())
         self.assertFalse(window.sidebar.tools_menu.isVisible())
