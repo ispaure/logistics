@@ -34,7 +34,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
             ('Save', self.save_current, qt.QKeySequence.StandardKey.Save),
             ('Save As…', lambda: self.save_current(True), qt.QKeySequence.StandardKey.SaveAs),
             ('Reload', self.reload_current, None), ('Find / Replace', self.find, qt.QKeySequence.StandardKey.Find),
-            ('Split right', self.add_group, None), ('Move left', lambda: self.move(-1), None),
+            ('Split right', self.split_right, None), ('Move left', lambda: self.move(-1), None),
             ('Move right', lambda: self.move(1), None), ('Close group', self.close_group, None),
             ('Close all in group', self.close_all, None), ('Locate file', self.locate, None)]:
             self.action(label, callback, shortcut)
@@ -156,21 +156,27 @@ class ProjectWorkspace(Navigation, qt.QWidget):
                     break
             except OSError:
                 continue
-        group = group if group in self.groups else self.active_group
+        explicit_group = group in self.groups
+        group = group if explicit_group else self.active_group
         def loaded(snapshot):
-            doc = self.documents.get(path)
+            representative = self.documents.get(path)
+            target = group if group in self.groups else self.active_group
+            doc = self.view_for(path, target)
+            if doc is None and representative is not None and not explicit_group:
+                doc = representative
+                target = self.group_for(doc)
             if doc is None:
-                doc = EditorDocument(snapshot, self)
-                self.documents[path] = doc
+                doc = EditorDocument(snapshot, self, buffer=representative.buffer if representative else None)
+                if representative is None:
+                    self.documents[path] = doc
+                    buffer = doc.buffer
+                    buffer.text.modificationChanged.connect(lambda _: self.update_buffer_titles(buffer))
+                    self.watch.addPath(str(path))
                 doc.viewport().installEventFilter(self)
-                target = group if group in self.groups else self.active_group
                 target.addTab(doc, doc.title)
-                doc.document().modificationChanged.connect(lambda _: self.update_title(doc))
                 doc.focused.connect(lambda: self.activate(self.group_for(doc)))
                 doc.cursorPositionChanged.connect(self.changed)
                 doc.verticalScrollBar().valueChanged.connect(self.changed)
-                self.watch.addPath(str(path))
-            target = self.group_for(doc)
             target.setCurrentWidget(doc)
             self.activate(target)
             doc.setFocus()
@@ -205,11 +211,33 @@ class ProjectWorkspace(Navigation, qt.QWidget):
                 self.error(error)
             self.run(lambda: read_text_file(path, encoding=encoding), opened, failed)
 
-    def update_title(self, doc):
-        group = self.group_for(doc)
-        if group:
-            group.setTabText(group.indexOf(doc), doc.title)
+    def views(self):
+        return [g.widget(i) for g in self.groups for i in range(g.count())]
+
+    def view_for(self, path, group=None):
+        group = group or self.active_group
+        return next((group.widget(i) for i in range(group.count()) if group.widget(i).path == path), None) if group else None
+
+    def navigation_view(self, path):
+        path = Path(path).resolve()
+        return self.view_for(path) or self.documents.get(path)
+
+    def split_right(self):
+        source = self.current
+        group = self.add_group()
+        if source and group:
+            self.open_path(source.path, group, source.textCursor().position())
+            self.current.verticalScrollBar().setValue(source.verticalScrollBar().value())
+
+    def update_buffer_titles(self, buffer):
+        for view in buffer.views:
+            group = self.group_for(view)
+            if group:
+                group.setTabText(group.indexOf(view), view.title)
         self.changed.emit()
+
+    def update_title(self, doc):
+        self.update_buffer_titles(doc.buffer)
 
     def save_current(self, save_as=False):
         doc = self.current
@@ -225,7 +253,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
                 return False
             target = Path(name).resolve()
             for other in self.documents.values():
-                if other is doc:
+                if other.buffer is doc.buffer:
                     continue
                 same = target == other.path
                 try:
@@ -252,7 +280,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
             self.error(f'Save failed: {error}. Reload or Save As a new file to preserve both versions.')
             return False
         self.documents.pop(old, None)
-        self.documents[doc.path] = doc
+        self.documents[doc.path] = doc.buffer.views[0]
         self.watch.removePath(str(old))
         self.watch.addPath(str(doc.path))
         self.update_title(doc)
@@ -270,13 +298,18 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         return choice == qt.QMessageBox.StandardButton.Discard
 
     def close_document(self, doc):
-        if doc is None or not self.confirm_document(doc):
+        if doc is None or (len(doc.buffer.views) == 1 and not self.confirm_document(doc)):
             return False
         group = self.group_for(doc)
         group.removeTab(group.indexOf(doc))
-        self.documents.pop(doc.path, None)
-        self.watch.removePath(str(doc.path))
-        doc.deleteLater()
+        remaining = [view for view in doc.buffer.views if view is not doc]
+        if remaining:
+            self.documents[doc.path] = remaining[0]
+        else:
+            self.documents.pop(doc.path, None)
+            self.watch.removePath(str(doc.path))
+        doc.release()
+        self.activate(self.active_group)
         self.changed.emit()
         return True
 
@@ -297,8 +330,11 @@ class ProjectWorkspace(Navigation, qt.QWidget):
             target = self.groups[1]
         while group.count():
             doc = group.widget(0)
-            group.removeTab(0)
-            target.addTab(doc, doc.title)
+            if self.view_for(doc.path, target):
+                self.close_document(doc)
+            else:
+                group.removeTab(0)
+                target.addTab(doc, doc.title)
         self.groups.remove(group)
         group.setParent(None)
         group.deleteLater()
@@ -313,9 +349,14 @@ class ProjectWorkspace(Navigation, qt.QWidget):
             self.add_group()
         if 0 <= index < len(self.groups):
             source = self.group_for(doc)
-            source.removeTab(source.indexOf(doc))
             target = self.groups[index]
-            target.addTab(doc, doc.title)
+            existing = self.view_for(doc.path, target)
+            if existing:
+                self.close_document(doc)
+                doc = existing
+            else:
+                source.removeTab(source.indexOf(doc))
+                target.addTab(doc, doc.title)
             target.setCurrentWidget(doc)
             self.activate(target)
             doc.setFocus()
@@ -333,7 +374,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         doc = self.documents.get(path)
         if doc is None:
             return
-        snapshot = doc.snapshot
+        snapshot, buffer = doc.snapshot, doc.buffer
         def changed_on_disk():
             try:
                 with path.open('rb') as stream:
@@ -341,7 +382,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
             except FileNotFoundError:
                 return True
         def checked(changed):
-            if self.documents.get(path) is doc and doc.snapshot is snapshot and changed:
+            if path in self.documents and self.documents[path].buffer is buffer and buffer.snapshot is snapshot and changed:
                 self.status.setText(f'File changed or removed externally: {path}. Reload to read it; saving checks for conflicts.')
         self.run(changed_on_disk, checked)
         if path.exists():
@@ -415,17 +456,19 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         def restored(_):
             self.restoring = False
             for record in returned:
-                doc = self.documents.get(Path(record['path']).resolve())
+                index = record.get('group', 0)
+                group = self.groups[index] if isinstance(index, int) and 0 <= index < len(self.groups) else self.groups[0]
+                doc = self.view_for(Path(record['path']).resolve(), group)
                 if doc and isinstance(record.get('scroll', 0), int):
                     doc.verticalScrollBar().setValue(record.get('scroll', 0))
             for group, entry in zip(self.groups, groups):
                 if not isinstance(entry, dict):
                     continue
                 active_path = entry.get('active')
-                doc = self.documents.get(Path(active_path).resolve()) if isinstance(active_path, str) else None
+                doc = self.view_for(Path(active_path).resolve(), group) if isinstance(active_path, str) else None
                 for record in entry.get('files', []) if isinstance(entry.get('files', []), list) else []:
                     if isinstance(record, dict) and isinstance(record.get('path'), str) and isinstance(record.get('scroll', 0), int):
-                        opened = self.documents.get(Path(record['path']).resolve())
+                        opened = self.view_for(Path(record['path']).resolve(), group)
                         if opened:
                             opened.verticalScrollBar().setValue(record.get('scroll', 0))
                 if doc and self.group_for(doc) is group:

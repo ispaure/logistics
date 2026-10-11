@@ -14,15 +14,16 @@ Each top-level tab is an independent project. **Reopen** lists registrations.
 Closing a project keeps its registration and layout. **Remove registration** asks
 for confirmation and removes only IDE metadata; it never deletes source files.
 Missing roots and missing or temporarily unreadable open files remain recorded,
-including their editor group and cursor position. Reopen once its storage is available. Changing a root in settings changes browsing
-and analysis; existing absolute document paths are not automatically relocated.
+including their editor group and cursor position. Reopen once storage is available.
+Changing a root in settings changes browsing and analysis; existing absolute document paths are not automatically relocated.
 
 Configuration is versioned JSON at `IDE/workspace.json` beside Logistics
 preferences: `~/Library/Application Support/Logistics` on macOS,
 `%APPDATA%/Logistics` on Windows, and `$XDG_CONFIG_HOME/logistics` (normally
 `~/.config/logistics`) on Linux. No project-local configuration is created.
-Layout saves are debounced and flushed on close. Concurrent instance changes are
+Layout saves are debounced and flushed on close. Intervening instance changes are
 rejected with a status message; restart to load the other instance's state.
+Simultaneous writers are not protected by a cross-process lock.
 Malformed configuration is retained and will not be overwritten automatically.
 
 ## Files and groups
@@ -37,11 +38,25 @@ pending file opens also block these operations.
 Recursive folder deletion is intentionally unavailable.
 
 Editor tabs belong to their project. Drag tabs to reorder them. **Split right**
-adds a group, up to three; **Move left/right** moves the current file. Closing a
-group moves its files into a remaining group. **Close all in group** closes files
-individually with save prompts. Internal tabs and groups cannot detach.
-Opening an already-open path activates its existing buffer, including across
-groups. This version uses one view per file, rather than duplicate split views.
+adds a group showing another view of the current file, up to three groups. You can
+edit either view: text, undo/redo, modified state and disk identity are shared.
+Each view has its own cursor, selection and scroll position. Cursor and scroll
+positions are restored on reopening the project; selections are not persisted. Folding is shared because it changes the common text layout.
+With no active file, Split right adds an empty group.
+
+**Move left/right** moves the current tab. If the destination already shows that
+file, its existing view is selected and the redundant source view closes.
+Closing a group moves its unique files into a remaining group and merges duplicate
+views. Closing one view leaves its shared buffer alive in other groups; only
+closing the last view prompts for unsaved changes. **Close all in group** follows
+the same rule. Closing the project/application prompts once per modified file.
+Internal tabs and groups cannot detach.
+
+Opening an already-open file selects its view in the active group, or an existing
+view in another group. Use **Split right** to open a second view deliberately.
+**Save**, **Save As**, and **Reload** apply to all views of that file; Save As
+changes the path and language for every view, while Reload replaces shared text
+and resets its undo history. Separate projects keep independent buffers.
 
 Save preserves encoding, BOM and line endings. Save As can replace an existing
 file after confirmation and checks for intervening changes. Unicode encodings
@@ -78,7 +93,8 @@ unsaved edits are not overlaid into Jedi's import analysis; save them first.
 Quick-open caps traversal at 100,000 file/directory entries and shows at most 500 matches.
 Project text search examines up to 10,000 files, skips binary/over-1-MiB files,
 and returns up to 500 matching lines. Scans skip excluded folders and directory
-symlinks. Analysis accepts up to 1 MiB of source. These tools are bounded searches,
+symlinks. Search reads saved files, not unsaved editor content.
+Analysis accepts up to 1,048,576 source characters. These tools are bounded searches,
 not a complete background project index. Wait for active work before closing a
 project or application, then retry closing.
 

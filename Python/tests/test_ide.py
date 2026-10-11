@@ -77,6 +77,181 @@ class WorkspaceFixture(IDEQtTests):
 
 
 class WorkspaceTests(WorkspaceFixture):
+    def test_history_and_analysis_use_the_selected_shared_view(self):
+        from features.ide.projects import Project
+        from features.ide.workspace import ProjectWorkspace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / 'a.py'
+            path.write_text('value = 1\n' * 30)
+            view = ProjectWorkspace(Project('test', directory))
+            view.show()
+            view.open_path(path)
+            self.wait(view)
+            left = view.current
+            view.split_right()
+            right = view.current
+            view.activate(view.group_for(left))
+            view.remember()
+            view.activate(view.group_for(right))
+            cursor = right.textCursor()
+            cursor.setPosition(30)
+            right.setTextCursor(cursor)
+            view.travel(-1)
+            self.wait(view)
+            self.assertIs(view.current, left)
+            view.travel(1)
+            self.wait(view)
+            self.assertIs(view.current, right)
+            pending = []
+            with patch.object(view, 'run', side_effect=lambda work, done: pending.append(done)):
+                view.query('definition')
+            pending[0]([(str(path), 20, 0, 'value')])
+            self.wait(view)
+            self.assertEqual(right.textCursor().blockNumber(), 19)
+            self.assertEqual(left.textCursor().blockNumber(), 0)
+            view.prepare_close()
+            view.close()
+
+    def test_split_views_share_edits_undo_save_and_survive_original_close(self):
+        from features.ide.projects import Project
+        from features.ide.workspace import ProjectWorkspace
+        from unittest.mock import patch
+        from commonUtils.ui import pyside as qt
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / 'a.py'
+            path.write_bytes(b'value = 1\r\nsecond = 2\r\n')
+            view = ProjectWorkspace(Project('test', directory))
+            view.open_path(path)
+            self.wait(view)
+            left = view.current
+            view.split_right()
+            right = view.current
+            self.assertIsNot(left, right)
+            self.assertIs(left.document(), right.document())
+            self.assertEqual(len(view.documents), 1)
+            cursor = right.textCursor()
+            cursor.setPosition(10)
+            right.setTextCursor(cursor)
+            self.assertEqual(left.textCursor().position(), 0)
+            left.insertPlainText('# left\n')
+            self.assertEqual(right.toPlainText(), left.toPlainText())
+            right.insertPlainText('# right')
+            self.assertEqual(right.toPlainText(), left.toPlainText())
+            right.undo()
+            self.assertNotIn('# right', left.toPlainText())
+            left.redo()
+            self.assertIn('# right', right.toPlainText())
+            for group in view.groups:
+                self.assertTrue(group.tabText(0).endswith(' *'))
+            with patch.object(qt.QMessageBox, 'question') as prompt:
+                self.assertTrue(view.close_document(left))
+                prompt.assert_not_called()
+            self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+            self.app.processEvents()
+            right.insertPlainText('more')
+            self.assertTrue(view.save_document(right))
+            self.assertIn(b'\r\n', path.read_bytes())
+            self.assertFalse(right.document().isModified())
+            right.insertPlainText('unsaved')
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Cancel) as prompt:
+                self.assertFalse(view.close_document(right))
+                self.assertEqual(prompt.call_count, 1)
+            right.document().setModified(False)
+            view.prepare_close()
+            view.close()
+
+    def test_shared_save_as_reload_merge_and_single_close_prompt(self):
+        from features.ide.projects import Project
+        from features.ide.workspace import ProjectWorkspace
+        from unittest.mock import patch
+        from commonUtils.ui import pyside as qt
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source, target = root / 'a.py', root / 'b.js'
+            source.write_text('value = 1\n')
+            view = ProjectWorkspace(Project('test', directory))
+            view.open_path(source)
+            self.wait(view)
+            left = view.current
+            view.split_right()
+            right = view.current
+            right.insertPlainText('# edit\n')
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Discard) as prompt:
+                self.assertTrue(view.can_close())
+                self.assertEqual(prompt.call_count, 1)
+            with patch.object(qt.QFileDialog, 'getSaveFileName', return_value=(str(target), '')):
+                self.assertTrue(view.save_document(right, True))
+            self.assertEqual(left.path, target)
+            self.assertEqual(right.path, target)
+            self.assertEqual(left.comment_prefix, '//')
+            self.assertEqual(right.comment_prefix, '//')
+            self.assertEqual(set(view.documents), {target})
+            target.write_text('external\n')
+            right.insertPlainText('mine')
+            self.assertFalse(view.save_document(left))
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Discard):
+                view.reload_current()
+            self.assertEqual(left.toPlainText(), 'external\n')
+            self.assertEqual(right.toPlainText(), 'external\n')
+            right.insertPlainText('retained')
+            view.move(-1)
+            self.assertEqual(len(view.views()), 1)
+            self.assertIs(view.current, left)
+            view.split_right()
+            with patch.object(qt.QMessageBox, 'question') as prompt:
+                view.close_group()
+                prompt.assert_not_called()
+            # The empty source column from Move remains; Close group merged
+            # the duplicate into that column without losing the shared buffer.
+            view.close_group()
+            self.assertEqual(len(view.groups), 1)
+            self.assertEqual(view.groups[0].count(), 1)
+            self.assertIn('retained', view.current.toPlainText())
+            view.current.document().setModified(False)
+            self.wait(view)
+            view.prepare_close()
+            view.close()
+
+    def test_same_file_views_restore_independent_positions(self):
+        from features.ide.projects import Project
+        from features.ide.workspace import ProjectWorkspace
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / 'a.py'
+            path.write_text('value = 1\n' * 300)
+            project = Project('test', directory)
+            view = ProjectWorkspace(project)
+            view.resize(1000, 500)
+            view.show()
+            view.open_path(path)
+            self.wait(view)
+            left = view.current
+            view.split_right()
+            right = view.current
+            self.app.processEvents()
+            cursor = right.textCursor()
+            cursor.setPosition(800)
+            right.setTextCursor(cursor)
+            left.verticalScrollBar().setValue(2)
+            right.verticalScrollBar().setValue(90)
+            self.assertNotEqual(left.verticalScrollBar().value(), right.verticalScrollBar().value())
+            project.layout = view.state()
+            view.prepare_close()
+            view.close()
+            restored = ProjectWorkspace(project)
+            restored.resize(1000, 500)
+            restored.show()
+            self.wait(restored)
+            left, right = (group.widget(0) for group in restored.groups)
+            self.assertIs(left.document(), right.document())
+            self.assertEqual(left.textCursor().position(), 0)
+            self.assertEqual(right.textCursor().position(), 800)
+            self.assertEqual(left.verticalScrollBar().value(), 2)
+            self.assertEqual(right.verticalScrollBar().value(), 90)
+            self.assertIs(restored.current, right)
+            restored.prepare_close()
+            restored.close()
+
     def test_pending_open_blocks_browser_mutation_and_callback_failure_drains_queue(self):
         from features.ide.projects import Project
         from features.ide.workspace import ProjectWorkspace

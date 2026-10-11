@@ -13,7 +13,7 @@ def analyze(project, path, code, line, column, kind='definition'):
     except ImportError as error:
         raise RuntimeError('Python intelligence is unavailable. Synchronize the application dependencies; text editing remains available.') from error
     if len(code) > 1024 * 1024:
-        raise ValueError('Analysis is limited to 1 MiB of text.')
+        raise ValueError('Analysis is limited to 1,048,576 source characters.')
     with _analysis_lock:
         context = jedi.Project(str(project.root), added_sys_path=project.sources(),
                                environment_path=project.environment(), load_unsafe_extensions=False)
