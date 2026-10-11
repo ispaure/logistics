@@ -171,16 +171,28 @@ quit; dragging the inner tab header or double-clicking it restores docking.
 The OS controls snapping/taskbar presentation; macOS groups application windows
 under the Logistics Dock icon.
 
-## Single application instance
+## Multiple application instances and shared indexing
 
-`launch.main()` initializes Qt, then acquires a per-user QLockFile in the shared
-commonUtils Temp directory before initializing features or constructing a window.
-The lock path is shared across checkouts. Duplicate launches use commonUtils.ui
-for an informational dialog and return exit status 0. Real lock I/O failures remain
-errors. Ownership lasts through the event loop and is released in `finally`, even
-when startup fails. Qt's long-lived-lock timeout is disabled, so an old live owner
-is retained while dead process owners can be detected. See the
-[Qt lock documentation](https://doc.qt.io/qt-6/qlockfile.html).
+`launch.main()` initializes Qt and starts `services.indexing.IndexService` before
+feature initialization. Every process runs a low-priority participant in the shared
+commonUtils index coordinator. There is no application-wide launch lock. The
+service also runs when no browser subscribes, so another open process can finish
+work submitted by a closing/crashed instance.
+
+Browser requests and progress live in a durable queue beside the index. The shared
+library owns deduplication, writer election, checkpoint recovery and scoped reads;
+Logistics owns the runner's startup/shutdown and Qt activity signal. Closing a
+browser detaches its subscription. On application exit (including startup failure),
+the service requests cancellation and waits for its worker to release its locks and
+SQLite connections. A blocking filesystem call must return before shutdown finishes.
+If all instances close, unfinished requests remain for the next launch.
+
+The coordinator's OS lock elects one runner; the existing index writer lock still
+serializes actual index mutations, including older or standalone library consumers.
+Neither PID reuse nor an old heartbeat permits takeover of a live lock. Progress
+notifications let idle browsers follow newly submitted work without starting an
+extra scan. This recovery contract covers directory indexing, not file operations,
+transfers, compression or other feature jobs.
 
 ## Startup failures
 

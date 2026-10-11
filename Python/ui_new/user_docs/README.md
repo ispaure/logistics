@@ -38,6 +38,25 @@ The Logistics indexing settings apply on the next index request after **Save**:
 | Run index jobs at background priority | Gives other work priority without changing scan scope |
 
 
+## Indexing across application instances
+
+You can launch Logistics more than once. Instances share a queue for directory
+indexing, so compatible requests follow the same work and only one index writer
+runs at a time. Open browsers update their progress, search data and folder sizes
+as saved results become available, including work started in another instance.
+
+Closing a browser or turning off its **Background indexing** subscription detaches
+that view; it does not cancel a submitted shared job. Other instances can finish
+that work even without a browser open at the original folder. Closing or crashing
+the indexing owner lets another instance resume saved folder checkpoints. If every
+instance closes, unfinished requests resume at the next launch. The interrupted
+folder may be scanned again; completed checkpoints are retained and validated.
+
+Explicit refreshes and filesystem notifications received during a scan run in a
+subsequent pass so those changes are not lost. Unreadable/unstable folders can still
+leave partial results; use **Index details…** and explicit refresh to retry. This
+recovery applies to indexing, not copying, moving, compression or transfers.
+
 ## Organize files
 
 Use the selection's copy, cut, paste, rename or removal actions. Existing paste

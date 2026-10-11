@@ -42,7 +42,7 @@ from features.comics import cbz
 
 path, output, password, keep, baseline = sys.argv[1:]
 # The archived baseline has its own original module layout.
-zip_module = 'zipUtils' if baseline == '1' else 'archives.legacy'
+zip_module = 'zipUtils' if importlib.util.find_spec('commonUtils.zipUtils') is not None else 'archives.legacy'
 zipUtils = importlib.import_module('commonUtils.' + zip_module)
 path, output = Path(path), Path(output)
 password = None if password == '-' else password
