@@ -111,7 +111,7 @@ configuration in **Project**. These menus follow the active project/editor and
 use the application's native macOS menu bar or the existing in-window menu on
 Windows/Linux. Keyboard shortcuts remain available.
 
-Code text defaults to 13 points and shares its saved size with Text Editor and
+Code text defaults to 11 points and shares its saved size with Text Editor and
 Git code panes. Ctrl+wheel zoom updates other open code panes and future views.
 Line numbers resize with the font and line count.
 
