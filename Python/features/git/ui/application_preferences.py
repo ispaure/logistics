@@ -25,25 +25,35 @@ class ApplicationPreferences:
         self.file_timer = qt.QTimer(self); self.file_timer.setSingleShot(True); self.file_timer.setInterval(500)
         self.file_timer.timeout.connect(self.refresh)
         self.fetch_timer = qt.QTimer(self); self.fetch_timer.timeout.connect(self.background_fetch)
+        self.settings_timer = qt.QTimer(self)
+        self.settings_timer.setInterval(500)
+        self.settings_timer.timeout.connect(self._refresh_systemic)
+        self.settings_timer.start()
+        from commonUtils.ui.styling import styling
+        styling().changed.connect(self.apply_preferences)
         self.apply_preferences()
+
+    def _refresh_systemic(self):
+        if self.preferences.refresh_systemic():
+            self.apply_preferences()
 
     def apply_preferences(self):
         options = self.preferences.options
         from commonUtils.ui.code_editor.widget import monospace_font
         self.changes.message.setFont(monospace_font() if options['fixed_commit_font'] else self._message_font)
+        from commonUtils.ui.styling import bind_font
+        bind_font(self.changes.message, 'code' if options['fixed_commit_font'] else 'ui')
         self.changes.message.column_guide = options['commit_guide'] if options['fixed_commit_font'] else 0
         self.changes.message.viewport().update()
         self.changes.stage_on_double_click = options['stage_double_click']
         if self.changes.default_push != options['push_after_commit'] and self.changes.push_immediately.isEnabled():
             self.changes.push_immediately.setChecked(options['push_after_commit'])
         self.changes.default_push = options['push_after_commit']
-        font = qt.QFont(self._diff_font)
-        if options['diff_font']: font.fromString(options['diff_font'])
-        self.preview.editor.setFont(font)
         from features.code_font import code_font
         code_font().bind(self.preview.editor)
-        self.preview.editor.diff_color_overrides = options['diff_colors']
-        self.preview.diff_color_overrides = options['diff_colors']
+        colors = self.preferences.color_overrides(self.palette())
+        self.preview.editor.diff_color_overrides = colors
+        self.preview.diff_color_overrides = colors
         self.preview.wrap.setChecked(options['wrap_diff'])
         self.preview._render_diff()
         self.preview.highlighter.rehighlight()

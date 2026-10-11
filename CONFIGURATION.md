@@ -27,8 +27,8 @@ Feature-wide defaults belong in `Python/features/<feature>/config.ini`, directly
 beside that feature's code. Folder/library-specific configuration keeps its
 existing location. Features with no configurable defaults need no empty INI.
 
-Settings displays INIs as section tabs with one row per key. **Source** retains
-plain-text editing for advanced changes and malformed files. Save is explicit;
+Logistics Settings displays declared software settings as section tabs with one row
+per key. Save is explicit;
 invalid typed values and concurrent disk changes block saving. Comments, key case,
 UTF-8 BOMs and line endings are retained when editing fields.
 
@@ -243,3 +243,40 @@ INI. Unsaved document content is not stored in preferences or recent history, bu
 stored separately in private session checkpoints. See
 [editor recovery](Python/features/text_editor/user_docs/README.md#appearance-and-preferences)
 for recovery limits and shutdown behavior.
+
+## Software defaults and personal settings
+
+The selector at the top left of **Logistics Settings** chooses **Default Software
+Configuration** or **Personal Settings** for all categories. Software mode writes
+the tracked repository INI shown above the fields; commit that change to ship it
+in a future release. Personal mode writes sparse overrides in the application's
+persistent configuration directory. It never copies inherited fields into that
+file. Each field shows **Inherited** or **Override**; **↶** removes its override,
+so future software defaults apply again. In software mode, ↶ reverts an unsaved
+field. Save explicitly; switching modes retains pending edits in each mode.
+
+Personal INIs live under `configuration/` in:
+
+- macOS: `~/Library/Application Support/Logistics/`
+- Windows: `%APPDATA%/Logistics/`
+- Linux: `${XDG_CONFIG_HOME:-~/.config}/logistics/` (relative XDG paths fall back to `~/.config`).
+
+Shared controls use `configuration/commonUtils/settings.ini`; feature overrides
+use `configuration/features/<feature>/config.ini`. Launcher overrides use
+`configuration/launch_config.ini` and apply on the next launch. Folder-specific
+integration files, reading positions, bookmarks, accounts and recovery records
+retain their own storage and are not software defaults.
+
+**Appearance & shared controls → Styling** contains 11 settings: theme, accent,
+dark surface tint, and font family/point size for interface/dialogs, file browsers,
+reading, and code. EPUB and Markdown share reading fonts. Text Editor, IDE, Git
+hunks and Markdown code share code fonts. Blank font families select the platform
+font (monospace for code). Saved styling updates open views; font changes preserve
+document text and modified state. Dark tint mixes the accent into neutral dark
+surfaces; zero gives neutral surfaces. The selection text follows accent contrast.
+
+Editor, book and Git systemic options are in Feature settings. Per-tool appearance
+buttons open this same Settings window. Existing editor font preferences and Git
+systemic preferences migrate to personal INIs; original legacy files are retained.
+Feature default enablement is stored in `[FeatureDefaults]` in `Python/configFile.ini`;
+the Features category respects the same software/personal selector.

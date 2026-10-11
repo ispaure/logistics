@@ -159,3 +159,19 @@ The normal File Browser keeps its header even with one tab. Detached browser and
 Document windows may hide a single header, retaining + at the upper right; + adds
 to that same window. Multiple tabs restore their headers and share the available
 width. The last normal browser tab still cannot close or detach.
+
+## Central settings
+
+Open **Logistics Settings** from the navigation rail or a tool's settings action.
+The top-left selector applies to every category: **Default Software Configuration**
+edits repository INIs shipped in future releases; **Personal Settings** edits
+AppData overrides. Fields indicate inheritance. Click **↶** to remove an override,
+then **Save Settings**. A software-mode reset reverts an unsaved field. Pending
+changes remain when switching modes; closing asks Save/Discard/Cancel.
+
+**Appearance & shared controls → Styling** controls the accent, dark tint and
+interface, browser, reading and code font roles. EPUB and Markdown share reading
+fonts; IDE, Text Editor, Git hunks and Markdown code share the code font. Tool
+options are in **Feature settings**. Reading positions, account data and recovery
+records remain personal data, outside software defaults. The path above each
+editor shows exactly which INI will change.

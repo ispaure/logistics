@@ -12,7 +12,9 @@ def create_settings(parent=None):
 
 
 def register():
+    from pathlib import Path
     from features.contributions import Feature, PageContribution, SettingsContribution
     return Feature(id='git', label='Git', pages=[
         PageContribution('Git', 'git.workspace', create_page, order=15, navigation_icon='git'),
-    ], settings=[SettingsContribution('Git preferences', 'git.preferences', create_settings, scope='personal')])
+    ], settings=[SettingsContribution('Git preferences', 'git.preferences', create_settings, scope='personal',
+                                      config_files=(Path(__file__).with_name('config.ini'),), config_scope='application', separate_tab=True)])

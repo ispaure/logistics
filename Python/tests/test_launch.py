@@ -12,6 +12,11 @@ class LaunchTests(unittest.TestCase):
         patcher = patch.object(launch, 'IndexService')
         self.service = patcher.start().return_value
         self.addCleanup(patcher.stop)
+        for name in ('apply_styling', 'initialize_settings'):
+            patcher = patch.object(launch, name)
+            patcher.start(); self.addCleanup(patcher.stop)
+        patcher = patch.object(launch.registry, 'load_feature_preferences')
+        patcher.start(); self.addCleanup(patcher.stop)
 
     def test_independent_launches_start_their_own_index_participant(self):
         with patch.object(launch, 'log'), patch.object(launch.pyside, 'initialize_q_app') as app, \

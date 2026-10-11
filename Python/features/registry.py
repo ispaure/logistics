@@ -3,6 +3,8 @@ Feature discovery, dependency handling, initialization, and contribution aggrega
 """
 
 import importlib
+from configparser import Error
+import json
 import weakref
 from dataclasses import dataclass
 from collections.abc import Callable
@@ -34,20 +36,87 @@ _initialized_features = set()
 _listeners = []
 _definitions = weakref.WeakKeyDictionary()
 _preferences_path = None
+_layered_preferences = False
+
+
+def feature_settings_store():
+    from .settings import settings_store
+    return settings_store(Path(__file__).resolve().parents[1] / 'configFile.ini')
+
+
+def default_disabled_features():
+    raw = feature_settings_store().safe_values('application').get(('FeatureDefaults', 'disabled_list-str'), '[]')
+    try:
+        values = json.loads(raw)
+        if isinstance(values, list) and all(isinstance(name, str) for name in values):
+            return set(values)
+    except ValueError:
+        pass
+    return set()
+
+
+def set_feature_default(name, enabled):
+    feature_map = _get_feature_map()
+    if name not in feature_map:
+        raise ValueError(f'Unknown feature: {name}')
+    leaders, groups = _feature_groups(feature_map)
+    members = groups[leaders[name]]
+    disabled = default_disabled_features()
+    if enabled:
+        required = set()
+        def visit(current):
+            if current in required:
+                return
+            required.add(current)
+            for dependency in get_feature_dependencies(feature_map[current]):
+                visit(dependency)
+        for member in members:
+            visit(member)
+        disabled.difference_update(required)
+    else:
+        dependents = [other for other, module in feature_map.items() if other not in members
+                      and other not in disabled and any(member in get_feature_dependencies(module) for member in members)]
+        if dependents:
+            raise ValueError('Disable these default dependent features first: ' + ', '.join(dependents))
+        disabled.update(members)
+    feature_settings_store().save({('FeatureDefaults', 'disabled_list-str'): json.dumps(sorted(disabled))}, scope='application')
+    _notify_changed()
 
 
 def load_feature_preferences(path=None):
     """Load defaults before feature initialization; no package folders are renamed."""
     from .preferences import preferences_path, load_disabled
-    global _preferences_path
+    global _preferences_path, _layered_preferences
+    _layered_preferences = path is None
     path = Path(path) if path is not None else preferences_path()
     disabled = load_disabled(path)
+    if _layered_preferences:
+        store = feature_settings_store()
+        try:
+            overrides = store.overrides()
+            if ('Migration', 'features_bool') not in overrides:
+                changes = {('Migration', 'features_bool'): 'true'}
+                if path.exists():
+                    changes['FeatureDefaults', 'disabled_list-str'] = json.dumps(sorted(disabled))
+                store.save(changes)
+        except (OSError, UnicodeError, Error, ValueError) as error:
+            log(Severity.ERROR, 'Feature settings', f'Could not migrate preferences; original files preserved: {error}')
+        raw = store.safe_values().get(('FeatureDefaults', 'disabled_list-str'))
+        try:
+            values = json.loads(raw) if raw is not None else None
+            disabled = set(values) if isinstance(values, list) and all(isinstance(name, str) for name in values) else default_disabled_features()
+        except ValueError:
+            disabled = default_disabled_features()
     _disabled_features.clear()
     _disabled_features.update(disabled)
     _preferences_path = path
 
 
 def _save_feature_preferences():
+    if _layered_preferences:
+        value = None if _disabled_features == default_disabled_features() else json.dumps(sorted(_disabled_features))
+        feature_settings_store().save({('FeatureDefaults', 'disabled_list-str'): value})
+        return
     if _preferences_path is not None:
         from .preferences import save_disabled
         save_disabled(_preferences_path, _disabled_features)
@@ -66,8 +135,10 @@ def reset_feature_defaults():
             file_types.set_owner_enabled(name, enabled)
     try:
         _disabled_features.clear()
+        if _layered_preferences:
+            _disabled_features.update(default_disabled_features())
         for name in feature_map:
-            activate(name, _is_feature_available(name, feature_map))
+            activate(name, name not in _disabled_features and _is_feature_available(name, feature_map))
         initialize_features()
         _save_feature_preferences()
     except Exception:

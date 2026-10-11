@@ -174,12 +174,11 @@ class GitPreferencesForm(qt.QWidget):
 
     def diff(self):
         box = self.page('Diff'); form = qt.QFormLayout(); box.addLayout(form)
-        self.font_button = qt.QPushButton(self.options['diff_font'] or 'System monospace font')
+        self.font_button = qt.QPushButton('Shared code font in Logistics Settings…')
         def choose_font():
-            font = qt.QFont(); font.fromString(self.options['diff_font'])
-            accepted, font = qt.QFontDialog.getFont(font, self)
-            if accepted: self.options['diff_font'] = font.toString(); self.font_button.setText(font.toString())
-        self.font_button.clicked.connect(choose_font); form.addRow('Diff font family (shared code size)', self.font_button)
+            from ui_new.settings.window import open_settings
+            open_settings(self, 'commonutils')
+        self.font_button.clicked.connect(choose_font); form.addRow('Code font', self.font_button)
         self.number(form, 'diff_limit_kb', 'Text preview limit (KiB)', 16, 16384)
         self.text(form, 'diff_ignore_patterns', 'Skip preview patterns (comma separated)')
         self.check(box, 'wrap_diff', 'Wrap diff lines by default')
@@ -293,10 +292,18 @@ class GitPreferencesForm(qt.QWidget):
         self.row_buttons(box, [('Add / Edit…', add_username), ('Remove', remove_username)])
 
     def collect(self):
+        central = getattr(self, 'central_configuration', False)
+        if central:
+            self.preferences.refresh_systemic()
+            from ..configuration import FIELDS
+            self.options.update({key: self.preferences.options[key] for key in FIELDS})
         try:
             for key, widget in self.fields.items():
+                if central:
+                    continue
                 self.options[key] = widget.isChecked() if isinstance(widget, qt.QCheckBox) else widget.value() if isinstance(widget, qt.QSpinBox) else widget.currentText() if isinstance(widget, qt.QComboBox) else widget.text()
-            self.options['commit_template'] = self.template.toPlainText()
+            if not central:
+                self.options['commit_template'] = self.template.toPlainText()
             if len(self.options['commit_template'].encode()) > 65536: raise ValueError('Template must be smaller than 64 KiB.')
             self.options['default_usernames'] = {self.usernames.topLevelItem(i).text(0): self.usernames.topLevelItem(i).text(1) for i in range(self.usernames.topLevelItemCount())}
             self.options = validate_options(self.options)
@@ -348,6 +355,32 @@ class GitPreferencesPanel(qt.QWidget):
             table.model().rowsInserted.connect(self._changed)
             table.model().rowsRemoved.connect(self._changed)
         self.dirty = False
+        if getattr(self, 'central_configuration', False):
+            self.use_systemic_editor()
+
+    def use_systemic_editor(self):
+        """Keep identity/accounts/actions here; systemic fields use the resettable INI."""
+        self.central_configuration = self.form.central_configuration = True
+        for widget in self.form.fields.values():
+            widget.hide()
+            parent = widget.parentWidget()
+            field = widget
+            if parent is not None and isinstance(parent.layout(), qt.QHBoxLayout):
+                field = parent
+                field.hide()
+                parent = parent.parentWidget()
+            if parent is not None:
+                for form in parent.findChildren(qt.QFormLayout):
+                    label = form.labelForField(field)
+                    if label is not None:
+                        label.hide()
+        for widget in (self.form.template, self.form.font_button, self.form.executable):
+            widget.hide()
+        for index in range(self.form.tabs.count()-1, -1, -1):
+            title = self.form.tabs.tabText(index)
+            if title in ('Commit', 'Diff', 'Git', 'Updates', 'Mercurial'):
+                self.form.tabs.setTabVisible(index, False)
+        self.form.font_button.setText('Shared code font in Logistics Settings…')
 
     def _changed(self, *args):
         self.dirty = True
@@ -382,13 +415,13 @@ class GitPreferencesPanel(qt.QWidget):
     def revert(self):
         if self.worker: return
         from ..preferences import Preferences
-        self.preferences = Preferences(self.preferences.path)
+        self.preferences = Preferences(self.preferences.path if self.preferences.custom else None)
         self._form(); self._load_identity()
 
     def save(self):
         if self.worker or not self.form.collect(): return
         form = self.form
-        options = deepcopy(form.options); executable = form.executable.text().strip()
+        options = deepcopy(form.options); executable = self.preferences.executable if getattr(form, 'central_configuration', False) else form.executable.text().strip()
         credentials = list(form.credentials); form.credentials.clear()
         identity = dict(self.identity)
         requested = {'user.name': form.author.text().strip(), 'user.email': form.email.text().strip()} if form.modify_global.isChecked() else None
@@ -417,7 +450,7 @@ class GitPreferencesPanel(qt.QWidget):
             from ..preferences import Preferences
             # Re-read bookmarks/repository state that may have changed while this
             # retained settings page was open. Only preferences are replaced.
-            current = Preferences(self.preferences.path)
+            current = Preferences(self.preferences.path if self.preferences.custom else None)
             current.options, current.executable = options, executable
             current.save()
             for preferences in list(Preferences.instances):

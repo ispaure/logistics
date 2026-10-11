@@ -183,7 +183,8 @@ class ReaderTests(QtTestCase):
         self.assertEqual(self.page.text.document().defaultFont().pointSize(), 27)
         self.assertEqual(self.page.text.document().begin().next().blockFormat().lineHeight(), 140)
         self.page.theme.setCurrentIndex(self.page.theme.findData('dark'))
-        self.assertIn('#111111', self.page.text.styleSheet())
+        from commonUtils.ui.theme import configured_colors
+        self.assertIn(configured_colors(True).surface, self.page.text.styleSheet())
         self.page.query.setText('hello')
         self.page.find_next()
         self.assertEqual(self.page.text.textCursor().selectedText(), 'HELLO')
@@ -212,9 +213,14 @@ class ReaderTests(QtTestCase):
         self.assertEqual(self.page.text.width(), 600)
         self.assertGreaterEqual(self.page.progress_label.width(),
                                 self.page.progress_label.fontMetrics().horizontalAdvance(self.page.progress_label.text()))
+        from ui_new.pages.settings import SettingsPage
         self.page.show_appearance()
-        self.assertTrue(self.page.appearance.isVisible())
-        self.page.appearance.hide()
+        settings = next(widget for window in self.app.topLevelWidgets()
+                        for widget in window.findChildren(SettingsPage))
+        self.assertTrue(settings.window().isVisible())
+        self.assertEqual(settings.sidebar.currentItem().data(0, qt.Qt.ItemDataRole.UserRole), 'feature:books')
+        self.assertFalse(self.page.appearance.isVisible())
+        settings.window().close()
 
     def test_embedded_close_keeps_the_logistics_page_available(self):
         self.page.menus.close_action.trigger()
@@ -250,14 +256,15 @@ class ReaderTests(QtTestCase):
             self.wait_idle(self.page)
         self.assertTrue(closed)
 
-    def test_bookmarks_and_saved_chapter_preferences(self):
+    def test_bookmarks_and_saved_chapter_keep_appearance_in_global_settings(self):
         self.page.go_chapter(1)
         self.page.font_size.setValue(25)
         with patch.object(qt.QInputDialog, 'getText', return_value=('My place', True)):
             self.page.add_bookmark()
         self.page._save_state()
         state = ReadingState(self.path, folder=self.folder / 'state').load()
-        self.assertEqual(state['font_size'], 25)
+        self.assertNotIn('font_size', state)
+        self.assertNotIn('theme', state)
         self.assertEqual(state['path'], 'OPS/Text/two.xhtml')
         self.assertEqual(state['bookmarks'][0]['label'], 'My place')
         self.page.go_chapter(0)

@@ -147,3 +147,12 @@ filename columns; release platform checks validate the change on each OS.
 Fix commits: commonUtils `c043426`, `ea31bcc`; Logistics `9ade07e`, `b4a6700`.
 Concurrent gesture-observer, menu, Markdown and navigation edits remained outside
 these commits.
+
+## Central settings verification
+
+The settings refinement adds explicit software/personal scope, sparse overrides,
+per-field reset, external-edit conflict detection, and four live font roles.
+Regression coverage checks the shared INI mechanics, malformed-file preservation,
+font/code-block refresh without document changes, palette contrast, launcher
+inheritance, and Logistics page scope routing. Release validation runs the shared
+and application suites on Windows, macOS, Ubuntu and Fedora before packaging.

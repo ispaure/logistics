@@ -69,9 +69,7 @@ def register():
             SettingsContribution(
                 "Editor defaults",
                 "text_editor",
-                create_page,
                 config_files=(Path(__file__).with_name("config.ini"),),
-                scope="personal", config_scope="application",
             )
         ],
     )

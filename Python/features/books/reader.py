@@ -37,6 +37,12 @@ class BooksPage(Bookmarks, qt.QWidget):
         self.save_timer.setInterval(600)
         self.save_timer.timeout.connect(self._save_state)
         self._set_busy(False)
+        from commonUtils.ui.styling import styling
+        styling().changed.connect(self._settings_changed)
+        self._settings_timer = qt.QTimer(self)
+        self._settings_timer.setInterval(500)
+        self._settings_timer.timeout.connect(self._check_settings)
+        self._settings_timer.start()
         if initial_path:
             self.open_book(initial_path)
 
@@ -80,9 +86,25 @@ class BooksPage(Bookmarks, qt.QWidget):
         self.sidebar.setCurrentIndex(1)
 
     def show_appearance(self):
-        self.appearance.adjustSize()
-        from commonUtils.ui.reader_chrome import show_reader_popup
-        show_reader_popup(self.appearance, self.appearance_button)
+        from ui_new.settings.window import open_settings
+        open_settings(self, 'feature:books')
+
+    def _check_settings(self):
+        if defaults() != self._settings:
+            self._settings_changed()
+
+    def _settings_changed(self):
+        self._settings = defaults()
+        for control in (self.font_family, self.font_size, self.theme, self.spacing, self.reading_width):
+            control.blockSignals(True)
+        self.font_family.setCurrentFont(qt.QFont(self._settings['font_family']))
+        self.font_size.setValue(self._settings['font_size'])
+        self.theme.setCurrentIndex(self.theme.findData(self._settings['theme']))
+        self.spacing.setValue(self._settings['line_spacing'])
+        self.reading_width.setValue(self._settings['reading_width'])
+        for control in (self.font_family, self.font_size, self.theme, self.spacing, self.reading_width):
+            control.blockSignals(False)
+        self._appearance_changed()
 
     def toggle_fullscreen(self):
         self.fullscreen.toggle()
@@ -215,14 +237,14 @@ class BooksPage(Bookmarks, qt.QWidget):
                            and isfinite(item['position'])]
         for control in (self.font_family, self.font_size, self.theme, self.spacing, self.reading_width):
             control.blockSignals(True)
-        self.font_family.setCurrentFont(qt.QFont(str(state.get('font_family', self._settings['font_family']))))
-        size = state.get('font_size', self._settings['font_size'])
+        self.font_family.setCurrentFont(qt.QFont(self._settings['font_family']))
+        size = self._settings['font_size']
         self.font_size.setValue(size if isinstance(size, int) else self._settings['font_size'])
-        theme = state.get('theme', self._settings['theme'])
+        theme = self._settings['theme']
         self.theme.setCurrentIndex(self.theme.findData(theme) if theme in THEMES else 2)
-        spacing = state.get('line_spacing', self._settings['line_spacing'])
+        spacing = self._settings['line_spacing']
         self.spacing.setValue(spacing if isinstance(spacing, int) else self._settings['line_spacing'])
-        width = state.get('reading_width', self._settings['reading_width'])
+        width = self._settings['reading_width']
         self.reading_width.setValue(width if isinstance(width, int) else self._settings['reading_width'])
         for control in (self.font_family, self.font_size, self.theme, self.spacing, self.reading_width):
             control.blockSignals(False)
@@ -314,6 +336,10 @@ class BooksPage(Bookmarks, qt.QWidget):
             return
         path = self.book.spine[self._current]
         background, foreground = THEMES[self.theme.currentData()]
+        if self.theme.currentData() in ('dark', 'slate'):
+            from commonUtils.ui.theme import configured_colors
+            colors = configured_colors(True)
+            background, foreground = colors.surface, colors.text
         self.reading_area.setStyleSheet(f'background-color: {background};')
         self.text.setMaximumWidth(self.reading_width.value())
         html = chapter_html(self.book, path, foreground=foreground, spacing=self.spacing.value())
@@ -419,9 +445,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         if not self._state or not self.book or not self._settings['remember']:
             return
         try:
-            self._state.save(dict(path=self._path, position=self._position(), location=self.text.location(), bookmarks=self._bookmarks,
-                                  theme=self.theme.currentData(), font_family=self.font_family.currentFont().family(),
-                                  font_size=self.font_size.value(), line_spacing=self.spacing.value(), reading_width=self.reading_width.value()))
+            self._state.save(dict(path=self._path, position=self._position(), location=self.text.location(), bookmarks=self._bookmarks))
         except (OSError, ValueError) as error:
             self.status.setText(f'Reading position could not be saved: {error}')
 

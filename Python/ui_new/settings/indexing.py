@@ -61,7 +61,7 @@ class IndexSettingsEditor(INISettingsEditor):
 
 
 class IndexSettingsPanel(qt.QWidget):
-    def __init__(self, parent=None, *, path=None):
+    def __init__(self, parent=None, *, path=None, scope=None):
         super().__init__(parent)
         layout = qt.QVBoxLayout(self)
         title = qt.QLabel('File indexing')
@@ -69,11 +69,47 @@ class IndexSettingsPanel(qt.QWidget):
         note = qt.QLabel('Save to apply changes to the next index request. Hover over an option for details.')
         note.setWordWrap(True)
         layout.addWidget(note)
-        self.editor = IndexSettingsEditor(path or Path(__file__).resolve().parents[2]/'configFile.ini', self)
+        self.path = path or Path(__file__).resolve().parents[2]/'configFile.ini'
+        self._editors = {}
+        if scope is not None:
+            self.set_scope(scope)
+            self._content = layout
+            layout.addWidget(self.editor, 1)
+            return
+        self.editor = IndexSettingsEditor(self.path, self)
         from commonUtils.ui.settings_sections import ScopedSettings, SettingsSection
         self.sections = ScopedSettings(self)
         self.sections.set_sections([SettingsSection('application', 'ini', 'INI files', self.editor, nested=True)])
         layout.addWidget(self.sections, 1)
 
     def can_close(self):
-        return self.editor.can_close()
+        return all(editor.can_close() for editor in self._editors.values()) if self._editors else self.editor.can_close()
+
+    def set_scope(self, scope):
+        from commonUtils.ui.layered_settings import LayeredSettingsEditor
+        from .configuration import settings_store
+        if scope not in self._editors:
+            class LayeredIndexEditor(LayeredSettingsEditor):
+                def _build(self):
+                    super()._build()
+                    for (_, key), control in self.fields.items():
+                        if key in INDEX_FIELDS:
+                            control.setToolTip(INDEX_FIELDS[key][1])
+                    scan = self.fields.get(('FileIndex', 'scan_on_open'))
+                    if isinstance(scan, qt.QCheckBox):
+                        scan.toggled.connect(self._dependencies)
+                    self._dependencies()
+
+                _dependencies = IndexSettingsEditor._dependencies
+
+            self._editors[scope] = LayeredIndexEditor(settings_store(self.path), self, scope=scope,
+                sections=('FileIndex',), labels={('FileIndex', key): label for key, (label, _) in INDEX_FIELDS.items()})
+            for (_, key), control in self._editors[scope].fields.items():
+                if key in INDEX_FIELDS:
+                    control.setToolTip(INDEX_FIELDS[key][1])
+        if hasattr(self, '_content'):
+            self._content.removeWidget(self.editor)
+            self.editor.hide()
+            self._content.addWidget(self._editors[scope], 1)
+            self._editors[scope].show()
+        self.editor = self._editors[scope]

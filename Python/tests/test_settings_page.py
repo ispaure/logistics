@@ -113,20 +113,32 @@ class SettingsPageTests(QtTestCase):
         with TemporaryDirectory() as temporary:
             path = Path(temporary) / 'settings.ini'
             path.write_text('[WheelNavigation]\nsensitivity=20\n')
-            with patch('ui_new.pages.settings.settings_path', return_value=path):
+            from commonUtils.configuration.layered import register_settings
+            store = register_settings(path, Path(temporary) / 'personal.ini')
+            with patch('ui_new.pages.settings.settings_path', return_value=path), patch('ui_new.pages.settings.settings_store', return_value=store):
                 page = SettingsPage(); self.addCleanup(page.deleteLater)
-                item = next(page.sidebar.topLevelItem(i) for i in range(page.sidebar.topLevelItemCount()) if page.sidebar.topLevelItem(i).text(0) == 'commonUtils')
-                self.assertEqual(item.text(0), 'commonUtils')
+                item = next(page.sidebar.topLevelItem(i) for i in range(page.sidebar.topLevelItemCount()) if page.sidebar.topLevelItem(i).data(0, qt.Qt.ItemDataRole.UserRole) == 'commonutils')
                 page.sidebar.setCurrentItem(item)
                 editor = page.panels['commonutils'].editors[path]
-                editor.text.setPlainText('[WheelNavigation]\nsensitivity=10\n')
-                editor.text.document().setModified(True)
+                editor.fields['WheelNavigation', 'sensitivity'].setText('10')
                 page.sidebar.setCurrentItem(page.sidebar.topLevelItem(0))
                 page.sidebar.setCurrentItem(item)
                 self.assertIs(page.stack.currentWidget().stack.currentWidget(), editor)
                 self.assertTrue(editor.save())
+                self.assertIn('sensitivity=20', path.read_text())
                 from commonUtils.configuration.settings import get_wheel_navigation_settings
                 self.assertEqual(get_wheel_navigation_settings(path=path).sensitivity, 10)
+                page.scope_selector.setCurrentIndex(0)
+                defaults = page.panels['commonutils'].editors[path]
+                self.assertIsNot(defaults, editor)
+                self.assertEqual(defaults.fields['WheelNavigation', 'sensitivity'].text(), '20')
+                defaults.fields['WheelNavigation', 'sensitivity'].setText('25')
+                page.scope_selector.setCurrentIndex(1)
+                self.assertIs(page.panels['commonutils'].editors[path], editor)
+                page.scope_selector.setCurrentIndex(0)
+                self.assertIs(page.panels['commonutils'].editors[path], defaults)
+                self.assertEqual(defaults.pending['WheelNavigation', 'sensitivity'], '25')
+                defaults.pending.clear()
 
     def test_configuration_file_switch_retains_unsaved_edits(self):
         with TemporaryDirectory() as temporary:

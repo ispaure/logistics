@@ -19,12 +19,14 @@ class RepositoryLayout:
         layout.setSpacing(0)
         toolbar_font = qt.QFont(self.font())
         content_font = qt.QFont(toolbar_font)
-        content_font.setPointSizeF(max(8.0, toolbar_font.pointSizeF() - 1.0))
         self.setFont(content_font)
         self._build_toolbar(layout, toolbar_font)
         self._build_views(layout)
         self._build_status(layout)
         self._style_content(content_font)
+        from commonUtils.ui.styling import bind_font
+        bind_font(self, 'ui')
+        bind_font(self.toolbar, 'ui')
 
     def _build_toolbar(self, layout, toolbar_font):
         self.repository_menu = qt.QMenu(self)
@@ -193,6 +195,8 @@ class RepositoryLayout:
             if widget is self.toolbar or self.toolbar.isAncestorOf(widget): continue
             if widget is self.preview.editor or self.preview.editor.isAncestorOf(widget): continue
             widget.setFont(content_font)
+            from commonUtils.ui.styling import bind_font
+            bind_font(widget, 'ui')
 
     def _connect_workspace_signals(self):
         self.changes.change_selected.connect(self.preview_change)

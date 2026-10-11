@@ -1,4 +1,3 @@
-from configparser import ConfigParser
 from pathlib import Path
 from commonUtils.configuration import legacy as configUtils
 from commonUtils.filesystem import files as fileUtils
@@ -44,8 +43,8 @@ class LogisticsConfig:
 
         # Local/private resources default to the checkout and are independent.
         # Explicit overrides can still point either directory at Dropbox.
-        resources = ConfigParser(interpolation=None)
-        resources.read(config_file_path, encoding='utf-8-sig')
+        from commonUtils.configuration.layered import effective_settings
+        resources = effective_settings(config_file_path, case_sensitive=False)
 
         def resource_path(key, default):
             value = resources.get('Resources', key, fallback=default).strip() or default

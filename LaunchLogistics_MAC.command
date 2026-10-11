@@ -2,6 +2,7 @@
 
 PROJECT_ROOT="$(cd -- "$(dirname -- "$0")" && pwd)"
 CONFIG_FILE="$PROJECT_ROOT/launch_config.ini"
+export COMMONUTILS_PERSONAL_CONFIG_FILE="${HOME}/Library/Application Support/Logistics/configuration/launch_config.ini"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "ERROR: launch_config.ini was not found:"
@@ -10,15 +11,22 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
 fi
 
 read_config_value() {
-    awk -F= -v key="$1" '
-        $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
-            value=$2
-            sub(/^[[:space:]]*/, "", value)
-            sub(/[[:space:]]*$/, "", value)
-            print value
-            exit
+    local inputs=("$CONFIG_FILE")
+    [[ ! -f "$COMMONUTILS_PERSONAL_CONFIG_FILE" ]] || inputs+=("$COMMONUTILS_PERSONAL_CONFIG_FILE")
+    awk -v key="$1" '
+        FNR == 1 { in_launch=0; matches=0 }
+        /^[[:space:]]*\[Launch\][[:space:]]*$/ { in_launch=1; next }
+        /^[[:space:]]*\[/ { in_launch=0 }
+        in_launch {
+            pos=index($0,"="); if(!pos) next
+            name=substr($0,1,pos-1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", name)
+            if(name==key) {
+                value=substr($0,pos+1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+                found=1
+            }
         }
-    ' "$CONFIG_FILE"
+        END { if(found) print value }
+    ' "${inputs[@]}"
 }
 
 COMMONUTILS_ROOT="$(read_config_value commonutils_root)"

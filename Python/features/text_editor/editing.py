@@ -129,6 +129,9 @@ class EditingCommands:
                 checkable=True,
             )
         self.action(self._view_menu, "font", "Choose Font…", self.choose_font)
+        from ui_new.settings.window import open_settings
+        self.action(self._view_menu, 'logistics_settings', 'Logistics Settings…',
+                    lambda: open_settings(self, 'feature:text_editor'))
         self.action(
             self._view_menu,
             "zoom_in",
@@ -144,6 +147,9 @@ class EditingCommands:
             qt.QKeySequence.StandardKey.ZoomOut,
         )
         self.escape = qt.QShortcut(qt.QKeySequence("Escape"), self)
+        for key in ('font', 'zoom_in', 'zoom_out', 'wrap', 'numbers', 'whitespace', 'auto_indent', 'auto_pairs'):
+            self.actions[key].setVisible(False)
+            self.actions[key].setShortcut(qt.QKeySequence())
         self.escape.setContext(qt.Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self.escape.activated.connect(self.escape_editor)
         self.encoding_button = self._status_button("Encoding", self.choose_encoding)
@@ -222,15 +228,8 @@ class EditingCommands:
         self._preferences_changed()
 
     def choose_font(self):
-        if not self.current:
-            return
-        accepted, font = qt.QFontDialog.getFont(
-            self.current.editor.font(), self, "Editor font"
-        )
-        if accepted:
-            self.current.editor.setFont(font)
-            self.current.editor.update_tab_width()
-            self._preferences_changed()
+        from ui_new.settings.window import open_settings
+        open_settings(self, 'commonutils')
 
     def zoom(self, direction):
         if self.current:

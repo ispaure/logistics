@@ -10,7 +10,7 @@ from pathlib import Path
 import config
 import json
 import re
-from commonUtils.formats.iniType import INIFile
+from commonUtils.configuration.layered import effective_settings
 from commonUtils.persistence import atomic_write_json
 from features.preferences import preferences_path
 
@@ -49,7 +49,7 @@ def run_repair_ntfs_on_d() -> bool:
         return False
 
     script_path = Path(config.LogisticsConfig().path_logistics_scripts, 'repair_ntfs_on_D.bat')
-    drive = INIFile(Path(__file__).with_name('config.ini')).read().get('Windows', 'ntfs_drive', fallback='D:').strip().upper()
+    drive = effective_settings(Path(__file__).with_name('config.ini')).get('Windows', 'ntfs_drive', fallback='D:').strip().upper()
     if re.fullmatch(r'[A-Z]:', drive) is None:
         raise ValueError('NTFS drive must be a drive letter such as D:.')
     command = f'start "" "{script_path}" {drive}'

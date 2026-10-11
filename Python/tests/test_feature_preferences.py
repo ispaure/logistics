@@ -12,7 +12,7 @@ class FeaturePreferencesTests(unittest.TestCase):
     def setUp(self):
         self.temporary = TemporaryDirectory(); self.addCleanup(self.temporary.cleanup)
         self.path = Path(self.temporary.name) / 'preferences.ini'
-        for name, value in [('_disabled_features', set()), ('_initialized_features', set()), ('_preferences_path', None)]:
+        for name, value in [('_disabled_features', set()), ('_initialized_features', set()), ('_preferences_path', None), ('_layered_preferences', False)]:
             replacement = patch.object(registry, name, value); replacement.start(); self.addCleanup(replacement.stop)
         self.base = ModuleType('features.pref_base'); self.base.FEATURE_NAME = 'pref_base'
         self.child = ModuleType('features.pref_child'); self.child.FEATURE_NAME = 'pref_child'
@@ -75,3 +75,38 @@ class FeaturePreferencesTests(unittest.TestCase):
         with patch.object(Path, 'open', side_effect=PermissionError('No access')):
             self.assertEqual(load_disabled(self.path), set())
         self.assertEqual(load_disabled(self.path), {'pref_child'})
+
+    def test_software_defaults_and_personal_reset_keep_layers_separate(self):
+        from commonUtils.configuration.layered import register_settings
+        defaults = self.path.with_name('defaults.ini')
+        defaults.write_text('[FeatureDefaults]\ndisabled_list-str = []\n')
+        store = register_settings(defaults, self.path.with_name('personal.ini'))
+        with patch('features.registry.feature_settings_store', return_value=store), \
+                patch('features.preferences.preferences_path', return_value=self.path):
+            registry.set_feature_default('pref_child', False)
+            self.assertEqual(registry.default_disabled_features(), {'pref_child'})
+            self.assertNotIn(('FeatureDefaults', 'disabled_list-str'), store.overrides())
+            registry.load_feature_preferences()
+            self.assertFalse(registry.is_feature_enabled('pref_child'))
+            registry.set_feature_enabled('pref_child', True)
+            self.assertEqual(store.overrides()['FeatureDefaults', 'disabled_list-str'], '[]')
+            self.assertEqual(registry.default_disabled_features(), {'pref_child'})
+            registry.reset_feature_defaults()
+            self.assertFalse(registry.is_feature_enabled('pref_child'))
+            self.assertNotIn(('FeatureDefaults', 'disabled_list-str'), store.overrides())
+
+    def test_legacy_feature_choices_migrate_once_and_do_not_return_after_reset(self):
+        from commonUtils.configuration.layered import register_settings
+        defaults = self.path.with_name('defaults.ini')
+        defaults.write_text('[FeatureDefaults]\ndisabled_list-str = []\n')
+        store = register_settings(defaults, self.path.with_name('personal.ini'))
+        save_disabled(self.path, {'pref_child'})
+        original = self.path.read_bytes()
+        with patch('features.registry.feature_settings_store', return_value=store), \
+                patch('features.preferences.preferences_path', return_value=self.path):
+            registry.load_feature_preferences()
+            self.assertFalse(registry.is_feature_enabled('pref_child'))
+            registry.reset_feature_defaults()
+            registry.load_feature_preferences()
+            self.assertTrue(registry.is_feature_enabled('pref_child'))
+        self.assertEqual(self.path.read_bytes(), original)

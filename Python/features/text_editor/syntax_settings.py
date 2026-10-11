@@ -19,6 +19,11 @@ class SyntaxSettings:
         self._preference_timer.setSingleShot(True)
         self._preference_timer.setInterval(300)
         self._preference_timer.timeout.connect(self._save_preferences)
+        if not self.preferences.custom:
+            self._settings_timer = qt.QTimer(self)
+            self._settings_timer.setInterval(500)
+            self._settings_timer.timeout.connect(self._reload_system_options)
+            self._settings_timer.start()
         geometry = self.options.get("geometry_str", "")
         if geometry:
             try:
@@ -38,12 +43,23 @@ class SyntaxSettings:
             checkable=True,
         )
         self.actions["syntax"].setChecked(self.options["syntax_highlighting_bool"])
+        self.actions['syntax'].setVisible(False)
         self.action(
             self._view_menu,
             "reset_preferences",
             "Reset Editor Preferences",
             self.reset_preferences,
         )
+        self.actions['reset_preferences'].setVisible(False)
+
+    def _reload_system_options(self):
+        options = self.preferences.load()
+        if any(options[key] != self.options[key] for key in options if key != 'geometry_str'):
+            self.options = options
+            for document in self.documents:
+                self._configure_document(document)
+            self.actions['syntax'].setChecked(options['syntax_highlighting_bool'])
+            self._active_changed()
 
     def _configure_document(self, document):
         editor = document.editor
@@ -57,7 +73,7 @@ class SyntaxSettings:
         font.setPointSize(options["font_size_int"])
         editor.setFont(font)
         from features.code_font import code_font
-        code_font(self.preferences.path).bind(editor)
+        code_font(self.preferences.font_path).bind(editor)
         editor.indent_width = options["indent_width_int"]
         editor.use_tabs = options["use_tabs_bool"]
         editor.update_tab_width()
@@ -144,7 +160,7 @@ class SyntaxSettings:
             return
         editor = self.current.editor
         from features.code_font import code_font
-        shared_font = code_font(self.preferences.path)
+        shared_font = code_font(self.preferences.font_path)
         if not shared_font.updating and shared_font.size != round(editor.font().pointSizeF()):
             shared_font.changed(editor)
         self.options.update(
@@ -166,7 +182,7 @@ class SyntaxSettings:
 
     def _save_preferences(self):
         try:
-            self.preferences.save(self.options)
+            self.preferences.save(self.options if self.preferences.custom else {'geometry_str': self.options.get('geometry_str', '')})
         except (OSError, ValueError, ConfigError) as error:
             self.statusBar().showMessage(
                 f"Preferences could not be saved: {error}", 7000
@@ -181,9 +197,9 @@ class SyntaxSettings:
         self._preference_timer.stop()
         self.options = self.preferences.load()
         from features.code_font import code_font
-        code_font(self.preferences.path).set_size(self.options['font_size_int'], save=False, notify=False)
+        code_font(self.preferences.font_path).set_size(self.options['font_size_int'], save=False, notify=False)
         for doc in self.documents:
             self._configure_document(doc)
-        code_font(self.preferences.path).set_size(self.options['font_size_int'], save=False)
+        code_font(self.preferences.font_path).set_size(self.options['font_size_int'], save=False)
         self.actions["syntax"].setChecked(self.options["syntax_highlighting_bool"])
         self._active_changed()

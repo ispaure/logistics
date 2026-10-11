@@ -3,6 +3,9 @@ setlocal EnableExtensions DisableDelayedExpansion
 
 set "PROJECT_ROOT=%~dp0"
 set "CONFIG_FILE=%PROJECT_ROOT%launch_config.ini"
+set "LOGISTICS_SETTINGS_ROOT=%APPDATA%"
+if not defined LOGISTICS_SETTINGS_ROOT set "LOGISTICS_SETTINGS_ROOT=%USERPROFILE%\AppData\Roaming"
+set "COMMONUTILS_PERSONAL_CONFIG_FILE=%LOGISTICS_SETTINGS_ROOT%\Logistics\configuration\launch_config.ini"
 set "PAUSE_AFTER_COMPLETED=false"
 
 if not exist "%CONFIG_FILE%" (
@@ -12,7 +15,7 @@ if not exist "%CONFIG_FILE%" (
     exit /b 1
 )
 
-for /f "usebackq tokens=1,* delims==" %%A in ("%CONFIG_FILE%") do (
+for %%F in ("%CONFIG_FILE%" "%COMMONUTILS_PERSONAL_CONFIG_FILE%") do if exist "%%~F" for /f "usebackq tokens=1,* delims==" %%A in ("%%~F") do (
     if /i "%%A"=="commonutils_root " set "COMMONUTILS_ROOT=%%B"
     if /i "%%A"=="commonutils_root" set "COMMONUTILS_ROOT=%%B"
     if /i "%%A"=="pause_after_completed " set "PAUSE_AFTER_COMPLETED=%%B"

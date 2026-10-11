@@ -6,7 +6,7 @@ from features.contributions import Feature, SettingsContribution, DocumentLaunch
 
 def create_settings(parent=None):
     from commonUtils.ui import pyside as qt
-    label = qt.QLabel('Defaults apply to books without saved reading preferences.', parent)
+    label = qt.QLabel('Reader settings apply to every book. Markdown and EPUB share the Reading font in Appearance & shared controls. Reading positions and bookmarks remain per book.', parent)
     label.setWordWrap(True)
     return label
 

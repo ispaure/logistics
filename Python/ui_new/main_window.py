@@ -85,6 +85,9 @@ class MainWindow(pyside.Window):
         self._feature_pages = {}
         try:
             self._populate_tabs()
+            for _, _, page in self._core_pages:
+                if isinstance(page, SettingsPage):
+                    page.reveal = self._show_settings
         except BaseException:
             self._cleanup_failed_startup()
             raise
