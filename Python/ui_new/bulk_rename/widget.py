@@ -226,7 +226,10 @@ class BulkRenameWidget(qt.QWidget):
         presets.setMenu(presets_menu)
         presets_menu.aboutToShow.connect(lambda: [button._menu_action.setEnabled(button.isEnabled())
             for button in (self.load_preset_button, self.save_preset_button, self.reset_button)])
-        actions.addWidget(presets)
+        preset_row = qt.QHBoxLayout()
+        preset_row.addWidget(presets)
+        preset_row.addStretch()
+        layout.addLayout(preset_row)
         actions.addStretch()
         for button in (self.preview_button, self.undo_button, self.rename_button):
             actions.addWidget(button)
