@@ -1,5 +1,8 @@
 # Logistics architecture and reuse assessment
 
+Historical record, not the current application contract. Start with
+[developer documentation](docs/developer/README.md) for current behavior and validation.
+
 Source review dated October 10, 2026. This assessment maps the current checkout and proposes cleanup; it does not implement any refactoring.
 
 The application already shares substantial infrastructure through **commonUtils**. The best next step is to make the boundaries between presentation, document state, application hosting, and domain behavior more explicit. Several similar-looking screens should share smaller components rather than become one enormous configurable window.
@@ -184,7 +187,7 @@ Each feature is discovered by package presence; enabled state and prerequisites 
 | `text_editor` | Browser actions/activation and editor settings; QApplication-owned editor service |
 | `youtube_downloader` | Detected-folder download workflow, dialog, downloader and synchronization |
 
-Use [UI architecture](Python/features/UI_ARCHITECTURE.md) and [browser authoring](Python/features/FILE_BROWSER.md) for existing extension contracts. Some passages in the architecture guide lag behind the code; see section 10.
+Use [UI architecture](docs/developer/features.md) and [browser authoring](docs/developer/file-browser.md) for existing extension contracts. Some passages in the architecture guide lag behind the code; see section 10.
 
 ## 3. Editors: what is and is not shared
 
@@ -214,7 +217,7 @@ flowchart LR
 | Configuration text editor | `TextFileEditor(QPlainTextEdit)` | INI editor subclasses it | Strong candidate for shared persistence; a full IDE-sized window is unnecessary here |
 | Git diff editor | `DiffEdit(CodeEdit)` | Real reuse of editor gutter and text mechanics | Keep old/new line-number gutter and diff presentation specialized |
 
-Evidence: [CodeEdit](Python/commonUtils/ui/code_editor/widget.py), [EditorViews](Python/commonUtils/ui/code_editor/views.py), [editor document](Python/features/text_editor/document.py), [Markdown editors](Python/commonUtils/ui/markdown/live_edit.py), [configuration editor](Python/commonUtils/ui/text_editor.py), [Git preview](Python/features/git/ui/preview.py).
+Evidence: [CodeEdit](https://github.com/ispaure/commonUtils/blob/main/ui/code_editor/widget.py), [EditorViews](https://github.com/ispaure/commonUtils/blob/main/ui/code_editor/views.py), [editor document](Python/features/text_editor/document.py), [Markdown editors](https://github.com/ispaure/commonUtils/blob/main/ui/markdown/live_edit.py), [configuration editor](https://github.com/ispaure/commonUtils/blob/main/ui/text_editor.py), [Git preview](Python/features/git/ui/preview.py).
 
 ### Answer to the line-number example
 
@@ -235,9 +238,9 @@ Suggested profiles, **not implemented**:
 
 Three paths independently handle bytes, original-file comparisons, newline/BOM preservation and atomic publication:
 
-- Text Editor uses [text_files.py](Python/commonUtils/persistence/text.py): `TextSnapshot`, multiple encodings, bounded reads/writes, conflict checks and staged publication.
-- Markdown uses [markdown/io.py](Python/commonUtils/ui/markdown/io.py): UTF-8/BOM/newline handling, extension and symlink policy, temporary file and replacement.
-- Configuration uses [TextFileEditor](Python/commonUtils/ui/text_editor.py): direct UTF-8 reads, stored original bytes, newline/BOM handling and `QSaveFile`.
+- Text Editor uses [text_files.py](https://github.com/ispaure/commonUtils/blob/main/persistence/text.py): `TextSnapshot`, multiple encodings, bounded reads/writes, conflict checks and staged publication.
+- Markdown uses [markdown/io.py](https://github.com/ispaure/commonUtils/blob/main/ui/markdown/io.py): UTF-8/BOM/newline handling, extension and symlink policy, temporary file and replacement.
+- Configuration uses [TextFileEditor](https://github.com/ispaure/commonUtils/blob/main/ui/text_editor.py): direct UTF-8 reads, stored original bytes, newline/BOM handling and `QSaveFile`.
 
 Extract or extend shared **byte persistence mechanics**, leaving format rules and prompts with callers. Do not automatically replace all paths with `text_files.py`: its 16 MiB limit, path resolution, encoding support and overwrite semantics may change existing callers' behavior. Markdown's symlink rejection is also an explicit policy worth preserving.
 
@@ -264,15 +267,15 @@ The internal Markdown viewer and EPUB reader both use Qt rich text. They do **no
 
 Existing reuse:
 
-- Reader button/icon/label/fullscreen mechanics in [reader_chrome.py](Python/commonUtils/ui/reader_chrome.py).
-- Speech/text tracking in [read_aloud.py](Python/commonUtils/ui/read_aloud.py), used by Markdown and EPUB.
+- Reader button/icon/label/fullscreen mechanics in [reader_chrome.py](https://github.com/ispaure/commonUtils/blob/main/ui/reader_chrome.py).
+- Speech/text tracking in [read_aloud.py](https://github.com/ispaure/commonUtils/blob/main/ui/read_aloud.py), used by Markdown and EPUB.
 - EPUB and Comics use shared `ReaderMenus`; Text Editor reuses `RecentFiles` with a separate history path.
 - Optional main-window hosting through `document_host`.
 
 Important differences to preserve:
 
 - [BookText](Python/features/books/text_view.py) permits archive-local EPUB image resources and implements location-preserving pagination; [BookSpread](Python/features/books/spread.py) manages the second page.
-- [MarkdownBrowser](Python/commonUtils/ui/markdown/presentation.py) adds quote/callout painting; the viewer sets the document base URL for local resources and owns local document/anchor history and editing.
+- [MarkdownBrowser](https://github.com/ispaure/commonUtils/blob/main/ui/markdown/presentation.py) adds quote/callout painting; the viewer sets the document base URL for local resources and owns local document/anchor history and editing.
 - [chapter_html](Python/features/books/content.py) strips unsupported/active content and rewrites resources before display.
 - Markdown editing has source/formatted round-trip behavior and frontmatter/property editing. EPUB reading has chapter/spine ordering and saved reading positions.
 
@@ -296,7 +299,7 @@ Recommended extraction: common reading appearance and navigation presentation, w
 
 **The Comics library does reuse `FileBrowser`.** [ComicLibraryWindow](Python/features/comics/ui/library.py) composes it and installs Comics/Archives bindings. [comics/ui/file_browser.py](Python/features/comics/ui/file_browser.py) is a compatibility export of shared views, not a second full browser implementation.
 
-Sources: [filesystem model](Python/commonUtils/ui/file_browser/model.py), [view coordination](Python/commonUtils/ui/file_browser/views.py), [archive contents](Python/commonUtils/ui/archive_view/contents.py), [archive page](Python/features/archives/ui/page.py), [archive session](Python/features/archives/ui/session.py).
+Sources: [filesystem model](https://github.com/ispaure/commonUtils/blob/main/ui/file_browser/model.py), [view coordination](https://github.com/ispaure/commonUtils/blob/main/ui/file_browser/views.py), [archive contents](https://github.com/ispaure/commonUtils/blob/main/ui/archive_view/contents.py), [archive page](Python/features/archives/ui/page.py), [archive session](Python/features/archives/ui/session.py).
 
 ### What could be reused
 
@@ -330,7 +333,7 @@ The visible items have different meanings:
 | Archive folders | Member-name hierarchy in `QTreeWidget` | Virtual containers inside an archive |
 | Git repository bookmarks | Workspace repository navigation and management | Saved repository locations, not document reading positions |
 
-Evidence: [Markdown show_contents](Python/commonUtils/ui/markdown/viewer.py), [EPUB chapter/bookmark methods](Python/features/books/reader.py), [EPUB sidebar controls](Python/features/books/reader_controls.py), [reading-state storage](Python/features/books/preferences.py), [Git page](Python/features/git/ui/page.py).
+Evidence: [Markdown show_contents](https://github.com/ispaure/commonUtils/blob/main/ui/markdown/viewer.py), [EPUB chapter/bookmark methods](Python/features/books/reader.py), [EPUB sidebar controls](Python/features/books/reader_controls.py), [reading-state storage](Python/features/books/preferences.py), [Git page](Python/features/git/ui/page.py).
 
 ### Recommended common component
 
@@ -392,9 +395,9 @@ Keep `Workspace` responsible for geometry, tab dragging and dock ownership; keep
 
 ### Existing shared execution infrastructure
 
-- [Operation](Python/commonUtils/ui/operations.py) wraps background callbacks and reports errors with noninteractive logging.
-- [OperationProgress](Python/commonUtils/ui/operation_progress.py) adds progress, cooperative cancellation and completion delivery after the worker has stopped. Archive sessions and Text Editor use it.
-- [ProcessRunner](Python/commonUtils/ui/process_runner.py) and [ProcessProgressWindow](Python/commonUtils/ui/process_progress.py) handle external processes and their result UI; `process_host` routes them to the application's Folder Actions host.
+- [Operation](https://github.com/ispaure/commonUtils/blob/main/ui/operations.py) wraps background callbacks and reports errors with noninteractive logging.
+- [OperationProgress](https://github.com/ispaure/commonUtils/blob/main/ui/operation_progress.py) adds progress, cooperative cancellation and completion delivery after the worker has stopped. Archive sessions and Text Editor use it.
+- [ProcessRunner](https://github.com/ispaure/commonUtils/blob/main/ui/process_runner.py) and [ProcessProgressWindow](https://github.com/ispaure/commonUtils/blob/main/ui/process_progress.py) handle external processes and their result UI; `process_host` routes them to the application's Folder Actions host.
 - Browser preview/index/thumbnail jobs have their own shared machinery and `stop`/`idle` coordination.
 - EPUB still has [BookTask](Python/features/books/tasks.py), a small `QThread` wrapper.
 - Git has [GitWorker](Python/features/git/ui/worker.py), including process-runner construction, cancellation, progress and error redaction.
@@ -475,7 +478,7 @@ Use those five questions for each future extraction. Document capabilities separ
 
 Two concrete guide discrepancies surfaced:
 
-1. [UI_ARCHITECTURE.md](Python/features/UI_ARCHITECTURE.md) describes feature toggles as session-only and reset on restart. Current `launch.main()` loads saved preferences and `registry.set_feature_enabled()` persists them.
+1. [UI_ARCHITECTURE.md](docs/developer/features.md) describes feature toggles as session-only and reset on restart. Current `launch.main()` loads saved preferences and `registry.set_feature_enabled()` persists them.
 2. Its independent-text-documents section describes one standalone editor window and native document tabs. Current `EditorService` retains a list of windows, `EditorWindow.document_entries()` describes one document, and shared document hosting provides the dock tabs.
 
 Use code as the source of truth for these maps. Future documentation cleanup should reconcile the existing guides rather than leave several competing architecture documents indefinitely. This dated report is an assessment snapshot, not a replacement developer contract.

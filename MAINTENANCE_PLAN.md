@@ -1,11 +1,12 @@
 # Coordinated maintenance
 
-Work through each change with focused checks before committing. Preserve the
-Python 3.10+ support statement and the separate Ally documentation boundary.
+Historical record, not the current application contract. Start with
+[developer documentation](docs/developer/README.md) for current behavior and validation.
 
-- [x] Preserve existing Ally installations and configuration on failure.
+Work through each change with focused checks before committing. Preserve the
+historical support assumptions; current runtime requirements are in the root README.
+
 - [x] Validate Hue targets and settings; move bridge calls off the UI thread.
-- [x] Match Ally's dependencies to Logistics and test both launch modes.
 - [x] Apply X-Plane settings once, preserve file conventions and recovery copies.
 - [x] Report action failures and external launches accurately.
 - [x] Move remaining lengthy integration workflows into owned workers.
@@ -23,7 +24,7 @@ Validation completed October 11, 2026:
 
 - Local suites: Logistics 828 tests plus three regression-runner checks,
   commonUtils 637 tests (one skip),
-  Ally Tools 33 tests, Blue Hole 14 adapter tests, and 10 release-tooling tests.
+  plus 10 release-tooling tests; external-project results are maintained by their owners.
 - All four repositories' GitHub workflows passed. Logistics passed Windows,
   macOS, Ubuntu and Fedora checks, including compression parity.
 - The [source release checks](https://github.com/ispaure/logistics/actions/workflows/release.yml)

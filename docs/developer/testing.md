@@ -1,0 +1,53 @@
+# Development and validation
+
+## Python and dependencies
+
+The existing launchers install `uv` when needed, select Python 3.12.2, and
+synchronize [Python/pyproject.toml](../../Python/pyproject.toml) and its
+[lockfile](../../Python/uv.lock) into the root `.venv`. Initial setup requires internet
+access. [launch_config.ini](../../launch_config.ini) controls launcher paths; the entry
+point is `Python/launch.py`. Feature-specific software and credentials are covered
+in [configuration](../../CONFIGURATION.md).
+
+## Testing
+
+Run the regression suite from the repository root:
+
+```sh
+# macOS / Linux
+PYTHONPATH=Python .venv/bin/python -m unittest discover -s Python/tests -v
+```
+
+On Windows PowerShell, set `$env:PYTHONPATH = "Python"` and run `.venv/Scripts/python.exe -m unittest discover -s Python/tests -v`.
+
+For both repositories' suites and the historical comic compression comparison,
+use the same project interpreter:
+
+```sh
+.venv/bin/python Python/tests/run_platform_checks.py
+```
+
+On Windows, use `.venv/Scripts/python.exe Python/tests/run_platform_checks.py`.
+The runner configures the import path and headless Qt automatically. See
+[cross-platform testing](../../Python/tests/PLATFORM_CHECKS.md) for CI and platform details,
+[UI architecture](features.md) for extension conventions,
+and [maintenance notes](../../Python/MAINTENANCE.md) for remaining validation gaps.
+
+Tests cover application startup, contributions, local fixtures and simulated
+failures. Desktop interaction, real remote transfers/mounts, external applications
+and installed drivers require separate validation.
+
+## Correctness checks and test ownership
+
+Normal launchers synchronize runtime dependencies only. Install developer tools
+with `UV_PROJECT_ENVIRONMENT=.venv uv sync --project Python --locked`, then run
+`.venv/bin/ruff check --config Python/pyproject.toml Python .github/scripts`.
+The initial lint policy checks syntax and correctness without forcing a formatting
+rewrite. `commonUtils.tests.qt_test_case.QtTestCase` gives GUI tests ownership of
+new windows: it requests worker shutdown, drains deferred deletion and deletes
+windows before the next test. New Qt tests should use that base and still register
+fixture-specific cleanup. Tests must not depend on windows retained by other tests.
+
+Platform checks also run on main pushes and launcher changes. The release workflow
+calls those checks before packaging, so a tag cannot bypass failing application
+regressions. Both headless suites and historical archive parity must pass.
