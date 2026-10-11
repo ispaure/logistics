@@ -107,61 +107,61 @@ def print_conflicting_copies(target_dir: str | Path, recursive: bool = True) -> 
 # DELETION
 
 def delete_conflicting_copies(target_dir: str | Path, recursive: bool = True) -> bool:
-    """
-    Delete Dropbox conflicting copies only when every detected conflict has an original.
+    """Remove identical copies only; preserve unique content and changed files."""
+    result = delete_reviewed_conflicts(review_conflicts(target_dir, recursive))
+    return not result.failed and not result.cancelled
 
-    If any conflicting copy has no corresponding original, or its naming cannot be processed
-    safely, deletion is aborted before any files are removed.
-    """
 
-    tool_name = 'Delete Conflicting Copies'
+from dataclasses import dataclass
+from commonUtils.runtime.streams import file_sha256
+from commonUtils.runtime.operations import run_batch, check_cancelled
 
-    with_original, no_original, unsure = analyze_directory(target_dir, recursive)
 
-    # Safety check: abort if anything is not clean
-    if no_original or unsure:
-        msg = 'Deletion aborted. Resolve conflicts before proceeding:\n'
+@dataclass(frozen=True)
+class ConflictCandidate:
+    path: Path
+    original: Path | None
+    signature: tuple
+    original_signature: tuple | None
+    identical: bool
 
-        if no_original:
-            msg += f'\nFiles WITHOUT original ({len(no_original)}):\n'
-            for file in no_original:
-                msg += f' - {file.path}\n'
 
-        if unsure:
-            msg += f'\nFiles that could NOT be processed safely ({len(unsure)}):\n'
-            for file in unsure:
-                msg += f' - {file.path}\n'
+def _signature(path):
+    info = path.lstat()
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
 
-        log(Severity.CRITICAL, tool_name, msg)
-        return False
 
-    # Safe to proceed: all detected conflicts have originals.
-    deleted = []
-    failed = []
+def review_conflicts(target, recursive=True, *, cancelled=lambda: False):
+    from commonUtils.filesystem.traversal import scan_directory
+    paths = [fileUtils.File(path) for path in scan_directory(target, recursive=recursive, cancelled=cancelled)
+             if not path.is_symlink()]
+    with_original, missing, unsure = analyze_conflicting_copies(paths)
+    reviewed = []
+    for file in [*with_original, *missing, *unsure]:
+        check_cancelled(cancelled)
+        original = None
+        if file in with_original:
+            original = file.path.with_name(file.name_without_ext.split(' (')[0] + file.path.suffix)
+        before = _signature(file.path)
+        previous = _signature(original) if original and original.is_file() and not original.is_symlink() else None
+        identical = bool(previous and file_sha256(file.path, cancelled=cancelled) == file_sha256(original, cancelled=cancelled))
+        if _signature(file.path) != before or (previous and _signature(original) != previous):
+            raise RuntimeError(f'File changed during review: {file.path}')
+        reviewed.append(ConflictCandidate(file.path, original, before, previous, identical))
+    return tuple(reviewed)
 
-    for file in with_original:
-        try:
-            result = file.delete_file()
 
-            if result:
-                deleted.append(file)
-            else:
-                failed.append(file)
-
-        except Exception as exception:
-            failed.append(file)
-            log(Severity.ERROR, tool_name, f'Error deleting {file.path}: {exception}')
-
-    msg = f'Deleted {len(deleted)} conflicting files (all had originals):\n'
-    for file in deleted:
-        msg += f' - {file.path}\n'
-    log(Severity.INFO, tool_name, msg)
-
-    if failed:
-        msg = f'Failed to delete {len(failed)} files:\n'
-        for file in failed:
-            msg += f' - {file.path}\n'
-        log(Severity.ERROR, tool_name, msg)
-        return False
-
-    return True
+def delete_reviewed_conflicts(candidates, *, cancelled=lambda: False, report=lambda done, total, message: None):
+    def remove(candidate):
+        if not candidate.identical:
+            raise ValueError('Copies with unique or unknown contents are preserved')
+        if (_signature(candidate.path) != candidate.signature
+                or _signature(candidate.original) != candidate.original_signature
+                or candidate.path.is_symlink() or candidate.original.is_symlink()):
+            raise RuntimeError(f'File changed after review: {candidate.path}')
+        if file_sha256(candidate.path) != file_sha256(candidate.original):
+            raise RuntimeError(f'Contents differ after review: {candidate.path}')
+        candidate.path.unlink()
+        return candidate.path
+    return run_batch([item for item in candidates if item.identical], remove,
+                     progress=report, cancelled=cancelled)
