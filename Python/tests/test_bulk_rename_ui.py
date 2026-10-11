@@ -57,6 +57,8 @@ class BulkRenameWidgetTests(QtTestCase):
             self.app.processEvents()
         self.assertLessEqual(self.widget.width(), 680)
         self.assertLess(self.widget.controls._columns, 4)
+        self.assertGreaterEqual(self.widget.table.header().sectionSize(0), 100)
+        self.assertGreaterEqual(self.widget.table.header().sectionSize(1), 100)
         before = self.widget.table.height()
         self.widget.rules_toggle.setChecked(False)
         self.app.processEvents()
