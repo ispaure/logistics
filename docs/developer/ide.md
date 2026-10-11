@@ -90,3 +90,45 @@ detection and a Blade overlay delegating PHP/HTML grammar work to Pygments.
 Future work should move bounded save/reload IO off the GUI thread, add optional
 unsaved-import overlays, and validate native Windows/Linux interaction. Automatic
 diagnostics, automatic hover and Git handoff are outside this initial selection.
+
+## Validation record — 2026-10-11
+
+Validated with Python 3.12.2 / PySide6 6.6.2 on macOS 26.6.2 ARM64:
+
+- Logistics: 840 tests across 78 isolated modules; zero failures or skips.
+- commonUtils: 662 tests across 90 isolated modules; zero failures, one expected
+  case-sensitive-filesystem skip on this volume.
+- Release tooling: 10 tests passed. Historical comic compression parity passed.
+- Repository Ruff checks passed. Offscreen visual inspection covered three editor
+  groups, file tree, Python/TOML/Blade colors and full-height layout. Palette tests
+  cover light and dark syntax rendering.
+- Dedicated IDE tests cover serialization, malformed/conflicting stores, source and
+  interpreter paths, imported definitions, modifier-click and back/forward,
+  stale results, search cancellation/exclusions/binary files, canonical buffers,
+  the three-group cap, cancelled closes, independent project restoration, missing
+  files, split sizes, external writes/deletions and own-save watcher notifications.
+
+The first broad runs exposed shared-index contention and a native Bulk Rename
+fixture cleanup crash. The regression runner now gives each process a private
+index and isolates both repositories' test modules. The Bulk Rename fixture
+retires its window/models before removing its temporary sources; it also passed
+three consecutive focused reruns. Final full-suite reruns passed after these
+repairs. The generic regression runner's release-tooling tests still pass without
+commonUtils on the import path.
+
+Commands: `Python/tests/run_regressions.py Python/tests --isolate-modules` and
+`Python/tests/run_regressions.py Python/commonUtils/tests --isolate-modules`, using
+the project interpreter with `PYTHONPATH=Python` and `QT_QPA_PLATFORM=offscreen`.
+The platform runner invokes both suites plus compression parity.
+
+Windows/Linux native desktop behavior has not been tested here. These checks do
+not establish debugger, diagnostics, crash recovery, or full dynamic Python/Blade
+analysis support. Concurrent unrelated File Browser/Folder Hub/workspace changes
+were present in the shared checkout during validation and were not staged in IDE
+commits.
+
+Implementation commits in Logistics: `af1e1d5`, `5037a3a`, `1c2d860`, `8acbbd4`,
+`d180dd7`, `13f7532`, `a902793`, `3ccb91b`, `c39b5cb`, `0485a04`, `542bb9d`,
+`a2b5784`, `990c129`. This validation record is a separate documentation commit.
+Shared commonUtils commits: `7fc93d1` (PHP/Blade support) and `dc134af` (PHP/HTML
+state across lines), with the latter pinned by Logistics.
