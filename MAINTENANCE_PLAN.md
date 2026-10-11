@@ -26,16 +26,17 @@ Validation completed October 11, 2026:
   Ally Tools 33 tests, Blue Hole 14 adapter tests, and 10 release-tooling tests.
 - All four repositories' GitHub workflows passed. Logistics passed Windows,
   macOS, Ubuntu and Fedora checks, including compression parity.
-- The [source release check](https://github.com/ispaure/logistics/actions/runs/38119613162)
-  built a ZIP matching all 792 files in the tested local package. Public and
-  private launches were checked locally.
+- The [source release checks](https://github.com/ispaure/logistics/actions/workflows/release.yml)
+  build a ZIP from tracked source and pinned submodules. The downloaded artifact
+  is compared against the tested local package. Public and private launches were
+  checked locally.
 - macOS intermittently crashed inside Qt when unrelated shared test files reused
   one application. Shared test files now use fresh processes; assertions, crashes
   and timeouts still fail validation. The application suite stays in one process.
   CI also retains native crash reports. The exact native defect is unconfirmed.
   Live Blender, Hue hardware and external services were not exercised.
-- A Windows browser fixture exceeded its five-second startup wait. Its wait
-  now allows 20 seconds and reports unfinished workers; the shared-suite CI
+- Windows browser fixtures exceeded their five- and eight-second startup waits.
+  Their waits now allow 20 seconds and report unfinished work; the shared-suite CI
   budget allows ten minutes rather than five. Completion is still required.
 
 Release tagging follows a validated pushed revision and an agreed version.

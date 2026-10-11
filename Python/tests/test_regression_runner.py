@@ -42,6 +42,7 @@ class RegressionRunnerTests(unittest.TestCase):
             result = self.run_modules(root)
             self.assertEqual(result.returncode, 1)
             self.assertIn('expected assertion failure', result.stderr)
+            self.assertIn('Failed isolated test files: test_first.py', result.stderr)
             self.assertTrue(marker.exists())
 
     def test_abnormal_child_exit_fails_validation(self):
