@@ -55,8 +55,9 @@ the active document; Find in Files is not included.
 
 The status bar shows position, line count, selection size, encoding, endings,
 indentation and syntax. Click Encoding or Line Endings to convert on the next
-save; conversions are explicit. Click Indentation to select tabs/spaces and width,
-or Syntax to choose a language manually. Plain Text disables highlighting.
+save; conversions are explicit. Click Indentation to open the central editor
+defaults for tabs/spaces and width, or Syntax to choose this document’s language
+manually. Plain Text disables highlighting.
 
 **View → Logistics Settings…** opens the central Settings window. Wrapping,
 line numbers, whitespace, automatic indentation and bracket/quote pairing are
