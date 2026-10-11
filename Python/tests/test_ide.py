@@ -111,7 +111,7 @@ class NavigationTests(__import__('unittest').TestCase):
             result = analyze(project, path, code, 2, 10)
             self.assertEqual(result[0][:2], (str(package / 'models.py'), 1))
             code = 'from sample.models import Widget\nvalue = Widget()\n'
-            self.assertEqual(analyze(project, root / 'test.py', code, 2, 10)[0][0], str(package / 'models.py'))
+            self.assertEqual(Path(analyze(project, root / 'test.py', code, 2, 10)[0][0]).resolve(), (package / 'models.py').resolve())
             (root / '.venv').mkdir()
             (root / '.venv' / 'hidden.py').write_text('')
             self.assertFalse(any('.venv' in p for p in project_files(project)))
