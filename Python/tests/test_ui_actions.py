@@ -8,6 +8,12 @@ from ui_new.actions import execute_action
 
 
 class ActionExecutionTests(unittest.TestCase):
+    def test_false_result_is_failure_and_does_not_refresh(self):
+        refresh = Mock()
+        with patch('ui_new.actions.ui.display_msg_box_ok_cancel', return_value=True):
+            self.assertFalse(execute_action(UIAction('Fail', lambda: False, destructive=True), refresh=refresh))
+        refresh.assert_not_called()
+
     def test_disabled_actions_never_execute_callbacks_or_workflows(self):
         callback = Mock()
         with patch('ui_new.actions.workflows.open_workflow') as workflow:
