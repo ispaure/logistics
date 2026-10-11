@@ -26,25 +26,8 @@ class BulkRenameWindow(qt.QMainWindow):
         if self._owner is not None:
             self._owner.installEventFilter(self)
         self.renamer.idle.connect(self._close_when_idle)
-        file_menu = self.menuBar().addMenu('File')
-        file_menu.addAction('Open folder…', self.renamer._browse, qt.QKeySequence(qt.QKeySequence.StandardKey.Open))
-        file_menu.addAction('Load rules…', self.renamer.load_preset)
-        file_menu.addAction('Save rules…', self.renamer.save_preset)
-        file_menu.addSeparator()
-        file_menu.addAction('Close', self.close, qt.QKeySequence(qt.QKeySequence.StandardKey.Close))
-        edit_menu = self.menuBar().addMenu('Edit')
-        edit_menu.addAction('Select all', self.renamer.table.selectAll,
-                            qt.QKeySequence(qt.QKeySequence.StandardKey.SelectAll))
-        edit_menu.addAction('Undo last rename', self.renamer.undo,
-                            qt.QKeySequence(qt.QKeySequence.StandardKey.Undo))
-        edit_menu.addAction('Reset rules', lambda: self.renamer.reset_button.click())
-        self._help_menu = self.menuBar().addMenu('Help')
-        self._help_menu.addAction('Bulk rename guide', self._show_help)
-
-    def _show_help(self):
-        from pathlib import Path
-        from commonUtils.ui.markdown import open_markdown
-        open_markdown(Path(__file__).with_name('README.md'), parent=self, detached=True, allow_new_tabs=False)
+        from .menus import build_menus
+        self.header_menus = build_menus(self, self.renamer, self.close)
 
     def eventFilter(self, watched, event):
         if (watched is self._owner and event.type() == qt.QEvent.Type.Close

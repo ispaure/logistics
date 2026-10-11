@@ -107,6 +107,10 @@ class MainWindow(pyside.Window):
         self._refresh_sidebar()
         self._update_window_title()
         self.dlg.workspace_menu_document = self._menu_document
+        from .header_menus import HeaderMenus
+        self.header_menus = HeaderMenus(self)
+        self.dlg.workspace_publish_menus = True
+        self.dlg.workspace_menu_actions = [self.header_menus.menu.menuAction()]
         self.documents.workspace.active_changed.connect(self._sync_menus)
         self._sync_menus()
 
@@ -504,7 +508,10 @@ class MainWindow(pyside.Window):
         page = self.tabs.currentWidget()
         workspace = getattr(page, 'workspace', None)
         view = workspace.active_view if workspace is not None else page
-        return view if isinstance(view, pyside.QMainWindow) else getattr(view, 'document', None)
+        document = view if isinstance(view, pyside.QMainWindow) else getattr(view, 'document', None)
+        if document is None and hasattr(self, 'header_menus'):
+            document = self.header_menus.context_document(page)
+        return document
 
     def _sync_menus(self, *args):
         from commonUtils.ui.workspace_menus import sync_native_menus

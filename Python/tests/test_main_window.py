@@ -60,7 +60,8 @@ class MainWindowTests(QtTestCase):
                 QTest.mouseClick(window.dlg.windowHandle(), qt.Qt.MouseButton.LeftButton, pos=point)
                 QTest.qWait(50)
                 self.assertIs(workspace.active_view.document, document)
-                commands = [a.text() for a in window.dlg.menuBar().actions()[0].menu().actions()]
+                file_menu = next(a.menu() for a in window.dlg.menuBar().actions() if a.text().replace('&', '') == 'File')
+                commands = [a.text() for a in file_menu.actions()]
                 self.assertEqual('Force Open as Text…' in commands, document is text)
                 if native is not None:
                     commands = native.contents()['File']
@@ -92,8 +93,10 @@ class MainWindowTests(QtTestCase):
                     QTest.mouseClick(bar, qt.Qt.MouseButton.LeftButton, pos=bar.tabRect(index).center())
                     for _ in range(5): self.app.processEvents()
                     self.assertIs(workspace.active_view.document, document)
-                    self.assertEqual(window.dlg.menuBar().actions(), document.menuBar().actions())
-                    commands = [a.text() for a in window.dlg.menuBar().actions()[0].menu().actions()]
+                    self.assertEqual(window.dlg.menuBar().actions(),
+                                     [window.header_menus.menu.menuAction(), *document.menuBar().actions()])
+                    file_menu = next(a.menu() for a in window.dlg.menuBar().actions() if a.text().replace('&', '') == 'File')
+                    commands = [a.text() for a in file_menu.actions()]
                     self.assertEqual('Force Open as Text…' in commands, document is text)
                 self.assertGreaterEqual(resolve.call_count, 4)
             for document in (markdown, text): document.close()
@@ -114,10 +117,10 @@ class MainWindowTests(QtTestCase):
             feature = window._feature_pages[('test', 'tools')]
             window.tabs.setCurrentWidget(feature)
             for _ in range(3): self.app.processEvents()
-            self.assertEqual([a.text() for a in window.dlg.menuBar().actions()], ['Feature tools'])
+            self.assertEqual([a.text() for a in window.dlg.menuBar().actions()], ['Logistics', 'Feature tools'])
             window.tabs.setCurrentWidget(window._core_pages[0][2])
             for _ in range(3): self.app.processEvents()
-            self.assertEqual(window.dlg.menuBar().actions(), [])
+            self.assertEqual([a.text() for a in window.dlg.menuBar().actions()], ['Logistics'])
 
     def test_notification_footer_releases_space_when_empty(self):
         from ui_new.notifications import notify
@@ -677,6 +680,35 @@ class MainWindowTests(QtTestCase):
         self.wait_browser(browser)
         self.assertEqual(browser.file_browser.navigation.library, Path(self.root.anchor))
         self.assertEqual(browser.file_browser.navigation.directory, self.root)
+        window.dlg.close(); self.app.processEvents()
+
+    def test_header_keeps_navigation_and_routes_browser_commands_across_destinations(self):
+        window = self.browser_window()
+        page = window.tabs.widget(0)
+        self.wait_browser(page)
+        bar = window.dlg.menuBar()
+        self.assertEqual([action.text() for action in bar.actions()], ['Logistics', 'File', 'Edit', 'View', 'Navigate', 'Index', 'Help'])
+        self.assertTrue(page.workspace.active_view.menuBar().isHidden())
+        menus = page.workspace.active_view.header_menus
+        page.file_browser.views.select_source(page.file_browser.model.index(str(self.root / 'file.txt')))
+        menus.update()
+        self.assertTrue(menus.selection.isEnabled())
+        menus.selection_menu()
+        self.assertIn('Bulk Rename…', [action.text() for action in menus.selection.actions()])
+        menus.mode_actions[1].trigger()
+        self.assertEqual(page.file_browser.view_selector.currentIndex(), 1)
+        menus.preview.trigger()
+        menus.update()
+        self.assertEqual(menus.preview.isChecked(), page.file_browser.preview_toggle.isChecked())
+        menus.selection_menu()
+        window.tabs.setCurrentIndex(1)
+        self.app.processEvents()
+        self.assertEqual([action.text() for action in bar.actions()], ['Logistics'])
+        window.header_menus.update_destinations()
+        window.header_menus.destinations.actions()[0].trigger()
+        self.app.processEvents()
+        self.assertIs(window.tabs.currentWidget(), page)
+        self.assertEqual([action.text() for action in bar.actions()], ['Logistics', 'File', 'Edit', 'View', 'Navigate', 'Index', 'Help'])
         window.dlg.close(); self.app.processEvents()
 
     def test_folder_hub_browse_uses_browser_and_preserves_scoped_views(self):
