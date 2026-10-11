@@ -10,6 +10,9 @@ class RenameRuleControls(qt.QWidget):
         super().__init__(parent)
         self.fields = {}
         grid = qt.QGridLayout(self)
+        self._sections = []
+        self._columns = 4
+        self.setMinimumWidth(260)
         grid.setContentsMargins(0, 0, 0, 0)
         sections = [
             ('1 · Regular expression', [('regex_pattern', 'Match', ''), ('regex_replacement', 'Replace', ''),
@@ -72,6 +75,7 @@ class RenameRuleControls(qt.QWidget):
                     form.addRow(label, widget)
                 widget.setAccessibleName(f'{title}: {label}')
                 self.fields[name] = widget
+            self._sections.append(box)
             grid.addWidget(box, index // 4, index % 4)
         for column in range(4):
             grid.setColumnStretch(column, 1)
@@ -79,6 +83,18 @@ class RenameRuleControls(qt.QWidget):
         self.fields['date_format'].setToolTip('%Y year · %m month · %d day · %H hour · %M minute · %S second')
         for name in ('remove_start', 'part_start', 'part_position', 'insert_position', 'number_position'):
             self.fields[name].setToolTip('Zero-based character position; positions beyond the name append at the end')
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        columns = max(1, min(4, self.width() // 280))
+        if columns != self._columns:
+            self._columns = columns
+            grid = self.layout()
+            for box in self._sections:
+                grid.removeWidget(box)
+            for index, box in enumerate(self._sections):
+                grid.addWidget(box, index // columns, index % columns)
+            self.updateGeometry()
 
     def rules(self):
         values = {}

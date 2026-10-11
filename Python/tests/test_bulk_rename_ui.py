@@ -49,6 +49,23 @@ class BulkRenameWidgetTests(QtTestCase):
             time.sleep(.005)
         self.fail('Rename UI worker did not finish')
 
+    def test_rules_resize_hide_and_reflow_without_resetting(self):
+        self.widget.controls.fields['prefix'].setText('keep_')
+        self.wait_idle()
+        self.widget.resize(680, 550)
+        for _ in range(12):
+            self.app.processEvents()
+        self.assertLessEqual(self.widget.width(), 680)
+        self.assertLess(self.widget.controls._columns, 4)
+        before = self.widget.table.height()
+        self.widget.rules_toggle.setChecked(False)
+        self.app.processEvents()
+        self.assertGreater(self.widget.table.height(), before)
+        self.assertEqual(self.widget.controls.fields['prefix'].text(), 'keep_')
+        self.widget.rules_toggle.setChecked(True)
+        self.app.processEvents()
+        self.assertEqual(self.widget.controls.fields['prefix'].text(), 'keep_')
+
     def wait_folder_visible(self, path):
         deadline = time.monotonic() + 8
         while time.monotonic() < deadline:

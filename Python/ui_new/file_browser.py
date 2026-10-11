@@ -11,7 +11,7 @@ from commonUtils.ui.workspace_policy import WorkspacePolicy
 from commonUtils.ui.file_browser.status import WorkspaceIndexStatus
 
 BROWSER_POLICY = WorkspacePolicy(allow_last_tab_detach=False,
-                                 show_single_tab_in_main=False,
+                                 show_single_tab_in_main=True,
                                  show_single_tab_in_detached=False,
                                  detached_title='File Browser: {title}')
 

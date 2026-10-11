@@ -117,3 +117,10 @@ features; disabling a required feature is refused until its dependents are disab
 Choices persist. Existing documents/jobs can finish after disabling their feature.
 
 [All feature guides](../../../USER_GUIDE.md) · [Configuration](../../../CONFIGURATION.md)
+
+### Tab headers and detached creation
+
+The normal File Browser keeps its header even with one tab. Detached browser and
+Document windows may hide a single header, retaining + at the upper right; + adds
+to that same window. Multiple tabs restore their headers and share the available
+width. The last normal browser tab still cannot close or detach.

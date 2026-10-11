@@ -14,7 +14,7 @@ Each full-width top-level tab is an independent project; two or more share the
 available header width, with scrolling for overflow. **+ → Reopen project** lists
 registrations. The + remains available with no projects open. Project tabs use the
 same docking and detached containers as Documents. A detached window's + opens
-projects there; a registration already open elsewhere activates its existing tab.
+projects there; a registration already open elsewhere moves its existing tab there.
 A detached single project can hide its header while retaining + at the upper right.
 **Project → Project Settings / Source Paths** configures the active project.
 Closing a project keeps its registration and layout. **Remove registration** asks

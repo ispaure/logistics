@@ -156,3 +156,7 @@ ready. If the buffer or disk changes during review, reopen the merge.
 PHP/HTML and Laravel `.blade.php` highlighting are shared with IDE. Python `.pyi`
 stubs use Python highlighting. Blade directives and single-line interpolations are
 supported; multiline Blade template expressions have limited highlighting.
+
+The editing surface uses the full document area with compact outer spacing.
+File/edit/search commands remain in the application menus, and disk-change
+controls appear only when needed. Documents owns the outer tab and detached +.
