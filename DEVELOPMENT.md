@@ -1,107 +1,12 @@
 # Developing Logistics
 
+Start with the [developer guide](docs/developer/README.md) for architecture,
+feature ownership, extension contracts and validation commands.
 
-`Python/features/` owns feature logic and feature-specific UI; `Python/ui_new/` hosts the generic interface; `Python/models/` and `Python/services/` provide folder models and discovery support. `Python/commonUtils/` is a Git submodule. See [UI architecture](Python/features/UI_ARCHITECTURE.md) for contribution and configuration conventions, and [file browser development](Python/features/FILE_BROWSER.md) for panels, context actions and activation. `Scripts/` contains standalone scripts.
+- [Set up and test a checkout](docs/developer/testing.md)
+- [Add or change a feature](docs/developer/features.md)
+- [Extend browser actions and file types](docs/developer/file-browser.md)
+- [commonUtils ownership](docs/developer/commonutils-integration.md)
+- [Release packaging](RELEASING.md)
 
-## Python and dependencies
-
-The existing launchers install `uv` when needed, select Python 3.12.2, and
-synchronize [Python/pyproject.toml](Python/pyproject.toml) and its
-[lockfile](Python/uv.lock) into the root `.venv`. Initial setup requires internet
-access. [launch_config.ini](launch_config.ini) controls launcher paths; the entry
-point is `Python/launch.py`. Feature-specific software and credentials are covered
-in [configuration](CONFIGURATION.md).
-
-## Testing
-
-Run the regression suite from the repository root:
-
-```sh
-# macOS / Linux
-PYTHONPATH=Python .venv/bin/python -m unittest discover -s Python/tests -v
-```
-
-On Windows PowerShell, set `$env:PYTHONPATH = "Python"` and run `.venv/Scripts/python.exe -m unittest discover -s Python/tests -v`.
-
-For both repositories' suites and the historical comic compression comparison,
-use the same project interpreter:
-
-```sh
-.venv/bin/python Python/tests/run_platform_checks.py
-```
-
-On Windows, use `.venv/Scripts/python.exe Python/tests/run_platform_checks.py`.
-The runner configures the import path and headless Qt automatically. See
-[cross-platform testing](Python/tests/PLATFORM_CHECKS.md) for CI and platform details,
-[UI architecture](Python/features/UI_ARCHITECTURE.md) for extension conventions,
-and [maintenance notes](Python/MAINTENANCE.md) for remaining validation gaps.
-
-Tests cover application startup, contributions, local fixtures and simulated
-failures. Desktop interaction, real remote transfers/mounts, external applications
-and installed drivers require separate validation.
-
-## Correctness checks and test ownership
-
-Normal launchers synchronize runtime dependencies only. Install developer tools
-with `UV_PROJECT_ENVIRONMENT=.venv uv sync --project Python --locked`, then run
-`.venv/bin/ruff check --config Python/pyproject.toml Python .github/scripts`.
-The initial lint policy checks syntax and correctness without forcing a formatting
-rewrite. `commonUtils.tests.qt_test_case.QtTestCase` gives GUI tests ownership of
-new windows: it requests worker shutdown, drains deferred deletion and deletes
-windows before the next test. New Qt tests should use that base and still register
-fixture-specific cleanup. Tests must not depend on windows retained by other tests.
-
-Platform checks also run on main pushes and launcher changes. The release workflow
-calls those checks before packaging, so a tag cannot bypass failing application
-regressions. Both headless suites and historical archive parity must pass.
-
-## Single application instance
-
-`launch.main()` initializes Qt, then acquires a per-user QLockFile in the shared
-commonUtils Temp directory before initializing features or constructing a window.
-The lock path is shared across checkouts. Duplicate launches use commonUtils.ui
-for an informational dialog and return exit status 0. Real lock I/O failures remain
-errors. Ownership lasts through the event loop and is released in `finally`, even
-when startup fails. Qt's long-lived-lock timeout is disabled, so an old live owner
-is retained while dead process owners can be detected. See the
-[Qt lock documentation](https://doc.qt.io/qt-6/qlockfile.html).
-
-## Startup failures
-
-Contribution categories are validated before pages are created, so a settings
-entry in a folder-source list fails with a clear feature/category error. MainWindow
-tracks each successfully created page as it builds the UI. If a later constructor
-fails, it requests worker shutdown and drains a Qt event loop before destroying
-the window and re-raising the original error. Shared index cancellation also
-handles workers that have exited before their queued GUI completion is delivered.
-
-The macOS launcher supports the system Bash 3.2. Pause flags use portable,
-case-insensitive case patterns; avoid Bash 4 lowercase parameter expansion there.
-
-## Text Editor
-
-The independent feature and its application document lifecycle live in
-`Python/features/text_editor`; its [developer guide](Python/features/text_editor/README.md)
-explains module boundaries, limits and tests. Reusable text-file IO and code-editor
-widgets belong to the existing commonUtils submodule. Pygments 2.19.2 is pinned
-in the same project/lockfile; no separate editor environment is introduced.
-
-## Optional sibling Ally integration
-
-The three root launchers detect a sibling `ally-tools/Python/ally_feature` package.
-They retain Logistics’ shared commonUtils launcher, but pass the Ally project root
-and its `logistics_launch.ini` so dependency sync and execution use Ally’s manifest,
-lockfile and `.venv`. Existing locks are never deleted on launch. Originals of the
-root launchers are saved in `old-launchers` as historical copies (their relative
-paths assume the root, so they are not directly runnable from that folder).
-
-Ally’s private bootstrap calls `services.ally_integration.activate`, which creates
-an ignored `Python/features/emulation` symlink (Unix) or junction (Windows).
-It updates existing links but refuses to overwrite an ordinary directory/file.
-Feature discovery only includes that package when this bootstrap has activated
-it; direct Logistics startup still works with a leftover link and its own venv.
-
-`PageContribution.navigation_icon` optionally promotes a feature page from the
-Tools menu to a dedicated destination below the existing top-left buttons. The
-`controller` icon is supported. The page and all emulator-specific source remain
-in the sibling repository. Shared commonUtils source and dependencies are unchanged.
+User-facing changes also update the owning feature's `user_docs/README.md`.

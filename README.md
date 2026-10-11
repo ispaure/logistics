@@ -36,50 +36,42 @@ project folder to fetch any missing shared files.
 
 ## Find your way around
 
-The app opens in **File Browser**, starting in your home folder. Use **Open
-folder…** to browse another location. You can search, preview files, switch views,
-and explore folder sizes with the storage charts.
+Start in **File Browser** for any folder, or **Folder Hub** for configured libraries
+and remote storage. **Documents** collects open readers and editors; their tabs can
+be split or detached. **Settings** saves feature choices and configuration and
+provides links to each feature's help.
 
-**Folder Hub** brings your configured local folders and remote sources together.
-Hover a sidebar icon for its name. The **Documents** icon lists open documents. Markdown,
-the Text Editor and comic/EPUB readers share draggable document tabs, floating
-windows, and side-by-side splits. Double-click a floating tab header to return it.
-**Settings** lets you save feature defaults and edit their configuration. Each
-feature settings page has a **User Guide** button in its upper-right corner.
-**Settings → File indexing** controls refresh rules. The default opens saved
-results immediately and indexes only visited folders; **Refresh index** scans deeper.
-
-Start with the tools you need. Credentials for remote services are supplied
-separately, and some integrations need their own software or setup. The
-[configuration guide](CONFIGURATION.md) explains those steps when you're ready.
+Start with [files and documents](Python/ui_new/user_docs/README.md), then choose a
+guide below. The [configuration guide](CONFIGURATION.md) explains resource paths,
+credentials and settings. External services need their own accounts/software.
 
 ## What can it do?
 
 | Tool | Use it to… |
 | --- | --- |
-| File Browser | Browse, search, preview files and explore storage usage |
-| [Git](Python/features/git/user_docs/index.md) | Clone repositories, browse history, stage and commit changes, manage branches and remotes |
-| Bulk Rename | Preview and apply changes to many filenames at once |
-| [Text Editor](Python/features/text_editor/user_docs/index.md) | Edit text and code in tabs, search/replace, and preserve file encodings |
-| [Books & Comics](Python/features/books/user_docs/index.md) | Read EPUBs and comics, edit metadata, and manage or compress comic archives |
-| [Archives](Python/features/archives/user_docs/index.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
-| [Images](Python/features/images/user_docs/index.md) | Compress images and work with photo metadata |
-| [rclone](Python/features/rclone/user_docs/index.md) | Transfer files between local folders and remote storage |
-| [FUSE](Python/features/fuse/user_docs/index.md) | Open supported remote storage as a mounted folder |
-| [Calibre](Python/features/calibre/user_docs/index.md) | Open book libraries and export books |
-| [Plex](Python/features/plex/user_docs/index.md) | Back up and restore media-server data |
-| [YouTube Downloader](Python/features/youtube_downloader/user_docs/index.md) | Download channels and playlists |
-| [Minecraft](Python/features/minecraft/user_docs/index.md) | Find and manage local servers |
-| [Perforce](Python/features/perforce/user_docs/index.md) | Launch configured servers on Linux |
-| [Obsidian](Python/features/obsidian/user_docs/index.md) | Find and open vaults |
-| [Dropbox](Python/features/dropbox/user_docs/index.md) | Browse Dropbox folders and clean up conflicting copies |
-| [Links](Python/features/links/user_docs/index.md) | Keep useful website shortcuts together |
-| [Smart Home](Python/features/smart_home/user_docs/index.md) | Control Philips Hue and access Tautulli tools |
-| [Aviation Tools](Python/features/aviation_tools/user_docs/index.md) | Flight calculators and aircraft/airport reference data |
-| [Flight Simulator](Python/features/flight_sim/user_docs/index.md) | Manage X-Plane settings and window presets |
-| [Media](Python/features/media/user_docs/index.md) | Rename audio chapters from a CSV |
-| [File Tools](Python/features/file_tools/user_docs/index.md) | Check filenames and remove Python bytecode files |
-| [System Tools](Python/features/system_tools/user_docs/index.md) | Run platform-specific maintenance tools |
+| [File Browser & Markdown](Python/ui_new/user_docs/README.md) | Browse, search, preview files and explore storage usage |
+| [Git](Python/features/git/user_docs/README.md) | Clone repositories, browse history, stage and commit changes, manage branches and remotes |
+| [Bulk Rename](Python/ui_new/bulk_rename/user_docs/README.md) | Preview and apply changes to many filenames at once |
+| [Text Editor](Python/features/text_editor/user_docs/README.md) | Edit text and code in tabs, search/replace, and preserve file encodings |
+| [Books](Python/features/books/user_docs/README.md) and [Comics](Python/features/comics/user_docs/README.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
+| [Archives](Python/features/archives/user_docs/README.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
+| [Images](Python/features/images/user_docs/README.md) | Compress images and work with photo metadata |
+| [rclone](Python/features/rclone/user_docs/README.md) | Transfer files between local folders and remote storage |
+| [FUSE](Python/features/fuse/user_docs/README.md) | Open supported remote storage as a mounted folder |
+| [Calibre](Python/features/calibre/user_docs/README.md) | Open book libraries and export books |
+| [Plex](Python/features/plex/user_docs/README.md) | Back up and restore media-server data |
+| [YouTube Downloader](Python/features/youtube_downloader/user_docs/README.md) | Download channels and playlists |
+| [Minecraft](Python/features/minecraft/user_docs/README.md) | Find and manage local servers |
+| [Perforce](Python/features/perforce/user_docs/README.md) | Launch configured servers on Linux |
+| [Obsidian](Python/features/obsidian/user_docs/README.md) | Find and open vaults |
+| [Dropbox](Python/features/dropbox/user_docs/README.md) | Browse Dropbox folders and clean up conflicting copies |
+| [Links](Python/features/links/user_docs/README.md) | Keep useful website shortcuts together |
+| [Smart Home](Python/features/smart_home/user_docs/README.md) | Control Philips Hue and access Tautulli tools |
+| [Aviation Tools](Python/features/aviation_tools/user_docs/README.md) | Flight calculators and aircraft/airport reference data |
+| [Flight Simulator](Python/features/flight_sim/user_docs/README.md) | Manage X-Plane settings and window presets |
+| [Media](Python/features/media/user_docs/README.md) | Rename audio chapters from a CSV |
+| [File Tools](Python/features/file_tools/user_docs/README.md) | Check filenames and remove Python bytecode files |
+| [System Tools](Python/features/system_tools/user_docs/README.md) | Run platform-specific maintenance tools |
 
 Additional emulator tools are available on request through ispaure’s **ally-tools**.
 
@@ -87,18 +79,13 @@ Additional emulator tools are available on request through ispaure’s **ally-to
 
 - [User guide](USER_GUIDE.md): using the app and its tools.
 - [Configuration](CONFIGURATION.md): paths, settings and optional integrations.
-- [Development](DEVELOPMENT.md): project structure, extension guides and testing.
+- [Development](docs/developer/README.md): project structure, extension guides and testing.
 - [Publishing releases](RELEASING.md): package checks and release troubleshooting.
 
-Maintainers publish a release by tagging a committed, pushed version:
-
-```sh
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-GitHub builds **release.zip**, including submodules, and adds it to a release with
-automatic notes. See the release guide for the steps before publishing your first one.
+For contributions, use the [development and validation guide](docs/developer/testing.md).
+Feature changes should include updates to their user guides. The application uses
+Python 3.12.2 and pinned dependencies; normal launchers manage that environment.
+Git and optional external tools are installed/configured separately.
 
 ## License
 

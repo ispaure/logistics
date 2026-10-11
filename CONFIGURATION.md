@@ -63,7 +63,7 @@ existing values remain visible so they can be corrected. Unsuffixed legacy keys
 are displayed as text and are not automatically renamed. Links and Smart Home
 prefer their new `_str` keys and still accept their old unsuffixed keys.
 
-The [shared configuration guide](Python/commonUtils/configuration/README.md)
+The [shared configuration guide](https://github.com/ispaure/commonUtils/blob/main/configuration/README.md)
 covers schema APIs, editor embedding and gradual migration. Logistics keeps its
 `ui_new.settings` imports as compatibility wrappers; its editor opts into typed
 keys by default. Ordinary users can
@@ -85,8 +85,9 @@ remote_local_sub_path = Local
 remote_network_mount_sub_path = NetworkMount
 ```
 
-With these defaults, a local folder is `~/Server/Local/<folder>` and a mount is
-`~/Server/NetworkMount/<remote>`. Credential names do not add another path level.
+With these defaults, a local folder is `~/Server/Local/<folder>` and a credential-specific mount is
+`~/Server/NetworkMount/<config-id>/<remote>`. The mount ID is derived from the
+resolved credential config path. Local sync folders remain shared by remote name.
 The launcher also has `ensure_user_dir = Server`; keep it aligned if you change
 the managed root. Changing launcher creation alone does not change application paths.
 
@@ -238,4 +239,7 @@ in the window are persisted in `commonUtils/Cache/TextEditor/preferences.ini`,
 using the same shared INI APIs. Private overrides take precedence over feature
 defaults. **Reset Editor Preferences** removes the overrides. Recent paths use
 `recent.json` in the same cache folder; window geometry is stored in the private
-INI. Unsaved document content is never stored in preferences or recent history.
+INI. Unsaved document content is not stored in preferences or recent history, but is
+stored separately in private session checkpoints. See
+[editor recovery](Python/features/text_editor/user_docs/README.md#appearance-and-preferences)
+for recovery limits and shutdown behavior.

@@ -88,7 +88,30 @@ integration/registry coverage. This is a source audit, not certification of live
 Existing commonUtils guides cover file browsing/indexing, Markdown/code editing,
 feature declarations, workspaces, archives, configuration, workers and persistence.
 Logistics should link to them rather than maintain another full shared manual.
-The shared UI index does not provide a focused end-user guide for text-to-speech
-engine/voice troubleshooting or a dedicated notification lifecycle/API guide.
-Those belong beside `commonUtils.ui` (speech and notification modules); Logistics
-only documents its reader controls and application notification integration.
+A focused platform-by-platform text-to-speech engine/voice troubleshooting guide
+is not present in the shared UI index. That belongs beside `commonUtils.ui.speech`;
+Logistics documents its reader controls without recreating engine setup guidance.
+Notification lifecycle and document hosting already have shared workspace guidance.
+The optional local external feature is audited/documented separately in its owning
+repository following the user's additional scope instruction.
+
+## Validation and delivery
+
+- All 22 distributed feature packages have canonical user guides and retained
+  in-app help entry links. Core browser/Markdown and Bulk Rename keep their actual
+  owners; no implementation packages were moved or added.
+- Markdown path/anchor checks passed for 306 local links across 95 Logistics
+  Markdown files. Another 46 commonUtils GitHub documentation targets were checked
+  against the local shared checkout; this was not an HTTP availability test.
+- 41 focused tests passed: `test_settings_page`, `test_feature_registry`,
+  `test_feature_preferences`, `test_document_launchers`. Qt's CPU probe failed in
+  the sandbox; the same tests passed outside it with `QT_QPA_PLATFORM=offscreen`.
+- `git diff --check` passed. Only Markdown is included in the documentation commits;
+  application behavior, dependency files and commonUtils source/pointer are unchanged.
+  Concurrent commonUtils documentation work was observed and deliberately excluded.
+- Audit/plan commit: `fdc7feb`; feature and core user-guide commit: `fdbd57d`.
+  Navigation/developer consolidation follows as its own commit.
+
+No full application, native platform or live external-service suite was run for
+this documentation-only change. Separate external-project documentation and its
+validation live in that project's checkout, not the Logistics feature inventory.

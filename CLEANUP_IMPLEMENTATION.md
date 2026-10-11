@@ -1,5 +1,8 @@
 # Architecture cleanup implementation
 
+Historical record, not the current application contract. Start with
+[developer documentation](docs/developer/README.md) for current behavior and validation.
+
 The twelve candidates in ARCHITECTURE_REUSE_REPORT.md were implemented in their
 suggested order, with review and regression checks before each numbered commit.
 The assessment remains a dated snapshot; current contracts live in
@@ -33,10 +36,10 @@ Directory indexing moved out of the commonUtils root into `directory/`.
 Atomic writing, text snapshots and recovery storage now live in `persistence/`.
 Public legacy modules remain state-sharing aliases; application/internal imports
 use canonical packages. BlueHole's existing vendored directory implementation
-received the equivalent structural move. Ally Tools checks the shared imports.
+received the equivalent structural move.
 `configUtils.py` was not changed in any repository.
 
 Organization validation: 571 commonUtils tests (one skip), 741 Logistics tests,
 24 full archive-compression parity runs, 12 BlueHole consumer tests plus 42
-vendored directory tests, and 27 Ally Tools tests passed. Relative-import audit,
+vendored directory tests, external-project checks passed. Relative-import audit,
 lint and whitespace checks passed. Both configUtils copies are byte-identical.
