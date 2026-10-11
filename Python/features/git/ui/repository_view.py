@@ -24,7 +24,7 @@ from .application_preferences import ApplicationPreferences
 from .layout import RepositoryLayout
 
 
-class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QWidget):
+class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMainWindow):
     feature_settings_requested = qt.Signal(str)
     title_changed = qt.Signal(str)
     view_title = "Repository (Git)"
@@ -47,6 +47,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QWidg
         self.repository_tools = RepositoryTools(self)
         self._build()
         self.init_preferences()
+        from .menus import RepositoryMenus
+        self.menu_controls = RepositoryMenus(self)
         self._repositories()
         self._set_busy(False)
         if self.preferences.warning: self._message(self.preferences.warning, error=True)
@@ -66,6 +68,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QWidg
         self.operation_bar.setEnabled(available and not busy)
         self.cancel_button.setEnabled(busy)
         self.progress.setVisible(busy)
+        if hasattr(self, 'menu_controls'):
+            self.menu_controls.update(busy)
 
     def _message(self, text, error=False):
         self.status.setText(redact(text))

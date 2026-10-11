@@ -18,6 +18,7 @@ See the [user guide](user_docs/README.md) for the interface and authentication s
 - `ui/worker.py`: retained cancellable Qt worker; no widgets accessed from its thread.
 - `ui/page.py`: shared dock-backed workspace and retained repository-pane lookup.
 - `ui/repository_view.py`: per-repository controls, snapshots, drafts, forms and previews.
+- `ui/menus.py`: conventional menus sharing existing actions and selection/busy guards.
 - `ui/jobs.py`: sequential per-repository worker dispatch and shutdown.
 - `ui/chrome.py`, `navigation.py`: scoped styling, vector toolbar icons and reference navigation.
 - `ui/repository_tools.py`: worktree/submodule/subtree dialogs using that dispatcher.

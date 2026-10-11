@@ -10,7 +10,9 @@ from .chrome import toolbar_button, WORKSPACE_STYLE
 
 class RepositoryLayout:
     def _build(self):
-        layout = qt.QVBoxLayout(self)
+        body = qt.QWidget(self)
+        self.setCentralWidget(body)
+        layout = qt.QVBoxLayout(body)
         self.setObjectName('gitWorkspace')
         self.setStyleSheet(WORKSPACE_STYLE)
         layout.setContentsMargins(0, 0, 0, 0)

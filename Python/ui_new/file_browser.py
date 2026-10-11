@@ -10,6 +10,23 @@ from commonUtils.ui.workspace import Workspace
 from commonUtils.ui.workspace_policy import WorkspacePolicy
 from commonUtils.ui.file_browser.status import WorkspaceIndexStatus
 
+
+class BrowserIndexStatus(WorkspaceIndexStatus):
+    """Logistics' compact footer, retaining the shared indexing controller."""
+    def __init__(self, workspace):
+        super().__init__(workspace)
+        content = self.label.parentWidget()
+        content.layout().setContentsMargins(0, 0, 0, 0)
+        content.layout().setSpacing(6)
+        font = self.label.font()
+        font.setItalic(False)
+        font.setPointSizeF(max(8.0, font.pointSizeF() - 1.0))
+        self.label.setFont(font)
+        self.activity.setFixedSize(100, 6)
+        for button in (self.refresh_button, self.details_button):
+            button.setFont(font)
+            button.setStyleSheet('QPushButton { min-height: 0px; padding: 2px 6px; }')
+
 BROWSER_POLICY = WorkspacePolicy(allow_last_tab_detach=False,
                                  show_single_tab_in_main=True,
                                  show_single_tab_in_detached=False,
@@ -22,7 +39,7 @@ def _new_browser_tab(workspace):
 
 
 def _browser_container(workspace):
-    workspace.index_status = WorkspaceIndexStatus(workspace)
+    workspace.index_status = BrowserIndexStatus(workspace)
 
 
 class _BrowserHost:
@@ -114,8 +131,17 @@ class BrowserView(_BrowserHost, qt.QWidget):
             if drive.is_dir() and initial.anchor.casefold() != drive.anchor.casefold():
                 initial = drive
         self._initialize_browser(initial, calculate_folder_sizes=True, filesystem_scope=filesystem_scope)
+        self.file_browser.setObjectName('logisticsBrowser')
+        self.file_browser.setStyleSheet('''
+            QWidget#logisticsBrowser QTreeView::item,
+            QWidget#logisticsBrowser QTreeView::item:hover,
+            QWidget#logisticsBrowser QTreeView::item:selected { padding: 2px 4px; }
+            QWidget#logisticsBrowser QHeaderView::section { padding: 2px 4px; }
+            QWidget#logisticsBrowser QTabBar::tab { padding: 4px 16px; }
+        ''')
         layout = qt.QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         self.drive_selector = None
         if filesystem_scope and sys.platform == 'win32':
             self.file_browser.navigation.breadcrumbs.enable_drive_menu(self._open_location)
@@ -181,7 +207,7 @@ class FileBrowserPage(_WorkspaceHost, qt.QWidget):
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.workspace)
-        self.index_status = WorkspaceIndexStatus(self.workspace)
+        self.index_status = BrowserIndexStatus(self.workspace)
         self.workspace.add_view(root_path or Path.home())
 
 
@@ -199,7 +225,7 @@ class FileBrowserWindow(_WorkspaceHost, qt.QMainWindow):
         self.workspace.active_changed.connect(self._update_title)
         self.workspace.tabs_changed.connect(self._update_title)
         self.setCentralWidget(self.workspace)
-        self.index_status = WorkspaceIndexStatus(self.workspace)
+        self.index_status = BrowserIndexStatus(self.workspace)
         view = self.workspace.add_view(root_path)
         view.folder_sizes.setChecked(True)
 

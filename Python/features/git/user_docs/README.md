@@ -24,6 +24,20 @@ Recent repositories are available under **+ → Bookmarks**. **+ → Manage book
 removes bookmarks. Open, Clone and Init are in the same menu. Removing a bookmark keeps all repository files on disk.
 Bare repositories can be remote destinations; open working repositories in the UI.
 
+Git also exposes **File**, **Edit**, **View**, **Repository**, and **Actions** menus.
+On macOS they appear in the system menu bar when Git is active; on Windows/Linux
+they appear inside the pane, or at the top of its detached window. Menus follow
+the active repository tab and use the same commands and confirmations as the toolbar.
+**File** contains Open, Clone, Init, bookmarks, preferences, and Close Repository Tab.
+**Edit** operates on the focused text field (read-only previews support copying),
+and can copy the selected History commit's hash. **View** switches between File Status,
+History, and Search, and toggles the operation log. Use Command on macOS or Ctrl
+elsewhere with **O** to open, **F** to search history, and **1/2/3** to switch views.
+**Repository** groups repository operations and settings; **Actions** contains
+selected file/commit commands, folder/terminal shortcuts, custom actions, and
+operation continuation, abort, and cancellation. Commands are disabled when their
+required selection or repository is unavailable, or an operation is running.
+
 For private repositories, configure your Git credential helper or SSH agent first.
 Set up SSH host trust outside Logistics. The app uses stored credentials and avoids
 invisible terminal prompts. Use URLs without passwords, HTTPS credentials, or query

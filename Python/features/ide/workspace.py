@@ -144,7 +144,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
     def activate(self, group):
         self.active_group = group
         if hasattr(self, 'search'):
-            self.search.set_editor(self.current)
+            self.search.set_editor(self.current if isinstance(self.current, EditorDocument) else None)
         self.changed.emit()
 
     @property
@@ -180,13 +180,18 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                 doc = representative
                 target = self.group_for(doc)
             if doc is None:
-                doc = EditorDocument(snapshot, self, buffer=representative.buffer if representative else None)
+                from .markdown_document import MarkdownDocument
+                document_type = MarkdownDocument if path.suffix.lower() in ('.md', '.markdown') else EditorDocument
+                document_type = type(representative) if representative else document_type
+                doc = document_type(snapshot, self, buffer=representative.buffer if representative else None)
                 if representative is None:
                     self.documents[path] = doc
                     buffer = doc.buffer
                     buffer.text.modificationChanged.connect(lambda _: self.update_buffer_titles(buffer))
                     self.watch.addPath(str(path))
-                doc.viewport().installEventFilter(self)
+                if isinstance(doc, EditorDocument):
+                    doc.link_requested.connect(lambda request, doc=doc: self.query_link(doc, request))
+                    doc.viewport().installEventFilter(self)
                 target.addTab(doc, doc.title)
                 doc.focused.connect(lambda: self.activate(self.group_for(doc)))
                 doc.cursorPositionChanged.connect(self.changed)
@@ -427,7 +432,10 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         install_project_menu(self, page)
 
     def find(self):
-        self.search.set_editor(self.current)
+        self.search.set_editor(self.current if isinstance(self.current, EditorDocument) else None)
+        if self.current and not isinstance(self.current, EditorDocument):
+            self.current.show_find()
+            return
         self.search.open(replace=True)
 
     def locate(self):
@@ -567,4 +575,10 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
             self.worker.cancel()
         ready = self.search.prepare_close() and self.worker is None
         self.closing = ready
+        if ready:
+            for doc in self.views():
+                if hasattr(doc, 'speech'):
+                    doc.speech.stop()
+                    if doc._diagram_renderer:
+                        doc._diagram_renderer.cancel()
         return ready

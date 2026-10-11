@@ -60,18 +60,18 @@ class FoldersPage(pyside.QWidget):
         self.refresh()
 
     def _build_layout(self):
-        root_layout = pyside.QHBoxLayout(self)
-        root_layout.setContentsMargins(16, 16, 16, 16)
-        root_layout.setSpacing(16)
+        root_layout = pyside.QVBoxLayout(self)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
 
         left_widget = pyside.QWidget()
         left_layout = pyside.QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(8)
+        left_layout.setSpacing(6)
 
         title_label = pyside.QLabel('Folder Hub')
         title_font = title_label.font()
-        title_font.setPointSize(title_font.pointSize() + 4)
+        title_font.setPointSize(title_font.pointSize() + 2)
         title_font.setBold(True)
         title_label.setFont(title_font)
 
@@ -86,8 +86,7 @@ class FoldersPage(pyside.QWidget):
         left_layout.addWidget(self.source_tabs)
         left_layout.addWidget(self.credential_label)
         left_layout.addWidget(self.credential_combo)
-        left_layout.addWidget(self.folder_tree)
-        left_layout.addWidget(self.discovery)
+        left_layout.addWidget(self.folder_tree, 1)
 
         splitter = pyside.QSplitter(pyside.Qt.Orientation.Horizontal)
         splitter.addWidget(left_widget)
@@ -96,7 +95,17 @@ class FoldersPage(pyside.QWidget):
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([250, 750])
 
-        root_layout.addWidget(splitter)
+        root_layout.addWidget(splitter, 1)
+        # Match the workspace notice row: progress belongs below both panes,
+        # rather than taking three rows out of the folder list.
+        self.discovery.layout().setDirection(pyside.QBoxLayout.Direction.LeftToRight)
+        self.discovery.layout().setSpacing(6)
+        self.discovery.layout().setStretch(0, 1)
+        self.discovery.bar.setFixedSize(100, 6)
+        self.discovery.bar.setTextVisible(False)
+        self.discovery.bar.setStyleSheet('QProgressBar { min-height: 0px; }')
+        self.discovery.cancel_button.setStyleSheet('QPushButton { min-height: 0px; padding: 2px 6px; }')
+        root_layout.addWidget(self.discovery)
 
     def _connect_signals(self):
         self.source_tabs.currentChanged.connect(self._source_changed)
@@ -362,7 +371,7 @@ class FoldersPage(pyside.QWidget):
         self._tools_status = None
         widget = pyside.QWidget()
         layout = pyside.QVBoxLayout(widget)
-        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setContentsMargins(8, 8, 8, 8)
 
         selected_source = self._get_selected_source()
         source_type = selected_source[0] if selected_source is not None else 'local'
@@ -389,12 +398,12 @@ class FoldersPage(pyside.QWidget):
         widget = pyside.QWidget()
         layout = pyside.QVBoxLayout(widget)
         layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(14)
+        layout.setSpacing(8)
 
         title_label = pyside.QLabel(entry.name)
         title_label.setTextFormat(pyside.Qt.TextFormat.PlainText)
         title_font = title_label.font()
-        title_font.setPointSize(title_font.pointSize() + 7)
+        title_font.setPointSize(title_font.pointSize() + 4)
         title_font.setBold(True)
         title_label.setFont(title_font)
 

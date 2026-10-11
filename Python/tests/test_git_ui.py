@@ -66,6 +66,56 @@ class GitUITests(QtTestCase):
         self.repo.stage(['file.txt'])
         self.repo.commit('First')
 
+    def test_conventional_menus_share_toolbar_actions_and_busy_guards(self):
+        menus = self.page.menu_controls.menus
+        self.assertEqual([a.text() for a in self.page.menuBar().actions()],
+                         ['File', 'Edit', 'View', 'Repository', 'Actions'])
+        self.assertIn(self.page.action_buttons['Fetch'].defaultAction(), menus['Repository'].actions())
+        self.assertFalse(self.page.action_buttons['Fetch'].defaultAction().isEnabled())
+        self.open()
+        fetch = self.page.action_buttons['Fetch'].defaultAction()
+        with patch.object(self.page, '_operation') as operation:
+            fetch.trigger()
+            operation.assert_called_once()
+        self.page._set_busy(True)
+        self.assertFalse(fetch.isEnabled())
+        self.assertFalse(menus['File'].actions()[0].isEnabled())
+        self.page._set_busy(False)
+        self.assertTrue(fetch.isEnabled())
+
+    def test_menu_staging_uses_selected_files_and_history_hides_file_actions(self):
+        self.open()
+        (self.repo.path / 'menu.txt').write_text('menu staging')
+        self.page.refresh(); self.wait()
+        actions = {a.text(): a for a in self.page.menu_controls.menus['Actions'].actions()}
+        self.assertFalse(actions['Stage Selected Files'].isEnabled())
+        self.page.changes.unstaged_files.setCurrentItem(self.page.changes.unstaged_files.topLevelItem(0))
+        self.wait()
+        self.assertTrue(actions['Stage Selected Files'].isEnabled())
+        actions['Stage Selected Files'].trigger(); self.wait()
+        self.assertTrue(self.repo.status().changes[0].staged)
+        self.page.menu_controls.show_view(1); self.wait()
+        self.assertFalse(actions['Unstage Selected Files'].isEnabled())
+
+    def test_edit_menu_dispatches_to_focused_field_and_protects_read_only_text(self):
+        self.open()
+        editor = self.page.changes.message
+        editor.setFocus(); editor.setPlainText('draft'); editor.selectAll()
+        self.app.processEvents()
+        controls = self.page.menu_controls
+        controls.update()
+        self.assertTrue(controls.edit_actions['copy'].isEnabled())
+        controls.edit_actions['copy'].trigger()
+        self.assertEqual(self.app.clipboard().text(), 'draft')
+        controls.edit_actions['cut'].trigger()
+        self.assertEqual(editor.toPlainText(), '')
+        self.page.log_toggle.setChecked(True)
+        self.page.log.setFocus(); self.page.log.setPlainText('operation output'); self.page.log.selectAll()
+        self.app.processEvents(); controls.update()
+        self.assertTrue(controls.edit_actions['copy'].isEnabled())
+        self.assertFalse(controls.edit_actions['cut'].isEnabled())
+        self.assertFalse(controls.edit_actions['paste'].isEnabled())
+
     def test_commit_badge_and_commit_button_track_staged_files(self):
         from dataclasses import replace
         self.open()

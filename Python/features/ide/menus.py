@@ -31,7 +31,7 @@ def build_menus(view):
         ('Cut', 'cut', key.Cut), ('Copy', 'copy', key.Copy), ('Paste', 'paste', key.Paste),
         ('Select All', 'selectAll', key.SelectAll),
     ):
-        add(view, 'Edit', title, lambda method=method: getattr(view.current, method)() if view.current else None, shortcut)
+        add(view, 'Edit', title, lambda method=method: (view.current.edit_command(method) if hasattr(view.current, 'edit_command') else getattr(view.current, method)()) if view.current else None, shortcut)
     add(view, 'Edit', 'Find / Replace', view.find, key.Find)
     for title, callback in (
         ('Split Editor Right', view.split_right), ('Move File Left', lambda: view.move(-1)),

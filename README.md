@@ -40,7 +40,12 @@ instances close, queued indexing resumes on the next launch.
 
 ## Find your way around
 
-Start in **File Browser** for any folder, or **Folder Hub** for configured libraries
+The launch page offers **Open full hub with sidebar**, or **File Browser**, **Git**
+and **IDE** without the sidebar. **Read & edit** cards launch enabled editors and
+readers, including comics, EPUBs and archives. Single-tool views keep a small
+settings icon at the bottom-left; clicking it opens settings and navigation choices.
+
+Use **File Browser** for any folder, or **Folder Hub** for configured libraries
 and remote storage. **Documents** collects open readers and editors; their tabs can
 be split or detached. **Settings** saves feature choices and configuration and
 provides links to each feature's help.

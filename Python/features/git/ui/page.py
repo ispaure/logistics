@@ -36,6 +36,8 @@ class GitPage(qt.QWidget):
     def _create_view(self, path):
         view = RepositoryView(preferences=self.preferences, restore_last=False)
         view.repository_opener = lambda path: self.open_repository(path, self._owner(view))
+        view.menu_controls.menus['File'].addSeparator()
+        view.menu_controls.add('File', 'Close Repository Tab', lambda: self._owner(view).close_active())
         view.idle.connect(self.idle)
         view.feature_settings_requested.connect(self.feature_settings_requested)
         if path is not None:
