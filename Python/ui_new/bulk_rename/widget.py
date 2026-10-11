@@ -143,6 +143,7 @@ class BulkRenameWidget(qt.QWidget):
         self.table.itemDoubleClicked.connect(self._enter_folder)
         header = self.table.header()
         header.setStretchLastSection(False)
+        header.setMinimumSectionSize(max(100, self.fontMetrics().horizontalAdvance('M') * 10))
         for column in (0, 1):
             header.setSectionResizeMode(column, qt.QHeaderView.ResizeMode.Stretch)
         for column in (3, 4):
