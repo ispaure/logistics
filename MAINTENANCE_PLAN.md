@@ -17,6 +17,19 @@ Python 3.10+ support statement and the separate Ally documentation boundary.
 - [x] Documentation pass one: correctness, feature coverage and usable examples.
 - [x] Documentation pass two: shorten, verify examples and check every local link.
 - [x] Run full suites, compression parity and extracted-package validation.
-- [ ] Commit and push all four repositories; wait for GitHub checks and repair failures.
+- [x] Commit and push all four repositories; wait for GitHub checks and repair failures.
+
+Validation completed October 11, 2026:
+
+- Local suites: Logistics 828 tests, commonUtils 637 tests (one skip),
+  Ally Tools 33 tests, Blue Hole 14 adapter tests, and 10 release-tooling tests.
+- All four repositories' GitHub workflows passed. Logistics passed Windows,
+  macOS, Ubuntu and Fedora checks, including compression parity.
+- The [source release check](https://github.com/ispaure/logistics/actions/runs/38119613162)
+  built a ZIP matching all 792 files in the tested local package. Public and
+  private launches were checked locally.
+- One macOS shared-suite process crashed inside Qt. A local full-suite repeat
+  and the debug rerun passed; the native crash's cause remains unconfirmed.
+  Live Blender, Hue hardware and external services were not exercised.
 
 Release tagging follows a validated pushed revision and an agreed version.
