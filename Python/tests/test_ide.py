@@ -115,3 +115,18 @@ class NavigationTests(__import__('unittest').TestCase):
             (root / '.venv').mkdir()
             (root / '.venv' / 'hidden.py').write_text('')
             self.assertFalse(any('.venv' in p for p in project_files(project)))
+
+    def test_project_search_skips_binary_exclusions_and_supports_cancellation(self):
+        from features.ide.projects import Project
+        from features.ide.analysis import search_project
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'a.py').write_text('needle\n')
+            (root / 'binary').write_bytes(b'needle\x00')
+            (root / '.git').mkdir()
+            (root / '.git' / 'secret').write_text('needle')
+            project = Project('test', directory)
+            results = search_project(project, 'NEEDLE')
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0][1], 1)
+            self.assertEqual(search_project(project, 'needle', cancelled=lambda: True), [])

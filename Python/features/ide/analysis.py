@@ -49,3 +49,26 @@ def project_files(project, query='', *, cancelled=lambda: False, limit=500):
             if visited >= 100000 or cancelled():
                 return results
     return results
+
+
+def search_project(project, query, *, cancelled=lambda: False):
+    from commonUtils.persistence.text import read_text_file
+    if not query:
+        return []
+    results = []
+    for relative in project_files(project, cancelled=cancelled, limit=10000):
+        if cancelled():
+            break
+        path = project.root / relative
+        try:
+            if path.stat().st_size > 1024 * 1024:
+                continue
+            text = read_text_file(path).text
+        except (OSError, ValueError):
+            continue
+        for line, content in enumerate(text.splitlines(), 1):
+            if query.casefold() in content.casefold():
+                results.append((str(path), line, content.strip()[:180]))
+                if len(results) >= 500:
+                    return results
+    return results
