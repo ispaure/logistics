@@ -173,3 +173,66 @@ class IDELayoutTests(QtTestCase):
             view.current.document().setModified(False)
         page.can_close()
         page.prepare_close()
+
+    def test_repeated_side_drops_at_three_groups_match_splitter_order(self):
+        view = ProjectWorkspace(Project('placement', str(self.root)))
+        view.resize(1050, 600)
+        view.show()
+        for name in ('a.py','b.py','c.py','d.py'):
+            path = self.root / name
+            path.write_text(name)
+            view.open_path(path)
+        self.wait(view)
+        a,b,c,d = [view.groups[0].widget(i) for i in range(4)]
+        view.drop_editor(b,view.groups[0],'right')
+        view.drop_editor(c,view.groups[-1],'right')
+        b.insertPlainText('unsaved')
+        expected = list(view.groups)
+        for moving in (b,c,b,c):
+            for anchor in tuple(expected):
+                source = view.group_for(moving)
+                if source is anchor:
+                    continue
+                for side in ('left','right'):
+                    expected.remove(source)
+                    expected.insert(expected.index(anchor)+(side=='right'),source)
+                    self.assertTrue(view.drop_editor(moving,anchor,side))
+                    self.settle()
+                    self.assertEqual(view.groups,expected)
+                    self.assertEqual(view.editors.count(),3)
+                    self.assertEqual([view.editors.widget(i) for i in range(3)],expected)
+                    self.assertEqual(sorted(expected,key=lambda g:g.x()),expected)
+                    self.assertEqual(len(view.groups),3)
+                    self.assertTrue(b.document().isModified())
+        # Splitting a multi-file source would genuinely need a fourth group.
+        self.assertFalse(view.drop_editor(a,view.group_for(b),'left'))
+        bar = view.group_for(a).tabBar()
+        bar.view = a
+        destination = view.group_for(b)
+        self.assertIsNone(bar.target(destination.mapToGlobal(qt.QPoint(2,100))))
+        bar.cancel_drag()
+        # The empty header strip is a tab insertion target, not a split target.
+        single = view.group_for(b)
+        point = single.mapToGlobal(qt.QPoint(single.width()-3, single.tabBar().height()//2))
+        self.assertEqual(bar.target(point)[1],'tabs')
+        # Escape cancels an in-progress move even if release is over a valid side.
+        bar.view,bar.dragging = a,True
+        bar.keyPressEvent(qt.QKeyEvent(qt.QEvent.Type.KeyPress,qt.Qt.Key.Key_Escape,qt.Qt.KeyboardModifier.NoModifier))
+        self.assertIsNone(bar.view)
+        self.assertFalse(bar.dragging)
+        b.document().setModified(False)
+        view.prepare_close()
+
+    def test_restore_sizes_written_with_old_hidden_preview_panes(self):
+        project = Project('old layout', str(self.root))
+        project.layout = {'groups': [{}, {}], 'editors': [0, 300, 0, 600]}
+        view = ProjectWorkspace(project)
+        view.resize(1200,700)
+        view.show()
+        self.wait(view)
+        self.settle()
+        self.assertEqual(view.editors.count(),2)
+        sizes = view.state()['editors']
+        self.assertEqual(len(sizes),2)
+        self.assertAlmostEqual(sizes[1]/sizes[0],2,delta=.15)
+        view.prepare_close()

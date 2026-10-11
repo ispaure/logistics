@@ -47,7 +47,8 @@ The browser and editor panels have font-scaled minimum widths and cannot collaps
 Editor tabs belong to their project. Drag onto a group header to insert/reorder,
 into its center to merge tabs, or onto its left/right quarter to create a split.
 A preview marks the target. Up to three groups are supported; a side drop at the
-limit is rejected. Escape or releasing outside this project's editor area cancels.
+limit is rejected unless moving an existing single-file column, which can be
+repositioned without adding a fourth group. Escape or releasing outside this project's editor area cancels.
 Empty groups disappear after files move/close. **View → Split Editor Right**
 adds a group showing another view of the current file, up to three groups. You can
 edit either view: text, undo/redo, modified state and disk identity are shared.
