@@ -219,6 +219,7 @@ class BulkRenameWidget(qt.QWidget):
         self.rename_button = qt.QPushButton('Rename selected')
         self.rename_button.clicked.connect(self.apply)
         presets = qt.QToolButton()
+        self.presets_button = presets
         presets.setText('Rule presets…')
         presets.setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
         presets_menu = qt.QMenu(presets)
@@ -234,7 +235,7 @@ class BulkRenameWidget(qt.QWidget):
         actions = qt.QHBoxLayout(self.action_area)
         actions.setContentsMargins(0, 4, 0, 0)
         actions.setSpacing(8)
-        actions.addWidget(presets, 0, qt.Qt.AlignmentFlag.AlignBottom)
+        actions.addWidget(presets, 0, qt.Qt.AlignmentFlag.AlignTop)
         actions.addStretch()
         secondary_group = qt.QWidget(self.action_area)
         secondary_group.setSizePolicy(qt.QSizePolicy.Policy.Fixed, qt.QSizePolicy.Policy.Preferred)
