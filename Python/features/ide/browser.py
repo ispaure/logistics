@@ -35,6 +35,8 @@ class ProjectBrowser(qt.QWidget):
         super().__init__(workspace)
         self.project, self.workspace = project, workspace
         layout = qt.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 2, 0)
+        layout.setSpacing(2)
         self.filter = qt.QLineEdit()
         self.filter.setPlaceholderText('Filter visible filenames…')
         layout.addWidget(self.filter)

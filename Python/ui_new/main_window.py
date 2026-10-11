@@ -353,8 +353,10 @@ class MainWindow(pyside.Window):
         self._update_window_title()
         self.sidebar.set_current(current_widget)
         from commonUtils.ui.workspace_menus import sync_native_menus
-        document = self.documents.workspace.active_view if current_widget is self.documents else None
-        sync_native_menus(self.dlg, getattr(document, 'document', None))
+        workspace = getattr(current_widget, 'workspace', None)
+        view = workspace.active_view if workspace is not None else current_widget
+        document = view if isinstance(view, pyside.QMainWindow) else getattr(view, 'document', None)
+        sync_native_menus(self.dlg, document)
         if self._docking_preview:
             return
         if current_widget is self.actions:
