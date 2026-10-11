@@ -140,7 +140,7 @@ before changing compression.
 
 ## Validation
 
-Use the [project test commands](../../../README.md#development) and
+Use the [project test commands](../../../DEVELOPMENT.md) and
 [cross-platform checks](../../tests/PLATFORM_CHECKS.md). Comic tests cover compression,
 metadata, reader/spreads/decoding, catalog, file-type integration, passwords,
 encryption and asynchronous cancellation using disposable fixtures. Shared ZIP and

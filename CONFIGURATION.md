@@ -2,7 +2,7 @@
 
 Logistics separates launcher settings, shared application paths, feature settings
 and folder-specific configuration. Start with defaults, then configure only the
-integrations you intend to use. See the [feature index](README.md#features) for
+integrations you intend to use. See the [feature index](README.md#what-can-it-do) for
 individual workflows and platform limitations.
 
 ## Configuration layers
