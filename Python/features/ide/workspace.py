@@ -335,7 +335,17 @@ class ProjectWorkspace(Navigation, qt.QWidget):
         return {'unavailable': self.unavailable, 'browser': self.browser.state(), 'groups': [{'files': [{'path': str(g.widget(i).path), 'cursor': g.widget(i).textCursor().position(), 'scroll': g.widget(i).verticalScrollBar().value()} for i in range(g.count())],
                             'active': str(g.currentWidget().path) if g.currentWidget() else None} for g in self.groups],
                 'active_group': self.groups.index(self.active_group) if self.active_group in self.groups else 0,
-                'splitter': self.splitter.sizes(), 'editors': self.editors.sizes()}
+                'splitter': self.saved_sizes(self.splitter, 'splitter'),
+                'editors': self.saved_sizes(self.editors, 'editors')}
+
+    def saved_sizes(self, splitter, key):
+        sizes = splitter.sizes()
+        if any(sizes):
+            return sizes
+        previous = self.project.layout.get(key)
+        if isinstance(previous, list) and len(previous) == splitter.count() and all(isinstance(n, int) and n >= 0 for n in previous) and any(previous):
+            return previous
+        return [1] * splitter.count()
 
     def restore(self, state):
         self.browser.restore(state.get('browser', {}))
@@ -381,7 +391,7 @@ class ProjectWorkspace(Navigation, qt.QWidget):
             self.activate(self.groups[active] if isinstance(active, int) and 0 <= active < len(self.groups) else self.groups[0])
             for key, splitter in [('splitter', self.splitter), ('editors', self.editors)]:
                 sizes = state.get(key)
-                if isinstance(sizes, list) and all(isinstance(n, int) and n >= 0 for n in sizes):
+                if isinstance(sizes, list) and all(isinstance(n, int) and n >= 0 for n in sizes) and any(sizes):
                     splitter.setSizes(sizes)
         self.run(lambda: None, restored)
 
