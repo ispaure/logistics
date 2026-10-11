@@ -32,3 +32,21 @@ class PreferenceTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'outside'):
                 actions._publish_preferences(path, b'original', b'updated')
             self.assertEqual(path.read_bytes(), b'external')
+
+    def test_failed_window_publication_restores_graphics_and_keeps_recovery(self):
+        with TemporaryDirectory() as directory:
+            path, window, preset = [Path(directory) / name for name in ('prefs', 'window', 'preset')]
+            keys = ('renopt_SSAO_04', 'renopt_FSR_04', 'renopt_MSAA', 'renopt_draw_3d_04', 'renopt_draw_distance04', 'renopt_shadow_quality_04', 'renopt_vegetation_quality_04')
+            original = ''.join(f'{key} 1\r\n' for key in keys).encode()
+            path.write_bytes(original); window.write_bytes(b'old window'); preset.write_bytes(b'new window')
+            publish = actions._publish_preferences
+            def failing_window(target, old, new):
+                if target == window:
+                    raise OSError('window publication failed')
+                return publish(target, old, new)
+            with patch.object(actions.detection, 'get_xp12_preferences_path', return_value=path), patch.object(actions.detection, 'get_xp12_window_positions_path', return_value=window), patch.object(actions, '_publish_preferences', side_effect=failing_window):
+                with self.assertRaises(OSError):
+                    actions.set_all_xp12_settings(preset, 2, 2, 2, 2, 2, 2, 2)
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(window.read_bytes(), b'old window')
+            self.assertEqual(next(path.parent.glob('prefs.previous-*')).read_bytes(), original)
