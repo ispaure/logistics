@@ -170,8 +170,15 @@ then **Save Settings**. A software-mode reset reverts an unsaved field. Pending
 changes remain when switching modes; closing asks Save/Discard/Cancel.
 
 **Appearance & shared controls → Styling** controls the accent, dark tint and
-interface, browser, reading and code font roles. EPUB and Markdown share reading
-fonts; IDE, Text Editor, Git hunks and Markdown code share the code font. Tool
+interface, browser, reading and code font roles. Each font name in the dropdown
+is shown in its own typeface for a preview while browsing, including the selected
+field. Samples underneath preview pending font and size changes before saving.
+The code font list is limited to monospace fonts with equal character widths.
+The interface font covers settings navigation and application menus. The file
+browser font covers text within browser panels: file lists and headers, tiles,
+folder columns, storage labels, paths, search controls and file details.
+EPUB and Markdown share reading fonts; IDE, Text Editor, Git hunks and Markdown
+code share the code font. Tool
 options are in **Feature settings**. Reading positions, account data and recovery
 records remain personal data, outside software defaults. The path above each
 editor shows exactly which INI will change.

@@ -17,7 +17,9 @@ def populate_navigation(page, snapshot):
             item.setFlags(item.flags() & ~qt.Qt.ItemFlag.ItemIsSelectable)
             item.setSizeHint(0,qt.QSize(0,tree.fontMetrics().height()+18))
             item.setForeground(0,tree.palette().brush(qt.QPalette.ColorRole.PlaceholderText))
-            item.setIcon(0,action_icon({'WORKSPACE':'folder','BRANCHES':'branch','TAGS':'commit','REMOTES':'remote','STASHES':'stash','SUBMODULES':'folder','SUBTREES':'branch'}[title]))
+            icon = {'WORKSPACE':'folder','BRANCHES':'branch','TAGS':'commit','REMOTES':'remote','STASHES':'stash','SUBMODULES':'folder','SUBTREES':'branch'}[title]
+            item.setData(0, qt.Qt.ItemDataRole.UserRole + 1, icon)
+            item.setIcon(0, action_icon(icon))
             font = item.font(0); font.setBold(True); item.setFont(0,font)
             tree.addTopLevelItem(item); item.setExpanded(expanded.get(title, title != 'TAGS'))
             groups[title] = item

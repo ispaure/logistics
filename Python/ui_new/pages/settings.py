@@ -287,6 +287,8 @@ class SettingsPage(qt.QWidget):
         splitter = qt.QSplitter()
         layout.addWidget(splitter)
         self.sidebar = qt.QTreeWidget()
+        from commonUtils.ui.styling import bind_font
+        bind_font(self.sidebar, 'ui')
         self.sidebar.setHeaderHidden(True)
         self.sidebar.setAccessibleName('Settings categories')
         self.sidebar.setMinimumWidth(190)

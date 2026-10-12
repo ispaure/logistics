@@ -21,6 +21,19 @@ class SettingsPageTests(QtTestCase):
         return SimpleNamespace(name='test', label='Test', enabled=True, available=True,
                                dependencies=(), dependents=())
 
+    def test_settings_sidebar_tracks_interface_font(self):
+        from commonUtils.ui.styling import styling
+        controller = styling()
+        with patch.object(registry, 'get_feature_states', return_value=[]):
+            page = SettingsPage()
+        self.addCleanup(page.deleteLater)
+        values = dict(controller.values, ui_font_family_str='Courier New', ui_font_size_int=18)
+        with patch('commonUtils.ui.styling.style_values', return_value=values):
+            controller.reload()
+            self.assertEqual(page.sidebar.font().family(), 'Courier New')
+            self.assertEqual(page.sidebar.font().pointSize(), 18)
+        controller.reload()
+
     def test_git_preferences_are_hosted_in_feature_settings(self):
         from features.git import register
         from features.git.ui.application_settings import GitPreferencesPanel

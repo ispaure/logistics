@@ -229,6 +229,32 @@ class GitUITests(QtTestCase):
             self.assertEqual(image.width(), 56)
             self.assertEqual(image.devicePixelRatio(), 2.0)
 
+    def test_git_actions_badges_and_file_status_follow_live_accent(self):
+        from commonUtils.ui.theme import apply_theme
+        from commonUtils.ui.styling import style_values
+        self.open()
+        button = self.page.action_buttons['Commit']
+        button.setProperty('badge_count', 7)
+        original = button.defaultAction().icon().cacheKey()
+        values = dict(style_values(), accent_color_str='#00cc88')
+        with patch('commonUtils.ui.styling.style_values', return_value=values):
+            apply_theme(self.app, mode='dark')
+            self.app.processEvents()
+        self.assertNotEqual(button.defaultAction().icon().cacheKey(), original)
+        self.assertEqual(button.property('badge_count'), 7)
+        image = button.defaultAction().icon().pixmap(28, 28).toImage()
+        self.assertTrue(any(image.pixelColor(x, y).name() == '#00cc88'
+                            and image.pixelColor(x, y).alpha() == 255
+                            for x in range(image.width()) for y in range(image.height())))
+        item = self.page.workspace_items[0]
+        self.page.refs.setCurrentItem(item)
+        self.app.processEvents()
+        rect = self.page.refs.visualItemRect(item)
+        image = self.page.refs.viewport().grab().toImage()
+        ratio = image.devicePixelRatio()
+        color = image.pixelColor(int((rect.right() - 4) * ratio), int(rect.center().y() * ratio))
+        self.assertEqual(color.name(), '#00cc88')
+
     def test_conflict_merge_dialog_saves_and_optionally_stages(self):
         from commonUtils.ui.code_editor.merge import MergeDialog
         from features.git.runner import GitError

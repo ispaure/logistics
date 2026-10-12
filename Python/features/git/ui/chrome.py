@@ -4,8 +4,7 @@ import math
 from urllib.parse import urlsplit, urlunsplit
 from commonUtils.ui import pyside as qt
 
-# Keep the application's palette, native controls and theme. Only density and
-# the repository navigation accent belong to this workspace.
+# Keep the application's palette, native controls and theme; customize workspace density.
 WORKSPACE_STYLE = '''
 QWidget#gitWorkspace QTreeWidget::item,
 QWidget#gitWorkspace QTreeWidget::item:hover,
@@ -14,7 +13,7 @@ QWidget#gitWorkspace QHeaderView::section { padding: 2px 4px; }
 QWidget#gitWorkspace QWidget#gitSidebar { background: palette(alternate-base); }
 QWidget#gitWorkspace QWidget#gitSidebar QTreeWidget { background: transparent; border: none; }
 QWidget#gitWorkspace QWidget#gitSidebar QTreeWidget::item { padding: 3px 4px; }
-QWidget#gitWorkspace QWidget#gitSidebar QTreeWidget::item:selected { background: #ed851b; color: white; }
+QWidget#gitWorkspace QWidget#gitSidebar QTreeWidget::item:selected { background: palette(highlight); color: palette(highlighted-text); }
 QWidget#gitWorkspace QWidget#gitToolbar QToolButton { padding: 4px; border: none; }
 QWidget#gitWorkspace QTabWidget::pane { border: none; }
 QWidget#gitWorkspace QTabBar::tab { padding: 4px 16px; }
@@ -46,28 +45,31 @@ def status_icon(status):
 def action_icon(name, count=0):
     # Supply native-resolution artwork rather than enlarging a 28px bitmap on Retina.
     icon = qt.QIcon()
+    palette = qt.QApplication.palette()
+    accent = palette.color(qt.QPalette.ColorRole.Highlight)
+    text = palette.color(qt.QPalette.ColorRole.HighlightedText)
     for scale in (1, 2, 3, 4):
         pixmap = qt.QPixmap(28 * scale, 28 * scale)
         pixmap.setDevicePixelRatio(scale)
         pixmap.fill(qt.Qt.GlobalColor.transparent)
         painter = qt.QPainter(pixmap)
-        _draw_action(painter, name)
+        _draw_action(painter, name, accent)
         if count:
             label = str(count) if count < 100 else '99+'
             width = max(11, 5 * len(label) + 4)
             rect = qt.QRectF(28 - width, 0, width, 12)
             painter.setPen(qt.Qt.PenStyle.NoPen)
-            painter.setBrush(qt.QColor('#216ab4'))
+            painter.setBrush(accent)
             painter.drawRoundedRect(rect, 3, 3)
             font = qt.QFont(); font.setPixelSize(9); font.setBold(True)
-            painter.setFont(font); painter.setPen(qt.QColor('white'))
+            painter.setFont(font); painter.setPen(text)
             painter.drawText(rect, qt.Qt.AlignmentFlag.AlignCenter, label)
         painter.end()
         icon.addPixmap(pixmap)
     return icon
 
 
-def _draw_action(painter, name, color='#36abe2'):
+def _draw_action(painter, name, color):
     painter.setRenderHint(qt.QPainter.RenderHint.Antialiasing)
     painter.setPen(qt.QPen(qt.QColor(color), 1.8, qt.Qt.PenStyle.SolidLine,
                                qt.Qt.PenCapStyle.RoundCap, qt.Qt.PenJoinStyle.RoundJoin))
@@ -124,6 +126,7 @@ def toolbar_button(title, icon, callback, parent):
     parent.addAction(action)
     button = parent.widgetForAction(action)
     button.setAccessibleName(title)
+    button.setProperty('git_action_icon', icon)
     button.setMinimumWidth(54)
     return button
 
