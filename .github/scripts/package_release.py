@@ -67,8 +67,14 @@ def package(root, output, names=None, required=REQUIRED):
                 info.external_attr = (stat.S_IFLNK | 0o777) << 16
                 archive.writestr(info, os.fsencode(os.readlink(source)))
             elif source.is_file():
-                archive.write(source, target)
-                manifest['files'][name] = hashlib.sha256(source.read_bytes()).hexdigest()
+                data = source.read_bytes()
+                if source.suffix.lower() in {'.bat', '.cmd'}:
+                    # cmd.exe's CALL/GOTO label scanning requires Windows line
+                    # endings even when the release was built on Linux/macOS.
+                    data = data.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+                info = zipfile.ZipInfo.from_file(source, target)
+                archive.writestr(info, data, compress_type=zipfile.ZIP_DEFLATED)
+                manifest['files'][name] = hashlib.sha256(data).hexdigest()
             else:
                 raise RuntimeError(f'Tracked release file is unavailable: {name}')
         archive.writestr('Logistics/.app-install.json', json.dumps(manifest, indent=2))

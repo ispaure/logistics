@@ -23,6 +23,11 @@ preserves script permissions. Existing releases can receive a missing
 state are preserved, so a draft left by a failed publish may need manual
 publication after a successful retry. Use a new version tag for corrected assets.
 
+Windows `.bat` and `.cmd` files are packaged with CRLF line endings on every build
+host. Installation-manifest hashes describe those packaged bytes. Windows CI runs
+the extracted project/shared launcher chain through configuration loading, stopping
+at an intentionally missing source directory before dependency installation.
+
 
 ## Before the first release
 
