@@ -545,6 +545,18 @@ class DocumentWorkspaceTests(QtTestCase):
         self.assertIs(self.page.records[chooser]['dock'].workspace, workspace)
         self.assertEqual(self.page.workspace.docks, [])
 
+    def test_chooser_is_not_a_document_tree_entry_or_document_count(self):
+        chooser = self.page.workspace.request_new_view(); self.settle()
+        self.assertTrue(document_is_open(chooser))
+        self.assertEqual(list(self.page.document_entries()), [])
+        self.assertEqual(self.page.count, 0)
+        self.assertEqual(self.page.attached_count, 0)
+        real = qt.QMainWindow(); real.setWindowTitle('Real document')
+        show_document(real); self.settle()
+        self.assertEqual([entry[1] for entry in self.page.document_entries()], ['Real document'])
+        self.assertEqual(self.page.count, 1)
+
+
 
 class PublicCloseContractTests(QtTestCase):
     def setUp(self):

@@ -270,3 +270,19 @@ callbacks run through `launch_document` and `creation_scope`, retaining detached
 container routing and the document service owner. Successful synchronous opens
 retire the chooser tab; cancelled opens keep it. Choosers refresh on feature changes.
 FolderActionsPage disables document creation because its tabs belong to workflows.
+
+## Enabled launch catalogs and responsive choosers
+
+Page contributions with a navigation icon enroll in the host's focused launch
+catalog; `launch_description` optionally overrides the feature description. The
+main window resolves these declarations to retained enabled pages and updates cards
+on registry notifications. Disabled entries are removed from launch cards and the
+Settings category tree, while Features still exposes enable/disable controls and
+retained editors still participate in close/reset handling.
+
+`ui_new.launch_catalog` owns core Markdown plus enabled document-launcher
+registrations for all document-choice surfaces. `DocumentLauncherContribution.description`
+is displayed on cards. Chooser windows remain workspace-owned utility tabs; they
+are excluded from document entries and counts without changing their close/detach
+lifecycle. The scroll viewport sizes content up to 1440 pixels, chooses one/two/three
+columns and enables ordinary vertical scrollbar/wheel navigation for long catalogs.

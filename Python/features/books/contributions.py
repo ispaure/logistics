@@ -32,7 +32,7 @@ def single(context):
 def register():
     kind = 'features.books.file_type:EPUBFile'
     return Feature(id='books', label='Books & Comics',
-                   document_launchers=[DocumentLauncherContribution('epub', 'EPUB Reader', launch, 'epub', 30)], file_types=(FileType(kind, extensions='epub'),),
+                   document_launchers=[DocumentLauncherContribution('epub', 'EPUB Reader', launch, 'epub', 30, description='Read EPUB books and resume your progress.')], file_types=(FileType(kind, extensions='epub'),),
                    browser=BrowserExtension(
                        actions=(SelectionAction('read', 'Read EPUB…', kind, read, is_available=single, order=5),
                                 SelectionAction('metadata', 'Edit metadata…',

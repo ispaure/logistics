@@ -434,27 +434,15 @@ class DestinationRail(qt.QWidget):
         self.document_tree.setFocus()
 
     def _refresh_editors(self):
-        from features import registry
-        from features.contributions import DocumentLauncherContribution
-        entries = [DocumentLauncherContribution('markdown', 'Markdown Editor', self._open_markdown, 'markdown', 20, self._new_markdown)]
-        entries.extend(entry.contribution for entry in registry.get_document_launchers())
-        self.launchers = {entry.editor_id: entry for entry in sorted(entries, key=lambda item: item.order)}
+        from .launch_catalog import document_launchers
+        self.launchers = document_launchers()
+
     def _launch_editor(self, key, *, new=False):
         self.document_overlay.hide()
         launcher = self.launchers[key]
         callback = launcher.new_document if new else launcher.open_document
         callback(self.documents)
         self._populate_document_tree()
-
-    def _open_markdown(self, parent):
-        from commonUtils.ui.markdown.window import open_markdown
-        path, _ = qt.QFileDialog.getOpenFileName(parent, 'Open Markdown', '', 'Markdown (*.md *.markdown);;All files (*)')
-        if path:
-            return open_markdown(path, allow_edit=True)
-
-    def _new_markdown(self, parent):
-        from commonUtils.ui.markdown.window import open_markdown
-        return open_markdown(None, allow_edit=True)
 
     def _open_bulk_rename(self):
         from ui_new.bulk_rename import open_bulk_rename

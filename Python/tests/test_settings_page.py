@@ -430,11 +430,28 @@ class SettingsPageTests(QtTestCase):
             position = page.sidebar.verticalScrollBar().value()
             selected = page.sidebar.currentItem()
             item = page._category_items['feature:test_29']
-            states[-1].enabled = False
+            states[-1].label = 'Updated title'
             page.refresh(); self.app.processEvents()
             self.assertIs(page.sidebar.currentItem(), selected)
             self.assertIs(page._category_items['feature:test_29'], item)
             self.assertEqual(page.sidebar.verticalScrollBar().value(), position)
-            self.assertEqual(item.text(0), 'Test 29 (disabled)')
+            self.assertEqual(item.text(0), 'Updated title')
             self.assertEqual(item.toolTip(0), 'A feature description.')
             page.close()
+
+    def test_disabled_features_are_absent_and_selected_category_falls_back(self):
+        state = self.state()
+        with patch.object(registry, 'get_feature_states', return_value=[state]),                 patch.object(registry, 'get_settings', return_value=[]):
+            page = SettingsPage(); self.addCleanup(page.deleteLater)
+            page.show_feature('test')
+            retained = page.panels['feature:test']
+            state.enabled = False
+            page.refresh()
+            self.assertNotIn('feature:test', page._category_items)
+            self.assertEqual(page.sidebar.currentItem().data(0, qt.Qt.ItemDataRole.UserRole), 'features')
+            self.assertIs(page.panels['feature:test'], retained)
+            state.enabled = True
+            page.refresh()
+            self.assertIn('feature:test', page._category_items)
+            page.show_feature('test')
+            self.assertIs(page.stack.currentWidget(), retained)

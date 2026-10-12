@@ -113,3 +113,24 @@ Its optional `navigation_icon` gives it a direct destination. Preserve
 `DestinationRail.tools_menu` and the `tools`/Misc glyph for future nested destinations,
 even when every current feature has its own button. This is an explicit repository
 requirement, not dead-code cleanup.
+
+## Launch chooser registrations (Logistics)
+
+`PageContribution.navigation_icon` is the opt-in for both a feature's navigation
+rail button and its focused launch card. Supply `launch_description` for a
+page-specific explanation; otherwise the card uses the feature's `FEATURE_DESCRIPTION`
+or its name. The declaration's existing name, page ID, factory and order remain the
+source of truth. Cards reuse retained page instances; their factories do not run
+again when the user selects a launch mode. Core File Browser is mandatory, with
+Folder Hub and Bulk Rename provided by the host.
+
+`DocumentLauncherContribution` adds a Read & edit card through `editor_id`, `name`,
+`icon`, `order`, `open_document`, optional `new_document`, and `description`.
+Only Markdown is supplied by the core. Register readers/editors here rather than
+creating a second top-area card. `ui_new.launch_catalog.document_launchers()` is
+the single document catalog used by the landing page, sidebar and workspace chooser.
+
+Both catalogs consume enabled registry contributions and update through existing
+registry subscriptions. Disabled cards disappear instead of becoming unavailable
+controls. No launch-screen feature knowledge or registration belongs in commonUtils.
+The view reflows one to three columns and uses a vertical scroll area for overflow.

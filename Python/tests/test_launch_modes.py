@@ -23,7 +23,7 @@ class LaunchModeTests(QtTestCase):
         super().setUp()
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.entries = [RegisteredContribution(name, name.title(), PageContribution(
-            name.title(), f'{name}.workspace', qt.QWidget, order=15)) for name in ('git', 'ide')]
+            name.title(), f'{name}.workspace', qt.QWidget, order=15, navigation_icon=name)) for name in ('git', 'ide')]
         self.open_comic = Mock()
         self.new_text = Mock()
         self.launchers = [RegisteredContribution('comics', 'Comics', DocumentLauncherContribution(
@@ -112,8 +112,8 @@ class LaunchModeTests(QtTestCase):
         with patch.object(main_window.registry, 'get_pages', return_value=[]):
             window._sync_feature_pages()
         self.assertIs(window.launch_stack.currentWidget(), window.landing)
-        self.assertFalse(window.landing.buttons['ide'].isEnabled())
-        self.assertFalse(window.landing.buttons['git'].isEnabled())
+        self.assertNotIn('ide', window.landing.buttons)
+        self.assertNotIn('git', window.landing.buttons)
         window._launch('ide')
         self.assertIs(window.launch_stack.currentWidget(), window.landing)
         window.show_settings_action.trigger()
@@ -198,3 +198,57 @@ class LaunchModeTests(QtTestCase):
         self.assertFalse(window.return_to_tool_action.isVisible())
         window.header_menus.update_destinations()
         self.assertNotIn('Ide', [a.text() for a in window.header_menus.destinations.actions()])
+
+    def test_page_contribution_adds_focused_card_and_disabled_card_disappears(self):
+        extra = RegisteredContribution('sample', 'Sample', PageContribution(
+            'Sample Tool', 'sample.workspace', qt.QWidget, order=30,
+            navigation_icon='links', launch_description='A feature-owned launch description.'))
+        key = 'feature:sample:sample.workspace'
+        with patch.object(main_window.registry, 'get_pages', return_value=[*self.entries, extra]):
+            self.window._sync_feature_pages()
+        button = self.window.landing.buttons[key]
+        self.assertEqual(button.accessibleDescription(), extra.contribution.launch_description)
+        self.assertIn('browser', self.window.landing.buttons)
+        self.assertIn('bulk_rename', self.window.landing.buttons)
+        button.click()
+        self.assertEqual(self.window._launch_mode, key)
+        retained = self.window.tabs.currentWidget()
+        self.assertTrue(self.window.sidebar.isHidden())
+        with patch.object(main_window.registry, 'get_pages', return_value=self.entries):
+            self.window._sync_feature_pages()
+        self.assertNotIn(key, self.window.landing.buttons)
+        self.assertIs(self.window.launch_stack.currentWidget(), self.window.landing)
+        self.assertIs(self.window._feature_pages['sample', 'sample.workspace'], retained)
+
+    def test_chooser_expands_reflows_and_scrolls_with_mouse_wheel(self):
+        from ui_new.landing import DocumentChooser
+        chooser = DocumentChooser(); self.addCleanup(chooser.deleteLater)
+        launchers = {f'sample_{i}': DocumentLauncherContribution(
+            f'sample_{i}', f'Editor {i}', Mock(), 'text', i,
+            description='A readable description for the document type.') for i in range(12)}
+        chooser.set_document_launchers(launchers)
+        chooser.resize(1400, 900); chooser.show(); self.app.processEvents()
+        wide = chooser.content.width()
+        self.assertGreater(wide, 1000)
+        self.assertEqual(chooser._document_columns, 3)
+        self.assertGreater(chooser._document_cards[0].width(), 300)
+        chooser.resize(500, 400); self.app.processEvents()
+        self.assertLess(chooser.content.width(), wide)
+        self.assertEqual(chooser._document_columns, 1)
+        scrollbar = chooser.scroll.verticalScrollBar()
+        self.assertGreater(scrollbar.maximum(), 0)
+        point = qt.QPoint(100, 100)
+        event = qt.QWheelEvent(qt.QPointF(point), qt.QPointF(chooser.scroll.viewport().mapToGlobal(point)),
+                              qt.QPoint(), qt.QPoint(0, -120), qt.Qt.MouseButton.NoButton,
+                              qt.Qt.KeyboardModifier.NoModifier, qt.Qt.ScrollPhase.NoScrollPhase, False)
+        self.app.sendEvent(chooser.scroll.viewport(), event); self.app.processEvents()
+        self.assertGreater(scrollbar.value(), 0)
+
+    def test_tool_settings_menu_contains_only_enabled_features(self):
+        from features.registry import FeatureState
+        states = [FeatureState('on', 'Enabled Tool', True, True, (), ()),
+                  FeatureState('off', 'Disabled Tool', True, False, (), ())]
+        with patch.object(main_window.registry, 'get_feature_states', return_value=states):
+            self.window.header_menus.update_settings()
+        self.assertEqual([action.text() for action in self.window.header_menus.feature_settings.actions()],
+                         ['Enabled Tool'])

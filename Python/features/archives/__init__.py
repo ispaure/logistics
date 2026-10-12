@@ -9,7 +9,7 @@ def register():
     from commonUtils.filesystem.directories import Directory
     from features.contributions import Feature, DocumentLauncherContribution
     return Feature(id='archives', label='Archives',
-                   document_launchers=[DocumentLauncherContribution('archive', 'Archives', launch, 'archives', 50)],
+                   document_launchers=[DocumentLauncherContribution('archive', 'Archives', launch, 'archives', 50, description='Browse, create and extract archives.')],
                    browser=BrowserExtension(actions=[
         SelectionAction('manage_archive', 'Open archive manager…', (File,), _manage, order=40,
                         is_available=_can_manage),
