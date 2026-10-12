@@ -155,3 +155,11 @@ browser tests belong to commonUtils. The [parity report](ZIP_COMPRESSION_PARITY.
 records decrypted full-run comparisons; ZIP container timestamps are not expected
 to match. Tests do not reproduce the ComicRack crash, invoke a real RAR extractor
 or replace native desktop/remote-mount validation. EPUB reading/editing belongs to the separate Books engine.
+
+## Portable document boundary
+
+ComicInfo reads/saves and compressed page-byte access do not eagerly load Pillow
+or legacy archive tools. TIFF decoding and cover rendering load Pillow on demand
+and report a missing decoder at the operation boundary. Archive rebuilding keeps
+its established desktop tooling. See [mobile preparation](../../../docs/developer/mobile-preparation.md)
+for the headless checks and remaining mobile-host work.

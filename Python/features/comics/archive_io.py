@@ -6,9 +6,16 @@ import stat
 from tempfile import TemporaryDirectory
 import zipfile
 
-from commonUtils.archives import legacy as zipUtils
 from commonUtils.archives.zip_access import validate_members, open_archive
 from commonUtils.runtime.streams import stream_signature
+
+
+def __getattr__(name):
+    # Retain the legacy module alias for consumers without loading it for reads.
+    if name == 'zipUtils':
+        from commonUtils.archives import legacy
+        return legacy
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def _file_signature(snapshot):
@@ -32,6 +39,8 @@ def validate_archive_members(path: Path):
 def replace_archive(source_dir: Path, destination: Path, *, overwrite: bool = True,
                     expected_stat=None, password=None):
     """Keep the original intact until a complete, verified ZIP is ready beside it."""
+    from commonUtils.archives import legacy as zipUtils
+
     source_dir, destination = Path(source_dir), Path(destination)
     if destination.is_symlink():
         raise ValueError(f'Refusing to replace an archive symlink: {destination}')

@@ -29,6 +29,10 @@ jobs:
           python-version: '3.12.2'
       - run: python -m pip install ruff==0.14.0
       - run: ruff check --config Python/pyproject.toml Python .github/scripts
+      - name: Check portable document core without desktop dependencies
+        env:
+          PYTHONPATH: Python
+        run: python Python/tests/portable_documents.py
       - name: Check Unix launcher syntax
         run: bash -n LaunchLogistics_MAC.command LaunchLogistics_LINUX_UV.sh Python/commonUtils/launchers/LaunchPythonProject_LINUX_UV.sh
 
