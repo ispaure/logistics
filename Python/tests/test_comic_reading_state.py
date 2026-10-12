@@ -120,3 +120,21 @@ class ComicResumeTests(QtTestCase):
             self.assertEqual(state.position(pages), 0)
         state.path.write_text('{"page": 99}')
         self.assertEqual(state.position(pages), 3)
+
+    def test_thumbnail_progress_tracks_resume_page_and_legacy_state(self):
+        from features.comics.cbz import CBZFile
+        with patch('features.comics.reading_state.cache_directory', return_value=self.root / 'cache'):
+            state = ReadingState(self.path)
+            item = CBZFile(self.path)
+            self.assertEqual(item.browser_thumbnail_badge(), '')
+            state.path.parent.mkdir(parents=True)
+            state.path.write_text('{"page":2,"name":"2.png"}')
+            item.browser_thumbnail((100, 140))
+            self.assertEqual(item.browser_thumbnail_badge(), '3/4')
+            state.save(1, ComicPages(self.path).pages)
+            self.assertEqual(item.browser_thumbnail_badge(), '2/4')
+            self.assertEqual(state.badge(), '2/4')
+            state.path.write_text('{"page":true,"total":4}')
+            self.assertEqual(state.badge(), '')
+            state.path.write_text('broken')
+            self.assertEqual(item.browser_thumbnail_badge(), '')

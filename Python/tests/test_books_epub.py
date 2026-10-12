@@ -152,3 +152,20 @@ class EPUBTests(unittest.TestCase):
         self.assertEqual(second.load()['position'], .25)
         first.path.write_text('invalid')
         self.assertEqual(first.load(), {})
+
+    def test_thumbnail_progress_supports_legacy_state_and_live_updates(self):
+        from features.books.file_type import EPUBFile
+        with patch('features.books.preferences.cache_directory', return_value=self.folder / 'cache'):
+            state = ReadingState(self.path)
+            item = EPUBFile(self.path)
+            self.assertEqual(item.browser_thumbnail_badge(), '')
+            state.save({'path': 'OPS/Text/two.xhtml', 'position': .5})
+            item.browser_thumbnail((100, 140))
+            self.assertEqual(item.browser_thumbnail_badge(), 'Ch 2/2')
+            state.save({'path': 'OPS/Text/one.xhtml', 'chapter': 0, 'chapters': 2})
+            self.assertEqual(item.browser_thumbnail_badge(), 'Ch 1/2')
+            self.assertEqual(ReadingState(self.path).badge(), 'Ch 1/2')
+            state.path.write_text('{"chapter":true,"chapters":2}')
+            self.assertEqual(ReadingState(self.path).badge(), '')
+            state.path.write_text('broken')
+            self.assertEqual(item.browser_thumbnail_badge(), '')

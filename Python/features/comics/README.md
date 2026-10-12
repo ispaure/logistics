@@ -163,3 +163,9 @@ or legacy archive tools. TIFF decoding and cover rendering load Pillow on demand
 and report a missing decoder at the operation boundary. Archive rebuilding keeps
 its established desktop tooling. See [mobile preparation](../../../docs/developer/mobile-preparation.md)
 for the headless checks and remaining mobile-host work.
+
+ReadingState saves the page-list total alongside the existing index/name resume
+record and provides a compact thumbnail badge. ComicBrowserMixin seeds page names
+from its existing thumbnail worker for legacy-state resolution and reorder-safe
+labels; painting never opens the archive. Badge state is private and follows the
+existing resolved-path identity and remember_position_bool setting.

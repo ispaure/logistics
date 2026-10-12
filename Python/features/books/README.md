@@ -84,3 +84,10 @@ Settings: font family/size in shared Styling, other appearance fields in Reader.
 Store notifications reload open readers; explicit styling reload updates Markdown
 fonts too. Reader Automatic fonts copy QApplication's font instead of constructing
 QFont with an empty family, which can resolve to emoji metrics on macOS.
+
+Reading state additionally saves zero-based chapter and total reading-order
+chapter counts for cheap thumbnail badges. EPUBFile seeds its spine from the
+existing thumbnail worker so legacy path-only state can be resolved without
+opening archives while painting. The generic commonUtils badge hook reads only
+bounded private reading state, honours remember_position_bool, and omits unread
+or malformed records.

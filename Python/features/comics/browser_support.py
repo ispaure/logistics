@@ -37,6 +37,14 @@ class ComicBrowserMixin:
     def browser_thumbnail(self, size):
         from .pages import ComicPages
         try:
-            return ComicPages(self.path).cover(size)
+            pages = ComicPages(self.path)
+            self._reading_pages = tuple(pages.pages)
+            return pages.cover(size)
         except ArchivePasswordError:
             return locked_preview(size)
+
+    def browser_thumbnail_badge(self):
+        from .reading_state import ReadingState, remember_position
+        if not remember_position():
+            return ''
+        return ReadingState(self.path).badge(getattr(self, '_reading_pages', None))

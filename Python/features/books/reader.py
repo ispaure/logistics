@@ -470,7 +470,8 @@ class BooksPage(Bookmarks, qt.QWidget):
         if not self._state or not self.book or not self._settings['remember']:
             return
         try:
-            self._state.save(dict(path=self._path, position=self._position(), location=self.text.location(), bookmarks=self._bookmarks))
+            self._state.save(dict(path=self._path, position=self._position(), location=self.text.location(), bookmarks=self._bookmarks,
+                                  chapter=self._current, chapters=len(self.book.spine)))
         except (OSError, ValueError) as error:
             self.status.setText(f'Reading position could not be saved: {error}')
 

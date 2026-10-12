@@ -155,3 +155,9 @@ an oversized chapter/image can therefore fail even when the overall book is smal
 These are uncompressed-content limits, not the `.epub` file's size on disk. Corrupt
 or protected content can also prevent loading. Keep the original and use another
 reader to investigate; Logistics does not repair or remove protection from EPUBs.
+
+File Browser tile covers show your last saved reading-order chapter as a badge,
+for example **Ch 4/12**. Unread books have no badge. It updates as the reader saves
+your position, without changing the EPUB. Chapter numbering matches the reader's
+chapter counter, including front matter in its reading order. Disabling Remember
+Position hides the badge. Existing saved positions work once the cover is loaded.

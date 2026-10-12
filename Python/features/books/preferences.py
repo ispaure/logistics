@@ -53,7 +53,8 @@ class ReadingState:
             if not isinstance(data, dict):
                 return {}
             expected = {'path': str, 'font_family': str, 'theme': str, 'font_size': int,
-                        'line_spacing': int, 'reading_width': int, 'position': (int, float), 'location': int, 'bookmarks': list}
+                        'line_spacing': int, 'reading_width': int, 'position': (int, float), 'location': int, 'bookmarks': list,
+                        'chapter': int, 'chapters': int}
             return {key: value for key, value in data.items() if key in expected and isinstance(value, expected[key])}
         except (OSError, ValueError):
             return {}
@@ -61,3 +62,14 @@ class ReadingState:
     def save(self, data):
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         atomic_write_json(self.path, data)
+
+    def badge(self, spine=None):
+        state = self.load()
+        total, chapter = state.get('chapters'), state.get('chapter')
+        if spine is not None:
+            if state.get('path') not in spine:
+                return ''
+            total, chapter = len(spine), spine.index(state['path'])
+        if type(total) is not int or type(chapter) is not int or total <= 0 or not 0 <= chapter < total:
+            return ''
+        return f'Ch {chapter + 1}/{total}'
