@@ -36,6 +36,7 @@ class AddonLibraryPage(qt.QWidget):
         self.refresh()
 
     def refresh(self):
+        self.tree.clearSelection()
         try:
             entries = self.library.entries(shared_only=True)
             groups = {}
@@ -59,7 +60,10 @@ class AddonLibraryPage(qt.QWidget):
                     group.addChild(item)
                 group.setExpanded(identity in expanded)
             self.status.setText(f'{len(groups)} addons · {sum(len(items) for items in groups.values())} packages. Versions are listed newest first; each preset chooses its latest compatible version.')
+            if self.library.errors:
+                self.status.setText(self.status.text() + '\nSkipped packages:\n' + '\n'.join(self.library.errors))
         except (OSError, ValueError) as error:
+            self.tree.clear()
             self.status.setText(str(error))
 
     def showEvent(self, event):

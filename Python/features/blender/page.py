@@ -26,6 +26,7 @@ class BlenderPage(qt.QWidget):
         self.releases = []
         self._operation = ''
         self._select_preset = None
+        self._choices_context = None
         self.task = OperationProgress(self)
         self.task.completed.connect(self._finished)
         self.task.completed.connect(lambda *args: self.idle.emit())
@@ -177,6 +178,11 @@ class BlenderPage(qt.QWidget):
         note = qt.QLabel('Choose addons from the library for this preset. Installed shows the current files; Latest compatible shows what the next launch will apply.')
         note.setWordWrap(True)
         selection_layout.addWidget(note)
+        self.catalog_warning = qt.QLabel()
+        self.catalog_warning.setTextFormat(qt.Qt.TextFormat.PlainText)
+        self.catalog_warning.setWordWrap(True)
+        self.catalog_warning.hide()
+        selection_layout.addWidget(self.catalog_warning)
         self.bluehole_group = qt.QGroupBox('Blue Hole')
         bluehole_form = qt.QFormLayout(self.bluehole_group)
         self.bluehole_enabled = qt.QCheckBox('Enable Blue Hole')
@@ -297,7 +303,7 @@ class BlenderPage(qt.QWidget):
         self.copy_button.setEnabled(has_preset and len(self.releases) > 1)
         self.addon_folder.setEnabled(self.table.rowCount() > 0)
         self.add_addon.setEnabled(has_preset)
-        self.apply_button.setEnabled(has_preset)
+        self.apply_button.setEnabled(has_preset and self._choices_context is not None)
         self.bluehole_group.setEnabled(has_preset)
         self.tabs.setEnabled(has_preset)
         self.bluehole_enabled.setEnabled(has_preset)
@@ -309,6 +315,7 @@ class BlenderPage(qt.QWidget):
                                    f'{"Installed" if ready else "Not installed"} · {platform_key()}')
 
     def _preset_changed(self, *_args):
+        self._invalidate_choices()
         try:
             rows = scan_preset(self.manager.preset(self.release, self.preset.currentText())) if (
                 self.release and self.preset.currentText()) else []
@@ -321,6 +328,7 @@ class BlenderPage(qt.QWidget):
                                             if self.preset.currentText() else f'Manage Blender {self.release.version}')
             self.preset_version_label.setText(self.release.version if self.release and self.preset.currentText() else 'Select or add a preset')
             self._mark_selected_preset()
+            self.controls.setEnabled(True)
             self._update_controls()
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
@@ -624,7 +632,14 @@ class BlenderPage(qt.QWidget):
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
 
+    def _invalidate_choices(self):
+        self._choices_context = None
+        self.choices.setRowCount(0)
+        self.apply_button.setEnabled(False)
+        self.bluehole_group.setEnabled(False)
+
     def _show_choices(self):
+        self._invalidate_choices()
         state = {'selected': [], 'installed': {}}
         root = None
         found = {}
@@ -632,7 +647,10 @@ class BlenderPage(qt.QWidget):
             root = self.manager.preset(self.release, self.preset.currentText())
             state = self.library.selection(root)
             found = {item['module']: item for item in scan_preset(root)}
-        entries = self.library.for_preset(root).entries() if root is not None else self.library.entries(shared_only=True)
+        catalog = self.library.for_preset(root) if root is not None else self.library
+        entries = catalog.entries(shared_only=root is None)
+        self.catalog_warning.setText('Some packages were skipped:\n' + '\n'.join(catalog.errors))
+        self.catalog_warning.setVisible(bool(catalog.errors))
         identities = sorted({addon.identity for addon in entries})
         selected = state['selected']
         actual = {('extension:' + row['module'].split('.')[-1] if row['kind'] == 'Extension' else 'legacy:' + row['module']): row for row in found.values()}
@@ -703,8 +721,15 @@ class BlenderPage(qt.QWidget):
             if installed:
                 self.choices.item(row, 2).setToolTip(f"{source_label(installed.get('source', 'Managed'))}\n{installed['path']}\n{installed.get('package_name', '')}")
         self.choices.resizeColumnsToContents()
+        if root is not None:
+            self._choices_context = (self.release.version, self.preset.currentText())
+            self.bluehole_group.setEnabled(True)
+            self.apply_button.setEnabled(True)
 
     def _apply_addons(self):
+        if not self.release or self._choices_context != (self.release.version, self.preset.currentText()):
+            self.status.setText('Refresh this preset before saving its addon selection.')
+            return
         identities = [self.choices.item(row, 0).data(qt.Qt.ItemDataRole.UserRole) for row in range(self.choices.rowCount())
                       if self.choices.item(row, 0).checkState() == qt.Qt.CheckState.Checked]
         release, name = self.release, self.preset.currentText()
