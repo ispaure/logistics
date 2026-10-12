@@ -1,7 +1,7 @@
 """Feature-owned private data, atomic publication and optimistic revisions."""
 from copy import deepcopy
 from collections import Counter
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import json
 import os
 from pathlib import Path
@@ -130,7 +130,7 @@ class Store:
                     records.append(data)
             except (OSError, ValueError, UnicodeError) as error:
                 warnings.append(f'{path.relative_to(self.folder)}: {error}')
-        return sorted(records, key=lambda d: d['updated'], reverse=True), warnings
+        return sorted(records, key=lambda d: (d.get('pinned', False), d['updated']), reverse=True), warnings
 
     @contextmanager
     def _publication(self):
@@ -195,6 +195,33 @@ class Store:
         finally:
             if owned_lease is not None:
                 owned_lease.unlock()
+
+    def move_folder(self, name, parent, *, active=None, lease=None):
+        """Move a whole subtree atomically, retaining IDs and refusing active peers."""
+        from commonUtils.filesystem.rename import rename_path
+        name, parent = folder_name(name), folder_name(parent)
+        if not name or parent == name or parent.startswith(name + '/'):
+            raise ValueError('A folder cannot be moved into itself or a descendant.')
+        destination = '/'.join(part for part in (parent, name.rsplit('/', 1)[-1]) if part)
+        if destination == name:
+            return name
+        with self._publication(), ExitStack() as locks:
+            source = self.folder_path(name)
+            target = self.folder_path(parent) / source.name
+            if not source.is_dir() or not target.parent.is_dir():
+                raise ValueError('The source or destination folder no longer exists.')
+            if target.exists() or target.is_symlink():
+                raise ValueError('A folder with that name already exists at the destination.')
+            for path in self._paths():
+                if source in path.parents:
+                    if active is not None and path.stem == active['id'] and lease is not None and lease.isLocked():
+                        continue
+                    lock = self.lease(path.stem)
+                    locks.callback(lock.unlock)
+            rename_path(source, target)
+            if active is not None and (active.get('folder') == name or active.get('folder', '').startswith(name + '/')):
+                active['folder'] = destination + active['folder'][len(name):]
+        return destination
 
     def delete(self, data):
         with self._publication():

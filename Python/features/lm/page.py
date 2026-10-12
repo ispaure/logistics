@@ -8,8 +8,9 @@ from commonUtils.persistence import atomic_write_bytes, atomic_write_json
 from .domain import build_request, conversation, defaults, message, validate_settings
 from .storage import Store, export_markdown
 from .transport import Client
-from .icons import chat_icon
+from .icons import chat_icon, action_button
 from .conversation_view import ConversationView
+from .conversation_tree import ConversationTree
 from commonUtils.ui.appearance.status_line import StatusLine
 
 
@@ -132,22 +133,25 @@ class LMPage(qt.QWidget):
         layout.setSpacing(0)
         splitter = qt.QSplitter()
         layout.addWidget(splitter, 1)
-        left = qt.QWidget()
+        left = self.sidebar = qt.QWidget()
         side = qt.QVBoxLayout(left)
         side.setContentsMargins(8, 8, 8, 8)
         side.setSpacing(10)
         self.search = qt.QLineEdit()
         self.search.setPlaceholderText('Search conversations…')
         side.addWidget(self.search)
-        self.list = qt.QTreeWidget()
+        self.list = ConversationTree()
+        self.list.move_requested.connect(self.move_tree_item)
+        self.list.setContextMenuPolicy(qt.Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list.customContextMenuRequested.connect(self.conversation_menu)
         self.list.setHeaderHidden(True)
         self.list.setAccessibleName('Conversation folders and conversations')
         self.list.setIndentation(16)
         side.addWidget(self.list, 1)
         row = qt.QHBoxLayout()
-        self.new_button = self.icon_button('New conversation', self.new_conversation, 'SP_FileIcon', row)
-        self.folder_button = self.icon_button('New folder…', self.new_folder, 'SP_FileDialogNewFolder', row)
-        self.refresh_button = self.icon_button('Refresh conversations', self.refresh, 'SP_BrowserReload', row)
+        self.new_button = self.icon_button('New conversation', self.new_conversation, 'new', row)
+        self.folder_button = self.icon_button('New folder…', self.new_folder, 'folder', row)
+        self.refresh_button = self.icon_button('Refresh conversations', self.refresh, 'refresh', row)
         row.addStretch()
         self.more_button = qt.QToolButton()
         self.more_button.setIcon(chat_icon('more'))
@@ -160,6 +164,8 @@ class LMPage(qt.QWidget):
         self.rename_button = menu.addAction('Rename conversation…', self.rename)
         self.move_button = menu.addAction('Move conversation…', self.move_conversation)
         self.export_button = menu.addAction('Export conversation…', self.export)
+        self.pin_action = menu.addAction('Pin conversation', self.toggle_pin)
+        self.fork_action = menu.addAction('Fork conversation', self.fork_conversation)
         menu.addSeparator()
         self.delete_button = menu.addAction('Delete conversation…', self.delete)
         self.more_button.setMenu(menu)
@@ -174,12 +180,13 @@ class LMPage(qt.QWidget):
         body.setSpacing(6)
         self.connection_box = qt.QWidget()
         connection = qt.QFormLayout(self.connection_box)
+        connection.setContentsMargins(0, 0, 0, 0)
         row = qt.QHBoxLayout()
         self.profile = qt.QComboBox()
         self.profile.setMinimumContentsLength(12)
         self.profile.setSizeAdjustPolicy(qt.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         row.addWidget(self.profile, 1)
-        self.profiles_button = self.icon_button('Manage server profiles', self.edit_profiles, 'SP_FileDialogDetailedView', row)
+        self.profiles_button = self.icon_button('Manage server profiles', self.edit_profiles, 'settings', row)
         connection.addRow('Server', row)
         self.token = qt.QLineEdit()
         self.token.setEchoMode(qt.QLineEdit.EchoMode.Password)
@@ -194,7 +201,7 @@ class LMPage(qt.QWidget):
         self.model.setInsertPolicy(qt.QComboBox.InsertPolicy.NoInsert)
         self.model.setToolTip('Refresh models or type the exact model ID from your server.')
         row.addWidget(self.model, 1)
-        self.test_button = self.icon_button('Test connection / Refresh models', self.refresh_models, 'SP_BrowserReload', row)
+        self.test_button = self.icon_button('Test connection / Refresh models', self.refresh_models, 'refresh', row)
         connection.addRow('Model', row)
         body.addWidget(self.connection_box)
         options = qt.QHBoxLayout()
@@ -277,7 +284,17 @@ class LMPage(qt.QWidget):
         self.status = StatusLine()
         self.status.setWordWrap(True)
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
-        layout.addWidget(self.status)
+        self.status.setContentsMargins(0, 0, 0, 0)
+        self.status_bar = qt.QStatusBar()
+        self.status_bar.setSizeGripEnabled(False)
+        content = qt.QWidget(self.status_bar)
+        footer = qt.QHBoxLayout(content)
+        footer.setContentsMargins(10, 8, 10, 8)
+        footer.setSpacing(8)
+        footer.addWidget(self.status, 1)
+        self.status_bar.addWidget(content, 1)
+        self.status_bar.setStyleSheet('QStatusBar::item { border: none; }')
+        layout.addWidget(self.status_bar)
         self.save_error = qt.QLabel()
         self.save_error.setWordWrap(True)
         self.save_error.setTextFormat(qt.Qt.TextFormat.PlainText)
@@ -316,6 +333,7 @@ class LMPage(qt.QWidget):
         self.styling.bind(self.transcript, 'reading')
         self.styling.bind(self.composer, 'reading')
         self.styling.changed.connect(self.render)
+        self.create_menus(layout)
         self.apply_chrome()
         self.styling.changed.connect(self.apply_chrome)
         self.load_profiles()
@@ -325,6 +343,111 @@ class LMPage(qt.QWidget):
             self.list.setCurrentItem(first)
         self.update_controls()
 
+    def create_menus(self, layout):
+        self.menu_bar = qt.QMenuBar()
+        self.menu_bar.setNativeMenuBar(False)
+        layout.insertWidget(0, self.menu_bar)
+        file = self.menu_bar.addMenu('File')
+        self.idle_menu_actions = [file.addAction('New conversation', self.new_conversation),
+                                  file.addAction('New folder…', self.new_folder)]
+        file.addSeparator()
+        for action in (self.rename_button, self.move_button, self.export_button, self.delete_button):
+            file.addAction(action)
+        edit = self.menu_bar.addMenu('Edit')
+        for label, callback in [('Undo draft', self.composer.undo), ('Redo draft', self.composer.redo),
+                                ('Cut draft selection', self.composer.cut), ('Copy draft selection', self.composer.copy),
+                                ('Paste into draft', self.composer.paste), ('Select draft', self.composer.selectAll)]:
+            edit.addAction(label, callback)
+        chat = self.menu_bar.addMenu('Conversation')
+        chat.addAction(self.pin_action)
+        chat.addAction(self.fork_action)
+        view = self.menu_bar.addMenu('View')
+        self.idle_menu_actions.append(view.addAction('Refresh conversations', self.refresh))
+        view.addAction('Find conversations', self.search.setFocus)
+        sidebar = view.addAction('Conversation sidebar')
+        sidebar.setCheckable(True)
+        sidebar.setChecked(True)
+        sidebar.toggled.connect(self.sidebar.setVisible)
+        generation = view.addAction('Generation settings')
+        generation.setCheckable(True)
+        generation.toggled.connect(self.settings_toggle.setChecked)
+        self.settings_toggle.toggled.connect(generation.setChecked)
+        server = self.menu_bar.addMenu('Server')
+        self.idle_menu_actions.extend([server.addAction('Manage profiles…', self.edit_profiles),
+                                      server.addAction('Test connection / Refresh models', self.refresh_models)])
+
+    def conversation_menu(self, point):
+        item = self.list.itemAt(point)
+        if item is None or self.client.busy:
+            return
+        self.list.setCurrentItem(item)
+        key = item.data(0, qt.Qt.ItemDataRole.UserRole)
+        menu = qt.QMenu(self.list)
+        if key:
+            if self.data is None or self.data['id'] != key:
+                return  # Opening may have been refused by a lease or save conflict.
+            for action in (self.pin_action, self.fork_action, self.rename_button, self.move_button,
+                           self.export_button, self.delete_button):
+                menu.addAction(action)
+        else:
+            menu.addAction('New conversation here', self.new_conversation)
+            menu.addAction('New folder…', self.new_folder)
+        menu.exec(self.list.viewport().mapToGlobal(point))
+
+    def toggle_pin(self):
+        if self.client.busy or self.data is None or self.lease is None or not self.persist():
+            return
+        self.data['pinned'] = not self.data.get('pinned', False)
+        self.dirty = True
+        if self.persist():
+            self.refresh(reveal_current=True)
+        self.update_controls()
+
+    def fork_conversation(self):
+        if self.client.busy or self.data is None or self.lease is None or not self.persist():
+            return
+        from .domain import now
+        fork = deepcopy(self.data)
+        fork.update(id=uuid4().hex, revision=0, title=(fork['title'] + ' (fork)')[:200],
+                    pinned=False, created=now(), updated=now())
+        for entry in fork['messages']:
+            entry['id'] = uuid4().hex
+        lease = None
+        try:
+            lease = self.store.lease(fork['id'])
+            self.store.save(fork)
+        except (OSError, ValueError) as error:
+            if lease is not None:
+                lease.unlock()
+            self.status.setText(str(error))
+            return
+        self.release_lease()
+        self.data, self.lease = fork, lease
+        self._lease_holder[0] = lease
+        self.restore()
+        self.search.clear()
+        self.refresh(reveal_current=True)
+        self.status.setText('Conversation forked. The original is unchanged.')
+
+    def move_tree_item(self, source, destination):
+        if self.client.busy or not self.persist():
+            return
+        key, folder = source
+        try:
+            if key:
+                active = self.data is not None and self.data['id'] == key
+                data = self.data if active else self.store.load(key)
+                self.store.move(data, destination, lease=self.lease if active else None)
+            else:
+                moved_folder = self.store.move_folder(folder, destination, active=self.data, lease=self.lease)
+        except (OSError, ValueError) as error:
+            self.status.setText(str(error))
+            return
+        self.refresh(reveal_current=True)
+        if not key and moved_folder in self.folder_items:
+            self.list.setCurrentItem(self.folder_items[moved_folder])
+        self.status.setText('Moved to ' + (destination or '/') + '.')
+
     @staticmethod
     def button(title, callback, layout):
         button = qt.QPushButton(title)
@@ -333,16 +456,7 @@ class LMPage(qt.QWidget):
         return button
 
     def icon_button(self, title, callback, icon, layout):
-        button = qt.QToolButton()
-        button.setAutoRaise(True)
-        glyph = {'SP_FileIcon': 'new', 'SP_FileDialogNewFolder': 'folder',
-                 'SP_BrowserReload': 'refresh', 'SP_FileDialogDetailedView': 'settings',
-                 'SP_FileDialogContentsView': 'copy'}[icon]
-        button.setIcon(chat_icon(glyph))
-        button.setIconSize(qt.QSize(20, 20))
-        button.setToolTip(title)
-        button.setAccessibleName(title)
-        button.clicked.connect(callback)
+        button = action_button(title, callback, icon)
         layout.addWidget(button)
         return button
 
@@ -442,7 +556,7 @@ class LMPage(qt.QWidget):
             item.setIcon(0, self.style().standardIcon(qt.QStyle.StandardPixmap.SP_DirIcon))
             self.folder_items[path] = item
         for data in records:
-            item = qt.QTreeWidgetItem(self.folder_items[data['folder']], [data['title']])
+            item = qt.QTreeWidgetItem(self.folder_items[data['folder']], [('★ ' if data.get('pinned') else '') + data['title']])
             item.setData(0, qt.Qt.ItemDataRole.UserRole, data['id'])
             item.setData(0, qt.Qt.ItemDataRole.UserRole + 1, data['folder'])
             if data['id'] == current:
@@ -624,7 +738,7 @@ class LMPage(qt.QWidget):
         self.save_error.hide()
         for item in self.tree_items():
             if item.data(0, qt.Qt.ItemDataRole.UserRole) == self.data['id']:
-                item.setText(0, self.data['title'])
+                item.setText(0, ('★ ' if self.data.get('pinned') else '') + self.data['title'])
         return True
 
     def new_conversation(self):
@@ -830,6 +944,12 @@ class LMPage(qt.QWidget):
         self.move_button.setEnabled(editable and not busy)
         self.move_button.setToolTip('Move the open conversation to another folder')
         self.export_button.setEnabled(self.data is not None)
+        self.pin_action.setEnabled(editable and not busy)
+        self.pin_action.setText('Unpin conversation' if self.data and self.data.get('pinned') else 'Pin conversation')
+        self.fork_action.setEnabled(editable and not busy)
+        for action in getattr(self, 'idle_menu_actions', ()):
+            action.setEnabled(not busy)
+
 
     def rename(self):
         if self.client.busy or not self.data:
@@ -881,12 +1001,6 @@ class LMPage(qt.QWidget):
             self.status.setText(f'Export failed: {error}')
             return
         self.status.setText(f'Conversation exported to {path}')
-
-    def copy_last(self):
-        if self.data:
-            entry = next((m for m in reversed(self.data['messages']) if m['role'] == 'assistant'), None)
-            if entry:
-                qt.QApplication.clipboard().setText(entry['content'])
 
     def can_close(self):
         if self.discard_approved or self.persist():

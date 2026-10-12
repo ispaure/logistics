@@ -48,3 +48,18 @@ See [implementation contracts](../../Python/features/lm/README.md) and
 [user behavior](../../Python/features/lm/user_docs/README.md). Future agent/tool
 integration would require a separate execution and permission contract; current
 transport rejects tool calls and provides no filesystem/shell tools.
+
+## Organization and controls
+
+Conversation pinning is an optional boolean in the existing version-1 record;
+legacy records default to unpinned. Forks get a new conversation ID and fresh
+message IDs, while preserving message timestamps and text. Tree drops request
+page-owned storage operations instead of allowing Qt to rearrange rows alone.
+Folder moves hold the publication lock and all descendant conversation leases,
+then perform one no-overwrite rename. Actual file placement remains authoritative
+for folder names, so moving a subtree does not rewrite each JSON file.
+
+Message timestamps render locally from the existing `created` field. The LM footer
+uses QStatusBar with the browser workspace's 10/8/10/8 content margins and a
+zero-margin StatusLine. Chat action buttons share one accessible construction
+helper. Context menus and header menus reuse the same actions and enabled state.
