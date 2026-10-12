@@ -132,6 +132,11 @@ class PublishTests(unittest.TestCase):
                 publishing.publish('owner/repo', tag, self.archive)
             self.assertIn('--prerelease', gh.call_args.args[0])
 
+    def test_numbered_main_tags_publish_as_stable(self):
+        with patch('publish_release.subprocess.run', side_effect=[self.response(404), None]) as gh:
+            publishing.publish('owner/repo', 'v0.1.0-main.01', self.archive)
+        self.assertNotIn('--prerelease', gh.call_args.args[0])
+
     def test_existing_release_uploads_without_clobber(self):
         with patch('publish_release.subprocess.run', side_effect=[self.response(), None]) as gh:
             publishing.publish('owner/repo', 'v1.0', self.archive)

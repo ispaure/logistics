@@ -66,7 +66,7 @@ checkout. Generated ZIPs belong outside the checkout and are never committed.
 
 ## In-app update channels
 
-Use `v1.0.0` for main, `v1.0.0-beta.1` for beta, or `v1.0.0-alpha.1` for alpha.
+Use `v0.1.0-main.01` for main (legacy `v1.0.0` is also recognized), `v1.0.0-beta.1` for beta, or `v1.0.0-alpha.1` for alpha.
 The publisher marks numeric alpha/beta tags as prereleases. The updater selects
 the highest numeric published version in the selected channel with a GitHub
 SHA-256-labelled `release.zip`; drafts and unclassified suffixes are excluded.
@@ -79,3 +79,8 @@ updates require it and refuse locally changed managed files. Old packages withou
 this marker require a fresh extraction before in-app updates. Git installations
 use the release commit and its pinned initialized submodules, leaving detached
 HEADs after success. Installed private/ignored files remain protected in both modes.
+
+Main sequence numbers sort numerically: `.10` follows `.09`. Existing clients
+that predate explicit `-main.N` support must first install an alpha containing
+the updated updater, or extract a new main release manually. Legacy numeric
+releases remain recognized by the updated client.
