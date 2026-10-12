@@ -335,6 +335,21 @@ class AddonLibrary:
         environments = manager._contained(root, 'addon-data', 'bluehole')
         with TemporaryDirectory(prefix='.addon-update-', dir=root.parent) as temp:
             backup = Path(temp)
+            packages = backup / 'packages'
+            packages.mkdir()
+            snapshots = {}
+            for index, addon in enumerate(resolved):
+                if addon.identity in retained and not (addon.identity == bluehole_source.IDENTITY and bluehole['deluxe']):
+                    snapshots[addon.identity] = addon
+                    continue
+                staged_package = packages / f'{index}.zip'
+                with addon.package.open('rb') as source, staged_package.open('wb') as output:
+                    copy_stream(source, output, cancelled=cancelled)
+                if inspect_package(staged_package).digest != addon.digest:
+                    raise ValueError(f'{addon.name} ZIP changed before installation; refresh and try again')
+                snapshots[addon.identity] = replace(addon, package=staged_package)
+            resolved = [snapshots[addon.identity] for addon in resolved]
+            payloads = [(snapshots[addon.identity], relative) for addon, relative in payloads]
             folders = ('config', 'scripts', 'extensions', 'addon-data')
             existing = {folder for folder in folders if (root / folder).exists()}
             for folder in folders:

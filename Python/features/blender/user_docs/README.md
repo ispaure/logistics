@@ -268,3 +268,5 @@ Launching leaves unchanged addon packages in place, preserving files they create
 Disabling Blue Hole keeps your custom environments in the preset’s separate `addon-data/bluehole` folder. Re-enabling restores them; default remains supplied by Blue Hole. Copying a preset includes this data, and deleting the preset removes it.
 
 Broken or conflicting ZIPs are skipped and listed as warnings in the library and preset views. Healthy packages stay available. If a preset cannot refresh, saving its addon choices is blocked until a successful refresh.
+
+Installation uses a verified private copy of each package it replaces. If a ZIP changes during a sync before it can be copied, installation stops safely and asks you to refresh and try again.
