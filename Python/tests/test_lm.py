@@ -130,6 +130,20 @@ class StorageTests(unittest.TestCase):
             self.assertTrue(warnings)
             self.assertEqual(path.read_text(), content)
 
+    def test_malformed_structured_status_is_reported_without_crashing(self):
+        data = conversation(settings())
+        data['messages'] = [message('assistant', 'Bad status')]
+        self.store.folder.mkdir(parents=True)
+        path = self.store.path(data['id'])
+        for malformed in ([], {}, None):
+            data['messages'][0]['status'] = malformed
+            source = json.dumps(data)
+            path.write_text(source)
+            records, warnings = self.store.list()
+            self.assertEqual(records, [])
+            self.assertTrue(warnings)
+            self.assertEqual(path.read_text(), source)
+
     def test_atomic_failure_keeps_old_file_and_revision(self):
         data = conversation(settings())
         self.store.save(data)

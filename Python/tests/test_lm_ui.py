@@ -52,6 +52,10 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         event = json.dumps({'choices': [{'delta': {'content': 'Bonjour 🌍'}, 'finish_reason': None}]}, ensure_ascii=False)
         try:
+            if self.server.mode == 'malformed_after_text':
+                self.wfile.write(('data: ' + event + '\n\ndata: {invalid}\n\n').encode())
+                self.wfile.flush()
+                return
             self.wfile.write(('data: ' + event + '\r\n\r\n').encode())
             self.wfile.flush()
             if self.server.mode == 'slow':
@@ -463,3 +467,114 @@ class LMUITests(QtTestCase):
         self.page.render()
         self.app.processEvents()
         self.assertEqual(bar.value(), 0)
+
+    def test_send_preserves_code_indentation_and_leading_trailing_lines(self):
+        source = '\n    print("Indented code")\n\n'
+        self.chat(source)
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(self.server.requests[-1]['messages'][-1]['content'], source)
+        self.assertEqual(self.page.data['messages'][0]['content'], source)
+
+    def test_next_draft_can_be_written_and_saved_while_reply_streams(self):
+        self.server.mode = 'slow'
+        self.chat()
+        self.until(lambda: bool(self.page.data['messages'][-1]['content']))
+        self.assertTrue(self.page.composer.isEnabled())
+        self.page.composer.setPlainText('My next question')
+        self.assertTrue(self.page.persist())
+        self.assertEqual(self.store.load(self.page.data['id'])['draft'], 'My next question')
+        QTest.keyClick(self.page.composer, qt.Qt.Key.Key_Return)
+        self.assertEqual(len(self.server.requests), 1)
+        self.page.client.cancel()
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(self.page.composer.toPlainText(), 'My next question')
+
+    def test_valid_text_before_bad_stream_record_is_kept(self):
+        self.server.mode = 'malformed_after_text'
+        self.chat()
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(self.page.data['messages'][-1]['status'], 'failed')
+        self.assertEqual(self.page.data['messages'][-1]['content'], 'Bonjour 🌍')
+        saved = self.store.load(self.page.data['id'])
+        self.assertEqual(saved['messages'][-1]['content'], 'Bonjour 🌍')
+
+    def test_refresh_keeps_folder_selection_and_collapsed_branches(self):
+        self.page.new_conversation()
+        self.store.create_folder('Work/Nested')
+        self.page.refresh()
+        self.page.folder_items['Work'].setExpanded(False)
+        self.page.list.setCurrentItem(self.page.folder_items['Work'])
+        self.page.refresh()
+        self.assertEqual(self.page.selected_folder(), 'Work')
+        self.assertFalse(self.page.folder_items['Work'].isExpanded())
+        self.page.new_conversation()
+        self.assertEqual(self.page.data['folder'], 'Work')
+        self.assertTrue(self.page.folder_items['Work'].isExpanded())
+
+    def test_new_conversation_clears_filter_and_is_visible(self):
+        self.page.search.setText('No matching conversation')
+        self.page.refresh()
+        self.page.new_conversation()
+        self.assertEqual(self.page.search.text(), '')
+        self.assertEqual(self.page.list.currentItem().data(0, qt.Qt.ItemDataRole.UserRole), self.page.data['id'])
+
+    def test_reopened_failed_response_shows_saved_error(self):
+        data = conversation(SETTINGS, 'fixture', 'fixture-model')
+        entry = message('assistant', 'Partial text', 'failed', error='Connection ended before completion.')
+        data['messages'] = [entry]
+        self.store.save(data)
+        self.page.open_conversation(data['id'])
+        bubble = self.page.transcript.bubbles[entry['id']]
+        self.assertEqual(bubble.error.text(), entry['error'])
+        self.assertFalse(bubble.error.isHidden())
+
+    def test_each_bubble_copies_exact_source_including_whitespace(self):
+        self.chat('    print("Keep indentation")\n')
+        self.until(lambda: not self.page.client.busy)
+        entry = self.page.data['messages'][0]
+        self.page.transcript.bubbles[entry['id']].copy_button.click()
+        self.assertEqual(self.app.clipboard().text(), entry['content'])
+
+    def test_reply_footer_actions_and_compact_composer(self):
+        self.chat('First question')
+        self.until(lambda: not self.page.client.busy)
+        first = self.page.data['messages'][-1]['id']
+        self.chat('Second question')
+        self.until(lambda: not self.page.client.busy)
+        last = self.page.data['messages'][-1]['id']
+        self.page.resize(900, 650)
+        self.page.show()
+        self.app.processEvents()
+        earlier = self.page.transcript.bubbles[first]
+        latest = self.page.transcript.bubbles[last]
+        self.assertTrue(earlier.retry_button.isHidden())
+        self.assertFalse(latest.retry_button.isHidden())
+        self.assertGreaterEqual(latest.copy_button.y(), latest.browser.geometry().bottom())
+        self.assertIs(self.page.send_button.parent(), self.page.composer_frame)
+        self.assertLess(self.page.send_button.y(), self.page.composer.geometry().bottom())
+        self.assertGreater(self.page.send_button.geometry().bottom(), self.page.composer.y())
+        self.assertTrue(self.page.save_error.isHidden())
+        self.assertEqual(self.page.disclaimer.text(), 'Language Models can make mistakes. Check important info.')
+        latest.copy_button.click()
+        self.assertEqual(self.app.clipboard().text(), self.page.data['messages'][-1]['content'])
+        latest.retry_button.click()
+        self.assertTrue(self.page.client.busy)
+        self.assertFalse(latest.retry_button.isEnabled())
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(self.server.requests[-1]['messages'][-1]['content'], 'Second question')
+
+    def test_switching_conversations_returns_to_latest_messages(self):
+        self.page.new_conversation()
+        self.page.resize(900, 600)
+        self.page.show()
+        self.page.data['messages'] = [message('assistant', 'Long message\n\n' * 10) for _ in range(10)]
+        self.page.render()
+        bar = self.page.transcript.verticalScrollBar()
+        self.until(lambda: bar.maximum() > 0)
+        bar.setValue(0)
+        data = conversation(SETTINGS, 'fixture', 'fixture-model')
+        data['messages'] = [message('assistant', 'Other message\n\n' * 10) for _ in range(10)]
+        self.store.save(data)
+        self.page.open_conversation(data['id'])
+        self.until(lambda: bar.maximum() > 0 and bar.value() == bar.maximum())
+        self.assertEqual(self.page.transcript.key, data['id'])
