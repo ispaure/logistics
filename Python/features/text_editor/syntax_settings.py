@@ -20,10 +20,12 @@ class SyntaxSettings:
         self._preference_timer.setInterval(300)
         self._preference_timer.timeout.connect(self._save_preferences)
         if not self.preferences.custom:
-            self._settings_timer = qt.QTimer(self)
-            self._settings_timer.setInterval(500)
-            self._settings_timer.timeout.connect(self._reload_system_options)
-            self._settings_timer.start()
+            from commonUtils.configuration.layered import shared_settings
+            from commonUtils.ui.settings.monitor import subscribe_settings
+            style = shared_settings()
+            store = self.preferences.store
+            self._settings_subscription = subscribe_settings(
+                (store.defaults, store.personal, style.defaults, style.personal), self._reload_system_options, self)
         geometry = self.options.get("geometry_str", "")
         if geometry:
             try:

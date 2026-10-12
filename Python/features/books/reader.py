@@ -39,10 +39,10 @@ class BooksPage(Bookmarks, qt.QWidget):
         self._set_busy(False)
         from commonUtils.ui.appearance.styling import styling
         styling().changed.connect(self._settings_changed)
-        self._settings_timer = qt.QTimer(self)
-        self._settings_timer.setInterval(500)
-        self._settings_timer.timeout.connect(self._check_settings)
-        self._settings_timer.start()
+        from commonUtils.ui.settings.monitor import subscribe_settings
+        from features.settings import settings_store
+        store = settings_store(Path(__file__).with_name('config.ini'))
+        self._settings_subscription = subscribe_settings((store.defaults, store.personal), self._check_settings, self)
         if initial_path:
             self.open_book(initial_path)
 
