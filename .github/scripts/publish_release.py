@@ -18,8 +18,11 @@ def publish(repo, tag, archive):
         # Only a confirmed HTTP 404 means absent. Authentication/network errors abort.
         if not re.search(r'^HTTP/\S+ 404\b', result.stdout, re.MULTILINE):
             raise RuntimeError(f'Cannot check existing release: {result.stderr}')
-        subprocess.run(['gh', 'release', 'create', tag, str(archive), '--repo', repo,
-                        '--verify-tag', '--generate-notes'], check=True)
+        command = ['gh', 'release', 'create', tag, str(archive), '--repo', repo,
+                   '--verify-tag', '--generate-notes']
+        if re.fullmatch(r'v\d+(?:\.\d+){1,2}-(alpha|beta)(?:[.-]\d+)?', tag):
+            command.append('--prerelease')
+        subprocess.run(command, check=True)
         return
     _, body = result.stdout.split('\r\n\r\n' if '\r\n\r\n' in result.stdout else '\n\n', 1)
     release = json.loads(body)

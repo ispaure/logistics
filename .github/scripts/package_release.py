@@ -1,5 +1,7 @@
 """Package tracked source and pinned recursive submodules without Git metadata."""
 import argparse
+import hashlib
+import json
 import os
 from pathlib import Path, PurePosixPath
 import stat
@@ -29,7 +31,8 @@ def included(name):
             and path.name not in {'.DS_Store', 'Thumbs.db', 'Desktop.ini', '.coverage', 'release.zip'}
             and not path.name.startswith('._')
             and path.suffix.lower() not in {'.pyc', '.pyo'}
-            and path.parts[0] not in {'Temp', 'temp'})
+            and path.parts[0] not in {'Temp', 'temp', 'Software', 'Credentials', 'RemoteCredentials', 'Addons', 'pyCharmProjects'}
+            and not any(part == '.env' or part.startswith('.env.') for part in path.parts))
 
 
 def tracked_files(root):
@@ -45,11 +48,14 @@ def tracked_files(root):
 
 def package(root, output, names=None, required=REQUIRED):
     root, output = Path(root).resolve(), Path(output).resolve()
+    explicit_names = names is not None
     names = [name for name in (tracked_files(root) if names is None else names) if included(name)]
     missing = required.difference(names)
     if missing:
         raise RuntimeError(f'Missing required release files: {sorted(missing)}')
     output.parent.mkdir(parents=True, exist_ok=True)
+    revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip() if not explicit_names else 'fixture'
+    manifest = {'format': 1, 'revision': revision, 'files': {}}
     with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         for name in names:
             source = root / name
@@ -62,8 +68,10 @@ def package(root, output, names=None, required=REQUIRED):
                 archive.writestr(info, os.fsencode(os.readlink(source)))
             elif source.is_file():
                 archive.write(source, target)
+                manifest['files'][name] = hashlib.sha256(source.read_bytes()).hexdigest()
             else:
                 raise RuntimeError(f'Tracked release file is unavailable: {name}')
+        archive.writestr('Logistics/.app-install.json', json.dumps(manifest, indent=2))
     with zipfile.ZipFile(output) as archive:
         if archive.testzip() is not None:
             raise RuntimeError('Release ZIP integrity check failed')

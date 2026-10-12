@@ -12,9 +12,9 @@ class CredentialDiscoveryTests(unittest.TestCase):
     def test_checkout_and_existing_dropbox_packages_are_aggregated(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
-            local = root / 'checkout/RemoteCredentials'
+            local = root / 'checkout/Credentials/rclone'
             dropbox = root / 'dropbox'
-            extra = dropbox / 'Software/GIT/logistics/RemoteCredentials'
+            extra = dropbox / 'Software/GIT/logistics/Credentials/rclone'
             for directory in (local, extra):
                 directory.mkdir(parents=True)
                 (directory / 'package.zip').write_bytes(b'fixture')
@@ -26,18 +26,31 @@ class CredentialDiscoveryTests(unittest.TestCase):
     def test_missing_dropbox_is_not_created_and_same_root_is_deduplicated(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
-            local = root / 'RemoteCredentials'
-            local.mkdir()
+            local = root / 'Credentials/rclone'
+            local.mkdir(parents=True)
             (local / 'package.zip').touch()
             missing = root / 'missing-dropbox'
             with patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(path_logistics_remote_cred=local)), patch.object(marcUtils, 'get_marc_dropbox_root', return_value=missing):
                 self.assertEqual(len(credentials.get_logistics_remote_credentials_zip_lst()), 1)
                 self.assertFalse(missing.exists())
-            extra = root / 'Software/GIT/logistics/RemoteCredentials'
+            extra = root / 'Software/GIT/logistics/Credentials/rclone'
             extra.parent.mkdir(parents=True)
             extra.symlink_to(local, target_is_directory=True)
             with patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(path_logistics_remote_cred=local)), patch.object(marcUtils, 'get_marc_dropbox_root', return_value=root):
                 self.assertEqual(credentials.get_credential_package_directories(), (local,))
+
+    def test_obsolete_and_blender_credential_roots_are_not_discovered(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            local = root / 'checkout/Credentials/rclone'
+            local.mkdir(parents=True)
+            for directory in (root / 'checkout/RemoteCredentials',
+                              root / 'Software/GIT/logistics/RemoteCredentials',
+                              root / 'Software/GIT/logistics/Credentials/blender_addons'):
+                directory.mkdir(parents=True)
+                (directory / 'private.zip').touch()
+            with patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(path_logistics_remote_cred=local)), patch.object(marcUtils, 'get_marc_dropbox_root', return_value=root):
+                self.assertEqual(credentials.get_logistics_remote_credentials_zip_lst(), [])
 
     def test_all_package_locations_use_zip_names_and_find_existing_configs(self):
         from features.rclone import configuration
@@ -48,7 +61,7 @@ class CredentialDiscoveryTests(unittest.TestCase):
             existing = config_dir / 'Personal.account.conf'
             existing.write_text('[fixture]\n')
             packages = [root / location / 'Personal.account.zip'
-                        for location in ('checkout/RemoteCredentials', 'dropbox', 'checkout/RemoteCredentials/nested')]
+                        for location in ('checkout/Credentials/rclone', 'dropbox', 'checkout/Credentials/rclone/nested')]
             with patch.object(configuration, 'get_rclone_config_dir', return_value=config_dir):
                 for package in packages:
                     config_path = configuration.get_credential_config_path(package)

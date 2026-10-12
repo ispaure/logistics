@@ -94,7 +94,9 @@ class BlenderReleaseSettingsTests(QtTestCase):
             self.addCleanup(panel.deleteLater)
             personal = panel.custom['blender_release_overrides']
             default = panel.custom['blender_release_defaults']
-            self.assertIsInstance(personal, BlenderReleaseSettings)
+            from features.blender.settings import BlenderSettings
+            self.assertIsInstance(personal, BlenderSettings)
+            self.assertIsInstance(personal.versions, BlenderReleaseSettings)
             self.assertEqual(personal.scope, 'personal')
             self.assertEqual(default.scope, 'application')
             self.assertEqual(panel.configs, {})

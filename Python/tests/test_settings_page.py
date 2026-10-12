@@ -98,9 +98,9 @@ class SettingsPageTests(QtTestCase):
                         self.assertEqual(page.scope_selector.count(), 1)
                         self.assertEqual(page.scope_selector.findData('application'), -1)
                         page.show_category('configuration')
-                        self.assertEqual(page.panels['configuration'].scope, 'personal')
-                        self.assertEqual(page.panels['configuration'].location.text(),
-                                         str(page.panels['configuration'].stack.currentWidget().store.personal))
+                        self.assertEqual(page.panels['configuration'].general.scope, 'personal')
+                        self.assertEqual(page.panels['configuration'].general.location.text(),
+                                         str(page.panels['configuration'].general.stack.currentWidget().store.personal))
 
     def test_settings_sidebar_tracks_interface_font(self):
         from commonUtils.ui.appearance.styling import styling

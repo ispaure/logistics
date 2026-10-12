@@ -10,7 +10,7 @@ Downloader uses it optionally. See the [user guide](user_docs/README.md) for con
 
 ## Credential contract
 
-Loading `RemoteCredentials/Personal.zip` creates `~/.config/rclone/Personal.conf`
+Loading `Credentials/rclone/Personal.zip` creates `~/.config/rclone/Personal.conf`
 without changing the ZIP. Entries are `.txt` files starting with a rclone section
 header such as `[Media]`, followed by configuration lines. Removing a loaded
 credential deletes only its `.conf`; Clear All deletes every directly contained

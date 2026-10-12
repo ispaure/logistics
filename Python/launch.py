@@ -29,9 +29,14 @@ def main() -> int:
         log(Severity.DEBUG, 'PySide6', 'Display Main UI Window')
         main_window = MainWindow()
         main_window.display_ui()
-        return app.exec()
+        main_window.start_updates()
+        exit_code = app.exec()
     finally:
         indexing.stop()
+    if main_window.pending_update is not None:
+        from services.updates import launch_helper
+        launch_helper(main_window.pending_update)
+    return exit_code
 
 
 

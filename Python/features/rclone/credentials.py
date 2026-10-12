@@ -48,7 +48,7 @@ def get_credential_package_directories() -> tuple[Path, ...]:
     """
     from commonUtils.runtime.helpers import get_marc_dropbox_root
     local = config.LogisticsConfig().path_logistics_remote_cred
-    dropbox = get_marc_dropbox_root() / 'Software/GIT/logistics/RemoteCredentials'
+    dropbox = get_marc_dropbox_root() / 'Software/GIT/logistics/Credentials/rclone'
     roots = [local]
     if dropbox.is_dir() and dropbox.resolve() != local.resolve():
         roots.append(dropbox)

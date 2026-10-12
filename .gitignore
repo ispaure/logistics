@@ -2,6 +2,8 @@
 # LOGISTICS LOCAL / PRIVATE RESOURCES
 
 /Software/
+/Addons/
+/Credentials/
 /RemoteCredentials/
 *.conf
 /pyCharmProjects/
@@ -56,3 +58,8 @@ Desktop.ini
 
 # Local private feature link (symlink on Unix; junction on Windows)
 /Python/features/emulation
+
+# Private environment configuration and archive installation metadata
+.env
+.env.*
+/.app-install.json

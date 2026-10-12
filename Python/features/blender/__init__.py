@@ -9,8 +9,8 @@ def _create_page(parent=None):
 
 
 def _create_settings(parent, scope):
-    from .settings import BlenderReleaseSettings
-    return BlenderReleaseSettings(parent, scope=scope)
+    from .settings import BlenderSettings
+    return BlenderSettings(parent, scope=scope)
 
 
 def register():
@@ -19,8 +19,8 @@ def register():
         id='blender', label='Blender',
         pages=[PageContribution('Blender', 'blender', _create_page, order=65,
                                 navigation_icon='blender')],
-        settings=[SettingsContribution('Release downloads', 'blender_release_defaults',
+        settings=[SettingsContribution('Blender configuration', 'blender_release_defaults',
                     lambda parent: _create_settings(parent, 'application'), scope='application'),
-                  SettingsContribution('Release downloads', 'blender_release_overrides',
+                  SettingsContribution('Blender configuration', 'blender_release_overrides',
                     lambda parent: _create_settings(parent, 'personal'), scope='personal')],
     )

@@ -24,6 +24,7 @@ class LaunchTests(unittest.TestCase):
                 patch.object(launch.registry, 'initialize_features'), \
                 patch.object(launch, 'apply_theme'), patch.object(launch, 'MainWindow') as window:
             app.return_value.exec.return_value = 0
+            window.return_value.pending_update = None
             self.assertEqual(launch.main(), 0)
             self.assertEqual(launch.main(), 0)
         self.assertEqual(window.call_count, 2)
@@ -34,7 +35,7 @@ class LaunchTests(unittest.TestCase):
         events = []
         app = Mock()
         app.exec.side_effect = lambda: events.append('event loop') or 7
-        window = Mock()
+        window = Mock(pending_update=None)
         window.display_ui.side_effect = lambda: events.append('display window')
         with patch.object(launch, 'log'), patch.object(
                 launch.pyside, 'initialize_q_app',
@@ -62,3 +63,16 @@ class LaunchTests(unittest.TestCase):
 
     def test_module_launcher_uses_the_application_entry_point(self):
         self.assertIs(module_launcher.main, launch.main)
+
+    def test_update_helper_starts_after_event_loop_and_index_shutdown(self):
+        events = []
+        request = object()
+        self.service.stop.side_effect = lambda: events.append('index stopped')
+        with patch.object(launch, 'log'), patch.object(launch.pyside, 'initialize_q_app') as app, \
+                patch.object(launch.registry, 'initialize_features'), patch.object(launch, 'apply_theme'), \
+                patch.object(launch, 'MainWindow') as window, \
+                patch('services.updates.launch_helper', side_effect=lambda value: events.append(('helper', value))):
+            window.return_value.pending_update = request
+            app.return_value.exec.side_effect = lambda: events.append('event loop exited') or 0
+            self.assertEqual(launch.main(), 0)
+        self.assertEqual(events, ['event loop exited', 'index stopped', ('helper', request)])

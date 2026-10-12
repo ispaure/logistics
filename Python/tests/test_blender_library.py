@@ -1,0 +1,192 @@
+"""Archive metadata, release resolution and preset publication/rollback contracts."""
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import unittest
+from unittest.mock import patch
+import zipfile
+
+from features.blender.library import AddonLibrary, inspect_package
+from features.blender.manager import BlenderManager
+from features.blender.releases import load_releases
+
+
+class BlenderLibraryTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.manager = BlenderManager(self.root / 'managed')
+        self.library = AddonLibrary(self.manager)
+        self.release = load_releases(platform='windows-x64')[0]
+        self.preset = self.manager.create_preset(self.release, 'Art')
+
+    def package(self, filename, version=(1, 0, 0), minimum=(3, 2, 0), body='', module='tool'):
+        path = self.root / filename
+        with zipfile.ZipFile(path, 'w') as archive:
+            info = {'name': 'Artist Tool', 'version': version}
+            if minimum:
+                info['blender'] = minimum
+            archive.writestr(f'{module}/__init__.py', f'bl_info={info!r}\n' + body)
+            archive.writestr(f'{module}/helper.py', '# companion module')
+        return path
+
+    def test_grouping_and_numeric_latest_compatible_resolution(self):
+        self.library.add(self.package('old.zip', (1, 9, 0)))
+        self.library.add(self.package('new.zip', (1, 10, 0)))
+        self.library.add(self.package('future.zip', (2, 0, 0), (99, 0, 0)))
+        entries = self.library.entries()
+        self.assertEqual(len(entries), 3)
+        self.assertEqual({entry.identity for entry in entries}, {'legacy:tool'})
+        self.assertEqual(self.library.resolve('legacy:tool', self.release).version, '1.10.0')
+        self.assertEqual(len(list(self.library.root.iterdir())), 1)
+
+    def test_import_does_not_execute_code_unknown_is_not_auto_resolved_and_conflicts_refused(self):
+        path = self.package('unknown.zip', minimum=None, body='raise RuntimeError("must never execute")')
+        self.library.add(path)
+        self.assertIsNone(self.library.resolve('legacy:tool', self.release))
+        self.library.add(path)  # exact duplicate is idempotent
+        with self.assertRaisesRegex(ValueError, 'different contents'):
+            self.library.add(self.package('different.zip', minimum=None, body='different=True'))
+
+    def test_extension_minimum_exclusive_maximum_and_platform(self):
+        path = self.root / 'extension.zip'
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('blender_manifest.toml', 'id="tool"\nname="Tool"\nversion="1.0.0"\ntype="add-on"\nblender_version_min="4.2.0"\nblender_version_max="5.0.0"\nplatforms=["windows-x64"]\n')
+            archive.writestr('__init__.py', '# extension')
+        addon = self.library.add(path)
+        from dataclasses import replace
+        self.assertTrue(addon.compatible(replace(self.release, version='4.5.1')))
+        self.assertFalse(addon.compatible(replace(self.release, version='5.0.0')))
+        self.assertFalse(addon.compatible(replace(self.release, version='4.5.1', platform='macos-arm64')))
+
+    def test_unsafe_or_ambiguous_packages_are_rejected(self):
+        for extra in ('../outside.py', 'C:/outside.py', 'tool/../outside.py', 'TOOL/__init__.py'):
+            path = self.package('unsafe.zip')
+            with zipfile.ZipFile(path, 'a') as archive:
+                archive.writestr(extra, '# bad')
+            with self.assertRaises(ValueError):
+                inspect_package(path)
+        path = self.package('ambiguous.zip')
+        with zipfile.ZipFile(path, 'a') as archive:
+            archive.writestr('other/__init__.py', 'bl_info={"version":(1,0)}')
+        with self.assertRaises(ValueError):
+            inspect_package(path)
+
+    def test_apply_update_remove_and_independent_presets(self):
+        self.library.add(self.package('old.zip'))
+        other = self.manager.create_preset(self.release, 'Other')
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.run_blender_script') as run:
+            self.library.apply(self.release, 'Art', ['legacy:tool'])
+            run.assert_called_once()
+            self.assertTrue((self.preset / 'scripts/addons/tool/helper.py').exists())
+            self.assertFalse((other / 'scripts/addons/tool').exists())
+            self.library.add(self.package('new.zip', (2, 0, 0), body='updated=True'))
+            self.library.apply(self.release, 'Art', ['legacy:tool'])
+            self.assertIn('updated=True', (self.preset / 'scripts/addons/tool/__init__.py').read_text())
+            self.library.apply(self.release, 'Art', [])
+            self.assertFalse((self.preset / 'scripts/addons/tool').exists())
+            self.assertEqual(self.library.selection(self.preset)['selected'], [])
+
+    def test_failed_enable_restores_files_preferences_and_selection(self):
+        self.library.add(self.package('old.zip'))
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.run_blender_script'):
+            self.library.apply(self.release, 'Art', ['legacy:tool'])
+        prefs = self.preset / 'config/userpref.blend'
+        prefs.write_bytes(b'original preferences')
+        state = (self.preset / '.logistics-addons.json').read_bytes()
+        self.library.add(self.package('new.zip', (2, 0, 0), body='updated=True'))
+        def fail(*args, **kwargs):
+            prefs.write_bytes(b'failed preferences')
+            raise ValueError('enable failed')
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.run_blender_script', side_effect=fail):
+            with self.assertRaisesRegex(ValueError, 'enable failed'):
+                self.library.apply(self.release, 'Art', ['legacy:tool'])
+        self.assertEqual(prefs.read_bytes(), b'original preferences')
+        self.assertEqual((self.preset / '.logistics-addons.json').read_bytes(), state)
+        self.assertNotIn('updated=True', (self.preset / 'scripts/addons/tool/__init__.py').read_text())
+
+    def test_provided_and_personal_layers_choose_latest_with_personal_tie_priority(self):
+        import shutil
+        provided = self.root / 'provided'
+        provided.mkdir()
+        shared = provided / 'tool.zip'
+        shutil.copyfile(self.package('shared.zip', (2, 0, 0)), shared)
+        original = shared.read_bytes()
+        library = AddonLibrary(self.manager, provided_root=provided)
+        self.assertEqual(library.resolve('legacy:tool', self.release).source, 'Provided')
+        library.add(self.package('personal-old.zip', (1, 0, 0)))
+        self.assertEqual(library.resolve('legacy:tool', self.release).source, 'Provided')
+        library.add(self.package('personal-same.zip', (2, 0, 0), body='personal=True'))
+        resolved = library.resolve('legacy:tool', self.release)
+        self.assertEqual(resolved.source, 'Personal')
+        self.assertEqual(len(library.entries()), 2)
+        self.assertEqual(shared.read_bytes(), original)
+        self.assertEqual(list(provided.iterdir()), [shared])
+
+    def test_provided_zip_discovery_requires_no_manifest_and_does_not_create_missing_root(self):
+        library = AddonLibrary(self.manager, provided_root=self.root / 'absent')
+        self.assertEqual(library.entries(), [])
+        self.assertFalse(library.provided_root.exists())
+        library.add(self.package('artist.zip'))
+        self.assertFalse(library.provided_root.exists())
+        self.assertEqual(library.entries()[0].source, 'Personal')
+
+    def test_apply_enables_by_display_name_not_identity_or_extension_prefix(self):
+        import json
+        legacy = self.package('z-module.zip', module='z_module')
+        self.library.add(legacy)
+        extension = self.root / 'a-extension.zip'
+        with zipfile.ZipFile(extension, 'w') as archive:
+            archive.writestr('blender_manifest.toml', 'id="a_extension"\nname="Zebra Tool"\nversion="1.0.0"\ntype="add-on"\nblender_version_min="4.2.0"\n')
+            archive.writestr('__init__.py', '# extension')
+        self.library.add(extension)
+        def check(executable, env, script, request, **kwargs):
+            value = json.loads(request.read_text())
+            self.assertEqual(value['enable'], ['z_module', 'bl_ext.logistics.a_extension'])
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.run_blender_script', side_effect=check):
+            self.library.apply(self.release, 'Art', ['extension:a_extension', 'legacy:z_module'])
+
+    def test_launch_command_passes_alphabetical_modules_and_controlled_startup(self):
+        import json
+        state = {'selected': ['legacy:z_module', 'extension:a_extension'], 'installed': {
+            'extension:a_extension': {'module': 'bl_ext.logistics.a_extension', 'name': 'Zebra', 'path': 'extensions/logistics/a_extension', 'digest': 'fixture'},
+            'legacy:z_module': {'module': 'z_module', 'name': 'Artist', 'path': 'scripts/addons/z_module', 'digest': 'fixture'}}}
+        (self.preset / '.logistics-addons.json').write_text(json.dumps(state))
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.manager.subprocess.Popen') as popen:
+            self.manager.launch(self.release, 'Art')
+        args, kwargs = popen.call_args
+        self.assertEqual(args[0][:3], ['/fixture/blender', '--addons', 'z_module,bl_ext.logistics.a_extension'])
+        self.assertEqual(args[0][3], '--python')
+        self.assertTrue(args[0][4].endswith('launch_addons.py'))
+        self.assertEqual(json.loads(kwargs['env']['LOGISTICS_BLENDER_ADDONS']), ['z_module', 'bl_ext.logistics.a_extension'])
+
+    def test_startup_reenables_in_requested_order_without_removing_saved_preferences(self):
+        import json
+        import os
+        import runpy
+        from types import SimpleNamespace
+        calls = []
+        addon_utils = SimpleNamespace(
+            disable=lambda module, **kwargs: calls.append(('disable', module, kwargs)),
+            enable=lambda module, **kwargs: calls.append(('enable', module, kwargs)),
+            check=lambda module: (True, True))
+        with patch.dict('sys.modules', {'addon_utils': addon_utils}), patch.dict(os.environ, {'LOGISTICS_BLENDER_ADDONS': json.dumps(['z_module', 'a_module'])}):
+            runpy.run_module('features.blender.launch_addons', run_name='__main__')
+        self.assertEqual([(op, module) for op, module, kwargs in calls],
+                         [('disable', 'a_module'), ('disable', 'z_module'), ('enable', 'z_module'), ('enable', 'a_module')])
+        self.assertTrue(all(not kwargs['default_set'] for op, module, kwargs in calls))
+
+    def test_running_and_unmanaged_addons_are_not_overwritten(self):
+        self.library.add(self.package('addon.zip'))
+        existing = self.preset / 'scripts/addons/tool'
+        existing.mkdir()
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')):
+            with self.assertRaisesRegex(ValueError, 'outside the addon library'):
+                self.library.apply(self.release, 'Art', ['legacy:tool'])
+        with patch.object(self.manager, 'running', return_value=True):
+            with self.assertRaisesRegex(ValueError, 'Close the Blender instance'):
+                self.library.apply(self.release, 'Art', ['legacy:tool'])
+
+
+if __name__ == '__main__':
+    unittest.main()

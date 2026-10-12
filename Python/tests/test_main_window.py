@@ -399,6 +399,36 @@ class MainWindowTests(QtTestCase):
         self.addCleanup(window.dlg.deleteLater)
         return window
 
+    def test_launch_sidebar_preference_defaults_on_and_preserves_focused_option(self):
+        entry = RegisteredContribution('feature', 'Feature', PageContribution(
+            'Example', 'example.page', self.page, navigation_icon='blender'))
+        window = self.window([entry])
+        window.dlg.show()
+        key = window._launch_key('feature', 'example.page')
+        for enabled in (True, False):
+            with patch('ui_new.main_window.get_setting', return_value=enabled) as setting:
+                window._launch(key)
+            self.app.processEvents()
+            setting.assert_called_once_with('Menus', 'launch_with_sidebar_bool', True)
+            self.assertEqual(window.sidebar.isVisible(), enabled)
+            self.assertEqual(window.settings_button.isVisible(), not enabled)
+            self.assertIs(window.tabs.currentWidget(), window._feature_pages[('feature', 'example.page')])
+        with patch('ui_new.main_window.get_setting', return_value=False):
+            window._launch('hub')
+        self.app.processEvents()
+        self.assertTrue(window.sidebar.isVisible())
+
+    def test_unopened_document_workspace_has_no_visible_controls_in_other_pages(self):
+        window = self.window()
+        window.dlg.show()
+        self.app.processEvents()
+        for sidebar in (True, False):
+            window.sidebar.setVisible(sidebar)
+            self.app.processEvents()
+            self.assertTrue(window.documents.isHidden())
+            self.assertFalse(window.documents.workspace.empty_new_button.isVisible())
+            self.assertTrue(window.actions.isHidden())
+
     def test_feature_destination_button_selects_page_and_survives_toggle(self):
         contribution = RegisteredContribution('private', 'Private', PageContribution(
             'Private page', 'private.main', self.page, order=20, navigation_icon='controller'))
@@ -710,7 +740,8 @@ class MainWindowTests(QtTestCase):
         import time
         window = self.browser_window()
         self.wait_browser(window.tabs.widget(0))
-        window._launch('browser')
+        with patch('ui_new.main_window.get_setting', return_value=False):
+            window._launch('browser')
         renamer = window._show_bulk_rename(self.root)
         deadline = time.monotonic() + 8
         while renamer.progress.busy or renamer.preview_timer.isActive() or renamer.plan is None:
@@ -720,6 +751,11 @@ class MainWindowTests(QtTestCase):
         self.assertEqual([action.text() for action in window.dlg.menuBar().actions()],
                          ['Logistics', 'File', 'Edit', 'View', 'Rename', 'Help'])
         self.assertTrue(window.settings_button.isVisible())
+        self.assertTrue(window.sidebar.buttons['rename'].isChecked())
+        window.tabs.setCurrentWidget(window.tabs.widget(0))
+        self.assertFalse(window.sidebar.buttons['rename'].isChecked())
+        window.tabs.setCurrentWidget(renamer)
+        self.assertTrue(window.sidebar.buttons['rename'].isChecked())
         preset_rect = qt.QRect(renamer.presets_button.mapTo(window.launch_surface, qt.QPoint()),
                                renamer.presets_button.size())
         self.assertFalse(preset_rect.intersects(window.settings_button.geometry()))

@@ -127,3 +127,40 @@ one shared field editor per version/scope. The retryable
 combined catalog without deleting it or overwriting new-format choices. Whole
 personal reset marks that migration complete alongside feature/editor/Git migrations;
 Blender presets and installations remain outside the configuration reset boundary.
+
+## Blender addon library and credentials
+
+Blender's feature-owned library is stored under the per-user Logistics root at
+`addons/blender/<kind-module>/<numeric-version>/addon.zip`; it is independent of
+checkout credential packages. Each preset's `.logistics-addons.json` records chosen
+identities and the published module/path/digest inventory. Imports read metadata
+without executing code. Applying or launching a managed selection resolves latest
+compatible releases, copies files, enables modules through background Blender and
+saves preferences; failed updates restore preset resource folders. See the
+[Blender contracts](../../Python/features/blender/README.md).
+
+The default credential ZIP root is now `Credentials/rclone` in the checkout, with
+read-only discovery of the matching Dropbox location. `RemoteCredentials` is no
+longer searched. Existing `~/.config/rclone/*.conf` files remain independently
+available. The whole checkout `Credentials/` tree is ignored, reserving
+`Credentials/blender_addons` for future private manifests. No Blender credential
+manifest format or download implementation is defined yet.
+
+Blender now merges that personal library with an optional read-only provided ZIP
+folder (`[Resources] blender_addons_path`, default checkout `Addons/blender`).
+Personal wins on equal identity/version, with latest compatible selection over both
+sources. The ignored provided folder is never created or modified automatically.
+Managed activation uses alphabetical display-name order and sorted CLI `--addons`
+plus a startup script; ordinary Blender initialization precedes this controlled
+reactivation. Saved addon preferences survive reactivation. See the feature's
+layering/activation contract for details.
+
+Blender personal settings show Presets first, then Versions Definitions for admin
+maintenance of the installable release catalog. Default software scope shows only
+Versions Definitions. The launch page
+links to Settings; creating presets/saving selections does no provisioning. Blue Hole
+has dedicated enabled/branch/Deluxe state in the preset selection JSON, plus its
+resolved commit and Deluxe payload digest. It uses a separate commit-keyed private
+cache and GitHub branch comparison on each enabled launch. Deluxe stamping is
+preset-contained and part of the existing rollback transaction; unchanged payloads
+preserve subsequent preference customization. See the feature guide for these contracts.

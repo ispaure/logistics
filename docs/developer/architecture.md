@@ -52,7 +52,8 @@ The chooser's Read & edit grid uses the rail's registered document-launcher
 snapshot, including the core Markdown launcher. Cards dispatch Open/New callbacks
 with `DocumentsPage` as parent; they do not construct editors or readers themselves.
 Registry refresh rebuilds the grid when launcher metadata changes. Successful
-opens reveal the shared document host without a sidebar; cancellation leaves the
+opens reveal the shared document host with the sidebar by default (the shared
+Menus launch preference can disable it); cancellation leaves the
 chooser visible. Documents opened from the chooser become the return destination
 for the settings menu. The chooser scrolls vertically at compact window heights.
 
@@ -286,3 +287,24 @@ is displayed on cards. Chooser windows remain workspace-owned utility tabs; they
 are excluded from document entries and counts without changing their close/detach
 lifecycle. The scroll viewport sizes content up to 1440 pixels, chooses one/two/three
 columns and enables ordinary vertical scrollbar/wheel navigation for long catalogs.
+
+## Application update handoff
+
+`services.updates` owns Logistics repository/channel policy, protected roots,
+layered Updates settings and restart launchers. `ui_new.updater.UpdateController`
+checks on an owned worker and offers the hub button. Tests constructing windows
+perform no network checks; production startup calls `start_updates()`.
+
+Preparation validates a checksum-labelled published release and creates a private
+AppData staging directory. Git installations fetch the release commit and its
+pins; extracted installations use the packaged managed-file manifest. Installation
+is delegated to a copied stdlib-only commonUtils transaction helper only after
+Qt exits and indexing stops. Ordinary close guards handle pending documents/jobs;
+a veto discards the pending update. The helper waits for process exit before
+revalidation, application and launcher restart, recording failures for startup
+notifications. Recovery staging is retained. A rollback failure requires manual
+recovery; it never launches a partially restored installation.
+
+Shared updater API contracts live in commonUtils `runtime/updates/README.md`.
+Logistics uses release discovery; Blue Hole uses branch commit discovery and owns
+its addon-specific extraction, preset resources and Deluxe overlay behavior.

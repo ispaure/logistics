@@ -2,8 +2,9 @@
 
 Logistics starts with a launch chooser. **Open full hub with sidebar** opens all
 available destinations. Below it, File Browser is always available; Folder Hub,
-Bulk Rename and enabled features with their own navigation buttons offer focused
-workspaces without the sidebar. Disabled features are absent. Use Settings to
+Bulk Rename and enabled features with their own navigation buttons open workspaces
+with the sidebar by default. **Appearance & shared controls → Menus → Launch with
+sidebar** can switch launch-page choices to focused workspaces without it. Disabled features are absent. Use Settings to
 enable them, and their cards appear without restarting the app.
 
 The **Read & edit** section always includes Markdown Editor. Enabled features add
@@ -227,3 +228,37 @@ code share the code font. Tool
 options are in **Feature settings**. Reading positions, account data and recovery
 records remain personal data, outside software defaults. The path above each
 editor shows exactly which INI will change.
+
+Launch and Documents pages keep their central content compact on wide windows,
+with a maximum width of 880 pixels. The card layout still adapts to narrower windows.
+
+New/Open document choices use the same 88-pixel base card height and horizontal
+presentation as launch choices, with compact New/Open actions on the right.
+
+Opening an app or document from the launch screen keeps the sidebar by default.
+Under **Settings → Appearance & shared controls → Menus**, **Launch with sidebar**
+controls this behavior beside **macOS native**. Turn it off to open focused app
+workspaces without the sidebar; the floating settings button remains available.
+The setting applies on the next launch-page selection. Opening the full hub always
+shows the sidebar.
+
+The Bulk Rename (A→B) rail button uses the accent color while Bulk Rename is the
+active destination, matching the other destination buttons.
+
+Logistics checks for updates by default. **Settings → Configuration → Updates**
+lets you disable checks or select **main**, **beta** or **alpha** (main by default).
+These are published release channels: main uses stable releases, beta and alpha
+use tags with those suffixes. Unpublished branch commits are not offered.
+
+When a newer eligible release exists, **Update Logistics** appears at the upper
+right of the hub. Clicking it prepares the update, follows the normal close/save
+flow, installs after Logistics exits, and restarts through the platform launcher.
+Offline checks stay quiet. A failed preparation leaves Logistics open. Software,
+Credentials, .env files, ignored files and personal AppData remain protected.
+Local changes or file collisions stop an update rather than overwrite your work.
+
+Extracted releases need the installed-file manifest included in newly packaged
+releases. Older ZIP installations need a fresh release extraction first. Git
+checkouts must have clean tracked files and initialized submodules at their pins;
+a successful update checks out the release commit and dependencies detached.
+Blue Hole separately checks its selected GitHub branch on each Blender launch.
