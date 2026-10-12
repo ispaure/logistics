@@ -19,10 +19,27 @@ Linux ARM64 package, and 5.2.2 has no Intel Mac package. The manager shows only
 packages for your OS/architecture. Blender's own OS and hardware requirements
 still apply; a matching package does not guarantee compatibility with older systems.
 
-Release metadata is editable under **Settings → Blender → Release downloads**.
-An exact version, platform, HTTPS URL, SHA-256, package format, extracted bundle
-and relative executable path must describe the same official package. New versions
-are added explicitly; the manager does not silently replace an installed release.
+Release metadata is editable under **Settings → Blender**. Select the exact
+**Blender version** from the dropdown, then choose a platform from the list on the
+left. The right-hand panel shows only that platform's download URL, SHA-256,
+package format, extracted bundle and executable path. **Save Settings** saves edits
+for the selected version; switching versions/platforms keeps unsaved edits.
+
+Each version has its own catalog file, such as `config-4.5.1.ini` or
+`config-5.2.2.ini` in `Python/features/blender`. The filename fixes the version;
+platform section names identify the builds. To add a version, add a matching
+`config-<major.minor.patch>.ini` with its official package metadata. The manager
+does not silently replace installed releases.
+
+The global Settings scope selects **Personal Settings** or **Default Software
+Configuration**. Personal edits save only explicit fields in the matching per-version
+personal INI; inherited fields follow software defaults. A matching explicit value
+remains an override until **↶** removes it and **Save Settings** commits the reset.
+Download URL, hash, format, bundle and executable must describe the same package;
+invalid metadata is rejected on Save. Existing personal fields from the old combined
+catalog migrate once to the matching version/platform; the old file is retained.
+Existing per-version choices take precedence. Migration failures preserve the old
+file and retry on a later launch. Switching scopes retains each scope's pending edits.
 
 ## Create and launch presets
 
