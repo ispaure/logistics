@@ -84,6 +84,32 @@ def update(manager, release, branch, *, cancelled=lambda: False):
     return addon, commit
 
 
+def preserve_environments(previous, destination, *, cancelled=lambda: False):
+    """Restore artist environments over a new payload; default stays publisher-owned."""
+    import shutil
+    previous, destination = Path(previous) / 'envFiles', Path(destination) / 'envFiles'
+    if previous.is_symlink() or destination.is_symlink():
+        raise ValueError('Blue Hole envFiles must be a real directory')
+    if not previous.is_dir():
+        return
+    destination.mkdir(parents=True, exist_ok=True)
+    for entry in previous.iterdir():
+        check_cancelled(cancelled)
+        if entry.name.casefold() == 'default':
+            continue
+        target = destination / entry.name
+        if target.is_symlink() or target.is_file():
+            target.unlink()
+        elif target.is_dir():
+            shutil.rmtree(target)
+        if entry.is_symlink():
+            target.symlink_to(entry.readlink(), target_is_directory=entry.is_dir())
+        elif entry.is_dir():
+            shutil.copytree(entry, target, symlinks=True)
+        else:
+            shutil.copy2(entry, target)
+
+
 def apply_deluxe(addon, root, previous_stamp, *, cancelled=lambda: False):
     """Stamp the selected preset only when the requested Deluxe payload changes."""
     import hashlib

@@ -122,7 +122,7 @@ removed. Windows/Linux and Intel macOS addon application remain unverified nativ
 ## Layered libraries and ordered activation
 
 `AddonLibrary` merges the recursively discovered read-only provided ZIP folder
-(default `Addons/blender`, `[Resources] blender_addons_path` override) with the
+(default `Software/Blender_Addons_Library`, `[Resources] blender_addons_path` override) with the
 existing per-user library. Package metadata is the index: neither source needs
 an artist-authored manifest. Personal releases replace provided entries only for
 matching identity/version; newest compatible resolution runs over the merged set.
@@ -180,3 +180,40 @@ so equal names across versions do not alias. The + action chooses a release/name
 context actions select their target before invoking the existing guarded lifecycle
 operations. Hidden version/name selectors remain the launch/manager routing source.
 List rebuilding retains the current preset and selects newly created/copied entries.
+
+## Package revisions and installed status
+
+The shareable library contains one folder per addon, with ZIPs such as
+`Anytree/Anytree_2.1.3_2026_10_12.zip`. Identity, numeric version and compatibility
+come from package metadata; a trailing `_YYYY_MM_DD` names a package revision.
+Resolution chooses the highest declared-compatible numeric version, then the
+newest date for that version. Same-version/date packages with conflicting bytes
+are rejected. Personal versions override provided packages of the same declared
+version; personal imports preserve revision/name in `origin.json`, and their
+managed folders include the date. Old undated imports remain discoverable.
+Legacy publisher nicknames appended to a version tuple are ignored for numeric
+comparison. `_support` is reserved for non-addon backup ZIPs and is not indexed.
+
+ZIP inspection is cached by path and device/inode/size/mtime/ctime fingerprints;
+normal changes invalidate the entry. Each refresh resolves its rows from a single
+catalog snapshot instead of rehashing the library for every addon row. The cache
+is in-memory, bounded and performs no addon imports. First inspection still reads
+and hashes every ZIP. Package dates are not proofs of runtime compatibility.
+
+Preset management shows Installed, Latest compatible, Status and Library source.
+Installed versions come from files actually found in the preset, with recorded
+managed metadata as fallback. Missing files/library packages and pending
+installation/removal have separate statuses. Successful apply records numeric
+version, package date and package name alongside existing digest/path ownership.
+Browsing and saving intent never install addons or query GitHub. Unix executable
+bits from ZIP members are retained for bundled addon helper programs.
+
+Blue Hole has a separate `installed_bluehole` snapshot for installed branch,
+commit and version. Changing the requested branch preserves the installed
+snapshot, including migration from old combined Blue Hole state. The short commit
+is displayed with the full commit in its tooltip. During Blue Hole replacement,
+`envFiles/default` comes from the new package. All other existing envFiles entries
+are restored exactly over the incoming payload from the transaction backup;
+user folders are not merged with or overwritten by publisher examples. Failure
+restores the complete previous preset as before. Symbolic envFiles roots are
+refused; nested user links are retained without copying their targets.

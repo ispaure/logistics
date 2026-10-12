@@ -162,16 +162,18 @@ class BlenderPage(qt.QWidget):
         primary.addStretch()
         controls.addLayout(primary)
         manage_layout.addWidget(self.controls)
-        self.choices = qt.QTableWidget(0, 3)
-        self.choices.setHorizontalHeaderLabels(['Load', 'Addon', 'Resolved release / compatibility'])
+        self.choices = qt.QTableWidget(0, 6)
+        self.choices.setHorizontalHeaderLabels(['Load', 'Addon', 'Installed', 'Latest compatible', 'Status', 'Library'])
         self.choices.setEditTriggers(qt.QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.choices.horizontalHeader().setStretchLastSection(True)
+        self.choices.horizontalHeader().setStretchLastSection(False)
+        for column in range(6):
+            self.choices.horizontalHeader().setSectionResizeMode(column, qt.QHeaderView.ResizeMode.Stretch if column == 1 else qt.QHeaderView.ResizeMode.ResizeToContents)
         self.apply_button = qt.QPushButton('Save Addon Selection')
         self.apply_button.clicked.connect(self._apply_addons)
         self.tabs = qt.QTabWidget()
         selection_page = qt.QWidget()
         selection_layout = qt.QVBoxLayout(selection_page)
-        note = qt.QLabel('Select the addons this configuration loads. The newest declared-compatible release is chosen automatically.')
+        note = qt.QLabel('Choose addons from the library for this preset. Installed shows the current files; Latest compatible shows what the next launch will apply.')
         note.setWordWrap(True)
         selection_layout.addWidget(note)
         self.bluehole_group = qt.QGroupBox('Blue Hole')
@@ -186,6 +188,9 @@ class BlenderPage(qt.QWidget):
         bluehole_form.addRow(self.bluehole_enabled)
         bluehole_form.addRow('Branch', self.bluehole_branch)
         bluehole_form.addRow('Deluxe', self.bluehole_deluxe)
+        self.bluehole_installed = qt.QLabel('Not installed')
+        self.bluehole_installed.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
+        bluehole_form.addRow('Currently installed', self.bluehole_installed)
         bluehole_form.addRow(qt.QLabel('Deluxe copies Blue Hole keymaps and stamps this preset’s saved preferences.'))
         controls.insertWidget(1, self.bluehole_group)
         selection_layout.addWidget(self.choices)
@@ -197,9 +202,9 @@ class BlenderPage(qt.QWidget):
         catalog_back = qt.QPushButton('‹ Back to configurations')
         catalog_back.clicked.connect(lambda: self.stack.setCurrentWidget(self.preset_splitter if self.settings_mode else self.home))
         catalog_layout.addWidget(catalog_back, 0, qt.Qt.AlignmentFlag.AlignLeft)
-        catalog_layout.addWidget(qt.QLabel('Addon library · all imported releases'))
-        self.catalog_table = qt.QTableWidget(0, 6)
-        self.catalog_table.setHorizontalHeaderLabels(['Addon', 'Release', 'Blender minimum', 'Blender maximum (exclusive)', 'Type', 'Library'])
+        catalog_layout.addWidget(qt.QLabel('Available in library · shared and personal packages'))
+        self.catalog_table = qt.QTableWidget(0, 8)
+        self.catalog_table.setHorizontalHeaderLabels(['Addon', 'Version', 'Package date', 'Blender minimum', 'Blender maximum (exclusive)', 'Type', 'Library', 'ZIP'])
         self.catalog_table.setEditTriggers(qt.QAbstractItemView.EditTrigger.NoEditTriggers)
         self.catalog_table.horizontalHeader().setStretchLastSection(True)
         catalog_layout.addWidget(self.catalog_table)
@@ -634,7 +639,7 @@ class BlenderPage(qt.QWidget):
                              key=lambda a: (a.identity, version_tuple(a.version)))
             self.catalog_table.setRowCount(len(entries))
             for row, addon in enumerate(entries):
-                for column, value in enumerate((addon.name, addon.version, addon.minimum or 'Unknown', addon.maximum or '—', addon.kind, addon.source)):
+                for column, value in enumerate((addon.name, addon.version, addon.published or '—', addon.minimum or 'Unknown', addon.maximum or '—', addon.kind, addon.source, addon.package_name or addon.package.name)):
                     self.catalog_table.setItem(row, column, qt.QTableWidgetItem(value))
             self.catalog_table.resizeColumnsToContents()
             self.stack.setCurrentWidget(self.catalog)
@@ -644,24 +649,37 @@ class BlenderPage(qt.QWidget):
     def _show_choices(self):
         entries = self.library.entries()
         identities = sorted({addon.identity for addon in entries})
-        selected = []
+        state = {'selected': [], 'installed': {}}
+        root = None
+        found = {}
         if self.release and self.preset.currentText():
-            selected = self.library.selection(self.manager.preset(self.release, self.preset.currentText()))['selected']
-        identities = sorted(set(identities) | set(selected),
+            root = self.manager.preset(self.release, self.preset.currentText())
+            state = self.library.selection(root)
+            found = {item['module']: item for item in scan_preset(root)}
+        selected = state['selected']
+        actual = {('extension:' + row['module'].split('.')[-1] if row['kind'] == 'Extension' else 'legacy:' + row['module']): row for row in found.values()}
+        identities = sorted(set(identities) | set(selected) | set(state['installed']) | set(actual),
                             key=lambda identity: (next((a.name for a in entries if a.identity == identity), identity).casefold(), identity))
-        config = bluehole.DEFAULT
-        if self.release and self.preset.currentText():
-            config = self.library.selection(self.manager.preset(self.release, self.preset.currentText())).get('bluehole', bluehole.DEFAULT)
+        config = state.get('bluehole', bluehole.DEFAULT)
         config = bluehole.validate(config)
         self.bluehole_enabled.setChecked(config['enabled'])
         self.bluehole_branch.setCurrentText(config['branch'])
         self.bluehole_deluxe.setCurrentText('Yes' if config['deluxe'] else 'No')
+        current = state.get('installed_bluehole') or state.get('bluehole', {})
+        bh = state['installed'].get(bluehole.IDENTITY)
+        if bh and bh['module'] in found:
+            commit = current.get('commit')
+            self.bluehole_installed.setText(f"{current.get('branch', 'Unknown branch')} · {commit[:12] if commit else 'Commit unknown'} · {bh.get('version') or found[bh['module']]['version'] or 'Version unknown'}")
+            self.bluehole_installed.setToolTip(commit or 'No installed commit recorded')
+        else:
+            self.bluehole_installed.setText('Not installed')
+            self.bluehole_installed.setToolTip('The selected branch will be checked on launch')
         identities = [identity for identity in identities if identity != bluehole.IDENTITY]
         self.choices.setRowCount(len(identities))
         for row, identity in enumerate(identities):
             releases = [a for a in entries if a.identity == identity]
             latest = max(releases, key=lambda a: version_tuple(a.version), default=None)
-            resolved = self.library.resolve(identity, self.release) if self.release else None
+            resolved = self.library.resolve(identity, self.release, entries=entries) if self.release else None
             check = qt.QTableWidgetItem('')
             check.setData(qt.Qt.ItemDataRole.UserRole, identity)
             check.setFlags(qt.Qt.ItemFlag.ItemIsEnabled | qt.Qt.ItemFlag.ItemIsUserCheckable)
@@ -669,13 +687,43 @@ class BlenderPage(qt.QWidget):
             if not resolved and identity not in selected:
                 check.setFlags(qt.Qt.ItemFlag.NoItemFlags)
             self.choices.setItem(row, 0, check)
-            self.choices.setItem(row, 1, qt.QTableWidgetItem(latest.name if latest else identity))
-            detail = f'{resolved.version} · Blender {resolved.minimum}+' if resolved else 'No declared-compatible release'
-            if resolved and resolved.maximum:
-                detail += f' · below {resolved.maximum}'
+            installed = state['installed'].get(identity)
+            physical = found.get(installed['module']) if installed else actual.get(identity)
+            installed_version = (physical.get('version') or (installed.get('version') if installed else None) or 'Unknown') if physical else '—'
+            if physical and not installed:
+                status = 'Installed outside library'
+                check.setToolTip('These files are not managed by Logistics; use Installed files to inspect them.')
+                if identity not in selected:
+                    check.setFlags(qt.Qt.ItemFlag.NoItemFlags)
+            elif installed and not physical:
+                status = 'Installed files missing'
+            elif physical and identity not in selected:
+                status = 'Removal pending'
+            elif physical and not resolved:
+                status = 'Missing from library' if not releases else 'No compatible version'
+            elif physical and resolved and installed['digest'] == resolved.digest:
+                status = 'Up to date'
+            elif physical:
+                status = 'Update available'
+                try:
+                    if version_tuple(resolved.version) < version_tuple(installed_version):
+                        status = 'Different package available'
+                except ValueError:
+                    pass
+            elif identity in selected:
+                status = 'Installation pending' if resolved else 'No compatible version'
+            else:
+                status = 'Available' if resolved else 'Incompatible'
+            title = latest.name if latest else installed.get('name', identity) if installed else physical.get('name', identity) if physical else identity
+            values = (title, installed_version, resolved.version if resolved else '—', status, resolved.source if resolved else '—')
+            for column, value in enumerate(values, 1):
+                self.choices.setItem(row, column, qt.QTableWidgetItem(value))
             if resolved:
-                detail += f' · {resolved.source}'
-            self.choices.setItem(row, 2, qt.QTableWidgetItem(detail))
+                detail = f"Blender {resolved.minimum}+" + (f"; below {resolved.maximum}" if resolved.maximum else '')
+                detail += f"\n{resolved.package_name or resolved.package.name}" + (f"\nPackage date: {resolved.published}" if resolved.published else '')
+                self.choices.item(row, 3).setToolTip(detail)
+            if installed:
+                self.choices.item(row, 2).setToolTip(f"{installed.get('source', 'Managed')}\n{installed['path']}\n{installed.get('package_name', '')}")
         self.choices.resizeColumnsToContents()
 
     def _apply_addons(self):
@@ -690,11 +738,14 @@ class BlenderPage(qt.QWidget):
             self.manager._require_idle(release, name)
             root = self.manager.preset(release, name)
             state = self.library.selection(root)
+            if 'installed_bluehole' not in state and state.get('bluehole', {}).get('commit'):
+                state['installed_bluehole'] = {key: state['bluehole'].get(key) for key in ('branch', 'commit')}
             if config['deluxe']:
                 config['deluxe_stamp'] = state.get('bluehole', {}).get('deluxe_stamp')
             staged = self.manager._contained(root, '.logistics-addons.tmp')
             staged.write_text(json.dumps({**state, 'selected': identities, 'bluehole': config}, indent=2), encoding='utf-8')
             staged.replace(root / '.logistics-addons.json')
+            self._show_choices()
             self.status.setText('Addon selection saved. It will be applied on the next launch.')
         except (OSError, ValueError) as error:
             self.status.setText(str(error))

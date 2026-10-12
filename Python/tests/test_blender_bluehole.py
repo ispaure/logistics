@@ -52,6 +52,23 @@ class BlueHoleTests(unittest.TestCase):
                 bluehole.update(self.manager, self.release, 'alpha')
         self.assertFalse((self.manager.root / 'escape.py').exists())
 
+    def test_environment_preservation_replaces_only_default_and_keeps_custom_exactly(self):
+        previous = self.manager.root / 'previous'; current = self.manager.root / 'current'
+        for root in (previous, current):
+            (root / 'envFiles/default').mkdir(parents=True)
+            (root / 'envFiles/artist').mkdir()
+        (previous / 'envFiles/default/old.ini').write_text('old default')
+        (previous / 'envFiles/artist/preferences.ini').write_text('artist settings')
+        (current / 'envFiles/default/new.ini').write_text('new default')
+        (current / 'envFiles/artist/preferences.ini').write_text('publisher example')
+        (current / 'envFiles/artist/extra.ini').write_text('must not be merged')
+        bluehole.preserve_environments(previous, current)
+        self.assertEqual((current / 'envFiles/artist/preferences.ini').read_text(), 'artist settings')
+        self.assertFalse((current / 'envFiles/artist/extra.ini').exists())
+        self.assertTrue((current / 'envFiles/default/new.ini').exists())
+        self.assertFalse((current / 'envFiles/default/old.ini').exists())
+        self.assertTrue((previous / 'envFiles/default/old.ini').exists())
+
     def test_deluxe_stamps_once_preserves_backup_and_rejects_symlink_escape(self):
         from dataclasses import replace
         from features.blender.library import inspect_package
