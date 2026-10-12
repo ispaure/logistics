@@ -62,6 +62,12 @@ class DestinationIcon(qt.QIconEngine):
                 else: plane.lineTo(x, y)
             plane.closeSubpath()
             painter.drawPath(plane)
+        elif self.name == 'blender':
+            painter.drawEllipse(qt.QRectF(8, 8, 13, 11))
+            painter.drawEllipse(qt.QRectF(12, 11, 5, 5))
+            painter.drawPolyline(qt.QPolygonF([qt.QPointF(10, 9), qt.QPointF(5, 4), qt.QPointF(15, 8)]))
+            painter.drawLine(qt.QLineF(2, 9, 10, 9))
+            painter.drawLine(qt.QLineF(3, 17, 9, 12))
         elif self.name == 'links':
             painter.save()
             painter.translate(12, 12); painter.rotate(-45)

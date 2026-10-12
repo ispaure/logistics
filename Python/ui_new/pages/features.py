@@ -23,9 +23,15 @@ class FeaturesPage(qt.QWidget):
         font = title.font(); font.setPointSize(font.pointSize() + 5); font.setBold(True)
         title.setFont(font)
         content_layout.addWidget(title)
-        description = qt.QLabel('Feature choices save immediately. Software defaults affect future launches; personal choices override them. Dependencies are enabled together.')
-        description.setWordWrap(True)
-        content_layout.addWidget(description)
+        self.path_label = qt.QLabel()
+        self.path_label.setAccessibleName('Feature configuration file')
+        self.path_label.setTextFormat(qt.Qt.TextFormat.PlainText)
+        self.path_label.setWordWrap(True)
+        self.path_label.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
+        content_layout.addWidget(self.path_label)
+        self.description = qt.QLabel()
+        self.description.setWordWrap(True)
+        content_layout.addWidget(self.description)
         reset = qt.QPushButton('Reset to defaults')
         reset.clicked.connect(self._reset_defaults)
         content_layout.addWidget(reset, alignment=qt.Qt.AlignmentFlag.AlignRight)
@@ -61,6 +67,15 @@ class FeaturesPage(qt.QWidget):
         qt.QTimer.singleShot(0, self.refresh)
 
     def refresh(self):
+        self.path_label.setText(str(registry.feature_settings_store().path(self.scope)))
+        self.path_label.setToolTip('Repository defaults shipped in releases' if self.scope == 'application'
+                                   else 'Personal feature choices override the shipped defaults')
+        self.description.setText(
+            'Default feature selection shipped with Logistics. Changes save immediately and affect future launches; '
+            'personal settings can override them. Dependencies are enabled together.'
+            if self.scope == 'application' else
+            'Your personal feature selection overrides the shipped defaults and applies immediately. '
+            'Changes save automatically. Dependencies are enabled together.')
         while self.cards.count():
             widget = self.cards.takeAt(0).widget()
             widget.hide(); widget.deleteLater()

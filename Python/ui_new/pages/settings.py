@@ -10,7 +10,7 @@ from .features import FeaturesPage
 from ui_new.settings.indexing import IndexSettingsPanel
 from commonUtils.ui.settings.settings_sections import ScopedSettings, SettingsSection
 from commonUtils.ui.settings.layered_settings import LayeredSettingsEditor
-from features.settings import settings_store, initialize_settings, validate_configuration
+from features.settings import settings_store, initialize_settings, validate_configuration, reset_personal_configuration
 
 
 class ConfigurationPanel(qt.QWidget):
@@ -277,14 +277,27 @@ class SettingsPage(qt.QWidget):
         layout = qt.QVBoxLayout(self)
         self.scope_selector = qt.QComboBox()
         self.scope_selector.setAccessibleName('Configuration scope')
-        self.scope_selector.addItem('Default Software Configuration', 'application')
+        can_edit_defaults = Path.home().name == 'marca'
+        if can_edit_defaults:
+            self.scope_selector.addItem('Default Software Configuration', 'application')
         self.scope_selector.addItem('Personal Settings', 'personal')
-        self.scope_selector.setCurrentIndex(1)
-        self.scope_selector.setToolTip('Software configuration edits tracked repository INIs. Personal settings override them in AppData.')
+        self.scope_selector.setCurrentIndex(self.scope_selector.findData('personal'))
+        self.scope_selector.setToolTip(
+            'Software configuration edits tracked repository INIs. Personal settings override them in AppData.'
+            if can_edit_defaults else 'Personal settings override the shipped defaults in AppData.')
         scope_row = qt.QHBoxLayout()
         scope_row.addWidget(self.scope_selector)
         scope_row.addStretch()
+        self.reset_personal_button = qt.QPushButton('Reset All Personal Settings…')
+        self.reset_personal_button.setToolTip('Restore defaults for every settings category, not just the current tab.')
+        self.reset_personal_button.clicked.connect(self._reset_all_personal_settings)
+        scope_row.addWidget(self.reset_personal_button)
         layout.addLayout(scope_row)
+        self.reset_status = qt.QLabel()
+        self.reset_status.setWordWrap(True)
+        self.reset_status.setTextFormat(qt.Qt.TextFormat.PlainText)
+        self.reset_status.hide()
+        layout.addWidget(self.reset_status)
         self.scope_selector.currentIndexChanged.connect(self._scope_changed)
         splitter = qt.QSplitter()
         layout.addWidget(splitter)
@@ -306,10 +319,48 @@ class SettingsPage(qt.QWidget):
 
     def _scope_changed(self):
         scope = self.scope_selector.currentData()
+        self.reset_personal_button.setVisible(scope == 'personal')
         for panel in self.panels.values():
             setter = getattr(panel, 'set_scope', None)
             if setter is not None:
                 setter(scope)
+
+    def _reset_all_personal_settings(self):
+        if self.scope_selector.currentData() != 'personal':
+            return
+        answer = qt.QMessageBox.question(
+            self, 'Reset All Personal Settings',
+            'Reset personal settings in ALL categories to the shipped software defaults?\n\n'
+            'This includes feature selection, appearance, editor options, indexing and other configuration overrides. '
+            'Unsaved personal settings edits will be discarded.\n\n'
+            'Your documents, accounts, workspaces, reading progress, installed software and Blender presets will be kept. '
+            'Launcher settings apply on the next launch.',
+            qt.QMessageBox.StandardButton.Yes | qt.QMessageBox.StandardButton.No,
+            qt.QMessageBox.StandardButton.No)
+        if answer != qt.QMessageBox.StandardButton.Yes:
+            return
+        self.reset_status.show()
+        try:
+            with reset_personal_configuration():
+                registry.reset_feature_defaults()
+        except Exception as error:
+            self.reset_status.setText(f'Could not reset personal settings: {error}')
+            return
+        try:
+            for editor in self.findChildren(LayeredSettingsEditor):
+                if editor.scope == 'personal':
+                    editor.pending.clear()
+                    if not editor.reload(initial=True):
+                        raise ValueError('A personal settings editor could not reload')
+            from commonUtils.ui.appearance.styling import styling
+            styling().reload()
+            self.refresh()
+        except Exception as error:
+            self.reset_status.setText(f'All personal settings were reset. Some views could not refresh: {error}. '
+                                      'Restart Logistics to finish applying the defaults.')
+        else:
+            self.reset_status.setText('All personal settings reset to software defaults. '
+                                      'Open tools reload their preferences automatically; launcher settings apply on the next launch.')
 
     def _changed(self):
         qt.QTimer.singleShot(0, self.refresh)
