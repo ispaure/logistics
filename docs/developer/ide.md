@@ -382,8 +382,35 @@ pause that buffer until an explicit save/reload succeeds and remain in a dedicat
 notice. Split views do not duplicate writes. Manual save/reload IO remains
 synchronous; autosave provides no crash checkpoint or cross-process writer lock.
 
-Validation on macOS/offscreen Qt: all 40 existing IDE tests and 34 standalone
+Validation on macOS/offscreen Qt: all 40 existing IDE tests and 36 standalone
 Text Editor tests passed, along with seven new baseline/autosave cases. The
-commonUtils suite passed all 108 isolated modules, including marker rendering.
+commonUtils suite ran 792 tests across 108 isolated modules with three skips and
+no failures, including marker rendering.
 Visual inspection confirmed separate marker, folding and line-number lanes.
 Native Windows/Linux interaction and other commonUtils consumers remain untested.
+
+### Gutter review and actions
+
+The follow-up `editor_hunks.HunkReview` uses the host's retained worker queue for
+baseline validation and Git jobs. Gutter hits use the current published snapshot
+and document revision; review actions revalidate live buffer identity/text. Revert
+rechecks the Git index (or saved snapshot) and replaces just the selected range
+through one QTextCursor edit block, converting offsets to UTF-16 for Qt. IDE's
+normal autosave policy applies to the resulting edit.
+
+Staging first verifies that the full buffer matches disk, loads a complete Git
+hunk and shows its exact patch (which may group nearby markers). The explicit stage
+action delegates to Repository.apply_hunk, preserving its status, attribute,
+regular-file and stale-patch validation. Staging never writes the working file.
+GUI completion callbacks reject destroyed views and stale buffers; jobs remain
+owned by each host's existing worker lifecycle. Git UI activation/registration is
+not involved. Untracked and otherwise unsupported hunk operations stay in the
+Git feature's file workflows.
+
+Document destruction cancels queued gutter futures and signals the Git runner to
+stop active reads. No Qt objects enter the background executor.
+
+Hunk-action validation on macOS/offscreen Qt: six new hunk/lifecycle tests and the
+seven baseline/autosave tests passed. The existing Git suite passed 121 tests
+across seven isolated modules; standalone Text Editor passed 36 tests across three
+modules after worker integration. Visual inspection covered the review dialog.

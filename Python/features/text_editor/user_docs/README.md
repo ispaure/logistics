@@ -181,3 +181,11 @@ required. Index/branch changes refresh within a few seconds. Otherwise the basel
 is the last saved file; markers then disappear after saving. Documents/baselines
 over 250,000 characters omit markers. Existing explicit save and private recovery
 checkpoint behavior is unchanged; this editor does not automatically write files.
+
+Click a marker to review its baseline and current lines. **Revert change in buffer**
+is a single undoable edit and does not save this editor's file. For Git-backed
+changes, save first and use **Preview Git hunk to stage**, then **Stage displayed
+Git hunk**. The displayed patch is authoritative: Git may include nearby changes
+in the same hunk. Staging changes only the index and rejects a stale patch.
+Untracked files, conflicts, renames and conversion-filter files require Git's
+file-level workflows. Reopen a review after its buffer or baseline changes.

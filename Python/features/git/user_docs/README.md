@@ -325,3 +325,12 @@ and unstaged changes.
 Repository tabs use the shared detached containers. The + in a detached window
 opens repository choices for that window, and new repository panes stay there.
 Closing Logistics also checks detached panes for drafts and running workers.
+
+## Reviewing changes from editors
+
+Text Editor and IDE can discover a file's Git repository without registering it
+here or opening this page. Their change markers compare the live buffer against
+the index. Click a marker to review/revert buffer lines or preview a saved Git
+hunk for staging. Staging uses the same regular-file, attribute and stale-patch
+checks as this page. Its patch preview can group nearby markers into one Git hunk;
+only the displayed hunk is staged. These editor actions do not auto-register repos.

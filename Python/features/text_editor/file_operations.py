@@ -47,6 +47,7 @@ class FileOperations:
         return self._add_document(Document())
 
     def _add_document(self, document):
+        document.markers.run = self._run
         index = self.document_stack.addWidget(document)
         self.document_stack.setCurrentIndex(index)
         document.changed.connect(lambda: self._document_changed(document))
