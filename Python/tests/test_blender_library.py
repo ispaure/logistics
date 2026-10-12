@@ -155,7 +155,7 @@ class BlenderLibraryTests(unittest.TestCase):
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.manager.subprocess.Popen') as popen:
             self.manager.launch(self.release, 'Art')
         args, kwargs = popen.call_args
-        self.assertEqual(args[0][:3], ['/fixture/blender', '--addons', 'z_module,bl_ext.logistics.a_extension'])
+        self.assertEqual(args[0][:3], [str(Path('/fixture/blender')), '--addons', 'z_module,bl_ext.logistics.a_extension'])
         self.assertEqual(args[0][3], '--python')
         self.assertTrue(args[0][4].endswith('launch_addons.py'))
         self.assertEqual(json.loads(kwargs['env']['LOGISTICS_BLENDER_ADDONS']), ['z_module', 'bl_ext.logistics.a_extension'])

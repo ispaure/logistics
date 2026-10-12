@@ -38,3 +38,22 @@ def make_book(path, *, version='3.0', nav=True):
           <p>Another chapter.</p></body></html>''')
         archive.writestr('OPS/unknown.dat', b'untouched\x00bytes')
     return path
+
+
+def isolate_appearance(test, folder):
+    """Popup controls save settings; tests must never write real user overrides."""
+    from unittest.mock import patch
+    from commonUtils.configuration.layered import LayeredSettings
+    from features.books import preferences
+    shared = LayeredSettings(folder / 'shared-defaults.ini', folder / 'shared-personal.ini')
+    books = LayeredSettings(folder / 'books-defaults.ini', folder / 'books-personal.ini')
+    shared.defaults.write_text('[Styling]\nreading_font_family_str =\nreading_font_size_int = 15\n')
+    books.defaults.write_text('[Reader]\ntheme_mode = sepia\nline_spacing_int = 150\nreading_width_int = 820\n')
+    stores = patch.object(preferences, 'appearance_store', side_effect=lambda key: shared if key.startswith('font_') else books)
+    stores.start(); test.addCleanup(stores.stop)
+    def read(section, key, fallback, **kwargs):
+        value = (shared if section == 'Styling' else books).values().get((section, key), fallback)
+        return int(value) if type(fallback) is int else value
+    values = patch.object(preferences, 'get_setting', side_effect=read)
+    values.start(); test.addCleanup(values.stop)
+    return shared, books

@@ -60,7 +60,8 @@ file and retry on a later launch. Switching scopes retains each scope's pending 
 
 Open **Settings → Blender → Presets**. The list on the left shows all presets
 with their Blender versions. Select one to configure its details on the right.
-Click **+**, choose a version and name, then launch from its card or **Launch Blender**.
+Click **+**, choose the Blender version and enter the preset name beneath it in
+the same dialog, then launch from its card or **Launch Blender**.
 Right-click a preset to rename, duplicate, copy it to another version, or delete it.
 Deletion still asks for confirmation and keeps the shared addon library intact. Each preset has
 independent `config`, `scripts`, `extensions` and `datafiles` folders. Blender's

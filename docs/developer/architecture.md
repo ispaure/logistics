@@ -308,3 +308,8 @@ recovery; it never launches a partially restored installation.
 Shared updater API contracts live in commonUtils `runtime/updates/README.md`.
 Logistics uses release discovery; Blue Hole uses branch commit discovery and owns
 its addon-specific extraction, preset resources and Deluxe overlay behavior.
+
+Book and comic metadata editors are feature-owned top-level dialogs. Browser and
+reader actions show them directly rather than registering them with the document
+host; feature controllers retain their normal save, worker and shutdown lifecycle.
+Reading windows continue to use the shared document host.

@@ -157,8 +157,10 @@ class WindowTests(ComicFixture, QtTestCase):
         menu = window._context_menu_for(index)
         self.assertEqual(menu.actions()[0].text(), 'Open')
         self.assertIn('Open in Default App', [action.text() for action in menu.actions()])
-        next(action for action in menu.actions() if action.text() == 'Edit metadata…').trigger()
+        with patch('commonUtils.ui.document_host.show_document', side_effect=AssertionError('Metadata must stay a popup')):
+            next(action for action in menu.actions() if action.text() == 'Edit metadata…').trigger()
         editor = window.metadata_windows[0]
+        self.assertTrue(editor.isWindow())
         self.wait_for(editor)
         self.assertEqual(editor.tabs.count(), 2)
         self.assertEqual(editor.tabs.tabText(0), 'Details')
@@ -490,7 +492,8 @@ class WindowTests(ComicFixture, QtTestCase):
         self.assertIn('2 items', window.heading.text())
         with patch.object(window, '_open_editor') as opened:
             menu = window._context_menu_for(indexes[1])
-            next(action for action in menu.actions() if action.text() == 'Edit metadata…').trigger()
+            with patch('commonUtils.ui.document_host.show_document', side_effect=AssertionError('Metadata must stay a popup')):
+                next(action for action in menu.actions() if action.text() == 'Edit metadata…').trigger()
         self.assertEqual(set(opened.call_args.args[0]), {folder, self.path})
         menu.deleteLater()
         window.tree.clearSelection()

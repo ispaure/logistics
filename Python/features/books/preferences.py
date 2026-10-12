@@ -10,6 +10,18 @@ from commonUtils.configuration.settings import get_setting
 THEMES = {'light': ('#ffffff', '#202124'), 'dark': ('#111111', '#eeeeee'),
           'sepia': ('#f4ecd8', '#46392c'), 'slate': ('#202630', '#dde5ee')}
 
+APPEARANCE_KEYS = {'font_family': ('Styling', 'reading_font_family_str'),
+                   'font_size': ('Styling', 'reading_font_size_int'),
+                   'line_spacing': ('Reader', 'line_spacing_int'),
+                   'reading_width': ('Reader', 'reading_width_int'),
+                   'theme': ('Reader', 'theme_mode')}
+
+
+def appearance_store(key):
+    from features.settings import settings_store
+    from commonUtils.configuration.layered import shared_settings
+    return shared_settings() if key in ('font_family', 'font_size') else settings_store(Path(__file__).with_name('config.ini'))
+
 
 def defaults():
     path = Path(__file__).with_name('config.ini')

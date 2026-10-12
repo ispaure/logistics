@@ -7,7 +7,7 @@ from zipfile import ZipFile
 import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
-from books_fixture import make_book
+from books_fixture import make_book, isolate_appearance
 from commonUtils.ui import pyside as qt
 from features.books import register
 from features.books.epub import EPUBBook
@@ -25,6 +25,7 @@ class ReaderTests(QtTestCase):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.folder = Path(self.temp.name)
+        self.appearance_stores = isolate_appearance(self, self.folder)
         self.path = make_book(self.folder / 'book.epub')
         self.page = BooksPage(state_folder=self.folder / 'state')
         self.addCleanup(self.page.deleteLater)
@@ -174,6 +175,40 @@ class ReaderTests(QtTestCase):
         self.page._link_clicked(qt.QUrl('https://example.com'))
         self.assertIn('inside the EPUB', self.page.status.text())
 
+    def test_automatic_font_keeps_application_family_and_normal_space_metrics(self):
+        font = self.page.text.document().defaultFont()
+        self.assertTrue(font.family())
+        expected = qt.QFont(self.app.font())
+        expected.setPointSize(font.pointSize())
+        self.assertEqual(qt.QFontInfo(font).family(), qt.QFontInfo(expected).family())
+        self.assertAlmostEqual(qt.QFontMetricsF(font).horizontalAdvance(' '),
+                               qt.QFontMetricsF(expected).horizontalAdvance(' '))
+
+    def test_appearance_changes_write_shared_personal_settings_and_reload_back(self):
+        shared, books = self.appearance_stores
+        self.page.font_size.setValue(23)
+        self.page.spacing.setValue(175)
+        self.assertEqual(shared.overrides()['Styling', 'reading_font_size_int'], '23')
+        self.assertEqual(books.overrides()['Reader', 'line_spacing_int'], '175')
+        self.assertEqual(self.page.text.document().defaultFont().pointSize(), 23)
+        self.assertNotIn(('Styling', 'reading_font_family_str'), shared.overrides())
+        shared.save({('Styling', 'reading_font_size_int'): '19'})
+        books.save({('Reader', 'line_spacing_int'): '125'})
+        self.page._check_settings()
+        self.assertEqual(self.page.font_size.value(), 19)
+        self.assertEqual(self.page.spacing.value(), 125)
+        self.assertEqual(self.page.text.document().defaultFont().pointSize(), 19)
+        self.assertIn('reading_font_size_int = 15', shared.defaults.read_text())
+
+    def test_failed_appearance_save_restores_displayed_value(self):
+        shared, books = self.appearance_stores
+        with patch.object(shared, 'save', side_effect=OSError('settings unavailable')), \
+                patch('ui_new.notifications.notify') as notification:
+            self.page.font_size.setValue(24)
+        self.assertEqual(self.page.font_size.value(), 15)
+        self.assertEqual(self.page.text.document().defaultFont().pointSize(), 15)
+        notification.assert_called_once()
+
     def test_font_themes_search_and_resource_blocking(self):
         from commonUtils.ui.appearance.theme import apply_theme
         apply_theme(mode='dark')
@@ -213,14 +248,9 @@ class ReaderTests(QtTestCase):
         self.assertEqual(self.page.text.width(), 600)
         self.assertGreaterEqual(self.page.progress_label.width(),
                                 self.page.progress_label.fontMetrics().horizontalAdvance(self.page.progress_label.text()))
-        from ui_new.pages.settings import SettingsPage
         self.page.show_appearance()
-        settings = next(widget for window in self.app.topLevelWidgets()
-                        for widget in window.findChildren(SettingsPage))
-        self.assertTrue(settings.window().isVisible())
-        self.assertEqual(settings.sidebar.currentItem().data(0, qt.Qt.ItemDataRole.UserRole), 'feature:books')
-        self.assertFalse(self.page.appearance.isVisible())
-        settings.window().close()
+        self.assertTrue(self.page.appearance.isVisible())
+        self.page.appearance.hide()
 
     def test_embedded_close_keeps_the_logistics_page_available(self):
         self.page.menus.close_action.trigger()
@@ -327,10 +357,12 @@ class ReaderTests(QtTestCase):
     def test_browser_metadata_action_opens_only_editor_and_saves(self):
         from features.books.metadata_window import MetadataWindow
         controller = register().browser.create_controller(self.page)
-        with patch('features.books.controller.BookWindow', side_effect=AssertionError('Reader should not open')):
+        with patch('features.books.controller.BookWindow', side_effect=AssertionError('Reader should not open')), \
+                patch('commonUtils.ui.document_host.show_document', side_effect=AssertionError('Metadata must stay a popup')):
             window = controller.open(self.path, edit=True)
             self.wait_idle(window)
         self.assertIsInstance(window, MetadataWindow)
+        self.assertTrue(window.isWindow())
         self.assertIsNone(window.findChild(qt.QTextBrowser))
         self.assertEqual(window.editor.fields['title'].text(), 'Sample Book')
         window.editor.fields['title'].setText('Edited without reader')

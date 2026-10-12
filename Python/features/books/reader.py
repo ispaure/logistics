@@ -86,8 +86,34 @@ class BooksPage(Bookmarks, qt.QWidget):
         self.sidebar.setCurrentIndex(1)
 
     def show_appearance(self):
-        from ui_new.settings.window import open_settings
-        open_settings(self, 'feature:books')
+        self.appearance.adjustSize()
+        self.appearance.move(self.appearance_button.mapToGlobal(
+            qt.QPoint(self.appearance_button.width() - self.appearance.width(), self.appearance_button.height())))
+        self.appearance.show()
+
+    def reading_font(self):
+        # An empty shared family means Automatic. QFont('') can resolve to an
+        # emoji font on macOS, whose space metrics stretch every word apart.
+        font = qt.QFont(qt.QApplication.font())
+        if self._settings['font_family'].strip():
+            font.setFamily(self._settings['font_family'])
+        font.setPointSize(self._settings['font_size'])
+        return font
+
+    def _save_appearance(self, key, value):
+        from .preferences import appearance_store, APPEARANCE_KEYS
+        section, field = APPEARANCE_KEYS[key]
+        try:
+            appearance_store(key).save({(section, field): str(value)}, scope='personal')
+        except (OSError, ValueError) as error:
+            from ui_new.notifications import notify
+            notify('books', 'Could not save reading appearance', str(error), outcome='failure')
+            self._settings_changed()
+            return
+        if key in ('font_family', 'font_size'):
+            from commonUtils.ui.appearance.styling import styling
+            styling().reload()
+        self._check_settings()
 
     def _check_settings(self):
         if defaults() != self._settings:
@@ -97,7 +123,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         self._settings = defaults()
         for control in (self.font_family, self.font_size, self.theme, self.spacing, self.reading_width):
             control.blockSignals(True)
-        self.font_family.setCurrentFont(qt.QFont(self._settings['font_family']))
+        self.font_family.setCurrentFont(self.reading_font())
         self.font_size.setValue(self._settings['font_size'])
         self.theme.setCurrentIndex(self.theme.findData(self._settings['theme']))
         self.spacing.setValue(self._settings['line_spacing'])
@@ -351,8 +377,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         base.setScheme('epub')
         base.setPath('/' + path)
         self.text.document().setBaseUrl(base)
-        font = self.font_family.currentFont()
-        font.setPointSize(self.font_size.value())
+        font = self.reading_font()
         family = font.family().replace('\\', '\\\\').replace('"', '\\"')
         self.text.setStyleSheet(f'QTextBrowser {{ background-color: {background}; color: {foreground}; '
                                f'font-family: "{family}"; font-size: {font.pointSize()}pt; border: none; padding: 24px; }}')

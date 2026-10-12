@@ -11,7 +11,7 @@ from commonUtils.ui import pyside as qt
 from features.books.epub import EPUBBook
 from features.books.file_type import EPUBFile
 from features.books.reader import BooksPage
-from books_fixture import make_book
+from books_fixture import make_book, isolate_appearance
 
 
 def replace_members(path, changes):
@@ -29,6 +29,7 @@ class BookPaginationTests(QtTestCase):
         self.tmp = TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
+        isolate_appearance(self, self.root)
         self.path = make_book(self.root / 'book.epub')
 
     def page(self):
