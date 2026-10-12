@@ -194,3 +194,12 @@ file and leave a visible notice. Use Save, Reload or Save As to resolve it; your
 buffer remains intact. Closing, reloading or explicitly saving during an active
 autosave asks you to retry after it finishes. Untouched files are not written.
 Autosave is not crash recovery; unsaved edits can still be lost on a crash.
+
+Click a colored gutter marker to review that change. **Revert change in buffer**
+restores the shown baseline lines as one undoable edit; normal IDE autosave applies
+afterward. Git-backed reviews also offer **Preview Git hunk to stage**. Save first,
+then inspect the displayed patch and choose **Stage displayed Git hunk**. Git can
+group nearby changes together, so the staging preview may include adjacent markers.
+Staging changes only the index. Changed buffers/baselines or stale patches require
+reopening the review. Untracked files, conflicts, renames, conversions and permission
+changes use the Git feature's file-level workflows instead of hunk staging.

@@ -165,6 +165,6 @@ class AutoSaveTests(QtTestCase):
         markers.request = (self.doc.snapshot, self.doc.document().revision())
         markers.future = Future()
         self.doc.insertPlainText('newer ')
-        markers.future.set_result((('stale',), 'stale'))
+        markers.future.set_result((('stale',), 'stale', ''))
         markers.finished()
         self.assertEqual(self.doc.line_changes, ())

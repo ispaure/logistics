@@ -196,6 +196,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                     buffer = doc.buffer
                     from .autosave import AutoSave
                     buffer.autosave = AutoSave(self, buffer)
+                    buffer.markers.run = self.run
                     buffer.text.modificationChanged.connect(lambda _: self.update_buffer_titles(buffer))
                     self.watch.addPath(str(path))
                 if isinstance(doc, EditorDocument):
