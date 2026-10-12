@@ -10,7 +10,8 @@ from .features import FeaturesPage
 from ui_new.settings.indexing import IndexSettingsPanel
 from commonUtils.ui.settings.settings_sections import ScopedSettings, SettingsSection
 from commonUtils.ui.settings.layered_settings import LayeredSettingsEditor
-from features.settings import settings_store, initialize_settings, validate_configuration, reset_personal_configuration
+from features.settings import settings_store, initialize_settings, validate_configuration
+from services.preferences import reset_personal_preferences
 
 
 class ConfigurationPanel(qt.QWidget):
@@ -341,26 +342,23 @@ class SettingsPage(qt.QWidget):
             return
         self.reset_status.show()
         try:
-            with reset_personal_configuration():
-                registry.reset_feature_defaults()
+            result = reset_personal_preferences(refresh_callbacks=(self._reload_personal_editors, self.refresh))
         except Exception as error:
             self.reset_status.setText(f'Could not reset personal settings: {error}')
             return
-        try:
-            for editor in self.findChildren(LayeredSettingsEditor):
-                if editor.scope == 'personal':
-                    editor.pending.clear()
-                    if not editor.reload(initial=True):
-                        raise ValueError('A personal settings editor could not reload')
-            from commonUtils.ui.appearance.styling import styling
-            styling().reload()
-            self.refresh()
-        except Exception as error:
-            self.reset_status.setText(f'All personal settings were reset. Some views could not refresh: {error}. '
+        if result.refresh_errors:
+            self.reset_status.setText(f'All personal settings were reset. Some views could not refresh: {"; ".join(result.refresh_errors)}. '
                                       'Restart Logistics to finish applying the defaults.')
         else:
             self.reset_status.setText('All personal settings reset to software defaults. '
                                       'Open tools reload their preferences automatically; launcher settings apply on the next launch.')
+
+    def _reload_personal_editors(self):
+        for editor in self.findChildren(LayeredSettingsEditor):
+            if editor.scope == 'personal':
+                editor.pending.clear()
+                if not editor.reload(initial=True):
+                    raise ValueError('A personal settings editor could not reload')
 
     def _changed(self):
         qt.QTimer.singleShot(0, self.refresh)

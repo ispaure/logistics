@@ -37,7 +37,7 @@ class SettingsPageTests(QtTestCase):
         with patch.object(registry, 'get_feature_states', return_value=[]):
             page = SettingsPage(); self.addCleanup(page.deleteLater)
         with patch('ui_new.pages.settings.qt.QMessageBox.question', return_value=qt.QMessageBox.StandardButton.No) as question, \
-                patch('ui_new.pages.settings.reset_personal_configuration') as reset:
+                patch('ui_new.pages.settings.reset_personal_preferences') as reset:
             page.reset_personal_button.click()
         reset.assert_not_called()
         self.assertIn('ALL categories', question.call_args.args[2])
@@ -77,7 +77,7 @@ class SettingsPageTests(QtTestCase):
         with patch.object(registry, 'get_feature_states', return_value=[]):
             page = SettingsPage(); self.addCleanup(page.deleteLater)
         with patch('ui_new.pages.settings.qt.QMessageBox.question', return_value=qt.QMessageBox.StandardButton.Yes), \
-                patch('ui_new.pages.settings.reset_personal_configuration', side_effect=OSError('Read only')):
+                patch('ui_new.pages.settings.reset_personal_preferences', side_effect=OSError('Read only')):
             page.reset_personal_button.click()
         self.assertIn('Could not reset', page.reset_status.text())
         self.assertIn('Read only', page.reset_status.text())
