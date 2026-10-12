@@ -170,16 +170,50 @@ class MainWindow(pyside.Window):
         self._show_documents()
         return self.documents.new_document_chooser(self.documents.workspace)
 
+    @staticmethod
+    def _launch_key(feature, page_id):
+        return {'git.workspace': 'git', 'ide.workspace': 'ide'}.get(page_id, 'feature:' + feature + ':' + page_id)
+
     def _launch_targets(self):
-        browser = next((page for _, _, page in self._core_pages
-                        if isinstance(page, FileBrowserPage)), None)
-        return {
-            'browser': browser,
-            'git': self._feature_pages.get(('git', 'git.workspace')),
-            'ide': self._feature_pages.get(('ide', 'ide.workspace')),
-        }
+        targets = {}
+        for _, _, page in self._core_pages:
+            if isinstance(page, FileBrowserPage):
+                targets['browser'] = page
+            elif isinstance(page, FoldersPage):
+                targets['folders'] = page
+        for (feature, page_id), page in self._feature_pages.items():
+            if page.property('navigation_icon') and self.tabs.indexOf(page) >= 0:
+                targets[self._launch_key(feature, page_id)] = page
+        if self.actions.count:
+            targets['actions'] = self.actions
+        if self.bulk_rename is not None:
+            targets['bulk_rename'] = self.bulk_rename
+        return targets
+
+    def _tool_launchers(self):
+        targets = self._launch_targets()
+        entries = []
+        for key, title, detail, icon in (
+                ('browser', 'File Browser', 'Browse and organize files.', 'browser'),
+                ('folders', 'Folder Hub', 'Browse configured folders and services.', 'hub'),
+                ('bulk_rename', 'Bulk Rename', 'Preview and rename files and folders.', 'rename')):
+            if key in targets or key == 'bulk_rename':
+                entries.append((key, title, detail, icon))
+        states = {state.name: state for state in registry.get_feature_states()}
+        for registered in registry.get_pages():
+            contribution = registered.contribution
+            key = self._launch_key(registered.feature_name, contribution.page_id)
+            if contribution.navigation_icon and key in targets:
+                state = states.get(registered.feature_name)
+                detail = contribution.launch_description or getattr(state, 'description', '') or f'Open {contribution.name}.'
+                entries.append((key, contribution.name, detail, contribution.navigation_icon))
+        if 'actions' in targets:
+            entries.append(('actions', 'Folder Actions', 'Continue running operations and review their results.', 'actions'))
+        return entries
 
     def _launch(self, mode):
+        if mode == 'bulk_rename' and self.bulk_rename is None:
+            self._show_bulk_rename()
         targets = self._launch_targets()
         page = targets.get(mode)
         if mode != 'hub' and (page is None or self.tabs.indexOf(page) < 0):
@@ -192,7 +226,7 @@ class MainWindow(pyside.Window):
         self.return_to_tool_action.setText('Return to tool')
         self.return_to_tool_action.setEnabled(page is not None)
         if page is None:
-            page = targets['browser']
+            page = targets.get('browser')
         if page is not None:
             self.tabs.setCurrentWidget(page)
         self.launch_surface.position_settings()
@@ -414,8 +448,7 @@ class MainWindow(pyside.Window):
     def _refresh_sidebar(self):
         self.sidebar.refresh(self.tabs, self._core_pages)
         self.landing.set_document_launchers(self.sidebar.launchers)
-        for mode, page in self._launch_targets().items():
-            self.landing.set_available(mode, page is not None and self.tabs.indexOf(page) >= 0)
+        self.landing.set_tool_launchers(self._tool_launchers())
         if self._standalone_page is not None and self.tabs.indexOf(self._standalone_page) < 0:
             self._show_landing()
 

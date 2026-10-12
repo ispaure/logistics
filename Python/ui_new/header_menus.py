@@ -64,7 +64,8 @@ class HeaderMenus(qt.QObject):
 
     def update_settings(self):
         self.feature_settings.clear()
-        for state in sorted(registry.get_feature_states(), key=lambda state: state.label.casefold()):
+        for state in sorted((state for state in registry.get_feature_states() if state.enabled),
+                            key=lambda state: state.label.casefold()):
             self.feature_settings.addAction(state.label, lambda checked=False, name=state.name:
                                            self.owner._show_feature_settings(name))
         self.feature_settings.setEnabled(bool(self.feature_settings.actions()))

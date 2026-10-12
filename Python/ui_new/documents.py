@@ -75,17 +75,19 @@ class DocumentsPage(qt.QWidget):
 
     @property
     def count(self):
-        return sum(not record['closed'] for record in self.records.values())
+        return sum(not record['closed'] and not getattr(window, '_document_chooser', False)
+                   for window, record in self.records.items())
 
     @property
     def attached_count(self):
-        return sum(not record['closed'] and not record['detached'] for record in self.records.values())
+        return sum(not record['closed'] and not record['detached'] and not getattr(window, '_document_chooser', False)
+                   for window, record in self.records.items())
 
     def document_entries(self):
         for dock in self.workspace.all_docks:
             window = dock.widget().document
             record = self.records[window]
-            if not record['closed']:
+            if not record['closed'] and not getattr(window, '_document_chooser', False):
                 entries = getattr(window, 'document_entries', lambda: [(window.windowTitle(), None)])()
                 for title, tab in entries:
                     yield window, title, tab, record['detached']
@@ -159,17 +161,8 @@ class DocumentsPage(qt.QWidget):
             self.changed.emit()
 
     def document_launchers(self):
-        from features import registry
-        from features.contributions import DocumentLauncherContribution
-        from commonUtils.ui.markdown.window import open_markdown
-        def open_markdown_file(parent):
-            path, _ = qt.QFileDialog.getOpenFileName(parent, 'Open Markdown', '',
-                                                    'Markdown (*.md *.markdown);;All files (*)')
-            return open_markdown(path, allow_edit=True) if path else None
-        launchers = [DocumentLauncherContribution('markdown', 'Markdown Editor', open_markdown_file,
-                     'markdown', 20, lambda parent: open_markdown(None, allow_edit=True))]
-        launchers.extend(entry.contribution for entry in registry.get_document_launchers())
-        return {entry.editor_id: entry for entry in sorted(launchers, key=lambda entry: entry.order)}
+        from .launch_catalog import document_launchers
+        return document_launchers()
 
     def _features_changed(self):
         qt.QTimer.singleShot(0, self, self._refresh_choosers)

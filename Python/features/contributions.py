@@ -142,13 +142,17 @@ class WorkflowContribution:
 
 @dataclass(frozen=True)
 class PageContribution:
-    """A standalone feature-owned page contributed to the main navigation."""
+    """A feature-owned page; navigation_icon opts into the rail and launch cards.
+
+    launch_description describes the focused workspace; empty uses feature metadata.
+    """
 
     name: str
     page_id: str
     create_page: Callable[[Any], Any]
     order: int = 0
     navigation_icon: str | None = None
+    launch_description: str = ''
 
 
 @dataclass(frozen=True)
@@ -196,6 +200,7 @@ class DocumentLauncherContribution:
     icon: str = 'documents'
     order: int = 0
     new_document: Callable[[Any], Any] | None = None
+    description: str = ''
 
 
 @dataclass

@@ -165,7 +165,7 @@ def register() -> Feature:
     from features.comics.browser_support import folder_fields
     return Feature(
         id='comics', label='Books & Comics', requires=('images',),
-        document_launchers=[DocumentLauncherContribution('comic', 'Comic Reader', _launch_reader, 'comic', 40)],
+        document_launchers=[DocumentLauncherContribution('comic', 'Comic Reader', _launch_reader, 'comic', 40, description='Read comics and image archives.')],
         file_types=[FileType(comic_type, extensions=('cbz',))],
         browser=BrowserExtension(
             actions=[SelectionAction('edit_metadata', 'Edit metadata…',

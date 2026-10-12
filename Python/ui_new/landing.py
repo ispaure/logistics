@@ -25,6 +25,7 @@ class LaunchCard(qt.QPushButton):
         text.setSpacing(4)
         heading = qt.QLabel(title)
         heading.setObjectName('launchTitle')
+        heading.setWordWrap(True)
         description = qt.QLabel(detail)
         description.setObjectName('launchDetail')
         description.setWordWrap(True)
@@ -41,7 +42,11 @@ class LandingPage(qt.QWidget):
 
     def __init__(self, parent=None, *, documents_only=False):
         super().__init__(parent)
-        self._document_columns = 2 if documents_only else 3
+        self._documents_only = documents_only
+        self._document_columns = 3
+        self._tool_signature = None
+        self._tool_cards = []
+        self._document_cards = []
         self.setStyleSheet('''
             QPushButton#launchCard, QFrame#documentCard {
                 background: palette(base); border: 1px solid palette(mid);
@@ -58,7 +63,7 @@ class LandingPage(qt.QWidget):
         ''')
         outer = qt.QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        scroll = qt.QScrollArea(self)
+        scroll = self.scroll = qt.QScrollArea(self)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(qt.QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -69,9 +74,9 @@ class LandingPage(qt.QWidget):
         centered.setContentsMargins(16 if documents_only else 36, 24 if documents_only else 36,
                                    16 if documents_only else 36, 32 if documents_only else 64)
         centered.addStretch()
-        content = qt.QWidget()
-        content.setMinimumWidth(240 if documents_only else 720)
-        content.setMaximumWidth(880)
+        content = self.content = qt.QWidget()
+        content.setMinimumWidth(240)
+        content.setMaximumWidth(1440)
         content.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Preferred)
         layout = qt.QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -81,6 +86,7 @@ class LandingPage(qt.QWidget):
         font.setPointSize(26)
         font.setBold(True)
         heading.setFont(font)
+        heading.setWordWrap(True)
         layout.addWidget(heading)
         layout.addWidget(qt.QLabel('Choose a format to create, read or edit.' if documents_only
                                  else 'Choose your workspace, or open something to read or edit.'))
@@ -90,17 +96,9 @@ class LandingPage(qt.QWidget):
             hub.clicked.connect(lambda: self.launch_requested.emit('hub'))
             self.buttons['hub'] = hub
             layout.addWidget(hub)
-            tools = qt.QHBoxLayout()
-            tools.setSpacing(12)
-            for mode, title, detail, icon in (
-                    ('browser', 'File Browser', 'Browse and organize files', 'browser'),
-                    ('git', 'Git', 'Work with repositories', 'git'),
-                    ('ide', 'IDE', 'Explore and edit projects', 'text')):
-                button = LaunchCard(title, detail, icon)
-                button.clicked.connect(lambda checked=False, mode=mode: self.launch_requested.emit(mode))
-                self.buttons[mode] = button
-                tools.addWidget(button, 1)
-            layout.addLayout(tools)
+            self.tool_grid = qt.QGridLayout()
+            self.tool_grid.setSpacing(16)
+            layout.addLayout(self.tool_grid)
             hint = qt.QLabel('Focused workspaces open without the sidebar. The settings icon keeps your launch choices nearby.')
             hint.setWordWrap(True)
             layout.addWidget(hint)
@@ -109,21 +107,60 @@ class LandingPage(qt.QWidget):
         title.setObjectName('sectionTitle')
         layout.addWidget(title)
         self.document_grid = qt.QGridLayout()
-        self.document_grid.setSpacing(12)
+        self.document_grid.setSpacing(16)
         layout.addLayout(self.document_grid)
         self.editor_buttons = {}
         self.editor_new_buttons = {}
         self._launcher_signature = None
         centered.addWidget(content, 0, qt.Qt.AlignmentFlag.AlignHCenter)
         centered.addStretch()
+        self.scroll.viewport().installEventFilter(self)
+        self._fit_content()
 
-    def set_available(self, mode, available):
-        button = self.buttons[mode]
-        button.setEnabled(available)
-        button.setToolTip('' if available else 'Enable this feature in Settings to open it.')
+    def eventFilter(self, watched, event):
+        if watched is self.scroll.viewport() and event.type() == qt.QEvent.Type.Resize:
+            self._fit_content()
+        return super().eventFilter(watched, event)
+
+    def _fit_content(self):
+        margin = 16 if self._documents_only else 36
+        width = max(240, min(1440, self.scroll.viewport().width() - 2 * margin))
+        self.content.setFixedWidth(width)
+        columns = 3 if width >= 900 else 2 if width >= 560 else 1
+        self._document_columns = columns
+        if hasattr(self, 'tool_grid'):
+            self._arrange_cards(self.tool_grid, self._tool_cards, columns)
+        self._arrange_cards(self.document_grid, self._document_cards, columns)
+
+    @staticmethod
+    def _arrange_cards(grid, cards, columns):
+        for card in cards:
+            grid.removeWidget(card)
+        for index, card in enumerate(cards):
+            grid.addWidget(card, index // columns, index % columns)
+        for column in range(3):
+            grid.setColumnStretch(column, int(column < columns))
+
+    def set_tool_launchers(self, entries):
+        """Logistics supplies enabled page cards; the view knows no feature IDs."""
+        signature = tuple(entries)
+        if signature == self._tool_signature:
+            return
+        self._tool_signature = signature
+        for card in self._tool_cards:
+            self.tool_grid.removeWidget(card)
+            card.hide(); card.deleteLater()
+        self._tool_cards = []
+        self.buttons = {'hub': self.buttons['hub']}
+        for key, title, detail, icon in entries:
+            button = LaunchCard(title, detail, icon)
+            button.clicked.connect(lambda checked=False, key=key: self.launch_requested.emit(key))
+            self.buttons[key] = button
+            self._tool_cards.append(button)
+        self._fit_content()
 
     def set_document_launchers(self, launchers):
-        signature = tuple((key, entry.name, entry.icon, bool(entry.new_document))
+        signature = tuple((key, entry.name, entry.icon, bool(entry.new_document), entry.description)
                           for key, entry in launchers.items())
         if signature == self._launcher_signature:
             return
@@ -134,12 +171,14 @@ class LandingPage(qt.QWidget):
             widget.deleteLater()
         self.editor_buttons = {}
         self.editor_new_buttons = {}
+        self._document_cards = []
         for index, (key, entry) in enumerate(launchers.items()):
             card = qt.QFrame()
             card.setObjectName('documentCard')
             layout = qt.QVBoxLayout(card)
             layout.setContentsMargins(16, 14, 16, 14)
-            layout.setSpacing(12)
+            layout.setSpacing(16)
+            card.setMinimumHeight(150)
             heading = qt.QHBoxLayout()
             glyph = DestinationGlyph()
             glyph.setFixedSize(24, 24)
@@ -147,18 +186,12 @@ class LandingPage(qt.QWidget):
             heading.addWidget(glyph)
             label = qt.QLabel(entry.name)
             label.setObjectName('launchTitle')
+            label.setWordWrap(True)
             heading.addWidget(label, 1)
             layout.addLayout(heading)
-            descriptions = {
-                'markdown': 'Write and preview formatted notes.',
-                'text': 'Edit plain text and code files.',
-                'epub': 'Read EPUB books and resume your progress.',
-                'comic': 'Read comics and image archives.',
-                'archive': 'Browse, create and extract archives.',
-            }
-            detail = qt.QLabel(descriptions.get(key, 'Open files with ' + entry.name + '.'))
+            detail = qt.QLabel(entry.description or 'Open files with ' + entry.name + '.')
             detail.setWordWrap(True)
-            layout.addWidget(detail)
+            layout.addWidget(detail, 1)
             actions = qt.QHBoxLayout()
             actions.addStretch()
             if entry.new_document:
@@ -175,9 +208,8 @@ class LandingPage(qt.QWidget):
             actions.addWidget(button)
             self.editor_buttons[key] = button
             layout.addLayout(actions)
-            self.document_grid.addWidget(card, index // self._document_columns, index % self._document_columns)
-        for column in range(self._document_columns):
-            self.document_grid.setColumnStretch(column, 1)
+            self._document_cards.append(card)
+        self._fit_content()
 
 
 class DocumentChooser(LandingPage):
@@ -185,16 +217,6 @@ class DocumentChooser(LandingPage):
     def __init__(self, parent=None):
         super().__init__(parent, documents_only=True)
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        columns = 1 if self.width() < 620 else 2
-        if columns != self._document_columns:
-            self._document_columns = columns
-            cards = [self.document_grid.itemAt(i).widget() for i in range(self.document_grid.count())]
-            for card in cards:
-                self.document_grid.removeWidget(card)
-            for index, card in enumerate(cards):
-                self.document_grid.addWidget(card, index // columns, index % columns)
 
 
 class LaunchSurface(qt.QWidget):

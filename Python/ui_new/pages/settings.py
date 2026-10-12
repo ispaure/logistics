@@ -365,14 +365,15 @@ class SettingsPage(qt.QWidget):
         qt.QTimer.singleShot(0, self.refresh)
 
     def refresh(self):
-        states = sorted(registry.get_feature_states(), key=lambda state: state.label.casefold())
+        states = sorted((state for state in registry.get_feature_states() if state.enabled),
+                        key=lambda state: state.label.casefold())
         feature_keys = {f'feature:{state.name}' for state in states}
         if self._category_items and feature_keys == {key for key in self._category_items if key.startswith('feature:')}:
             # Runtime toggles change labels, not the category structure. Retain the
             # tree items so selection, expansion and sidebar scrolling stay put.
             for state in states:
                 key = f'feature:{state.name}'
-                self._category_items[key].setText(0, state.label + (' (disabled)' if not state.enabled else ''))
+                self._category_items[key].setText(0, state.label)
                 self._category_items[key].setToolTip(0, getattr(state, 'description', ''))
                 if key in self.panels:
                     self.panels[key].refresh(state)
@@ -394,7 +395,7 @@ class SettingsPage(qt.QWidget):
             self.sidebar.addTopLevelItem(heading)
             for state in states:
                 key = f'feature:{state.name}'
-                item = qt.QTreeWidgetItem([state.label + (' (disabled)' if not state.enabled else '')])
+                item = qt.QTreeWidgetItem([state.label])
                 item.setData(0, qt.Qt.ItemDataRole.UserRole, key)
                 item.setToolTip(0, getattr(state, 'description', ''))
                 heading.addChild(item)

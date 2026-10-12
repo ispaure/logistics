@@ -47,7 +47,7 @@ def register():
     return Feature(
         id="text_editor",
         label="Text Editor",
-        document_launchers=[DocumentLauncherContribution("text", "Text Editor", launch, "text", 10, new_document)],
+        document_launchers=[DocumentLauncherContribution("text", "Text Editor", launch, "text", 10, new_document, "Edit plain text and code files.")],
         browser=BrowserExtension(
             actions=(
                 SelectionAction(

@@ -1,20 +1,27 @@
 # Files and documents in Logistics
 
-Logistics starts with a launch chooser. Select **Open full hub with sidebar** for
-all destinations, or **File Browser**, **Git**, or **IDE** to use one tool without
-the sidebar. Git and IDE are available when their features are enabled.
+Logistics starts with a launch chooser. **Open full hub with sidebar** opens all
+available destinations. Below it, File Browser is always available; Folder Hub,
+Bulk Rename and enabled features with their own navigation buttons offer focused
+workspaces without the sidebar. Disabled features are absent. Use Settings to
+enable them, and their cards appear without restarting the app.
 
-The chooser's **Read & edit** cards open Markdown, Text Editor, EPUB Reader,
-Comic Reader and Archives, according to enabled features. Use **Open…** to pick a
-file or **New** where offered to create a document. Cancelling the picker keeps
-the chooser visible. Opened documents use the shared workspace without the sidebar.
+The **Read & edit** section always includes Markdown Editor. Enabled features add
+their registered document tools, such as Text Editor, EPUB Reader, Comic Reader and
+Archives. **Open…** picks a file; **New** appears where creation is supported.
+Cancelling keeps the chooser visible. Opened documents use the shared workspace.
+
+Cards adapt to the available width: up to three per row in landscape windows,
+fewer columns in narrower windows. Wider views give cards more room. Long lists
+scroll vertically with the scrollbar or mouse wheel. The New / Open Document
+chooser is a utility tab and is omitted from the document list and document counts.
 
 In a single-tool view, a small, opaque settings icon floats above the content at
 the bottom-left. Click it to show **Settings**, **Return to tool** (or **Return to
 documents**), **Open Documents**, **Choose launch mode**, and **Open full hub with
 sidebar**. The sidebar's Settings icon opens the same menu. Actions for the current
 page or launch mode are hidden. The chooser also offers this icon, so
-you can enable an unavailable tool. Switching modes reuses your existing pages
+you can enable a tool that is absent from the chooser. Switching modes reuses your existing pages
 and workspaces. Each new app launch shows the chooser again.
 
 The window header also keeps a **Logistics** menu in every context. **Go to Tool**
@@ -168,7 +175,9 @@ width. The last normal browser tab still cannot close or detach.
 ## Central settings
 
 Open **Logistics Settings** from the navigation rail or a tool's settings action.
-Settings opens in **Personal Settings**. **Default Software Configuration** is
+Settings opens in **Personal Settings**. Its feature-settings list includes only
+enabled features; the **Features** page lists installed features so you can enable
+or disable them. Hidden feature editors retain pending edits until you close or reset them. **Default Software Configuration** is
 available only when the current user's home folder is named `marca`.
 For **Features**, choose **Default Software Configuration** to change which tools
 are enabled by default in shipped releases, or **Personal Settings** to change your
