@@ -395,7 +395,7 @@ class EditingCommands:
 
     def merge_disk(self):
         from commonUtils.persistence.text import read_text_file
-        from commonUtils.ui.code_editor.merge_model import merge_text
+        from commonUtils.persistence.merge import merge_text
         from commonUtils.ui.code_editor.merge import MergeDialog
         document = self.current
         if not document or not document.path or self.task.busy:

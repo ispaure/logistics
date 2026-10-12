@@ -819,7 +819,7 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
     def resolve_conflict(self, relative_path):
         if self.busy or not self.path:
             return
-        from commonUtils.ui.code_editor.merge_model import merge_text
+        from commonUtils.persistence.merge import merge_text
         from commonUtils.ui.code_editor.merge import MergeDialog
         path = self.path
         def read(runner):
