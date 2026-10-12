@@ -52,9 +52,9 @@ See the [user guide](user_docs/README.md) for controls and recovery.
   restores files; successful selection state publishes atomically afterward.
   Launching a preset with managed selections reapplies resolution before launch.
   External side effects of addon startup code are beyond filesystem rollback.
-- `page.py` shows LaunchCard configurations and adjacent Manage buttons, a separate
-  library view, and management tabs for selection/inventory. Maintenance actions
-  live in More; local ZIP import lives on the main page. It uses commonUtils `OperationProgress` for installs, copies, deletions and
+- `page.py` shows LaunchCard configurations and adjacent Manage buttons, and
+  management tabs for selection/inventory. Maintenance actions live in More;
+  local ZIP imports and the grouped catalog live in the Addon Library settings tab. It uses commonUtils `OperationProgress` for installs, copies, deletions and
   inventory queries. `prepare_close()` requests cancellation and defers destruction;
   `idle` fires only after the worker retires. Preset selection uses filesystem metadata;
   the explicit Refresh action queries Blender. The core rail owns its Blender glyph.
@@ -217,3 +217,15 @@ are restored exactly over the incoming payload from the transaction backup;
 user folders are not merged with or overwritten by publisher examples. Failure
 restores the complete previous preset as before. Symbolic envFiles roots are
 refused; nested user links are retained without copying their targets.
+
+### Grouped addon library settings
+
+Personal feature settings have three tabs: Presets, Versions Definitions, and
+Addon Library. `library_page.py` owns the independent catalog/import UI and its
+cancellable worker. It shares the preset page's AddonLibrary instance; successful
+imports refresh preset choices without changing selections. The settings host
+waits for both workers to retire before closing. The catalog groups by stable
+addon identity, keeps groups collapsed initially, and lists numeric versions and
+dated revisions newest first under each group. Its Shared / User provided source
+labels map to the existing Provided / Personal storage values; stored records
+remain compatible. The generated library-inventory.json is informational only.

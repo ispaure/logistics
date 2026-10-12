@@ -7,6 +7,7 @@ from commonUtils.runtime.operations import check_cancelled
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from .addons import inspect_addons, scan_preset
 from .library import AddonLibrary, version_tuple
+from .library_page import source_label
 from ui_new.landing import LaunchCard
 from .manager import get_manager
 from . import bluehole
@@ -46,12 +47,7 @@ class BlenderPage(qt.QWidget):
         home.setContentsMargins(0, 0, 0, 0)
         toolbar = qt.QHBoxLayout()
         self.add_configuration = qt.QPushButton('Add Configuration…')
-        self.add_addon = qt.QPushButton('Add Addon…')
-        self.add_addon.setToolTip('Add a ZIP to your personal library; provided addons remain unchanged.')
-        self.library_button = qt.QPushButton('Addon Library')
-        self.versions_button = qt.QPushButton('Manage Versions')
-        for button in (self.add_configuration, self.add_addon, self.library_button, self.versions_button):
-            toolbar.addWidget(button)
+        toolbar.addWidget(self.add_configuration)
         toolbar.addStretch()
         home.addLayout(toolbar)
         scroll = qt.QScrollArea()
@@ -156,9 +152,6 @@ class BlenderPage(qt.QWidget):
             button._menu_action = action
         self.actions.setMenu(menu)
         primary.addWidget(self.actions)
-        if settings_mode:
-            primary.addWidget(self.add_addon)
-            primary.addWidget(self.library_button)
         primary.addStretch()
         controls.addLayout(primary)
         manage_layout.addWidget(self.controls)
@@ -197,22 +190,7 @@ class BlenderPage(qt.QWidget):
         selection_layout.addWidget(self.apply_button, 0, qt.Qt.AlignmentFlag.AlignLeft)
         self.tabs.addTab(selection_page, 'Addons')
         manage_layout.addWidget(self.tabs, 1)
-        self.catalog = qt.QWidget()
-        catalog_layout = qt.QVBoxLayout(self.catalog)
-        catalog_back = qt.QPushButton('‹ Back to configurations')
-        catalog_back.clicked.connect(lambda: self.stack.setCurrentWidget(self.preset_splitter if self.settings_mode else self.home))
-        catalog_layout.addWidget(catalog_back, 0, qt.Qt.AlignmentFlag.AlignLeft)
-        catalog_layout.addWidget(qt.QLabel('Available in library · shared and personal packages'))
-        self.catalog_table = qt.QTableWidget(0, 8)
-        self.catalog_table.setHorizontalHeaderLabels(['Addon', 'Version', 'Package date', 'Blender minimum', 'Blender maximum (exclusive)', 'Type', 'Library', 'ZIP'])
-        self.catalog_table.setEditTriggers(qt.QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.catalog_table.horizontalHeader().setStretchLastSection(True)
-        catalog_layout.addWidget(self.catalog_table)
-        self.stack.addWidget(self.catalog)
         self.add_configuration.clicked.connect(self._add_configuration)
-        self.add_addon.clicked.connect(self._add_library_addon)
-        self.library_button.clicked.connect(self._open_library)
-        self.versions_button.clicked.connect(lambda: self._manage_configuration())
         self.setStyleSheet("""
             QPushButton#launchCard { background: palette(base); border: 1px solid palette(mid); border-radius: 10px; }
             QPushButton#launchCard:hover { background: palette(midlight); border-color: palette(highlight); }
@@ -248,8 +226,6 @@ class BlenderPage(qt.QWidget):
         self.addon_folder.clicked.connect(self._open_addon)
         if not settings_mode:
             self.add_configuration.setText('Configure Blender…')
-            for button in (self.add_addon, self.library_button, self.versions_button):
-                button.hide()
         self.refresh()
         if settings_mode:
             self.stack.setCurrentWidget(self.preset_splitter if self.settings_mode else self.manage)
@@ -393,8 +369,6 @@ class BlenderPage(qt.QWidget):
             self._version_changed()
             self.status.setText('Cancelled.' if cancelled else
                                 f'{self._operation} failed: {error}' if error else f'{self._operation} finished.')
-            if self.stack.currentWidget() == self.catalog:
-                self._open_library()
             if cancelled:
                 self.task.message.setText('Cancelled.')
 
@@ -628,24 +602,6 @@ class BlenderPage(qt.QWidget):
                 self._adding_preset = False
                 self._rebuild_preset_list()
 
-    def _add_library_addon(self):
-        package, _ = qt.QFileDialog.getOpenFileName(self, 'Add Addon to Library', '', 'Addon ZIP (*.zip)')
-        if package:
-            self._run('Adding addon to library', lambda report, cancelled: self.library.add(package, cancelled=cancelled))
-
-    def _open_library(self):
-        try:
-            entries = sorted((a for a in self.library.entries() if a.identity != bluehole.IDENTITY),
-                             key=lambda a: (a.identity, version_tuple(a.version)))
-            self.catalog_table.setRowCount(len(entries))
-            for row, addon in enumerate(entries):
-                for column, value in enumerate((addon.name, addon.version, addon.published or '—', addon.minimum or 'Unknown', addon.maximum or '—', addon.kind, addon.source, addon.package_name or addon.package.name)):
-                    self.catalog_table.setItem(row, column, qt.QTableWidgetItem(value))
-            self.catalog_table.resizeColumnsToContents()
-            self.stack.setCurrentWidget(self.catalog)
-        except (OSError, ValueError) as error:
-            self.status.setText(str(error))
-
     def _show_choices(self):
         entries = self.library.entries()
         identities = sorted({addon.identity for addon in entries})
@@ -715,7 +671,7 @@ class BlenderPage(qt.QWidget):
             else:
                 status = 'Available' if resolved else 'Incompatible'
             title = latest.name if latest else installed.get('name', identity) if installed else physical.get('name', identity) if physical else identity
-            values = (title, installed_version, resolved.version if resolved else '—', status, resolved.source if resolved else '—')
+            values = (title, installed_version, resolved.version if resolved else '—', status, source_label(resolved.source) if resolved else '—')
             for column, value in enumerate(values, 1):
                 self.choices.setItem(row, column, qt.QTableWidgetItem(value))
             if resolved:
@@ -723,7 +679,7 @@ class BlenderPage(qt.QWidget):
                 detail += f"\n{resolved.package_name or resolved.package.name}" + (f"\nPackage date: {resolved.published}" if resolved.published else '')
                 self.choices.item(row, 3).setToolTip(detail)
             if installed:
-                self.choices.item(row, 2).setToolTip(f"{installed.get('source', 'Managed')}\n{installed['path']}\n{installed.get('package_name', '')}")
+                self.choices.item(row, 2).setToolTip(f"{source_label(installed.get('source', 'Managed'))}\n{installed['path']}\n{installed.get('package_name', '')}")
         self.choices.resizeColumnsToContents()
 
     def _apply_addons(self):

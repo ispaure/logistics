@@ -67,15 +67,14 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual(requested, ['blender'])
         self.assertEqual(page.stack.currentWidget(), page.home)
         self.assertEqual(self.manager.settings_selection, (self.builds[0].version, 'Modeling'))
-        page._open_library()
-        self.assertEqual(page.stack.currentWidget(), page.catalog)
+        self.assertFalse(hasattr(page, 'catalog'))
 
     def test_settings_contains_versions_and_presets_with_default_optional_bluehole(self):
         from features.blender.settings import BlenderSettings
         self.manager.create_preset(self.builds[0], 'Art')
         with patch('features.blender.bluehole.DEFAULT', {'enabled': True, 'branch': 'main'}):
             panel = BlenderSettings(manager=self.manager)
-        self.assertEqual([panel.tabs.tabText(i) for i in range(panel.tabs.count())], ['Presets', 'Versions Definitions'])
+        self.assertEqual([panel.tabs.tabText(i) for i in range(panel.tabs.count())], ['Presets', 'Versions Definitions', 'Addon Library'])
         self.assertEqual(panel.presets.stack.currentWidget(), panel.presets.preset_splitter)
         self.assertTrue(panel.presets.bluehole_enabled.isChecked())
         self.assertEqual([panel.presets.bluehole_branch.itemText(i) for i in range(3)], ['main', 'beta', 'alpha'])
@@ -85,6 +84,42 @@ class BlenderPageTests(QtTestCase):
         state = panel.presets.library.selection(self.manager.preset(self.builds[0], 'Art'))
         self.assertEqual(state['bluehole'], {'enabled': False, 'branch': 'beta', 'deluxe': False})
         self.assertFalse(self.manager.software.exists())
+
+    def test_library_tab_groups_versions_and_imports_without_any_preset(self):
+        import zipfile
+        from features.blender.settings import BlenderSettings
+        panel = BlenderSettings(manager=self.manager)
+        catalog = panel.library
+        self.assertEqual(panel.presets.preset_list.count(), 0)
+        root = catalog.library.provided_root / 'Tool'
+        root.mkdir(parents=True)
+        for version in (1, 2):
+            with zipfile.ZipFile(root / f'tool-{version}.zip', 'w') as archive:
+                archive.writestr('tool/__init__.py', f'bl_info={{"name":"Tool","version":({version},0,0),"blender":(4,2,0)}}')
+        personal = Path(self.temporary.name) / 'personal.zip'
+        with zipfile.ZipFile(personal, 'w') as archive:
+            archive.writestr('tool/__init__.py', 'bl_info={"name":"Tool","version":(3,0,0),"blender":(5,0,0)}')
+        catalog.refresh()
+        self.assertEqual(catalog.tree.topLevelItemCount(), 1)
+        group = catalog.tree.topLevelItem(0)
+        self.assertFalse(group.isExpanded())
+        self.assertEqual([group.child(i).text(0) for i in range(group.childCount())], ['2.0.0', '1.0.0'])
+        self.assertEqual(group.child(0).text(5), 'Shared')
+        group.setExpanded(True)
+        changes = []
+        catalog.changed.connect(lambda: changes.append(True))
+        with patch('features.blender.library_page.qt.QFileDialog.getOpenFileName', return_value=(str(personal), '')):
+            catalog.add_button.click()
+        self._wait_for_operation(catalog)
+        self.assertEqual(changes, [True])
+        self.assertEqual(catalog.tree.topLevelItemCount(), 1)
+        group = catalog.tree.topLevelItem(0)
+        self.assertTrue(group.isExpanded())
+        self.assertEqual([group.child(i).text(0) for i in range(group.childCount())], ['3.0.0', '2.0.0', '1.0.0'])
+        self.assertEqual(group.child(0).text(5), 'User provided')
+        self.assertEqual(group.child(0).text(2), '5.0.0')
+        self.assertTrue((root / 'tool-1.zip').exists())
+        self.assertFalse(self.manager.presets(self.builds[0]))
 
     def test_preset_list_selects_same_names_in_different_versions_and_adds_to_empty_version(self):
         self.manager.create_preset(self.builds[0], 'Art')
@@ -126,6 +161,7 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual(page.choices.item(row, 2).text(), '1.0.0')
         self.assertEqual(page.choices.item(row, 3).text(), '2.0.0')
         self.assertEqual(page.choices.item(row, 4).text(), 'Update available')
+        self.assertEqual(page.choices.item(row, 5).text(), 'User provided')
         self.assertEqual(page.choices.item(rows['legacy:missing'], 4).text(), 'No compatible version')
         page.choices.item(row, 0).setCheckState(qt.Qt.CheckState.Unchecked)
         page._apply_addons()

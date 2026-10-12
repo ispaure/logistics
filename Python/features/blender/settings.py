@@ -139,17 +139,25 @@ class BlenderSettings(qt.QWidget):
         self.versions = BlenderReleaseSettings(self, scope=scope, directory=directory)
         self.tabs.addTab(self.versions, 'Versions Definitions')
         self.presets = None
+        self.library = None
         self._close_pending = False
         if scope == 'personal':
             from .page import BlenderPage
             self.presets = BlenderPage(self, manager=manager, settings_mode=True)
             self.presets.idle.connect(self._resume_close)
             self.tabs.insertTab(0, self.presets, 'Presets')
+            from .library_page import AddonLibraryPage
+            self.library = AddonLibraryPage(self.presets.library, self)
+            self.library.changed.connect(self.presets.refresh)
+            self.library.idle.connect(self._resume_close)
+            self.tabs.addTab(self.library, 'Addon Library')
             self.tabs.setCurrentWidget(self.presets)
             self.refresh()
 
     def refresh(self):
         self.versions.refresh()
+        if self.library is not None:
+            self.library.refresh()
         if self.presets is not None and not self.presets.task.busy:
             self.presets.refresh()
             selected = getattr(self.presets.manager, 'settings_selection', None)
@@ -161,14 +169,15 @@ class BlenderSettings(qt.QWidget):
                 self.tabs.setCurrentWidget(self.presets)
 
     def _resume_close(self):
-        if self._close_pending:
+        if self._close_pending and not any(page.task.busy for page in (self.presets, self.library) if page is not None):
             self._close_pending = False
             qt.QTimer.singleShot(0, self.window().close)
 
     def can_close(self):
         if not self.versions.can_close():
             return False
-        if self.presets is not None and not self.presets.prepare_close():
+        ready = [page.prepare_close() for page in (self.presets, self.library) if page is not None]
+        if not all(ready):
             self._close_pending = True
             return False
         return True
