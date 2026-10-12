@@ -281,7 +281,7 @@ class LMPage(qt.QWidget):
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([245, 850])
         splitter.setHandleWidth(1)
-        self.status = StatusLine()
+        self.status = StatusLine('Ready.')
         self.status.setWordWrap(True)
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.status.setContentsMargins(0, 0, 0, 0)
@@ -354,10 +354,11 @@ class LMPage(qt.QWidget):
         for action in (self.rename_button, self.move_button, self.export_button, self.delete_button):
             file.addAction(action)
         edit = self.menu_bar.addMenu('Edit')
+        self.draft_actions = []
         for label, callback in [('Undo draft', self.composer.undo), ('Redo draft', self.composer.redo),
                                 ('Cut draft selection', self.composer.cut), ('Copy draft selection', self.composer.copy),
                                 ('Paste into draft', self.composer.paste), ('Select draft', self.composer.selectAll)]:
-            edit.addAction(label, callback)
+            self.draft_actions.append(edit.addAction(label, callback))
         chat = self.menu_bar.addMenu('Conversation')
         chat.addAction(self.pin_action)
         chat.addAction(self.fork_action)
@@ -947,6 +948,8 @@ class LMPage(qt.QWidget):
         self.pin_action.setEnabled(editable and not busy)
         self.pin_action.setText('Unpin conversation' if self.data and self.data.get('pinned') else 'Pin conversation')
         self.fork_action.setEnabled(editable and not busy)
+        for action in getattr(self, 'draft_actions', ()):
+            action.setEnabled(editable)
         for action in getattr(self, 'idle_menu_actions', ()):
             action.setEnabled(not busy)
 
