@@ -13,6 +13,8 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONPATH: Python
+      TMP: ${{ runner.temp }}
+      TEMP: ${{ runner.temp }}
       BROWSER_TEST_ARTIFACTS: browser-diagnostics
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
