@@ -141,7 +141,8 @@ def _inspect_package(package):
             prefix = module + '/' if marker.endswith('/__init__.py') else ''
             if archive.getinfo(marker).file_size > 1024 ** 2:
                 raise ValueError('Addon metadata is too large')
-            tree = ast.parse(archive.read(marker).decode('utf-8-sig'))
+            from .metadata import parse_addon_source
+            tree = parse_addon_source(archive.read(marker).decode('utf-8-sig'), f'{package}!/{marker}')
             info = {}
             for node in tree.body:
                 if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'bl_info' for t in node.targets):

@@ -8,6 +8,7 @@ from time import monotonic
 import tomllib
 
 from commonUtils.runtime.operations import check_cancelled
+from .metadata import parse_addon_source
 
 
 def scan_preset(root):
@@ -21,7 +22,7 @@ def scan_preset(root):
                 continue
             info = {}
             try:
-                tree = ast.parse(script.read_text(encoding='utf-8-sig'))
+                tree = parse_addon_source(script.read_text(encoding='utf-8-sig'), script)
                 for node in tree.body:
                     if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'bl_info'
                                                             for target in node.targets):

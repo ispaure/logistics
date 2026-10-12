@@ -34,6 +34,10 @@ See the [user guide](user_docs/README.md) for controls and recovery.
   Launched instances are tracked for local mutation guards and continue independently
   after Logistics closes. Instances started elsewhere are not tracked.
 - `addons.py` reads legacy AST metadata and modern TOML manifests without imports.
+  Inventory, ZIP inspection and installed Blue Hole fallback share the metadata
+  parser. It silences only invalid-escape SyntaxWarnings from third-party source
+  during AST parsing; syntax errors retain the source filename and application
+  warning filters are restored afterward. No addon source is modified or executed.
   Explicit refresh invokes `probe.py` in the selected Blender's embedded Python;
   a temporary JSON file carries the inventory, independent of addon console output.
   The subprocess runs offline with blend-file autoexecution disabled, but normal

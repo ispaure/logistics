@@ -110,6 +110,9 @@ keeps the imported ZIP available for later selection in that preset.
 
 Imports read metadata without running addon code. They do not automatically
 select the addon; check it in the preset's addon list and save the selection.
+Legacy add-on regex escape warnings are not printed during metadata inspection.
+Invalid metadata is still rejected; the add-on's source is left unchanged.
+
 Older imports from the previous per-user library remain available to presets
 that already selected their identity, labelled **User provided (legacy)**.
 They are retained on disk and are not newly offered to unrelated presets.

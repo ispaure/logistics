@@ -82,7 +82,10 @@ class PackageTests(unittest.TestCase):
                     'Logistics/Python/uv.lock'})
                 self.assertEqual(archive.read('Logistics/Python/shared/nested/module.py'),
                                  b'Python/shared/nested/module.py')
-                self.assertTrue(archive.getinfo('Logistics/Launch.command').external_attr >> 16 & stat.S_IXUSR)
+                self.assertEqual(stat.S_IMODE(archive.getinfo('Logistics/Launch.command').external_attr >> 16),
+                                 stat.S_IMODE((root / 'Launch.command').stat().st_mode))
+                if os.name != 'nt':
+                    self.assertTrue(archive.getinfo('Logistics/Launch.command').external_attr >> 16 & stat.S_IXUSR)
 
     def test_required_files_must_exist(self):
         with tempfile.TemporaryDirectory() as root:
