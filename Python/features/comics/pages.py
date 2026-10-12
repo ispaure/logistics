@@ -4,7 +4,6 @@ from io import BytesIO
 from pathlib import Path
 import re
 import zipfile
-from PIL import Image, ImageOps
 
 from .archive_io import archive_unchanged
 from .library import ComicDocument
@@ -14,6 +13,21 @@ IMAGE_TYPES = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
                '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp',
                '.tif': 'image/tiff', '.tiff': 'image/tiff'}
 MAX_PAGE_BYTES = 128 * 1024 * 1024
+
+
+def _image_modules():
+    try:
+        from PIL import Image, ImageOps
+    except ImportError as error:
+        raise RuntimeError('Image decoding and cover rendering require the optional Pillow dependency') from error
+    return Image, ImageOps
+
+
+def __getattr__(name):
+    # Preserve previous module-level exports for desktop callers.
+    if name in ('Image', 'ImageOps'):
+        return _image_modules()[0 if name == 'Image' else 1]
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def natural_key(name):
@@ -66,6 +80,7 @@ class ComicPages:
             raise RuntimeError('The comic changed while reading this page')
         mime = IMAGE_TYPES[Path(name).suffix.lower()]
         if mime == 'image/tiff':
+            Image, ImageOps = _image_modules()
             with Image.open(BytesIO(data)) as image:
                 image = ImageOps.exif_transpose(image).convert('RGB')
                 result = BytesIO()
@@ -74,6 +89,7 @@ class ComicPages:
         return data, mime
 
     def cover(self, size=(360, 500)):
+        Image, ImageOps = _image_modules()
         data, _ = self.read_page(0)
         with Image.open(BytesIO(data)) as image:
             image = ImageOps.exif_transpose(image)
