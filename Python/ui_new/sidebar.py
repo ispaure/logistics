@@ -145,6 +145,17 @@ class DestinationIcon(qt.QIconEngine):
             for x, y in ((7, 4), (7, 20), (17, 5)):
                 painter.setBrush(palette.color(qt.QPalette.ColorRole.Window))
                 painter.drawEllipse(qt.QPointF(x, y), 2.5, 2.5)
+        elif self.name == 'lm':
+            bubble = qt.QPainterPath()
+            bubble.moveTo(5, 4); bubble.lineTo(19, 4)
+            bubble.quadTo(22, 4, 22, 7); bubble.lineTo(22, 15)
+            bubble.quadTo(22, 18, 19, 18); bubble.lineTo(10, 18)
+            bubble.lineTo(5, 22); bubble.lineTo(5, 18)
+            bubble.quadTo(2, 18, 2, 15); bubble.lineTo(2, 7)
+            bubble.quadTo(2, 4, 5, 4)
+            painter.drawPath(bubble)
+            for x in (7, 12, 17):
+                painter.drawEllipse(qt.QPointF(x, 11), .8, .8)
         elif self.name == 'tools':
             for x in (4, 14):
                 for y in (4, 14):

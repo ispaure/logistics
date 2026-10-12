@@ -2,6 +2,7 @@
 from collections import Counter, deque
 from pathlib import Path
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.appearance.status_line import StatusLine
 from commonUtils.ui.tasks.operations import ResultWorker
 from commonUtils.ui.code_editor.search import SearchPanel
 from commonUtils.persistence.text import read_text_file
@@ -63,7 +64,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         self.search.hide()
         self.search.idle.connect(self.idle)
         layout.addWidget(self.search)
-        self.status = qt.QLabel()
+        self.status = StatusLine()
         self.status.setWordWrap(True)
         self.status.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         layout.addWidget(self.status)

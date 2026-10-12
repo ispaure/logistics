@@ -1,5 +1,6 @@
 """Project registration, retained tabs and application close participation."""
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.appearance.status_line import StatusLine
 from .projects import Project, ProjectStore
 from commonUtils.ui.workspaces.workspace import Workspace
 from commonUtils.ui.workspaces.workspace_policy import WorkspacePolicy
@@ -23,7 +24,7 @@ class IDEPage(qt.QWidget):
         self.setup_container(self.workspace)
         layout.addWidget(self.workspace, 1)
         self.workspace._drop_target.widget().setText('Open or reopen a project with +.')
-        self.status = qt.QLabel(self.store.error or '')
+        self.status = StatusLine(self.store.error or '')
         self.status.setWordWrap(True)
         self.status.setVisible(bool(self.store.error))
         layout.addWidget(self.status)

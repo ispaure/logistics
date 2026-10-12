@@ -1,5 +1,6 @@
 """Shared addon catalog, independent of individual preset management."""
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.appearance.status_line import StatusLine
 from .library import version_tuple
 from . import bluehole
 
@@ -28,7 +29,7 @@ class AddonLibraryPage(qt.QWidget):
         for column in range(self.tree.columnCount() - 1):
             self.tree.header().setSectionResizeMode(column, qt.QHeaderView.ResizeMode.ResizeToContents)
         layout.addWidget(self.tree, 1)
-        self.status = qt.QLabel()
+        self.status = StatusLine()
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)

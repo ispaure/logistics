@@ -195,7 +195,8 @@ def build_controls(page):
     footer.setSpacing(READER_SPACING)
     footer.addWidget(page.previous)
     footer.addWidget(page.next)
-    page.status = ReaderLabel('Open an EPUB to start reading.', muted=True)
+    from commonUtils.ui.appearance.status_line import StatusLine
+    page.status = StatusLine('Open an EPUB to start reading.')
     footer.addWidget(page.status, 1)
     page.progress_label = qt.QLabel()
     page.progress_label.setAccessibleName('Reading progress')

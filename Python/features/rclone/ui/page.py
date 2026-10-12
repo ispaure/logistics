@@ -4,6 +4,7 @@ rclone management page for the Logistics feature UI.
 
 from commonUtils import ui
 from commonUtils.ui import pyside
+from commonUtils.ui.appearance.status_line import StatusLine
 
 from features.rclone import configuration, credentials
 
@@ -49,7 +50,7 @@ class RclonePage(pyside.QWidget):
 
         self.clear_all_button = pyside.QPushButton('Clear All .conf Files')
 
-        self.status_label = pyside.QLabel()
+        self.status_label = StatusLine()
         self.status_label.setWordWrap(True)
 
         self._build_layout()

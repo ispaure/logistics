@@ -67,6 +67,7 @@ credentials and settings. External services need their own accounts/software.
 | [Bulk Rename](Python/ui_new/bulk_rename/user_docs/README.md) | Preview and apply changes to many filenames at once |
 | [Text Editor](Python/features/text_editor/user_docs/README.md) | Edit text and code in tabs, search/replace, and preserve file encodings |
 | [IDE](Python/features/ide/user_docs/README.md) | Keep dockable projects, arrange shared file views in up to three internal groups, navigate Python definitions, and search project files |
+| [LM Chat](Python/features/lm/user_docs/README.md) | Chat with an existing LM server, adjust generation settings and save conversations locally |
 | [Books](Python/features/books/user_docs/README.md) and [Comics](Python/features/comics/user_docs/README.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
 | [Archives](Python/features/archives/user_docs/README.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
 | [Images](Python/features/images/user_docs/README.md) | Compress images and work with photo metadata |

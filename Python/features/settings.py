@@ -107,6 +107,9 @@ def validate_configuration(path, values):
     if path.parent.name == 'git':
         from features.git.configuration import validate
         validate(values)
+    elif path.parent.name == 'lm':
+        from features.lm.configuration import validate
+        validate(values)
     elif path.parent.name == 'books':
         from features.books.preferences import THEMES
         for key, low, high in (('line_spacing_int', 100, 220), ('reading_width_int', 480, 1400)):

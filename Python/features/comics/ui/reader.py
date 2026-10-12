@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.appearance.status_line import style_status_bar
 from features.comics.pages import ComicPages
 from features.comics.reading import comic_siblings, visible_pages
 from features.comics.reading_state import ReadingState, remember_position
@@ -70,7 +71,7 @@ class ComicReaderWindow(qt.QMainWindow):
         self.workspace_controls = self.controls.workspace_controls
         self.setCentralWidget(self.controls)
         status = self.statusBar()
-        status.setSizeGripEnabled(False)
+        style_status_bar(status)
         status.messageChanged.connect(lambda message: status.setVisible(bool(message)))
         status.hide()
         # Preserve the widget handles used by callers while keeping construction separate.

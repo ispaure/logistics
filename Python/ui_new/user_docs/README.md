@@ -19,9 +19,13 @@ chooser is a utility tab and is omitted from the document list and document coun
 
 In a single-tool view, a small, opaque settings icon floats above the content at
 the bottom-left. Click it to show **Settings**, **Return to tool** (or **Return to
-documents**), **Open Documents**, **Choose launch mode**, and **Open full hub with
+documents**), **Open Documents**, **Landing Page**, and **Open full hub with
 sidebar**. The sidebar's Settings icon opens the same menu. Actions for the current
-page or launch mode are hidden. The chooser also offers this icon, so
+page or launch mode are hidden. **Landing Page** returns to the initial chooser.
+Settings reset messages stay above the category panel without taking its available
+height. Bottom status lines across tools use the same compact, greyed-out style
+as File Browser. Long messages are shortened on screen; hover to read the complete
+message. The chooser also offers this icon, so
 you can enable a tool that is absent from the chooser. Switching modes reuses your existing pages
 and workspaces. Each new app launch shows the chooser again.
 

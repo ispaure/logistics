@@ -43,6 +43,17 @@ class SettingsPageTests(QtTestCase):
         self.assertIn('ALL categories', question.call_args.args[2])
         self.assertIn('Blender presets will be kept', question.call_args.args[2])
 
+    def test_reset_status_stays_compact_and_content_receives_extra_height(self):
+        with patch.object(registry, 'get_feature_states', return_value=[]):
+            page = SettingsPage(); self.addCleanup(page.deleteLater)
+        page.resize(1100, 800)
+        page.reset_status.setText('All personal settings reset to software defaults. Open tools reload their preferences automatically; launcher settings apply on the next launch.')
+        page.reset_status.show()
+        page.show()
+        self.app.processEvents()
+        self.assertLess(page.reset_status.height(), 80)
+        self.assertGreater(page.stack.height(), page.height() * .75)
+
     def test_global_reset_reloads_personal_editors_and_preserves_unsaved_software_edits(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
