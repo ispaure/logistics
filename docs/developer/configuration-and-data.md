@@ -130,8 +130,8 @@ Blender presets and installations remain outside the configuration reset boundar
 
 ## Blender addon library and credentials
 
-Blender's feature-owned library is stored under the per-user Logistics root at
-`addons/blender/<kind-module>/<numeric-version>/addon.zip`; it is independent of
+Blender's preset ZIP library is stored inside each per-user preset at
+`addon-library/<kind-module>/<numeric-version>[--date]/addon.zip`; it is independent of
 checkout credential packages. Each preset's `.logistics-addons.json` records chosen
 identities and the published module/path/digest inventory. Imports read metadata
 without executing code. Applying or launching a managed selection resolves latest
@@ -146,9 +146,9 @@ available. The whole checkout `Credentials/` tree is ignored, reserving
 `Credentials/blender_addons` for future private manifests. No Blender credential
 manifest format or download implementation is defined yet.
 
-Blender now merges that personal library with an optional read-only provided ZIP
+Blender resolves each preset against its private `addon-library` ZIP folder and a read-only provided ZIP
 folder (`[Resources] blender_addons_path`, default checkout `Software/Blender_Addons_Library`).
-Personal wins on equal identity/version, with latest compatible selection over both
+Preset packages win on equal identity/version, with latest compatible selection over both
 sources. The ignored provided folder is never created or modified automatically.
 Managed activation uses alphabetical display-name order and sorted CLI `--addons`
 plus a startup script; ordinary Blender initialization precedes this controlled
@@ -164,3 +164,10 @@ resolved commit and Deluxe payload digest. It uses a separate commit-keyed priva
 cache and GitHub branch comparison on each enabled launch. Deluxe stamping is
 preset-contained and part of the existing rollback transaction; unchanged payloads
 preserve subsequent preference customization. See the feature guide for these contracts.
+
+New Blender ZIP imports belong to the selected preset and are labelled Preset
+provided. Copy/duplicate includes its private ZIP library; deletion removes it.
+Legacy per-user ZIPs remain usable for already selected identities. The third
+Addon Library settings tab browses shared packages only; Add Addon is offered
+from preset management. Versions Definitions uses the shared editor's platform
+tabs with readable platform labels, preserving section keys and pending edits.

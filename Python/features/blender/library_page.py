@@ -1,30 +1,23 @@
-"""Shared/personal addon catalog, independent of individual preset management."""
+"""Shared addon catalog, independent of individual preset management."""
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.tasks.operation_progress import OperationProgress
 from .library import version_tuple
 from . import bluehole
 
 
 def source_label(source):
-    return {'Provided': 'Shared', 'Personal': 'User provided'}.get(source, source)
+    return {'Provided': 'Shared', 'Personal': 'User provided (legacy)', 'Preset': 'Preset provided'}.get(source, source)
 
 
 class AddonLibraryPage(qt.QWidget):
-    changed = qt.Signal()
-    idle = qt.Signal()
-
     def __init__(self, library, parent=None):
         super().__init__(parent)
         self.library = library
         layout = qt.QVBoxLayout(self)
-        note = qt.QLabel('Available addon packages, grouped by addon. Expand an addon to see its versions and Blender compatibility. Imports go to your user library.')
+        note = qt.QLabel('Shared addon packages, grouped by addon. Expand an addon to see its versions and Blender compatibility. Add your own ZIPs from the selected preset’s Add Addon button.')
         note.setWordWrap(True)
         layout.addWidget(note)
         toolbar = qt.QHBoxLayout()
-        self.add_button = qt.QPushButton('Add Addon…')
-        self.add_button.setToolTip('Import a ZIP into your user library. Shared packages remain unchanged.')
         self.refresh_button = qt.QPushButton('Refresh')
-        toolbar.addWidget(self.add_button)
         toolbar.addWidget(self.refresh_button)
         toolbar.addStretch()
         layout.addLayout(toolbar)
@@ -39,18 +32,12 @@ class AddonLibraryPage(qt.QWidget):
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
-        self.task = OperationProgress(self)
-        layout.addWidget(self.task)
-        self.task.completed.connect(self._finished)
-        self.add_button.clicked.connect(self._add)
         self.refresh_button.clicked.connect(self.refresh)
         self.refresh()
 
     def refresh(self):
-        if self.task.busy:
-            return
         try:
-            entries = self.library.entries()
+            entries = self.library.entries(shared_only=True)
             groups = {}
             for addon in entries:
                 if addon.identity != bluehole.IDENTITY:
@@ -78,37 +65,3 @@ class AddonLibraryPage(qt.QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         self.refresh()
-
-    def _add(self):
-        if self.task.busy:
-            return
-        package, _ = qt.QFileDialog.getOpenFileName(self, 'Add Addon to Library', '', 'Addon ZIP (*.zip)')
-        if package:
-            self.add_button.setEnabled(False)
-            self.refresh_button.setEnabled(False)
-            self.task.start(lambda report, cancelled: self.library.add(package, cancelled=cancelled), message='Adding addon to library…')
-
-    def _finished(self, result, error):
-        self.add_button.setEnabled(True)
-        self.refresh_button.setEnabled(True)
-        self.refresh()
-        if error:
-            self.status.setText(f'Import failed: {error}')
-        elif self.task.cancelled.is_set():
-            self.status.setText('Cancelled.')
-        else:
-            self.status.setText(f'{result.name} {result.version} added · User provided')
-            self.changed.emit()
-        self.idle.emit()
-
-    def prepare_close(self):
-        if self.task.busy:
-            self.task.request_cancel()
-            return False
-        return True
-
-    def closeEvent(self, event):
-        if not self.prepare_close():
-            event.ignore()
-        else:
-            super().closeEvent(event)

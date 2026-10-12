@@ -13,8 +13,8 @@ Under **Settings → Blender**, **Presets** appears first. The second tab,
 **Versions Definitions**, is admin configuration for the catalog of Blender versions
 available to install, including their platform packages and download metadata.
 In **Personal Settings**, **Presets** creates and manages configurations, selects
-addons. The third tab, **Addon Library**, groups available versions and provides
-**Add Addon…** independently of presets. Version/preset editing
+addons and provides **Add Addon…** for the selected preset only. The third tab,
+**Addon Library**, browses shared versions. Version/preset editing
 is kept off the main launch page. Manage opens the selected card's preset.
 
 ## Install a version
@@ -36,8 +36,8 @@ packages for your OS/architecture. Blender's own OS and hardware requirements
 still apply; a matching package does not guarantee compatibility with older systems.
 
 Release metadata is editable under **Settings → Blender**. Select the exact
-**Blender version** from the dropdown, then choose a platform from the list on the
-left. The right-hand panel shows only that platform's download URL, SHA-256,
+**Blender version** from the dropdown, then choose a platform tab across the top.
+The panel shows only that platform's download URL, SHA-256,
 package format, extracted bundle and executable path. **Save Settings** saves edits
 for the selected version; switching versions/platforms keeps unsaved edits.
 
@@ -90,30 +90,34 @@ does not rewrite those references. Close Blender before copying, renaming or
 deleting its preset. Logistics blocks these operations for instances it launched
 while they are running; it cannot track Blender instances started elsewhere.
 
-## Shared and user-provided addon libraries
+## Shared and preset-provided addons
 
-The library combines two sources:
+Each preset resolves addons from two sources:
 
-- **Shared:** a read-only collection of addon ZIPs supplied by the studio or
-  maintainer. It defaults to `Software/Blender_Addons_Library` in the checkout and also supports a
-  configured shared folder. ZIPs are discovered recursively; no manifest is needed.
-- **User provided:** addon ZIPs the artist imports with **Add Addon…**. The system reads
-  metadata, groups releases and handles compatibility; artists do not edit documents.
+- **Shared:** the read-only studio/maintainer ZIP collection, defaulting to
+  `Software/Blender_Addons_Library`. ZIPs are discovered recursively; no manifest
+  needs manual maintenance.
+- **Preset provided:** ZIPs imported with **Settings → Blender → Presets → Add
+  Addon…**. Choose a preset first. These ZIPs belong only to that preset and are
+  stored in its `addon-library/<identity>/<version>[--date]/addon.zip` folder.
 
-The library and each preset's resolved release show which source supplies the addon.
-The newest declared-compatible release across both sources wins. When the same addon
-identity/version exists in both, the personal copy takes precedence for that artist;
-other versions in the provided collection remain available. Importing an older
-personal version does not hide a newer compatible provided version. The provided
-collection is never written, copied into the personal library, or removed by imports.
-No addon packages are shipped by this change; supplied ZIPs populate the collection.
+The newest declared-compatible release across both sources wins. For matching
+identity/version, the preset's own package overrides the shared copy. Importing
+an older version does not hide a newer compatible shared version. The shared
+collection remains untouched. Duplicating or copying a preset includes its ZIPs;
+deleting the preset deletes its private ZIP library too. Unchecking an addon
+keeps the imported ZIP available for later selection in that preset.
 
-**Settings → Blender → Addon Library → Add Addon…** selects a local `.zip` and copies it into the per-user library at
-`addons/blender/<identity>/<addon-version>/addon.zip`. Each legacy module name
-or extension manifest ID identifies one addon; releases sharing that identity are
-kept together. An identical import is harmless; different contents claiming the
-same identity/version are rejected. Different module names remain distinct, even
-if their display names match. Keep package/module identities stable across releases.
+Imports read metadata without running addon code. They do not automatically
+select the addon; check it in the preset's addon list and save the selection.
+Older imports from the previous per-user library remain available to presets
+that already selected their identity, labelled **User provided (legacy)**.
+They are retained on disk and are not newly offered to unrelated presets.
+
+Legacy module names and extension manifest IDs identify addons, regardless of
+folder or display name. Keep these identities stable across releases. Exact
+reimports are harmless; conflicting contents for one identity/version/date are
+rejected. Different module names remain distinct even if display names match.
 
 Metadata is read without importing addon code. Legacy packages use the literal
 `bl_info` dictionary in `__init__.py` (or a single root Python file); its `version`
@@ -134,7 +138,7 @@ addons under **Addons**, then click **Save Addon Selection**. This saves the cho
 without installing or launching Blender. The next launch copies the resolved
 releases into that preset, enables them in background Blender and saves preferences.
 Close Blender before saving or applying changes. Deselecting an addon disables
-and removes its library-managed files from that preset; the source ZIP stays in its provided or personal library.
+and removes its library-managed files from that preset; the source ZIP stays in the shared folder or the preset's ZIP library.
 Existing addons installed outside the library are preserved; conflicting module
 paths must be moved manually before the library can manage that addon.
 
@@ -228,7 +232,7 @@ access and enough disk space for the package, staging and extracted application.
 ## Available packages and installed addons
 
 **Settings → Blender → Addon Library** is the third tab, after Presets and
-Versions Definitions. It shows one collapsed row per addon; expand it to see its
+Versions Definitions. It browses shared packages, with one collapsed row per addon; expand it to see its
 ZIP packages newest first,
 including package dates, compatibility limits and original ZIP names. The shared
 folder defaults to `Software/Blender_Addons_Library`; you can distribute that
@@ -239,9 +243,9 @@ compatible**. Status indicates Up to date, Update available, Installation pendin
 Removal pending, incompatible packages, or missing files/library entries. Saving
 selection records what the next launch should apply. **Installed files** also
 shows addons placed directly in the preset, including those outside the library.
-The **Library** column says **Shared** for the supplied ZIP folder or **User
-provided** for a ZIP imported with Add Addon. The library is independent of
-presets; importing a ZIP does not select it for any preset.
+The **Library** column says **Shared** for the supplied ZIP folder or **Preset
+provided** for a ZIP imported into this preset. Imported packages do not appear
+in the shared library tab or in other presets.
 
 Keep future ZIPs inside the same addon folder. Filenames can include both the
 addon version and date, for example `Anytree_2.1.3_2026_10_12.zip`. Logistics reads
