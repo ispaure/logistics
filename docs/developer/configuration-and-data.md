@@ -78,8 +78,11 @@ the shared launcher, including before Python dependencies are available.
 SettingsPage propagates one application/personal scope to all category panels.
 It starts in personal scope and offers application scope in its selector only
 when `Path.home().name == 'marca'`.
-Its global personal-reset action replaces only `configuration/`, via
-`features.settings.reset_personal_configuration()`. Completion is recorded through
+Its global personal-reset action calls `services.preferences.reset_personal_preferences()`.
+That service coordinates `features.settings.reset_personal_configuration()`, feature
+activation, shared notifications and host-supplied view reload callbacks. The Settings
+widget owns confirmation, its dirty-editor policy and result text. Only
+`configuration/` is replaced. Completion is recorded through
 commonUtils' MigrationLedger in `state/settings-migrations.ini`, outside resettable
 overrides. Existing legacy completion markers are adopted once; pending imports
 retry idempotently after partial failures. Reset deliberately completes the legacy
