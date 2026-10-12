@@ -76,6 +76,7 @@ credentials and settings. External services need their own accounts/software.
 | [Plex](Python/features/plex/user_docs/README.md) | Back up and restore media-server data |
 | [YouTube Downloader](Python/features/youtube_downloader/user_docs/README.md) | Download channels and playlists |
 | [Minecraft](Python/features/minecraft/user_docs/README.md) | Find and manage local servers |
+| [Blender](Python/features/blender/user_docs/README.md) | Install Blender versions, launch isolated preference presets and inspect their addons |
 | [Perforce](Python/features/perforce/user_docs/README.md) | Launch configured servers on Linux |
 | [Obsidian](Python/features/obsidian/user_docs/README.md) | Find and open vaults |
 | [Dropbox](Python/features/dropbox/user_docs/README.md) | Browse Dropbox folders and clean up conflicting copies |

@@ -21,6 +21,7 @@ reconfigure an already running worker or reader.
 
 | Data | Location/owner | Compatibility consequence |
 | --- | --- | --- |
+| Blender installations and presets | per-user Logistics root: `software/blender/<version>` and `preferences/blender/<version>/<preset>` | Separate from global software resources; removal preserves presets; copies retain embedded absolute paths |
 | Disabled feature names | configFile.ini and persistent personal override | Stable feature IDs; legacy preferences migrate before initialization |
 | Git options | feature config.ini and personal override | Scalars are exposed in central Settings |
 | Git accounts, actions, bookmarks and subtree mappings | `git.json` beside Logistics preferences | Preserve malformed files; credentials belong in secure helpers |
@@ -75,6 +76,17 @@ root, `configuration/<Python-relative INI path>`; shared controls map to
 the shared launcher, including before Python dependencies are available.
 
 SettingsPage propagates one application/personal scope to all category panels.
+It starts in personal scope and offers application scope in its selector only
+when `Path.home().name == 'marca'`.
+Its global personal-reset action replaces only `configuration/`, via
+`features.settings.reset_personal_configuration()`. Staging retains Migration
+sections, sets the feature-migration marker, and keeps empty Git/Text Editor INIs
+so existence-based legacy migrations cannot run again. The prior tree is kept
+outside temporary staging until feature-default activation succeeds; failures
+restore it or retain a named recovery directory. Personal layered editors discard
+pending edits and reload, while application-editor pending values remain intact.
+The registry notifies navigation observers and styling reloads immediately; open
+tools use their existing preference reload timers. Launcher values apply at launch.
 Each panel retains editors for both scopes and checks all dirty editors on close.
 Feature schemas declare exposed systemic settings; runtime book positions,
 recovery, folder credentials and Git account/action records retain their own

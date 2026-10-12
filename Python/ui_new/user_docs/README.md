@@ -163,6 +163,29 @@ width. The last normal browser tab still cannot close or detach.
 ## Central settings
 
 Open **Logistics Settings** from the navigation rail or a tool's settings action.
+Settings opens in **Personal Settings**. **Default Software Configuration** is
+available only when the current user's home folder is named `marca`.
+For **Features**, choose **Default Software Configuration** to change which tools
+are enabled by default in shipped releases, or **Personal Settings** to change your
+own selection. The file path above the feature controls identifies the file being
+edited and updates when you switch scope. Feature toggles save immediately;
+default changes affect future launches, while personal changes apply immediately.
+
+In **Personal Settings**, the upper-right **Reset All Personal Settings…** button
+is available from every category. Its confirmation applies to **all categories**,
+including feature choices, appearance, editor options, indexing and other personal
+configuration overrides. It also discards unsaved personal configuration edits;
+unsaved software-default edits are retained. Settings panels reload and feature
+navigation/appearance update immediately. Open editor, reader and Git views reload
+preferences automatically; launcher settings apply on the next launch.
+
+This resets only personal configuration, keeping migration markers so old
+preferences cannot be imported again. Documents, accounts, IDE workspaces, reading
+progress, installed software and Blender presets are kept. A failed reset restores
+the previous configuration where possible; if recovery fails, the error identifies
+the retained recovery folder. A refresh failure after a successful reset asks you
+to restart Logistics to finish applying the defaults.
+
 The top-left selector applies to every category: **Default Software Configuration**
 edits repository INIs shipped in future releases; **Personal Settings** edits
 AppData overrides. Fields indicate inheritance. Click **↶** to remove an override,

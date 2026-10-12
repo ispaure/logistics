@@ -21,6 +21,87 @@ class SettingsPageTests(QtTestCase):
         return SimpleNamespace(name='test', label='Test', enabled=True, available=True,
                                dependencies=(), dependents=())
 
+    def test_global_personal_reset_is_available_across_categories_and_hidden_in_software_mode(self):
+        with TemporaryDirectory() as temporary, patch('pathlib.Path.home', return_value=Path(temporary) / 'marca'), \
+                patch.object(registry, 'get_feature_states', return_value=[]):
+            page = SettingsPage(); self.addCleanup(page.deleteLater)
+            for category in ('features', 'configuration', 'indexing', 'commonutils'):
+                page.show_category(category)
+                self.assertFalse(page.reset_personal_button.isHidden())
+            page.scope_selector.setCurrentIndex(page.scope_selector.findData('application'))
+            self.assertTrue(page.reset_personal_button.isHidden())
+            page.scope_selector.setCurrentIndex(page.scope_selector.findData('personal'))
+            self.assertFalse(page.reset_personal_button.isHidden())
+
+    def test_global_reset_confirmation_cancel_keeps_configuration(self):
+        with patch.object(registry, 'get_feature_states', return_value=[]):
+            page = SettingsPage(); self.addCleanup(page.deleteLater)
+        with patch('ui_new.pages.settings.qt.QMessageBox.question', return_value=qt.QMessageBox.StandardButton.No) as question, \
+                patch('ui_new.pages.settings.reset_personal_configuration') as reset:
+            page.reset_personal_button.click()
+        reset.assert_not_called()
+        self.assertIn('ALL categories', question.call_args.args[2])
+        self.assertIn('Blender presets will be kept', question.call_args.args[2])
+
+    def test_global_reset_reloads_personal_editors_and_preserves_unsaved_software_edits(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            personal = root / 'configuration/commonUtils/settings.ini'
+            personal.parent.mkdir(parents=True)
+            personal.write_text('[Styling]\ncode_font_size_int=30\n')
+            with patch('pathlib.Path.home', return_value=root / 'marca'), \
+                    patch('features.settings.preferences_path', return_value=root / 'preferences.ini'), \
+                    patch.object(registry, 'get_feature_states', return_value=[]):
+                page = SettingsPage(); self.addCleanup(page.deleteLater)
+                page.show_category('commonutils')
+                config = page.panels['commonutils']
+                editor = config.stack.currentWidget()
+                self.assertEqual(editor.fields['Styling', 'code_font_size_int'].text(), '30')
+                editor.fields['Styling', 'code_font_size_int'].setValue(31)
+                page.scope_selector.setCurrentIndex(page.scope_selector.findData('application'))
+                defaults = config.stack.currentWidget()
+                defaults.fields['Styling', 'code_font_size_int'].setValue(12)
+                page.scope_selector.setCurrentIndex(page.scope_selector.findData('personal'))
+                with patch('ui_new.pages.settings.qt.QMessageBox.question', return_value=qt.QMessageBox.StandardButton.Yes), \
+                        patch.object(registry, 'reset_feature_defaults') as features_reset:
+                    page.reset_personal_button.click()
+                features_reset.assert_called_once()
+                self.assertEqual(editor.pending, {})
+                self.assertEqual(editor.store.overrides(), {})
+                self.assertNotIn(editor.fields['Styling', 'code_font_size_int'].text(), ('30', '31'))
+                self.assertEqual(defaults.pending['Styling', 'code_font_size_int'], '12')
+                self.assertIn('All personal settings reset', page.reset_status.text())
+                defaults.pending.clear()
+
+    def test_global_reset_failure_reports_error_without_reloading_editors(self):
+        with patch.object(registry, 'get_feature_states', return_value=[]):
+            page = SettingsPage(); self.addCleanup(page.deleteLater)
+        with patch('ui_new.pages.settings.qt.QMessageBox.question', return_value=qt.QMessageBox.StandardButton.Yes), \
+                patch('ui_new.pages.settings.reset_personal_configuration', side_effect=OSError('Read only')):
+            page.reset_personal_button.click()
+        self.assertIn('Could not reset', page.reset_status.text())
+        self.assertIn('Read only', page.reset_status.text())
+
+    def test_software_defaults_are_available_only_for_marca_and_start_personal(self):
+        with TemporaryDirectory() as temporary:
+            for name in ('marca', 'visitor', 'Marca'):
+                with self.subTest(home=name), patch('pathlib.Path.home', return_value=Path(temporary) / name), \
+                        patch.object(registry, 'get_feature_states', return_value=[]):
+                    page = SettingsPage(); self.addCleanup(page.deleteLater)
+                    self.assertEqual(page.scope_selector.currentData(), 'personal')
+                    self.assertEqual(page.panels['features'].scope, 'personal')
+                    if name == 'marca':
+                        self.assertNotEqual(page.scope_selector.findData('application'), -1)
+                        page.scope_selector.setCurrentIndex(page.scope_selector.findData('application'))
+                        self.assertEqual(page.panels['features'].scope, 'application')
+                    else:
+                        self.assertEqual(page.scope_selector.count(), 1)
+                        self.assertEqual(page.scope_selector.findData('application'), -1)
+                        page.show_category('configuration')
+                        self.assertEqual(page.panels['configuration'].scope, 'personal')
+                        self.assertEqual(page.panels['configuration'].location.text(),
+                                         str(page.panels['configuration'].stack.currentWidget().store.personal))
+
     def test_settings_sidebar_tracks_interface_font(self):
         from commonUtils.ui.appearance.styling import styling
         controller = styling()
@@ -128,7 +209,8 @@ class SettingsPageTests(QtTestCase):
             path.write_text('[WheelNavigation]\nsensitivity=20\n')
             from commonUtils.configuration.layered import register_settings
             store = register_settings(path, Path(temporary) / 'personal.ini')
-            with patch('ui_new.pages.settings.settings_path', return_value=path), patch('ui_new.pages.settings.settings_store', return_value=store):
+            with patch('ui_new.pages.settings.settings_path', return_value=path), patch('ui_new.pages.settings.settings_store', return_value=store), \
+                    patch('pathlib.Path.home', return_value=Path(temporary) / 'marca'):
                 page = SettingsPage(); self.addCleanup(page.deleteLater)
                 item = next(page.sidebar.topLevelItem(i) for i in range(page.sidebar.topLevelItemCount()) if page.sidebar.topLevelItem(i).data(0, qt.Qt.ItemDataRole.UserRole) == 'commonutils')
                 page.sidebar.setCurrentItem(item)
