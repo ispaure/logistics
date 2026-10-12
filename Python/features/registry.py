@@ -417,6 +417,7 @@ class FeatureState:
     dependents: tuple[str, ...]
     members: tuple[str, ...] = ()
     error: str = ''
+    description: str = ''
 
 
 def _feature_groups(feature_map):
@@ -450,7 +451,8 @@ def get_feature_states():
         states.append(FeatureState(name, _get_feature_label(feature_map[name]),
             all(_is_feature_available(member, feature_map) for member in members),
             all(member in enabled for member in members), dependencies, dependents, tuple(members),
-            "; ".join(getattr(feature_map[member], 'FEATURE_LOAD_ERROR', '') for member in members).strip('; ')))
+            "; ".join(getattr(feature_map[member], 'FEATURE_LOAD_ERROR', '') for member in members).strip('; '),
+            getattr(feature_map[name], 'FEATURE_DESCRIPTION', '')))
     return states
 
 

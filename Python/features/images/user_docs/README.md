@@ -1,5 +1,7 @@
 # Compress images and edit JPG comments
 
+Enable **Image Tools** under **Settings → Features** to use these tools.
+
 WEBP compression opens from a folder’s File Browser context menu. EXIF comments
 remain a Debug tool. Comics uses the
 same image encoder through its own workflow.

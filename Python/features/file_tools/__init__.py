@@ -2,6 +2,8 @@
 File maintenance and diagnostic tools for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Inspect unusual filename characters and remove Python bytecode.'
+
 FEATURE_NAME = "file_tools"
 FEATURE_LABEL = "File Tools"
 

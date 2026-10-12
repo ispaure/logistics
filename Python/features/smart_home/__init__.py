@@ -2,6 +2,8 @@
 Smart Home feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Control Philips Hue rooms, brightness and color presets.'
+
 
 FEATURE_NAME = 'smart_home'
 FEATURE_LABEL = 'Smart Home'

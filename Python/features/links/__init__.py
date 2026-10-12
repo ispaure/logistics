@@ -2,9 +2,11 @@
 Links feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Open your configured websites and service shortcuts from one page.'
+
 
 FEATURE_NAME = "links"
-FEATURE_LABEL = "Links"
+FEATURE_LABEL = "Personal Links"
 
 
 def get_contributions():

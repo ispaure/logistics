@@ -181,3 +181,18 @@ page with feature-owned pinned releases and whole-application installation adapt
 It reuses verified download mechanics, stores installations/presets in the per-user
 Logistics root and queries the selected Blender for saved addon state. Its catalog
 contains metadata only; it does not add Blender packages to Logistics releases.
+
+## Feature selection presentation
+
+Feature packages expose `FEATURE_DESCRIPTION` beside their registration entry
+point. The registry includes the visible group leader's description in
+`FeatureState`; Settings uses it on selection cards and category tooltips. Display
+labels come from declarations; stable feature IDs, package paths and saved choices
+remain unchanged when labels are clarified.
+
+The feature selection uses the existing layered `FeatureDefaults.disabled_list-str`
+setting. Its personal override replaces the entire disabled list, so card source
+indicators report the source of that selection, even for choices matching defaults.
+Per-card reset matches a feature to its software default; the page-wide personal
+reset removes the selection override. Cards and category tree items are retained
+across enable/disable notifications to preserve focus and scroll position.

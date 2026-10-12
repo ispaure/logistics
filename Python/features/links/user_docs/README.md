@@ -1,5 +1,7 @@
 # Open configured service shortcuts
 
+Enable **Personal Links** under **Settings → Features** to use these tools.
+
 The **Links** page opens configured websites in your default browser.
 
 ## Configure shortcuts

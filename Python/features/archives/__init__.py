@@ -1,5 +1,7 @@
 """Archive workspace and declarative browser capabilities; UI imports are lazy."""
 
+FEATURE_DESCRIPTION = 'Browse, preview, create and extract archives.'
+
 
 def register():
     from commonUtils.ui.features import BrowserExtension, SelectionAction, FileActivation

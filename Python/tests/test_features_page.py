@@ -2,6 +2,8 @@
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from commonUtils.tests.qt_test_case import QtTestCase
 from types import ModuleType
 from unittest.mock import patch
@@ -26,7 +28,15 @@ class FeaturesPageTests(QtTestCase):
         self.missing = ModuleType('features.test_missing')
         self.missing.FEATURE_NAME = 'test_missing'
         self.missing.FEATURE_DEPENDENCIES = ('not_installed',)
-        for target, value in [('_disabled_features', set()), ('_initialized_features', set())]:
+        temporary = TemporaryDirectory(); self.addCleanup(temporary.cleanup)
+        from commonUtils.configuration.layered import register_settings
+        defaults = Path(temporary.name) / 'defaults.ini'
+        defaults.write_text('[FeatureDefaults]\ndisabled_list-str = []\n')
+        self.store = register_settings(defaults, Path(temporary.name) / 'personal.ini')
+        store_patch = patch.object(registry, 'feature_settings_store', return_value=self.store)
+        store_patch.start(); self.addCleanup(store_patch.stop)
+        for target, value in [('_disabled_features', set()), ('_initialized_features', set()),
+                              ('_layered_preferences', True), ('_preferences_path', None)]:
             patcher = patch.object(registry, target, value)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -76,3 +86,74 @@ class FeaturesPageTests(QtTestCase):
         self.assertEqual(self.page.findChildren(qt.QTreeWidget), [])
         self.assertEqual(self.page.cards.count(), 3)
         self.page.close()
+
+    def test_selection_source_and_reset_follow_actual_saved_override(self):
+        self.assertIn('Personal overrides · Inherited', self.page.scope_label.text())
+        self.assertEqual(self.page.indicators['test_base'].text(), 'Inherited')
+        self.assertFalse(self.page.reset_all.isEnabled())
+        self.item('test_child').setChecked(False)
+        self.app.processEvents()
+        self.assertIn('Override', self.page.scope_label.text())
+        self.assertEqual(self.page.indicators['test_child'].text(), 'Override')
+        # Even an unchanged feature is in the saved whole-selection override.
+        self.assertEqual(self.page.indicators['test_base'].text(), 'Override')
+        self.assertIn('matches', self.page.indicators['test_base'].toolTip())
+        self.assertTrue(self.page.reset_buttons['test_child'].isEnabled())
+        self.page.reset_all.click()
+        self.app.processEvents()
+        self.assertEqual(self.page.indicators['test_child'].text(), 'Inherited')
+        self.assertNotIn(('FeatureDefaults', 'disabled_list-str'), self.store.overrides())
+
+    def test_software_scope_and_reset_use_current_defaults(self):
+        toggle = self.item('test_child')
+        self.page.set_scope('application')
+        toggle.setChecked(False)
+        self.app.processEvents()
+        self.assertEqual(self.page.scope_label.text(), 'Software defaults')
+        self.assertEqual(self.page.indicators['test_child'].text(), '')
+        self.assertEqual(registry.default_disabled_features(), {'test_child'})
+        self.page.set_scope('personal')
+        self.assertIs(self.item('test_child'), toggle)
+        self.assertTrue(toggle.isChecked())
+        self.page.reset_buttons['test_child'].click()
+        self.app.processEvents()
+        self.assertFalse(toggle.isChecked())
+        self.assertEqual(self.page.indicators['test_child'].text(), 'Inherited')
+
+    def test_toggle_preserves_scrolling_and_keyboard_focus(self):
+        features = []
+        for index in range(30):
+            feature = ModuleType(f'features.scroll_{index}')
+            feature.FEATURE_NAME = f'scroll_{index}'
+            feature.FEATURE_LABEL = f'Scroll {index:02}'
+            feature.FEATURE_DESCRIPTION = 'A short description of this feature.'
+            features.append(feature)
+        registry.load_features.return_value = features
+        self.page.refresh()
+        self.page.resize(650, 450); self.page.show(); self.app.processEvents()
+        self.page.activateWindow(); self.app.processEvents()
+        scrollbar = self.page.scroll.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum() - 50)
+        toggle = self.item('scroll_29')
+        toggle.setFocus(); self.app.processEvents()
+        position = scrollbar.value()
+        self.assertGreater(position, 0)
+        toggle.setChecked(False)
+        self.app.processEvents(); self.app.processEvents()
+        self.assertIs(self.item('scroll_29'), toggle)
+        self.assertEqual(scrollbar.value(), position)
+        self.assertIs(self.app.focusWidget(), toggle)
+        self.assertEqual(self.page.summaries['scroll_29'].text(), features[-1].FEATURE_DESCRIPTION)
+        registry.reset_feature_defaults()
+        self.page.close()
+
+    def test_clarified_labels_and_feature_owned_descriptions(self):
+        import importlib
+        expected = {'minecraft': 'Minecraft Server', 'links': 'Personal Links',
+                    'images': 'Image Tools', 'media': 'Media Tools',
+                    'perforce': 'Perforce Server', 'flight_sim': 'X-Plane Presets'}
+        for name, label in expected.items():
+            module = importlib.import_module(f'features.{name}')
+            with self.subTest(feature=name):
+                self.assertEqual(registry._get_feature_label(module), label)
+                self.assertTrue(module.FEATURE_DESCRIPTION)

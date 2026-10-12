@@ -24,7 +24,7 @@ def _open_exif_comments(data=None, parent=None):
 
 
 def get_contributions() -> Feature:
-    return Feature(id='images', label='Images',
+    return Feature(id='images', label='Image Tools',
         browser=BrowserExtension(actions=[SelectionAction('compress_webp', 'Batch Compress Images to WEBP…', Directory, _open_compress, order=60)]),
         debug_actions=[
             DebugActionContribution(

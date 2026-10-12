@@ -1,5 +1,7 @@
 # Manage Minecraft servers
 
+Enable **Minecraft Server** under **Settings → Features** to use these tools.
+
 Minecraft controls appear for servers discovered below a selected local folder
 on **Folder Hub**. A directory with `server.properties` is recognized as a server;
 searching is limited to one to three directory levels.

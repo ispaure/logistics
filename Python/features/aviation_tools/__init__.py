@@ -1,4 +1,6 @@
 """Flight Tools integrated into Logistics as an optional feature."""
+
+FEATURE_DESCRIPTION = 'Calculate flight distances, headings and aircraft performance.'
 from features.contributions import Feature, PageContribution
 
 

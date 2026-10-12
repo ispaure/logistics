@@ -2,9 +2,11 @@
 Minecraft feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Discover local Minecraft servers, launch them and open their settings.'
+
 
 FEATURE_NAME = "minecraft"
-FEATURE_LABEL = "Minecraft"
+FEATURE_LABEL = "Minecraft Server"
 
 
 def get_contributions():

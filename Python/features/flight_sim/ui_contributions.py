@@ -11,7 +11,7 @@ def get_contributions() -> Feature:
     """Return UI contributions provided by Flight Simulator."""
 
     return Feature(
-        id='flight_sim', label='Flight Simulator',
+        id='flight_sim', label='X-Plane Presets',
         settings=[SettingsContribution('Installation', 'installation', config_files=(Path(__file__).with_name('config.ini'),))],
         debug_actions=[
             DebugActionContribution(

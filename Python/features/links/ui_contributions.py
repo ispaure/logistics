@@ -15,7 +15,7 @@ def get_contributions() -> Feature:
     """Return UI contributions provided by Links."""
 
     return Feature(
-        id='links', label='Links',
+        id='links', label='Personal Links',
         settings=[SettingsContribution('Configuration', 'links_config',
                     config_files=(Path(__file__).with_name('config.ini'),))],
         pages=[

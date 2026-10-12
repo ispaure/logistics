@@ -2,9 +2,11 @@
 Perforce feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Launch configured local Perforce servers and open their console.'
+
 
 FEATURE_NAME = "perforce"
-FEATURE_LABEL = "Perforce"
+FEATURE_LABEL = "Perforce Server"
 
 
 def get_contributions():

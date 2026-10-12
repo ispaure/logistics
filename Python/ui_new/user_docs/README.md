@@ -170,6 +170,13 @@ are enabled by default in shipped releases, or **Personal Settings** to change y
 own selection. The file path above the feature controls identifies the file being
 edited and updates when you switch scope. Feature toggles save immediately;
 default changes affect future launches, while personal changes apply immediately.
+Each feature card includes a short description. The **Personal overrides** heading
+and **Inherited / Override** indicators show where the selection comes from.
+Feature selection is stored as one setting: changing any toggle saves the entire
+selection as an override, including features that still match their defaults.
+**↶** matches one feature to its software default; **Use software defaults** removes
+the whole selection override and restores inheritance. Toggles keep the current
+scroll position and keyboard focus.
 
 In **Personal Settings**, the upper-right **Reset All Personal Settings…** button
 is available from every category. Its confirmation applies to **all categories**,

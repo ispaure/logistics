@@ -2,6 +2,8 @@
 Plex feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Back up and restore Plex Media Server data with rclone.'
+
 FEATURE_NAME = 'plex'
 FEATURE_LABEL = 'Plex'
 FEATURE_DEPENDENCIES = ('rclone',)

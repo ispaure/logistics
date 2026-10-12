@@ -13,7 +13,7 @@ def _open_rename_mka(data=None, parent=None):
 
 def get_contributions() -> Feature:
     return Feature(
-        id='media', label='Media',
+        id='media', label='Media Tools',
         debug_actions=[
             DebugActionContribution(
                 name='Rename MKA from CSV...',

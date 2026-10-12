@@ -2,9 +2,11 @@
 Flight Simulator feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Apply display and graphics presets to X-Plane 12.'
+
 
 FEATURE_NAME = "flight_sim"
-FEATURE_LABEL = "Flight Simulator"
+FEATURE_LABEL = "X-Plane Presets"
 
 
 def get_contributions():

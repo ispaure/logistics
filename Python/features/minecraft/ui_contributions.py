@@ -31,7 +31,7 @@ def get_contributions() -> Feature:
     """Return UI contributions provided by Minecraft."""
 
     return Feature(
-        id='minecraft', label='Minecraft',
+        id='minecraft', label='Minecraft Server',
         folder_features=[
             FolderFeatureContribution(
                 name='Minecraft',

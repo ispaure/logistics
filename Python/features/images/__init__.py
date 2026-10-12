@@ -2,8 +2,10 @@
 Images feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Compress images to WebP and edit JPG EXIF comments.'
+
 FEATURE_NAME = "images"
-FEATURE_LABEL = "Images"
+FEATURE_LABEL = "Image Tools"
 
 
 def get_contributions():

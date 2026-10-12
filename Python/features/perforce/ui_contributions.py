@@ -54,7 +54,7 @@ def get_contributions() -> Feature:
     """Return UI contributions provided by Perforce."""
 
     return Feature(
-        id='perforce', label='Perforce',
+        id='perforce', label='Perforce Server',
         folder_features=[
             FolderFeatureContribution(
                 name='Perforce',
