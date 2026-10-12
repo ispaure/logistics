@@ -16,6 +16,7 @@ class Project:
     excluded_paths: list[str] = field(default_factory=lambda: ['.git', '.venv', '__pycache__', 'node_modules', 'build', 'dist'])
     python_interpreter: str | None = None
     layout: dict = field(default_factory=dict)
+    autosave: str = 'after_delay'
 
     @property
     def root(self):
@@ -39,6 +40,8 @@ class Project:
         for key in ('source_paths', 'excluded_paths'):
             if key in data and (not isinstance(data[key], list) or not all(isinstance(p, str) for p in data[key])):
                 raise ValueError(f'Invalid project {key}')
+        if data.get('autosave', 'after_delay') not in ('off', 'after_delay', 'focus_change'):
+            raise ValueError('Invalid autosave mode')
         if not isinstance(data.get('layout', {}), dict):
             raise ValueError('Invalid project layout')
         if data.get('python_interpreter') is not None and not isinstance(data['python_interpreter'], str):

@@ -9,6 +9,7 @@ from commonUtils.persistence.text import read_text_file
 from .documents import EditorDocument
 from .browser import ProjectBrowser
 from .navigation import Navigation
+from .autosave import pause_autosave
 
 
 class ProjectWorkspace(Navigation, qt.QMainWindow):
@@ -68,6 +69,11 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         self.status.setWordWrap(True)
         self.status.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         layout.addWidget(self.status)
+        self.autosave_notice = qt.QLabel()
+        self.autosave_notice.setWordWrap(True)
+        self.autosave_notice.setTextFormat(qt.Qt.TextFormat.PlainText)
+        self.autosave_notice.hide()
+        layout.addWidget(self.autosave_notice)
         self.splitter.splitterMoved.connect(self.changed)
         self.editors.splitterMoved.connect(self.changed)
         self.add_group()
@@ -188,6 +194,8 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                 if representative is None:
                     self.documents[path] = doc
                     buffer = doc.buffer
+                    from .autosave import AutoSave
+                    buffer.autosave = AutoSave(self, buffer)
                     buffer.text.modificationChanged.connect(lambda _: self.update_buffer_titles(buffer))
                     self.watch.addPath(str(path))
                 if isinstance(doc, EditorDocument):
@@ -253,11 +261,29 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
     def update_title(self, doc):
         self.update_buffer_titles(doc.buffer)
 
+    def refresh_autosave_notice(self):
+        errors = [doc.buffer.autosave.error for doc in self.documents.values() if doc.buffer.autosave.error]
+        self.autosave_notice.setText('\n'.join(errors))
+        self.autosave_notice.setVisible(bool(errors))
+
+    def set_autosave(self, mode):
+        self.project.autosave = mode
+        for doc in self.documents.values():
+            doc.buffer.autosave.timer.stop()
+            if mode == 'after_delay':
+                doc.buffer.autosave.changed()
+        self.changed.emit()
+
     def save_current(self, save_as=False):
         doc = self.current
         return self.save_document(doc, save_as) if doc else True
 
+    @pause_autosave
     def save_document(self, doc, save_as=False):
+        if doc.buffer.autosave.busy:
+            self.error('Autosave is finishing. Please retry Save when it completes.')
+            return False
+        doc.buffer.autosave.timer.stop()
         target = None
         expected = None
         if save_as:
@@ -298,10 +324,16 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         self.watch.removePath(str(old))
         self.watch.addPath(str(doc.path))
         self.update_title(doc)
+        doc.buffer.autosave.reset()
         self.status.setText('Saved.')
         return True
 
+    @pause_autosave
     def confirm_document(self, doc):
+        if doc.buffer.autosave.busy:
+            self.error('Autosave is finishing. Please retry closing when it completes.')
+            return False
+        doc.buffer.autosave.timer.stop()
         if not doc.document().isModified():
             return True
         choice = qt.QMessageBox.question(self, 'Unsaved changes', f'Save changes to {doc.path.name}?',
@@ -323,6 +355,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
             self.documents.pop(doc.path, None)
             self.watch.removePath(str(doc.path))
         doc.release()
+        self.refresh_autosave_notice()
         if prune:
             self.remove_empty_groups()
         self.activate(self.active_group)
@@ -462,16 +495,22 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         if path.exists():
             self.watch.addPath(str(path))
 
+    @pause_autosave
     def reload_current(self):
         doc = self.current
         if not doc:
             return
+        if doc.buffer.autosave.busy:
+            self.error('Autosave is finishing. Please retry Reload when it completes.')
+            return
+        doc.buffer.autosave.timer.stop()
         if doc.document().isModified() and qt.QMessageBox.question(self, 'Reload?', 'Discard unsaved buffer and reload?',
                 qt.QMessageBox.StandardButton.Discard | qt.QMessageBox.StandardButton.Cancel,
                 qt.QMessageBox.StandardButton.Cancel) != qt.QMessageBox.StandardButton.Discard:
             return
         try:
             doc.reload()
+            doc.buffer.autosave.reset()
         except (OSError, ValueError) as error:
             self.error(error)
 
@@ -559,6 +598,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                     splitter.setSizes(sizes)
         self.run(lambda: None, restored)
 
+    @pause_autosave
     def can_close(self):
         if self.worker or self.queue:
             self.error('Please wait for the current operation to finish before closing.')
@@ -578,6 +618,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         self.closing = ready
         if ready:
             for doc in self.views():
+                doc.buffer.autosave.timer.stop()
                 if hasattr(doc, 'speech'):
                     doc.speech.stop()
                     if doc._diagram_renderer:
