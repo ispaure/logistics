@@ -85,6 +85,37 @@ class StorageTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.store = Store(self.temp.name)
 
+    def test_folder_move_retains_history_and_rejects_cycles_collisions_and_leases(self):
+        data = conversation(settings())
+        data.update(folder='Work/Nested', draft='Keep my draft')
+        self.store.save(data)
+        self.store.create_folder('Archive')
+        lease = self.store.lease(data['id'])
+        try:
+            with self.assertRaises(ConflictError):
+                self.store.move_folder('Work', 'Archive')
+            with self.assertRaises(ValueError):
+                self.store.move_folder('Work', 'Work/Nested')
+            self.store.move_folder('Work', 'Archive', active=data, lease=lease)
+            self.assertEqual(data['folder'], 'Archive/Work/Nested')
+            saved = self.store.load(data['id'])
+            self.assertEqual(saved['draft'], 'Keep my draft')
+            self.assertEqual(saved['folder'], data['folder'])
+            self.store.save(data)
+            self.store.create_folder('Work')
+            with self.assertRaises(ValueError):
+                self.store.move_folder('Archive/Work', '', active=data, lease=lease)
+        finally:
+            lease.unlock()
+
+    def test_pins_survive_reopen_and_sort_before_newer_unpinned_chats(self):
+        pinned, recent = conversation(settings()), conversation(settings())
+        pinned['pinned'] = True
+        self.store.save(pinned)
+        self.store.save(recent)
+        self.assertEqual(self.store.list()[0][0]['id'], pinned['id'])
+        self.assertTrue(self.store.load(pinned['id'])['pinned'])
+
     def test_drafts_and_interrupted_output_survive_restart(self):
         data = conversation(settings(), 'local', 'test')
         data['draft'] = 'Next question'

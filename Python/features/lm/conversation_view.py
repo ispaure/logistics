@@ -1,9 +1,10 @@
 """Incremental conversation bubbles with native, selectable Markdown bodies."""
 import math
+from datetime import datetime
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.styling import styling
 from commonUtils.ui.markdown.presentation import MarkdownBrowser, style_document
-from .icons import chat_icon
+from .icons import action_button
 
 
 class MessageBrowser(MarkdownBrowser):
@@ -73,16 +74,12 @@ class Bubble(qt.QFrame):
         self.label = qt.QLabel()
         self.label.setForegroundRole(qt.QPalette.ColorRole.PlaceholderText)
         self.label.setTextFormat(qt.Qt.TextFormat.PlainText)
+        styling().bind(self.label, 'ui')
         header = qt.QHBoxLayout()
         header.addWidget(self.label)
         header.addStretch()
-        self.copy_button = qt.QToolButton()
-        self.copy_button.setAutoRaise(True)
-        self.copy_button.setIcon(chat_icon('copy'))
-        self.copy_button.setIconSize(qt.QSize(16, 16))
-        self.copy_button.setToolTip('Copy message as written')
-        self.copy_button.setAccessibleName('Copy message as written')
-        self.copy_button.clicked.connect(lambda: qt.QApplication.clipboard().setText(self.browser.source or ''))
+        self.copy_button = action_button('Copy message as written',
+            lambda: qt.QApplication.clipboard().setText(self.browser.source or ''), 'copy', size=16)
         self.browser = MessageBrowser(self)
         self.error = qt.QLabel()
         self.error.setTextFormat(qt.Qt.TextFormat.PlainText)
@@ -94,22 +91,27 @@ class Bubble(qt.QFrame):
         footer = qt.QHBoxLayout()
         footer.setSpacing(4)
         footer.addWidget(self.copy_button)
-        self.retry_button = qt.QToolButton()
-        self.retry_button.setAutoRaise(True)
-        self.retry_button.setIcon(chat_icon('refresh'))
-        self.retry_button.setIconSize(qt.QSize(16, 16))
-        self.retry_button.setToolTip('Retry / Regenerate last response')
-        self.retry_button.setAccessibleName('Retry / Regenerate last response')
-        self.retry_button.clicked.connect(self.retry_requested)
+        self.retry_button = action_button('Retry / Regenerate last response', self.retry_requested, 'refresh', size=16)
         self.retry_button.hide()
         footer.addWidget(self.retry_button)
         footer.addStretch()
+        self.timestamp = qt.QLabel()
+        self.timestamp.setTextFormat(qt.Qt.TextFormat.PlainText)
+        footer.addWidget(self.timestamp)
         layout.addLayout(footer)
         self.update_entry(entry)
 
     def update_entry(self, entry):
         name = 'You' if self.role == 'user' else 'Assistant'
         self.label.setText(name if entry['status'] == 'complete' else f'{name} · {entry["status"]}')
+        try:
+            created = datetime.fromisoformat(entry.get('created', '')).astimezone()
+            self.timestamp.setText(created.strftime('%b %d · %H:%M'))
+            self.timestamp.setToolTip(created.strftime('%Y-%m-%d %H:%M:%S %Z'))
+        except (TypeError, ValueError):
+            self.timestamp.clear()
+        shade = 112 if self.palette().color(qt.QPalette.ColorRole.Base).lightness() > 128 else 170
+        self.timestamp.setStyleSheet(f'color: rgb({shade}, {shade}, {shade}); font-size: 9pt;')
         error = entry.get('error', '')
         self.error.setText(error)
         self.error.setVisible(bool(error))

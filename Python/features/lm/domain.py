@@ -87,6 +87,8 @@ def message(role, content='', status='complete', **metadata):
 def validate_conversation(data):
     if not isinstance(data, dict) or type(data.get('schema_version')) is not int or data['schema_version'] != 1:
         raise ValueError('Unsupported conversation format; original file preserved.')
+    if 'pinned' in data and type(data['pinned']) is not bool:
+        raise ValueError('Invalid pinned conversation state.')
     identity(data.get('id'))
     if type(data.get('revision')) is not int or data['revision'] < 0:
         raise ValueError('Invalid conversation revision.')

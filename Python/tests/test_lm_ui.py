@@ -578,3 +578,40 @@ class LMUITests(QtTestCase):
         self.page.open_conversation(data['id'])
         self.until(lambda: bar.maximum() > 0 and bar.value() == bar.maximum())
         self.assertEqual(self.page.transcript.key, data['id'])
+
+    def test_pin_fork_menus_and_timestamp_preserve_original_conversation(self):
+        self.chat('Keep this history')
+        self.until(lambda: not self.page.client.busy)
+        original = self.page.data['id']
+        self.page.toggle_pin()
+        self.assertTrue(self.store.load(original)['pinned'])
+        self.assertEqual(self.page.pin_action.text(), 'Unpin conversation')
+        entry = self.page.data['messages'][0]
+        timestamp = self.page.transcript.bubbles[entry['id']].timestamp
+        self.assertTrue(timestamp.text())
+        self.assertTrue(timestamp.toolTip())
+        self.page.fork_conversation()
+        self.assertNotEqual(self.page.data['id'], original)
+        self.assertFalse(self.page.data['pinned'])
+        self.assertEqual(self.page.data['messages'][0]['content'], 'Keep this history')
+        self.assertNotEqual(self.page.data['messages'][0]['id'], entry['id'])
+        self.assertTrue(self.store.load(original)['pinned'])
+        self.assertEqual([a.text() for a in self.page.menu_bar.actions()],
+                         ['File', 'Edit', 'Conversation', 'View', 'Server'])
+        self.assertEqual(self.page.status.contentsMargins().bottom(), 0)
+        content = self.page.status.parentWidget()
+        self.assertEqual(content.layout().contentsMargins().bottom(), 8)
+
+    def test_tree_move_persists_conversation_and_folder_destinations(self):
+        self.page.new_conversation()
+        key = self.page.data['id']
+        self.store.create_folder('Work/Nested')
+        self.store.create_folder('Archive')
+        self.page.move_tree_item((key, ''), 'Work/Nested')
+        self.assertEqual(self.store.load(key)['folder'], 'Work/Nested')
+        self.page.move_tree_item((None, 'Work'), 'Archive')
+        self.assertEqual(self.page.data['folder'], 'Archive/Work/Nested')
+        self.assertEqual(self.store.load(key)['folder'], 'Archive/Work/Nested')
+        self.page.composer.setPlainText('Still editable after moving')
+        self.assertTrue(self.page.persist())
+        self.assertEqual(self.store.load(key)['draft'], 'Still editable after moving')

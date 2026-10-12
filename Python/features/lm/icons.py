@@ -68,3 +68,15 @@ class ChatIcon(qt.QIconEngine):
 
 def chat_icon(name):
     return qt.QIcon(ChatIcon(name))
+
+
+def action_button(title, callback, icon, *, size=20, parent=None):
+    """Consistent named, palette-aware controls for page and message actions."""
+    button = qt.QToolButton(parent)
+    button.setAutoRaise(True)
+    button.setIcon(chat_icon(icon))
+    button.setIconSize(qt.QSize(size, size))
+    button.setToolTip(title)
+    button.setAccessibleName(title)
+    button.clicked.connect(callback)
+    return button

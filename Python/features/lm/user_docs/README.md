@@ -166,3 +166,23 @@ LM Studio's OpenAI-compatible text endpoint is the initial target. Other servers
 must support Chat Completions with text messages; model discovery uses `/models`.
 Image/audio inputs, server provisioning, persistent token storage, Codex and local
 tool execution are outside this first version.
+
+## Organize conversations and page controls
+
+Right-click a conversation for **Pin / Unpin**, **Fork**, **Rename**, **Move**,
+**Export**, or **Delete**. Delete still asks for confirmation. Pinned conversations
+appear first within their folder and keep their pin after reopening. Fork creates
+an independent saved copy of the full conversation and draft; future changes do
+not alter the original, and forking does not contact the model server.
+
+Drag a conversation onto a folder to move it. Drag a folder onto another folder
+to move its entire subtree; drop on Conversations or empty tree space to return it
+to the root. Folders cannot be dropped into themselves/descendants or overwrite
+an existing folder. A move is refused if another window owns a chat inside it.
+Conversation switching and dragging are disabled during a request.
+
+The page has File, Edit, Conversation, View and Server menus. Edit commands target
+the draft. View can hide the conversation sidebar or show generation settings.
+The compact bottom status bar matches the file-browser workspace spacing.
+Each message shows its creation time in small grayscale text; hover for the full
+local date, time and timezone. Older messages without usable timestamps omit it.
