@@ -209,6 +209,10 @@ the previous configuration where possible; if recovery fails, the error identifi
 the retained recovery folder. A refresh failure after a successful reset asks you
 to restart Logistics to finish applying the defaults.
 
+The settings category list stays just wide enough for its labels, with a small
+padding allowance. It adapts to the interface font; wider windows give the extra
+space to the selected settings panel.
+
 The top-left selector applies to every category: **Default Software Configuration**
 edits repository INIs shipped in future releases; **Personal Settings** edits
 AppData overrides. Fields indicate inheritance. Click **↶** to remove an override,

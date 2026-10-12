@@ -13,7 +13,8 @@ Under **Settings → Blender**, **Presets** appears first. The second tab,
 **Versions Definitions**, is admin configuration for the catalog of Blender versions
 available to install, including their platform packages and download metadata.
 In **Personal Settings**, **Presets** creates and manages configurations, selects
-addons and provides **Add Addon…** / **Addon Library**. Version/preset editing
+addons. The third tab, **Addon Library**, groups available versions and provides
+**Add Addon…** independently of presets. Version/preset editing
 is kept off the main launch page. Manage opens the selected card's preset.
 
 ## Install a version
@@ -89,14 +90,14 @@ does not rewrite those references. Close Blender before copying, renaming or
 deleting its preset. Logistics blocks these operations for instances it launched
 while they are running; it cannot track Blender instances started elsewhere.
 
-## Provided and personal addon libraries
+## Shared and user-provided addon libraries
 
 The library combines two sources:
 
-- **Provided:** a read-only collection of addon ZIPs supplied by the studio or
-  maintainer. It defaults to `Addons/blender` in the checkout and also supports a
+- **Shared:** a read-only collection of addon ZIPs supplied by the studio or
+  maintainer. It defaults to `Software/Blender_Addons_Library` in the checkout and also supports a
   configured shared folder. ZIPs are discovered recursively; no manifest is needed.
-- **Personal:** addon ZIPs the artist imports with **Add Addon…**. The system reads
+- **User provided:** addon ZIPs the artist imports with **Add Addon…**. The system reads
   metadata, groups releases and handles compatibility; artists do not edit documents.
 
 The library and each preset's resolved release show which source supplies the addon.
@@ -107,7 +108,7 @@ personal version does not hide a newer compatible provided version. The provided
 collection is never written, copied into the personal library, or removed by imports.
 No addon packages are shipped by this change; supplied ZIPs populate the collection.
 
-**Add Addon…** selects a local `.zip` and copies it into the per-user library at
+**Settings → Blender → Addon Library → Add Addon…** selects a local `.zip` and copies it into the per-user library at
 `addons/blender/<identity>/<addon-version>/addon.zip`. Each legacy module name
 or extension manifest ID identifies one addon; releases sharing that identity are
 kept together. An identical import is harmless; different contents claiming the
@@ -226,7 +227,9 @@ access and enough disk space for the package, staging and extracted application.
 
 ## Available packages and installed addons
 
-**Addon library** shows the shared and personal ZIP releases available to choose,
+**Settings → Blender → Addon Library** is the third tab, after Presets and
+Versions Definitions. It shows one collapsed row per addon; expand it to see its
+ZIP packages newest first,
 including package dates, compatibility limits and original ZIP names. The shared
 folder defaults to `Software/Blender_Addons_Library`; you can distribute that
 folder and change `Resources.blender_addons_path` to its location.
@@ -236,11 +239,16 @@ compatible**. Status indicates Up to date, Update available, Installation pendin
 Removal pending, incompatible packages, or missing files/library entries. Saving
 selection records what the next launch should apply. **Installed files** also
 shows addons placed directly in the preset, including those outside the library.
+The **Library** column says **Shared** for the supplied ZIP folder or **User
+provided** for a ZIP imported with Add Addon. The library is independent of
+presets; importing a ZIP does not select it for any preset.
 
 Keep future ZIPs inside the same addon folder. Filenames can include both the
 addon version and date, for example `Anytree_2.1.3_2026_10_12.zip`. Logistics reads
 version and compatibility from the ZIP, choosing the newest compatible declared
 version; dated revisions distinguish packages that retain the same version.
+`library-inventory.json` is a packaging snapshot, not the application index;
+you do not need to edit it when adding ZIPs. Refresh the library tab to rescan it.
 Unknown compatibility is not automatically selected. The package date alone does
 not establish compatibility. Python caches are not needed in shared ZIPs.
 

@@ -308,12 +308,12 @@ class SettingsPage(qt.QWidget):
         bind_font(self.sidebar, 'ui')
         self.sidebar.setHeaderHidden(True)
         self.sidebar.setAccessibleName('Settings categories')
-        self.sidebar.setMinimumWidth(190)
+        self.sidebar.installEventFilter(self)
         self.stack = qt.QStackedWidget()
         splitter.addWidget(self.sidebar)
         splitter.addWidget(self.stack)
+        splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([280, 850])
         self.sidebar.currentItemChanged.connect(self._selected)
         self._unsubscribe = registry.subscribe(self._changed)
         self.destroyed.connect(self._unsubscribe)
@@ -364,6 +364,18 @@ class SettingsPage(qt.QWidget):
     def _changed(self):
         qt.QTimer.singleShot(0, self.refresh)
 
+    def _fit_sidebar(self):
+        # The view's column hint includes the tree indentation and styled items.
+        padding = self.sidebar.fontMetrics().horizontalAdvance('   ')
+        scrollbar = self.sidebar.style().pixelMetric(qt.QStyle.PixelMetric.PM_ScrollBarExtent)
+        width = self.sidebar.sizeHintForColumn(0) + padding + scrollbar + 2 * self.sidebar.frameWidth()
+        self.sidebar.setFixedWidth(max(1, width))
+
+    def eventFilter(self, watched, event):
+        if watched is self.sidebar and event.type() in (qt.QEvent.Type.FontChange, qt.QEvent.Type.StyleChange):
+            qt.QTimer.singleShot(0, self._fit_sidebar)
+        return super().eventFilter(watched, event)
+
     def refresh(self):
         states = sorted((state for state in registry.get_feature_states() if state.enabled),
                         key=lambda state: state.label.casefold())
@@ -377,6 +389,7 @@ class SettingsPage(qt.QWidget):
                 self._category_items[key].setToolTip(0, getattr(state, 'description', ''))
                 if key in self.panels:
                     self.panels[key].refresh(state)
+            self._fit_sidebar()
             return
         scroll_position = self.sidebar.verticalScrollBar().value()
         current = self.sidebar.currentItem()
@@ -406,6 +419,7 @@ class SettingsPage(qt.QWidget):
             self.sidebar.setCurrentItem(items.get(selected, items['features']))
             self._category_items = items
         self.sidebar.verticalScrollBar().setValue(scroll_position)
+        self._fit_sidebar()
         self._selected(self.sidebar.currentItem(), None)
 
     def _selected(self, item, previous):
