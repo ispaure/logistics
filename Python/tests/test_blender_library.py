@@ -201,6 +201,46 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual((self.preset / '.logistics-addons.json').read_bytes(), state)
         self.assertNotIn('updated=True', (self.preset / 'scripts/addons/tool/__init__.py').read_text())
 
+    def test_zip_replaced_after_resolution_aborts_before_mutating_preset(self):
+        package = self.package('tool.zip')
+        self.library.add(package)
+        scoped = self.library.for_preset(self.preset)
+        scoped.add(self.package('private.zip', (2, 0, 0)))
+        original_resolve = self.library.resolve
+        before = self.preset / 'config/userpref.blend'; before.write_bytes(b'artist preferences')
+        def race(*args, **kwargs):
+            addon = original_resolve(*args, **kwargs)
+            with zipfile.ZipFile(addon.package, 'w') as archive:
+                archive.writestr('tool/__init__.py', 'bl_info={"name":"Tool","version":(9,0,0),"blender":(3,0,0)}')
+            return addon
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch.object(self.library, 'resolve', side_effect=race), \
+                patch('features.blender.addons.run_blender_script') as run:
+            with self.assertRaisesRegex(ValueError, 'ZIP changed before installation'):
+                self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={'enabled': False, 'branch': 'main'})
+        run.assert_not_called()
+        self.assertEqual(before.read_bytes(), b'artist preferences')
+        self.assertFalse((self.preset / 'scripts/addons/tool').exists())
+        self.assertFalse((self.preset / '.logistics-addons.json').exists())
+
+    def test_extraction_uses_verified_snapshot_when_source_changes_later(self):
+        from features.blender import library as module
+        addon = self.library.for_preset(self.preset).add(self.package('tool.zip'))
+        inspect = module.inspect_package
+        def race(path):
+            parsed = inspect(path)
+            if Path(path).parent.name == 'packages':
+                with zipfile.ZipFile(addon.package, 'w') as archive:
+                    archive.writestr('tool/__init__.py', 'bl_info={"name":"Tool","version":(9,0,0),"blender":(3,0,0)}')
+            return parsed
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch.object(module, 'inspect_package', side_effect=race), \
+                patch('features.blender.addons.run_blender_script'):
+            self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={'enabled': False, 'branch': 'main'})
+        self.assertEqual(inspect(addon.package).version, '9.0.0')
+        self.assertIn('(1, 0, 0)', (self.preset / 'scripts/addons/tool/__init__.py').read_text())
+        self.assertEqual(self.library.selection(self.preset)['installed']['legacy:tool']['digest'], addon.digest)
+
     def test_apply_preserves_executable_permission_for_bundled_helpers(self):
         import os
         path = self.package('engine.zip')
