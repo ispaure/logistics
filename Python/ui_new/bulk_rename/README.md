@@ -86,3 +86,9 @@ The latest request wins during scanning/preview; an active rename or undo finish
 before the new selection loads. Closing Logistics cooperatively stops the worker.
 `open_bulk_rename` uses the registered main-window host when available and otherwise
 opens the standalone window. Pass `standalone=True` to explicitly bypass hosting.
+
+Rule groups use independent vertical stacks, up to six columns selected by the
+available width. Packing uses group size hints; paired numeric fields and
+checkboxes reduce row count. Controls retain their identities and values during
+reflow. The browser/rules splitter initially gives the rules more vertical space;
+narrow windows keep a scroll area. Rename planning/apply behavior is unchanged.

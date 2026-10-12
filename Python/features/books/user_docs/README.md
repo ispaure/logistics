@@ -14,7 +14,8 @@ Right-clicking an EPUB offers **Read EPUB…** and **Edit metadata…**.
 The same **Edit metadata…** action works for comics and mixed selections.
 It opens the appropriate editors without opening a reader.
 
-In the main app, readers and metadata editors open as tabs in **Open documents**.
+In the main app, readers open as tabs in **Open documents**. Metadata editors
+open in separate popup windows.
 Use **Detach** for a separate window and **Bring back** to return it to the same
 workspace. Switching to File Browser or Folder Hub retains your open documents.
 
@@ -39,7 +40,9 @@ Selecting an EPUB in File Browser shows its cover and metadata in the **Book
 Metadata** preview panel, just like a comic. Tile thumbnails use the cover too.
 Books without an embedded cover still show their metadata.
 
-Choose **Aa** or **View → Logistics Settings…** to open central book settings.
+Choose **Aa** or **View → Reading appearance…** to customize the font, text size,
+spacing, width and theme in a compact popup. Changes save immediately as personal
+settings and use the same values as the central Settings controls.
 Line spacing, reading width and reading theme are under **Feature settings →
 Books & Comics → Options**. Font and text size are under **Appearance & shared
 controls → Styling**, shared with Markdown.
@@ -135,7 +138,9 @@ Closing the panel, changing chapters, or closing the reader stops playback.
 ## Reading defaults
 
 In **Logistics Settings → Appearance & shared controls → Styling**, the shared
-reading font and size (8–48) apply to EPUB and Markdown. **Feature settings → Books
+reading font and size (8–48) apply to EPUB and Markdown. The default is Georgia
+at 15 pt, a serif font suited to long passages. Automatic uses the
+application text font. Changes made through Aa appear here too. **Feature settings → Books
 & Comics → Options** exposes `line_spacing_int` (100–220), `reading_width_int`
 (480–1400), `theme_mode` and `remember_position_bool`. Larger text or spacing means
 fewer words per page. Appearance is global; positions and bookmarks remain per

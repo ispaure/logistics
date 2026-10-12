@@ -245,8 +245,10 @@ shows the sidebar.
 The Bulk Rename (A→B) rail button uses the accent color while Bulk Rename is the
 active destination, matching the other destination buttons.
 
-Logistics checks for updates by default. **Settings → Configuration → Updates**
-lets you disable checks or select **main**, **beta** or **alpha** (main by default).
+Logistics checks for updates by default. In **Settings → Configuration**, choose
+**configFile.ini**; **Updates** sits alongside the other configuration section tabs.
+The Updates controls
+let you disable checks or select **main**, **beta** or **alpha** (main by default).
 These are published release channels: main uses stable releases, beta and alpha
 use tags with those suffixes. Unpublished branch commits are not offered.
 

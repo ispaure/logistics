@@ -11,7 +11,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.configuration.layered import register_settings
 from services import updates
 from ui_new.updater import UpdateController
-from ui_new.pages.settings import ApplicationConfigurationPanel
+from ui_new.pages.settings import ConfigurationPanel
 
 
 class UpdatePolicyTests(unittest.TestCase):
@@ -46,15 +46,18 @@ class UpdateUITests(QtTestCase):
             root = Path(temp)
             path = updates.ROOT / 'Python/configFile.ini'
             store = register_settings(path, root / 'personal.ini')
-            with patch('services.updates.settings_store', return_value=store), patch('ui_new.pages.settings.settings_store', return_value=store):
-                panel = ApplicationConfigurationPanel(scope='personal')
-            self.assertEqual([panel.tabs.tabText(i) for i in range(panel.tabs.count())], ['General', 'Updates'])
-            editor = panel.update_editors['personal']
+            with patch('ui_new.pages.settings.settings_store', return_value=store):
+                panel = ConfigurationPanel([path], layered=True, scoped=False, scope='personal')
+            editor = panel.stack.currentWidget()
+            tabs = [editor.sections.tabText(i) for i in range(editor.sections.count())]
+            self.assertIn('Updates', tabs)
+            self.assertIn('FeatureDefaults', tabs)
+            self.assertNotIn('General', tabs)
             self.assertTrue(editor.fields[('Updates', 'enabled_bool')].isChecked())
             branch = editor.fields[('Updates', 'branch_mode')]
             self.assertEqual([branch.itemText(i) for i in range(branch.count())], ['main', 'beta', 'alpha'])
             self.assertEqual(branch.currentText(), 'main')
-            self.assertNotIn(('FeatureDefaults', 'disabled_list-str'), editor.fields)
+            self.assertIn(('FeatureDefaults', 'disabled_list-str'), editor.fields)
             panel.deleteLater()
             self.app.processEvents()
 

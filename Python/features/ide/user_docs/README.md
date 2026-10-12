@@ -127,7 +127,8 @@ Line numbers resize with the font and line count.
   caret. Ctrl+Shift-click (Command+Shift-click on macOS) also lists usages. Choose
   a result to open its file and position; Back returns to where you searched.
   Results appear in a popup over the editor, with filename, line number and code
-  preview. Filter by file/path or preview text; use arrows and Enter or click a row
+  preview. Rows use compact padding while retaining the current font and size.
+  Filter by file/path or preview text; use arrows and Enter or click a row
   to open it. Escape or a click outside closes the popup without choosing a result.
 - **Alt+Left / Alt+Right**: back/forward with cursor and approximate scroll position.
 - **Ctrl/Cmd+P**: Go to file; **Ctrl/Cmd+L**: Go to line.

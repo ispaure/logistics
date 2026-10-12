@@ -7,6 +7,11 @@ check those rules before the next batch.
 
 ## Using the window
 
+Rules use compact fields in up to six independently packed columns, with related
+values and checkboxes sharing rows. Wider windows show more controls at once.
+Drag the divider above the rules to adjust their space; narrow windows retain
+scrolling and reflow without changing your settings.
+
 The folder tree keeps the filesystem/drive hierarchy visible as you navigate.
 The current folder remains selected alongside its parent folders and siblings;
 expanded branches stay open. The navigation tree includes hidden directories so

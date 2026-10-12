@@ -11,7 +11,6 @@ from tempfile import mkdtemp
 from commonUtils.runtime.updates.github import GitHubSource
 from commonUtils.runtime.updates.transaction import MARKER, head, prepare_git, prepare_archive
 from features.preferences import preferences_path
-from features.settings import settings_store
 
 ROOT = Path(__file__).resolve().parents[2]
 BRANCHES = ('main', 'beta', 'alpha')
@@ -98,9 +97,3 @@ def launch_helper(request):
         return subprocess.Popen([sys.executable, str(request.parent / 'apply_update.py'), str(request)],
                                 cwd=request.parent, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                                 start_new_session=os.name != 'nt', creationflags=flags, close_fds=True)
-
-
-def settings_widget(parent=None, scope='personal'):
-    from commonUtils.ui.settings.layered_settings import LayeredSettingsEditor
-    return LayeredSettingsEditor(settings_store(ROOT / 'Python/configFile.ini'), parent, scope=scope,
-                                 sections=['Updates'], labels={('Updates', 'enabled_bool'): 'Enable updates', ('Updates', 'branch_mode'): 'Update channel'})

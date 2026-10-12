@@ -31,7 +31,12 @@ class BooksController(qt.QObject):
         else:
             window.reader.idle.connect(self.idle)
         from commonUtils.ui.document_host import show_document
-        show_document(window)
+        if edit:
+            window.show()
+            window.raise_()
+            window.activateWindow()
+        else:
+            show_document(window)
         return window
 
     def prepare_close(self):

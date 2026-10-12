@@ -21,7 +21,8 @@ tabs or collection indexing.
 
 ## Read and edit
 
-Readers and metadata editors opened from the main app appear in **Open documents**.
+Readers opened from the main app appear in **Open documents**. Metadata editors
+open in separate popup windows.
 Use **Detach** to move the same view into a separate window and **Bring back** to
 return it; switching sidebar destinations retains the open views.
 

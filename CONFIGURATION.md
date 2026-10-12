@@ -305,7 +305,7 @@ the Features category respects the same software/personal selector.
 
 `Python/configFile.ini` supplies `[Updates] enabled_bool = true` and
 `branch_mode = main`, with main/beta/alpha choices. The field is presented as
-**Update channel** in **Configuration → Updates** and supports the normal personal
+the branch selector in **Configuration → configFile.ini → Updates** and supports the normal personal
 and software scopes. Disabled checks make no GitHub requests. Enabled checks run
 at startup and approximately every fifteen minutes. Only published releases with
 an uploaded, SHA-256-labelled `release.zip` qualify; no branch-HEAD fallback.

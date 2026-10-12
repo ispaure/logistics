@@ -428,8 +428,9 @@ class BlenderPage(qt.QWidget):
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
 
-    def _create(self):
-        name = self._name('Create Preset', 'Default')
+    def _create(self, *, name=None):
+        if name is None:
+            name = self._name('Create Preset', 'Default')
         if name is not None:
             try:
                 destination = self.manager.create_preset(self.release, name)
@@ -581,6 +582,28 @@ class BlenderPage(qt.QWidget):
             action.triggered.connect(callback)
         menu.exec(self.preset_list.viewport().mapToGlobal(position))
 
+    def _preset_details(self):
+        dialog = qt.QDialog(self)
+        dialog.setWindowTitle('New Blender Preset')
+        form = qt.QFormLayout(dialog)
+        version = qt.QComboBox(dialog)
+        version.addItems([release.version for release in self.releases])
+        version.setCurrentText(self.version.currentText())
+        version.setAccessibleName('Blender version')
+        name = qt.QLineEdit('Default', dialog)
+        name.setAccessibleName('Preset name')
+        name.selectAll()
+        form.addRow('Blender version', version)
+        form.addRow('Preset name', name)
+        buttons = qt.QDialogButtonBox(qt.QDialogButtonBox.StandardButton.Ok | qt.QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        name.setFocus()
+        if dialog.exec() == qt.QDialog.DialogCode.Accepted:
+            return version.currentText(), name.text()
+        return None
+
     def _add_configuration(self):
         if not self.settings_mode:
             self._manage_configuration()
@@ -588,13 +611,13 @@ class BlenderPage(qt.QWidget):
         if not self.releases:
             self.status.setText('Configure a Blender release in Settings first.')
             return
-        version, accepted = qt.QInputDialog.getItem(self, 'Add Configuration', 'Blender version:',
-                                                  [r.version for r in self.releases], editable=False)
-        if accepted:
+        details = self._preset_details()
+        if details is not None:
+            version, name = details
             self._adding_preset = True
             try:
                 self.version.setCurrentText(version)
-                self._create()
+                self._create(name=name)
                 self._manage_configuration()
             finally:
                 self._adding_preset = False

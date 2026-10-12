@@ -94,11 +94,25 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual(page.preset_version_label.text(), self.builds[1].version)
         self.manager.remove_preset(self.builds[1], 'Art')
         page.refresh()
-        with patch('features.blender.page.qt.QInputDialog.getItem', return_value=(self.builds[1].version, True)), patch.object(page, '_name', return_value='New Art'):
+        with patch.object(page, '_preset_details', return_value=(self.builds[1].version, 'New Art')):
             page.add_preset_button.click()
         self.assertEqual(self.manager.presets(self.builds[1]), ['New Art'])
         self.assertEqual(page.preset.currentText(), 'New Art')
         self.assertEqual(page.preset_list.currentItem().data(qt.Qt.ItemDataRole.UserRole), (self.builds[1].version, 'New Art'))
+
+    def test_new_preset_dialog_collects_version_and_name_together(self):
+        page = BlenderPage(manager=self.manager, settings_mode=True)
+        labels = []
+        def fill_dialog():
+            dialog = self.app.activeModalWidget()
+            form = dialog.layout()
+            labels.extend(form.itemAt(row, qt.QFormLayout.ItemRole.LabelRole).widget().text() for row in range(2))
+            dialog.findChild(qt.QComboBox).setCurrentText(self.builds[1].version)
+            dialog.findChild(qt.QLineEdit).setText('Artist')
+            dialog.accept()
+        qt.QTimer.singleShot(0, fill_dialog)
+        self.assertEqual(page._preset_details(), (self.builds[1].version, 'Artist'))
+        self.assertEqual(labels, ['Blender version', 'Preset name'])
 
     def test_preset_context_menu_deletes_selected_preset_and_refreshes_list(self):
         self.manager.create_preset(self.builds[0], 'Art')

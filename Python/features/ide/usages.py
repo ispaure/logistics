@@ -32,13 +32,13 @@ class UsagePopup(qt.QFrame):
         self.setStyleSheet('''
             QFrame#ideUsagePopup { background: palette(window); border: 1px solid palette(mid); border-radius: 8px; }
             QFrame#ideUsagePopup QTreeWidget { background: palette(window); border: none; }
-            QFrame#ideUsagePopup QTreeWidget::item { padding: 6px 4px; }
+            QFrame#ideUsagePopup QTreeWidget::item { padding: 3px 4px; }
             QFrame#ideUsagePopup QTreeWidget::item:selected { background: palette(highlight); color: palette(highlighted-text); }
             QLabel#usageTitle { font-weight: bold; }
         ''')
         layout = qt.QVBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(8)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(6)
         header = qt.QHBoxLayout()
         self.title = qt.QLabel()
         self.title.setObjectName('usageTitle')

@@ -358,11 +358,13 @@ class ComicReaderWindow(qt.QMainWindow):
 
     def edit_metadata(self):
         from .metadata_editor import MetadataEditor
-        from commonUtils.ui.document_host import show_document, document_is_open
+        from commonUtils.ui.document_host import document_is_open
         existing = next((window for window in self.metadata_windows
                          if window.targets == (self.pages.path,) and document_is_open(window)), None)
         if existing is not None:
-            show_document(existing)
+            existing.showNormal() if existing.isMinimized() else existing.show()
+            existing.raise_()
+            existing.activateWindow()
             return existing
         for window in list(self.metadata_windows):
             if not document_is_open(window) and not window.busy:
@@ -373,7 +375,9 @@ class ComicReaderWindow(qt.QMainWindow):
         self.metadata_windows.append(editor)
         editor.idle.connect(self.idle)
         editor.saved.connect(self._metadata_saved)
-        show_document(editor)
+        editor.show()
+        editor.raise_()
+        editor.activateWindow()
         return editor
 
     def _metadata_saved(self, path):

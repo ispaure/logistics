@@ -11,7 +11,16 @@ class RenameRuleControls(qt.QWidget):
         self.fields = {}
         grid = qt.QGridLayout(self)
         self._sections = []
-        self._columns = 4
+        self._columns = 0
+        self._column_layouts = []
+        for column in range(6):
+            stack = qt.QVBoxLayout()
+            stack.setSpacing(4)
+            stack.addStretch()
+            grid.addLayout(stack, 0, column)
+            self._column_layouts.append(stack)
+        grid.setSizeConstraint(qt.QLayout.SizeConstraint.SetNoConstraint)
+        grid.setHorizontalSpacing(6)
         self.setMinimumWidth(260)
         grid.setContentsMargins(0, 0, 0, 0)
         sections = [
@@ -45,19 +54,21 @@ class RenameRuleControls(qt.QWidget):
         for index, (title, fields) in enumerate(sections):
             box = qt.QGroupBox(title)
             form = qt.QFormLayout(box)
-            form.setContentsMargins(8, 8, 8, 8)
+            form.setContentsMargins(6, 4, 6, 4)
+            form.setVerticalSpacing(3)
+            form.setHorizontalSpacing(6)
+            box.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Fixed)
+            rows = []
             for name, label, default in fields:
                 if isinstance(default, bool):
                     widget = qt.QCheckBox(label)
                     widget.setChecked(default)
                     widget.toggled.connect(self.changed)
-                    form.addRow(widget)
                 elif isinstance(default, list):
                     widget = qt.QComboBox()
                     for value in default:
                         widget.addItem(value.replace('_', ' ').capitalize(), value)
                     widget.currentIndexChanged.connect(self.changed)
-                    form.addRow(label, widget)
                 elif isinstance(default, int):
                     widget = qt.QSpinBox()
                     widget.setRange(-1000000 if name in ('date_offset_days', 'number_start', 'number_step') else 0,
@@ -68,17 +79,39 @@ class RenameRuleControls(qt.QWidget):
                         widget.setMinimum(1)
                     widget.setValue(default)
                     widget.valueChanged.connect(self.changed)
-                    form.addRow(label, widget)
                 else:
                     widget = qt.QLineEdit(default)
                     widget.textChanged.connect(self.changed)
-                    form.addRow(label, widget)
                 widget.setAccessibleName(f'{title}: {label}')
                 self.fields[name] = widget
+                rows.append((name, label, widget))
+            row = 0
+            pairs = {'remove_first': ('remove_last', 'First', 'Last'),
+                     'remove_start': ('remove_count', 'From', 'Count'),
+                     'part_start': ('part_count', 'From', 'Count'),
+                     'number_start': ('number_step', 'Start', 'Step'),
+                     'number_padding': ('number_position', 'Pad', 'At')}
+            while row < len(rows):
+                name, label, widget = rows[row]
+                next_row = rows[row + 1] if row + 1 < len(rows) else None
+                pair = pairs.get(name)
+                if next_row and (isinstance(widget, qt.QCheckBox) and isinstance(next_row[2], qt.QCheckBox)
+                                 or pair and next_row[0] == pair[0]):
+                    line = qt.QHBoxLayout()
+                    line.setSpacing(4)
+                    if pair:
+                        line.addWidget(qt.QLabel(pair[1]))
+                    line.addWidget(widget)
+                    if pair:
+                        line.addWidget(qt.QLabel(pair[2]))
+                    line.addWidget(next_row[2])
+                    form.addRow(line)
+                    row += 2
+                else:
+                    form.addRow(widget) if isinstance(widget, qt.QCheckBox) else form.addRow(label, widget)
+                    row += 1
             self._sections.append(box)
-            grid.addWidget(box, index // 4, index % 4)
-        for column in range(4):
-            grid.setColumnStretch(column, 1)
+        self._reflow(4)
         self.fields['regex_replacement'].setToolTip(r'Python regex replacement: \1 or \g<name> for groups')
         self.fields['date_format'].setToolTip('%Y year · %m month · %d day · %H hour · %M minute · %S second')
         for name in ('remove_start', 'part_start', 'part_position', 'insert_position', 'number_position'):
@@ -86,15 +119,27 @@ class RenameRuleControls(qt.QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        columns = max(1, min(4, self.width() // 280))
+        columns = max(1, min(6, self.width() // 280))
         if columns != self._columns:
-            self._columns = columns
-            grid = self.layout()
+            self._reflow(columns)
+
+    def _reflow(self, columns):
+        self._columns = columns
+        for stack in self._column_layouts:
             for box in self._sections:
-                grid.removeWidget(box)
-            for index, box in enumerate(self._sections):
-                grid.addWidget(box, index // columns, index % columns)
-            self.updateGeometry()
+                stack.removeWidget(box)
+        heights = [0] * columns
+        for box in self._sections:
+            # Independent stacks avoid a tall section stretching every group in
+            # its row. Numbered titles keep pipeline order clear after packing.
+            column = min(range(columns), key=lambda index: heights[index])
+            stack = self._column_layouts[column]
+            stack.insertWidget(stack.count() - 1, box)
+            heights[column] += box.sizeHint().height() + stack.spacing()
+        for column in range(6):
+            self.layout().setColumnStretch(column, int(column < columns))
+        self.setMinimumHeight(max(heights))
+        self.updateGeometry()
 
     def rules(self):
         values = {}

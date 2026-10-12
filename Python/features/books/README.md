@@ -78,3 +78,9 @@ PYTHONPATH=Python python -m unittest discover -s Python/tests -p 'test_books*.py
 
 Implementation follows the [EPUB package/navigation model](https://www.w3.org/TR/epub-33/)
 and Qt's [rich-text browser resource hooks](https://doc.qt.io/qtforpython-6/PySide6/QtWidgets/QTextBrowser.html).
+
+The Aa popup writes sparse personal overrides to the same layered stores used by
+Settings: font family/size in shared Styling, other appearance fields in Reader.
+Store notifications reload open readers; explicit styling reload updates Markdown
+fonts too. Reader Automatic fonts copy QApplication's font instead of constructing
+QFont with an empty family, which can resolve to emoji metrics on macOS.

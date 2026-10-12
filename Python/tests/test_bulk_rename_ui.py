@@ -68,6 +68,18 @@ class BulkRenameWidgetTests(QtTestCase):
         self.app.processEvents()
         self.assertEqual(self.widget.controls.fields['prefix'].text(), 'keep_')
 
+    def test_wide_window_shows_all_rule_groups_without_scrolling(self):
+        self.widget.resize(1600, 1000)
+        for _ in range(12):
+            self.app.processEvents()
+        scroll = self.widget.controls.parentWidget().parentWidget()
+        self.assertEqual(scroll.verticalScrollBar().maximum(), 0)
+        self.assertGreaterEqual(self.widget.controls._columns, 5)
+        for section in self.widget.controls._sections:
+            self.assertTrue(section.isVisible())
+            self.assertLessEqual(section.mapTo(self.widget.controls, qt.QPoint()).y() + section.height(),
+                                 scroll.viewport().height())
+
     def test_footer_groups_secondary_actions_beside_rename_at_narrow_width(self):
         widget = self.widget
         widget.resize(680, 650)
