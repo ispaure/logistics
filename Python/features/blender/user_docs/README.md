@@ -262,3 +262,5 @@ next launch, which may differ from what is installed now. Updating Blue Hole
 refreshes `envFiles/default` and preserves the artist's other envFiles folders.
 Non-addon backup data in `_support` is retained for manual use and not installed
 as an addon.
+
+Launching leaves unchanged addon packages in place, preserving files they created inside their folders. Changed versions still replace package files; keep important addon-local data backed up before a version update.
