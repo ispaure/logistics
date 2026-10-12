@@ -94,7 +94,7 @@ the displayed label, so equal labels from different features remain distinct.
 Shared background primitives live in commonUtils, while the feature owns inputs,
 password prompts, transaction boundaries and result presentation. Use
 `commonUtils.ui.tasks.operation_progress.OperationProgress` for progress/cancellation
-controls and `commonUtils.ui.operations.Operation` for simpler background callbacks.
+controls and `commonUtils.ui.tasks.operations.Operation` for simpler background callbacks.
 [Workflow recipes](https://github.com/ispaure/commonUtils/blob/main/ui/operation_progress.md) demonstrate both the callback contract
 and safe owner lifetimes.
 

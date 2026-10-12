@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from features.archives import register, backend
+from features.archives import register
+from commonUtils import archives
 from features.archives.ui.page import ArchivePage
 from features.archives.ui.create import NewArchiveDialog
 from services.zip_passwords import clear_passwords
@@ -27,7 +28,7 @@ class ArchiveWorkspaceUITests(QtTestCase):
         (folder / 'nested' / 'notes.txt').write_text('Nested preview')
         (folder / 'hello.txt').write_text('Hello preview')
         self.path = self.root / 'sample.zip'
-        backend.create([folder], self.path)
+        archives.create([folder], self.path)
         self.page = ArchivePage()
         self.page.resize(1200, 750)
         self.page.show()
@@ -74,7 +75,7 @@ class ArchiveWorkspaceUITests(QtTestCase):
 
     def test_password_retry_on_gui_thread(self):
         encrypted = self.root / 'encrypted.zip'
-        backend.create([self.root / 'source'], encrypted, password='secret')
+        archives.create([self.root / 'source'], encrypted, password='secret')
         self.page.open_archive(encrypted)
         self.wait()
         answers = iter(['wrong', 'secret'])
@@ -89,7 +90,7 @@ class ArchiveWorkspaceUITests(QtTestCase):
 
     def test_password_cancel_restores_controls(self):
         encrypted = self.root / 'encrypted.zip'
-        backend.create([self.root / 'source'], encrypted, password='secret')
+        archives.create([self.root / 'source'], encrypted, password='secret')
         self.page.open_archive(encrypted)
         self.wait()
         with patch('features.archives.ui.session.ask_password', return_value=None):
@@ -136,7 +137,7 @@ class ArchiveWorkspaceUITests(QtTestCase):
 
     def test_tar_disables_zip_editing(self):
         tar = self.root / 'sample.tar.gz'
-        backend.create([self.root / 'source'], tar, format='tar.gz')
+        archives.create([self.root / 'source'], tar, format='tar.gz')
         self.page.open_archive(tar)
         self.wait()
         self.assertFalse(self.page.edit_menu.isEnabled())
@@ -176,7 +177,7 @@ class ArchiveWorkspaceUITests(QtTestCase):
 
     def test_edit_keeps_verified_password_in_session_for_next_action(self):
         encrypted = self.root / 'encrypted.zip'
-        backend.create([self.root / 'source'], encrypted, password='secret')
+        archives.create([self.root / 'source'], encrypted, password='secret')
         self.page.open_archive(encrypted)
         self.wait()
         extra = self.root / 'extra.txt'

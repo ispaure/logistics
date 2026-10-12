@@ -22,9 +22,9 @@ activation hooks.
 | Browser integration | `browser_support.py` loads CBZ panels/thumbnails and folder counts; `ui/browser_extension.py` owns per-window state; `ui/browser_services.py` shares handlers between hosts. |
 | Library | `ui/library.py` adds library tabs and catalog services around the shared browser; `library_config.py` reads library names; `catalog.py` maintains suggestions. |
 
-The `ui/file_browser.py`, `ui/filesystem_model.py`, `ui/navigation.py` and
-`folder_stats.py` compatibility imports delegate to commonUtils. Extend the
-shared browser through declarations rather than adding Comics checks to it.
+Comics imports shared filesystem, desktop actions and browser modules directly
+from commonUtils. Extend the shared browser through declarations rather than
+adding Comics checks to it.
 Registration is idempotent and does not parse archives; UI imports remain lazy.
 
 ## Browser and library boundaries

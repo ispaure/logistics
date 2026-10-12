@@ -67,8 +67,8 @@ Unicode normalization, permissions, process termination or native UI behavior.
 ## Central software/personal configuration
 
 `features.settings` owns the application path mapping and registers repository
-INIs with commonUtils at startup. `ui_new.settings.configuration` retains imports
-for compatibility. Persistent overrides are under the platform Logistics AppData
+INIs with commonUtils at startup. Settings pages and launch bootstrap import
+that owner directly. Persistent overrides are under the platform Logistics AppData
 root, `configuration/<Python-relative INI path>`; shared controls map to
 `configuration/commonUtils/settings.ini`. The root launcher maps to
 `configuration/launch_config.ini`. Bootstrap wrappers pass that personal path to

@@ -20,11 +20,11 @@ See the [user guide](user_docs/README.md) for reading controls, settings and bac
   not delegated to Qt's default resource loader.
 - `preferences.py`: shared settings access plus atomic, per-book reading state.
 - `reader_controls.py`: compact toolbar, appearance popup, contents/bookmarks
-  sidebar and on-demand search. Both readers use `commonUtils.ui.reader_menus`
+  sidebar and on-demand search. Both readers use `commonUtils.ui.readers.reader_menus`
   for shared menus and bounded recent-file history.
   The EPUB reader opens only EPUBs; the comic reader opens only CBZs. The unified
   feature and browser metadata action do not merge their reading engines.
-  `commonUtils.ui.reader_chrome` supplies palette-aware icons, uniform controls,
+  `commonUtils.ui.readers.reader_chrome` supplies palette-aware icons, uniform controls,
   elided titles/status and native fullscreen state synchronization. Navigation
   and format-specific controls remain in their own reader modules.
   Shared read-aloud controls start at the top of the visible EPUB page, highlight

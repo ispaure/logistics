@@ -1,4 +1,4 @@
-"""Logistics compatibility imports and existing feature configuration readers."""
+"""Direct shared settings integration and existing feature configuration readers."""
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
@@ -8,29 +8,30 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
 from commonUtils.formats.iniType import INIFile
-from ui_new.settings.ini_editor import INISettingsEditor
 from commonUtils.ui.settings.ini_editor import INISettingsEditor as SharedINISettingsEditor
 
 
-class CompatibilityTests(QtTestCase):
+class SettingsIntegrationTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.path = Path(self.temp.name) / 'config.ini'
 
-    def test_logistics_wrapper_preserves_typed_default(self):
+    def test_configuration_panel_explicitly_enables_typed_keys(self):
+        from ui_new.pages.settings import ConfigurationPanel
         self.path.write_text('[S]\non_bool = true\n')
-        editor = INISettingsEditor(self.path)
-        self.addCleanup(editor.deleteLater)
+        panel = ConfigurationPanel([self.path])
+        self.addCleanup(panel.deleteLater)
+        editor = panel.editors[self.path]
         self.assertIsInstance(editor, SharedINISettingsEditor)
-        self.assertIsInstance(editor.fields['S','on_bool'], qt.QCheckBox)
+        self.assertIsInstance(editor.fields['S', 'on_bool'], qt.QCheckBox)
 
-    def test_schema_imports_are_compatibility_aliases(self):
-        from ui_new.settings import ini_schema as old
-        from commonUtils.configuration import ini_schema as shared
-        self.assertIs(old.parse_value, shared.parse_value)
-        self.assertIs(old.validate_values, shared.validate_values)
+    def test_shared_editor_keeps_untyped_default(self):
+        self.path.write_text('[S]\non_bool = true\n')
+        editor = SharedINISettingsEditor(self.path)
+        self.addCleanup(editor.deleteLater)
+        self.assertIsInstance(editor.fields['S', 'on_bool'], qt.QLineEdit)
 
     def test_feature_readers_support_typed_and_legacy_keys(self):
         from features.links import configuration as links

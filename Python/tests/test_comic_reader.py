@@ -534,7 +534,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.assertIn(f'Path: {folder}', window.preview.toPlainText())
         self.assertIn('Comics: 1', window.preview.toPlainText())
         self.assertIn('Subfolders: 1', window.preview.toPlainText())
-        from features.comics.folder_stats import format_size
+        from commonUtils.filesystem import format_size
         expected = format_size(comic.stat().st_size + 3)
         self.assertIn(f'Total size: {expected}', window.preview.toPlainText())
         self.assertEqual(window.model.data(folder_index.siblingAtColumn(1)), expected)
@@ -548,7 +548,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
 
 class FolderStatsTests(QtTestCase):
     def test_recursive_sizes_counts_links_and_cancellation(self):
-        from features.comics.folder_stats import scan_folders
+        from commonUtils.filesystem import scan_folders
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             nested = root / 'one' / 'two'

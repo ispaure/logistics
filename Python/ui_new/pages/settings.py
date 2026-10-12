@@ -3,14 +3,14 @@ from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.text_editor import TextFileEditor
 from commonUtils.ui.markdown import open_markdown
-from ui_new.settings.ini_editor import INISettingsEditor
+from commonUtils.ui.settings.ini_editor import INISettingsEditor
 from commonUtils.configuration.settings import settings_path
 from features import registry
 from .features import FeaturesPage
 from ui_new.settings.indexing import IndexSettingsPanel
 from commonUtils.ui.settings.settings_sections import ScopedSettings, SettingsSection
 from commonUtils.ui.settings.layered_settings import LayeredSettingsEditor
-from ui_new.settings.configuration import settings_store, initialize_settings, validate_configuration
+from features.settings import settings_store, initialize_settings, validate_configuration
 
 
 class ConfigurationPanel(qt.QWidget):
@@ -64,8 +64,10 @@ class ConfigurationPanel(qt.QWidget):
                 self.stack.addWidget(editor)
             self.editors[path] = self._scope_editors[identity]
         elif path not in self.editors:
-            editor_type = INISettingsEditor if path.suffix.lower() == '.ini' else TextFileEditor
-            self.editors[path] = editor_type(path, self)
+            if path.suffix.lower() == '.ini':
+                self.editors[path] = INISettingsEditor(path, self, typed_keys=True)
+            else:
+                self.editors[path] = TextFileEditor(path, self)
             self.stack.addWidget(self.editors[path])
         self.location = self.editors[path].path_label
         self.location.setToolTip(str(path.absolute()))
