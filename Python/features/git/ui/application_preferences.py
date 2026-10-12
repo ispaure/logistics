@@ -25,10 +25,11 @@ class ApplicationPreferences:
         self.file_timer = qt.QTimer(self); self.file_timer.setSingleShot(True); self.file_timer.setInterval(500)
         self.file_timer.timeout.connect(self.refresh)
         self.fetch_timer = qt.QTimer(self); self.fetch_timer.timeout.connect(self.background_fetch)
-        self.settings_timer = qt.QTimer(self)
-        self.settings_timer.setInterval(500)
-        self.settings_timer.timeout.connect(self._refresh_systemic)
-        self.settings_timer.start()
+        if not self.preferences.custom:
+            from commonUtils.ui.settings.monitor import subscribe_settings
+            store = self.preferences.settings
+            self._settings_subscription = subscribe_settings((store.defaults, store.personal),
+                                                              self._refresh_systemic, self)
         from commonUtils.ui.appearance.styling import styling
         styling().changed.connect(self.apply_preferences)
         self.apply_preferences()

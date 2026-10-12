@@ -88,8 +88,11 @@ absent. Migration metadata rolls back along with failed resets. The prior tree i
 outside temporary staging until feature-default activation succeeds; failures
 restore it or retain a named recovery directory. Personal layered editors discard
 pending edits and reload, while application-editor pending values remain intact.
-The registry notifies navigation observers and styling reloads immediately; open
-tools use their existing preference reload timers. Launcher values apply at launch.
+The registry notifies navigation observers and styling reloads immediately. Styling,
+Text Editor, Books and Git subscribe to shared change detection instead of owning
+separate preference polling timers. Layered saves notify after publication; one
+application monitor detects external changes every 500 ms and queues GUI callbacks.
+Subscriptions retire with their QObject owners. Launcher values apply at launch.
 Each panel retains editors for both scopes and checks all dirty editors on close.
 Feature schemas declare exposed systemic settings; runtime book positions,
 recovery, folder credentials and Git account/action records retain their own
