@@ -237,3 +237,5 @@ library; deletion removes it with the rest of that preset.
 Unchanged managed packages (same module/path/ZIP digest with an installed entrypoint) remain in place during apply. Activation still runs; a missing entrypoint triggers repair. Changed or deselected regular addon packages are replaced/removed as before.
 
 Blue Hole artist environments are stored in the preset’s `addon-data/bluehole/envFiles`, excluding default. Apply snapshots the current installed environments before removal and restores them on reinstall. This storage participates in resource rollback and follows preset copy/delete.
+
+Catalog scans quarantine unreadable packages and conflicting identity/version/date entries, exposing per-file errors while retaining healthy addons. Selected identities without a valid compatible package still fail before mutation. Preset choices are cleared and their owner context invalidated before refresh; saving is guarded until the current preset completes a successful refresh.

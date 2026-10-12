@@ -95,6 +95,25 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual(len(entries), 2)
         self.assertEqual(self.library.resolve('legacy:tool', self.release).published, '2026-10-12')
 
+    def test_invalid_and_conflicting_packages_are_reported_without_hiding_healthy_addons(self):
+        import shutil
+        provided = self.library.provided_root; provided.mkdir()
+        (provided / 'broken.zip').write_bytes(b'broken')
+        shutil.copy2(self.package('first.zip'), provided / 'first.zip')
+        shutil.copy2(self.package('conflict.zip', body='different=True'), provided / 'conflict.zip')
+        shutil.copy2(self.package('healthy.zip', module='healthy'), provided / 'healthy.zip')
+        entries = self.library.entries(shared_only=True)
+        self.assertEqual([entry.identity for entry in entries], ['legacy:healthy'])
+        self.assertEqual(len(self.library.errors), 3)
+        self.assertTrue(any('broken.zip' in error for error in self.library.errors))
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')):
+            with self.assertRaisesRegex(ValueError, 'No declared-compatible'):
+                self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={'enabled': False, 'branch': 'main'})
+        self.assertFalse((self.preset / 'scripts/addons/tool').exists())
+        (provided / 'conflict.zip').unlink(); (provided / 'broken.zip').unlink()
+        self.assertEqual(len(self.library.entries()), 2)
+        self.assertEqual(self.library.errors, [])
+
     def test_metadata_cache_invalidates_modified_zip_and_accepts_legacy_nickname(self):
         from features.blender import library
         path = self.package('named.zip', version=(1, 13, 2, 'DeusEx'))

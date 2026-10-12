@@ -168,6 +168,37 @@ class BlenderPageTests(QtTestCase):
         page._apply_addons()
         self.assertEqual(page.choices.item(row, 4).text(), 'Removal pending')
 
+    def test_catalog_failure_clears_choices_and_blocks_cross_preset_save_until_refresh(self):
+        import json
+        import zipfile
+        art = self.manager.create_preset(self.builds[0], 'Art')
+        other = self.manager.create_preset(self.builds[0], 'Other')
+        package = Path(self.temporary.name) / 'tool.zip'
+        with zipfile.ZipFile(package, 'w') as archive:
+            archive.writestr('tool/__init__.py', 'bl_info={"name":"Tool","version":(1,0,0),"blender":(3,0,0)}')
+        page = BlenderPage(manager=self.manager, settings_mode=True)
+        page.library.for_preset(art).add(package)
+        (art / '.logistics-addons.json').write_text(json.dumps({'selected': ['legacy:tool'], 'installed': {}}))
+        page.refresh()
+        with patch('features.blender.library.AddonLibrary.entries', side_effect=OSError('unavailable')):
+            page.preset_list.setCurrentRow(1)
+            self.assertEqual(page.choices.rowCount(), 0)
+            self.assertFalse(page.apply_button.isEnabled())
+            page._apply_addons()
+        self.assertFalse((other / '.logistics-addons.json').exists())
+        page.refresh()
+        self.assertTrue(page.apply_button.isEnabled())
+        self.assertTrue(page.controls.isEnabled())
+        self.assertEqual(page.choices.rowCount(), 0)
+        provided = page.library.provided_root; provided.mkdir()
+        (provided / 'broken.zip').write_bytes(b'broken')
+        page.preset_list.setCurrentRow(0)
+        self.assertEqual(page.choices.rowCount(), 1)
+        self.assertTrue(page.apply_button.isEnabled())
+        self.assertIn('broken.zip', page.catalog_warning.text())
+        page._apply_addons()
+        self.assertEqual(page.library.selection(art)['selected'], ['legacy:tool'])
+
     def test_changing_bluehole_branch_preserves_installed_branch_and_commit(self):
         import json
         root = self.manager.create_preset(self.builds[0], 'Art')

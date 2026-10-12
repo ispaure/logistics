@@ -65,7 +65,7 @@ def inspect_package(package):
         if fingerprint != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns):
             raise ValueError('Addon ZIP changed while reading it')
         return result
-    except (zipfile.BadZipFile, SyntaxError, UnicodeError, KeyError, TypeError) as error:
+    except (zipfile.BadZipFile, SyntaxError, UnicodeError, KeyError, TypeError, RuntimeError) as error:
         raise ValueError(f'Cannot read addon ZIP metadata: {error}') from error
 
 
@@ -166,6 +166,7 @@ def _inspect_package(package):
 class AddonLibrary:
     def __init__(self, manager, *, provided_root=None, preset_root=None):
         self.manager = manager
+        self.errors = []
         self.legacy_root = manager.root / 'addons' / 'blender'
         self.preset_root = preset_root
         self.root = manager._contained(preset_root, 'addon-library') if preset_root is not None else self.legacy_root
@@ -185,6 +186,7 @@ class AddonLibrary:
 
     def entries(self, *, shared_only=False, legacy_identities=None):
         combined = {}
+        self.errors = []
         layers = [('Provided', self.provided_root)]
         if not shared_only:
             layers.append(('Personal', self.legacy_root))
@@ -197,30 +199,43 @@ class AddonLibrary:
                 continue
             layer = {}
             paths = sorted(p for p in root.rglob('*.zip') if '_support' not in p.relative_to(root).parts) if source == 'Provided' else sorted(root.glob('*/*/addon.zip'))
+            conflicts = set()
             for path in paths:
-                if source != 'Provided':
-                    path = self.manager._contained(root, *path.relative_to(root).parts)
-                addon = replace(inspect_package(path), source=source)
-                if source == 'Personal' and self.preset_root is not None and addon.identity not in legacy_identities:
-                    continue  # Keep previously selected legacy imports usable in their preset.
-                origin = path.with_name('origin.json')
-                if source != 'Provided' and origin.is_file():
-                    record = json.loads(self.manager._contained(root, *origin.relative_to(root).parts).read_text())
-                    if not isinstance(record, dict) or any(not isinstance(record.get(field, ''), str) for field in ('published', 'package_name')):
-                        raise ValueError('Invalid personal addon package record')
-                    if record.get('published'):
-                        date.fromisoformat(record['published'])
-                    addon = replace(addon, published=record.get('published', ''), package_name=record.get('package_name', path.name))
-                key = (addon.identity, addon.version, addon.published)
-                if key in layer and layer[key].digest != addon.digest:
-                    raise ValueError(f'{source} library contains conflicting packages for {addon.name} {addon.version}')
-                layer[key] = addon
+                try:
+                    addon = self._entry(path, root, source)
+                    if source == 'Personal' and self.preset_root is not None and addon.identity not in legacy_identities:
+                        continue
+                    key = (addon.identity, addon.version, addon.published)
+                    if key in conflicts:
+                        raise ValueError('Package conflicts with another ZIP for this addon version/date')
+                    if key in layer and layer[key].digest != addon.digest:
+                        previous = layer.pop(key)
+                        conflicts.add(key)
+                        self.errors.append(f'{previous.package}: conflicting package for {addon.name} {addon.version}')
+                        raise ValueError(f'Conflicting package for {addon.name} {addon.version}')
+                    layer[key] = addon
+                except (OSError, ValueError) as error:
+                    self.errors.append(f'{path}: {error}')
             # Artist packages override only the matching identity/version.
             if source != 'Provided':
                 versions = {(item.identity, item.version) for item in layer.values()}
                 combined = {key: item for key, item in combined.items() if (item.identity, item.version) not in versions}
             combined.update(layer)
         return sorted(combined.values(), key=lambda a: (a.name.casefold(), a.identity, version_tuple(a.version)))
+
+    def _entry(self, path, root, source):
+        if source != 'Provided':
+            path = self.manager._contained(root, *path.relative_to(root).parts)
+        addon = replace(inspect_package(path), source=source)
+        origin = path.with_name('origin.json')
+        if source != 'Provided' and origin.is_file():
+            record = json.loads(self.manager._contained(root, *origin.relative_to(root).parts).read_text())
+            if not isinstance(record, dict) or any(not isinstance(record.get(field, ''), str) for field in ('published', 'package_name')):
+                raise ValueError('Invalid personal addon package record')
+            if record.get('published'):
+                date.fromisoformat(record['published'])
+            addon = replace(addon, published=record.get('published', ''), package_name=record.get('package_name', path.name))
+        return addon
 
     def add(self, package, *, cancelled=lambda: False):
         addon = inspect_package(package)
