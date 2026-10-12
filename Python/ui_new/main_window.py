@@ -152,7 +152,7 @@ class MainWindow(pyside.Window):
         menu.addSeparator()
         self.return_to_tool_action = menu.addAction('Return to tool', self._return_to_tool)
         self.open_documents_action = menu.addAction('Open Documents', self._show_documents)
-        self.choose_launch_mode_action = menu.addAction('Choose launch mode', self._show_landing)
+        self.choose_launch_mode_action = menu.addAction('Landing Page', self._show_landing)
         self.open_hub_action = menu.addAction('Open full hub with sidebar', lambda: self._launch('hub'))
         self.settings_button.setMenu(menu)
         menu.aboutToShow.connect(self._update_navigation_menu)

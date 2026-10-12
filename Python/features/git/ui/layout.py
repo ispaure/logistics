@@ -1,6 +1,7 @@
 """Build the Git workspace layout without owning commands or jobs."""
 import sys
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.appearance.status_line import StatusLine
 from .changes import ChangesPanel
 from .history import HistoryPanel
 from .search import SearchPanel
@@ -165,7 +166,7 @@ class RepositoryLayout:
         self._connect_workspace_signals()
     def _build_status(self, layout):
         status = qt.QHBoxLayout()
-        self.status = qt.QLabel('Ready')
+        self.status = StatusLine('Ready')
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         status.addWidget(self.status, 1)

@@ -6,6 +6,7 @@ import json
 import re
 import stat
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.appearance.status_line import StatusLine
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.ui.file_browser.controls import navigation_button
 from commonUtils.filesystem import format_size
@@ -196,7 +197,7 @@ class BulkRenameWidget(qt.QWidget):
         self.progress = OperationProgress(self)
         self.progress.completed.connect(self._finished)
         layout.addWidget(self.progress)
-        self.status = qt.QLabel('Choose files and configure rules to see the live preview.')
+        self.status = StatusLine('Choose files and configure rules to see the live preview.')
         self.status.setWordWrap(True)
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.status.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)

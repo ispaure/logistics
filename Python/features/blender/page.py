@@ -3,6 +3,7 @@ from pathlib import Path
 from configparser import Error as ConfigError
 
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.appearance.status_line import StatusLine
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from .addons import inspect_addons, scan_preset
@@ -212,7 +213,7 @@ class BlenderPage(qt.QWidget):
             QLabel#launchTitle { font-size: 16px; font-weight: 600; }
             QLabel#launchDetail { color: palette(text); }
         """)
-        self.status = qt.QLabel()
+        self.status = StatusLine()
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)

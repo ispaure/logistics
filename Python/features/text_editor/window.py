@@ -1,6 +1,7 @@
 """One text document per host tab or standalone editor window."""
 
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.appearance.status_line import StatusLine, style_status_bar
 from commonUtils.ui.document_host import close_document
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.ui.readers.reader_menus import RecentFiles
@@ -172,8 +173,9 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
             self.recent_menu.addAction("No recent files").setEnabled(False)
 
     def _build_status(self):
-        self.position = qt.QLabel()
+        self.position = StatusLine()
         self.statusBar().addWidget(self.position, 1)
+        style_status_bar(self.statusBar())
 
     def _document_changed(self, document):
         if document is self.current:

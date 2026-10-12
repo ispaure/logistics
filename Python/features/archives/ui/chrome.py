@@ -1,5 +1,6 @@
 """Archive workspace toolbar and page chrome; no archive I/O or credentials."""
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.appearance.status_line import StatusLine
 from commonUtils.ui.archive_view import ArchiveContents
 
 
@@ -60,7 +61,7 @@ def build_workspace(page):
     page.contents.remove_requested.connect(page.remove_selected)
     page.contents.selection_changed.connect(page._enabled)
     layout.addWidget(page.contents, 1)
-    page.status = qt.QLabel('Ready. Sources and existing output files are preserved.')
+    page.status = StatusLine('Ready. Sources and existing output files are preserved.')
     page.status.setTextFormat(qt.Qt.TextFormat.PlainText)
     page.status.setWordWrap(True)
     layout.addWidget(page.status)

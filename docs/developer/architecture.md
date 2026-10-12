@@ -156,6 +156,13 @@ public command compatibility.
 
 ## Application notifications
 
+Bottom status footers use commonUtils' `ui.appearance.status_line.StatusLine`,
+shared with File Browser indexing. It preserves full messages while displaying a
+compact, muted UI-font line. Native reader/editor bars use `style_status_bar`.
+Logistics tools retain their own status semantics, progress/cancel controls and
+error recovery; only presentation is shared. Settings reset notices are bounded
+above the content splitter and do not consume its stretch allocation.
+
 `ui_new.notifications.notification_service()` retains a bounded NotificationCenter
 for the QApplication. Features publish Notice events through `notify`, with source,
 ID, title, plain-text message, outcome, optional details action and native delivery
