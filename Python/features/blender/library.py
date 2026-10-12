@@ -312,6 +312,10 @@ class AddonLibrary:
             target = root / entry['path']
             if target.exists() and not any(e['path'] == entry['path'] for e in old.values()):
                 raise ValueError(f'{target.name} already exists outside the addon library; move it before selecting this addon')
+        retained = {key for key, entry in new.items() if key in old
+                    and all(entry[field] == old[key][field] for field in ('module', 'path', 'digest'))
+                    and ((root / entry['path']).is_file() if entry['path'].endswith('.py') else
+                         (root / entry['path'] / '__init__.py').is_file())}
         manager.environment(release, name)  # Validate all resource folders before copying.
         with TemporaryDirectory(prefix='.addon-update-', dir=root.parent) as temp:
             backup = Path(temp)
@@ -319,13 +323,17 @@ class AddonLibrary:
             for folder in folders:
                 shutil.copytree(root / folder, backup / folder, symlinks=True)
             try:
-                for entry in old.values():
+                for key, entry in old.items():
+                    if key in retained:
+                        continue
                     target = root / entry['path']
                     if target.is_dir():
                         shutil.rmtree(target)
                     elif target.exists():
                         target.unlink()
                 for addon, relative in payloads:
+                    if addon.identity in retained:
+                        continue
                     target = root / relative
                     with zipfile.ZipFile(addon.package) as archive:
                         for member in archive.infolist():

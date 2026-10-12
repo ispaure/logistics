@@ -146,6 +146,24 @@ class BlenderLibraryTests(unittest.TestCase):
             self.assertFalse((self.preset / 'scripts/addons/tool').exists())
             self.assertEqual(self.library.selection(self.preset)['selected'], [])
 
+    def test_unchanged_launch_preserves_addon_local_files_and_repairs_missing_package(self):
+        self.library.add(self.package('tool.zip'))
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.run_blender_script'):
+            self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={'enabled': False, 'branch': 'main'})
+            folder = self.preset / 'scripts/addons/tool'
+            settings = folder / 'artist-settings.json'
+            settings.write_text('{"artist":true}')
+            helper = folder / 'helper.py'
+            helper.write_text('# local edit')
+            self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={'enabled': False, 'branch': 'main'})
+            self.assertEqual(settings.read_text(), '{"artist":true}')
+            self.assertEqual(helper.read_text(), '# local edit')
+            (folder / '__init__.py').unlink()
+            self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={'enabled': False, 'branch': 'main'})
+            self.assertTrue((folder / '__init__.py').is_file())
+            self.library.apply(self.release, 'Art', [], bluehole={'enabled': False, 'branch': 'main'})
+            self.assertFalse(folder.exists())
+
     def test_failed_enable_restores_files_preferences_and_selection(self):
         self.library.add(self.package('old.zip'))
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.run_blender_script'):

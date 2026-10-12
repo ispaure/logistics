@@ -233,3 +233,5 @@ selections. Shared / Preset provided / User provided (legacy) labels map to
 Provided / Preset / Personal storage values. The generated library-inventory.json
 is informational only. Preset duplicate/copy operations include the private ZIP
 library; deletion removes it with the rest of that preset.
+
+Unchanged managed packages (same module/path/ZIP digest with an installed entrypoint) remain in place during apply. Activation still runs; a missing entrypoint triggers repair. Changed or deselected regular addon packages are replaced/removed as before.
