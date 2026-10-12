@@ -171,3 +171,13 @@ Legacy per-user ZIPs remain usable for already selected identities. The third
 Addon Library settings tab browses shared packages only; Add Addon is offered
 from preset management. Versions Definitions uses the shared editor's platform
 tabs with readable platform labels, preserving section keys and pending edits.
+
+Addon apply retains unchanged managed packages, installs changed packages only
+from verified transaction ZIP snapshots, and quarantines malformed catalog
+entries with per-file warnings. Preset selection saves require a successfully
+refreshed current-preset context. Blue Hole artist environments are kept separately
+in each preset's addon-data/bluehole folder, including while the addon is disabled;
+that storage participates in rollback and preset copy/delete. A failed remote
+Blue Hole check/download can use a recorded, present, compatible installed copy,
+keeping its actual branch/commit distinct from the requested branch and reporting
+a launch warning. First installs and invalid payloads still fail explicitly.

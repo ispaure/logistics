@@ -167,6 +167,7 @@ class AddonLibrary:
     def __init__(self, manager, *, provided_root=None, preset_root=None):
         self.manager = manager
         self.errors = []
+        self.warnings = []
         self.legacy_root = manager.root / 'addons' / 'blender'
         self.preset_root = preset_root
         self.root = manager._contained(preset_root, 'addon-library') if preset_root is not None else self.legacy_root
@@ -280,6 +281,7 @@ class AddonLibrary:
         return value
 
     def apply(self, release, name, identities, *, bluehole=None, cancelled=lambda: False):
+        self.warnings = []
         from .install import installation_lock
         with installation_lock(self.manager.preset(release, name)):
             return self._apply(release, name, identities, bluehole=bluehole, cancelled=cancelled)
@@ -303,8 +305,16 @@ class AddonLibrary:
         from . import bluehole as bluehole_source
         bluehole = bluehole_source.validate(bluehole if bluehole is not None else state.get('bluehole', {'enabled': False, 'branch': 'main'}))
         commit = None
+        installed_branch = bluehole['branch']
+        fallback = False
         if bluehole['enabled']:
-            addon, commit = bluehole_source.update(manager, release, bluehole['branch'], cancelled=cancelled)
+            try:
+                addon, commit = bluehole_source.update(manager, release, bluehole['branch'], cancelled=cancelled)
+            except bluehole_source.UpdateUnavailable as error:
+                check_cancelled(cancelled)
+                addon, installed_branch, commit = bluehole_source.installed_fallback(manager, release, root, state)
+                fallback = True
+                self.warnings.append(f'{error}. Using installed Blue Hole {installed_branch} · {commit[:12]}; update and Deluxe changes will be retried next launch.')
             resolved = [item for item in resolved if item.identity != bluehole_source.IDENTITY]
             resolved.append(addon)
         resolved.sort(key=lambda a: (a.name.casefold(), a.module.casefold(), a.identity))
@@ -339,7 +349,7 @@ class AddonLibrary:
             packages.mkdir()
             snapshots = {}
             for index, addon in enumerate(resolved):
-                if addon.identity in retained and not (addon.identity == bluehole_source.IDENTITY and bluehole['deluxe']):
+                if addon.identity in retained and not (addon.identity == bluehole_source.IDENTITY and bluehole['deluxe'] and not fallback):
                     snapshots[addon.identity] = addon
                     continue
                 staged_package = packages / f'{index}.zip'
@@ -388,8 +398,8 @@ class AddonLibrary:
                                 output.chmod(mode)
                     if addon.identity == bluehole_source.IDENTITY:
                         bluehole_source.preserve_environments(environments, target, cancelled=cancelled)
-                deluxe_stamp = None
-                if bluehole['enabled'] and bluehole['deluxe']:
+                deluxe_stamp = state.get('bluehole', {}).get('deluxe_stamp') if fallback else None
+                if bluehole['enabled'] and bluehole['deluxe'] and not fallback:
                     bluehole_addon = next(a for a in resolved if a.identity == bluehole_source.IDENTITY)
                     deluxe_stamp = bluehole_source.apply_deluxe(bluehole_addon, root,
                                     state.get('bluehole', {}).get('deluxe_stamp'), cancelled=cancelled)
@@ -403,7 +413,7 @@ class AddonLibrary:
                 check_cancelled(cancelled)
                 staged = root / '.logistics-addons.tmp'
                 manager._contained(root, staged.name)
-                staged.write_text(json.dumps({'selected': sorted(set(identities)), 'installed': new, 'installed_bluehole': {'branch': bluehole['branch'], 'commit': commit, 'version': new.get(bluehole_source.IDENTITY, {}).get('version', '')} if commit else None, 'bluehole': {**bluehole, 'commit': commit, 'deluxe_stamp': deluxe_stamp}}, indent=2), encoding='utf-8')
+                staged.write_text(json.dumps({'selected': sorted(set(identities)), 'installed': new, 'installed_bluehole': {'branch': installed_branch, 'commit': commit, 'version': new.get(bluehole_source.IDENTITY, {}).get('version', '')} if commit else None, 'bluehole': {**bluehole, 'commit': commit, 'deluxe_stamp': deluxe_stamp}}, indent=2), encoding='utf-8')
                 staged.replace(root / '.logistics-addons.json')
             except BaseException:
                 for folder in folders:

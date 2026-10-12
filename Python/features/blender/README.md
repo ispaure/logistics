@@ -241,3 +241,10 @@ Blue Hole artist environments are stored in the preset’s `addon-data/bluehole/
 Catalog scans quarantine unreadable packages and conflicting identity/version/date entries, exposing per-file errors while retaining healthy addons. Selected identities without a valid compatible package still fail before mutation. Preset choices are cleared and their owner context invalidated before refresh; saving is guarded until the current preset completes a successful refresh.
 
 Before modifying a preset, changed ZIPs and Deluxe payload ZIPs are copied into the private transaction workspace and inspected against the resolved SHA-256. Extraction and Deluxe stamping read only those verified snapshots. A concurrent source change before copying aborts without mutation; a later change cannot alter installed contents.
+
+Remote Blue Hole check/download failures raise UpdateUnavailable. Apply can retain
+a recorded, present, declared-compatible installed copy without a cached ZIP. It
+preserves the actual installed branch/commit independently of requested settings,
+skips offline Deluxe stamping, and surfaces a launch warning. Missing, unknown or
+incompatible installed copies cannot fall back. Cancellation and invalid downloaded
+packages are not treated as network failures.
