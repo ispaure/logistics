@@ -1,5 +1,7 @@
 # Launch a local Perforce server
 
+Enable **Perforce Server** under **Settings → Features** to use these tools.
+
 Perforce controls are offered for configured local folders. Launch and console
 actions require Linux and separately supplied Perforce executables/data.
 

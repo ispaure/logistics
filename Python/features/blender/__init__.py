@@ -1,4 +1,6 @@
 """Managed Blender installations and isolated user presets."""
+
+FEATURE_DESCRIPTION = 'Manage Blender versions and isolated user presets.'
 from pathlib import Path
 
 

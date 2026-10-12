@@ -2,8 +2,10 @@
 Media feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Rename MKA audio files using a CSV mapping.'
+
 FEATURE_NAME = "media"
-FEATURE_LABEL = "Media"
+FEATURE_LABEL = "Media Tools"
 
 
 def get_contributions():

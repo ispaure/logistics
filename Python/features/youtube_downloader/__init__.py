@@ -2,6 +2,8 @@
 YouTube Downloader feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Download videos and playlists with yt-dlp.'
+
 FEATURE_NAME = 'youtube_downloader'
 FEATURE_LABEL = 'YouTube Downloader'
 FEATURE_OPTIONAL_DEPENDENCIES = ('rclone',)

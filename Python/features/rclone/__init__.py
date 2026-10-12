@@ -2,6 +2,8 @@
 rclone feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Browse cloud storage and transfer files with rclone.'
+
 from . import api
 
 

@@ -1,5 +1,7 @@
 # Rename MKA chapters from a CSV
 
+Enable **Media Tools** under **Settings → Features** to use these tools.
+
 Rename chapter audio files in one folder using their chapter titles from a CSV.
 
 ## Prepare the folder

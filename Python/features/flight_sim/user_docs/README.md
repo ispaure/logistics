@@ -1,7 +1,9 @@
 # Apply X-Plane 12 presets
 
+Enable **X-Plane Presets** under **Settings → Features** to use these tools.
+
 Flight Simulator exposes X-Plane preset actions on **Debug**. The current workflow
-uses presets for specific display setups. Set `installation_path` under **Settings → Flight Simulator** for your X-Plane folder; blank retains the historical Steam path on macOS.
+uses presets for specific display setups. Set `installation_path` under **Settings → X-Plane Presets** for your X-Plane folder; blank retains the historical Steam path on macOS.
 
 ## Before applying a preset
 

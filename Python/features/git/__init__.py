@@ -1,5 +1,7 @@
 """Executable-backed Git workspace; no UI or executable probing at import time."""
 
+FEATURE_DESCRIPTION = 'Inspect repository changes, stage files and manage commits.'
+
 
 def create_page(parent=None):
     from .ui.page import GitPage

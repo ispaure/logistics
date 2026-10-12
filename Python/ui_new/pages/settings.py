@@ -275,6 +275,7 @@ class SettingsPage(qt.QWidget):
         super().__init__(parent)
         initialize_settings()
         self.panels = {}
+        self._category_items = {}
         layout = qt.QVBoxLayout(self)
         self.scope_selector = qt.QComboBox()
         self.scope_selector.setAccessibleName('Configuration scope')
@@ -364,6 +365,19 @@ class SettingsPage(qt.QWidget):
         qt.QTimer.singleShot(0, self.refresh)
 
     def refresh(self):
+        states = sorted(registry.get_feature_states(), key=lambda state: state.label.casefold())
+        feature_keys = {f'feature:{state.name}' for state in states}
+        if self._category_items and feature_keys == {key for key in self._category_items if key.startswith('feature:')}:
+            # Runtime toggles change labels, not the category structure. Retain the
+            # tree items so selection, expansion and sidebar scrolling stay put.
+            for state in states:
+                key = f'feature:{state.name}'
+                self._category_items[key].setText(0, state.label + (' (disabled)' if not state.enabled else ''))
+                self._category_items[key].setToolTip(0, getattr(state, 'description', ''))
+                if key in self.panels:
+                    self.panels[key].refresh(state)
+            return
+        scroll_position = self.sidebar.verticalScrollBar().value()
         current = self.sidebar.currentItem()
         selected = current.data(0, qt.Qt.ItemDataRole.UserRole) if current else 'features'
         with qt.QSignalBlocker(self.sidebar):
@@ -378,16 +392,19 @@ class SettingsPage(qt.QWidget):
             heading = qt.QTreeWidgetItem(['Feature settings'])
             heading.setFlags(heading.flags() & ~qt.Qt.ItemFlag.ItemIsSelectable)
             self.sidebar.addTopLevelItem(heading)
-            for state in sorted(registry.get_feature_states(), key=lambda state: state.label.casefold()):
+            for state in states:
                 key = f'feature:{state.name}'
                 item = qt.QTreeWidgetItem([state.label + (' (disabled)' if not state.enabled else '')])
                 item.setData(0, qt.Qt.ItemDataRole.UserRole, key)
+                item.setToolTip(0, getattr(state, 'description', ''))
                 heading.addChild(item)
                 items[key] = item
                 if key in self.panels:
                     self.panels[key].refresh(state)
             heading.setExpanded(True)
             self.sidebar.setCurrentItem(items.get(selected, items['features']))
+            self._category_items = items
+        self.sidebar.verticalScrollBar().setValue(scroll_position)
         self._selected(self.sidebar.currentItem(), None)
 
     def _selected(self, item, previous):

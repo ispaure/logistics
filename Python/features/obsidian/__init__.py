@@ -2,6 +2,8 @@
 Obsidian feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Find local Obsidian vaults and open them in Obsidian.'
+
 
 FEATURE_NAME = "obsidian"
 FEATURE_LABEL = "Obsidian"

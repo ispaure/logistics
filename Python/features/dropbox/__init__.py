@@ -2,6 +2,8 @@
 Dropbox feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Browse local Dropbox folders and review conflicting copies.'
+
 FEATURE_NAME = "dropbox"
 FEATURE_LABEL = "Dropbox"
 

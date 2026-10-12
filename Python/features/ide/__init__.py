@@ -1,5 +1,7 @@
 """Independent project IDE; shared editor and analysis imports remain lazy."""
 
+FEATURE_DESCRIPTION = 'Work on code projects with editing, search and code analysis.'
+
 def create_page(parent=None):
     from .page import IDEPage
     return IDEPage(parent)

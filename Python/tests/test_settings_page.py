@@ -416,3 +416,25 @@ class SettingsPageTests(QtTestCase):
             panel.resize(850, 800); panel.show(); self.app.processEvents()
             self.assertGreater(panel.custom['custom'].height(), 650)
             panel.close()
+
+    def test_runtime_refresh_keeps_category_items_scroll_and_selection(self):
+        states = [self.state() for _ in range(30)]
+        for index, state in enumerate(states):
+            state.name = f'test_{index}'
+            state.label = f'Test {index:02}'
+            state.description = 'A feature description.'
+        with patch.object(registry, 'get_feature_states', return_value=states):
+            page = SettingsPage(); self.addCleanup(page.deleteLater)
+            page.resize(900, 400); page.show(); self.app.processEvents()
+            page.sidebar.verticalScrollBar().setValue(page.sidebar.verticalScrollBar().maximum())
+            position = page.sidebar.verticalScrollBar().value()
+            selected = page.sidebar.currentItem()
+            item = page._category_items['feature:test_29']
+            states[-1].enabled = False
+            page.refresh(); self.app.processEvents()
+            self.assertIs(page.sidebar.currentItem(), selected)
+            self.assertIs(page._category_items['feature:test_29'], item)
+            self.assertEqual(page.sidebar.verticalScrollBar().value(), position)
+            self.assertEqual(item.text(0), 'Test 29 (disabled)')
+            self.assertEqual(item.toolTip(0), 'A feature description.')
+            page.close()

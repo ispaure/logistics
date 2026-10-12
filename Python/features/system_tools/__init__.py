@@ -2,6 +2,8 @@
 System Tools feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Run platform-specific disk repair and power management actions.'
+
 FEATURE_NAME = "system_tools"
 FEATURE_LABEL = "System Tools"
 

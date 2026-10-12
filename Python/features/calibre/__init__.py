@@ -2,6 +2,8 @@
 Calibre feature integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Open local Calibre libraries and export books.'
+
 
 FEATURE_NAME = "calibre"
 FEATURE_LABEL = "Calibre"

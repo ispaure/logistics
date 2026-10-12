@@ -2,6 +2,8 @@
 FUSE-mounted rclone remote integration for Logistics.
 """
 
+FEATURE_DESCRIPTION = 'Mount rclone remotes as local folders.'
+
 FEATURE_NAME = 'fuse'
 FEATURE_LABEL = 'FUSE'
 FEATURE_DEPENDENCIES = ('rclone',)

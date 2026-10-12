@@ -23,6 +23,10 @@ class FeaturesPage(qt.QWidget):
         font = title.font(); font.setPointSize(font.pointSize() + 5); font.setBold(True)
         title.setFont(font)
         content_layout.addWidget(title)
+        self.scope_label = qt.QLabel()
+        font = self.scope_label.font(); font.setBold(True)
+        self.scope_label.setFont(font)
+        content_layout.addWidget(self.scope_label)
         self.path_label = qt.QLabel()
         self.path_label.setAccessibleName('Feature configuration file')
         self.path_label.setTextFormat(qt.Qt.TextFormat.PlainText)
@@ -32,9 +36,9 @@ class FeaturesPage(qt.QWidget):
         self.description = qt.QLabel()
         self.description.setWordWrap(True)
         content_layout.addWidget(self.description)
-        reset = qt.QPushButton('Reset to defaults')
-        reset.clicked.connect(self._reset_defaults)
-        content_layout.addWidget(reset, alignment=qt.Qt.AlignmentFlag.AlignRight)
+        self.reset_all = qt.QPushButton('Reset to defaults')
+        self.reset_all.clicked.connect(self._reset_defaults)
+        content_layout.addWidget(self.reset_all, alignment=qt.Qt.AlignmentFlag.AlignRight)
         self.cards = qt.QVBoxLayout()
         self.cards.setSpacing(10)
         content_layout.addLayout(self.cards)
@@ -53,6 +57,12 @@ class FeaturesPage(qt.QWidget):
         self.toggles = {}
         self.reset_buttons = {}
         self.states = {}
+        self.indicators = {}
+        self.notes = {}
+        self.summaries = {}
+        self._card_widgets = {}
+        self._feature_states = {}
+        self._default_enabled = {}
         self._unsubscribe = registry.subscribe(self._features_changed)
         self.destroyed.connect(self._unsubscribe)
         self.refresh()
@@ -67,71 +77,113 @@ class FeaturesPage(qt.QWidget):
         qt.QTimer.singleShot(0, self.refresh)
 
     def refresh(self):
-        self.path_label.setText(str(registry.feature_settings_store().path(self.scope)))
-        self.path_label.setToolTip('Repository defaults shipped in releases' if self.scope == 'application'
+        store = registry.feature_settings_store()
+        personal = self.scope == 'personal'
+        selection_override = ('FeatureDefaults', 'disabled_list-str') in store.overrides() if personal else False
+        source = 'Override' if selection_override else 'Inherited'
+        self.scope_label.setText(f'Personal overrides · {source} feature selection' if personal else 'Software defaults')
+        self.path_label.setText(str(store.path(self.scope)))
+        self.path_label.setToolTip('Repository defaults shipped in releases' if not personal
                                    else 'Personal feature choices override the shipped defaults')
         self.description.setText(
             'Default feature selection shipped with Logistics. Changes save immediately and affect future launches; '
             'personal settings can override them. Dependencies are enabled together.'
-            if self.scope == 'application' else
-            'Your personal feature selection overrides the shipped defaults and applies immediately. '
-            'Changes save automatically. Dependencies are enabled together.')
-        while self.cards.count():
-            widget = self.cards.takeAt(0).widget()
-            widget.hide(); widget.deleteLater()
-        self.toggles.clear(); self.states.clear()
-        self.reset_buttons.clear()
+            if not personal else
+            'Inherited selection uses software defaults. Toggling a feature saves the entire selection as a personal '
+            'override and applies immediately. ↶ matches one feature to its software default; '
+            'Use software defaults removes the selection override. Dependencies are enabled together.')
+        self.reset_all.setText('Use software defaults' if personal else 'Reset to defaults')
+        self.reset_all.setEnabled(selection_override if personal else bool(registry.default_disabled_features()))
         defaults = registry.default_disabled_features()
         states = sorted(registry.get_feature_states(), key=lambda state: state.label.casefold())
+        self._feature_states = {state.name: state for state in states}
         labels = {state.name: state.label for state in states}
-        for state in states:
+        # Preserve the controls, focus and scroll range across runtime notifications.
+        for name in set(self._card_widgets) - self._feature_states.keys():
+            card = self._card_widgets.pop(name)
+            self.cards.removeWidget(card)
+            card.hide(); card.deleteLater()
+            for mapping in (self.toggles, self.reset_buttons, self.states, self.indicators,
+                            self.notes, self.summaries, self._default_enabled):
+                mapping.pop(name, None)
+        for index, state in enumerate(states):
+            if state.name not in self._card_widgets:
+                self._add_card(state.name, index)
             error = getattr(state, 'error', '')
-            card = qt.QFrame()
-            card.setObjectName('featureCard')
-            card.setStyleSheet('QFrame#featureCard { background: palette(base); border: 1px solid palette(mid); border-radius: 6px; }')
-            card.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Maximum)
-            card_layout = qt.QVBoxLayout(card)
-            card_layout.setContentsMargins(14, 12, 14, 12)
-            header = qt.QHBoxLayout()
-            toggle = qt.QCheckBox(state.label)
-            toggle.setAccessibleName(f'Enable {state.label}')
-            font = toggle.font(); font.setBold(True); toggle.setFont(font)
             members = getattr(state, 'members', ()) or (state.name,)
             default_enabled = all(member not in defaults for member in members)
-            enabled = default_enabled if self.scope == 'application' else state.enabled
-            toggle.setChecked(enabled)
+            self._default_enabled[state.name] = default_enabled
+            enabled = state.enabled if personal else default_enabled
+            toggle = self.toggles[state.name]
+            toggle.setText(state.label)
+            toggle.setAccessibleName(f'Enable {state.label}')
+            with qt.QSignalBlocker(toggle):
+                toggle.setChecked(enabled)
             toggle.setEnabled(state.available)
             toggle.setToolTip((error or 'Required feature packages are missing.') if not state.available else
                               'Enable or disable this feature and remember the choice.')
-            toggle.toggled.connect(lambda enabled, feature=state: self._toggled(feature, enabled))
-            header.addWidget(toggle, 1)
-            reset = qt.QToolButton()
-            reset.setText('↶')
+            reset = self.reset_buttons[state.name]
             reset.setAccessibleName(f'Reset {state.label} to default')
-            reset.setToolTip('Restore enabled software baseline' if self.scope == 'application' else 'Use software default')
-            reset.setEnabled(not enabled if self.scope == 'application' else enabled != default_enabled)
-            reset.clicked.connect(lambda checked=False, feature=state, value=default_enabled:
-                                  self._toggled(feature, True if self.scope == 'application' else value))
-            header.addWidget(reset)
+            reset.setToolTip('Use software default' if personal else 'Restore enabled software baseline')
+            reset.setEnabled(enabled != default_enabled if personal else not enabled)
+            indicator = self.indicators[state.name]
+            indicator.setText(source if personal else '')
+            indicator.setVisible(personal)
+            indicator.setToolTip(
+                ('The entire feature selection is saved as a personal override. ' if selection_override
+                 else 'The feature selection is inherited from software defaults. ')
+                + ('This feature matches its software default.' if enabled == default_enabled
+                   else 'This feature differs from its software default.'))
             text = ('Unavailable' if error else 'Missing dependency') if not state.available else 'Enabled' if enabled else 'Disabled'
-            status = qt.QLabel(text)
-            self._muted(status)
-            header.addWidget(status)
-            card_layout.addLayout(header)
+            self.states[state.name].setText(text)
+            summary = self.summaries[state.name]
+            summary.setText(getattr(state, 'description', ''))
+            summary.setVisible(bool(summary.text()))
             details = [error] if error else []
             if state.dependencies:
                 details.append('Requires: ' + ', '.join(labels.get(name, name) for name in state.dependencies))
             if state.dependents:
                 details.append('Used by: ' + ', '.join(labels.get(name, name) for name in state.dependents))
-            if details:
-                note = qt.QLabel(' · '.join(details))
-                note.setWordWrap(True)
-                self._muted(note)
-                card_layout.addWidget(note)
-            self.cards.addWidget(card)
-            self.toggles[state.name] = toggle
-            self.reset_buttons[state.name] = reset
-            self.states[state.name] = status
+            note = self.notes[state.name]
+            note.setText(' · '.join(details))
+            note.setVisible(bool(details))
+
+    def _add_card(self, name, index):
+        card = qt.QFrame()
+        card.setObjectName('featureCard')
+        card.setStyleSheet('QFrame#featureCard { background: palette(base); border: 1px solid palette(mid); border-radius: 6px; }')
+        card.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Maximum)
+        card_layout = qt.QVBoxLayout(card)
+        card_layout.setContentsMargins(14, 12, 14, 12)
+        header = qt.QHBoxLayout()
+        toggle = self.toggles[name] = qt.QCheckBox()
+        font = toggle.font(); font.setBold(True); toggle.setFont(font)
+        toggle.toggled.connect(lambda enabled, name=name: self._toggled(self._feature_states[name], enabled))
+        header.addWidget(toggle, 1)
+        status = self.states[name] = qt.QLabel()
+        self._muted(status)
+        header.addWidget(status)
+        indicator = self.indicators[name] = qt.QLabel()
+        indicator.setMinimumWidth(65)
+        header.addWidget(indicator)
+        reset = self.reset_buttons[name] = qt.QToolButton()
+        reset.setText('↶')
+        reset.clicked.connect(lambda checked=False, name=name: self._toggled(
+            self._feature_states[name], self._default_enabled[name] if self.scope == 'personal' else True))
+        header.addWidget(reset)
+        card_layout.addLayout(header)
+        summary = self.summaries[name] = qt.QLabel()
+        summary.setWordWrap(True)
+        summary.setTextFormat(qt.Qt.TextFormat.PlainText)
+        self._muted(summary)
+        card_layout.addWidget(summary)
+        note = self.notes[name] = qt.QLabel()
+        note.setWordWrap(True)
+        note.setTextFormat(qt.Qt.TextFormat.PlainText)
+        self._muted(note)
+        card_layout.addWidget(note)
+        self._card_widgets[name] = card
+        self.cards.insertWidget(index, card)
 
     @staticmethod
     def _muted(label):
