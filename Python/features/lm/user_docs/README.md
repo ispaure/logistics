@@ -7,8 +7,9 @@ or execute tools, commands or file edits.
 
 ## Connect and start a conversation
 
-1. Open **LM Chat** from the launch cards or sidebar. If unavailable, enable
-   **LM Chat** in Settings → Features.
+1. LM Chat is disabled by default. Enable **LM Chat** in Settings → Features,
+   then open it from the launch cards or sidebar. Existing personal feature
+   choices override the shipped default.
 2. Start your server and load a chat model there. For another computer, configure
    its server to accept connections from your Logistics computer.
 3. Click the server settings icon beside **Server** to add or edit named profiles.
