@@ -128,6 +128,8 @@ class LMPage(qt.QWidget):
         self.closing = False
         self.setProperty('navigation_position', 'workspace')
         layout = qt.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         splitter = qt.QSplitter()
         layout.addWidget(splitter, 1)
         left = qt.QWidget()
@@ -243,24 +245,31 @@ class LMPage(qt.QWidget):
             qt.Qt.ArrowType.DownArrow if shown else qt.Qt.ArrowType.RightArrow))
         self.transcript = ConversationView()
         self.transcript.setAccessibleName('Conversation transcript')
+        self.transcript.retry_requested.connect(self.retry)
         body.addWidget(self.transcript, 1)
+        self.disclaimer = qt.QLabel('Language Models can make mistakes. Check important info.')
+        self.disclaimer.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
+        self.disclaimer.setWordWrap(True)
+        self.disclaimer.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
+        body.addWidget(self.disclaimer)
+        self.composer_frame = qt.QFrame()
+        self.composer_frame.setObjectName('lmComposerFrame')
+        row = qt.QHBoxLayout(self.composer_frame)
+        row.setContentsMargins(4, 2, 6, 2)
+        row.setSpacing(6)
         self.composer = Composer()
         self.composer.setPlaceholderText('Message…  Enter to send · Shift+Enter for a new line')
         self.composer.send_requested.connect(self.send)
         self.composer.setFixedHeight(72)
         self.composer.setAccessibleName('Message draft')
-        body.addWidget(self.composer)
-        row = qt.QHBoxLayout()
-        self.retry_button = self.icon_button('Retry / Regenerate last response', self.retry, 'SP_BrowserReload', row)
-        self.copy_button = self.icon_button('Copy last response', self.copy_last, 'SP_FileDialogContentsView', row)
-        row.addStretch()
+        row.addWidget(self.composer, 1)
         self.send_button = qt.QToolButton()
         self.send_button.setFixedSize(42, 42)
         self.send_button.setIconSize(qt.QSize(24, 24))
         self.send_button.setObjectName('lmSendStop')
         self.send_button.clicked.connect(self.send_or_stop)
-        row.addWidget(self.send_button)
-        body.addLayout(row)
+        row.addWidget(self.send_button, 0, qt.Qt.AlignmentFlag.AlignVCenter)
+        body.addWidget(self.composer_frame)
         splitter.addWidget(right)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([245, 850])
@@ -273,6 +282,7 @@ class LMPage(qt.QWidget):
         self.save_error.setWordWrap(True)
         self.save_error.setTextFormat(qt.Qt.TextFormat.PlainText)
         layout.addWidget(self.save_error)
+        self.save_error.hide()
         self.save_timer = qt.QTimer(self)
         self.save_timer.setSingleShot(True)
         self.save_timer.setInterval(700)
@@ -343,7 +353,10 @@ class LMPage(qt.QWidget):
         accent = palette.color(qt.QPalette.ColorRole.Highlight).name()
         font = self.styling.font('reading')
         family = font.family().replace('\\', '\\\\').replace('"', '\\"')
-        self.composer.setStyleSheet(f'QPlainTextEdit {{ background: {base}; border: 1px solid {border}; border-radius: 12px; padding: 8px; font-family: "{family}"; font-size: {font.pointSizeF()}pt; }}')
+        self.composer_frame.setStyleSheet(f'QFrame#lmComposerFrame {{ background: {base}; border: 1px solid {border}; border-radius: 12px; }}')
+        muted = palette.color(qt.QPalette.ColorRole.PlaceholderText).name()
+        self.disclaimer.setStyleSheet(f'color: {muted}; font-size: {max(8, self.styling.font("ui").pointSize() - 1)}pt;')
+        self.composer.setStyleSheet(f'QPlainTextEdit {{ background: transparent; border: none; padding: 8px; font-family: "{family}"; font-size: {font.pointSizeF()}pt; }}')
         self.composer.document().setDefaultFont(font)
         self.send_button.setStyleSheet(f'QToolButton {{ border: 1px solid {border}; border-radius: 21px; background: {accent}; }} QToolButton:disabled {{ background: {base}; }}')
         self.transcript.setFrameShape(qt.QFrame.Shape.NoFrame)
@@ -389,7 +402,7 @@ class LMPage(qt.QWidget):
         if not self.loading and self.profile.currentData():
             self.session_tokens[self.profile.currentData()] = text
 
-    def refresh(self):
+    def refresh(self, *, reveal_current=False):
         if self.client.busy:
             return
         if self.data is not None and self.lease is None:
@@ -401,6 +414,10 @@ class LMPage(qt.QWidget):
             self.closing = False
             self.open_conversation(key)
         current = self.data['id'] if self.data else None
+        selected = self.list.currentItem()
+        selected_folder = (selected.data(0, qt.Qt.ItemDataRole.UserRole + 1)
+                           if selected is not None and not selected.data(0, qt.Qt.ItemDataRole.UserRole) else None)
+        expanded = {path: item.isExpanded() for path, item in getattr(self, 'folder_items', {}).items()}
         try:
             records, warnings = self.store.list(self.search.text())
             folders = self.store.folders()
@@ -430,8 +447,17 @@ class LMPage(qt.QWidget):
             item.setData(0, qt.Qt.ItemDataRole.UserRole + 1, data['folder'])
             if data['id'] == current:
                 self.list.setCurrentItem(item)
-        self.list.expandAll()
+        if selected_folder in self.folder_items and not reveal_current:
+            self.list.setCurrentItem(self.folder_items[selected_folder])
+        for path, item in self.folder_items.items():
+            item.setExpanded(True if self.search.text() else expanded.get(path, True))
+        if reveal_current and self.list.currentItem() is not None:
+            parent = self.list.currentItem().parent()
+            while parent is not None:
+                parent.setExpanded(True)
+                parent = parent.parent()
         self.list.blockSignals(False)
+        self.update_controls()
         if warnings:
             self.status.setText('Some conversation files could not be read and were preserved. ' + '\n'.join(warnings[:3]))
 
@@ -495,7 +521,7 @@ class LMPage(qt.QWidget):
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
             return
-        self.refresh()
+        self.refresh(reveal_current=True)
         self.update_controls()
         self.status.setText(f'Conversation moved to {destination or "/"}.')
 
@@ -554,6 +580,7 @@ class LMPage(qt.QWidget):
         self.dirty = False
         self.discard_approved = False
         self.save_error.clear()
+        self.save_error.hide()
         self.transcript.clear()
         self.render()
 
@@ -590,9 +617,11 @@ class LMPage(qt.QWidget):
             self.store.save(self.data)
         except (OSError, ValueError, UnicodeError) as error:
             self.save_error.setText(f'Conversation not saved: {error} Use Export to keep your current copy.')
+            self.save_error.show()
             return False
         self.dirty = False
         self.save_error.clear()
+        self.save_error.hide()
         for item in self.tree_items():
             if item.data(0, qt.Qt.ItemDataRole.UserRole) == self.data['id']:
                 item.setText(0, self.data['title'])
@@ -617,7 +646,8 @@ class LMPage(qt.QWidget):
         self.data, self.lease = data, lease
         self._lease_holder[0] = lease
         self.restore()
-        self.refresh()
+        self.search.clear()
+        self.refresh(reveal_current=True)
         self.update_controls()
         self.composer.setFocus()
 
@@ -668,10 +698,10 @@ class LMPage(qt.QWidget):
             return
         self.collect()
         snapshot = deepcopy(self.data)
-        text = self.composer.toPlainText().strip()
+        text = self.composer.toPlainText()
         self.data['messages'].append(message('user', text))
         if self.data['title'] == 'New conversation':
-            self.data['title'] = text.splitlines()[0][:80]
+            self.data['title'] = next(line.strip() for line in text.splitlines() if line.strip())[:80]
         if not self.begin_generation():
             self.data = snapshot
             self.render()
@@ -768,7 +798,8 @@ class LMPage(qt.QWidget):
     def render(self):
         self.render_timer.stop()
         bar = self.transcript.verticalScrollBar()
-        bottom = bar.value() >= bar.maximum() - 12
+        current = self.data['id'] if self.data else None
+        bottom = self.transcript.key != current or bar.value() >= bar.maximum() - 12
         old = bar.value()
         self.transcript.sync(self.data)
         self.transcript.body.layout().activate()
@@ -781,13 +812,15 @@ class LMPage(qt.QWidget):
             widget.setEnabled(not busy)
         self.connection_box.setEnabled(not busy)
         self.settings_box.setEnabled(editable and not busy)
-        self.composer.setEnabled(editable and not busy)
+        self.composer.setEnabled(editable)
+        self.composer.setPlaceholderText('Draft your next message… Send after the current request finishes · Shift+Enter for a new line'
+            if busy else 'Message…  Enter to send · Shift+Enter for a new line')
         self.send_button.setEnabled(busy or editable)
         action = 'Stop generation / connection check' if busy else 'Send message'
         self.send_button.setIcon(chat_icon('stop' if busy else 'send'))
         self.send_button.setToolTip(action)
         self.send_button.setAccessibleName(action)
-        self.retry_button.setEnabled(editable and not busy and bool(self.data['messages']))
+        self.transcript.set_retry_enabled(editable and not busy)
         self.auth_toggle.setEnabled(not busy)
         selected = self.list.currentItem()
         selected_conversation = (selected is not None and self.data is not None and
@@ -797,7 +830,6 @@ class LMPage(qt.QWidget):
         self.move_button.setEnabled(editable and not busy)
         self.move_button.setToolTip('Move the open conversation to another folder')
         self.export_button.setEnabled(self.data is not None)
-        self.copy_button.setEnabled(self.data is not None)
 
     def rename(self):
         if self.client.busy or not self.data:

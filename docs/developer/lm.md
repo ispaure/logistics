@@ -26,7 +26,11 @@ Folder paths are relative, portable and do not traverse links. Search spans all
 levels. Server profiles remain in `LM/profiles.json`, independent of this hierarchy.
 
 The composer handles Enter to send and Shift+Enter for a newline, with an input
-method composition guard. No application-wide Return shortcut is installed.
+method composition guard. Send/Stop shares the composer container; message copy
+controls and the latest-reply retry control live in bubble footers. The transcript
+emits retry requests to the page, which owns request/lease enablement. Empty save
+errors are hidden so the shared status line remains at the bottom. No
+application-wide Return shortcut is installed.
 
 The page owns one QtNetwork request at a time. Sending persists a turn before
 starting inference; deltas/checkpoints retain partial responses. Cancellation is

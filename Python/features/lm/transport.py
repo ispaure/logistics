@@ -83,6 +83,7 @@ class Client(QObject):
         self.body = b''
         self.total_bytes = 0
         self.pending = ''
+        self.delivered_chars = 0
         if timeout_ms is None:
             from commonUtils.configuration.settings import get_setting
             seconds = get_setting('Connection', 'timeout_seconds_int', 180,
@@ -118,6 +119,7 @@ class Client(QObject):
         self.total_bytes = 0
         self.decoder = StreamDecoder()
         self.pending = ''
+        self.delivered_chars = 0
         self.cancelled = False
         self.failure = ''
         if payload is None:
@@ -143,6 +145,7 @@ class Client(QObject):
     def _flush(self):
         if self.pending:
             text, self.pending = self.pending, ''
+            self.delivered_chars += len(text)
             self.delta.emit(text)
 
     def _read(self):
@@ -167,6 +170,10 @@ class Client(QObject):
                 if len(self.body) > 2 * 1024 * 1024:
                     raise ValueError('Server JSON response exceeds the size limit.')
         except (ValueError, UnicodeError, TypeError, AttributeError, KeyError):
+            # feed() may have accepted earlier records before rejecting this chunk.
+            # Preserve all decoded text, including anything not yet flushed to UI.
+            if self.mode == 'chat':
+                self.pending = self.decoder.text[self.delivered_chars:]
             self.failure = 'Invalid, unsupported or oversized server response. Check the server API and model.'
             self.reply.abort()
 

@@ -85,7 +85,7 @@ def message(role, content='', status='complete', **metadata):
 
 
 def validate_conversation(data):
-    if not isinstance(data, dict) or data.get('schema_version') != 1:
+    if not isinstance(data, dict) or type(data.get('schema_version')) is not int or data['schema_version'] != 1:
         raise ValueError('Unsupported conversation format; original file preserved.')
     identity(data.get('id'))
     if type(data.get('revision')) is not int or data['revision'] < 0:
@@ -101,11 +101,14 @@ def validate_conversation(data):
         if not isinstance(entry, dict):
             raise ValueError('Invalid message record.')
         key = identity(entry.get('id'))
-        if key in seen or entry.get('role') not in ('user', 'assistant') or entry.get('status') not in STATUSES:
+        if (key in seen or not isinstance(entry.get('role'), str) or entry['role'] not in ('user', 'assistant') or
+                not isinstance(entry.get('status'), str) or entry['status'] not in STATUSES):
             raise ValueError('Invalid message identity, role or status.')
         seen.add(key)
         if not isinstance(entry.get('content'), str) or len(entry['content']) > MAX_TEXT:
             raise ValueError('Invalid message text.')
+        if 'error' in entry and (not isinstance(entry['error'], str) or len(entry['error']) > MAX_TEXT):
+            raise ValueError('Invalid message error details.')
     return data
 
 

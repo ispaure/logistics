@@ -3,6 +3,7 @@ import math
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.styling import styling
 from commonUtils.ui.markdown.presentation import MarkdownBrowser, style_document
+from .icons import chat_icon
 
 
 class MessageBrowser(MarkdownBrowser):
@@ -60,6 +61,8 @@ class MessageBrowser(MarkdownBrowser):
 
 
 class Bubble(qt.QFrame):
+    retry_requested = qt.Signal()
+
     def __init__(self, entry, parent=None):
         super().__init__(parent)
         self.role = entry['role']
@@ -70,14 +73,46 @@ class Bubble(qt.QFrame):
         self.label = qt.QLabel()
         self.label.setForegroundRole(qt.QPalette.ColorRole.PlaceholderText)
         self.label.setTextFormat(qt.Qt.TextFormat.PlainText)
+        header = qt.QHBoxLayout()
+        header.addWidget(self.label)
+        header.addStretch()
+        self.copy_button = qt.QToolButton()
+        self.copy_button.setAutoRaise(True)
+        self.copy_button.setIcon(chat_icon('copy'))
+        self.copy_button.setIconSize(qt.QSize(16, 16))
+        self.copy_button.setToolTip('Copy message as written')
+        self.copy_button.setAccessibleName('Copy message as written')
+        self.copy_button.clicked.connect(lambda: qt.QApplication.clipboard().setText(self.browser.source or ''))
         self.browser = MessageBrowser(self)
-        layout.addWidget(self.label)
+        self.error = qt.QLabel()
+        self.error.setTextFormat(qt.Qt.TextFormat.PlainText)
+        self.error.setWordWrap(True)
+        self.error.setForegroundRole(qt.QPalette.ColorRole.PlaceholderText)
+        layout.addLayout(header)
         layout.addWidget(self.browser)
+        layout.addWidget(self.error)
+        footer = qt.QHBoxLayout()
+        footer.setSpacing(4)
+        footer.addWidget(self.copy_button)
+        self.retry_button = qt.QToolButton()
+        self.retry_button.setAutoRaise(True)
+        self.retry_button.setIcon(chat_icon('refresh'))
+        self.retry_button.setIconSize(qt.QSize(16, 16))
+        self.retry_button.setToolTip('Retry / Regenerate last response')
+        self.retry_button.setAccessibleName('Retry / Regenerate last response')
+        self.retry_button.clicked.connect(self.retry_requested)
+        self.retry_button.hide()
+        footer.addWidget(self.retry_button)
+        footer.addStretch()
+        layout.addLayout(footer)
         self.update_entry(entry)
 
     def update_entry(self, entry):
         name = 'You' if self.role == 'user' else 'Assistant'
         self.label.setText(name if entry['status'] == 'complete' else f'{name} · {entry["status"]}')
+        error = entry.get('error', '')
+        self.error.setText(error)
+        self.error.setVisible(bool(error))
         if self.role == 'user':
             light = self.palette().color(qt.QPalette.ColorRole.Base).lightness()
             gray = max(0, min(255, light + (14 if light < 128 else -14)))
@@ -86,6 +121,8 @@ class Bubble(qt.QFrame):
 
 
 class ConversationView(qt.QScrollArea):
+    retry_requested = qt.Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWidgetResizable(True)
@@ -100,6 +137,7 @@ class ConversationView(qt.QScrollArea):
         self.rows = {}
         self.key = None
         self.follow_bottom = True
+        self.retry_enabled = False
         self.verticalScrollBar().rangeChanged.connect(self._range_changed)
         self.verticalScrollBar().valueChanged.connect(self._scrolled)
 
@@ -119,8 +157,10 @@ class ConversationView(qt.QScrollArea):
     def sync(self, data):
         key = data['id'] if data else None
         if key != self.key:
+            self.follow_bottom = True
             for row in self.rows.values():
                 self.box.removeWidget(row)
+                row.hide()
                 row.deleteLater()
             self.bubbles.clear()
             self.rows.clear()
@@ -132,6 +172,7 @@ class ConversationView(qt.QScrollArea):
                 layout = qt.QHBoxLayout(row)
                 layout.setContentsMargins(0, 0, 0, 0)
                 bubble = Bubble(entry, row)
+                bubble.retry_requested.connect(self.retry_requested)
                 if entry['role'] == 'user':
                     layout.addStretch(1)
                 layout.addWidget(bubble, 4)
@@ -140,12 +181,24 @@ class ConversationView(qt.QScrollArea):
                 self.rows[entry['id']] = row
             else:
                 bubble.update_entry(entry)
+        messages = data['messages'] if data else []
+        latest = next((entry['id'] for entry in reversed(messages) if entry['role'] == 'assistant'), None)
+        for message_id, bubble in self.bubbles.items():
+            bubble.retry_button.setVisible(message_id == latest)
+            bubble.retry_button.setEnabled(self.retry_enabled)
         valid = {entry['id'] for entry in data['messages']} if data else set()
         for key in list(self.rows):
             if key not in valid:
                 self.box.removeWidget(self.rows[key])
-                self.rows.pop(key).deleteLater()
+                row = self.rows.pop(key)
+                row.hide()
+                row.deleteLater()
                 self.bubbles.pop(key)
+
+    def set_retry_enabled(self, enabled):
+        self.retry_enabled = enabled
+        for bubble in self.bubbles.values():
+            bubble.retry_button.setEnabled(enabled)
 
     def clear(self):
         self.sync(None)
