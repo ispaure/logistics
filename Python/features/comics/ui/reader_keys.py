@@ -2,7 +2,7 @@
 
 from commonUtils.ui import pyside as qt
 from commonUtils.configuration.settings import get_wheel_navigation_settings
-from commonUtils.ui.page_wheel import PageWheel
+from commonUtils.ui.readers.page_wheel import PageWheel
 from shiboken6 import isValid
 
 PAGE_TURN_INTERVAL_MS = 225

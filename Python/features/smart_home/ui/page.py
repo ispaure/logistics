@@ -3,7 +3,7 @@ Smart Home page for the Logistics feature UI.
 """
 
 from commonUtils.ui import pyside
-from commonUtils.ui.operation_progress import OperationProgress
+from commonUtils.ui.tasks.operation_progress import OperationProgress
 
 from features.smart_home.philips_hue import api as philips_hue
 

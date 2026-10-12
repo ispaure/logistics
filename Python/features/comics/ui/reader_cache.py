@@ -2,7 +2,7 @@
 
 from collections import OrderedDict
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.operations import Operation
+from commonUtils.ui.tasks.operations import Operation
 from features.comics.archive_io import archive_unchanged
 from .reader_pages import read_image, read_candidates, read_previous
 

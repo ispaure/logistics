@@ -6,7 +6,7 @@ from pathlib import Path
 
 from commonUtils import ui
 from commonUtils.ui import pyside
-from commonUtils.ui.operation_progress import OperationProgress
+from commonUtils.ui.tasks.operation_progress import OperationProgress
 
 
 def coerce_initial_path(initial_path) -> str:

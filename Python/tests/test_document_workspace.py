@@ -37,12 +37,12 @@ class DocumentWorkspaceTests(QtTestCase):
         for _ in range(5): self.app.processEvents()
 
     def test_mac_menus_follow_active_document_and_restore_host_actions(self):
-        from commonUtils.ui.workspace_menus import sync_native_menus
+        from commonUtils.ui.workspaces.workspace_menus import sync_native_menus
         original = self.host.menuBar().addMenu('Host').menuAction()
         first = qt.QMainWindow(); first.menuBar().addMenu('File')
         second = qt.QMainWindow(); second.menuBar().addMenu('View')
         show_document(first); show_document(second)
-        with patch('commonUtils.ui.workspace_menus.sys.platform', 'darwin'):
+        with patch('commonUtils.ui.workspaces.workspace_menus.sys.platform', 'darwin'):
             sync_native_menus(self.host, first)
             self.assertEqual([action.text() for action in self.host.menuBar().actions()], ['File'])
             self.assertFalse(first.menuBar().isVisible())
@@ -100,7 +100,7 @@ class DocumentWorkspaceTests(QtTestCase):
     def test_detached_menus_follow_tabs_before_show_and_survive_repeated_transfers(self):
         # Exercise actual adoption/activation rather than calling menu sync directly.
         for platform in ('darwin', 'win32', 'linux'):
-            with self.subTest(platform=platform), patch('commonUtils.ui.workspace_menus.sys.platform', platform):
+            with self.subTest(platform=platform), patch('commonUtils.ui.workspaces.workspace_menus.sys.platform', platform):
                 first = qt.QMainWindow(); first.setWindowTitle('First')
                 file = first.menuBar().addMenu('File')
                 clicked = Mock(); save = file.addAction('Save', clicked)
@@ -132,7 +132,7 @@ class DocumentWorkspaceTests(QtTestCase):
 
     def test_initial_detached_and_menu_less_documents_restore_container_menus(self):
         for platform in ('darwin', 'win32', 'linux'):
-            with self.subTest(platform=platform), patch('commonUtils.ui.workspace_menus.sys.platform', platform):
+            with self.subTest(platform=platform), patch('commonUtils.ui.workspaces.workspace_menus.sys.platform', platform):
                 document = qt.QMainWindow(); document.menuBar().addMenu('File')
                 show_document(document, detached=True); self.settle()
                 dock = self.page.records[document]['dock']; container = dock.window()
@@ -311,12 +311,12 @@ class DocumentWorkspaceTests(QtTestCase):
         self.assertNotIn('return_control', self.page.records[window])
 
     def test_document_tabs_drag_with_full_pane_preview_and_drop_back(self):
-        from commonUtils.ui.workspace_drag import tab_mime
+        from commonUtils.ui.workspaces.workspace_drag import tab_mime
         window = qt.QMainWindow(); window.setWindowTitle('Dragged reader')
         edit = qt.QLineEdit('retained'); window.setCentralWidget(edit)
         show_document(window); self.settle()
         dock = self.page.records[window]['dock']
-        with patch('commonUtils.ui.workspace_drag.qt.QDrag') as drag, \
+        with patch('commonUtils.ui.workspaces.workspace_drag.qt.QDrag') as drag, \
              patch.object(qt.QCursor, 'pos', return_value=qt.QPoint(5000,5000)), \
              patch.object(qt.QApplication, 'mouseButtons', return_value=qt.Qt.MouseButton.NoButton):
             drag.return_value.exec.return_value = qt.Qt.DropAction.IgnoreAction
@@ -443,8 +443,8 @@ class DocumentWorkspaceTests(QtTestCase):
         self.assertEqual(self.page.workspace.docks, [])
 
     def test_readers_can_split_and_browser_tabs_keep_their_own_workspace(self):
-        from commonUtils.ui.workspace import Workspace
-        from commonUtils.ui.workspace_drag import tab_mime
+        from commonUtils.ui.workspaces.workspace import Workspace
+        from commonUtils.ui.workspaces.workspace_drag import tab_mime
         first = qt.QMainWindow(); second = qt.QMainWindow()
         show_document(first); show_document(second); self.settle()
         left = self.page.records[first]['dock']; right = self.page.records[second]['dock']

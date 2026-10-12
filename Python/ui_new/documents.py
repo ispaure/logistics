@@ -5,8 +5,8 @@ import sys
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.document_host import show_document, register_document_host, document_is_open, close_document, request_document_close, CloseOutcome
 from shiboken6 import isValid
-from commonUtils.ui.workspace import Workspace
-from commonUtils.ui.workspace_policy import WorkspacePolicy
+from commonUtils.ui.workspaces.workspace import Workspace
+from commonUtils.ui.workspaces.workspace_policy import WorkspacePolicy
 
 
 class DocumentPane(qt.QWidget):
@@ -108,7 +108,7 @@ class DocumentsPage(qt.QWidget):
             if isinstance(window, qt.QDialog):
                 window.finished.connect(lambda result, view=window: self._dialog_finished(view))
         if detached and record['dock'] is None:
-            from commonUtils.ui.workspace_window import WorkspaceWindow
+            from commonUtils.ui.workspaces.workspace_window import WorkspaceWindow
             main = self.workspace
             policy = replace(main.policy, max_tabs=None if allow_new_tabs else 1)
             container = WorkspaceWindow(main, policy=policy, allow_new_tabs=allow_new_tabs)
@@ -137,7 +137,7 @@ class DocumentsPage(qt.QWidget):
         record['dock'].show(); record['dock'].raise_()
         record['dock'].workspace._activate(record['dock'])
         window.show()
-        from commonUtils.ui.workspace_menus import sync_native_menus
+        from commonUtils.ui.workspaces.workspace_menus import sync_native_menus
         sync_native_menus(record["dock"].window(), window)
         self.changed.emit()
 

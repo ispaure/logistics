@@ -10,7 +10,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from commonUtils.filesystem.index import DirectoryCache
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.workspace import Workspace
+from commonUtils.ui.workspaces.workspace import Workspace
 from commonUtils.ui.file_browser.status import WorkspaceIndexStatus
 from ui_new.file_browser import BrowserView
 from commonUtils.ui.file_browser.index_policy import IndexPolicy

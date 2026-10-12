@@ -1,7 +1,7 @@
 """Git cancellation and redaction policy around the shared result worker."""
 from threading import Event
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.operations import ResultWorker
+from commonUtils.ui.tasks.operations import ResultWorker
 from ..runner import GitRunner, GitCancelled, redact
 
 

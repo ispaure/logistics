@@ -39,7 +39,7 @@ def get_software(tool):
 
 
 def ensure_software(tool, *, install=False):
-    from commonUtils.ui.download import ensure_download
+    from commonUtils.ui.tasks.download import ensure_download
     from commonUtils import ui
     try:
         spec, destination = get_software(tool)

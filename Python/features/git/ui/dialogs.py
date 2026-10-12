@@ -17,7 +17,7 @@ class FormDialog(qt.QDialog):
         if scope is None:
             layout.addLayout(self.form)
         else:
-            from commonUtils.ui.settings_sections import ScopedSettings, SettingsSection
+            from commonUtils.ui.settings.settings_sections import ScopedSettings, SettingsSection
             body = qt.QWidget(self)
             body.setLayout(self.form)
             self.sections = ScopedSettings(self)

@@ -5,7 +5,7 @@ Generic folder sources, selection, and feature actions.
 from collections import Counter
 
 from commonUtils.ui import pyside
-from commonUtils.ui.operation_progress import OperationProgress
+from commonUtils.ui.tasks.operation_progress import OperationProgress
 
 from features import registry
 from features.contributions import UIAction

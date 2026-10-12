@@ -45,7 +45,7 @@ class ProjectBrowser(qt.QWidget):
         self.proxy = ProjectFilter(project, self.model, self)
         self.proxy.sort(0, qt.Qt.SortOrder.AscendingOrder)
         self.tree = qt.QTreeView()
-        from commonUtils.ui.styling import bind_font
+        from commonUtils.ui.appearance.styling import bind_font
         bind_font(self.tree, 'browser')
         self.tree.setModel(self.proxy)
         for column in (1, 2, 3):

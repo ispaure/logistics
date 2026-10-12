@@ -6,7 +6,7 @@ import json
 import re
 import stat
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.operation_progress import OperationProgress
+from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.ui.file_browser.controls import navigation_button
 from commonUtils.filesystem import format_size
 from commonUtils.filesystem.rename import RenameRules, plan_renames, apply_renames, undo_renames

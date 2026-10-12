@@ -71,7 +71,7 @@ class CodeFontTests(QtTestCase):
 
     def test_production_split_views_bind_shared_styling_controller(self):
         from features.text_editor.window import EditorWindow
-        from commonUtils.ui.styling import styling
+        from commonUtils.ui.appearance.styling import styling
         with TemporaryDirectory() as directory:
             root = Path(directory)
             window = EditorWindow(history_path=root / 'recent.json', preferences_path=root / 'preferences.ini')

@@ -1,8 +1,8 @@
 """Retained, dockable Git repository panes using the shared workspace."""
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.workspace import Workspace
-from commonUtils.ui.workspace_policy import WorkspacePolicy
+from commonUtils.ui.workspaces.workspace import Workspace
+from commonUtils.ui.workspaces.workspace_policy import WorkspacePolicy
 from ..preferences import Preferences
 from .repository_view import RepositoryView
 

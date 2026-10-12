@@ -29,7 +29,7 @@ class ApplicationPreferences:
         self.settings_timer.setInterval(500)
         self.settings_timer.timeout.connect(self._refresh_systemic)
         self.settings_timer.start()
-        from commonUtils.ui.styling import styling
+        from commonUtils.ui.appearance.styling import styling
         styling().changed.connect(self.apply_preferences)
         self.apply_preferences()
 
@@ -41,7 +41,7 @@ class ApplicationPreferences:
         options = self.preferences.options
         from commonUtils.ui.code_editor.widget import monospace_font
         self.changes.message.setFont(monospace_font() if options['fixed_commit_font'] else self._message_font)
-        from commonUtils.ui.styling import bind_font
+        from commonUtils.ui.appearance.styling import bind_font
         bind_font(self.changes.message, 'code' if options['fixed_commit_font'] else 'ui')
         self.changes.message.column_guide = options['commit_guide'] if options['fixed_commit_font'] else 0
         self.changes.message.viewport().update()

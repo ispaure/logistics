@@ -1,5 +1,5 @@
 """Compatibility editor retaining Logistics' typed-key default."""
-from commonUtils.ui.ini_editor import INISettingsEditor as SharedINISettingsEditor
+from commonUtils.ui.settings.ini_editor import INISettingsEditor as SharedINISettingsEditor
 
 
 class INISettingsEditor(SharedINISettingsEditor):

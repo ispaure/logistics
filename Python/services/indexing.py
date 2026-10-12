@@ -2,7 +2,7 @@
 from commonUtils.filesystem.index import directory_cache
 from commonUtils.filesystem.index.coordinator import IndexCoordinator
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.operations import Operation
+from commonUtils.ui.tasks.operations import Operation
 
 
 class IndexService(qt.QObject):

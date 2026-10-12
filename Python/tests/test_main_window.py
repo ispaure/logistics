@@ -21,7 +21,7 @@ class MainWindowTests(QtTestCase):
         launcher = RegisteredContribution('text_editor', 'Text Editor', register().document_launchers[0])
         with TemporaryDirectory() as temporary, patch.object(main_window.registry,
                 'get_document_launchers', return_value=[launcher]), patch(
-                'commonUtils.ui.workspace_menus.sys.platform', 'darwin'):
+                'commonUtils.ui.workspaces.workspace_menus.sys.platform', 'darwin'):
             window = self.window(); window.dlg.show(); window.dlg.activateWindow()
             root = Path(temporary)
             service = EditorService(window.documents, history_path=root/'recent.json',
@@ -77,7 +77,7 @@ class MainWindowTests(QtTestCase):
         from commonUtils.ui.document_host import show_document
         from commonUtils.ui.markdown.window import MarkdownWindow
         from features.text_editor.window import EditorWindow
-        with TemporaryDirectory() as temporary, patch('commonUtils.ui.workspace_menus.sys.platform', 'darwin'):
+        with TemporaryDirectory() as temporary, patch('commonUtils.ui.workspaces.workspace_menus.sys.platform', 'darwin'):
             root = Path(temporary)
             window = self.window(); window.dlg.show(); window.dlg.activateWindow()
             markdown = MarkdownWindow(None, allow_edit=True)
@@ -103,7 +103,7 @@ class MainWindowTests(QtTestCase):
             for _ in range(5): self.app.processEvents()
 
     def test_menus_follow_feature_workspace_and_restore_for_plain_destinations(self):
-        from commonUtils.ui.workspace import Workspace
+        from commonUtils.ui.workspaces.workspace import Workspace
         def create(parent):
             page = qt.QWidget(parent)
             page.workspace = Workspace(lambda unused: qt.QMainWindow(), page)
@@ -112,7 +112,7 @@ class MainWindowTests(QtTestCase):
             document.menuBar().addMenu('Feature tools').addAction('Run')
             return page
         contribution = RegisteredContribution('test', 'Test', PageContribution('Tools', 'tools', create, 20))
-        with patch('commonUtils.ui.workspace_menus.sys.platform', 'darwin'):
+        with patch('commonUtils.ui.workspaces.workspace_menus.sys.platform', 'darwin'):
             window = self.window([contribution]); window.dlg.show()
             feature = window._feature_pages[('test', 'tools')]
             window.tabs.setCurrentWidget(feature)
@@ -163,7 +163,7 @@ class MainWindowTests(QtTestCase):
         previous = window._core_pages[0][2]
         window.tabs.setCurrentWidget(previous)
         before = window._last_destination
-        from commonUtils.ui.workspace_drag import NativeWindowDrag
+        from commonUtils.ui.workspaces.workspace_drag import NativeWindowDrag
         container = dock.window()
         drag = NativeWindowDrag(container, container.geometry())
         container._native_drag = drag
@@ -354,7 +354,7 @@ class MainWindowTests(QtTestCase):
 
     def test_sync_job_appears_in_the_rail_and_marks_background_completion(self):
         import sys, time
-        from commonUtils.ui.process_progress import open_process
+        from commonUtils.ui.tasks.process_progress import open_process
         window = self.window()
         window.dlg.show(); window.dlg.activateWindow()
         with patch.object(window.actions, 'notify') as notice:

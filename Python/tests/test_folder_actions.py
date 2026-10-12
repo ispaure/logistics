@@ -6,8 +6,8 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from shiboken6 import isValid
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.process_host import register_process_host
-from commonUtils.ui.process_progress import open_process
+from commonUtils.ui.tasks.process_host import register_process_host
+from commonUtils.ui.tasks.process_progress import open_process
 from ui_new.folder_actions import FolderActionsPage
 
 

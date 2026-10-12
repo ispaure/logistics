@@ -61,3 +61,11 @@ runtime and integration packages shown in the
 Do not restore the removed compatibility hook to fix a consumer import. This is
 separate from Logistics' retained feature hooks and settings wrappers, which still
 have their own explicit compatibility contracts.
+
+## Grouped shared UI imports
+
+Logistics uses `commonUtils.ui.workspaces`, `tasks`, `readers`, `settings` and
+`appearance` for their owning implementations. Existing direct UI module imports
+remain compatibility aliases in commonUtils. Keep application navigation and
+document policy in Logistics. See the [shared module map](https://github.com/ispaure/commonUtils/blob/main/ui/README.md#module-organization)
+for ownership and canonical paths.

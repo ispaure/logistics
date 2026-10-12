@@ -9,7 +9,7 @@ from unittest.mock import patch
 from commonUtils.ui import pyside as qt
 from commonUtils.formats.iniType import INIFile
 from ui_new.settings.ini_editor import INISettingsEditor
-from commonUtils.ui.ini_editor import INISettingsEditor as SharedINISettingsEditor
+from commonUtils.ui.settings.ini_editor import INISettingsEditor as SharedINISettingsEditor
 
 
 class CompatibilityTests(QtTestCase):

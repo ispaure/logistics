@@ -230,14 +230,14 @@ class GitUITests(QtTestCase):
             self.assertEqual(image.devicePixelRatio(), 2.0)
 
     def test_git_actions_badges_and_file_status_follow_live_accent(self):
-        from commonUtils.ui.theme import apply_theme
-        from commonUtils.ui.styling import style_values
+        from commonUtils.ui.appearance.theme import apply_theme
+        from commonUtils.ui.appearance.styling import style_values
         self.open()
         button = self.page.action_buttons['Commit']
         button.setProperty('badge_count', 7)
         original = button.defaultAction().icon().cacheKey()
         values = dict(style_values(), accent_color_str='#00cc88')
-        with patch('commonUtils.ui.styling.style_values', return_value=values):
+        with patch('commonUtils.ui.appearance.styling.style_values', return_value=values):
             apply_theme(self.app, mode='dark')
             self.app.processEvents()
         self.assertNotEqual(button.defaultAction().icon().cacheKey(), original)
