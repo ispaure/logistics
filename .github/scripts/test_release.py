@@ -1,5 +1,7 @@
 """Release layout, submodule validation and safe publishing regressions."""
+import hashlib
 import json
+import os
 from pathlib import Path
 import stat
 import subprocess
@@ -13,6 +15,55 @@ import publish_release as publishing
 
 
 class PackageTests(unittest.TestCase):
+    def test_windows_scripts_have_crlf_and_manifest_hashes_shipped_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = b'@echo off\ncall :ReadLaunchConfig\r\nexit /b\n:ReadLaunchConfig\nexit /b\n'
+            for name in ('Launch.bat', 'nested/helper.CMD', 'unchanged.sh'):
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(original)
+            packaging.package(root, root / 'release.zip',
+                              ['Launch.bat', 'nested/helper.CMD', 'unchanged.sh'], required=set())
+            with zipfile.ZipFile(root / 'release.zip') as archive:
+                manifest = json.loads(archive.read('Logistics/.app-install.json'))
+                for name in ('Launch.bat', 'nested/helper.CMD'):
+                    data = archive.read('Logistics/' + name)
+                    self.assertNotIn(b'\n', data.replace(b'\r\n', b''))
+                    self.assertNotIn(b'\r\r\n', data)
+                    self.assertEqual(manifest['files'][name], hashlib.sha256(data).hexdigest())
+                    self.assertEqual((root / name).read_bytes(), original)
+                self.assertEqual(archive.read('Logistics/unchanged.sh'), original)
+
+    @unittest.skipUnless(os.name == 'nt', 'Requires native Windows cmd.exe and PowerShell')
+    def test_packaged_windows_launcher_reads_config_before_bootstrap(self):
+        repository = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory(prefix='Logistics launch ') as directory:
+            root = Path(directory)
+            names = ['LaunchLogistics_WIN.bat',
+                     'Python/commonUtils/launchers/LaunchPythonProject_WIN.bat', 'launch_config.ini']
+            for name in names[:2]:
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                # Reproduce a Linux-built release, regardless of checkout policy.
+                target.write_bytes((repository / name).read_bytes().replace(b'\r\n', b'\n'))
+            (root / 'launch_config.ini').write_text(
+                '[Launch]\ncommonutils_root = Python/commonUtils\n'
+                'source_dir = missing-source\nlaunch_file = main\n'
+                'ensure_user_dir =\npause_after_completed = false\n')
+            packaging.package(root, root / 'release.zip', names, required=set())
+            with zipfile.ZipFile(root / 'release.zip') as archive:
+                archive.extractall(root / 'extracted')
+            env = dict(os.environ, APPDATA=str(root / 'appdata'), USERPROFILE=str(root / 'user'))
+            env.pop('COMMONUTILS_ROOT', None)
+            result = subprocess.run(['cmd.exe', '/d', '/c', 'LaunchLogistics_WIN.bat'],
+                cwd=root / 'extracted/Logistics', env=env, stdin=subprocess.DEVNULL,
+                capture_output=True, text=True, errors='replace', timeout=60)
+            output = result.stdout + result.stderr
+            self.assertEqual(result.returncode, 1, output)
+            self.assertIn('Configured source_dir does not exist or is not a directory:', output)
+            self.assertIn('missing-source', output)
+
     def test_layout_nested_contents_exclusions_and_permissions(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
