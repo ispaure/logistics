@@ -41,20 +41,25 @@ This is a **host** test, without OS mocks. It is ready to be packaged into a fut
 mobile testbed but has not run inside iOS/Android. It does not test image decoding,
 Qt rendering, Android content URIs, iOS security-scoped URLs or physical devices.
 
-## Your first mobile CI run
+## Mobile runtime validation
 
-The next gate belongs in commonUtils, before selecting a mobile UI framework.
+The shared-runtime gate is complete, before selecting a mobile UI framework.
 Follow its [mobile test guide](../../Python/commonUtils/docs/developer/mobile-testing.md)
 for the manual Actions controls, artifacts, success criteria and troubleshooting.
-Start with Android, then iOS. The workflow setup has been pushed but **has not
-been dispatched**. Existing desktop push-triggered CI remains enabled.
+The [hosted smoke run](https://github.com/ispaure/commonUtils/actions/runs/38277821906)
+passed Android and iOS on 2026-10-12 at commonUtils `8ff459a`: seven tests per
+runtime, zero failures/errors/skips. The first iOS attempt exposed a testbed
+package-copy mismatch, which was fixed before the successful rerun. The
+[shared evidence guide](https://github.com/ispaure/commonUtils/blob/main/docs/developer/mobile-testing.md)
+records the runtime details and result JSON. Existing desktop push-triggered CI
+remains enabled.
 
 For each run, keep the commit SHA, runtime result JSON and build/testbed logs. A
 red build step is a toolchain/setup problem; a red test or missing result is not a
 successful mobile run. The guide distinguishes these cases. Do not enable a
 capability merely because a simulator boots or an app builds.
 
-## After those runs pass
+## Next steps after the runtime passes
 
 1. Extend the mobile payload with the small Logistics document modules and this
    headless fixture suite. Keep platform-specific dependencies out of that package.
@@ -69,8 +74,9 @@ capability merely because a simulator boots or an app builds.
 
 No production mobile UI is implemented yet. This sequencing preserves the earlier
 infrastructure-only boundary and avoids choosing a UI stack before verifying the
-shared runtime and dependencies. The first hosted runs and framework/device
-choices are explicit future gates, not unreported passes.
+shared runtime and dependencies. Hosted commonUtils smoke checks have passed;
+Logistics document tests inside those runtimes and framework/device choices
+remain future gates.
 
 ## Local validation record
 
@@ -78,6 +84,7 @@ The preparation changes passed 923 Logistics tests in 91 isolated modules on
 macOS. The three headless document scenarios also passed directly, with optional
 desktop/image/archive packages blocked. Ruff passed across Python and CI scripts,
 and actionlint accepted the updated desktop and new commonUtils mobile workflows.
-The commonUtils revision linked by this update passed 735 shared tests and its
-seven-case staged host harness. No mobile workflow has been dispatched and no
-physical-device result is claimed.
+The original commonUtils foundation revision passed 735 shared tests and its
+seven-case staged host harness. Hosted commonUtils runtime results are recorded
+above; Logistics document checks remain host-only and no physical-device result
+is claimed.
