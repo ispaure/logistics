@@ -10,15 +10,16 @@ class HeaderMenus(qt.QObject):
         self.owner = owner
         self.menu = owner.dlg.menuBar().addMenu('Logistics')
         self.destinations = self.menu.addMenu('Go to Tool')
-        self.documents = self.menu.addMenu('New / Open Document')
+        self.documents = self.menu.addAction('New / Open Document…', owner._show_document_chooser)
         self.menu.addSeparator()
         self.menu.addAction('Bulk Rename…', lambda: owner._show_bulk_rename())
         self.refresh = self.menu.addAction('Refresh Current Tool', self.refresh_current)
         self.menu.addSeparator()
-        self.menu.addAction('Settings…', owner._show_settings)
+        self.menu.addAction(owner.show_settings_action)
+        self.menu.addAction(owner.open_documents_action)
         self.feature_settings = self.menu.addMenu('Tool Settings')
-        self.menu.addAction('Choose Launch Mode', owner._show_landing)
-        self.menu.addAction('Show Full Hub with Sidebar', lambda: owner._launch('hub'))
+        self.menu.addAction(owner.choose_launch_mode_action)
+        self.menu.addAction(owner.open_hub_action)
         self.menu.addSeparator()
         self.guides = self.menu.addMenu('Help / Guides')
         self.menu.addSeparator()
@@ -26,11 +27,11 @@ class HeaderMenus(qt.QObject):
         self.sources = {}
         self.menu.aboutToShow.connect(self.update)
         self.destinations.aboutToShow.connect(self.update_destinations)
-        self.documents.aboutToShow.connect(self.update_documents)
         self.feature_settings.aboutToShow.connect(self.update_settings)
         self.guides.aboutToShow.connect(self.update_guides)
 
     def update(self):
+        self.owner._update_navigation_menu()
         page = self.owner.tabs.currentWidget()
         self.refresh.setEnabled(self.owner.launch_stack.currentWidget() is self.owner.hub
                                 and callable(getattr(page, 'refresh', None)))
@@ -49,6 +50,8 @@ class HeaderMenus(qt.QObject):
         tabs = self.owner.tabs
         for index in range(tabs.count()):
             page = tabs.widget(index)
+            if page is tabs.currentWidget() and self.owner.launch_stack.currentWidget() is self.owner.hub:
+                continue
             action = self.destinations.addAction(tabs.tabText(index), lambda checked=False, page=page:
                                                  self.owner._destination_changed(page))
             action.setCheckable(True)
@@ -57,13 +60,7 @@ class HeaderMenus(qt.QObject):
             self.destinations.addAction('Open Documents', self.owner._show_documents)
 
     def update_documents(self):
-        self.documents.clear()
-        for key, launcher in self.owner.sidebar.launchers.items():
-            menu = self.documents.addMenu(launcher.name)
-            if launcher.new_document is not None:
-                menu.addAction('New', lambda checked=False, key=key: self.owner._launch_document(key, True))
-            menu.addAction('Open…', lambda checked=False, key=key: self.owner._launch_document(key))
-        self.documents.setEnabled(bool(self.documents.actions()))
+        self.documents.setEnabled(bool(self.owner.sidebar.launchers))
 
     def update_settings(self):
         self.feature_settings.clear()

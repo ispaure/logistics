@@ -179,3 +179,22 @@ class LaunchModeTests(QtTestCase):
         self.assertIn('markdown', window.landing.editor_buttons)
         window._launch_document('comic')
         self.open_comic.assert_not_called()
+
+    def test_settings_navigation_is_shared_and_omits_current_destination(self):
+        window = self.window
+        self.assertIs(window.sidebar.buttons['settings'].menu(), window.settings_button.menu())
+        window._update_navigation_menu()
+        self.assertFalse(window.choose_launch_mode_action.isVisible())
+        window._launch('hub'); window._update_navigation_menu()
+        self.assertFalse(window.open_hub_action.isVisible())
+        self.assertTrue(window.choose_launch_mode_action.isVisible())
+        window._show_settings(); window._update_navigation_menu()
+        self.assertFalse(window.show_settings_action.isVisible())
+        self.assertTrue(window.open_documents_action.isVisible())
+        window._show_documents(); window._update_navigation_menu()
+        self.assertFalse(window.open_documents_action.isVisible())
+        window._launch('ide'); window._update_navigation_menu()
+        self.assertTrue(window.open_hub_action.isVisible())
+        self.assertFalse(window.return_to_tool_action.isVisible())
+        window.header_menus.update_destinations()
+        self.assertNotIn('Ide', [a.text() for a in window.header_menus.destinations.actions()])

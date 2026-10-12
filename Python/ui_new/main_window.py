@@ -141,14 +141,34 @@ class MainWindow(pyside.Window):
         self.show_settings_action = menu.addAction('Settings', self._show_settings)
         menu.addSeparator()
         self.return_to_tool_action = menu.addAction('Return to tool', self._return_to_tool)
-        menu.addAction('Open documents', self._show_documents)
-        menu.addAction('Choose launch mode', self._show_landing)
-        menu.addAction('Open full hub with sidebar', lambda: self._launch('hub'))
+        self.open_documents_action = menu.addAction('Open Documents', self._show_documents)
+        self.choose_launch_mode_action = menu.addAction('Choose launch mode', self._show_landing)
+        self.open_hub_action = menu.addAction('Open full hub with sidebar', lambda: self._launch('hub'))
         self.settings_button.setMenu(menu)
+        menu.aboutToShow.connect(self._update_navigation_menu)
+        rail_settings = self.sidebar.buttons['settings']
+        rail_settings.clicked.disconnect()
+        rail_settings.setCheckable(False)
+        rail_settings.setMenu(menu)
+        rail_settings.setPopupMode(pyside.QToolButton.ToolButtonPopupMode.InstantPopup)
         self.return_to_tool_action.setEnabled(False)
         central_widget.position_settings()
 
         self.dlg.setCentralWidget(central_widget)
+
+    def _update_navigation_menu(self):
+        showing_hub = self.launch_stack.currentWidget() is self.hub
+        current = self.tabs.currentWidget() if showing_hub else None
+        settings = next((page for _, _, page in self._core_pages if isinstance(page, SettingsPage)), None)
+        self.show_settings_action.setVisible(current is not settings or settings is None)
+        self.open_documents_action.setVisible(current is not self.documents)
+        self.choose_launch_mode_action.setVisible(self.launch_stack.currentWidget() is not self.landing)
+        self.open_hub_action.setVisible(self._launch_mode != 'hub')
+        self.return_to_tool_action.setVisible(self._standalone_page is not None and current is not self._standalone_page)
+
+    def _show_document_chooser(self):
+        self._show_documents()
+        return self.documents.new_document_chooser(self.documents.workspace)
 
     def _launch_targets(self):
         browser = next((page for _, _, page in self._core_pages

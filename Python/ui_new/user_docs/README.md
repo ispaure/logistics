@@ -11,14 +11,19 @@ the chooser visible. Opened documents use the shared workspace without the sideb
 
 In a single-tool view, a small, opaque settings icon floats above the content at
 the bottom-left. Click it to show **Settings**, **Return to tool** (or **Return to
-documents**), **Open documents**, **Choose launch mode**, and **Open full hub with
-sidebar**. The chooser also offers this icon, so
+documents**), **Open Documents**, **Choose launch mode**, and **Open full hub with
+sidebar**. The sidebar's Settings icon opens the same menu. Actions for the current
+page or launch mode are hidden. The chooser also offers this icon, so
 you can enable an unavailable tool. Switching modes reuses your existing pages
 and workspaces. Each new app launch shows the chooser again.
 
 The window header also keeps a **Logistics** menu in every context. **Go to Tool**
-lists current destinations; **New / Open Document** lists enabled document
-launchers. Settings, tool settings, launch modes and installed guides are grouped
+lists current destinations; **New / Open Document…** opens a chooser tab with
+cards for the enabled document types. Empty document workspaces also show these
+cards. Click **+** or use the new-tab shortcut to show the chooser in that same
+workspace, including detached windows. **New** appears only for formats that
+support creation; **Open…** opens a file picker. Cancelling keeps the chooser open;
+a successful open replaces the chooser tab with your document. Settings, tool settings, launch modes and installed guides are grouped
 there. The active tool's menus appear alongside it, including File Browser's
 File, Edit, View, Navigate, Index and Help commands. On macOS these use the native menu bar;
 Windows and Linux show them in the window header without a second embedded bar.

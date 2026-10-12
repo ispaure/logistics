@@ -39,8 +39,9 @@ class LandingPage(qt.QWidget):
     launch_requested = qt.Signal(str)
     document_requested = qt.Signal(str, bool)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, documents_only=False):
         super().__init__(parent)
+        self._document_columns = 2 if documents_only else 3
         self.setStyleSheet('''
             QPushButton#launchCard, QFrame#documentCard {
                 background: palette(base); border: 1px solid palette(mid);
@@ -65,42 +66,45 @@ class LandingPage(qt.QWidget):
         canvas = qt.QWidget()
         scroll.setWidget(canvas)
         centered = qt.QVBoxLayout(canvas)
-        centered.setContentsMargins(36, 36, 36, 64)
+        centered.setContentsMargins(16 if documents_only else 36, 24 if documents_only else 36,
+                                   16 if documents_only else 36, 32 if documents_only else 64)
         centered.addStretch()
         content = qt.QWidget()
-        content.setMinimumWidth(720)
+        content.setMinimumWidth(240 if documents_only else 720)
         content.setMaximumWidth(880)
         content.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Preferred)
         layout = qt.QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
-        heading = qt.QLabel('Welcome to Logistics')
+        heading = qt.QLabel('New / Open Document' if documents_only else 'Welcome to Logistics')
         font = heading.font()
         font.setPointSize(26)
         font.setBold(True)
         heading.setFont(font)
         layout.addWidget(heading)
-        layout.addWidget(qt.QLabel('Choose your workspace, or open something to read or edit.'))
+        layout.addWidget(qt.QLabel('Choose a format to create, read or edit.' if documents_only
+                                 else 'Choose your workspace, or open something to read or edit.'))
         self.buttons = {}
-        hub = LaunchCard('Open full hub with sidebar', 'All your tools, folders and documents in one place.', 'hub')
-        hub.clicked.connect(lambda: self.launch_requested.emit('hub'))
-        self.buttons['hub'] = hub
-        layout.addWidget(hub)
-        tools = qt.QHBoxLayout()
-        tools.setSpacing(12)
-        for mode, title, detail, icon in (
-                ('browser', 'File Browser', 'Browse and organize files', 'browser'),
-                ('git', 'Git', 'Work with repositories', 'git'),
-                ('ide', 'IDE', 'Explore and edit projects', 'text')):
-            button = LaunchCard(title, detail, icon)
-            button.clicked.connect(lambda checked=False, mode=mode: self.launch_requested.emit(mode))
-            self.buttons[mode] = button
-            tools.addWidget(button, 1)
-        layout.addLayout(tools)
-        hint = qt.QLabel('Focused workspaces open without the sidebar. The settings icon keeps your launch choices nearby.')
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
-        layout.addSpacing(8)
+        if not documents_only:
+            hub = LaunchCard('Open full hub with sidebar', 'All your tools, folders and documents in one place.', 'hub')
+            hub.clicked.connect(lambda: self.launch_requested.emit('hub'))
+            self.buttons['hub'] = hub
+            layout.addWidget(hub)
+            tools = qt.QHBoxLayout()
+            tools.setSpacing(12)
+            for mode, title, detail, icon in (
+                    ('browser', 'File Browser', 'Browse and organize files', 'browser'),
+                    ('git', 'Git', 'Work with repositories', 'git'),
+                    ('ide', 'IDE', 'Explore and edit projects', 'text')):
+                button = LaunchCard(title, detail, icon)
+                button.clicked.connect(lambda checked=False, mode=mode: self.launch_requested.emit(mode))
+                self.buttons[mode] = button
+                tools.addWidget(button, 1)
+            layout.addLayout(tools)
+            hint = qt.QLabel('Focused workspaces open without the sidebar. The settings icon keeps your launch choices nearby.')
+            hint.setWordWrap(True)
+            layout.addWidget(hint)
+            layout.addSpacing(8)
         title = qt.QLabel('Read & edit')
         title.setObjectName('sectionTitle')
         layout.addWidget(title)
@@ -145,6 +149,16 @@ class LandingPage(qt.QWidget):
             label.setObjectName('launchTitle')
             heading.addWidget(label, 1)
             layout.addLayout(heading)
+            descriptions = {
+                'markdown': 'Write and preview formatted notes.',
+                'text': 'Edit plain text and code files.',
+                'epub': 'Read EPUB books and resume your progress.',
+                'comic': 'Read comics and image archives.',
+                'archive': 'Browse, create and extract archives.',
+            }
+            detail = qt.QLabel(descriptions.get(key, 'Open files with ' + entry.name + '.'))
+            detail.setWordWrap(True)
+            layout.addWidget(detail)
             actions = qt.QHBoxLayout()
             actions.addStretch()
             if entry.new_document:
@@ -161,9 +175,26 @@ class LandingPage(qt.QWidget):
             actions.addWidget(button)
             self.editor_buttons[key] = button
             layout.addLayout(actions)
-            self.document_grid.addWidget(card, index // 3, index % 3)
-        for column in range(3):
+            self.document_grid.addWidget(card, index // self._document_columns, index % self._document_columns)
+        for column in range(self._document_columns):
             self.document_grid.setColumnStretch(column, 1)
+
+
+class DocumentChooser(LandingPage):
+    """The launch page's document cards, sized for a workspace tab."""
+    def __init__(self, parent=None):
+        super().__init__(parent, documents_only=True)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        columns = 1 if self.width() < 620 else 2
+        if columns != self._document_columns:
+            self._document_columns = columns
+            cards = [self.document_grid.itemAt(i).widget() for i in range(self.document_grid.count())]
+            for card in cards:
+                self.document_grid.removeWidget(card)
+            for index, card in enumerate(cards):
+                self.document_grid.addWidget(card, index // columns, index % columns)
 
 
 class LaunchSurface(qt.QWidget):

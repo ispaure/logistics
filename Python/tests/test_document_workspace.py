@@ -350,17 +350,12 @@ class DocumentWorkspaceTests(QtTestCase):
             return show_document(window)
         entry = RegisteredContribution('test', 'Test',
             DocumentLauncherContribution('test', 'Test editor', new, 'text', 0, new))
-        choices = []
-        menu = Mock()
-        def submenu(title):
-            sub = Mock(); actions = {}; choices.append(actions)
-            sub.addAction.side_effect = lambda title, callback: actions.update({title: callback})
-            return sub
-        menu.addMenu.side_effect = submenu
-        menu.exec.side_effect = lambda point: choices[0]['New']()
-        with patch.object(registry, 'get_document_launchers', return_value=[entry]), \
-                patch('ui_new.documents.qt.QMenu', return_value=menu):
+        with patch.object(registry, 'get_document_launchers', return_value=[entry]):
             self.page.records[first]['dock'].local_new_button.click()
+            self.settle()
+            chooser = detached.active_view.document
+            self.assertTrue(chooser._document_chooser)
+            chooser.centralWidget().editor_new_buttons['test'].click()
         self.settle()
         self.assertEqual(self.page.workspace.docks, [])
         self.assertEqual(len(detached.docks), 2)
@@ -517,6 +512,38 @@ class DocumentWorkspaceTests(QtTestCase):
             while isValid(reader) and (reader.busy or reader.page_cache.busy):
                 self.assertLess(monotonic(), deadline); self.app.processEvents(); sleep(.005)
             self.settle()
+
+    def test_empty_workspace_shows_cards_and_cancel_keeps_chooser_tab(self):
+        from features import registry
+        from features.contributions import DocumentLauncherContribution, RegisteredContribution
+        callback = Mock(return_value=None)
+        entry = RegisteredContribution('test', 'Test', DocumentLauncherContribution(
+            'test', 'Test editor', callback, 'text'))
+        with patch.object(registry, 'get_document_launchers', return_value=[entry]):
+            self.page._refresh_choosers()
+            empty = self.page.workspace._drop_target.widget()
+            self.assertIn('test', empty.editor_buttons)
+            self.assertNotIn('test', empty.editor_new_buttons)
+            window = self.page.workspace.request_new_view(); self.settle()
+            window.centralWidget().editor_buttons['test'].click(); self.settle()
+            callback.assert_called_once_with(self.host)
+            self.assertTrue(document_is_open(window))
+            self.assertIs(self.page.workspace.active_view.document, window)
+            self.assertIs(self.page.workspace.request_new_view(), window)
+            self.assertEqual(len(self.page.workspace.docks), 1)
+            with patch.object(registry, 'get_document_launchers', return_value=[]):
+                self.page._refresh_choosers()
+            self.assertNotIn('test', window.centralWidget().editor_buttons)
+
+    def test_detached_chooser_is_reused_without_reattaching(self):
+        document = qt.QMainWindow(); document.setWindowTitle('Detached')
+        show_document(document)
+        self.page.detach_current(); self.settle()
+        workspace = self.page.records[document]['dock'].workspace
+        chooser = workspace.request_new_view(); self.settle()
+        self.assertIs(workspace.request_new_view(), chooser)
+        self.assertIs(self.page.records[chooser]['dock'].workspace, workspace)
+        self.assertEqual(self.page.workspace.docks, [])
 
 
 class PublicCloseContractTests(QtTestCase):
