@@ -22,7 +22,7 @@ reconfigure an already running worker or reader.
 | Data | Location/owner | Compatibility consequence |
 | --- | --- | --- |
 | Blender installations and presets | per-user Logistics root: `software/blender/<version>` and `preferences/blender/<version>/<preset>` | Separate from global software resources; removal preserves presets; copies retain embedded absolute paths |
-| Disabled feature names | configFile.ini and persistent personal override | Stable feature IDs; legacy preferences migrate before initialization |
+| Feature choices | configFile.ini defaults and sparse personal FeatureOverrides | Stable feature IDs; explicit matching choices persist until reset |
 | Git options | feature config.ini and personal override | Scalars are exposed in central Settings |
 | Git accounts, actions, bookmarks and subtree mappings | `git.json` beside Logistics preferences | Preserve malformed files; credentials belong in secure helpers |
 | Editor settings | feature config.ini and persistent personal override; shared Styling fonts | Legacy cache settings migrate once |
@@ -110,3 +110,11 @@ retain compatibility for isolated hosts/tests. Typography changes do not write
 source documents. Shared mechanics and font-role API contracts live in the
 [commonUtils configuration guide](https://github.com/ispaure/commonUtils/blob/main/configuration/README.md)
 and [styling guide](https://github.com/ispaure/commonUtils/blob/main/ui/styling.md).
+
+Feature defaults remain `[FeatureDefaults] disabled_list-str`; personal feature
+choices use `[FeatureOverrides] <feature_id>_bool`. Only an explicit toggle (or a
+dependency that must be enabled) writes a key. Equal-to-default values remain
+explicit; the reset arrow removes the key. Untouched features resolve against
+current defaults at startup. The retryable `feature-overrides-v2` migration removes
+the old personal selection snapshot while preserving differing choices and
+unrelated settings. Whole-preference reset also marks this migration complete.

@@ -79,7 +79,8 @@ class FeaturesPage(qt.QWidget):
     def refresh(self):
         store = registry.feature_settings_store()
         personal = self.scope == 'personal'
-        selection_override = ('FeatureDefaults', 'disabled_list-str') in store.overrides() if personal else False
+        overrides = registry.feature_overrides() if personal else {}
+        selection_override = bool(overrides)
         source = 'Override' if selection_override else 'Inherited'
         self.scope_label.setText(f'Personal overrides · {source} feature selection' if personal else 'Software defaults')
         self.path_label.setText(str(store.path(self.scope)))
@@ -89,9 +90,9 @@ class FeaturesPage(qt.QWidget):
             'Default feature selection shipped with Logistics. Changes save immediately and affect future launches; '
             'personal settings can override them. Dependencies are enabled together.'
             if not personal else
-            'Inherited selection uses software defaults. Toggling a feature saves the entire selection as a personal '
-            'override and applies immediately. ↶ matches one feature to its software default; '
-            'Use software defaults removes the selection override. Dependencies are enabled together.')
+            'Untouched features inherit software defaults. Toggling saves only that feature’s explicit choice, '
+            'even when it matches the default. ↶ removes its override; Use software defaults removes all '
+            'feature overrides. Changes apply immediately. Dependencies are enabled together.')
         self.reset_all.setText('Use software defaults' if personal else 'Reset to defaults')
         self.reset_all.setEnabled(selection_override if personal else bool(registry.default_disabled_features()))
         defaults = registry.default_disabled_features()
@@ -125,13 +126,14 @@ class FeaturesPage(qt.QWidget):
             reset = self.reset_buttons[state.name]
             reset.setAccessibleName(f'Reset {state.label} to default')
             reset.setToolTip('Use software default' if personal else 'Restore enabled software baseline')
-            reset.setEnabled(enabled != default_enabled if personal else not enabled)
+            has_override = any(member in overrides for member in members)
+            reset.setEnabled(has_override if personal else not enabled)
             indicator = self.indicators[state.name]
-            indicator.setText(source if personal else '')
+            indicator.setText(('Override' if has_override else 'Inherited') if personal else '')
             indicator.setVisible(personal)
             indicator.setToolTip(
-                ('The entire feature selection is saved as a personal override. ' if selection_override
-                 else 'The feature selection is inherited from software defaults. ')
+                ('This feature has an explicit personal choice. ↶ removes it. ' if has_override
+                 else 'This feature follows software defaults. ')
                 + ('This feature matches its software default.' if enabled == default_enabled
                    else 'This feature differs from its software default.'))
             text = ('Unavailable' if error else 'Missing dependency') if not state.available else 'Enabled' if enabled else 'Disabled'
@@ -168,8 +170,7 @@ class FeaturesPage(qt.QWidget):
         header.addWidget(indicator)
         reset = self.reset_buttons[name] = qt.QToolButton()
         reset.setText('↶')
-        reset.clicked.connect(lambda checked=False, name=name: self._toggled(
-            self._feature_states[name], self._default_enabled[name] if self.scope == 'personal' else True))
+        reset.clicked.connect(lambda checked=False, name=name: self._reset_feature(self._feature_states[name]))
         header.addWidget(reset)
         card_layout.addLayout(header)
         summary = self.summaries[name] = qt.QLabel()
@@ -201,6 +202,19 @@ class FeaturesPage(qt.QWidget):
             self._features_changed()
         else:
             self.status.setText(f'{state.label} {"enabled" if enabled else "disabled"}. Choice saved for the next launch.')
+
+    def _reset_feature(self, state):
+        try:
+            if self.scope == 'application':
+                registry.set_feature_default(state.name, True)
+            else:
+                registry.reset_feature_override(state.name)
+        except Exception as error:
+            self.status.setText(str(error))
+            self._features_changed()
+        else:
+            self.status.setText(f'{state.label} uses software defaults.' if self.scope == 'personal'
+                                else f'{state.label} enabled by default.')
 
     def _reset_defaults(self):
         try:
