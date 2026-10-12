@@ -142,7 +142,7 @@ class ReaderUXTests(QtTestCase):
         self.assertLessEqual(self.book.sidebar.width(), 192)
 
     def test_repagination_after_theme_and_size_changes_keeps_text_visible(self):
-        from commonUtils.ui.theme import apply_theme
+        from commonUtils.ui.appearance.theme import apply_theme
         theme = apply_theme(mode='dark')
         for mode in ('dark', 'light'):
             theme.set_mode(mode)

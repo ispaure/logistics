@@ -61,7 +61,7 @@ class Preferences:
         defaults = Path(__file__).with_name("config.ini")
         for key, fallback in DEFAULTS.items():
             if not self.custom and key in ('font_family_str', 'font_size_int'):
-                from commonUtils.ui.styling import style_values
+                from commonUtils.ui.appearance.styling import style_values
                 values[key] = style_values()['code_' + key]
                 continue
             bounds = (

@@ -175,7 +175,7 @@ class ReaderTests(QtTestCase):
         self.assertIn('inside the EPUB', self.page.status.text())
 
     def test_font_themes_search_and_resource_blocking(self):
-        from commonUtils.ui.theme import apply_theme
+        from commonUtils.ui.appearance.theme import apply_theme
         apply_theme(mode='dark')
         self.page.font_size.setValue(27)
         self.page.spacing.setValue(140)
@@ -183,7 +183,7 @@ class ReaderTests(QtTestCase):
         self.assertEqual(self.page.text.document().defaultFont().pointSize(), 27)
         self.assertEqual(self.page.text.document().begin().next().blockFormat().lineHeight(), 140)
         self.page.theme.setCurrentIndex(self.page.theme.findData('dark'))
-        from commonUtils.ui.theme import configured_colors
+        from commonUtils.ui.appearance.theme import configured_colors
         self.assertIn(configured_colors(True).surface, self.page.text.styleSheet())
         self.page.query.setText('hello')
         self.page.find_next()

@@ -12,7 +12,7 @@ from ui_new.documents import DocumentsPage, register_document_host
 from ui_new.sidebar import DestinationRail
 from ui_new.landing import LandingPage, LaunchSurface
 from ui_new.folder_actions import FolderActionsPage
-from commonUtils.ui.process_host import register_process_host
+from commonUtils.ui.tasks.process_host import register_process_host
 
 
 CORE_TABS = (
@@ -288,7 +288,7 @@ class MainWindow(pyside.Window):
         self.dlg.deleteLater()
 
     def _bind_docking_preview(self, page):
-        from commonUtils.ui.workspace import Workspace
+        from commonUtils.ui.workspaces.workspace import Workspace
         for workspace in page.findChildren(Workspace):
             workspace.drop_reveal = lambda target=page: self._preview_docking(target)
 
@@ -517,7 +517,7 @@ class MainWindow(pyside.Window):
         return document
 
     def _sync_menus(self, *args):
-        from commonUtils.ui.workspace_menus import sync_native_menus
+        from commonUtils.ui.workspaces.workspace_menus import sync_native_menus
         sync_native_menus(self.dlg, self._menu_document())
 
     def can_close(self):
@@ -531,7 +531,7 @@ class MainWindow(pyside.Window):
         self._closing = True
         self.documents.closing = True
         self.actions.closing = True
-        from commonUtils.ui.process_progress import prepare_close_all
+        from commonUtils.ui.tasks.process_progress import prepare_close_all
         ready = prepare_close_all(self.dlg.close)
         ready = self.documents.prepare_close() and ready
         ready = self.actions.prepare_close() and ready

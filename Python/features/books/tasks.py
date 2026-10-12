@@ -1,5 +1,5 @@
 """EPUB work uses the shared finish-safe result contract."""
-from commonUtils.ui.operations import ResultWorker
+from commonUtils.ui.tasks.operations import ResultWorker
 
 
 class BookTask(ResultWorker):

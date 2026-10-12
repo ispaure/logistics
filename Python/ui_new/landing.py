@@ -1,7 +1,7 @@
 """Application launch choices and chrome for sidebar-free workspaces."""
 
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.icons import set_painted_icon
+from commonUtils.ui.appearance.icons import set_painted_icon
 from ui_new.sidebar import DestinationGlyph, DestinationIcon
 
 

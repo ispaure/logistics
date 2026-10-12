@@ -71,7 +71,7 @@ def rclone_sync(
         from commonUtils.ui import pyside as qt
         application = qt.QApplication.instance()
         if application is not None and qt.QThread.currentThread() == application.thread():
-            from commonUtils.ui.process_progress import open_process
+            from commonUtils.ui.tasks.process_progress import open_process
             from .progress import RcloneProgressParser
             open_process('rclone sync (dry run)' if dry_run else 'rclone sync',
                          arguments[0], arguments[1:], parser=RcloneProgressParser(),

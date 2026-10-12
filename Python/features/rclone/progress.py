@@ -6,7 +6,7 @@ Terminal text is retained as diagnostics; transfer counters never parse that tex
 import json
 import math
 import re
-from commonUtils.ui.process_runner import ProcessUpdate
+from commonUtils.ui.tasks.process_runner import ProcessUpdate
 
 
 def _number(value):

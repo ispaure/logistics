@@ -18,7 +18,7 @@ class ApplicationNotifications(NotificationCenter):
             return
         if self.tray is None:
             from .sidebar import DestinationIcon
-            from commonUtils.ui.icons import set_painted_icon
+            from commonUtils.ui.appearance.icons import set_painted_icon
             self.tray = qt.QSystemTrayIcon(self)
             set_painted_icon(self.tray, DestinationIcon, 'actions')
             self.tray.setToolTip('Logistics')

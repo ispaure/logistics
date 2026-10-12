@@ -2,7 +2,7 @@
 from collections import Counter, deque
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.operations import ResultWorker
+from commonUtils.ui.tasks.operations import ResultWorker
 from commonUtils.ui.code_editor.search import SearchPanel
 from commonUtils.persistence.text import read_text_file
 from .documents import EditorDocument
@@ -126,7 +126,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
     def add_group(self):
         if len(self.groups) >= 3:
             return None
-        from commonUtils.ui.scoped_tabs import ScopedTabBar
+        from commonUtils.ui.workspaces.scoped_tabs import ScopedTabBar
         group = qt.QTabWidget()
         group.setTabBar(ScopedTabBar(group, self.editors, lambda: self.groups, self.drop_editor, self.can_drop_editor))
         group.setMinimumWidth(max(160, self.fontMetrics().horizontalAdvance('M') * 16))

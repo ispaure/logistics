@@ -1,10 +1,10 @@
 """Compact EPUB controls and discoverable reading panels, independent of loading."""
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.reader_menus import ReaderMenus
-from commonUtils.ui.reader_chrome import ReaderLabel, ReaderFullscreen, reader_button, READER_MARGINS, READER_SPACING, reading_spin
+from commonUtils.ui.readers.reader_menus import ReaderMenus
+from commonUtils.ui.readers.reader_chrome import ReaderLabel, ReaderFullscreen, reader_button, READER_MARGINS, READER_SPACING, reading_spin
 from .preferences import THEMES
 from .text_view import BookText
-from commonUtils.ui.read_aloud import ReadAloud, reader_text
+from commonUtils.ui.readers.read_aloud import ReadAloud, reader_text
 
 
 def tool(page, action, name, icon=None):

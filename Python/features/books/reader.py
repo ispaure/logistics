@@ -37,7 +37,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         self.save_timer.setInterval(600)
         self.save_timer.timeout.connect(self._save_state)
         self._set_busy(False)
-        from commonUtils.ui.styling import styling
+        from commonUtils.ui.appearance.styling import styling
         styling().changed.connect(self._settings_changed)
         self._settings_timer = qt.QTimer(self)
         self._settings_timer.setInterval(500)
@@ -337,7 +337,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         path = self.book.spine[self._current]
         background, foreground = THEMES[self.theme.currentData()]
         if self.theme.currentData() in ('dark', 'slate'):
-            from commonUtils.ui.theme import configured_colors
+            from commonUtils.ui.appearance.theme import configured_colors
             colors = configured_colors(True)
             background, foreground = colors.surface, colors.text
         self.reading_area.setStyleSheet(f'background-color: {background};')

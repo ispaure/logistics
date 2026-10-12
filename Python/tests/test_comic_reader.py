@@ -84,14 +84,14 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
                 qt.Qt.KeyboardModifier.NoModifier, qt.Qt.ScrollPhase.NoScrollPhase, False)
             self.app.sendEvent(reader.canvas, event)
             self.wait_reader(reader)
-        with patch('commonUtils.ui.page_wheel.monotonic', return_value=10):
+        with patch('commonUtils.ui.readers.page_wheel.monotonic', return_value=10):
             wheel(-1)
             self.assertEqual(reader.page, 1)
             wheel(1)
             self.assertEqual(reader.page, 0)
             wheel(-1200)
             self.assertEqual(reader.page, 1)
-        with patch('commonUtils.ui.page_wheel.monotonic', return_value=11):
+        with patch('commonUtils.ui.readers.page_wheel.monotonic', return_value=11):
             wheel(1200)
             self.assertEqual(reader.page, 0)
         self.assertEqual(reader.keys.timer.interval(), 225)
@@ -108,7 +108,7 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
             self.app.sendEvent(reader.canvas, event)
             self.wait_reader(reader)
         with patch('commonUtils.configuration.settings.settings_path', return_value=path):
-            with patch('commonUtils.ui.page_wheel.monotonic', return_value=10):
+            with patch('commonUtils.ui.readers.page_wheel.monotonic', return_value=10):
                 wheel(pixel=-3)
                 self.assertEqual(reader.page, 0)
                 path.write_text('[WheelNavigation]\nsensitivity=20\n')
@@ -116,7 +116,7 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
                 self.assertEqual(reader.page, 1)
                 wheel(pixel=-600)
                 self.assertEqual(reader.page, 1)
-            with patch('commonUtils.ui.page_wheel.monotonic', return_value=11):
+            with patch('commonUtils.ui.readers.page_wheel.monotonic', return_value=11):
                 wheel(angle=6)
                 self.assertEqual(reader.page, 0)
             with patch.object(reader, 'file_loading', True):
@@ -132,7 +132,7 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
         path = self.root / 'settings.ini'
         path.write_text('[WheelNavigation]\nimmediate_notches=false\nsensitivity=1\n')
         with patch('commonUtils.configuration.settings.settings_path', return_value=path), patch(
-                'commonUtils.ui.page_wheel.monotonic', return_value=10):
+                'commonUtils.ui.readers.page_wheel.monotonic', return_value=10):
             for expected in (0, 1):
                 event = qt.QWheelEvent(qt.QPointF(), qt.QPointF(), qt.QPoint(), qt.QPoint(0, -60),
                     qt.Qt.MouseButton.NoButton, qt.Qt.KeyboardModifier.NoModifier,

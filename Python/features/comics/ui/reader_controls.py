@@ -1,10 +1,10 @@
 """Reader menus and visual controls; loading and navigation remain in the window."""
-from commonUtils.ui.icons import set_painted_icon
+from commonUtils.ui.appearance.icons import set_painted_icon
 
 from commonUtils.ui import pyside as qt
 from .reader_pages import PageCanvas
-from commonUtils.ui.reader_menus import ReaderMenus as SharedReaderMenus
-from commonUtils.ui.reader_chrome import ReaderLabel, ReaderFullscreen, ReaderIcon, reader_button, READER_MARGINS, READER_SPACING
+from commonUtils.ui.readers.reader_menus import ReaderMenus as SharedReaderMenus
+from commonUtils.ui.readers.reader_chrome import ReaderLabel, ReaderFullscreen, ReaderIcon, reader_button, READER_MARGINS, READER_SPACING
 
 
 class ReaderControls(qt.QWidget):

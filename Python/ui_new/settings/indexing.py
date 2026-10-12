@@ -77,7 +77,7 @@ class IndexSettingsPanel(qt.QWidget):
             layout.addWidget(self.editor, 1)
             return
         self.editor = IndexSettingsEditor(self.path, self)
-        from commonUtils.ui.settings_sections import ScopedSettings, SettingsSection
+        from commonUtils.ui.settings.settings_sections import ScopedSettings, SettingsSection
         self.sections = ScopedSettings(self)
         self.sections.set_sections([SettingsSection('application', 'ini', 'INI files', self.editor, nested=True)])
         layout.addWidget(self.sections, 1)
@@ -86,7 +86,7 @@ class IndexSettingsPanel(qt.QWidget):
         return all(editor.can_close() for editor in self._editors.values()) if self._editors else self.editor.can_close()
 
     def set_scope(self, scope):
-        from commonUtils.ui.layered_settings import LayeredSettingsEditor
+        from commonUtils.ui.settings.layered_settings import LayeredSettingsEditor
         from .configuration import settings_store
         if scope not in self._editors:
             class LayeredIndexEditor(LayeredSettingsEditor):

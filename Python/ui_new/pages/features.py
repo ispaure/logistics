@@ -38,7 +38,7 @@ class FeaturesPage(qt.QWidget):
         content_layout.addWidget(self.status)
         content_layout.addStretch()
         self.scroll.setWidget(self.content)
-        from commonUtils.ui.settings_sections import ScopedSettings, SettingsSection
+        from commonUtils.ui.settings.settings_sections import ScopedSettings, SettingsSection
         self.sections = ScopedSettings(self)
         self.sections.set_sections([SettingsSection('personal', 'features', 'Features', self.scroll)])
         if self.controlled_scope:

@@ -1,8 +1,8 @@
 """Project registration, retained tabs and application close participation."""
 from commonUtils.ui import pyside as qt
 from .projects import Project, ProjectStore
-from commonUtils.ui.workspace import Workspace
-from commonUtils.ui.workspace_policy import WorkspacePolicy
+from commonUtils.ui.workspaces.workspace import Workspace
+from commonUtils.ui.workspaces.workspace_policy import WorkspacePolicy
 
 
 class IDEPage(qt.QWidget):

@@ -25,7 +25,7 @@ class RepositoryLayout:
         qt.QApplication.instance().paletteChanged.connect(self._refresh_action_icons)
         self._build_status(layout)
         self._style_content(content_font)
-        from commonUtils.ui.styling import bind_font
+        from commonUtils.ui.appearance.styling import bind_font
         bind_font(self, 'ui')
         bind_font(self.toolbar, 'ui')
 
@@ -207,7 +207,7 @@ class RepositoryLayout:
             if widget is self.toolbar or self.toolbar.isAncestorOf(widget): continue
             if widget is self.preview.editor or self.preview.editor.isAncestorOf(widget): continue
             widget.setFont(content_font)
-            from commonUtils.ui.styling import bind_font
+            from commonUtils.ui.appearance.styling import bind_font
             bind_font(widget, 'ui')
 
     def _connect_workspace_signals(self):

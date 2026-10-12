@@ -190,9 +190,9 @@ class IDELayoutTests(QtTestCase):
         undo.trigger()
         self.assertEqual(two.current.toPlainText(), 'b.py')
         self.assertEqual(one.current.toPlainText(), 'a.py')
-        from commonUtils.ui.workspace_menus import sync_native_menus
+        from commonUtils.ui.workspaces.workspace_menus import sync_native_menus
         host = qt.QMainWindow()
-        with patch('commonUtils.ui.workspace_menus.sys.platform', 'darwin'):
+        with patch('commonUtils.ui.workspaces.workspace_menus.sys.platform', 'darwin'):
             sync_native_menus(host, two)
             self.assertEqual(host.menuBar().actions(), two.menuBar().actions())
             sync_native_menus(host, one)

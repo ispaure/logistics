@@ -8,8 +8,8 @@ from commonUtils.configuration.settings import settings_path
 from features import registry
 from .features import FeaturesPage
 from ui_new.settings.indexing import IndexSettingsPanel
-from commonUtils.ui.settings_sections import ScopedSettings, SettingsSection
-from commonUtils.ui.layered_settings import LayeredSettingsEditor
+from commonUtils.ui.settings.settings_sections import ScopedSettings, SettingsSection
+from commonUtils.ui.settings.layered_settings import LayeredSettingsEditor
 from ui_new.settings.configuration import settings_store, initialize_settings, validate_configuration
 
 
@@ -99,7 +99,7 @@ class CommonUtilsPanel(ConfigurationPanel):
         self.layout().insertLayout(0, appearance)
 
     def _appearance_changed(self, index):
-        from commonUtils.ui.theme import apply_theme
+        from commonUtils.ui.appearance.theme import apply_theme
         apply_theme(mode=self.theme_mode.itemData(index))
 
 
@@ -287,7 +287,7 @@ class SettingsPage(qt.QWidget):
         splitter = qt.QSplitter()
         layout.addWidget(splitter)
         self.sidebar = qt.QTreeWidget()
-        from commonUtils.ui.styling import bind_font
+        from commonUtils.ui.appearance.styling import bind_font
         bind_font(self.sidebar, 'ui')
         self.sidebar.setHeaderHidden(True)
         self.sidebar.setAccessibleName('Settings categories')

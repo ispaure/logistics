@@ -26,8 +26,8 @@ class RcloneProgressTests(QtTestCase):
     def test_streamed_retry_success_is_confirmed_by_the_actual_exit(self):
         import sys
         import time
-        from commonUtils.ui.process_progress import ProcessProgressWindow
-        from commonUtils.ui.process_runner import ProcessRunner
+        from commonUtils.ui.tasks.process_progress import ProcessProgressWindow
+        from commonUtils.ui.tasks.process_runner import ProcessRunner
         app = qt.QApplication.instance() or qt.QApplication([])
         for code, expected in ((0, 'succeeded'), (9, 'failed')):
             window = ProcessProgressWindow('Simulated rclone', runner=ProcessRunner(parser=RcloneProgressParser()))
@@ -60,7 +60,7 @@ class RcloneProgressTests(QtTestCase):
         with TemporaryDirectory() as temp:
             destination = Path(temp) / 'destination'
             with patch('features.rclone.sync.executable.ensure_rclone', return_value=Path('/rclone')), \
-                    patch('commonUtils.ui.process_progress.open_process') as opened, \
+                    patch('commonUtils.ui.tasks.process_progress.open_process') as opened, \
                     patch('features.rclone.sync.cmdShellWrapper.exec_cmd') as console:
                 self.assertTrue(rclone_sync('Remote:', destination, config_path='/selected.conf'))
                 console.assert_not_called()
@@ -71,7 +71,7 @@ class RcloneProgressTests(QtTestCase):
     def test_real_local_rclone_sync_and_failure_when_executable_available(self):
         import time
         from features.rclone.executable import get_rclone_path
-        from commonUtils.ui.process_progress import _windows
+        from commonUtils.ui.tasks.process_progress import _windows
         executable = get_rclone_path()
         if not executable.is_file():
             self.skipTest('Pinned rclone executable not installed')

@@ -54,7 +54,7 @@ def code_font(path=None):
     app = qt.QApplication.instance()
     preferences = Preferences(path)
     if not preferences.custom:
-        from commonUtils.ui.styling import styling
+        from commonUtils.ui.appearance.styling import styling
         return styling(app).code_font
     key = str(preferences.path.resolve())
     if not hasattr(app, '_logistics_code_fonts'):

@@ -1,6 +1,6 @@
 """Scrollable destinations and a grouped document-launcher overlay."""
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.icons import set_painted_icon
+from commonUtils.ui.appearance.icons import set_painted_icon
 
 
 class DestinationIcon(qt.QIconEngine):
