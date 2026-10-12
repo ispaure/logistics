@@ -361,3 +361,29 @@ Enter navigation, stale edits, and bounded/unsaved source previews. A rendered
 dark-palette popup was inspected for column layout, selection and truncation.
 Ruff and whitespace checks pass. Native Windows/Linux popup behavior remains
 unverified.
+
+## Editor markers and IDE autosave
+
+Logistics `features.editor_changes.ChangeMarkers` owns immutable background diff
+requests, revision/snapshot validation and two-second baseline refresh for IDE and
+Text Editor. It lazily uses Git's read-only `editor_baseline` provider, independent
+of page activation and repository registrations, and falls back to the document's
+saved snapshot when unavailable. Jobs retain Python values only; Qt owners may
+close while reads finish. One pending job per controller and two worker threads
+bound concurrency. Shared gutter APIs are documented in commonUtils.
+
+IDE owns one AutoSave per DocumentBuffer, including Markdown buffers. Project
+metadata stores off/after_delay/focus_change (default after_delay, 1000 ms). Snapshot
+encoding and conflict-checked publication run on the workspace's retained worker
+queue. A revision check prevents completion from clearing newer edits. Active
+writes veto final-buffer close, manual save and reload; workspace shutdown already
+waits for its worker queue. Modal save/close choices suppress autosave. Failures
+pause that buffer until an explicit save/reload succeeds and remain in a dedicated
+notice. Split views do not duplicate writes. Manual save/reload IO remains
+synchronous; autosave provides no crash checkpoint or cross-process writer lock.
+
+Validation on macOS/offscreen Qt: all 40 existing IDE tests and 34 standalone
+Text Editor tests passed, along with seven new baseline/autosave cases. The
+commonUtils suite passed all 108 isolated modules, including marker rendering.
+Visual inspection confirmed separate marker, folding and line-number lanes.
+Native Windows/Linux interaction and other commonUtils consumers remain untested.

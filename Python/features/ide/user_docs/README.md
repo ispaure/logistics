@@ -173,3 +173,24 @@ Git status UI or direct Git handoff. Git remains independently available in its 
 feature. Navigation history is per open project session. File reads use workers;
 bounded saves/reloads and small tree mutations currently run on the GUI thread.
 Windows and Linux still require native desktop validation.
+
+## Change markers and automatic saving
+
+The code editor gutter shows green added lines, blue replacements and red
+markers where lines were deleted. Hover over the gutter to see the comparison
+baseline. With Git available, it compares the live buffer to the file's Git index,
+including unsaved edits. No Git page or repository registration is needed. Staging
+or changing branches refreshes markers within a few seconds. Without a usable Git
+baseline, markers compare against the last saved file. Large documents/baselines
+(over 250,000 characters) omit markers to keep editing responsive.
+
+**File → Auto Save** offers **After 1 second** (the default), **On focus change**,
+and **Off**, persisted per project. The delay restarts with each edit. Split views
+save once per shared buffer; undo remains available. Autosave preserves encoding
+and line endings and runs disk writes in the background. An edit made during a
+save stays unsaved until a later save completes. Markdown edits also autosave.
+External changes, deletion, permissions or encoding errors pause autosave for that
+file and leave a visible notice. Use Save, Reload or Save As to resolve it; your
+buffer remains intact. Closing, reloading or explicitly saving during an active
+autosave asks you to retry after it finishes. Untouched files are not written.
+Autosave is not crash recovery; unsaved edits can still be lost on a crash.

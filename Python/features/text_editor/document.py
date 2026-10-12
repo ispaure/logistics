@@ -28,6 +28,9 @@ class Document(qt.QWidget):
         self.editor.document().modificationChanged.connect(self.changed)
         self.editor.cursorPositionChanged.connect(self.changed)
         self.editor.focused.connect(self.changed)
+        from features.editor_changes import ChangeMarkers
+        self.markers = ChangeMarkers(self, self.editor.document(), lambda: self.snapshot,
+            lambda: [v for v in (self.views.primary, self.views.secondary) if v is not None])
 
     @property
     def editor(self):

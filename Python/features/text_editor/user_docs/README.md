@@ -170,3 +170,14 @@ supported; multiline Blade template expressions have limited highlighting.
 The editing surface uses the full document area with compact outer spacing.
 File/edit/search commands remain in the application menus, and disk-change
 controls appear only when needed. Documents owns the outer tab and detached +.
+
+## Change markers
+
+The gutter to the left of line numbers shows additions in green, replacements in
+blue and deleted-line boundaries in red. Hover over the gutter for its baseline.
+When Git is available, markers compare the live buffer (including unsaved edits)
+with the file's index. Repository registration and an enabled Git page are not
+required. Index/branch changes refresh within a few seconds. Otherwise the baseline
+is the last saved file; markers then disappear after saving. Documents/baselines
+over 250,000 characters omit markers. Existing explicit save and private recovery
+checkpoint behavior is unchanged; this editor does not automatically write files.

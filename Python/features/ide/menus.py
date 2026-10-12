@@ -26,6 +26,15 @@ def build_menus(view):
         ('Close All in Group', view.close_all, None),
     ):
         add(view, 'File', title, callback, shortcut)
+    autosave = view.menus['File'].addMenu('Auto Save')
+    group = qt.QActionGroup(view)
+    group.setExclusive(True)
+    for label, mode in [('Off', 'off'), ('After 1 second', 'after_delay'), ('On focus change', 'focus_change')]:
+        action = autosave.addAction(label)
+        action.setCheckable(True)
+        action.setChecked(view.project.autosave == mode)
+        group.addAction(action)
+        action.triggered.connect(lambda checked=False, mode=mode: view.set_autosave(mode))
     for title, method, shortcut in (
         ('Undo', 'undo', key.Undo), ('Redo', 'redo', key.Redo),
         ('Cut', 'cut', key.Cut), ('Copy', 'copy', key.Copy), ('Paste', 'paste', key.Paste),
