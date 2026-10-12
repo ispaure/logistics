@@ -590,7 +590,12 @@ class LMUITests(QtTestCase):
         timestamp = self.page.transcript.bubbles[entry['id']].timestamp
         self.assertTrue(timestamp.text())
         self.assertTrue(timestamp.toolTip())
+        self.page.composer.setPlainText('A draft to branch')
+        requests = len(self.server.requests)
         self.page.fork_conversation()
+        self.assertEqual(len(self.server.requests), requests)
+        self.assertEqual(self.page.data['draft'], 'A draft to branch')
+        self.assertEqual(self.store.load(original)['draft'], 'A draft to branch')
         self.assertNotEqual(self.page.data['id'], original)
         self.assertFalse(self.page.data['pinned'])
         self.assertEqual(self.page.data['messages'][0]['content'], 'Keep this history')
@@ -607,7 +612,16 @@ class LMUITests(QtTestCase):
         key = self.page.data['id']
         self.store.create_folder('Work/Nested')
         self.store.create_folder('Archive')
-        self.page.move_tree_item((key, ''), 'Work/Nested')
+        from types import SimpleNamespace
+        self.page.refresh()
+        self.page.resize(900, 650)
+        self.page.show()
+        self.app.processEvents()
+        tree = self.page.list
+        target = self.page.folder_items['Work/Nested']
+        point = tree.visualItemRect(target).center()
+        event = SimpleNamespace(source=lambda: tree, position=lambda: qt.QPointF(point), ignore=lambda: None)
+        tree.dropEvent(event)
         self.assertEqual(self.store.load(key)['folder'], 'Work/Nested')
         self.page.move_tree_item((None, 'Work'), 'Archive')
         self.assertEqual(self.page.data['folder'], 'Archive/Work/Nested')
