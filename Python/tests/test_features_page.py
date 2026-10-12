@@ -95,8 +95,9 @@ class FeaturesPageTests(QtTestCase):
         self.app.processEvents()
         self.assertIn('Override', self.page.scope_label.text())
         self.assertEqual(self.page.indicators['test_child'].text(), 'Override')
-        # Even an unchanged feature is in the saved whole-selection override.
-        self.assertEqual(self.page.indicators['test_base'].text(), 'Override')
+        # Untouched features remain inherited and are absent from the file.
+        self.assertEqual(self.page.indicators['test_base'].text(), 'Inherited')
+        self.assertNotIn('test_base', registry.feature_overrides())
         self.assertIn('matches', self.page.indicators['test_base'].toolTip())
         self.assertTrue(self.page.reset_buttons['test_child'].isEnabled())
         self.page.reset_all.click()
@@ -115,6 +116,8 @@ class FeaturesPageTests(QtTestCase):
         self.page.set_scope('personal')
         self.assertIs(self.item('test_child'), toggle)
         self.assertTrue(toggle.isChecked())
+        registry.set_feature_enabled('test_child', True)
+        self.app.processEvents()
         self.page.reset_buttons['test_child'].click()
         self.app.processEvents()
         self.assertFalse(toggle.isChecked())
@@ -157,3 +160,14 @@ class FeaturesPageTests(QtTestCase):
             with self.subTest(feature=name):
                 self.assertEqual(registry._get_feature_label(module), label)
                 self.assertTrue(module.FEATURE_DESCRIPTION)
+
+    def test_matching_toggle_stays_explicit_until_arrow_removes_it(self):
+        toggle = self.item('test_child')
+        toggle.setChecked(False); self.app.processEvents()
+        toggle.setChecked(True); self.app.processEvents()
+        self.assertEqual(registry.feature_overrides(), {'test_child': True})
+        self.assertEqual(self.page.indicators['test_child'].text(), 'Override')
+        self.assertTrue(self.page.reset_buttons['test_child'].isEnabled())
+        self.page.reset_buttons['test_child'].click(); self.app.processEvents()
+        self.assertEqual(registry.feature_overrides(), {})
+        self.assertEqual(self.page.indicators['test_child'].text(), 'Inherited')

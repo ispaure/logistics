@@ -89,7 +89,7 @@ class FeaturePreferencesTests(unittest.TestCase):
             registry.load_feature_preferences()
             self.assertFalse(registry.is_feature_enabled('pref_child'))
             registry.set_feature_enabled('pref_child', True)
-            self.assertEqual(store.overrides()['FeatureDefaults', 'disabled_list-str'], '[]')
+            self.assertEqual(store.overrides()['FeatureOverrides', 'pref_child_bool'], 'true')
             self.assertEqual(registry.default_disabled_features(), {'pref_child'})
             registry.reset_feature_defaults()
             self.assertFalse(registry.is_feature_enabled('pref_child'))
@@ -110,3 +110,122 @@ class FeaturePreferencesTests(unittest.TestCase):
             registry.load_feature_preferences()
             self.assertTrue(registry.is_feature_enabled('pref_child'))
         self.assertEqual(self.path.read_bytes(), original)
+
+    def layered_store(self):
+        from commonUtils.configuration.layered import register_settings
+        defaults = self.path.with_name('defaults.ini')
+        defaults.write_text('[FeatureDefaults]\ndisabled_list-str = []\n')
+        store = register_settings(defaults, self.path.with_name('personal.ini'))
+        replacement = patch.object(registry, 'feature_settings_store', return_value=store)
+        replacement.start(); self.addCleanup(replacement.stop)
+        replacement = patch('features.preferences.preferences_path', return_value=self.path)
+        replacement.start(); self.addCleanup(replacement.stop)
+        registry.load_feature_preferences()
+        return store
+
+    def test_matching_values_remain_explicit_and_untouched_defaults_flow_through(self):
+        store = self.layered_store()
+        registry.set_feature_enabled('pref_child', False)
+        registry.set_feature_enabled('pref_child', True)
+        self.assertEqual(registry.feature_overrides(), {'pref_child': True})
+        self.assertEqual(store.overrides(), {('FeatureOverrides', 'pref_child_bool'): 'true'})
+        registry.set_feature_default('pref_child', False)
+        registry.load_feature_preferences()
+        self.assertTrue(registry.is_feature_enabled('pref_child'))
+        registry.reset_feature_override('pref_child')
+        self.assertFalse(registry.is_feature_enabled('pref_child'))
+        self.assertEqual(registry.feature_overrides(), {})
+        registry.set_feature_default('pref_child', True)
+        registry.load_feature_preferences()
+        self.assertTrue(registry.is_feature_enabled('pref_child'))
+
+    def test_matching_disabled_override_blocks_future_default_enable(self):
+        store = self.layered_store()
+        registry.set_feature_default('pref_child', False)
+        registry.load_feature_preferences()
+        registry.set_feature_enabled('pref_child', True)
+        registry.set_feature_enabled('pref_child', False)
+        self.assertEqual(registry.feature_overrides(), {'pref_child': False})
+        registry.set_feature_default('pref_child', True)
+        registry.load_feature_preferences()
+        self.assertFalse(registry.is_feature_enabled('pref_child'))
+        registry.reset_feature_override('pref_child')
+        self.assertTrue(registry.is_feature_enabled('pref_child'))
+        self.assertNotIn(('FeatureOverrides', 'pref_child_bool'), store.overrides())
+
+    def test_dependencies_get_only_necessary_overrides_and_reset_is_checked(self):
+        store = self.layered_store()
+        registry.set_feature_default('pref_child', False)
+        registry.set_feature_default('pref_base', False)
+        registry.load_feature_preferences()
+        registry.set_feature_enabled('pref_child', True)
+        self.assertEqual(registry.feature_overrides(), {'pref_base': True, 'pref_child': True})
+        before = store.personal.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'dependent'):
+            registry.reset_feature_override('pref_base')
+        self.assertEqual(store.personal.read_bytes(), before)
+        self.assertTrue(registry.is_feature_enabled('pref_base'))
+        registry.reset_feature_override('pref_child')
+        self.assertEqual(registry.feature_overrides(), {'pref_base': True})
+        registry.reset_feature_override('pref_base')
+        self.assertEqual(registry.feature_overrides(), {})
+
+    def test_legacy_snapshot_migrates_differences_and_preserves_unknown_choices(self):
+        store = self.layered_store()
+        store.save({('FeatureDefaults', 'disabled_list-str'): '["pref_child", "not_installed"]',
+                    ('Other', 'choice'): 'kept'})
+        # Simulate a pre-v2 installation's migration ledger.
+        from features.settings import migration_ledger
+        ledger = migration_ledger(store)
+        ledger.path.write_text('[Migrations]\nfeature-enable-v1=done\n')
+        registry.load_feature_preferences()
+        self.assertEqual(registry.feature_overrides(), {'pref_child': False, 'not_installed': False})
+        self.assertNotIn(('FeatureDefaults', 'disabled_list-str'), store.overrides())
+        self.assertNotIn(('FeatureOverrides', 'pref_base_bool'), store.overrides())
+        self.assertEqual(store.overrides()['Other', 'choice'], 'kept')
+        registry.reset_feature_defaults()
+        registry.load_feature_preferences()
+        self.assertEqual(registry.feature_overrides(), {})
+        self.assertEqual(store.overrides(), {('Other', 'choice'): 'kept'})
+
+    def test_failed_sparse_save_and_arrow_reset_roll_back_runtime(self):
+        store = self.layered_store()
+        registry.set_feature_enabled('pref_child', False)
+        original = store.personal.read_bytes()
+        with patch.object(store, 'save', side_effect=OSError('Read only')):
+            with self.assertRaises(OSError):
+                registry.reset_feature_override('pref_child')
+            self.assertFalse(registry.is_feature_enabled('pref_child'))
+            with self.assertRaises(OSError):
+                registry.set_feature_enabled('pref_child', True)
+            self.assertFalse(registry.is_feature_enabled('pref_child'))
+        self.assertEqual(store.personal.read_bytes(), original)
+
+    def test_group_arrow_restores_each_engine_default_and_initializes_enabled_members(self):
+        store = self.layered_store()
+        self.child.FEATURE_GROUP = 'pref_base'
+        store.save({('FeatureDefaults', 'disabled_list-str'): '["pref_child"]'}, scope='application')
+        registry.load_feature_preferences()
+        registry.set_feature_enabled('pref_base', False)
+        self.assertEqual(registry.feature_overrides(), {'pref_base': False, 'pref_child': False})
+        registry.reset_feature_override('pref_base')
+        self.assertEqual(registry.feature_overrides(), {})
+        self.assertTrue(registry.is_feature_enabled('pref_base'))
+        self.assertFalse(registry.is_feature_enabled('pref_child'))
+        self.base.initialize.assert_called_once()
+
+    def test_failed_snapshot_migration_preserves_selection_and_retries(self):
+        store = self.layered_store()
+        store.save({('FeatureDefaults', 'disabled_list-str'): '["pref_child"]'})
+        from features.settings import migration_ledger
+        ledger = migration_ledger(store)
+        ledger.path.write_text('[Migrations]\nfeature-enable-v1=done\n')
+        original = store.personal.read_bytes()
+        with patch.object(store, 'save', side_effect=OSError('Read only')):
+            registry.load_feature_preferences()
+        self.assertFalse(registry.is_feature_enabled('pref_child'))
+        self.assertEqual(store.personal.read_bytes(), original)
+        self.assertEqual(ledger.state('feature-overrides-v2'), 'pending')
+        registry.load_feature_preferences()
+        self.assertEqual(registry.feature_overrides(), {'pref_child': False})
+        self.assertEqual(ledger.state('feature-overrides-v2'), 'done')

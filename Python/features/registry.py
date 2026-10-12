@@ -102,29 +102,89 @@ def load_feature_preferences(path=None):
                                        already_applied=('Migration', 'features_bool') in overrides)
         except (OSError, UnicodeError, Error, ValueError) as error:
             log(Severity.ERROR, 'Feature settings', f'Could not migrate preferences; original files preserved: {error}')
-        raw = store.safe_values().get(('FeatureDefaults', 'disabled_list-str'))
         try:
-            values = json.loads(raw) if raw is not None else None
-            disabled = set(values) if isinstance(values, list) and all(isinstance(name, str) for name in values) else default_disabled_features()
-        except ValueError:
-            disabled = default_disabled_features()
+            _migrate_feature_overrides(store)
+            disabled = _effective_disabled_features(store)
+        except (OSError, UnicodeError, Error, ValueError) as error:
+            log(Severity.ERROR, 'Feature settings', f'Could not migrate per-feature choices; original files preserved: {error}')
+            disabled = _effective_disabled_features(store)
     _disabled_features.clear()
     _disabled_features.update(disabled)
     _preferences_path = path
 
 
-def _save_feature_preferences():
+def feature_overrides():
+    """Return explicit per-engine personal choices, including matching defaults."""
+    result = {}
+    for (section, key), value in feature_settings_store().overrides().items():
+        if section == 'FeatureOverrides' and key.endswith('_bool'):
+            if value.lower() in ('true', 'false'):
+                result[key.removesuffix('_bool')] = value.lower() == 'true'
+    return result
+
+
+def _effective_disabled_features(store):
+    disabled = default_disabled_features()
+    # Preserve the old selection if migration cannot publish; retry next launch.
+    try:
+        legacy = store.overrides().get(('FeatureDefaults', 'disabled_list-str'))
+    except (OSError, UnicodeError, Error):
+        return disabled
+    if legacy is not None:
+        try:
+            values = json.loads(legacy)
+            if isinstance(values, list) and all(isinstance(name, str) for name in values):
+                disabled = set(values)
+        except ValueError:
+            pass
+    for name, enabled in feature_overrides().items():
+        if enabled:
+            disabled.discard(name)
+        else:
+            disabled.add(name)
+    return disabled
+
+
+def _migrate_feature_overrides(store):
+    from .settings import migration_ledger
+    def migrate():
+        overrides = store.overrides()
+        identity = 'FeatureDefaults', 'disabled_list-str'
+        if identity not in overrides:
+            return
+        values = json.loads(overrides[identity])
+        if not isinstance(values, list) or not all(isinstance(name, str) for name in values):
+            raise ValueError('Invalid legacy feature selection; personal file preserved')
+        disabled = set(values)
+        # Legacy snapshots cannot tell deliberate matching values from untouched
+        # features. Preserve differences and let matching choices inherit again.
+        changes = {identity: None}
+        for name in disabled ^ default_disabled_features():
+            key = 'FeatureOverrides', name + '_bool'
+            if key not in overrides:
+                changes[key] = 'false' if name in disabled else 'true'
+        store.save(changes)
+    migration_ledger(store).run('feature-overrides-v2', migrate)
+
+
+def _save_feature_preferences(changes=None):
     if _layered_preferences:
-        value = None if _disabled_features == default_disabled_features() else json.dumps(sorted(_disabled_features))
-        feature_settings_store().save({('FeatureDefaults', 'disabled_list-str'): value})
+        store = feature_settings_store()
+        fields = ({('FeatureOverrides', name + '_bool'): None if enabled is None else str(enabled).lower()
+                   for name, enabled in changes.items()} if changes is not None else
+                  {key: None for key in store.overrides() if key[0] == 'FeatureOverrides'})
+        if changes is None:
+            fields['FeatureDefaults', 'disabled_list-str'] = None
+        store.save(fields)
         return
     if _preferences_path is not None:
         from .preferences import save_disabled
         save_disabled(_preferences_path, _disabled_features)
 
 
+
 def reset_feature_defaults():
-    """Enable all available features and save the default choice atomically."""
+    """Remove personal choices and restore software defaults atomically."""
     before = set(_disabled_features)
     feature_map = _get_feature_map()
     from commonUtils.formats.registry import file_types
@@ -479,23 +539,29 @@ def _notify_changed():
 
 
 def set_feature_enabled(name, enabled):
-    """Persist choices; enable dependencies and refuse disabling required features."""
+    """Persist an explicit choice, even when it matches the software default."""
+    _set_feature_enabled(name, enabled)
+
+
+def _set_feature_enabled(name, enabled, *, _inherit=False):
+    """Enable dependencies and refuse disabling required features."""
     feature_map = _get_feature_map()
     if name not in feature_map:
         raise ValueError(f'Unknown feature: {name}')
     leaders, groups = _feature_groups(feature_map)
     members = groups[leaders[name]]
-    if all(is_feature_enabled(member) == enabled for member in members):
+    if not _layered_preferences and all(is_feature_enabled(member) == enabled for member in members):
         return
     from commonUtils.formats.registry import file_types
     before = set(_disabled_features)
+    changes = {member: None if _inherit else enabled for member in members}
     def activate(current, value):
         definition = get_feature_definition(feature_map[current])
         if definition is not None:
             definition.set_enabled(value)
         else:
             file_types.set_owner_enabled(current, value)
-    if enabled:
+    if enabled and not (_inherit and not all(_is_feature_available(member, feature_map) for member in members)):
         if not all(_is_feature_available(member, feature_map) for member in members):
             raise ValueError(f'{name} has missing required dependencies')
         required = set()
@@ -509,6 +575,7 @@ def set_feature_enabled(name, enabled):
             visit(member)
         plan = _get_initialization_order([feature_map[item] for item in feature_map if item in required])
         _disabled_features.difference_update(required)
+        changes.update({item: True for item in required & before if item not in members})
         for item in required:
             activate(item, True)
         try:
@@ -526,10 +593,15 @@ def set_feature_enabled(name, enabled):
         if dependents:
             raise ValueError(f'Disable these dependent features first: {", ".join(dependents)}')
         for member in members:
-            _disabled_features.add(member)
-            activate(member, False)
+            if _inherit and member not in default_disabled_features():
+                _disabled_features.discard(member)
+            else:
+                _disabled_features.add(member)
+            activate(member, member not in _disabled_features and _is_feature_available(member, feature_map))
     try:
-        _save_feature_preferences()
+        if _inherit:
+            initialize_features()
+        _save_feature_preferences(changes)
     except Exception:
         _disabled_features.clear()
         _disabled_features.update(before)
@@ -537,6 +609,17 @@ def set_feature_enabled(name, enabled):
             activate(current, current not in before and _is_feature_available(current, feature_map))
         raise
     _notify_changed()
+
+
+def reset_feature_override(name):
+    """Remove this visible feature's explicit choices; keep other overrides."""
+    feature_map = _get_feature_map()
+    if name not in feature_map:
+        raise ValueError(f'Unknown feature: {name}')
+    leaders, groups = _feature_groups(feature_map)
+    members = groups[leaders[name]]
+    defaults = default_disabled_features()
+    _set_feature_enabled(name, all(member not in defaults for member in members), _inherit=True)
 
 
 def _get_startup_hooks(features: list[ModuleType], name: str) -> list[Callable[[], None]]:

@@ -190,9 +190,19 @@ point. The registry includes the visible group leader's description in
 labels come from declarations; stable feature IDs, package paths and saved choices
 remain unchanged when labels are clarified.
 
-The feature selection uses the existing layered `FeatureDefaults.disabled_list-str`
-setting. Its personal override replaces the entire disabled list, so card source
-indicators report the source of that selection, even for choices matching defaults.
-Per-card reset matches a feature to its software default; the page-wide personal
-reset removes the selection override. Cards and category tree items are retained
+Software feature selection uses `FeatureDefaults.disabled_list-str`. Personal
+choices are sparse `FeatureOverrides.<stable_id>_bool` fields. Presence means an
+explicit override even when its value matches the default; setting a toggle never
+writes untouched choices. Dependencies get enabled overrides only if activation
+had to change them. Per-card reset removes its group's engine keys, applies their
+individual software defaults and enforces dependency policy. Page-wide personal
+reset removes all feature overrides. Cards and category tree items are retained
 across enable/disable notifications to preserve focus and scroll position.
+
+`feature-overrides-v2` migrates legacy personal disabled-list snapshots atomically:
+only differences from current defaults become sparse keys, existing new-format
+keys take precedence, and the old list is removed. Matching snapshot choices were
+not distinguishable from untouched values, so they inherit after migration.
+Unknown differing feature IDs are preserved. Failed publication keeps the old
+selection effective and leaves the migration pending for retry. Completion stays
+outside resettable configuration alongside the existing migration ledger.

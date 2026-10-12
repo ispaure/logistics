@@ -10,7 +10,7 @@ from commonUtils.configuration.layered import LayeredSettings, register_settings
 from commonUtils.configuration.settings import settings_path
 from features.preferences import preferences_path
 
-LEGACY_SETTINGS_MIGRATIONS = ('feature-enable-v1', 'text-editor-v1', 'git-options-v1')
+LEGACY_SETTINGS_MIGRATIONS = ('feature-enable-v1', 'feature-overrides-v2', 'text-editor-v1', 'git-options-v1')
 
 
 def migration_ledger(store=None):
