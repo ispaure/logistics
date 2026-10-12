@@ -93,12 +93,13 @@ def load_feature_preferences(path=None):
     if _layered_preferences:
         store = feature_settings_store()
         try:
+            from .settings import migration_ledger
             overrides = store.overrides()
-            if ('Migration', 'features_bool') not in overrides:
-                changes = {('Migration', 'features_bool'): 'true'}
+            def migrate():
                 if path.exists():
-                    changes['FeatureDefaults', 'disabled_list-str'] = json.dumps(sorted(disabled))
-                store.save(changes)
+                    store.save({('FeatureDefaults', 'disabled_list-str'): json.dumps(sorted(disabled))})
+            migration_ledger(store).run('feature-enable-v1', migrate,
+                                       already_applied=('Migration', 'features_bool') in overrides)
         except (OSError, UnicodeError, Error, ValueError) as error:
             log(Severity.ERROR, 'Feature settings', f'Could not migrate preferences; original files preserved: {error}')
         raw = store.safe_values().get(('FeatureDefaults', 'disabled_list-str'))
