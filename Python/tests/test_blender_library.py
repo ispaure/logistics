@@ -336,7 +336,7 @@ class BlenderLibraryTests(unittest.TestCase):
         self.library.for_preset(self.preset).add(self.package('tool.zip'))
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
                 patch('features.blender.addons.run_blender_script'), \
-                patch.object(bluehole, 'branch_commit', side_effect=ConnectionError('offline')):
+                patch.object(bluehole, 'resolve_branch', side_effect=ConnectionError('offline')):
             self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={**config, 'branch': 'beta', 'deluxe': True})
         state = self.library.selection(self.preset)
         self.assertEqual(state['bluehole']['branch'], 'beta')
@@ -348,7 +348,7 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertIn('Using installed Blue Hole main', self.library.warnings[0])
         (self.preset / 'scripts/addons/BlueHole/__init__.py').unlink()
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
-                patch.object(bluehole, 'branch_commit', side_effect=ConnectionError('offline')):
+                patch.object(bluehole, 'resolve_branch', side_effect=ConnectionError('offline')):
             with self.assertRaisesRegex(ValueError, 'entrypoint is missing'):
                 self.library.apply(self.release, 'Art', [], bluehole=config)
         self.assertEqual(self.library.selection(self.preset), state)
@@ -356,7 +356,7 @@ class BlenderLibraryTests(unittest.TestCase):
     def test_offline_bluehole_first_install_still_reports_failure(self):
         from features.blender import bluehole
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
-                patch.object(bluehole, 'branch_commit', side_effect=ConnectionError('offline')):
+                patch.object(bluehole, 'resolve_branch', side_effect=ConnectionError('offline')):
             with self.assertRaisesRegex(ValueError, 'No recorded installed Blue Hole'):
                 self.library.apply(self.release, 'Art', [], bluehole={'enabled': True, 'branch': 'main'})
         self.assertFalse((self.preset / '.logistics-addons.json').exists())

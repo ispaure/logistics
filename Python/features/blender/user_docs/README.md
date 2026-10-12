@@ -171,13 +171,15 @@ Blue Hole is a dedicated optional configuration above the normal addon list in
 on by default. Choose **main**, **beta** or **alpha**, and **Deluxe: No / Yes**.
 Deluxe defaults to No. Save the selection before launching.
 
-Each launch with Blue Hole enabled checks the selected GitHub branch head. The
+Each launch with Blue Hole enabled resolves the channel’s compatible versioned
+branch and checks its GitHub head. The
 manager downloads that exact commit only when it is not already cached, using the
 public `ispaure/BlueHole` repository. Branch snapshots have their own commit cache,
 so two commits declaring the same addon version still remain distinct. Declared
 Blender compatibility is checked before applying the snapshot. No GitHub access
-or download happens merely by viewing the page or creating a preset. A failed
-update stops launch and preserves the existing preset files/preferences.
+or download happens merely by viewing the page or creating a preset. An invalid or incompatible
+update stops launch and preserves the existing preset files/preferences. Network
+failures can use the installed-copy fallback described below.
 
 Deluxe copies `overlays/deluxe/payload/userpref.blend` into the preset's config
 and `payload/keyconfig/BH_Keymaps.py` into its scripts/presets/keyconfig folder,
@@ -276,3 +278,9 @@ installed, compatible Blue Hole copy and shows its actual branch and commit in a
 warning. Your selected branch remains requested for the next launch. Deluxe
 changes wait until an online update succeeds. First-time installation still needs
 internet access.
+
+Blue Hole's Main/Beta/Alpha selection automatically chooses the newest supported
+Blender baseline for that channel. For example, Blender 5.2 uses
+`blender-5.1.0/main` if available, otherwise `blender-4.5.1/main`. The installed row
+shows the full resolved branch and commit. Older Blender versions do not receive
+branches intended for newer Blender baselines.

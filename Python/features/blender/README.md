@@ -164,7 +164,7 @@ and name to the retained settings panel. Selection saves persist intent without
 provisioning; launch preparation applies it through the existing worker/rollback path.
 
 `bluehole.py` is deliberately specific to ispaure/BlueHole: allowlisted main/beta/alpha
-branches resolve through GitHub's branch API, and commit-pinned codeload ZIPs are
+channels resolve to versioned branches through GitHub's branch API, and commit-pinned codeload ZIPs are
 normalized to the stable BlueHole module. The private cache is
 `addons/bluehole/<branch>/<commit>/addon.zip`; regular numeric library resolution
 never substitutes for the selected branch. Every launch rechecks the branch head,
@@ -248,3 +248,14 @@ preserves the actual installed branch/commit independently of requested settings
 skips offline Deluxe stamping, and surfaces a launch warning. Missing, unknown or
 incompatible installed copies cannot fall back. Cancellation and invalid downloaded
 packages are not treated as network failures.
+
+Blue Hole channels resolve to `blender-<major.minor.patch>/<main|beta|alpha>`.
+The resolver paginates GitHub branches, filters the requested channel and chooses
+the highest baseline at or below the exact Blender version. It then requests the
+URL-encoded branch endpoint and downloads by immutable commit. No compatible
+baseline fails explicitly. Temporary legacy channel names remain readable during
+migration; the original 4.5.1 channel cache is reused when commits match. Addon.branch
+and installed_bluehole record the actual qualified branch, while preset intent
+remains a channel. Offline fallback accepts both legacy and versioned records and
+rejects a baseline newer than the preset's Blender version. GitHub's default branch
+is independent of Logistics resolution.

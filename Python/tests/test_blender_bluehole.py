@@ -16,6 +16,8 @@ class BlueHoleTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.manager = BlenderManager(Path(self.temp.name))
         self.release = load_releases(platform='windows-x64')[0]
+        self.resolver = patch.object(bluehole, 'resolve_branch', side_effect=lambda channel, version: f'blender-4.5.1/{channel}')
+        self.resolver.start(); self.addCleanup(self.resolver.stop)
 
     def download(self, commit, destination, cancelled):
         with zipfile.ZipFile(destination, 'w') as archive:
@@ -107,6 +109,36 @@ class BlueHoleTests(unittest.TestCase):
                 bluehole.update(self.manager, self.release, 'main')
         with self.assertRaises(OperationCancelled):
             bluehole.update(self.manager, self.release, 'main', cancelled=lambda: True)
+
+    def test_versioned_branch_resolution_uses_latest_baseline_for_selected_channel(self):
+        self.resolver.stop()
+        names = ['blender-4.5.1/main', 'blender-5.1.0/main', 'blender-5.3.0/main', 'blender-4.5.1/beta', 'blender-5.2.0/alpha', 'unrelated']
+        with patch('commonUtils.runtime.updates.github.json_get', return_value=[{'name': name} for name in names]):
+            self.assertEqual(bluehole.resolve_branch('main', '5.2.0'), 'blender-5.1.0/main')
+            self.assertEqual(bluehole.resolve_branch('main', '4.5.1'), 'blender-4.5.1/main')
+            self.assertEqual(bluehole.resolve_branch('beta', '5.2.0'), 'blender-4.5.1/beta')
+            with self.assertRaises(bluehole.NoCompatibleBranch):
+                bluehole.resolve_branch('alpha', '5.1.0')
+            with self.assertRaises(bluehole.NoCompatibleBranch):
+                bluehole.resolve_branch('main', '4.5.0')
+        pages = [[{'name': f'feature-{i}'} for i in range(100)], [{'name': 'blender-4.5.1/main'}]]
+        with patch('commonUtils.runtime.updates.github.json_get', side_effect=pages) as get:
+            self.assertEqual(bluehole.resolve_branch('main', '5.2.0'), 'blender-4.5.1/main')
+            self.assertIn('page=2', get.call_args.args[0])
+
+    def test_qualified_branch_commit_is_url_encoded(self):
+        with patch('commonUtils.runtime.updates.github.json_get', return_value={'commit': {'sha': 'a' * 40}}) as get:
+            self.assertEqual(bluehole.branch_commit('blender-4.5.1/main'), 'a' * 40)
+            self.assertTrue(get.call_args.args[0].endswith('blender-4.5.1%2Fmain'))
+
+    def test_original_channel_cache_is_reused_after_rename(self):
+        with patch.object(bluehole, 'resolve_branch', return_value='main'), patch.object(bluehole, 'branch_commit', return_value='a' * 40), patch.object(bluehole, 'download', side_effect=self.download):
+            old, _ = bluehole.update(self.manager, self.release, 'main')
+        with patch.object(bluehole, 'branch_commit', return_value='a' * 40), patch.object(bluehole, 'download') as download:
+            new, _ = bluehole.update(self.manager, self.release, 'main')
+        download.assert_not_called()
+        self.assertEqual(new.package, old.package)
+        self.assertEqual(new.branch, 'blender-4.5.1/main')
 
     def test_invalid_branch_is_rejected_before_network(self):
         with self.assertRaises(ValueError):

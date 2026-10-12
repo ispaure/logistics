@@ -48,6 +48,7 @@ class Addon:
     source: str = 'Personal'
     published: str = ''
     package_name: str = ''
+    branch: str = ''
 
     def compatible(self, release):
         return (bool(self.minimum) and version_tuple(release.version) >= version_tuple(self.minimum)
@@ -310,6 +311,7 @@ class AddonLibrary:
         if bluehole['enabled']:
             try:
                 addon, commit = bluehole_source.update(manager, release, bluehole['branch'], cancelled=cancelled)
+                installed_branch = addon.branch or bluehole['branch']
             except bluehole_source.UpdateUnavailable as error:
                 check_cancelled(cancelled)
                 addon, installed_branch, commit = bluehole_source.installed_fallback(manager, release, root, state)
