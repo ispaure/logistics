@@ -321,7 +321,7 @@ class BlenderPageTests(QtTestCase):
         with patch.object(self.manager, 'ready', return_value=True), \
                 patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
                 patch('features.blender.addons.run_blender_script'), \
-                patch.object(bluehole, 'branch_commit', side_effect=ConnectionError('offline')), \
+                patch.object(bluehole, 'resolve_branch', side_effect=ConnectionError('offline')), \
                 patch.object(self.manager, 'launch', return_value=42) as launch:
             page._launch()
             self._wait_for_operation(page)
