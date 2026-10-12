@@ -118,3 +118,12 @@ explicit; the reset arrow removes the key. Untouched features resolve against
 current defaults at startup. The retryable `feature-overrides-v2` migration removes
 the old personal selection snapshot while preserving differing choices and
 unrelated settings. Whole-preference reset also marks this migration complete.
+
+Blender release catalogs use `features/blender/config-<exact-version>.ini`, one
+file per version with platform sections. Initialization registers each file with
+its matching sparse personal layer; the feature's custom Settings panel retains
+one shared field editor per version/scope. The retryable
+`blender-release-files-v1` migration copies matching fields from the old personal
+combined catalog without deleting it or overwriting new-format choices. Whole
+personal reset marks that migration complete alongside feature/editor/Git migrations;
+Blender presets and installations remain outside the configuration reset boundary.

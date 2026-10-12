@@ -7,8 +7,9 @@ See the [user guide](user_docs/README.md) for controls and recovery.
 
 ## Owners and contracts
 
-- `releases.py` reads layered feature `config.ini` settings and selects exact
-  version/platform builds. `Release` validates paths and delegates HTTPS/digest
+- `releases.py` discovers layered `config-<major.minor.patch>.ini` files and selects
+  exact version/platform builds. The filename owns the version and platform sections
+  own the build identity. Explicit legacy-file callers remain supported. `Release` validates paths and delegates HTTPS/digest
   validation to the shared `DownloadSpec`. SHA-256 values are pinned from Blender's
   official release checksum files, independently for each package.
 - `install.py` uses commonUtils `provision()` to download and verify the entire
@@ -66,3 +67,27 @@ saved `userpref.blend` placement and legacy addon enabled-state inventory. A mod
 extension fixture also passed saved enabled-state inventory in 5.2.2. The temporary
 packages, installs and presets were deleted afterward. Windows/Linux/Intel Mac
 native runtime checks remain outstanding.
+
+## Release settings presentation and migration
+
+`settings.py` retains a shared LayeredSettingsEditor per version and scope.
+A version dropdown selects the file; a platform list selects the editor's hidden
+section tab. Field controls, override/reset behavior, conflict detection and saves
+remain shared. The validator constructs Release objects for the whole version
+before publication, so invalid URL/hash/format/path metadata cannot be saved.
+Editors remain alive across version/platform and scope changes; host close checks
+all pending editors, and the global personal reset reloads them through the normal
+LayeredSettingsEditor lifecycle.
+
+Separate application/personal contributions expose the custom panel in both host
+scopes without a second raw INI editor. `initialize_release_settings()` registers
+all version files at application settings initialization. The retryable
+`blender-release-files-v1` migration copies matching editable fields from legacy
+personal `blender/config.ini` sections into per-version INIs, retains the source,
+and preserves existing new-format overrides. Migration identity fields are now
+represented by filenames/platform sections rather than editable scalar controls.
+Global personal reset marks the migration complete to prevent old values returning.
+
+`test_blender_settings.py` covers platform routing, pending buffers, sparse matching
+overrides, release validation and retryable migration. All original pinned package
+metadata remains unchanged by the file split.
