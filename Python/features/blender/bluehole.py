@@ -156,7 +156,8 @@ def installed_fallback(manager, release, root, state):
     if not script.is_file() or script.stat().st_size > 1024 ** 2:
         raise ValueError('The installed Blue Hole entrypoint is missing or invalid')
     info = {}
-    for node in ast.parse(script.read_text(encoding='utf-8-sig')).body:
+    from .metadata import parse_addon_source
+    for node in parse_addon_source(script.read_text(encoding='utf-8-sig'), script).body:
         if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'bl_info' for target in node.targets):
             info = ast.literal_eval(node.value)
             break
