@@ -3,6 +3,7 @@ Main window for Logistics.
 """
 
 from commonUtils.ui import pyside
+from commonUtils.configuration.settings import get_setting
 from features import registry
 from ui_new.pages.debug import DebugPage
 from ui_new.pages.folders import FoldersPage
@@ -32,8 +33,12 @@ class _CloseGuard(pyside.QObject):
     def eventFilter(self, watched, event):
         if event.type() == pyside.QEvent.Type.Close:
             if not self.owner.can_close():
+                if not self.owner._closing:
+                    self.owner.pending_update = None
                 event.ignore()
                 return True
+            if self.owner.pending_update is not None:
+                pyside.QTimer.singleShot(0, pyside.QApplication.instance().quit)
         return super().eventFilter(watched, event)
 
 
@@ -58,6 +63,8 @@ class MainWindow(pyside.Window):
     def __init__(self):
         super().__init__('Logistics', main_window=True)
 
+        self.updates = None
+        self.pending_update = None
         self.width = 1250
         self.height = 800
         self.dlg.resize(self.width, self.height)
@@ -66,7 +73,9 @@ class MainWindow(pyside.Window):
         self.tabs = pyside.QTabWidget()
         self.tabs.tabBar().hide()
         self.documents = DocumentsPage(self._show_documents, self.dlg)
+        self.documents.hide()  # Added to the tab host only when first opened.
         self.actions = FolderActionsPage(self._show_actions, self.dlg)
+        self.actions.hide()
         self.sidebar = DestinationRail(self.documents, self.dlg)
         self.sidebar.actions = self.actions
         self.sidebar.selected.connect(self._destination_changed)
@@ -134,6 +143,7 @@ class MainWindow(pyside.Window):
         layout.addWidget(self.sidebar)
         layout.addWidget(self.tabs, 1)
         self.launch_stack.addWidget(self.hub)
+        self.launch_stack.currentChanged.connect(self._update_offer_visibility)
         self.sidebar.hide()
 
         self.settings_button = central_widget.settings_button
@@ -155,6 +165,17 @@ class MainWindow(pyside.Window):
         central_widget.position_settings()
 
         self.dlg.setCentralWidget(central_widget)
+
+    def start_updates(self):
+        from .updater import UpdateController
+        self.updates = UpdateController(self)
+        self.updates.idle.connect(self._retry_close)
+
+    def _update_offer_visibility(self, *args):
+        button = self.launch_surface.update_button
+        button.setVisible(self.updates is not None and self.updates.available is not None
+                          and self.launch_stack.currentWidget() is self.hub)
+        self.launch_surface.position_settings()
 
     def _update_navigation_menu(self):
         showing_hub = self.launch_stack.currentWidget() is self.hub
@@ -218,13 +239,14 @@ class MainWindow(pyside.Window):
         page = targets.get(mode)
         if mode != 'hub' and (page is None or self.tabs.indexOf(page) < 0):
             return
-        self._launch_mode = mode
-        self._standalone_page = page
+        use_sidebar = mode == 'hub' or get_setting('Menus', 'launch_with_sidebar_bool', True)
+        self._launch_mode = 'hub' if use_sidebar else mode
+        self._standalone_page = None if use_sidebar else page
         self.launch_stack.setCurrentWidget(self.hub)
-        self.sidebar.setVisible(mode == 'hub')
-        self.settings_button.setVisible(mode != 'hub')
+        self.sidebar.setVisible(use_sidebar)
+        self.settings_button.setVisible(not use_sidebar)
         self.return_to_tool_action.setText('Return to tool')
-        self.return_to_tool_action.setEnabled(page is not None)
+        self.return_to_tool_action.setEnabled(self._standalone_page is not None)
         if page is None:
             page = targets.get('browser')
         if page is not None:
@@ -268,6 +290,12 @@ class MainWindow(pyside.Window):
 
     def _reveal_hub(self):
         """Hosted documents and jobs may reveal content from the launch screen."""
+        if self.launch_stack.currentWidget() is self.landing:
+            use_sidebar = get_setting('Menus', 'launch_with_sidebar_bool', True)
+            self.sidebar.setVisible(use_sidebar)
+            self.settings_button.setVisible(not use_sidebar)
+            if use_sidebar:
+                self._launch_mode = 'hub'
         self.launch_stack.setCurrentWidget(self.hub)
         self.launch_surface.position_settings()
         self._update_window_title()
@@ -598,4 +626,6 @@ class MainWindow(pyside.Window):
         for page in pages:
             if not getattr(page, 'prepare_close', lambda: True)():
                 ready = False
+        if self.updates is not None:
+            ready = self.updates.prepare_close() and ready
         return ready

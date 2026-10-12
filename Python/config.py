@@ -55,7 +55,7 @@ class LogisticsConfig:
             return path
 
         self.path_logistics_software = resource_path('software_path', 'Software')
-        self.path_logistics_remote_cred = resource_path('credentials_path', 'RemoteCredentials')
+        self.path_logistics_remote_cred = resource_path('credentials_path', 'Credentials/rclone')
 
         # Platform-specific software directories
         self.path_logistics_software_win: Path = self.path_logistics_software / 'Windows'

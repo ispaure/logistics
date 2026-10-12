@@ -65,7 +65,7 @@ class SoftwareTests(QtTestCase):
                 ini.write_text(ini.read_text() + '[Resources]\nsoftware_path=AlternateSoftware\n')
                 cfg = config.LogisticsConfig()
                 self.assertEqual(cfg.path_logistics_software, root / 'AlternateSoftware')
-                self.assertEqual(cfg.path_logistics_remote_cred, root / 'RemoteCredentials')
+                self.assertEqual(cfg.path_logistics_remote_cred, root / 'Credentials/rclone')
 
     def test_declining_rclone_does_not_launch_sync_or_create_destination(self):
         from features.rclone import sync

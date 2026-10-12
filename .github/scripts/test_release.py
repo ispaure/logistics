@@ -27,7 +27,7 @@ class PackageTests(unittest.TestCase):
             packaging.package(root, root / 'release.zip', names, required=set())
             with zipfile.ZipFile(root / 'release.zip') as archive:
                 self.assertEqual(set(archive.namelist()), {
-                    'Logistics/Launch.command', 'Logistics/Python/shared/nested/module.py',
+                    'Logistics/.app-install.json', 'Logistics/Launch.command', 'Logistics/Python/shared/nested/module.py',
                     'Logistics/Python/uv.lock'})
                 self.assertEqual(archive.read('Logistics/Python/shared/nested/module.py'),
                                  b'Python/shared/nested/module.py')
@@ -71,6 +71,12 @@ class PublishTests(unittest.TestCase):
             self.assertEqual(args[:3], ['gh', 'release', 'create'])
             self.assertIn('--verify-tag', args)
             self.assertIn('--generate-notes', args)
+
+    def test_alpha_beta_tags_publish_as_prereleases(self):
+        for tag in ('v1.0.0-alpha.2', 'v1.0.0-beta.1'):
+            with patch('publish_release.subprocess.run', side_effect=[self.response(404), None]) as gh:
+                publishing.publish('owner/repo', tag, self.archive)
+            self.assertIn('--prerelease', gh.call_args.args[0])
 
     def test_existing_release_uploads_without_clobber(self):
         with patch('publish_release.subprocess.run', side_effect=[self.response(), None]) as gh:

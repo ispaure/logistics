@@ -58,3 +58,19 @@ python -m unittest discover -s .github/scripts -p 'test_*.py' -v
 A local dry run reads tracked working-tree files, so it may contain your unstaged
 edits. New untracked application files are omitted. CI uses the clean tagged
 checkout. Generated ZIPs belong outside the checkout and are never committed.
+
+## In-app update channels
+
+Use `v1.0.0` for main, `v1.0.0-beta.1` for beta, or `v1.0.0-alpha.1` for alpha.
+The publisher marks numeric alpha/beta tags as prereleases. The updater selects
+the highest numeric published version in the selected channel with a GitHub
+SHA-256-labelled `release.zip`; drafts and unclassified suffixes are excluded.
+Branch pushes alone do not offer an update. The release workflow gates packaging
+on the platform checks before publication.
+
+Packaging writes `.app-install.json` with the source commit and SHA-256 hashes of
+managed files. Preserve this marker when extracting a new release: archive
+updates require it and refuse locally changed managed files. Old packages without
+this marker require a fresh extraction before in-app updates. Git installations
+use the release commit and its pinned initialized submodules, leaving detached
+HEADs after success. Installed private/ignored files remain protected in both modes.

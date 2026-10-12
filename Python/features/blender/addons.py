@@ -95,3 +95,29 @@ def inspect_addons(manager, release, name, *, cancelled=lambda: False, timeout=9
             return rows, 'Saved enabled state read from Blender. Refresh after saving changes in Blender.'
         except (OSError, ValueError, TimeoutError) as error:
             return fallback, f'{error}. Showing preset files; enabled state is unknown.'
+
+
+def run_blender_script(executable, env, script, request, *, cancelled=lambda: False, timeout=90):
+    """Bounded saved-preference update; logs stay private and child is always reaped."""
+    with TemporaryDirectory(prefix='logistics-blender-apply-') as workspace:
+        with (Path(workspace) / 'apply.log').open('wb') as log:
+            process = subprocess.Popen([str(executable), '--background', '--disable-autoexec', '--offline-mode',
+                                        '--python-exit-code', '1', '--python', str(script), '--', str(request)],
+                                       env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=log)
+            deadline = monotonic() + timeout
+            try:
+                while process.poll() is None:
+                    check_cancelled(cancelled)
+                    if monotonic() >= deadline:
+                        raise TimeoutError('Blender addon update timed out')
+                    try:
+                        process.wait(timeout=.1)
+                    except subprocess.TimeoutExpired:
+                        pass
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                process.wait()
+            if process.returncode:
+                detail = (Path(workspace) / 'apply.log').read_text(encoding='utf-8', errors='replace')[-2000:]
+                raise ValueError(f'Blender could not apply addons. Previous files and preferences were restored.\n{detail}')

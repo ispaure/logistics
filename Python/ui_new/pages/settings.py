@@ -15,10 +15,11 @@ from services.preferences import reset_personal_preferences
 
 
 class ConfigurationPanel(qt.QWidget):
-    def __init__(self, paths, parent=None, *, description=None, scoped=True, scope="application", layered=False):
+    def __init__(self, paths, parent=None, *, description=None, scoped=True, scope="application", layered=False, section_filters=None):
         super().__init__(parent)
         self.editors = {}
         self.layered, self.scope = layered, scope
+        self.section_filters = section_filters or {}
         self._scope_editors = {}
         layout = qt.QVBoxLayout(self)
         body = qt.QWidget(self)
@@ -60,7 +61,8 @@ class ConfigurationPanel(qt.QWidget):
         if self.layered:
             if identity not in self._scope_editors:
                 editor = LayeredSettingsEditor(settings_store(path), self, scope=self.scope,
-                    validator=lambda values, path=path: validate_configuration(path, values))
+                    validator=lambda values, path=path: validate_configuration(path, values),
+                    sections=self.section_filters.get(path))
                 self._scope_editors[identity] = editor
                 self.stack.addWidget(editor)
             self.editors[path] = self._scope_editors[identity]
@@ -81,6 +83,47 @@ class ConfigurationPanel(qt.QWidget):
 
     def can_close(self):
         return all(editor.can_close() for editor in (self._scope_editors.values() if self.layered else self.editors.values()))
+
+
+class ApplicationConfigurationPanel(qt.QWidget):
+    def __init__(self, parent=None, *, scope='personal'):
+        super().__init__(parent)
+        from services.updates import settings_widget
+        source = Path(__file__).resolve().parents[2]
+        from configparser import ConfigParser
+        parser = ConfigParser(interpolation=None)
+        parser.read(source / 'configFile.ini')
+        layout = qt.QVBoxLayout(self)
+        self.tabs = qt.QTabWidget()
+        layout.addWidget(self.tabs)
+        self.general = ConfigurationPanel([source / 'configFile.ini', source / 'maintenance.ini',
+                                            source.parent / 'launch_config.ini'], self, layered=True, scoped=False,
+                                            scope=scope, section_filters={source / 'configFile.ini':
+                                            [name for name in parser.sections() if name != 'Updates']})
+        self.tabs.addTab(self.general, 'General')
+        body = qt.QWidget()
+        body_layout = qt.QVBoxLayout(body)
+        note = qt.QLabel('Updates offer tested, published GitHub releases from the selected main, beta or alpha channel. '
+                        'Updating safely closes Logistics, installs the prepared version and restarts it. '
+                        'Local resources and personal settings are preserved.')
+        note.setWordWrap(True)
+        body_layout.addWidget(note)
+        self.update_stack = qt.QStackedWidget()
+        body_layout.addWidget(self.update_stack, 1)
+        self.update_editors = {}
+        self.settings_widget = settings_widget
+        self.tabs.addTab(body, 'Updates')
+        self.set_scope(scope)
+
+    def set_scope(self, scope):
+        self.general.set_scope(scope)
+        if scope not in self.update_editors:
+            self.update_editors[scope] = self.settings_widget(self, scope)
+            self.update_stack.addWidget(self.update_editors[scope])
+        self.update_stack.setCurrentWidget(self.update_editors[scope])
+
+    def can_close(self):
+        return self.general.can_close() and all(editor.can_close() for editor in self.update_editors.values())
 
 
 class CommonUtilsPanel(ConfigurationPanel):
@@ -421,9 +464,7 @@ class SettingsPage(qt.QWidget):
                 panel = IndexSettingsPanel(self, scope=self.scope_selector.currentData())
             elif key == 'configuration':
                 source = Path(__file__).resolve().parents[2]
-                panel = ConfigurationPanel([source / 'configFile.ini', source / 'maintenance.ini',
-                                            source.parent / 'launch_config.ini'], self, layered=True, scoped=False,
-                                            scope=self.scope_selector.currentData())
+                panel = ApplicationConfigurationPanel(self, scope=self.scope_selector.currentData())
             elif key == 'commonutils':
                 panel = CommonUtilsPanel(self, layered=True, scope=self.scope_selector.currentData())
             else:

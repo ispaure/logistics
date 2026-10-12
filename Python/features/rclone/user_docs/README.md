@@ -5,7 +5,7 @@ remote config. FUSE is optional and only needed for mounting.
 
 ## Set up credentials
 
-1. Place your credential ZIP packages in the checkout's `RemoteCredentials/`
+1. Place your credential ZIP packages in the checkout's `Credentials/rclone/`
    directory (or the configured credentials resource directory).
 2. Open **Settings → rclone → Credential packages** and load a package, entering its password when asked.
 3. Return to **Folder Hub** and select the rclone source and credential.
@@ -61,7 +61,7 @@ and credential paths, see [application setup](../../../../CONFIGURATION.md).
 See [Using Logistics](../../../../USER_GUIDE.md) for navigation and settings.
 
 
-Marc’s existing Dropbox credential folder (`Software/GIT/logistics/RemoteCredentials`)
+Marc’s existing Dropbox credential folder (`Software/GIT/logistics/Credentials/rclone`)
 is also discovered automatically when present. Hover a package to see its location.
 
 ## Choose a rclone download version

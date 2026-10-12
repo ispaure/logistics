@@ -390,7 +390,7 @@ class DestinationRail(qt.QWidget):
         self.current_page = page
         is_tool = page is not None and page not in self.pages.values() and page is not self.documents
         for key, button in self.buttons.items():
-            if key.startswith('editor:') or key == 'rename':
+            if key.startswith('editor:'):
                 button.setChecked(False)
                 continue
             if key == 'tools':
@@ -398,7 +398,7 @@ class DestinationRail(qt.QWidget):
             elif key == 'documents':
                 checked = page is self.documents or self.document_overlay.isVisible()
             else:
-                checked = page is self.pages.get(key)
+                checked = page is not None and page is self.pages.get(key)
             button.setChecked(checked)
         for action in self.tools_menu.actions():
             action.setChecked(action.data() is page)

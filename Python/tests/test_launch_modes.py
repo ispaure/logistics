@@ -22,6 +22,8 @@ class LaunchModeTests(QtTestCase):
     def setUp(self):
         super().setUp()
         self.app = qt.QApplication.instance() or qt.QApplication([])
+        sidebar = patch.object(main_window, 'get_setting', return_value=False)
+        sidebar.start(); self.addCleanup(sidebar.stop)
         self.entries = [RegisteredContribution(name, name.title(), PageContribution(
             name.title(), f'{name}.workspace', qt.QWidget, order=15, navigation_icon=name)) for name in ('git', 'ide')]
         self.open_comic = Mock()
@@ -229,9 +231,9 @@ class LaunchModeTests(QtTestCase):
         chooser.set_document_launchers(launchers)
         chooser.resize(1400, 900); chooser.show(); self.app.processEvents()
         wide = chooser.content.width()
-        self.assertGreater(wide, 1000)
+        self.assertEqual(wide, 880)
         self.assertEqual(chooser._document_columns, 3)
-        self.assertGreater(chooser._document_cards[0].width(), 300)
+        self.assertGreater(chooser._document_cards[0].width(), 240)
         chooser.resize(500, 400); self.app.processEvents()
         self.assertLess(chooser.content.width(), wide)
         self.assertEqual(chooser._document_columns, 1)

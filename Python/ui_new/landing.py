@@ -59,7 +59,7 @@ class LandingPage(qt.QWidget):
             QLabel#launchTitle { font-weight: bold; font-size: 14px; }
             QLabel#launchDetail { color: palette(text); }
             QLabel#sectionTitle { font-weight: bold; font-size: 15px; }
-            QPushButton#documentAction { padding: 5px 12px; }
+            QPushButton#documentAction { min-height: 0px; padding: 2px 10px; }
         ''')
         outer = qt.QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -76,7 +76,7 @@ class LandingPage(qt.QWidget):
         centered.addStretch()
         content = self.content = qt.QWidget()
         content.setMinimumWidth(240)
-        content.setMaximumWidth(1440)
+        content.setMaximumWidth(880)
         content.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Preferred)
         layout = qt.QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -99,7 +99,7 @@ class LandingPage(qt.QWidget):
             self.tool_grid = qt.QGridLayout()
             self.tool_grid.setSpacing(16)
             layout.addLayout(self.tool_grid)
-            hint = qt.QLabel('Focused workspaces open without the sidebar. The settings icon keeps your launch choices nearby.')
+            hint = qt.QLabel('Workspaces open with the sidebar by default. Change this under Appearance & shared controls → Menus.')
             hint.setWordWrap(True)
             layout.addWidget(hint)
             layout.addSpacing(8)
@@ -124,9 +124,10 @@ class LandingPage(qt.QWidget):
 
     def _fit_content(self):
         margin = 16 if self._documents_only else 36
-        width = max(240, min(1440, self.scroll.viewport().width() - 2 * margin))
+        width = max(240, min(880, self.scroll.viewport().width() - 2 * margin))
         self.content.setFixedWidth(width)
-        columns = 3 if width >= 900 else 2 if width >= 560 else 1
+        three_column_width = 840
+        columns = 3 if width >= three_column_width else 2 if width >= 560 else 1
         self._document_columns = columns
         if hasattr(self, 'tool_grid'):
             self._arrange_cards(self.tool_grid, self._tool_cards, columns)
@@ -175,25 +176,26 @@ class LandingPage(qt.QWidget):
         for index, (key, entry) in enumerate(launchers.items()):
             card = qt.QFrame()
             card.setObjectName('documentCard')
-            layout = qt.QVBoxLayout(card)
-            layout.setContentsMargins(16, 14, 16, 14)
-            layout.setSpacing(16)
-            card.setMinimumHeight(150)
-            heading = qt.QHBoxLayout()
+            layout = qt.QHBoxLayout(card)
+            layout.setContentsMargins(20, 16, 20, 16)
+            layout.setSpacing(14)
+            card.setMinimumHeight(88)
+            heading = qt.QVBoxLayout()
+            heading.setSpacing(4)
             glyph = DestinationGlyph()
-            glyph.setFixedSize(24, 24)
+            glyph.setFixedSize(28, 28)
             set_painted_icon(glyph, DestinationIcon, entry.icon or key)
-            heading.addWidget(glyph)
+            layout.addWidget(glyph)
             label = qt.QLabel(entry.name)
             label.setObjectName('launchTitle')
             label.setWordWrap(True)
-            heading.addWidget(label, 1)
-            layout.addLayout(heading)
+            heading.addWidget(label)
             detail = qt.QLabel(entry.description or 'Open files with ' + entry.name + '.')
             detail.setWordWrap(True)
-            layout.addWidget(detail, 1)
-            actions = qt.QHBoxLayout()
-            actions.addStretch()
+            heading.addWidget(detail)
+            layout.addLayout(heading, 1)
+            actions = qt.QVBoxLayout()
+            actions.setSpacing(4)
             if entry.new_document:
                 new = qt.QPushButton('New')
                 new.setObjectName('documentAction')
@@ -224,6 +226,10 @@ class LaunchSurface(qt.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.update_button = qt.QPushButton('Update Logistics', self)
+        self.update_button.setAccessibleName('Update Logistics')
+        self.update_button.setMinimumHeight(32)
+        self.update_button.hide()
         self.settings_button = qt.QToolButton(self)
         self.settings_button.setObjectName('floatingSettings')
         self.settings_button.setAccessibleName('Settings and launch navigation')
@@ -249,6 +255,10 @@ class LaunchSurface(qt.QWidget):
         button = self.settings_button
         button.move(12, max(12, self.height() - button.height() - 12))
         button.raise_()
+        update = self.update_button
+        update.adjustSize()
+        update.move(max(12, self.width() - update.width() - 12), 12)
+        update.raise_()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

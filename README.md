@@ -76,7 +76,7 @@ credentials and settings. External services need their own accounts/software.
 | [Plex](Python/features/plex/user_docs/README.md) | Back up and restore media-server data |
 | [YouTube Downloader](Python/features/youtube_downloader/user_docs/README.md) | Download channels and playlists |
 | [Minecraft](Python/features/minecraft/user_docs/README.md) | Find and manage local servers |
-| [Blender](Python/features/blender/user_docs/README.md) | Install Blender versions, launch isolated preference presets and inspect their addons |
+| [Blender](Python/features/blender/user_docs/README.md) | Launch Blender configuration cards; manage presets, compatible addon libraries and Blue Hole branches/Deluxe in Settings |
 | [Perforce](Python/features/perforce/user_docs/README.md) | Launch configured servers on Linux |
 | [Obsidian](Python/features/obsidian/user_docs/README.md) | Find and open vaults |
 | [Dropbox](Python/features/dropbox/user_docs/README.md) | Browse Dropbox folders and clean up conflicting copies |
@@ -105,3 +105,9 @@ Git and optional external tools are installed/configured separately.
 ## License
 
 Logistics is available under the [MIT License](LICENSE.md).
+
+Logistics can update itself from published main, beta or alpha releases through
+**Update Logistics** in the hub. Checks are on by default; choose a channel or
+turn them off in **Settings → Configuration → Updates**. Updates preserve private
+software, credentials and ignored files. See [release packaging](RELEASING.md)
+for supported installation manifests and channel tags.

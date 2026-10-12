@@ -1,5 +1,6 @@
 """Private paths, preset lifecycle and Blender process ownership."""
 import os
+import json
 from pathlib import Path
 import re
 import shutil
@@ -141,8 +142,32 @@ class BlenderManager:
 
     def launch(self, release, name):
         executable = self.executable(release)
-        process = subprocess.Popen([str(executable)], env=self.environment(release, name),
+        from .library import AddonLibrary
+        state = AddonLibrary(self).selection(self.preset(release, name))
+        entries = sorted(state['installed'].values(),
+                         key=lambda entry: (entry.get('name', entry['module']).casefold(), entry['module'].casefold()))
+        modules = [entry['module'] for entry in entries]
+        if any(not re.fullmatch(r'(?:bl_ext\.logistics\.)?[A-Za-z_][A-Za-z_0-9]*', module) for module in modules):
+            raise ValueError('Invalid managed addon module')
+        command = [str(executable)]
+        env = self.environment(release, name)
+        env.pop('LOGISTICS_BLENDER_ADDONS', None)
+        if modules:
+            command.extend(['--addons', ','.join(modules), '--python', str(Path(__file__).with_name('launch_addons.py'))])
+            env['LOGISTICS_BLENDER_ADDONS'] = json.dumps(modules)
+        process = subprocess.Popen(command, env=env,
                                    cwd=self.preset(release, name), stdin=subprocess.DEVNULL,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.processes.append((process, release.version, name))
         return process.pid
+
+
+_default_manager = None
+
+
+def get_manager():
+    """Share launched-process ownership between the feature page and Settings."""
+    global _default_manager
+    if _default_manager is None:
+        _default_manager = BlenderManager()
+    return _default_manager

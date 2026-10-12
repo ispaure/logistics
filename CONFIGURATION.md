@@ -104,22 +104,31 @@ Defaults are independent directories at the checkout root:
 
 ```text
 logistics/
+├── Addons/
+│   └── blender/  (optional provided addon ZIP library)
 ├── Software/
 │   ├── Windows/
 │   ├── macOS/
 │   ├── Linux/
 │   └── General/
-└── RemoteCredentials/
+└── Credentials/
+    ├── rclone/
+    └── blender_addons/  (reserved; downloads not implemented)
 ```
 
-The resource roots are created when configuration is loaded; platform subfolders
+The optional provided Blender addon directory is read-only discovery and is never
+created automatically. It may point to a shared studio folder. Artist imports stay
+in their own per-user library and never alter provided ZIPs.
+
+The software and rclone credential resource roots are created when configuration is loaded; platform subfolders
 are created as needed. Neither root must come from Dropbox. To reuse another
 location, add independent overrides to `Python/configFile.ini`:
 
 ```ini
 [Resources]
 software_path = Software
-credentials_path = RemoteCredentials
+credentials_path = Credentials/rclone
+blender_addons_path = Addons/blender
 ```
 
 Relative overrides resolve from the checkout root; absolute paths and `~` paths
@@ -128,14 +137,14 @@ moving the other. Configuration loading requires write access to missing resourc
 roots so it can create them.
 
 Credential discovery also includes Marc’s existing Dropbox folder at
-`Software/GIT/logistics/RemoteCredentials` beneath his Dropbox root. Missing Dropbox
+`Software/GIT/logistics/Credentials/rclone` beneath his Dropbox root. Missing Dropbox
 folders are skipped and never created. Packages are listed together with checkout
 packages; their original locations stay unchanged. Generated configs use the ZIP’s
 base name with a `.conf` extension, regardless of the package location. Same-named
 ZIPs refer to the same config, including existing configs. Software provisioning continues
 to use only the configured `software_path` and never searches Dropbox automatically.
 
-`Software/`, `RemoteCredentials/` and all `.conf` files are ignored by Git.
+`Software/`, `Addons/`, the entire `Credentials/` tree and all `.conf` files are ignored by Git.
 Git ignore rules do not protect secrets placed in other tracked files or remove
 already tracked content. Keep credential packages and real configuration passwords
 in private locations; repository INIs should contain only safe example settings.
@@ -291,3 +300,12 @@ buttons open this same Settings window. Existing editor font preferences and Git
 systemic preferences migrate to personal INIs; original legacy files are retained.
 Feature default enablement is stored in `[FeatureDefaults]` in `Python/configFile.ini`;
 the Features category respects the same software/personal selector.
+
+## Logistics updates
+
+`Python/configFile.ini` supplies `[Updates] enabled_bool = true` and
+`branch_mode = main`, with main/beta/alpha choices. The field is presented as
+**Update channel** in **Configuration → Updates** and supports the normal personal
+and software scopes. Disabled checks make no GitHub requests. Enabled checks run
+at startup and approximately every fifteen minutes. Only published releases with
+an uploaded, SHA-256-labelled `release.zip` qualify; no branch-HEAD fallback.

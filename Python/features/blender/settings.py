@@ -47,7 +47,8 @@ class BlenderReleaseSettings(qt.QWidget):
         self.version.setAccessibleName('Blender release configuration version')
         row.addWidget(self.version, 1)
         layout.addLayout(row)
-        self.note = qt.QLabel('Choose a version, then a platform. Save Settings applies only to that version. '
+        self.note = qt.QLabel('Admin configuration: this catalog defines the Blender versions available to install. '
+                             'Choose a version, then a platform. Save Settings applies only to that version. '
                              + ('Edits update this installation’s software release catalog.' if scope == 'application' else
                                 'Untouched fields inherit software defaults; ↶ removes a personal override.'))
         self.note.setWordWrap(True)
@@ -123,3 +124,51 @@ class BlenderReleaseSettings(qt.QWidget):
 
     def can_close(self):
         return all(editor.can_close() for editor in self.editors.values())
+
+
+class BlenderSettings(qt.QWidget):
+    """Feature configuration: existing release editors plus personal preset management."""
+    def __init__(self, parent=None, *, scope='personal', directory=None, manager=None):
+        super().__init__(parent)
+        self.scope = scope
+        self.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Expanding)
+        layout = qt.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.tabs = qt.QTabWidget()
+        layout.addWidget(self.tabs)
+        self.versions = BlenderReleaseSettings(self, scope=scope, directory=directory)
+        self.tabs.addTab(self.versions, 'Versions Definitions')
+        self.presets = None
+        self._close_pending = False
+        if scope == 'personal':
+            from .page import BlenderPage
+            self.presets = BlenderPage(self, manager=manager, settings_mode=True)
+            self.presets.idle.connect(self._resume_close)
+            self.tabs.insertTab(0, self.presets, 'Presets')
+            self.tabs.setCurrentWidget(self.presets)
+            self.refresh()
+
+    def refresh(self):
+        self.versions.refresh()
+        if self.presets is not None and not self.presets.task.busy:
+            self.presets.refresh()
+            selected = getattr(self.presets.manager, 'settings_selection', None)
+            if selected:
+                version, name = selected
+                self.presets.manager.settings_selection = None
+                release = next((r for r in self.presets.releases if r.version == version), None)
+                self.presets._manage_configuration(release, name)
+                self.tabs.setCurrentWidget(self.presets)
+
+    def _resume_close(self):
+        if self._close_pending:
+            self._close_pending = False
+            qt.QTimer.singleShot(0, self.window().close)
+
+    def can_close(self):
+        if not self.versions.can_close():
+            return False
+        if self.presets is not None and not self.presets.prepare_close():
+            self._close_pending = True
+            return False
+        return True
