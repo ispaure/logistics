@@ -1,1 +1,1 @@
-"""Compatibility entry points for shared INI settings support."""
+"""Application settings panels and indexing-specific controls."""

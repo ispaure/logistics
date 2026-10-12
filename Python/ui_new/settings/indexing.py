@@ -1,7 +1,7 @@
 """An explicit-save home for browser refresh rules in Logistics' existing INI."""
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from .ini_editor import INISettingsEditor
+from commonUtils.ui.settings.ini_editor import INISettingsEditor
 
 INDEX_FIELDS = {
     'scan_on_open': ('Build an index when opening an unindexed folder',
@@ -76,7 +76,7 @@ class IndexSettingsPanel(qt.QWidget):
             self._content = layout
             layout.addWidget(self.editor, 1)
             return
-        self.editor = IndexSettingsEditor(self.path, self)
+        self.editor = IndexSettingsEditor(self.path, self, typed_keys=True)
         from commonUtils.ui.settings.settings_sections import ScopedSettings, SettingsSection
         self.sections = ScopedSettings(self)
         self.sections.set_sections([SettingsSection('application', 'ini', 'INI files', self.editor, nested=True)])
@@ -87,7 +87,7 @@ class IndexSettingsPanel(qt.QWidget):
 
     def set_scope(self, scope):
         from commonUtils.ui.settings.layered_settings import LayeredSettingsEditor
-        from .configuration import settings_store
+        from features.settings import settings_store
         if scope not in self._editors:
             class LayeredIndexEditor(LayeredSettingsEditor):
                 def _build(self):

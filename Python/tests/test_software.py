@@ -92,7 +92,7 @@ class SoftwareTests(QtTestCase):
 
     def test_download_prompt_decline_returns_without_network(self):
         from commonUtils.ui import pyside as qt
-        from commonUtils.ui import download
+        from commonUtils.ui.tasks import download
         self.app = qt.QApplication.instance() or qt.QApplication([])
         spec = DownloadSpec('Tool','1','https://example.test/tool','0'*64,'0'*64)
         with patch.object(download, 'is_ready', return_value=False), patch.object(qt, 'display_msg_box_yes_no', return_value=False), patch.object(download, '_DownloadDialog') as dialog:
@@ -101,7 +101,7 @@ class SoftwareTests(QtTestCase):
 
     def test_background_download_dialog_returns_verified_path(self):
         from commonUtils.ui import pyside as qt
-        from commonUtils.ui import download
+        from commonUtils.ui.tasks import download
         self.app = qt.QApplication.instance() or qt.QApplication([])
         spec = DownloadSpec('Tool','1','https://example.test/tool','0'*64,'0'*64)
         with patch.object(download, 'provision', return_value=Path('/verified/tool')):
@@ -114,7 +114,7 @@ class SoftwareTests(QtTestCase):
     def test_download_dialog_cancellation_waits_for_worker(self):
         import time
         from commonUtils.ui import pyside as qt
-        from commonUtils.ui import download
+        from commonUtils.ui.tasks import download
         from commonUtils.runtime.streams.downloads import DownloadCancelled
         self.app = qt.QApplication.instance() or qt.QApplication([])
         spec = DownloadSpec('Tool','1','https://example.test/tool','0'*64,'0'*64)
@@ -136,7 +136,7 @@ class SoftwareTests(QtTestCase):
 
     def test_download_failure_is_not_hidden_by_a_late_cancel_request(self):
         from commonUtils.ui import pyside as qt
-        from commonUtils.ui import download
+        from commonUtils.ui.tasks import download
         self.app = qt.QApplication.instance() or qt.QApplication([])
         spec = DownloadSpec('Tool','1','https://example.test/tool','0'*64,'0'*64)
         with patch.object(download, 'provision', side_effect=ValueError('SHA-256 verification failed')):

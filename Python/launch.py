@@ -2,7 +2,7 @@ from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.ui import pyside
 from commonUtils.ui.appearance.theme import apply_theme
 from commonUtils.ui.appearance.styling import apply_styling
-from ui_new.settings.configuration import initialize_settings
+from features.settings import initialize_settings
 from features import registry
 from ui_new.main_window import MainWindow
 from services.indexing import IndexService

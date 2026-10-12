@@ -155,7 +155,7 @@ window shutdown on the platforms affected by UI changes.
 
 
 The embedded `FileBrowserPage` and standalone `FileBrowserWindow` wrap BrowserViews
-in `commonUtils.ui.workspace.Workspace`. Feature bindings/controllers belong to
+in `commonUtils.ui.workspaces.workspace.Workspace`. Feature bindings/controllers belong to
 one view and move with its dock when detached or reattached. Each view independently
 subscribes to feature toggles and participates in cooperative shutdown. Browser
 search and storage dialogs use shared directory metadata snapshots/cache; their

@@ -26,7 +26,7 @@ comic-reader activation remain independent of Archives.
 | `commonUtils.archives` | Reusable ZIP/TAR operations and metadata |
 | `commonUtils.ui.archive_view` | Passive contents navigation and previews |
 
-`backend.py` keeps compatibility imports; it has no archive implementation.
+Archive workflows import reusable operations directly from `commonUtils.archives`.
 The shared [archive guide](https://github.com/ispaure/commonUtils/blob/main/archives/README.md) documents formats,
 validation, publication, preview bounds and public APIs. Existing low-level ZIP
 callers retain their defaults and extraction behavior.

@@ -38,7 +38,7 @@ Optional `[Resources] software_path` and `credentials_path` entries in
 `configFile.ini` override them independently (relative to the checkout, or absolute).
 Dropbox is never selected implicitly. Public binaries/installers are pinned in
 `software_manifest.json`; `services.software` supplies project policy to the shared
-`commonUtils.runtime.streams.downloads` and `commonUtils.ui.download` provisioning code. Download
+`commonUtils.runtime.streams.downloads` and `commonUtils.ui.tasks.download` provisioning code. Download
 hashes and extracted executable hashes must both be updated when changing releases.
 Other integrations still require their existing private software resources.
 
@@ -79,7 +79,7 @@ settings are intentionally tied to their operating systems.
 ## Shared workers and API changes
 
 Recent helpers are consolidated around `commonUtils.runtime.streams`,
-`commonUtils.ui.operations.Operation` and `OperationProgress`. Download dialogs
+`commonUtils.ui.tasks.operations.Operation` and `OperationProgress`. Download dialogs
 reuse the same progress/cancellation widget; browser workers use the generic
 worker module. New callers should use these canonical imports. Feature declarations
 and direct file-type registration share resolution-rule validation.

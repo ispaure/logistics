@@ -73,8 +73,8 @@ from feature action pages such as Links or Smart Home.
 New feature-wide settings belong directly in the feature's `config.ini`. See
 [typed INI conventions](../../CONFIGURATION.md#feature-ini-settings) for suffixes
 and dropdown choices. The schema lives in `commonUtils.configuration.ini_schema` and its editor in
-`commonUtils.ui.ini_editor`; Logistics retains compatibility imports and opts
-into typed keys. commonUtils `fileTypes.iniType.INIFile` remains schema-free. Keep fallback reads
+`commonUtils.ui.settings.ini_editor`; Logistics imports it directly and explicitly
+opts into typed keys. `commonUtils.formats.iniType.INIFile` remains schema-free. Keep fallback reads
 when migrating an existing public key; do not rename folder-owned configs.
 
 Contribution lists are type-checked during collection, before UI page creation.

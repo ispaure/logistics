@@ -59,13 +59,14 @@ are no longer supplied by an import adapter. Use the current filesystem, formats
 runtime and integration packages shown in the
 [shared API guide](https://github.com/ispaure/commonUtils/blob/main/docs/developer/public-apis.md).
 Do not restore the removed compatibility hook to fix a consumer import. This is
-separate from Logistics' retained feature hooks and settings wrappers, which still
-have their own explicit compatibility contracts.
+separate from Logistics' feature hooks and persisted settings migration rules.
+Settings callers import shared editors and schemas directly and request typed keys
+explicitly. Feature archive and browser code likewise imports the shared owners.
 
 ## Grouped shared UI imports
 
 Logistics uses `commonUtils.ui.workspaces`, `tasks`, `readers`, `settings` and
-`appearance` for their owning implementations. Existing direct UI module imports
-remain compatibility aliases in commonUtils. Keep application navigation and
-document policy in Logistics. See the [shared module map](https://github.com/ispaure/commonUtils/blob/main/ui/README.md#module-organization)
+`appearance` for their owning implementations. Former flat forwarding modules
+have been removed; imports and mock patch targets use the grouped paths. Keep
+application navigation and document policy in Logistics. See the [shared module map](https://github.com/ispaure/commonUtils/blob/main/ui/README.md#module-organization)
 for ownership and canonical paths.
