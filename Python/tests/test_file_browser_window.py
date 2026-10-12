@@ -115,7 +115,7 @@ class BrowserWindowTests(QtTestCase):
         window = self.window([])
         browser = window.file_browser
         window.index_status.refresh()
-        with patch.object(browser, '_update_pause_button', wraps=browser._update_pause_button) as layout:
+        with patch.object(browser, '_update_index_controls', wraps=browser._update_index_controls) as layout:
             for _ in range(5):
                 browser._index_progressed('Indexing files · 42 processed this run')
             layout.assert_not_called()
