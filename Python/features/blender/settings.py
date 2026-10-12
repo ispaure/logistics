@@ -20,17 +20,16 @@ FIELD_LABELS = {
 
 
 class ReleaseSettingsEditor(LayeredSettingsEditor):
-    platforms_changed = qt.Signal()
-
     def _build(self):
-        selected = self.sections.tabText(self.sections.currentIndex()) if self.sections.count() else ''
+        bar = self.sections.tabBar()
+        selected = bar.tabData(self.sections.currentIndex()) if self.sections.count() else None
         super()._build()
-        self.sections.tabBar().hide()
         for index in range(self.sections.count()):
-            if self.sections.tabText(index) == selected:
+            key = self.sections.tabText(index)
+            bar.setTabData(index, key)
+            self.sections.setTabText(index, PLATFORM_LABELS.get(key, key))
+            if key == selected:
                 self.sections.setCurrentIndex(index)
-                break
-        self.platforms_changed.emit()
 
 
 class BlenderReleaseSettings(qt.QWidget):
@@ -53,21 +52,12 @@ class BlenderReleaseSettings(qt.QWidget):
                                 'Untouched fields inherit software defaults; ↶ removes a personal override.'))
         self.note.setWordWrap(True)
         layout.addWidget(self.note)
-        splitter = qt.QSplitter()
-        self.platforms = qt.QListWidget()
-        self.platforms.setAccessibleName('Blender release platform')
-        self.platforms.setMinimumWidth(170)
         self.stack = qt.QStackedWidget()
-        splitter.addWidget(self.platforms)
-        splitter.addWidget(self.stack)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([200, 650])
-        layout.addWidget(splitter, 1)
+        layout.addWidget(self.stack, 1)
         self.empty = qt.QLabel('No version configuration files found. Add config-<version>.ini to the Blender feature.')
         self.empty.setWordWrap(True)
         self.stack.addWidget(self.empty)
         self.version.currentIndexChanged.connect(self._select_version)
-        self.platforms.currentRowChanged.connect(self._select_platform)
         self.refresh()
 
     def refresh(self):
@@ -90,7 +80,6 @@ class BlenderReleaseSettings(qt.QWidget):
     def _select_version(self, *_args):
         path = self.version.currentData()
         if path is None:
-            self.platforms.clear()
             self.stack.setCurrentWidget(self.empty)
             return
         if path not in self.editors:
@@ -101,26 +90,7 @@ class BlenderReleaseSettings(qt.QWidget):
                         validator=lambda values, path=path: releases_from_values(path, values))
             self.editors[path] = editor
             self.stack.addWidget(editor)
-            editor.platforms_changed.connect(self._update_platforms)
         self.stack.setCurrentWidget(self.editors[path])
-        self._update_platforms()
-
-    def _update_platforms(self):
-        editor = self.editor
-        if editor is None:
-            return
-        with qt.QSignalBlocker(self.platforms):
-            self.platforms.clear()
-            for index in range(editor.sections.count()):
-                key = editor.sections.tabText(index)
-                item = qt.QListWidgetItem(PLATFORM_LABELS.get(key, key))
-                item.setData(qt.Qt.ItemDataRole.UserRole, key)
-                self.platforms.addItem(item)
-            self.platforms.setCurrentRow(editor.sections.currentIndex())
-
-    def _select_platform(self, index):
-        if self.editor is not None and index >= 0:
-            self.editor.sections.setCurrentIndex(index)
 
     def can_close(self):
         return all(editor.can_close() for editor in self.editors.values())
@@ -148,8 +118,6 @@ class BlenderSettings(qt.QWidget):
             self.tabs.insertTab(0, self.presets, 'Presets')
             from .library_page import AddonLibraryPage
             self.library = AddonLibraryPage(self.presets.library, self)
-            self.library.changed.connect(self.presets.refresh)
-            self.library.idle.connect(self._resume_close)
             self.tabs.addTab(self.library, 'Addon Library')
             self.tabs.setCurrentWidget(self.presets)
             self.refresh()
@@ -169,15 +137,14 @@ class BlenderSettings(qt.QWidget):
                 self.tabs.setCurrentWidget(self.presets)
 
     def _resume_close(self):
-        if self._close_pending and not any(page.task.busy for page in (self.presets, self.library) if page is not None):
+        if self._close_pending:
             self._close_pending = False
             qt.QTimer.singleShot(0, self.window().close)
 
     def can_close(self):
         if not self.versions.can_close():
             return False
-        ready = [page.prepare_close() for page in (self.presets, self.library) if page is not None]
-        if not all(ready):
+        if self.presets is not None and not self.presets.prepare_close():
             self._close_pending = True
             return False
         return True

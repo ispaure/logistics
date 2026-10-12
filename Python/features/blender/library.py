@@ -164,10 +164,11 @@ def _inspect_package(package):
 
 
 class AddonLibrary:
-    def __init__(self, manager, *, provided_root=None):
+    def __init__(self, manager, *, provided_root=None, preset_root=None):
         self.manager = manager
-        # Existing imports remain in the same private directory.
-        self.root = manager.root / 'addons' / 'blender'
+        self.legacy_root = manager.root / 'addons' / 'blender'
+        self.preset_root = preset_root
+        self.root = manager._contained(preset_root, 'addon-library') if preset_root is not None else self.legacy_root
         if provided_root is None:
             from config import get_config_file_path
             from commonUtils.configuration.layered import effective_settings
@@ -179,19 +180,31 @@ class AddonLibrary:
                 provided_root = config_path.parent.parent / provided_root
         self.provided_root = Path(provided_root)
 
-    def entries(self):
+    def for_preset(self, root):
+        return AddonLibrary(self.manager, provided_root=self.provided_root, preset_root=root)
+
+    def entries(self, *, shared_only=False, legacy_identities=None):
         combined = {}
-        for source, root in (('Provided', self.provided_root), ('Personal', self.root)):
+        layers = [('Provided', self.provided_root)]
+        if not shared_only:
+            layers.append(('Personal', self.legacy_root))
+            if self.preset_root is not None:
+                layers.append(('Preset', self.root))
+        if self.preset_root is not None and legacy_identities is None:
+            legacy_identities = self.selection(self.preset_root)['selected']
+        for source, root in layers:
             if not root.is_dir():
                 continue
             layer = {}
             paths = sorted(p for p in root.rglob('*.zip') if '_support' not in p.relative_to(root).parts) if source == 'Provided' else sorted(root.glob('*/*/addon.zip'))
             for path in paths:
-                if source == 'Personal':
+                if source != 'Provided':
                     path = self.manager._contained(root, *path.relative_to(root).parts)
                 addon = replace(inspect_package(path), source=source)
+                if source == 'Personal' and self.preset_root is not None and addon.identity not in legacy_identities:
+                    continue  # Keep previously selected legacy imports usable in their preset.
                 origin = path.with_name('origin.json')
-                if source == 'Personal' and origin.is_file():
+                if source != 'Provided' and origin.is_file():
                     record = json.loads(self.manager._contained(root, *origin.relative_to(root).parts).read_text())
                     if not isinstance(record, dict) or any(not isinstance(record.get(field, ''), str) for field in ('published', 'package_name')):
                         raise ValueError('Invalid personal addon package record')
@@ -202,8 +215,8 @@ class AddonLibrary:
                 if key in layer and layer[key].digest != addon.digest:
                     raise ValueError(f'{source} library contains conflicting packages for {addon.name} {addon.version}')
                 layer[key] = addon
-            # Personal packages override only the matching identity/version.
-            if source == 'Personal':
+            # Artist packages override only the matching identity/version.
+            if source != 'Provided':
                 versions = {(item.identity, item.version) for item in layer.values()}
                 combined = {key: item for key, item in combined.items() if (item.identity, item.version) not in versions}
             combined.update(layer)
@@ -217,7 +230,7 @@ class AddonLibrary:
             existing = inspect_package(destination / 'addon.zip')
             if existing.digest != addon.digest:
                 raise ValueError('This addon version already exists with different contents')
-            return replace(existing, published=addon.published, package_name=addon.package_name)
+            return replace(existing, published=addon.published, package_name=addon.package_name, source='Preset' if self.preset_root is not None else 'Personal')
         with TemporaryDirectory(prefix='.import-', dir=destination.parent) as temp:
             staged = Path(temp) / 'release'
             staged.mkdir()
@@ -229,7 +242,7 @@ class AddonLibrary:
             (staged / 'origin.json').write_text(json.dumps({'published': addon.published, 'package_name': addon.package_name}), encoding='utf-8')
             check_cancelled(cancelled)
             staged.rename(destination)
-        return replace(inspect_package(destination / 'addon.zip'), published=addon.published, package_name=addon.package_name)
+        return replace(inspect_package(destination / 'addon.zip'), published=addon.published, package_name=addon.package_name, source='Preset' if self.preset_root is not None else 'Personal')
 
     def resolve(self, identity, release, *, entries=None):
         choices = [item for item in (self.entries() if entries is None else entries) if item.identity == identity and item.compatible(release)]
@@ -266,8 +279,9 @@ class AddonLibrary:
         from .bluehole import IDENTITY
         identities = [identity for identity in identities if identity != IDENTITY]
         resolved = []
+        entries = self.for_preset(root).entries(legacy_identities=identities)
         for identity in sorted(set(identities)):
-            addon = self.resolve(identity, release)
+            addon = self.resolve(identity, release, entries=entries)
             if addon is None:
                 raise ValueError(f'No declared-compatible release is available for {identity}')
             resolved.append(addon)

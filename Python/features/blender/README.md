@@ -87,8 +87,8 @@ native runtime checks remain outstanding.
 ## Release settings presentation and migration
 
 `settings.py` retains a shared LayeredSettingsEditor per version and scope.
-A version dropdown selects the file; a platform list selects the editor's hidden
-section tab. Field controls, override/reset behavior, conflict detection and saves
+A version dropdown selects the file; the editor's visible section tabs select
+platforms, using human-readable labels while tab data retains the section keys. Field controls, override/reset behavior, conflict detection and saves
 remain shared. The validator constructs Release objects for the whole version
 before publication, so invalid URL/hash/format/path metadata cannot be saved.
 Editors remain alive across version/platform and scope changes; host close checks
@@ -123,11 +123,15 @@ removed. Windows/Linux and Intel macOS addon application remain unverified nativ
 
 `AddonLibrary` merges the recursively discovered read-only provided ZIP folder
 (default `Software/Blender_Addons_Library`, `[Resources] blender_addons_path` override) with the
-existing per-user library. Package metadata is the index: neither source needs
-an artist-authored manifest. Personal releases replace provided entries only for
-matching identity/version; newest compatible resolution runs over the merged set.
-Conflicting duplicate versions inside one source fail explicitly. `add()` writes
-only the personal root. Public packaging does not include the ignored addon folder.
+selected preset's `addon-library` ZIP collection. Package metadata is the index:
+neither source needs an artist-authored manifest. `for_preset(root)` isolates
+imports and resolution; `entries(shared_only=True)` powers the catalog tab.
+Preset releases replace provided entries only for matching identity/version;
+newest compatible resolution runs over the merged set. Legacy per-user imports
+are included only for already selected identities (or requested apply identities),
+preserving existing selections without exposing old imports to unrelated presets.
+Conflicting duplicate versions inside one source fail explicitly. UI `add()` writes
+only the selected preset's library root. Public packaging does not include the ignored addon folder.
 
 Managed inventory stores display names/source. Apply requests sort by casefolded
 name and module; selected modules are temporarily disabled with `default_set=False`
@@ -188,8 +192,8 @@ The shareable library contains one folder per addon, with ZIPs such as
 come from package metadata; a trailing `_YYYY_MM_DD` names a package revision.
 Resolution chooses the highest declared-compatible numeric version, then the
 newest date for that version. Same-version/date packages with conflicting bytes
-are rejected. Personal versions override provided packages of the same declared
-version; personal imports preserve revision/name in `origin.json`, and their
+are rejected. Preset versions override provided packages of the same declared
+version; preset imports preserve revision/name in `origin.json`, and their
 managed folders include the date. Old undated imports remain discoverable.
 Legacy publisher nicknames appended to a version tuple are ignored for numeric
 comparison. `_support` is reserved for non-addon backup ZIPs and is not indexed.
@@ -221,11 +225,11 @@ refused; nested user links are retained without copying their targets.
 ### Grouped addon library settings
 
 Personal feature settings have three tabs: Presets, Versions Definitions, and
-Addon Library. `library_page.py` owns the independent catalog/import UI and its
-cancellable worker. It shares the preset page's AddonLibrary instance; successful
-imports refresh preset choices without changing selections. The settings host
-waits for both workers to retire before closing. The catalog groups by stable
-addon identity, keeps groups collapsed initially, and lists numeric versions and
-dated revisions newest first under each group. Its Shared / User provided source
-labels map to the existing Provided / Personal storage values; stored records
-remain compatible. The generated library-inventory.json is informational only.
+Addon Library. `library_page.py` owns a read-only catalog of shared packages,
+grouped by stable identity, collapsed initially, with versions and dated revisions
+newest first. ZIP import is a preset-page operation, using its cancellable worker
+and close lifecycle. Import completion refreshes choices without changing saved
+selections. Shared / Preset provided / User provided (legacy) labels map to
+Provided / Preset / Personal storage values. The generated library-inventory.json
+is informational only. Preset duplicate/copy operations include the private ZIP
+library; deletion removes it with the rest of that preset.

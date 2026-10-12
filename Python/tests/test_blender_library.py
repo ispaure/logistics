@@ -40,6 +40,28 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual(self.library.resolve('legacy:tool', self.release).version, '1.10.0')
         self.assertEqual(len(list(self.library.root.iterdir())), 1)
 
+    def test_preset_packages_are_isolated_apply_and_follow_duplicate(self):
+        other = self.manager.create_preset(self.release, 'Other')
+        scoped = self.library.for_preset(self.preset)
+        addon = scoped.add(self.package('private.zip'))
+        self.assertEqual(addon.source, 'Preset')
+        self.assertEqual(len(scoped.entries()), 1)
+        self.assertEqual(self.library.for_preset(other).entries(), [])
+        self.assertEqual(self.library.entries(shared_only=True), [])
+        with patch.object(self.manager, 'executable', return_value=Path('/unused/blender')), patch('features.blender.addons.run_blender_script'):
+            self.library.apply(self.release, 'Art', [addon.identity], bluehole={'enabled': False, 'branch': 'main'})
+        self.assertTrue((self.preset / 'scripts/addons/tool/__init__.py').exists())
+        copied = self.manager.duplicate_preset(self.release, 'Art', 'Copy')
+        self.assertEqual(self.library.for_preset(copied).entries()[0].digest, addon.digest)
+
+    def test_legacy_personal_packages_remain_visible_only_where_selected(self):
+        import json
+        self.library.add(self.package('legacy.zip'))
+        other = self.manager.create_preset(self.release, 'Other')
+        (self.preset / '.logistics-addons.json').write_text(json.dumps({'selected': ['legacy:tool'], 'installed': {}}))
+        self.assertEqual(self.library.for_preset(self.preset).entries()[0].source, 'Personal')
+        self.assertEqual(self.library.for_preset(other).entries(), [])
+
     def test_import_does_not_execute_code_unknown_is_not_auto_resolved_and_conflicts_refused(self):
         path = self.package('unknown.zip', minimum=None, body='raise RuntimeError("must never execute")')
         self.library.add(path)

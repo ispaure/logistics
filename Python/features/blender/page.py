@@ -152,6 +152,14 @@ class BlenderPage(qt.QWidget):
             button._menu_action = action
         self.actions.setMenu(menu)
         primary.addWidget(self.actions)
+        self.add_addon = qt.QPushButton('Add Addon…')
+        self.add_addon.setToolTip('Import a ZIP for this preset only; shared packages remain unchanged.')
+        self.add_addon.clicked.connect(self._add_preset_addon)
+        if settings_mode:
+            primary.addWidget(self.add_addon)
+        else:
+            self.add_addon.setParent(self.controls)
+            self.add_addon.hide()
         primary.addStretch()
         controls.addLayout(primary)
         manage_layout.addWidget(self.controls)
@@ -288,6 +296,7 @@ class BlenderPage(qt.QWidget):
             button.setEnabled(has_preset)
         self.copy_button.setEnabled(has_preset and len(self.releases) > 1)
         self.addon_folder.setEnabled(self.table.rowCount() > 0)
+        self.add_addon.setEnabled(has_preset)
         self.apply_button.setEnabled(has_preset)
         self.bluehole_group.setEnabled(has_preset)
         self.tabs.setEnabled(has_preset)
@@ -602,9 +611,20 @@ class BlenderPage(qt.QWidget):
                 self._adding_preset = False
                 self._rebuild_preset_list()
 
+    def _add_preset_addon(self):
+        if self.task.busy or not self.release or not self.preset.currentText():
+            return
+        release, name = self.release, self.preset.currentText()
+        try:
+            self.manager._require_idle(release, name)
+            library = self.library.for_preset(self.manager.preset(release, name))
+            package, _ = qt.QFileDialog.getOpenFileName(self, 'Add Addon to Preset', '', 'Addon ZIP (*.zip)')
+            if package:
+                self._run('Adding preset addon', lambda report, cancelled: library.add(package, cancelled=cancelled))
+        except (OSError, ValueError) as error:
+            self.status.setText(str(error))
+
     def _show_choices(self):
-        entries = self.library.entries()
-        identities = sorted({addon.identity for addon in entries})
         state = {'selected': [], 'installed': {}}
         root = None
         found = {}
@@ -612,6 +632,8 @@ class BlenderPage(qt.QWidget):
             root = self.manager.preset(self.release, self.preset.currentText())
             state = self.library.selection(root)
             found = {item['module']: item for item in scan_preset(root)}
+        entries = self.library.for_preset(root).entries() if root is not None else self.library.entries(shared_only=True)
+        identities = sorted({addon.identity for addon in entries})
         selected = state['selected']
         actual = {('extension:' + row['module'].split('.')[-1] if row['kind'] == 'Extension' else 'legacy:' + row['module']): row for row in found.values()}
         identities = sorted(set(identities) | set(selected) | set(state['installed']) | set(actual),
