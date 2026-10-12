@@ -159,3 +159,10 @@ organization or author/series changes. Organization copies before removing its
 source and stops on the first failure; this differs from compression, which can
 continue past failed comics. There is no collection-wide Undo. If an action fails,
 read its item-level results before retrying the remaining files.
+
+Comics remember the last successfully displayed page by default, using its image
+filename to keep the same page after reordering where possible. File Browser tile
+covers show that saved position as **45/205** at the top-right. Unread comics have
+no badge. The badge updates as reading position is saved, without changing the
+archive; disabling Remember Position hides it. Older saved positions also work
+once the cover is loaded.

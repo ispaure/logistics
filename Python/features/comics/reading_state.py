@@ -36,4 +36,19 @@ class ReadingState:
 
     def save(self, index, pages):
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        atomic_write_json(self.path, dict(page=index, name=pages[index]))
+        atomic_write_json(self.path, dict(page=index, name=pages[index], total=len(pages)))
+
+    def badge(self, pages=None):
+        try:
+            if self.path.stat().st_size > 128 * 1024:
+                return ''
+            state = json.loads(self.path.read_text(encoding='utf-8'))
+            if not isinstance(state, dict) or type(state.get('page')) is not int:
+                return ''
+            total = len(pages) if pages is not None else state.get('total')
+            if type(total) is not int or total <= 0:
+                return ''
+            index = self.position(pages) if pages is not None else max(0, min(state['page'], total - 1))
+            return f'{index + 1}/{total}'
+        except (OSError, ValueError):
+            return ''
