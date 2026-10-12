@@ -386,6 +386,8 @@ class BlenderPage(qt.QWidget):
             self._version_changed()
             self.status.setText('Cancelled.' if cancelled else
                                 f'{self._operation} failed: {error}' if error else f'{self._operation} finished.')
+            if not error and not cancelled and 'launching blender' in self._operation.lower() and self.library.warnings:
+                self.status.setText(self.status.text() + '\n' + '\n'.join(self.library.warnings))
             if cancelled:
                 self.task.message.setText('Cancelled.')
 

@@ -270,3 +270,9 @@ Disabling Blue Hole keeps your custom environments in the preset’s separate `a
 Broken or conflicting ZIPs are skipped and listed as warnings in the library and preset views. Healthy packages stay available. If a preset cannot refresh, saving its addon choices is blocked until a successful refresh.
 
 Installation uses a verified private copy of each package it replaces. If a ZIP changes during a sync before it can be copied, installation stops safely and asks you to refresh and try again.
+
+If GitHub checking or downloading fails, Logistics can launch with the already
+installed, compatible Blue Hole copy and shows its actual branch and commit in a
+warning. Your selected branch remains requested for the next launch. Deluxe
+changes wait until an online update succeeds. First-time installation still needs
+internet access.

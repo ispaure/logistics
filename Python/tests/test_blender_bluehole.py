@@ -96,6 +96,18 @@ class BlueHoleTests(unittest.TestCase):
             bluehole.apply_deluxe(addon, root, None)
         self.assertEqual(outside.read_text(), 'outside')
 
+    def test_network_failure_is_distinct_from_invalid_download_and_cancellation(self):
+        from commonUtils.runtime.operations import OperationCancelled
+        with patch.object(bluehole, 'branch_commit', side_effect=ConnectionError('offline')):
+            with self.assertRaises(bluehole.UpdateUnavailable):
+                bluehole.update(self.manager, self.release, 'main')
+        with patch.object(bluehole, 'branch_commit', return_value='a' * 40), \
+                patch.object(bluehole, 'download', side_effect=ConnectionError('offline')):
+            with self.assertRaises(bluehole.UpdateUnavailable):
+                bluehole.update(self.manager, self.release, 'main')
+        with self.assertRaises(OperationCancelled):
+            bluehole.update(self.manager, self.release, 'main', cancelled=lambda: True)
+
     def test_invalid_branch_is_rejected_before_network(self):
         with self.assertRaises(ValueError):
             bluehole.branch_commit('../unsafe')

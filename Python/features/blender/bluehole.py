@@ -16,6 +16,10 @@ BRANCHES = ('main', 'beta', 'alpha')
 DEFAULT = {'enabled': True, 'branch': 'main', 'deluxe': False}
 
 
+class UpdateUnavailable(ValueError):
+    """A remote check/download failed, allowing an installed-copy fallback."""
+
+
 def validate(value):
     if not isinstance(value, dict) or not isinstance(value.get('enabled'), bool) or value.get('branch') not in BRANCHES:
         raise ValueError('Choose main, beta or alpha for Blue Hole')
@@ -40,7 +44,10 @@ def download(commit, destination, cancelled):
 
 def update(manager, release, branch, *, cancelled=lambda: False):
     check_cancelled(cancelled)
-    commit = branch_commit(branch)  # Always compare branch head, even with a warm cache.
+    try:
+        commit = branch_commit(branch)  # Always compare branch head, even with a warm cache.
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise UpdateUnavailable(f'Could not check Blue Hole {branch}: {error}') from error
     check_cancelled(cancelled)
     root = manager.root / 'addons' / 'bluehole'
     destination = manager._contained(root, branch, commit)
@@ -53,7 +60,10 @@ def update(manager, release, branch, *, cancelled=lambda: False):
                 with TemporaryDirectory(prefix='.github-', dir=destination.parent) as temp:
                     workspace = Path(temp)
                     archive_path = workspace / 'github.zip'
-                    download(commit, archive_path, cancelled)
+                    try:
+                        download(commit, archive_path, cancelled)
+                    except OSError as error:
+                        raise UpdateUnavailable(f'Could not download Blue Hole {branch}: {error}') from error
                     staged = workspace / 'release'
                     staged.mkdir()
                     # GitHub archive roots include a commit suffix; the addon module
@@ -82,6 +92,36 @@ def update(manager, release, branch, *, cancelled=lambda: False):
     if addon.identity != IDENTITY or not addon.compatible(release):
         raise ValueError(f'Blue Hole ({branch}) is not declared compatible with Blender {release.version}')
     return addon, commit
+
+
+def installed_fallback(manager, release, root, state):
+    """Use only a recorded, present, declared-compatible installed Blue Hole copy."""
+    import ast
+    from .library import Addon, legacy_version, version_string
+    entry = state['installed'].get(IDENTITY)
+    current = state.get('installed_bluehole') or state.get('bluehole', {})
+    if (not entry or entry['module'] != 'BlueHole' or entry['path'] != 'scripts/addons/BlueHole'
+            or not isinstance(current, dict) or current.get('branch') not in BRANCHES
+            or not isinstance(current.get('commit'), str) or not re.fullmatch(r'[a-f0-9]{40}', current['commit'])
+            or not re.fullmatch(r'[a-f0-9]{64}', entry['digest'])):
+        raise ValueError('No recorded installed Blue Hole copy is available for offline launch')
+    script = manager._contained(root, 'scripts', 'addons', 'BlueHole', '__init__.py')
+    if not script.is_file() or script.stat().st_size > 1024 ** 2:
+        raise ValueError('The installed Blue Hole entrypoint is missing or invalid')
+    info = {}
+    for node in ast.parse(script.read_text(encoding='utf-8-sig')).body:
+        if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'bl_info' for target in node.targets):
+            info = ast.literal_eval(node.value)
+            break
+    if not isinstance(info, dict):
+        raise ValueError('The installed Blue Hole metadata is invalid')
+    addon = Addon(IDENTITY, str(info.get('name') or 'Blue Hole'), legacy_version(info.get('version', '')),
+                  version_string(info['blender']) if info.get('blender') else '', '', 'Legacy addon',
+                  'BlueHole', 'BlueHole/', (), None, entry['digest'], source=entry.get('source', f"GitHub · {current['branch']}"),
+                  published=entry.get('published', ''), package_name=entry.get('package_name', ''))
+    if not addon.compatible(release):
+        raise ValueError('The installed Blue Hole copy is not declared compatible with this Blender version')
+    return addon, current['branch'], current['commit']
 
 
 def preserve_environments(previous, destination, *, cancelled=lambda: False):

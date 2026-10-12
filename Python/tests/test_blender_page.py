@@ -304,6 +304,31 @@ class BlenderPageTests(QtTestCase):
         install.assert_not_called()
         launch.assert_called_once_with(self.builds[0], 'Art')
 
+    def test_offline_bluehole_launches_installed_copy_and_displays_warning(self):
+        import zipfile
+        from features.blender import bluehole
+        from features.blender.library import inspect_package
+        self.manager.create_preset(self.builds[0], 'Art')
+        page = BlenderPage(manager=self.manager)
+        package = Path(self.temporary.name) / 'bluehole.zip'
+        with zipfile.ZipFile(package, 'w') as archive:
+            archive.writestr('BlueHole/__init__.py', 'bl_info={"name":"Blue Hole","version":(1,0,0),"blender":(3,0,0)}')
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch('features.blender.addons.run_blender_script'), \
+                patch.object(bluehole, 'update', return_value=(inspect_package(package), 'a' * 40)):
+            page.library.apply(self.builds[0], 'Art', [], bluehole={'enabled': True, 'branch': 'main'})
+        package.unlink()
+        with patch.object(self.manager, 'ready', return_value=True), \
+                patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch('features.blender.addons.run_blender_script'), \
+                patch.object(bluehole, 'branch_commit', side_effect=ConnectionError('offline')), \
+                patch.object(self.manager, 'launch', return_value=42) as launch:
+            page._launch()
+            self._wait_for_operation(page)
+        launch.assert_called_once_with(self.builds[0], 'Art')
+        self.assertIn('Using installed Blue Hole main', page.status.text())
+        self.assertIn('a' * 12, page.status.text())
+
     def test_close_cancels_worker_and_emits_idle_after_retirement(self):
         page = BlenderPage(manager=self.manager)
         started = Event()

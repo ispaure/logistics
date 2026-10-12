@@ -322,6 +322,45 @@ class BlenderLibraryTests(unittest.TestCase):
             self.assertEqual(artist.read_text(), 'artist preferences')
             self.assertEqual((addon / 'envFiles/default/settings.ini').read_text(), 'publisher default')
 
+    def test_offline_bluehole_retains_installed_copy_without_cached_zip(self):
+        from features.blender import bluehole
+        path = self.package('bluehole.zip', module='BlueHole')
+        config = {'enabled': True, 'branch': 'main', 'deluxe': False}
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch('features.blender.addons.run_blender_script'), \
+                patch.object(bluehole, 'update', return_value=(inspect_package(path), 'a' * 40)):
+            self.library.apply(self.release, 'Art', [], bluehole=config)
+        path.unlink()
+        prefs = self.preset / 'config/userpref.blend'; prefs.write_bytes(b'artist preferences')
+        artist = self.preset / 'scripts/addons/BlueHole/artist.json'; artist.write_text('preserve me')
+        self.library.for_preset(self.preset).add(self.package('tool.zip'))
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch('features.blender.addons.run_blender_script'), \
+                patch.object(bluehole, 'branch_commit', side_effect=ConnectionError('offline')):
+            self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={**config, 'branch': 'beta', 'deluxe': True})
+        state = self.library.selection(self.preset)
+        self.assertEqual(state['bluehole']['branch'], 'beta')
+        self.assertEqual(state['installed_bluehole']['branch'], 'main')
+        self.assertEqual(state['installed_bluehole']['commit'], 'a' * 40)
+        self.assertEqual(artist.read_text(), 'preserve me')
+        self.assertEqual(prefs.read_bytes(), b'artist preferences')
+        self.assertTrue((self.preset / 'scripts/addons/tool/__init__.py').exists())
+        self.assertIn('Using installed Blue Hole main', self.library.warnings[0])
+        (self.preset / 'scripts/addons/BlueHole/__init__.py').unlink()
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch.object(bluehole, 'branch_commit', side_effect=ConnectionError('offline')):
+            with self.assertRaisesRegex(ValueError, 'entrypoint is missing'):
+                self.library.apply(self.release, 'Art', [], bluehole=config)
+        self.assertEqual(self.library.selection(self.preset), state)
+
+    def test_offline_bluehole_first_install_still_reports_failure(self):
+        from features.blender import bluehole
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch.object(bluehole, 'branch_commit', side_effect=ConnectionError('offline')):
+            with self.assertRaisesRegex(ValueError, 'No recorded installed Blue Hole'):
+                self.library.apply(self.release, 'Art', [], bluehole={'enabled': True, 'branch': 'main'})
+        self.assertFalse((self.preset / '.logistics-addons.json').exists())
+
     def test_provided_and_personal_layers_choose_latest_with_personal_tie_priority(self):
         import shutil
         provided = self.root / 'provided'
