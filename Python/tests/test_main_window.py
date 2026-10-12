@@ -33,16 +33,11 @@ class MainWindowTests(QtTestCase):
             for _ in range(3): self.app.processEvents()
             workspace = window.documents.workspace
             markdown = workspace.active_view.document
-            def choose_new():
-                menu = next(menu for menu in workspace.findChildren(qt.QMenu)
-                            if any(action.text() == 'Text Editor' for action in menu.actions()))
-                try:
-                    action = next(action for action in menu.actions() if action.text() == 'Text Editor')
-                    action.menu().actions()[0].trigger()
-                finally:
-                    menu.close()
-            qt.QTimer.singleShot(0, workspace, choose_new)
             QTest.mouseClick(workspace.active_dock.local_new_button, qt.Qt.MouseButton.LeftButton)
+            for _ in range(3): self.app.processEvents()
+            chooser = workspace.active_view.document
+            self.assertTrue(chooser._document_chooser)
+            chooser.centralWidget().editor_new_buttons['text'].click()
             for _ in range(5): self.app.processEvents()
             text = workspace.active_view.document
             self.assertIsNot(text, markdown)

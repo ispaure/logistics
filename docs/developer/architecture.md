@@ -255,3 +255,18 @@ handles workers that have exited before their queued GUI completion is delivered
 
 The macOS launcher supports the system Bash 3.2. Pause flags use portable,
 case-insensitive case patterns; avoid Bash 4 lowercase parameter expansion there.
+
+## Document chooser and navigation actions
+
+The main window shares one Settings navigation menu between its floating control
+and the destination rail; the header uses the same actions. Visibility is refreshed
+before showing menus so the current page/mode is omitted. Release launch channels
+are unaffected by these session-only navigation choices.
+
+`DocumentChooser` reuses LandingPage's Read & edit cards without launch-mode controls.
+DocumentsPage installs one in each empty workspace's existing docking target;
+`+` presents a retained chooser tab in the requesting workspace. Registered launcher
+callbacks run through `launch_document` and `creation_scope`, retaining detached
+container routing and the document service owner. Successful synchronous opens
+retire the chooser tab; cancelled opens keep it. Choosers refresh on feature changes.
+FolderActionsPage disables document creation because its tabs belong to workflows.

@@ -11,6 +11,12 @@ class FolderActionsPage(DocumentsPage):
         self.workspace.active_changed.connect(lambda pane: self.acknowledge_current())
         self.window().installEventFilter(self)
 
+    def setup_workspace(self, workspace):
+        # Operation tabs are created by workflows, not document launchers.
+        workspace.allow_new_tabs = False
+        workspace.new_action.setEnabled(False)
+        workspace.empty_new_button.hide()
+
     @property
     def unread_count(self):
         return sum(record.get('unseen', False) and not record['closed'] for record in self.records.values())
