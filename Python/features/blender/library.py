@@ -317,12 +317,20 @@ class AddonLibrary:
                     and ((root / entry['path']).is_file() if entry['path'].endswith('.py') else
                          (root / entry['path'] / '__init__.py').is_file())}
         manager.environment(release, name)  # Validate all resource folders before copying.
+        environments = manager._contained(root, 'addon-data', 'bluehole')
         with TemporaryDirectory(prefix='.addon-update-', dir=root.parent) as temp:
             backup = Path(temp)
-            folders = ('config', 'scripts', 'extensions')
+            folders = ('config', 'scripts', 'extensions', 'addon-data')
+            existing = {folder for folder in folders if (root / folder).exists()}
             for folder in folders:
-                shutil.copytree(root / folder, backup / folder, symlinks=True)
+                if folder in existing:
+                    shutil.copytree(root / folder, backup / folder, symlinks=True)
             try:
+                previous_bluehole = old.get(bluehole_source.IDENTITY)
+                if previous_bluehole and (root / previous_bluehole['path']).is_dir():
+                    if environments.exists():
+                        shutil.rmtree(environments)
+                    bluehole_source.preserve_environments(root / previous_bluehole['path'], environments, cancelled=cancelled)
                 for key, entry in old.items():
                     if key in retained:
                         continue
@@ -348,8 +356,8 @@ class AddonLibrary:
                             mode = (member.external_attr >> 16) & 0o777
                             if os.name != 'nt' and mode:
                                 output.chmod(mode)
-                    if addon.identity == bluehole_source.IDENTITY and addon.identity in old:
-                        bluehole_source.preserve_environments(backup / old[addon.identity]['path'], target, cancelled=cancelled)
+                    if addon.identity == bluehole_source.IDENTITY:
+                        bluehole_source.preserve_environments(environments, target, cancelled=cancelled)
                 deluxe_stamp = None
                 if bluehole['enabled'] and bluehole['deluxe']:
                     bluehole_addon = next(a for a in resolved if a.identity == bluehole_source.IDENTITY)
@@ -369,7 +377,9 @@ class AddonLibrary:
                 staged.replace(root / '.logistics-addons.json')
             except BaseException:
                 for folder in folders:
-                    shutil.rmtree(root / folder)
-                    shutil.copytree(backup / folder, root / folder, symlinks=True)
+                    if (root / folder).exists():
+                        shutil.rmtree(root / folder)
+                    if folder in existing:
+                        shutil.copytree(backup / folder, root / folder, symlinks=True)
                 raise
         return root
