@@ -223,3 +223,30 @@ native mount/copy waits for that bounded operation to finish before cleanup.
 Removal/deletion finish their filesystem operation once begun; partial removal
 after a filesystem error may require manual cleanup. Downloads need internet
 access and enough disk space for the package, staging and extracted application.
+
+## Available packages and installed addons
+
+**Addon library** shows the shared and personal ZIP releases available to choose,
+including package dates, compatibility limits and original ZIP names. The shared
+folder defaults to `Software/Blender_Addons_Library`; you can distribute that
+folder and change `Resources.blender_addons_path` to its location.
+
+In **Settings → Blender → Presets → Addons**, compare **Installed** with **Latest
+compatible**. Status indicates Up to date, Update available, Installation pending,
+Removal pending, incompatible packages, or missing files/library entries. Saving
+selection records what the next launch should apply. **Installed files** also
+shows addons placed directly in the preset, including those outside the library.
+
+Keep future ZIPs inside the same addon folder. Filenames can include both the
+addon version and date, for example `Anytree_2.1.3_2026_10_12.zip`. Logistics reads
+version and compatibility from the ZIP, choosing the newest compatible declared
+version; dated revisions distinguish packages that retain the same version.
+Unknown compatibility is not automatically selected. The package date alone does
+not establish compatibility. Python caches are not needed in shared ZIPs.
+
+Blue Hole's **Currently installed** row shows its installed branch, short commit
+and version; hover to see the complete commit. The branch dropdown describes the
+next launch, which may differ from what is installed now. Updating Blue Hole
+refreshes `envFiles/default` and preserves the artist's other envFiles folders.
+Non-addon backup data in `_support` is retained for manual use and not installed
+as an addon.

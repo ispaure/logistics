@@ -23,6 +23,9 @@ class BlenderPageTests(QtTestCase):
         self.temporary = TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.manager = BlenderManager(Path(self.temporary.name))
+        from features.blender.library import AddonLibrary
+        library = patch('features.blender.page.AddonLibrary', side_effect=lambda manager: AddonLibrary(manager, provided_root=Path(self.temporary.name) / 'provided'))
+        library.start(); self.addCleanup(library.stop)
         disabled = patch('features.blender.bluehole.DEFAULT', {'enabled': False, 'branch': 'main'})
         disabled.start()
         self.addCleanup(disabled.stop)
@@ -99,6 +102,52 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual(self.manager.presets(self.builds[1]), ['New Art'])
         self.assertEqual(page.preset.currentText(), 'New Art')
         self.assertEqual(page.preset_list.currentItem().data(qt.Qt.ItemDataRole.UserRole), (self.builds[1].version, 'New Art'))
+
+    def test_addon_rows_compare_installed_and_latest_and_keep_missing_selections(self):
+        import json
+        import zipfile
+        from features.blender.library import AddonLibrary
+        root = self.manager.create_preset(self.builds[0], 'Art')
+        library = AddonLibrary(self.manager, provided_root=Path(self.temporary.name) / 'provided')
+        addons = []
+        for version in (1, 2):
+            package = Path(self.temporary.name) / f'tool-{version}.zip'
+            with zipfile.ZipFile(package, 'w') as archive:
+                archive.writestr('tool/__init__.py', f'bl_info={{"name":"Tool","version":({version},0,0),"blender":(4,2,0)}}')
+            addons.append(library.add(package))
+        folder = root / 'scripts/addons/tool'; folder.mkdir()
+        (folder / '__init__.py').write_text('bl_info={"name":"Tool","version":(1,0,0),"blender":(4,2,0)}')
+        state = {'selected': ['legacy:tool', 'legacy:missing'], 'installed': {'legacy:tool': {
+            'module': 'tool', 'path': 'scripts/addons/tool', 'digest': addons[0].digest, 'version': '1.0.0'}}}
+        (root / '.logistics-addons.json').write_text(json.dumps(state))
+        page = BlenderPage(manager=self.manager, settings_mode=True)
+        rows = {page.choices.item(i, 0).data(qt.Qt.ItemDataRole.UserRole): i for i in range(page.choices.rowCount())}
+        row = rows['legacy:tool']
+        self.assertEqual(page.choices.item(row, 2).text(), '1.0.0')
+        self.assertEqual(page.choices.item(row, 3).text(), '2.0.0')
+        self.assertEqual(page.choices.item(row, 4).text(), 'Update available')
+        self.assertEqual(page.choices.item(rows['legacy:missing'], 4).text(), 'No compatible version')
+        page.choices.item(row, 0).setCheckState(qt.Qt.CheckState.Unchecked)
+        page._apply_addons()
+        self.assertEqual(page.choices.item(row, 4).text(), 'Removal pending')
+
+    def test_changing_bluehole_branch_preserves_installed_branch_and_commit(self):
+        import json
+        root = self.manager.create_preset(self.builds[0], 'Art')
+        folder = root / 'scripts/addons/BlueHole'; folder.mkdir()
+        (folder / '__init__.py').write_text('bl_info={"version":(1,0,0)}')
+        (root / '.logistics-addons.json').write_text(json.dumps({'selected': [], 'installed': {
+            'legacy:BlueHole': {'module': 'BlueHole', 'path': 'scripts/addons/BlueHole', 'digest': 'fixture'}},
+            'bluehole': {'enabled': True, 'branch': 'main', 'deluxe': False, 'commit': 'a' * 40}}))
+        page = BlenderPage(manager=self.manager, settings_mode=True)
+        self.assertIn('main · ' + 'a' * 12, page.bluehole_installed.text())
+        page.bluehole_branch.setCurrentText('beta')
+        page._apply_addons()
+        state = page.library.selection(root)
+        self.assertEqual(state['bluehole']['branch'], 'beta')
+        self.assertEqual(state['installed_bluehole']['branch'], 'main')
+        self.assertEqual(state['installed_bluehole']['commit'], 'a' * 40)
+        self.assertIn('main · ' + 'a' * 12, page.bluehole_installed.text())
 
     def test_new_preset_dialog_collects_version_and_name_together(self):
         page = BlenderPage(manager=self.manager, settings_mode=True)

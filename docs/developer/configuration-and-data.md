@@ -147,7 +147,7 @@ available. The whole checkout `Credentials/` tree is ignored, reserving
 manifest format or download implementation is defined yet.
 
 Blender now merges that personal library with an optional read-only provided ZIP
-folder (`[Resources] blender_addons_path`, default checkout `Addons/blender`).
+folder (`[Resources] blender_addons_path`, default checkout `Software/Blender_Addons_Library`).
 Personal wins on equal identity/version, with latest compatible selection over both
 sources. The ignored provided folder is never created or modified automatically.
 Managed activation uses alphabetical display-name order and sorted CLI `--addons`

@@ -1,8 +1,11 @@
 """Private versioned addon library. Metadata is parsed, never imported."""
 import ast
+from functools import lru_cache
+from datetime import date
 from dataclasses import dataclass, replace
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
@@ -43,6 +46,8 @@ class Addon:
     package: Path
     digest: str
     source: str = 'Personal'
+    published: str = ''
+    package_name: str = ''
 
     def compatible(self, release):
         return (bool(self.minimum) and version_tuple(release.version) >= version_tuple(self.minimum)
@@ -51,10 +56,41 @@ class Addon:
 
 
 def inspect_package(package):
+    package = Path(package)
+    before = package.stat()
+    fingerprint = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns)
     try:
-        return _inspect_package(package)
+        result = _cached_package(package, fingerprint)
+        after = package.stat()
+        if fingerprint != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns):
+            raise ValueError('Addon ZIP changed while reading it')
+        return result
     except (zipfile.BadZipFile, SyntaxError, UnicodeError, KeyError, TypeError) as error:
         raise ValueError(f'Cannot read addon ZIP metadata: {error}') from error
+
+
+@lru_cache(maxsize=512)
+def _cached_package(package, fingerprint):
+    return _inspect_package(package)
+
+
+def package_date(filename):
+    match = re.search(r'_(\d{4})_(\d{2})_(\d{2})\.zip$', filename, re.IGNORECASE)
+    if match:
+        try:
+            return date(*map(int, match.groups())).isoformat()
+        except ValueError:
+            pass
+    return ''
+
+
+def legacy_version(value):
+    # Some publishers append a release nickname to the numeric bl_info tuple.
+    if isinstance(value, (tuple, list)):
+        value = list(value)
+        while value and isinstance(value[-1], str):
+            value.pop()
+    return version_string(value)
 
 
 def _inspect_package(package):
@@ -122,9 +158,9 @@ def _inspect_package(package):
         with package.open('rb') as stream:
             digest = hashlib.file_digest(stream, 'sha256').hexdigest()
         return Addon(('extension:' if kind == 'Extension' else 'legacy:') + module,
-                     str(info.get('name') or module), version_string(info.get('version', '')),
+                     str(info.get('name') or module), legacy_version(info.get('version', '')) if kind == 'Legacy addon' else version_string(info.get('version', '')),
                      version_string(minimum) if minimum else '', version_string(maximum) if maximum else '',
-                     kind, module, prefix, tuple(platforms), package, digest)
+                     kind, module, prefix, tuple(platforms), package, digest, published=package_date(package.name), package_name=package.name)
 
 
 class AddonLibrary:
@@ -137,7 +173,7 @@ class AddonLibrary:
             from commonUtils.configuration.layered import effective_settings
             config_path = get_config_file_path()
             settings = effective_settings(config_path, case_sensitive=False)
-            value = settings.get('Resources', 'blender_addons_path', fallback='Addons/blender').strip() or 'Addons/blender'
+            value = settings.get('Resources', 'blender_addons_path', fallback='Software/Blender_Addons_Library').strip() or 'Software/Blender_Addons_Library'
             provided_root = Path(value).expanduser()
             if not provided_root.is_absolute():
                 provided_root = config_path.parent.parent / provided_root
@@ -149,28 +185,39 @@ class AddonLibrary:
             if not root.is_dir():
                 continue
             layer = {}
-            paths = sorted(root.rglob('*.zip')) if source == 'Provided' else sorted(root.glob('*/*/addon.zip'))
+            paths = sorted(p for p in root.rglob('*.zip') if '_support' not in p.relative_to(root).parts) if source == 'Provided' else sorted(root.glob('*/*/addon.zip'))
             for path in paths:
                 if source == 'Personal':
                     path = self.manager._contained(root, *path.relative_to(root).parts)
                 addon = replace(inspect_package(path), source=source)
-                key = (addon.identity, addon.version)
+                origin = path.with_name('origin.json')
+                if source == 'Personal' and origin.is_file():
+                    record = json.loads(self.manager._contained(root, *origin.relative_to(root).parts).read_text())
+                    if not isinstance(record, dict) or any(not isinstance(record.get(field, ''), str) for field in ('published', 'package_name')):
+                        raise ValueError('Invalid personal addon package record')
+                    if record.get('published'):
+                        date.fromisoformat(record['published'])
+                    addon = replace(addon, published=record.get('published', ''), package_name=record.get('package_name', path.name))
+                key = (addon.identity, addon.version, addon.published)
                 if key in layer and layer[key].digest != addon.digest:
                     raise ValueError(f'{source} library contains conflicting packages for {addon.name} {addon.version}')
                 layer[key] = addon
             # Personal packages override only the matching identity/version.
+            if source == 'Personal':
+                versions = {(item.identity, item.version) for item in layer.values()}
+                combined = {key: item for key, item in combined.items() if (item.identity, item.version) not in versions}
             combined.update(layer)
         return sorted(combined.values(), key=lambda a: (a.name.casefold(), a.identity, version_tuple(a.version)))
 
     def add(self, package, *, cancelled=lambda: False):
         addon = inspect_package(package)
-        destination = self.manager._contained(self.root, addon.identity.replace(':', '-'), addon.version)
+        destination = self.manager._contained(self.root, addon.identity.replace(':', '-'), addon.version + ('--' + addon.published if addon.published else ''))
         destination.parent.mkdir(parents=True, exist_ok=True)
         if destination.exists():
             existing = inspect_package(destination / 'addon.zip')
             if existing.digest != addon.digest:
                 raise ValueError('This addon version already exists with different contents')
-            return existing
+            return replace(existing, published=addon.published, package_name=addon.package_name)
         with TemporaryDirectory(prefix='.import-', dir=destination.parent) as temp:
             staged = Path(temp) / 'release'
             staged.mkdir()
@@ -179,13 +226,14 @@ class AddonLibrary:
             copied = inspect_package(staged / 'addon.zip')
             if copied.digest != addon.digest:
                 raise ValueError('Addon ZIP changed during import')
+            (staged / 'origin.json').write_text(json.dumps({'published': addon.published, 'package_name': addon.package_name}), encoding='utf-8')
             check_cancelled(cancelled)
             staged.rename(destination)
-        return inspect_package(destination / 'addon.zip')
+        return replace(inspect_package(destination / 'addon.zip'), published=addon.published, package_name=addon.package_name)
 
-    def resolve(self, identity, release):
-        choices = [item for item in self.entries() if item.identity == identity and item.compatible(release)]
-        return max(choices, key=lambda item: version_tuple(item.version), default=None)
+    def resolve(self, identity, release, *, entries=None):
+        choices = [item for item in (self.entries() if entries is None else entries) if item.identity == identity and item.compatible(release)]
+        return max(choices, key=lambda item: (version_tuple(item.version), item.published), default=None)
 
     def selection(self, root):
         path = root / '.logistics-addons.json'
@@ -237,7 +285,7 @@ class AddonLibrary:
             module = f'bl_ext.logistics.{addon.module}' if addon.kind == 'Extension' else addon.module
             relative = (f'extensions/logistics/{addon.module}' if addon.kind == 'Extension' else
                         f'scripts/addons/{addon.module}' + ('.py' if not addon.prefix else ''))
-            new[addon.identity] = {'module': module, 'path': relative, 'digest': addon.digest, 'name': addon.name, 'source': addon.source}
+            new[addon.identity] = {'module': module, 'path': relative, 'digest': addon.digest, 'name': addon.name, 'source': addon.source, 'version': addon.version, 'published': addon.published, 'package_name': addon.package_name}
             payloads.append((addon, relative))
         old = state['installed']
         # Only paths published by this library may be replaced/removed.
@@ -275,6 +323,11 @@ class AddonLibrary:
                             output.parent.mkdir(parents=True, exist_ok=True)
                             with archive.open(member) as source, output.open('wb') as out:
                                 copy_stream(source, out, cancelled=cancelled)
+                            mode = (member.external_attr >> 16) & 0o777
+                            if os.name != 'nt' and mode:
+                                output.chmod(mode)
+                    if addon.identity == bluehole_source.IDENTITY and addon.identity in old:
+                        bluehole_source.preserve_environments(backup / old[addon.identity]['path'], target, cancelled=cancelled)
                 deluxe_stamp = None
                 if bluehole['enabled'] and bluehole['deluxe']:
                     bluehole_addon = next(a for a in resolved if a.identity == bluehole_source.IDENTITY)
@@ -290,7 +343,7 @@ class AddonLibrary:
                 check_cancelled(cancelled)
                 staged = root / '.logistics-addons.tmp'
                 manager._contained(root, staged.name)
-                staged.write_text(json.dumps({'selected': sorted(set(identities)), 'installed': new, 'bluehole': {**bluehole, 'commit': commit, 'deluxe_stamp': deluxe_stamp}}, indent=2), encoding='utf-8')
+                staged.write_text(json.dumps({'selected': sorted(set(identities)), 'installed': new, 'installed_bluehole': {'branch': bluehole['branch'], 'commit': commit, 'version': new.get(bluehole_source.IDENTITY, {}).get('version', '')} if commit else None, 'bluehole': {**bluehole, 'commit': commit, 'deluxe_stamp': deluxe_stamp}}, indent=2), encoding='utf-8')
                 staged.replace(root / '.logistics-addons.json')
             except BaseException:
                 for folder in folders:

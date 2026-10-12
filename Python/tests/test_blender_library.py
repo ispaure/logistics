@@ -16,7 +16,7 @@ class BlenderLibraryTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.manager = BlenderManager(self.root / 'managed')
-        self.library = AddonLibrary(self.manager)
+        self.library = AddonLibrary(self.manager, provided_root=self.root / 'provided')
         self.release = load_releases(platform='windows-x64')[0]
         self.preset = self.manager.create_preset(self.release, 'Art')
 
@@ -47,6 +47,43 @@ class BlenderLibraryTests(unittest.TestCase):
         self.library.add(path)  # exact duplicate is idempotent
         with self.assertRaisesRegex(ValueError, 'different contents'):
             self.library.add(self.package('different.zip', minimum=None, body='different=True'))
+
+    def test_dated_revisions_keep_same_version_and_choose_latest_compatible(self):
+        early = self.package('Tool_1.0.0_2026_10_01.zip', body='revision="first"')
+        later = self.package('Tool_1.0.0_2026_10_12.zip', body='revision="second"')
+        self.library.add(early)
+        imported = self.library.add(later)
+        self.assertEqual(imported.published, '2026-10-12')
+        self.assertEqual(len(self.library.entries()), 2)
+        self.assertEqual(self.library.resolve('legacy:tool', self.release).published, '2026-10-12')
+        self.assertEqual(self.library.resolve('legacy:tool', self.release).package_name, later.name)
+        self.library.add(self.package('Tool_2.0.0_2026_10_13.zip', version=(2, 0, 0), minimum=(99, 0, 0)))
+        self.assertEqual(self.library.resolve('legacy:tool', self.release).version, '1.0.0')
+
+    def test_provided_dated_revisions_and_support_archives_are_discovered_separately(self):
+        provided = self.root / 'provided'
+        (provided / 'Tool').mkdir(parents=True)
+        for day in ('01', '12'):
+            path = self.package(f'Tool_1.0.0_2026_10_{day}.zip', body=f'revision={int(day)}')
+            import shutil
+            shutil.copy2(path, provided / 'Tool' / path.name)
+        (provided / '_support').mkdir()
+        (provided / '_support/backups.zip').write_bytes(b'not an addon')
+        entries = self.library.entries()
+        self.assertEqual(len(entries), 2)
+        self.assertEqual(self.library.resolve('legacy:tool', self.release).published, '2026-10-12')
+
+    def test_metadata_cache_invalidates_modified_zip_and_accepts_legacy_nickname(self):
+        from features.blender import library
+        path = self.package('named.zip', version=(1, 13, 2, 'DeusEx'))
+        with patch.object(library, '_inspect_package', wraps=library._inspect_package) as inspect:
+            first = inspect_package(path)
+            self.assertEqual(first.version, '1.13.2')
+            self.assertEqual(inspect_package(path), first)
+            self.assertEqual(inspect.call_count, 1)
+            self.package('named.zip', version=(2, 0, 0))
+            self.assertEqual(inspect_package(path).version, '2.0.0')
+            self.assertEqual(inspect.call_count, 2)
 
     def test_extension_minimum_exclusive_maximum_and_platform(self):
         path = self.root / 'extension.zip'
@@ -104,6 +141,56 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual(prefs.read_bytes(), b'original preferences')
         self.assertEqual((self.preset / '.logistics-addons.json').read_bytes(), state)
         self.assertNotIn('updated=True', (self.preset / 'scripts/addons/tool/__init__.py').read_text())
+
+    def test_apply_preserves_executable_permission_for_bundled_helpers(self):
+        import os
+        path = self.package('engine.zip')
+        with zipfile.ZipFile(path, 'a') as archive:
+            engine = zipfile.ZipInfo('tool/bin/engine')
+            engine.create_system = 3
+            engine.external_attr = 0o100755 << 16
+            archive.writestr(engine, b'engine fixture')
+        self.library.add(path)
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch('features.blender.addons.run_blender_script'):
+            self.library.apply(self.release, 'Art', ['legacy:tool'])
+        installed = self.preset / 'scripts/addons/tool/bin/engine'
+        self.assertEqual(installed.read_bytes(), b'engine fixture')
+        if os.name != 'nt':
+            self.assertEqual(installed.stat().st_mode & 0o777, 0o755)
+
+    def test_bluehole_update_preserves_custom_environments_and_failed_apply_rolls_back(self):
+        from features.blender import bluehole
+        config = {'enabled': True, 'branch': 'main', 'deluxe': False}
+        packages = []
+        for index in (1, 2):
+            path = self.package(f'bluehole-{index}.zip', module='BlueHole', body=f'revision={index}')
+            with zipfile.ZipFile(path, 'a') as archive:
+                archive.writestr('BlueHole/envFiles/default/settings.ini', f'default {index}')
+                archive.writestr('BlueHole/envFiles/artist/settings.ini', f'example {index}')
+            packages.append(inspect_package(path))
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch.object(bluehole, 'update', return_value=(packages[0], 'a' * 40)), \
+                patch('features.blender.addons.run_blender_script'):
+            self.library.apply(self.release, 'Art', [], bluehole=config)
+        addon = self.preset / 'scripts/addons/BlueHole'
+        (addon / 'envFiles/artist/settings.ini').write_text('artist customization')
+        before = (self.preset / '.logistics-addons.json').read_bytes()
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch.object(bluehole, 'update', return_value=(packages[1], 'b' * 40)), \
+                patch('features.blender.addons.run_blender_script', side_effect=OSError('enable failed')):
+            with self.assertRaises(OSError):
+                self.library.apply(self.release, 'Art', [], bluehole=config)
+        self.assertEqual((self.preset / '.logistics-addons.json').read_bytes(), before)
+        self.assertEqual((addon / 'envFiles/default/settings.ini').read_text(), 'default 1')
+        self.assertEqual((addon / 'envFiles/artist/settings.ini').read_text(), 'artist customization')
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch.object(bluehole, 'update', return_value=(packages[1], 'b' * 40)), \
+                patch('features.blender.addons.run_blender_script'):
+            self.library.apply(self.release, 'Art', [], bluehole=config)
+        self.assertEqual((addon / 'envFiles/default/settings.ini').read_text(), 'default 2')
+        self.assertEqual((addon / 'envFiles/artist/settings.ini').read_text(), 'artist customization')
+        self.assertEqual(self.library.selection(self.preset)['installed_bluehole']['commit'], 'b' * 40)
 
     def test_provided_and_personal_layers_choose_latest_with_personal_tie_priority(self):
         import shutil

@@ -104,13 +104,12 @@ Defaults are independent directories at the checkout root:
 
 ```text
 logistics/
-├── Addons/
-│   └── blender/  (optional provided addon ZIP library)
 ├── Software/
 │   ├── Windows/
 │   ├── macOS/
 │   ├── Linux/
-│   └── General/
+│   ├── General/
+│   └── Blender_Addons_Library/  (optional shared addon ZIPs)
 └── Credentials/
     ├── rclone/
     └── blender_addons/  (reserved; downloads not implemented)
@@ -128,7 +127,7 @@ location, add independent overrides to `Python/configFile.ini`:
 [Resources]
 software_path = Software
 credentials_path = Credentials/rclone
-blender_addons_path = Addons/blender
+blender_addons_path = Software/Blender_Addons_Library
 ```
 
 Relative overrides resolve from the checkout root; absolute paths and `~` paths
