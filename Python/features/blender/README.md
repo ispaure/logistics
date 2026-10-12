@@ -235,3 +235,5 @@ is informational only. Preset duplicate/copy operations include the private ZIP
 library; deletion removes it with the rest of that preset.
 
 Unchanged managed packages (same module/path/ZIP digest with an installed entrypoint) remain in place during apply. Activation still runs; a missing entrypoint triggers repair. Changed or deselected regular addon packages are replaced/removed as before.
+
+Blue Hole artist environments are stored in the preset’s `addon-data/bluehole/envFiles`, excluding default. Apply snapshots the current installed environments before removal and restores them on reinstall. This storage participates in resource rollback and follows preset copy/delete.

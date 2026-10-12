@@ -232,6 +232,37 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual((addon / 'envFiles/artist/settings.ini').read_text(), 'artist customization')
         self.assertEqual(self.library.selection(self.preset)['installed_bluehole']['commit'], 'b' * 40)
 
+    def test_bluehole_disable_reenable_preserves_environments_and_failed_disable_rolls_back(self):
+        from features.blender import bluehole
+        enabled = {'enabled': True, 'branch': 'main', 'deluxe': False}
+        path = self.package('bluehole.zip', module='BlueHole')
+        with zipfile.ZipFile(path, 'a') as archive:
+            archive.writestr('BlueHole/envFiles/default/settings.ini', 'publisher default')
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch.object(bluehole, 'update', return_value=(inspect_package(path), 'a' * 40)), \
+                patch('features.blender.addons.run_blender_script') as run:
+            self.library.apply(self.release, 'Art', [], bluehole=enabled)
+            addon = self.preset / 'scripts/addons/BlueHole'
+            artist = addon / 'envFiles/artist/settings.ini'
+            artist.parent.mkdir(); artist.write_text('artist preferences')
+            disabled = {**enabled, 'enabled': False}
+            run.side_effect = OSError('enable failed')
+            with self.assertRaises(OSError):
+                self.library.apply(self.release, 'Art', [], bluehole=disabled)
+            self.assertEqual(artist.read_text(), 'artist preferences')
+            self.assertFalse((self.preset / 'addon-data').exists())
+            run.side_effect = None
+            self.library.apply(self.release, 'Art', [], bluehole=disabled)
+            self.assertFalse(addon.exists())
+            saved = self.preset / 'addon-data/bluehole/envFiles'
+            self.assertEqual((saved / 'artist/settings.ini').read_text(), 'artist preferences')
+            self.assertFalse((saved / 'default').exists())
+            copied = self.manager.duplicate_preset(self.release, 'Art', 'Copy')
+            self.assertTrue((copied / 'addon-data/bluehole/envFiles/artist/settings.ini').exists())
+            self.library.apply(self.release, 'Art', [], bluehole=enabled)
+            self.assertEqual(artist.read_text(), 'artist preferences')
+            self.assertEqual((addon / 'envFiles/default/settings.ini').read_text(), 'publisher default')
+
     def test_provided_and_personal_layers_choose_latest_with_personal_tie_priority(self):
         import shutil
         provided = self.root / 'provided'

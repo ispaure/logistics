@@ -264,3 +264,5 @@ Non-addon backup data in `_support` is retained for manual use and not installed
 as an addon.
 
 Launching leaves unchanged addon packages in place, preserving files they created inside their folders. Changed versions still replace package files; keep important addon-local data backed up before a version update.
+
+Disabling Blue Hole keeps your custom environments in the preset’s separate `addon-data/bluehole` folder. Re-enabling restores them; default remains supplied by Blue Hole. Copying a preset includes this data, and deleting the preset removes it.
