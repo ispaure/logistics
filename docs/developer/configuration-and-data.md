@@ -79,9 +79,12 @@ SettingsPage propagates one application/personal scope to all category panels.
 It starts in personal scope and offers application scope in its selector only
 when `Path.home().name == 'marca'`.
 Its global personal-reset action replaces only `configuration/`, via
-`features.settings.reset_personal_configuration()`. Staging retains Migration
-sections, sets the feature-migration marker, and keeps empty Git/Text Editor INIs
-so existence-based legacy migrations cannot run again. The prior tree is kept
+`features.settings.reset_personal_configuration()`. Completion is recorded through
+commonUtils' MigrationLedger in `state/settings-migrations.ini`, outside resettable
+overrides. Existing legacy completion markers are adopted once; pending imports
+retry idempotently after partial failures. Reset deliberately completes the legacy
+migration IDs, so old preferences cannot return even when their personal INIs are
+absent. Migration metadata rolls back along with failed resets. The prior tree is kept
 outside temporary staging until feature-default activation succeeds; failures
 restore it or retain a named recovery directory. Personal layered editors discard
 pending edits and reload, while application-editor pending values remain intact.

@@ -251,8 +251,8 @@ choice is available only when the current user's home folder is named `marca`.
 
 **Reset All Personal Settings…**, at the upper-right in personal mode, resets
 configuration overrides in every category after confirmation and discards unsaved
-personal configuration edits. It preserves migration markers and empty feature
-INIs to prevent legacy settings from returning. Documents, accounts, workspaces,
+personal configuration edits. Migration completion lives separately in
+`state/settings-migrations.ini` to prevent legacy settings from returning. Documents, accounts, workspaces,
 reading state, managed software and Blender presets remain intact. Feature choices
 and appearance refresh immediately; open tools reload their preferences, and
 launcher settings apply on the next launch.

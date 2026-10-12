@@ -1,5 +1,6 @@
 """Feature-owned user settings; no repository-specific config in Logistics core."""
 import json
+from configparser import Error as ConfigError
 import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -44,10 +45,12 @@ class Preferences:
         except (OSError, ValueError, TypeError) as exc:
             self.warning = f'Could not read Git settings: {exc}. Original file has been preserved.'
         if not self.custom:
-            from features.settings import settings_store
+            from features.settings import settings_store, migration_ledger
             from .configuration import config_path, FIELDS, field_key
             self.settings = settings_store(config_path())
-            if data and not self.warning and not self.settings.personal.exists():
+            def migrate():
+                if not data:
+                    return
                 legacy = data.get('options', {})
                 changes = {('Git', field_key(key)): str(value).lower() if isinstance(value, bool) else str(value)
                            for key, value in legacy.items() if key in FIELDS}
@@ -57,9 +60,15 @@ class Preferences:
                     prefix = 'added' if kind == 'add' else 'removed'
                     for suffix, color in zip(('text', 'background'), colors):
                         changes['DiffColors', f'{prefix}_{suffix}_color_str'] = color
-                try:
+                current = self.settings.overrides()
+                changes = {key: value for key, value in changes.items() if key not in current}
+                if changes:
                     self.settings.save(changes)
-                except (OSError, ValueError) as error:
+            if not self.warning:
+                try:
+                    migration_ledger(self.settings).run('git-options-v1', migrate,
+                                                       already_applied=self.settings.personal.exists())
+                except (OSError, ValueError, UnicodeError, ConfigError) as error:
                     self.warning = f'Could not migrate Git preferences: {error}. Original file has been preserved.'
             self.refresh_systemic()
 

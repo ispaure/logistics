@@ -1,6 +1,5 @@
 """Logistics owns the paths; commonUtils owns layered configuration mechanics."""
 from pathlib import Path
-from configparser import Error as ConfigError
 from contextlib import contextmanager
 import shutil
 import logging
@@ -10,6 +9,18 @@ from uuid import uuid4
 from commonUtils.configuration.layered import LayeredSettings, register_settings
 from commonUtils.configuration.settings import settings_path
 from features.preferences import preferences_path
+
+LEGACY_SETTINGS_MIGRATIONS = ('feature-enable-v1', 'text-editor-v1', 'git-options-v1')
+
+
+def migration_ledger(store=None):
+    from commonUtils.configuration.migrations import MigrationLedger
+    root = preferences_path().parent
+    if store is not None:
+        # Explicit test/external stores retain their own metadata location.
+        root = next((parent.parent for parent in store.personal.parents if parent.name == 'configuration'),
+                    store.personal.parent)
+    return MigrationLedger(root / 'state' / 'settings-migrations.ini')
 
 
 def settings_store(path):
@@ -41,48 +52,32 @@ def initialize_settings():
 def reset_personal_configuration():
     """Replace personal overrides; roll back if publication/runtime reset fails.
 
-    Keep migration markers and empty INIs so legacy preferences cannot be
-    reimported. Only configuration/ is touched, never the user-data root.
+    Completion metadata stays in state/, independently of resettable overrides.
+    Only configuration/ is replaced, never the user-data root.
     """
-    from commonUtils.configuration.layered import read_values
-    from commonUtils.formats.iniType import INIFile
+    from commonUtils.persistence import atomic_write_bytes
     root = preferences_path().parent / 'configuration'
     root.parent.mkdir(parents=True, exist_ok=True)
     if root.is_symlink() or (root.exists() and not root.is_dir()):
         raise ValueError('Personal configuration must be a regular folder to reset it')
+    ledger = migration_ledger()
+    ledger_snapshot = ledger.path.read_bytes() if ledger.path.exists() else None
     with TemporaryDirectory(prefix='.settings-reset-', dir=root.parent) as workspace:
         replacement = Path(workspace) / 'replacement'
         # Keep recovery outside the auto-cleaned staging directory: a failed
         # rollback must never erase the only remaining copy of the old settings.
         backup = root.with_name('configuration.reset-backup-' + uuid4().hex)
         replacement.mkdir(mode=0o700)
-        files = set()
         if root.exists():
             for path in root.rglob('*'):
                 if path.is_symlink():
                     raise ValueError('Personal configuration contains a symlink; inspect it before resetting')
-                if path.is_file() and path.suffix.lower() == '.ini':
-                    files.add(path.relative_to(root))
-        # Preserve empty files even for features not yet opened this session:
-        # these two legacy migrations use existence as their one-time marker.
-        files.update((Path('configFile.ini'), Path('features/git/config.ini'),
-                      Path('features/text_editor/config.ini')))
-        for relative in files:
-            source = root / relative
-            try:
-                markers = {key: value for key, value in read_values(source).items() if key[0] == 'Migration'}
-            except (UnicodeError, ConfigError, ValueError):
-                markers = {}
-            if relative == Path('configFile.ini'):
-                markers['Migration', 'features_bool'] = 'true'
-            destination = replacement / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_text(INIFile.updated_text('', markers), encoding='utf-8')
         previous = root.exists()
         if previous:
             root.rename(backup)
         try:
             replacement.rename(root)
+            ledger.complete(*LEGACY_SETTINGS_MIGRATIONS)
             yield root
         except BaseException:
             try:
@@ -90,6 +85,10 @@ def reset_personal_configuration():
                     shutil.rmtree(root)
                 if previous:
                     backup.rename(root)
+                if ledger_snapshot is None:
+                    ledger.path.unlink(missing_ok=True)
+                else:
+                    atomic_write_bytes(ledger.path, ledger_snapshot)
             except OSError as error:
                 raise OSError(f'Could not restore personal configuration. Previous settings are kept at {backup}') from error
             raise

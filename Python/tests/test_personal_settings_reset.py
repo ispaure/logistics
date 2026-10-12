@@ -25,7 +25,10 @@ class PersonalSettingsResetTests(unittest.TestCase):
         path.write_text(text)
         return path
 
-    def test_reset_all_categories_keeps_user_data_and_migration_markers(self):
+    def test_reset_all_categories_keeps_user_data_and_separate_migration_metadata(self):
+        from features.settings import migration_ledger
+        ledger = migration_ledger()
+        ledger.complete('another-tool-v1')
         self.write('configuration/configFile.ini', '[FeatureDefaults]\ndisabled_list-str=["blender"]\n[Migration]\nfeatures_bool=true\n')
         self.write('configuration/features/books/config.ini', '[Reader]\ntheme_mode=dark\n[Migration]\nother_bool=true\n')
         self.write('configuration/features/disabled_tool/config.ini', '[Options]\nvalue_str=custom\n')
@@ -33,13 +36,16 @@ class PersonalSettingsResetTests(unittest.TestCase):
         data = [self.write(name, 'keep') for name in ('git.json', 'IDE/workspace.json',
                 'preferences/blender/4.5.1/Default/config/userpref.blend', 'software/blender/4.5.1/blender')]
         with reset_personal_configuration():
-            self.assertEqual(read_values(self.config / 'configFile.ini'), {('Migration', 'features_bool'): 'true'})
-            self.assertEqual(read_values(self.config / 'features/books/config.ini'), {('Migration', 'other_bool'): 'true'})
+            self.assertEqual(read_values(self.config / 'configFile.ini'), {})
+            self.assertEqual(read_values(self.config / 'features/books/config.ini'), {})
             self.assertEqual(read_values(self.config / 'features/disabled_tool/config.ini'), {})
             self.assertEqual(read_values(self.config / 'commonUtils/settings.ini'), {})
         self.assertTrue(all(path.read_text() == 'keep' for path in data))
-        self.assertTrue((self.config / 'features/git/config.ini').exists())
-        self.assertTrue((self.config / 'features/text_editor/config.ini').exists())
+        self.assertFalse((self.config / 'features/git/config.ini').exists())
+        self.assertFalse((self.config / 'features/text_editor/config.ini').exists())
+        self.assertEqual(ledger.state('another-tool-v1'), 'done')
+        for key in ('feature-enable-v1', 'text-editor-v1', 'git-options-v1'):
+            self.assertEqual(ledger.state(key), 'done')
         self.assertEqual(list(self.root.glob('.settings-reset-*')), [])
         self.assertEqual(list(self.root.glob('configuration.reset-backup-*')), [])
 

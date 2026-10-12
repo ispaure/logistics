@@ -179,8 +179,8 @@ unsaved software-default edits are retained. Settings panels reload and feature
 navigation/appearance update immediately. Open editor, reader and Git views reload
 preferences automatically; launcher settings apply on the next launch.
 
-This resets only personal configuration, keeping migration markers so old
-preferences cannot be imported again. Documents, accounts, IDE workspaces, reading
+This resets only personal configuration. Separate migration metadata prevents old
+preferences from being imported again. Documents, accounts, IDE workspaces, reading
 progress, installed software and Blender presets are kept. A failed reset restores
 the previous configuration where possible; if recovery fails, the error identifies
 the retained recovery folder. A refresh failure after a successful reset asks you

@@ -31,26 +31,31 @@ class Preferences:
             else cache_directory(create=False) / "TextEditor" / "preferences.ini"
         )
         if not self.custom:
-            from features.settings import settings_store
+            from features.settings import settings_store, migration_ledger
             self.store = settings_store(Path(__file__).with_name('config.ini'))
             legacy = self.path
             self.path = self.store.personal
-            if legacy.exists() and not self.path.exists():
+            already_applied = self.path.exists()
+            def migrate():
+                if not legacy.exists():
+                    return
                 from commonUtils.configuration.layered import read_values, shared_settings
-                try:
-                    saved = read_values(legacy)
-                    editor = {identity: value for identity, value in saved.items()
-                              if identity[0] == 'Editor' and identity[1] not in ('font_family_str', 'font_size_int')}
-                    if editor:
-                        self.store.save(editor)
-                    fonts = {('Styling', 'code_' + key): value for (section, key), value in saved.items()
-                             if section == 'Editor' and key in ('font_family_str', 'font_size_int')}
-                    style = shared_settings()
-                    fonts = {key: value for key, value in fonts.items() if key not in style.overrides()}
-                    if fonts:
-                        style.save(fonts)
-                except (OSError, UnicodeError, Error, ValueError) as error:
-                    logging.getLogger(__name__).warning('Could not migrate editor preferences; original file preserved: %s', error)
+                saved = read_values(legacy)
+                current = self.store.overrides()
+                editor = {identity: value for identity, value in saved.items() if identity not in current
+                          and identity[0] == 'Editor' and identity[1] not in ('font_family_str', 'font_size_int')}
+                if editor:
+                    self.store.save(editor)
+                fonts = {('Styling', 'code_' + key): value for (section, key), value in saved.items()
+                         if section == 'Editor' and key in ('font_family_str', 'font_size_int')}
+                style = shared_settings()
+                fonts = {key: value for key, value in fonts.items() if key not in style.overrides()}
+                if fonts:
+                    style.save(fonts)
+            try:
+                migration_ledger(self.store).run('text-editor-v1', migrate, already_applied=already_applied)
+            except (OSError, UnicodeError, Error, ValueError) as error:
+                logging.getLogger(__name__).warning('Could not migrate editor preferences; original file preserved: %s', error)
 
     @property
     def font_path(self):
