@@ -7,6 +7,9 @@ with remote repositories. Open **Git** from the navigation rail; enable it in
 Code previews and comparison/merge panes share a saved point size with Text
 Editor and IDE, defaulting to 11 points. Ctrl+wheel zoom in a code editor updates
 other open code panes. Both code family and size use the shared Styling settings.
+Toolbar and navigation icons, toolbar count badges, and the selected navigation
+row (including File status) use the shared accent color and update when the theme
+changes. Set it under **Settings → Appearance & shared controls → Styling**.
 
 ## Get started
 

@@ -22,11 +22,23 @@ class RepositoryLayout:
         self.setFont(content_font)
         self._build_toolbar(layout, toolbar_font)
         self._build_views(layout)
+        qt.QApplication.instance().paletteChanged.connect(self._refresh_action_icons)
         self._build_status(layout)
         self._style_content(content_font)
         from commonUtils.ui.styling import bind_font
         bind_font(self, 'ui')
         bind_font(self.toolbar, 'ui')
+
+    def _refresh_action_icons(self, *args):
+        from .chrome import action_icon
+        for button in self.action_buttons.values():
+            button.defaultAction().setIcon(action_icon(button.property('git_action_icon'),
+                                                       button.property('badge_count') or 0))
+        for index in range(self.refs.topLevelItemCount()):
+            item = self.refs.topLevelItem(index)
+            name = item.data(0, qt.Qt.ItemDataRole.UserRole + 1)
+            if name:
+                item.setIcon(0, action_icon(name))
 
     def _build_toolbar(self, layout, toolbar_font):
         self.repository_menu = qt.QMenu(self)
