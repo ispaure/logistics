@@ -254,6 +254,11 @@ incompatible installed copies cannot fall back. Cancellation and invalid downloa
 packages are not treated as network failures.
 
 Blue Hole channels resolve to `blender-<major.minor.patch>/<main|beta|alpha>`.
+The published families are `blender-4.5.1` and `blender-5.2.2`, each with all three
+channels. Resolution uses the managed release being launched: 4.5.1 selects its
+own family and 5.2.2 selects its own family. Regression tests cover all six choices
+through both branch resolution and update/cache handling. The 5.2.2 family starts
+from 4.5.1 alpha; availability does not imply completed Blender compatibility.
 The resolver paginates GitHub branches, filters the requested channel and chooses
 the highest baseline at or below the exact Blender version. It then requests the
 URL-encoded branch endpoint and downloads by immutable commit. No compatible
