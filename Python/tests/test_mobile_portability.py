@@ -11,8 +11,11 @@ class MobilePortabilityTests(unittest.TestCase):
     def test_headless_mobile_core_and_document_fixtures(self):
         root = Path(__file__).resolve().parents[2]
         env = dict(os.environ, PYTHONPATH=os.pathsep.join((str(root / 'Python'), str(root / 'Python/tests'))))
-        completed = subprocess.run([sys.executable, '-m', 'logisticsmobile.smoke', '--target', 'host'],
-                                   cwd=root, env=env, capture_output=True, text=True, timeout=30)
+        try:
+            completed = subprocess.run([sys.executable, '-m', 'logisticsmobile.smoke', '--target', 'host'],
+                                       cwd=root, env=env, capture_output=True, text=True, timeout=30)
+        except subprocess.TimeoutExpired as error:
+            self.fail(f'Mobile harness timed out. stdout={error.stdout!r}; stderr={error.stderr!r}')
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         line = next(line for line in completed.stdout.splitlines() if line.startswith('LOGISTICS_MOBILE_RESULT='))
         report = json.loads(line.split('=', 1)[1])
