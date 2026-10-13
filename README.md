@@ -25,6 +25,9 @@ The launcher sets up Python and the required Python packages for you. You'll nee
 an internet connection for the first run. Setup may take a little while; later
 launches reuse the installed environment.
 
+The Qt 6.12 interface requires macOS 14 or newer, Windows 10/11, or Linux
+with glibc 2.34 or newer on x86-64 (2.39 or newer on ARM64).
+
 Using Git instead? Clone with the shared utilities included, then open the same launcher:
 
 ```sh

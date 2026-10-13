@@ -32,6 +32,8 @@ emits retry requests to the page, which owns request/lease enablement. Empty sav
 errors are hidden so the shared status line remains at the bottom. No
 application-wide Return shortcut is installed.
 
+The transport reads content types through `QNetworkRequest.KnownHeaders`, keeping
+SSE and JSON detection compatible with Qt 6.12's changed raw-header name binding.
 The page owns one QtNetwork request at a time. Sending persists a turn before
 starting inference; deltas/checkpoints retain partial responses. Cancellation is
 distinct from failure. Requests do not run at discovery, construction or refresh

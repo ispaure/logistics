@@ -162,8 +162,10 @@ class Client(QObject):
         try:
             if self.total_bytes > 32 * 1024 * 1024:
                 raise ValueError('Server response exceeds the size limit.')
-            content_type = bytes(self.reply.rawHeader(b'Content-Type')).lower()
-            if self.mode == 'chat' and b'text/event-stream' in content_type:
+            # The rawHeader name binding changed to str in newer PySide.
+            # KnownHeaders returns the content type consistently across Qt versions.
+            content_type = str(self.reply.header(QNetworkRequest.KnownHeaders.ContentTypeHeader) or '').lower()
+            if self.mode == 'chat' and 'text/event-stream' in content_type:
                 self.pending += self.decoder.feed(chunk)
             else:
                 self.body += chunk

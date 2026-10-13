@@ -188,6 +188,8 @@ Mercurial status, Custom Actions, Update and Advanced pages.
 watching, periodic fetch, custom actions and external tools to the existing job
 boundary. `options.py` validates the persisted schema and constructs command-scoped
 Git defaults; only the explicit global-identity action writes global Git config.
+Commands disable Git's optional index writes so background status reads do not
+trigger another filesystem-watcher refresh. Required mutation locks remain enabled.
 `accounts.py` invokes approved native credential helpers directly, using sensitive
 stdin with captured output suppressed, and delegates GitHub browser login to GCM.
 Secrets are excluded from the account schema. Backend discard backups and submodule

@@ -283,6 +283,11 @@ can enable file watching and periodic origin fetch; see the limits under
 [Git preferences](#git-preferences). Text preview capture is bounded and configurable;
 oversized structured responses report an error rather than silently losing entries.
 
+Background status reads avoid changing Git's index, and the focused field retains
+keyboard focus when a refresh temporarily disables the workspace controls.
+Automatic refreshes also preserve repository-operation errors until another
+operation replaces them.
+
 This version supports whole-file and eligible hunk staging, side-by-side review,
 three-way text conflict resolution and configured external diff/merge tools.
 Interactive rebase editing, reset/clean, LFS management, sparse/partial cloning,
