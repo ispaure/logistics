@@ -1,0 +1,40 @@
+{
+  "backend": "toga_android.app",
+  "cases": [
+    "native_hub",
+    "native_preferences",
+    "native_documents",
+    "native_markdown_preview",
+    "native_epub_reader",
+    "native_bookmarks",
+    "native_comic_reader"
+  ],
+  "error": "",
+  "expected_cases": [
+    "native_hub",
+    "native_preferences",
+    "native_documents",
+    "native_markdown_preview",
+    "native_epub_reader",
+    "native_bookmarks",
+    "native_comic_reader"
+  ],
+  "native_picker_tested": false,
+  "schema": 1,
+  "source": {
+    "commonUtils_commit": "18e23630e50a03ad84eade2473a84401e1fb5e1b",
+    "dirty": false,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics"
+    ],
+    "logistics_commit": "428d1d72d9c835e7fc65ef347dc684b4e52ea69a"
+  },
+  "success": true,
+  "suite": "logistics-native-ui",
+  "target": "android",
+  "run_id": 38365625757,
+  "run_url": "https://github.com/ispaure/logistics/actions/runs/38365625757"
+}
