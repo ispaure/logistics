@@ -47,15 +47,15 @@ class AutoSave(qt.QObject):
             return
         snapshot = buffer.snapshot
         text = buffer.text.toPlainText()
-        revision = buffer.text.revision()
         self.busy = True
         def done(saved):
             self.busy = False
             buffer.snapshot = saved
-            # A newer edit must remain dirty and receive a subsequent save.
-            if buffer.text.revision() == revision:
-                buffer.text.setModified(False)
             buffer.configure()
+            # Syntax/format updates also advance Qt's revision. Only newer
+            # source text must remain dirty and receive a subsequent save.
+            if buffer.text.toPlainText() == text:
+                buffer.text.setModified(False)
             workspace.watch.addPath(str(saved.path))
             workspace.update_buffer_titles(buffer)
             if buffer.text.isModified():

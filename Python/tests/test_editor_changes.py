@@ -86,7 +86,11 @@ class AutoSaveTests(QtTestCase):
         deadline = time.monotonic() + 8
         while not predicate():
             self.app.processEvents()
-            self.assertLess(time.monotonic(), deadline)
+            autosave = getattr(getattr(getattr(self, 'doc', None), 'buffer', None), 'autosave', None)
+            self.assertLess(time.monotonic(), deadline,
+                f'Autosave busy={getattr(autosave, "busy", None)}, error={getattr(autosave, "error", None)}, '
+                f'timer={autosave.timer.isActive() if autosave else None}, '
+                f'workspace worker={bool(getattr(getattr(self, "view", None), "worker", None))}')
             time.sleep(.005)
 
     def setUp(self):
@@ -170,6 +174,32 @@ class AutoSaveTests(QtTestCase):
         self.assertEqual(Project.from_dict(legacy).autosave, 'after_delay')
         with self.assertRaises(ValueError):
             Project.from_dict(dict(legacy, autosave='invalid'))
+
+    def test_format_only_revision_during_save_does_not_leave_text_dirty(self):
+        from features.ide.autosave import write_snapshot
+        started, release = Event(), Event()
+        def delayed(snapshot, text):
+            started.set()
+            if not release.wait(5):
+                raise RuntimeError('Test worker timed out')
+            return write_snapshot(snapshot, text)
+        self.addCleanup(release.set)
+        with patch('features.ide.autosave.write_snapshot', side_effect=delayed):
+            self.doc.insertPlainText('edit ')
+            self.doc.buffer.autosave.save()
+            self.until(started.is_set)
+            revision = self.doc.document().revision()
+            cursor = qt.QTextCursor(self.doc.document())
+            cursor.select(qt.QTextCursor.SelectionType.Document)
+            style = qt.QTextCharFormat()
+            style.setForeground(qt.QColor('blue'))
+            cursor.mergeCharFormat(style)
+            self.assertGreater(self.doc.document().revision(), revision)
+            self.assertEqual(self.doc.toPlainText(), 'edit original\n')
+            release.set()
+            self.until(lambda: not self.doc.buffer.autosave.busy)
+        self.assertFalse(self.doc.document().isModified())
+        self.assertEqual(self.path.read_bytes(), b'edit original\r\n')
 
     def test_off_and_focus_mode(self):
         self.view.set_autosave('off')

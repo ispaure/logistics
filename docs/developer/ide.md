@@ -423,7 +423,9 @@ bound concurrency. Shared gutter APIs are documented in commonUtils.
 IDE owns one AutoSave per DocumentBuffer, including Markdown buffers. Project
 metadata stores off/after_delay/focus_change (default after_delay, 1000 ms). Snapshot
 encoding and conflict-checked publication run on the workspace's retained worker
-queue. A revision check prevents completion from clearing newer edits. Active
+queue. Completion compares source text with the text submitted for saving,
+so newer text stays dirty while formatting-only Qt revisions do not force another
+save. Active
 writes veto final-buffer close, manual save and reload; workspace shutdown already
 waits for its worker queue. Modal save/close choices suppress autosave. Failures
 pause that buffer until an explicit save/reload succeeds and remain in a dedicated

@@ -235,7 +235,8 @@ baseline, markers compare against the last saved file. Large documents/baselines
 and **Off**, persisted per project. The delay restarts with each edit. Split views
 save once per shared buffer; undo remains available. Autosave preserves encoding
 and line endings and runs disk writes in the background. An edit made during a
-save stays unsaved until a later save completes. Markdown edits also autosave.
+save stays unsaved until a later save completes. Formatting-only updates during
+a save do not leave unchanged source text dirty. Markdown edits also autosave.
 External changes, deletion, permissions or encoding errors pause autosave for that
 file and leave a visible notice. Use Save, Reload or Save As to resolve it; your
 buffer remains intact. Closing, reloading or explicitly saving during an active
