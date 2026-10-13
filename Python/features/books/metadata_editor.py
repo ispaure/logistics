@@ -10,10 +10,11 @@ class MetadataEditor(qt.QDialog):
     def __init__(self, book, parent=None, *, save_handler=None):
         super().__init__(parent)
         self.save_handler = save_handler
-        self.setWindowTitle('Edit EPUB metadata')
+        self.setWindowTitle(('🕵️ Private - ' if book.source is not None else '') + 'Edit EPUB metadata')
         self.resize(650, 680)
         layout = qt.QVBoxLayout(self)
-        note = qt.QLabel('Save updates this EPUB directly. An original backup is kept beside the book. '
+        note = qt.QLabel(('Save updates the encrypted local copy without plaintext backups. ' if book.source is not None else
+                         'Save updates this EPUB directly. An original backup is kept beside the book. ') +
                         'Chapters, images and other metadata are preserved.')
         note.setWordWrap(True)
         layout.addWidget(note)

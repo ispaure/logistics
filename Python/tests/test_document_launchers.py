@@ -9,10 +9,13 @@ class TextLauncherTests(unittest.TestCase):
     def test_open_passes_selected_path_and_cancel_creates_no_service(self):
         parent = Mock()
         service = Mock()
-        with patch.object(qt.QFileDialog, 'getOpenFileName', return_value=('/work/notes.txt', '')), patch.object(contributions, '_service', return_value=service):
+        from pathlib import Path
+        choice = Mock(path='notes.txt', provider=Mock(root=Path('/work'), private=False))
+        with patch('services.editor_resources.choose_editor_resource', return_value=choice), patch.object(contributions, '_service', return_value=service):
             self.assertIs(contributions.launch(parent), service.open.return_value)
-            service.open.assert_called_once_with('/work/notes.txt')
-        with patch.object(qt.QFileDialog, 'getOpenFileName', return_value=('', '')), patch.object(contributions, '_service') as create:
+            service.open.assert_called_once_with(Path('/work/notes.txt'))
+            choice.close.assert_called_once_with()
+        with patch('services.editor_resources.choose_editor_resource', return_value=None), patch.object(contributions, '_service') as create:
             self.assertIsNone(contributions.launch(parent))
             create.assert_not_called()
 

@@ -45,10 +45,12 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         box.add(toga.Box(children=[toga.Button('New', on_press=self.new_document, style=Pack(flex=1, height=44)),
                                    self.import_button], style=Pack(direction=ROW, margin_bottom=8)))
         box.add(toga.Box(children=[self.name], style=Pack(direction=ROW, margin_bottom=8)))
+        box.add(toga.Button('Open…', on_press=self.show_editor_open, style=Pack(height=44)))
         box.add(self.editor)
         box.add(self.status)
         box.add(toga.Box(children=[self.save_button,
-            toga.Button('Save a copy', on_press=self.save_copy, style=Pack(flex=1, height=44))],
+            toga.Button('Save a copy', on_press=self.save_copy, style=Pack(flex=1, height=44)),
+            toga.Button('Save As…', on_press=self.show_document_save_as, style=Pack(flex=1, height=44))],
             style=Pack(direction=ROW, margin_top=8)))
         self.export_button = toga.Button('Export…', on_press=self.export_document, style=Pack(flex=1, height=44))
         box.add(toga.Box(children=[self.export_button,
@@ -77,12 +79,20 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         self.show_home()
         self.main_window.show()
 
-    def show_view(self, view):
-        if not self.checkpoint():
+    def show_view(self, view, *, checkpoint=True):
+        if checkpoint and not self.checkpoint():
             return False
-        for child in list(self.body.children):
-            self.body.remove(child)
-        self.body.add(view)
+        previous = list(self.body.children)
+        try:
+            for child in previous:
+                self.body.remove(child)
+            self.body.add(view)
+        except Exception:
+            for child in list(self.body.children):
+                self.body.remove(child)
+            for child in previous:
+                self.body.add(child)
+            raise
         return True
 
     def show_home(self, widget=None, **kwargs):
@@ -225,6 +235,9 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
     def checkpoint(self, *args, **kwargs):
         if self.current is None or self.loading:
             return True
+        if getattr(self.current, 'private', False):
+            self.status.text = 'This draft is session-only. Save it before leaving.'
+            return not self.current.modified
         try:
             self.store.checkpoint(self.current)
             return True
@@ -286,6 +299,12 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
             self.export_button.enabled = True
 
     def exit_app(self, app, **kwargs):
+        if getattr(self, 'cloud_busy', False):
+            self.cancel_cloud()
+            return False
+        if hasattr(self, "crypt_reader"):
+            if not self.clear_private_reader():
+                return False
         if getattr(self, 'cloud_client', None):
             self.cloud_client.cancel()
         if getattr(self, 'chat_client', None):

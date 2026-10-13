@@ -97,3 +97,27 @@ class PickerTests(unittest.IsolatedAsyncioTestCase):
             provider, reference = await pick_document(app)
         self.assertIsInstance(provider, LocalDocuments)
         self.assertEqual(reference, Path('/selected.txt'))
+
+    async def test_large_private_copy_export_streams_without_old_size_cap(self):
+        from tempfile import TemporaryDirectory
+        from logisticsmobile.pickers import export_file
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'large.zip'
+            with source.open('wb') as output:
+                output.seek(40 * 1024 * 1024 - 1)
+                output.write(b'x')
+            app = SimpleNamespace(paths=SimpleNamespace(data=root))
+            observed = []
+            async def picker(app, path):
+                observed.append(path)
+                self.assertEqual(path.stat().st_size, source.stat().st_size)
+                with path.open('rb') as stream:
+                    stream.seek(-1, 2)
+                    self.assertEqual(stream.read(1), b'x')
+                return True
+            with patch('logisticsmobile.pickers.get_os', return_value=OS.IOS), \
+                    patch('logisticsmobile.pickers.pick_ios', side_effect=picker):
+                self.assertTrue(await export_file(app, source))
+            self.assertTrue(source.exists())
+            self.assertFalse(observed[0].exists())

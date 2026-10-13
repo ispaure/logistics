@@ -8,10 +8,66 @@ from commonUtils.runtime.platform import OS, get_os
 from commonUtils.integrations.wrappers import cmdShellWrapper
 from commonUtils.runtime.diagnostics import Severity, log
 
-from . import executable
+from . import executable, session
 
 
-def rclone_sync(
+def rclone_sync(source_path, destination_path, *, config_path, query=False, wait_for_output=False,
+                dry_run=False, track_renames=False, bw_limit=None, integrated=True, copy_links=True,
+                cancelled=lambda: False, executable_path=None):
+    """Preflight every local-to-remote push before starting a transfer."""
+    options = dict(source_path=source_path, destination_path=destination_path, config_path=config_path,
+                   query=query, wait_for_output=wait_for_output, dry_run=dry_run, track_renames=track_renames,
+                   bw_limit=bw_limit, integrated=integrated, copy_links=copy_links, cancelled=cancelled,
+                   executable_path=executable_path)
+    # Existing local paths also support synthetic/local rclone remotes in tests.
+    is_push = Path(source_path).is_dir() and ':' in str(destination_path) and not Path(destination_path).is_absolute()
+    if is_push:
+        from .push_policy import load_excludes, validate_localcrypt_push
+        from .local_crypt import for_path, storage_root
+        options['excludes'] = load_excludes()
+        item = for_path(source_path)
+        boundary = storage_root().absolute()
+        source = Path(source_path).absolute()
+        if item is None and (source == boundary or boundary in source.parents):
+            raise ValueError('LocalCrypt push has no valid credential mapping.')
+        if item is None:
+            from commonUtils.filesystem.local_access import check_local_path
+            check_local_path(source, recursive=True)
+        if item is not None:
+            binary = executable_path or executable.ensure_rclone()
+            if binary is None:
+                return False
+            options['executable_path'] = binary
+            options['copy_links'] = False
+            def validate(report, stopping):
+                return validate_localcrypt_push(item, binary, cancelled=lambda: cancelled() or stopping(),
+                                                report=report, cleanup=not (query or dry_run))
+            from commonUtils.ui import pyside as qt
+            app = qt.QApplication.instance()
+            if not wait_for_output and app is not None and qt.QThread.currentThread() == app.thread():
+                from commonUtils.ui.resource_picker import ResourceTaskDialog
+                dialog = ResourceTaskDialog(None, 'Checking LocalCrypt before push')
+                result = []
+                def completed(value, error):
+                    result.append((value, error))
+                    dialog.accept()
+                dialog.operation.completed.connect(completed)
+                dialog.operation.start(validate, message='Checking encrypted storage…')
+                dialog.exec()
+                stopped = dialog.operation.cancelled.is_set()
+                dialog.deleteLater()
+                if stopped:
+                    return False
+                if not result or result[0][1]:
+                    raise ValueError(result[0][1] if result else 'Push validation was cancelled.')
+            else:
+                validate(lambda *args: None, cancelled)
+    if cancelled():
+        return False
+    return _run_sync(**options)
+
+
+def _run_sync(
     source_path: str | Path,
     destination_path: str | Path,
     *,
@@ -22,8 +78,10 @@ def rclone_sync(
     track_renames=False,
     bw_limit=None,
     integrated=True,
+    copy_links=True,
     cancelled=lambda: False,
-    executable_path=None
+    executable_path=None,
+    excludes=()
 ):
     """Synchronize using one explicit config.
 
@@ -38,9 +96,16 @@ def rclone_sync(
 
     source_path_str = str(source_path)
     destination_path_str = str(destination_path)
+    session_launch = session.launch(config_path, source_path, destination_path)
+    environment = None
+    if session_launch is not None:
+        environment, source_path, destination_path = session_launch
+        config_path = 'NUL' if get_os() == OS.WIN else '/dev/null'
+    elif Path(config_path).suffix == '.session':
+        raise ValueError('This credential session has ended. Unlock the package again.')
     arguments = build_sync_arguments(rclone_path, source_path, destination_path,
         config_path=config_path, track_renames=track_renames, bw_limit=bw_limit,
-        dry_run=dry_run or query, integrated=integrated and not query and not wait_for_output)
+        dry_run=dry_run or query, integrated=integrated and not query and not wait_for_output, copy_links=copy_links, excludes=excludes)
     import shlex
     import subprocess
     baseline = subprocess.list2cmdline(arguments) if get_os() == OS.WIN else shlex.join(arguments)
@@ -56,7 +121,7 @@ def rclone_sync(
                     Path(destination_path).mkdir(parents=True, exist_ok=True)
 
     if query or wait_for_output:
-        result = cmdShellWrapper.run_command(arguments, cancelled=cancelled)
+        result = cmdShellWrapper.run_command(arguments, cancelled=cancelled, **({'environment': environment} if environment is not None else {}))
         if not result.success:
             detail = '\n'.join(result.stderr) or ('Cancelled' if result.cancelled else f'Exit status {result.returncode}')
             if query:
@@ -76,16 +141,25 @@ def rclone_sync(
             open_process('rclone sync (dry run)' if dry_run else 'rclone sync',
                          arguments[0], arguments[1:], parser=RcloneProgressParser(),
                          context={'operation': 'Sync (dry run)' if dry_run else 'Sync', 'source': source_path_str,
-                                  'destination': destination_path_str, 'dry_run': dry_run})
+                                  'destination': destination_path_str, 'dry_run': dry_run},
+                         **({'environment': environment} if environment is not None else {}))
             return True
 
+    if environment is not None:
+        # Session secrets never enter terminal command strings or global env.
+        result = cmdShellWrapper.run_command(arguments, environment=environment, cancelled=cancelled)
+        if not result.success:
+            log(Severity.ERROR, 'rclone sync', 'The session transfer failed or was cancelled.')
+        return result.success
     return cmdShellWrapper.exec_cmd(baseline, wait_for_output=False, in_new_window=True) is not False
 
 
 def build_sync_arguments(rclone_path, source_path, destination_path, *, config_path,
-                         track_renames=False, bw_limit=None, dry_run=False, integrated=True):
+                         track_renames=False, bw_limit=None, dry_run=False, integrated=True, copy_links=True, excludes=()):
     """Argument vector shared by UI and legacy callers; no shell interpretation."""
-    arguments = [str(rclone_path), '--config', str(config_path), 'sync', '--copy-links']
+    arguments = [str(rclone_path), '--config', str(config_path), 'sync']
+    if copy_links:
+        arguments += ['--copy-links']
     if integrated:
         # Leave rclone's retry policy untouched; observe its own retry messages.
         arguments += ['--use-json-log', '--stats', '1s', '--stats-log-level', 'NOTICE']
@@ -101,6 +175,9 @@ def build_sync_arguments(rclone_path, source_path, destination_path, *, config_p
         arguments += ['--bwlimit', f'{value}M']
     if dry_run:
         arguments += ['--dry-run']
+    from .push_policy import validate_excludes
+    for pattern in validate_excludes(excludes):
+        arguments += ['--exclude', pattern]
     arguments += ['--', str(source_path), str(destination_path)]
     return arguments
 

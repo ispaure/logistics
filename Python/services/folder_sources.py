@@ -27,6 +27,7 @@ class RemoteSourceSnapshot:
     label: str
     source: RemoteFolderSource
     remote_names: tuple[str, ...]
+    local_folders: tuple[LocalFolder, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -50,7 +51,8 @@ def discover_folder_sources(*, remote_providers=None, local_providers=None, canc
         for source in registered.contribution.get_sources():
             check_cancelled(cancelled)
             remote_sources.append(RemoteSourceSnapshot(registered.feature_name, registered.contribution.name,
-                                                       source, tuple(source.get_remote_names())))
+                                                       source, tuple(source.get_remote_names()),
+                                                       tuple(source.get_local_folders()) if source.get_local_folders else None))
     for registered in local_providers:
         check_cancelled(cancelled)
         for source in registered.contribution.get_sources():

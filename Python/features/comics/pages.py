@@ -39,7 +39,7 @@ class ComicPages:
     def __init__(self, path, document=None, *, password=None):
         self.document = document or ComicDocument(path, password=password)
         self.path = self.document.path
-        with open_archive(self.path, password=self.document.password) as archive:
+        with self.document.open_archive() as archive:
             self.pages = sorted((info.filename for info in archive.infolist()
                                  if not info.is_dir() and Path(info.filename).suffix.lower() in IMAGE_TYPES
                                  and '__MACOSX' not in Path(info.filename).parts
@@ -69,14 +69,14 @@ class ComicPages:
     def read_page(self, index):
         if not 0 <= index < len(self.pages):
             raise IndexError('Page does not exist')
-        if not archive_unchanged(self.path, self.document.snapshot):
+        if not self.document.unchanged():
             raise RuntimeError('The comic changed. Reopen the reader to load the updated archive.')
         name = self.pages[index]
-        with open_archive(self.path, password=self.document.password) as archive:
+        with self.document.open_archive() as archive:
             if archive.getinfo(name).file_size > MAX_PAGE_BYTES:
                 raise ValueError('Page exceeds the supported image size')
             data = archive.read(name)
-        if not archive_unchanged(self.path, self.document.snapshot):
+        if not self.document.unchanged():
             raise RuntimeError('The comic changed while reading this page')
         mime = IMAGE_TYPES[Path(name).suffix.lower()]
         if mime == 'image/tiff':
@@ -92,6 +92,7 @@ class ComicPages:
         Image, ImageOps = _image_modules()
         data, _ = self.read_page(0)
         with Image.open(BytesIO(data)) as image:
+            image.draft('RGB', size)
             image = ImageOps.exif_transpose(image)
             image.thumbnail(size)
             result = BytesIO()

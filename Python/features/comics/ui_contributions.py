@@ -200,8 +200,5 @@ def _edit_shared_metadata(context):
 
 
 def _launch_reader(parent):
-    from commonUtils.ui import pyside as qt
-    path, _ = qt.QFileDialog.getOpenFileName(parent, 'Open comic', '', 'Comic archives (*.cbz)')
-    if path:
-        from .reader import open_reader
-        return open_reader(path)
+    from services.reader_resources import choose_reader_document
+    return choose_reader_document(parent, 'comic')

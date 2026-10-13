@@ -22,6 +22,10 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
 
     def __init__(self, *, history_path=None, preferences_path=None, service=None, create_blank=True):
         super().__init__()
+        from services.local_storage import install_local_storage_policy
+        install_local_storage_policy()
+        from services.editor_resources import install_editor_dialogs
+        install_editor_dialogs()
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle("Text Editor — Logistics")
         self.resize(1100, 780)
@@ -244,6 +248,10 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
         return CloseOutcome.PENDING if self._close_pending else CloseOutcome.VETOED
 
     def closeEvent(self, event):
+        from commonUtils.ui.resource_picker import resource_tasks_pending
+        if resource_tasks_pending(self):
+            event.ignore()
+            return
         if self.task.busy or self._queue or not self.search.prepare_close():
             self._close_pending = True
             event.ignore()

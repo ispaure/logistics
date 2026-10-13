@@ -45,6 +45,29 @@ class EditorRecoveryTests(QtTestCase):
         self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
         self.temp.cleanup()
 
+    def test_private_handoff_scrubs_queued_and_claimed_recovery(self):
+        service = self.service()
+        window = service.open()
+        document = window.current
+        document.editor.insertPlainText('private handoff sentinel')
+        session = service.session
+        session.checkpoint()
+        self.wait(lambda: session.future is None)
+        self.assertIn('private handoff sentinel', session.store.path.read_text())
+        claimed = self.root / 'claimed.json'
+        claimed.write_text(session.store.path.read_text())
+        lock = qt.QLockFile(str(claimed.with_suffix('.lock')))
+        self.assertTrue(lock.tryLock(0))
+        session.claim = claimed, lock
+        scrub = session.privatize(document)
+        scrub()
+        self.assertNotIn('private handoff sentinel', session.store.path.read_text())
+        self.assertFalse(claimed.exists())
+        self.assertIsNone(session.ensure_current(window))
+        self.assertEqual(document.editor.toPlainText(), 'private handoff sentinel')
+        lock.unlock()
+        session.claim = None
+
     def test_late_checkpoint_after_last_window_closes_does_not_reopen_session_lock(self):
         service = self.service()
         service.open()

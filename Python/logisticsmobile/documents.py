@@ -75,6 +75,8 @@ class DocumentStore:
         return doc
 
     def checkpoint(self, doc):
+        if getattr(doc, "private", False):
+            return
         if not isinstance(doc.text, str) or len(doc.snapshot.encode(doc.text)) > MAX_BYTES:
             raise ValueError('Mobile text documents are limited to 1 MiB.')
         record = dict(schema=1, id=doc.id, name=document_name(doc.name), text=doc.text,
@@ -82,6 +84,12 @@ class DocumentStore:
                       original=base64.b64encode(doc.snapshot.original).decode('ascii'))
         atomic_write_json(self.path(doc.id, '.json'), record, max_bytes=MAX_RECORD,
                           durable_directory=True)
+
+    def privatize(self, doc):
+        """Keep the draft in memory and replace its recovery record with the baseline."""
+        doc.private = True
+        baseline = Document(doc.id, doc.name, doc.snapshot, doc.snapshot.text)
+        self.checkpoint(baseline)
 
     def open(self, key):
         path = self.path(key, '.json')
@@ -128,6 +136,7 @@ class DocumentStore:
             raise
         doc.snapshot = decode_bytes(content, path=doc.snapshot.path, encoding=doc.snapshot.encoding)
         doc.conflict = False
+        doc.private = False
         self.checkpoint(doc)
 
     def save_copy(self, doc, name=None):

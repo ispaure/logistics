@@ -54,7 +54,9 @@ settings icon at the bottom-left; clicking it opens settings and navigation choi
 
 Use **File Browser** for any folder, or **Folder Hub** for configured libraries
 and remote storage. **Documents** collects open readers and editors; their tabs can
-be split or detached. **Settings** saves feature choices and configuration and
+be split or detached. Text, Markdown, EPUB and comic Open dialogs share a Local/LocalCrypt
+file picker; encrypted copies open in private readers or editors. Regular and private file browsers
+share list, tile and column views. **Settings** saves feature choices and configuration and
 provides links to each feature's help.
 
 Start with [files and documents](Python/ui_new/user_docs/README.md), then choose a
@@ -65,7 +67,12 @@ credentials and settings. External services need their own accounts/software.
 
 An independent [Android/iOS document prototype](Mobile/README.md) is available for
 development builds, with a native hub, private preferences, text/Markdown editing
-and EPUB/comic reading, LM text chat and read-only rclone remote files. See its
+and EPUB/comic reading, LM text chat, read-only rclone remote files and encrypted
+LocalCrypt offline reading, text and comic/EPUB metadata editing, local file/folder
+management with shared list/tile views, thumbnails and file information, and text
+Save As across Local/LocalCrypt storage. Encrypted transfers and archive metadata
+updates and ordinary comic imports stream large files without a fixed whole-file
+size cap. Shared mobile browsing includes folder taps, Back history and search/sort. See its
 guide for format limits and validation status.
 
 | Tool | Use it to… |

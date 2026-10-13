@@ -294,3 +294,15 @@ releases. Older ZIP installations need a fresh release extraction first. Git
 checkouts must have clean tracked files and initialized submodules at their pins;
 a successful update checks out the release commit and dependencies detached.
 Blue Hole separately checks its selected GitHub branch on each Blender launch.
+
+
+Opening or expanding a LocalCrypt copy in File Browser automatically opens its
+private tab with resolved names. The ordinary tab stays available at its previous
+location. Folder Hub lists each encrypted copy once; separate Local and LocalCrypt
+copies have distinct labels, with full source details available on hover.
+
+Private File Browser tabs and their detached windows begin with **🕵️ Private -**. Their navigation, list, tile and column views share the regular browser’s presentation. Selecting a file shows File Information and supported comic/book metadata in the right Preview panel, or in the final column. Private views omit storage maps; thumbnails stay in memory. Editor Open/Save As omits Preview and retains its Local/LocalCrypt storage picker at the top.
+
+Folder Hub shows backend-aware tools for private LocalCrypt copies, including rclone Pull and Push. Ordinary local-folder detection does not run against their ciphertext paths.
+
+EPUB Reader and Comic Reader **Open** buttons in New Document, and their reader File menus, use the shared Local/LocalCrypt picker with format-specific filters. Cancelling leaves the current document or chooser in place. Private selections open separate readers with **🕵️ Private -** titles.

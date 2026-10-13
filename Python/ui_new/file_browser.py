@@ -1,8 +1,10 @@
 """General browser host enriched by available Logistics feature contributions."""
 
 from commonUtils.ui.appearance.typography import point_size, setting_size
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
+from functools import lru_cache
+import time
 import sys
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.file_browser import FileBrowser
@@ -31,11 +33,73 @@ class BrowserIndexStatus(WorkspaceIndexStatus):
 BROWSER_POLICY = WorkspacePolicy(allow_last_tab_detach=False,
                                  show_single_tab_in_main=True,
                                  show_single_tab_in_detached=False,
-                                 detached_title='File Browser: {title}')
+                                 detached_title='{title} — File Browser')
+
+
+@lru_cache(maxsize=8)
+def _crypt_copies(root, record_revision, interval):
+    # Model callbacks are frequent. Refresh on publication and at least once a
+    # second for external record edits; cache identities, never decoded names.
+    from features.rclone.local_crypt import connections
+    return tuple(connections(root))
+
+
+def _crypt_location(path, *, root=None):
+    """Resolve raw paths/aliases only at the host's provider boundary."""
+    from features.rclone.local_crypt import storage_root
+    path = Path(path).absolute()
+    configured_root = Path(root if root is not None else storage_root()).absolute()
+    root = configured_root.resolve()
+    resolved = path.resolve()
+    if resolved == root:
+        return None, False
+    try:
+        revision = (configured_root / '.connections').stat().st_mtime_ns
+    except FileNotFoundError:
+        revision = None
+    copies = _crypt_copies(configured_root, revision, int(time.monotonic()))
+    for item in copies:
+        target = item.data.resolve()
+        if resolved == target or target in resolved.parents:
+            return item, True
+    if root not in resolved.parents and configured_root not in path.parents:
+        return None, False
+    # Schema-1 package containers are navigable to their mapped copy roots.
+    if any(resolved in item.data.resolve().parents for item in copies):
+        return None, False
+    return None, True
+
+
+@dataclass(frozen=True)
+class _PrivateBrowserLocation:
+    item: object
+    directory: Path
+
+
+def _browser_view(path=None, *, root_path=None, filesystem_scope=False):
+    from services.local_storage import install_local_storage_policy
+    install_local_storage_policy()
+    initial = path or root_path or Path.home()
+    if isinstance(initial, _PrivateBrowserLocation):
+        from features.rclone.ui.local_crypt import CryptBrowserView, ensure_session
+        if not ensure_session(initial.item.context, package=initial.item.package, parent=qt.QApplication.activeWindow()):
+            return None
+        return CryptBrowserView(initial.item, directory=initial.directory)
+    item, _managed = _crypt_location(initial)
+    if item is not None:
+        from features.rclone.ui.local_crypt import CryptBrowserView, ensure_session
+        if not ensure_session(item.context, package=item.package, parent=qt.QApplication.activeWindow()):
+            return None
+        return CryptBrowserView(item, directory=item.data)
+    return BrowserView(root_path=initial, filesystem_scope=filesystem_scope)
 
 
 def _new_browser_tab(workspace):
-    browser = getattr(workspace.active_view, 'file_browser', None)
+    active = workspace.active_view
+    browser = getattr(active, 'file_browser', None)
+    if getattr(active, 'item', None) is not None:
+        return workspace.add_view(_PrivateBrowserLocation(active.item,
+            browser.navigation.directory if browser else active.item.data))
     return workspace.add_view(browser.navigation.directory if browser else Path.home())
 
 
@@ -50,6 +114,8 @@ class _BrowserHost:
         self.filesystem_scope = filesystem_scope
         from ui_new.bulk_rename import bulk_rename_actions
         self.file_browser = FileBrowser(parent=self, action_providers=(bulk_rename_actions,),
+                                       directory_handler=self._route_directory,
+                                       directory_boundary=self._directory_boundary,
                                        calculate_folder_sizes=calculate_folder_sizes,
                                        index_settings_path=Path(__file__).resolve().parents[1]/'configFile.ini')
         self.extensions = []
@@ -59,6 +125,61 @@ class _BrowserHost:
         self.destroyed.connect(self._unsubscribe)
         self.file_browser.idle.connect(self._retry_close)
         self._open_location(root_path)
+
+    def _directory_boundary(self, path):
+        # Qt asks rowCount repeatedly while painting. Do not reread application
+        # settings or resolve the same path for every query. Actual navigation
+        # always uses the fresh resolver below.
+        interval = int(time.monotonic())
+        if getattr(self, '_boundary_interval', None) != interval:
+            from features.rclone.local_crypt import storage_root
+            self._boundary_interval = interval
+            self._boundary_root = storage_root()
+            self._boundary_paths = {}
+        if path not in self._boundary_paths:
+            if len(self._boundary_paths) >= 1024:
+                self._boundary_paths.clear()
+            self._boundary_paths[path] = _crypt_location(path, root=self._boundary_root)[1]
+        return self._boundary_paths[path]
+
+    def _route_directory(self, path):
+        item, managed = _crypt_location(path)
+        if not managed:
+            return False
+        if self.closing or getattr(self, '_crypt_route_pending', False):
+            return True
+        self._crypt_route_pending = True
+        def open_copy():
+            try:
+                if self.closing:
+                    return
+                if item is None:
+                    raise ValueError('This LocalCrypt folder has no valid credential mapping. Open a mapped copy or pull it again.')
+                from features.rclone.ui.local_crypt import ensure_session
+                if not ensure_session(item.context, package=item.package, parent=self):
+                    return
+                from commonUtils.ui.workspaces.workspace import WorkspaceDock
+                parent = self.parentWidget()
+                while parent is not None and not isinstance(parent, WorkspaceDock):
+                    parent = parent.parentWidget()
+                if parent is not None:
+                    workspace = parent.workspace
+                    for dock in workspace.docks:
+                        if getattr(dock.widget(), 'item', None) == item:
+                            dock.show()
+                            dock.raise_()
+                            workspace._activate(dock)
+                            return
+                    if workspace.add_view(item.data) is not None:
+                        return
+                from features.rclone.ui.local_crypt import open_browser
+                open_browser(item, self)
+            except Exception as error:
+                qt.QMessageBox.warning(self, 'Cannot open LocalCrypt', str(error))
+            finally:
+                self._crypt_route_pending = False
+        qt.QTimer.singleShot(0, self, open_copy)
+        return True
 
     def _open_location(self, path):
         path = Path(path).absolute()
@@ -204,7 +325,7 @@ class _WorkspaceHost:
 class FileBrowserPage(_WorkspaceHost, qt.QWidget):
     def __init__(self, parent=None, *, root_path=None):
         super().__init__(parent)
-        self.workspace = Workspace(lambda path: BrowserView(
+        self.workspace = Workspace(lambda path: _browser_view(
             root_path=path or root_path or Path.home(),
             filesystem_scope=root_path is None and (path is None or not self.workspace.all_docks)), self,
             keep_one_tab=True, policy=BROWSER_POLICY, new_view=_new_browser_tab,
@@ -224,7 +345,7 @@ class FileBrowserWindow(_WorkspaceHost, qt.QMainWindow):
         self.setWindowTitle(f'File Browser: {Path(root_path).name}')
         self.resize(1200, 800)
         self.workspace_publish_menus = True
-        self.workspace = Workspace(lambda path: BrowserView(root_path=path or root_path), self,
+        self.workspace = Workspace(lambda path: _browser_view(root_path=path or root_path), self,
                                    keep_one_tab=True, allow_new_tabs=allow_new_tabs,
                                    policy=replace(BROWSER_POLICY, max_tabs=None if allow_new_tabs else 1),
                                    new_view=_new_browser_tab, setup_container=_browser_container)
@@ -234,11 +355,15 @@ class FileBrowserWindow(_WorkspaceHost, qt.QMainWindow):
         self.setCentralWidget(self.workspace)
         self.index_status = BrowserIndexStatus(self.workspace)
         view = self.workspace.add_view(root_path)
-        view.folder_sizes.setChecked(True)
+        if view.file_browser is not None and getattr(view.file_browser, 'persistent_index', True):
+            view.folder_sizes.setChecked(True)
 
     def _update_title(self, *args):
         view = self.workspace.active_view
-        self.setWindowTitle(f'File Browser: {view.view_title}' if view else 'File Browser')
+        title = view.view_title if view else ''
+        private = title.startswith('🕵️ Private - ')
+        self.setWindowTitle(('🕵️ Private - ' if private else '') + 'File Browser' +
+                            (f': {title.removeprefix("🕵️ Private - ")}' if title else ''))
 
 
 _windows = []

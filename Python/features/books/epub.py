@@ -4,6 +4,7 @@ Resources stay inside their ZIP; no book content is extracted to disk. Limits
 bound decompression and XML parsing. Metadata writes live in metadata.py.
 """
 from dataclasses import dataclass
+from contextlib import contextmanager
 from pathlib import Path
 import posixpath
 from urllib.parse import unquote, urlsplit
@@ -55,12 +56,15 @@ class Chapter:
 
 class EPUBBook:
     """Immutable loaded package with lazy, bounded chapter/resource reads."""
-    def __init__(self, path):
+    def __init__(self, path, *, source=None, password=None):
         # Editing a symlink must update its target, rather than replacing the link
         # with a new archive and leaving the original book's metadata unchanged.
-        self.path = Path(path).resolve(strict=True)
+        self.source = source
+        self.password = password
+        self.path = Path(path) if source is not None else Path(path).resolve(strict=True)
+        initial_signature = self._signature()
         try:
-            with ZipFile(self.path) as archive:
+            with self.open_archive() as archive:
                 infos = archive.infolist()
                 self.members = {info.filename for info in infos}
                 self.resource_sizes = {info.filename: info.file_size for info in infos}
@@ -68,8 +72,8 @@ class EPUBBook:
                     raise BookError('This EPUB exceeds the supported archive size limits.')
                 if len(self.members) != len(infos):
                     raise BookError('The EPUB has duplicate archive entries.')
-                if any(info.flag_bits & 1 for info in infos):
-                    raise BookError('Encrypted EPUB archives are not supported.')
+                from commonUtils.archives.zip_access import validate_members
+                validate_members(archive)
                 if self._read(archive, 'mimetype').strip() != b'application/epub+zip':
                     raise BookError('This file is not an EPUB book.')
                 container = parse_xml(self._read(archive, 'META-INF/container.xml'))
@@ -132,10 +136,31 @@ class EPUBBook:
                     self.section_offsets.update({(target, anchor): offset / max(1, length)
                                                  for anchor, offset in offsets.items()})
                 self.signature = self._signature()
+                if self.signature != initial_signature:
+                    raise BookError('This EPUB changed while loading; reopen it.')
         except (BadZipFile, KeyError, UnicodeError) as error:
             raise BookError(f'Cannot read EPUB: {error}') from error
 
+    @contextmanager
+    def open_archive(self):
+        if self.source is None:
+            with ZipFile(self.path) as archive:
+                yield archive
+        elif hasattr(self.source, 'open_archive'):
+            with self.source.open_archive(self.path, self.password) as archive:
+                yield archive
+        else:
+            from commonUtils.archives.zip_access import open_archive, is_encrypted
+            with self.source.open(self.path) as stream:
+                if is_encrypted(stream) and self.password is None:
+                    self.password = self.source.archive_password(self.path)
+                stream.seek(0)
+                with open_archive(stream, password=self.password) as archive:
+                    yield archive
+
     def _signature(self):
+        if self.source is not None:
+            return self.source.version(self.path)
         info = self.path.stat()
         return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
 
@@ -154,7 +179,7 @@ class EPUBBook:
         if self._signature() != self.signature:
             raise BookError('This book changed on disk. Reopen it before continuing.')
         try:
-            with ZipFile(self.path) as archive:
+            with self.open_archive() as archive:
                 return self._read(archive, name)
         except (BadZipFile, KeyError) as error:
             raise BookError(f'Cannot read EPUB resource: {error}') from error

@@ -32,6 +32,11 @@ class RclonePushDialog(pyside.QDialog):
 
         self.regular_radio = pyside.QRadioButton('Entire local folder')
         self.specific_radio = pyside.QRadioButton('Specific folder')
+        from features.rclone.local_crypt import for_path
+        self.crypt_copy = for_path(entry.local.path)
+        if self.crypt_copy is not None:
+            self.specific_radio.setEnabled(False)
+            self.specific_radio.setToolTip('Encrypted copies mirror their ciphertext folder as a whole.')
 
         self.track_renames = pyside.QCheckBox('Track renames')
 
@@ -171,9 +176,15 @@ class RclonePushDialog(pyside.QDialog):
     def _update_result_preview(self):
         if self.regular_radio.isChecked():
             self.result_source.setText(str(self.entry.local.path))
-            self.result_destination.setText(f'{self.entry.remote_name}:')
+            from features.rclone.local_crypt import push_target
+            try:
+                target = push_target(self.entry.local.path, self.config_path, self.entry.remote_name)
+            except ValueError as error:
+                target = str(error)
+            self.result_destination.setText(target)
             self.result_explanation.setText(
-                'The entire local folder will be synchronized with the remote root. '
+                'The entire local folder will be synchronized with the resolved destination. ' +
+                ('The encrypted local bytes go directly to the backing remote; no second crypt layer. ' if self.crypt_copy else '') +
                 'Files at that destination may be added, updated, or removed to match the local source.'
             )
             return
@@ -190,13 +201,17 @@ class RclonePushDialog(pyside.QDialog):
             return
 
         directory = Path(directory_path)
-        remote_destination = f'{self.entry.remote_name}:{directory.name}'
+        from features.rclone.local_crypt import push_target
+        try:
+            remote_destination = push_target(directory, self.config_path, self.entry.remote_name, specific=True)
+        except ValueError as error:
+            remote_destination = str(error)
 
         self.result_source.setText(str(directory))
         self.result_destination.setText(remote_destination)
         self.result_explanation.setText(
-            f'Only "{directory.name}" on the remote is the sync destination. '
-            'Other sibling folders at the remote root are not touched by this operation. '
+            'The selected folder is synchronized to the resolved destination above. '
+            'Mapped encrypted copies go directly to their backing remote and subpath. '
             'Within that destination subfolder, rclone sync will make the remote match the selected local folder.'
         )
 
@@ -216,6 +231,13 @@ class RclonePushDialog(pyside.QDialog):
             self.specific_path.setText(selected_path)
 
     def _push(self):
+        try:
+            self._push_validated()
+        except (ValueError, OSError) as error:
+            ui.display_msg_box_ok('Push could not start', str(error))
+            self._update_result_preview()
+
+    def _push_validated(self):
         if self.regular_radio.isChecked():
             started = actions.push_to_cloud(
                 self.entry.local,

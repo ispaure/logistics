@@ -5,13 +5,27 @@ from features.contributions import DocumentLauncherContribution
 
 def _open_markdown(parent):
     from commonUtils.ui import pyside as qt
+    from services.local_storage import install_local_storage_policy
+    install_local_storage_policy()
+    from services.editor_resources import install_editor_dialogs
+    install_editor_dialogs()
     from commonUtils.ui.markdown.window import open_markdown
-    path, _ = qt.QFileDialog.getOpenFileName(parent, 'Open Markdown', '',
-                                            'Markdown (*.md *.markdown);;All files (*)')
-    return open_markdown(path, allow_edit=True) if path else None
+    from services.editor_resources import choose_editor_resource, open_editor_choice
+    choice = choose_editor_resource(parent, 'open', markdown=True)
+    if choice is None:
+        return None
+    if getattr(choice.provider, 'private', False):
+        return open_editor_choice(choice, parent, markdown=True)
+    path = choice.provider.root / choice.path
+    choice.close()
+    return open_markdown(path, allow_edit=True)
 
 
 def _new_markdown(parent):
+    from services.local_storage import install_local_storage_policy
+    install_local_storage_policy()
+    from services.editor_resources import install_editor_dialogs
+    install_editor_dialogs()
     from commonUtils.ui.markdown.window import open_markdown
     return open_markdown(None, allow_edit=True)
 

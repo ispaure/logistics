@@ -221,7 +221,7 @@ class BrowserWindowTests(QtTestCase):
         self.assertEqual(detached.active_view.file_browser.navigation.directory, self.root)
         child = self.root/'renamed'; child.mkdir()
         detached.active_view.file_browser.navigate(child); self.wait(detached.active_view)
-        self.assertEqual(detached_window.windowTitle(), 'File Browser: renamed')
+        self.assertEqual(detached_window.windowTitle(), 'renamed — File Browser')
         from shiboken6 import isValid
         detached_window.close()
         deadline = time.monotonic() + 5

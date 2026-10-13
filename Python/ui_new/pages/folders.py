@@ -284,7 +284,7 @@ class FoldersPage(pyside.QWidget):
                     remote_source=feature_name,
                     remote_context=source.source.context,
                     include_local_only=False,
-                    local_folders=self._local_folders
+                    local_folders=source.local_folders if source.local_folders is not None else self._local_folders
                 )
                 entries.extend(source_entries)
                 for entry in source_entries:
@@ -292,6 +292,9 @@ class FoldersPage(pyside.QWidget):
 
         entries.sort(key=lambda entry: (entry.name, str(entry.remote_context)))
         name_counts = Counter(entry.name for entry in entries)
+        copy_labels = {self._entry_key(entry): getattr(entry.local, 'storage_label', 'Local')
+                       if entry.local is not None else 'Remote' for entry in entries}
+        copy_counts = Counter((entry.name, copy_labels[self._entry_key(entry)]) for entry in entries)
 
         self.folder_tree.clear()
         self._entry_items = {}
@@ -315,7 +318,10 @@ class FoldersPage(pyside.QWidget):
                 is_leaf = index == len(name_parts) - 1
                 if is_leaf and name_counts[entry.name] > 1:
                     item_path = (*item_path, entry_key)
-                    name_part = f'{name_part} [{entry_labels[entry_key]}]'
+                    label = copy_labels[entry_key]
+                    if copy_counts[entry.name, label] > 1:
+                        label += ' · ' + entry_labels[entry_key]
+                    name_part = f'{name_part} [{label}]'
 
                 item = tree_items.get(item_path)
 
@@ -330,6 +336,8 @@ class FoldersPage(pyside.QWidget):
 
                 if index == len(name_parts) - 1:
                     item.setData(0, pyside.Qt.ItemDataRole.UserRole, entry)
+                    item.setToolTip(0, '\n'.join(filter(None, (entry.name, copy_labels[entry_key],
+                        entry_labels.get(entry_key, ''), str(entry.local.path) if entry.local is not None else ''))))
                     self._entry_items[entry_key] = item
 
                 parent_item = item
@@ -431,6 +439,10 @@ class FoldersPage(pyside.QWidget):
             for registered in features:
                 check_cancelled(cancelled)
                 contribution = registered.contribution
+                # Private folder paths identify ciphertext, not a LocalFolder.
+                # Only backend-aware tools may inspect or operate on them.
+                if getattr(entry.local, 'private', False) and not contribution.supports_private_folders:
+                    continue
                 if contribution.is_available(entry):
                     actions = None if contribution.create_widget else contribution.get_actions(entry)
                     found.append((contribution, actions))

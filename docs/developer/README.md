@@ -14,6 +14,7 @@ user guide for the workflow you are changing, then follow this map.
 | Add settings, a page, folder integration or a document launcher | [Extension points](extension-points.md) |
 | Register a format, preview, action or activation | [Browser extensions](file-browser.md) |
 | Decide whether behavior belongs in Logistics or commonUtils | [Shared ownership](commonutils-integration.md) |
+| Develop encrypted local copies and private readers | [LocalCrypt](localcrypt.md) |
 | Change paths, stored state or configuration | [Configuration and data](configuration-and-data.md) |
 | Prepare the document core for mobile runtimes | [Mobile preparation](mobile-preparation.md) |
 | Set up, test and contribute | [Development and validation](testing.md) |

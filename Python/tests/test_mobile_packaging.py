@@ -23,7 +23,7 @@ class MobilePackagingTests(unittest.TestCase):
             def git(root, *args):
                 return subprocess.run(['git', '-C', str(root), *args], check=True, capture_output=True)
             git(shared, 'init')
-            for name in ('__init__.py', 'tests/mobile_smoke.py', 'tools/mobile_ci.py'):
+            for name in ('__init__.py', 'tests/mobile_smoke.py', 'tools/mobile_ci.py', *mobile_tools.SHARED_REQUIRED_MODULES):
                 target = shared / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text((REPO / 'Python/commonUtils' / name).read_text())

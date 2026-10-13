@@ -67,6 +67,7 @@ class RemoteFolderSource:
     name: str
     get_remote_names: Callable[[], list[str]]
     context: Any = None
+    get_local_folders: Callable[[], list[Any]] | None = None
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,7 @@ class FolderFeatureContribution:
     order: int = 0
     create_widget: Callable[[FolderEntry, Any], Any] | None = None
     actions_horizontal: bool = False
+    supports_private_folders: bool = False
 
 
 @dataclass(frozen=True)

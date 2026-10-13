@@ -71,13 +71,11 @@ class ReaderUXTests(QtTestCase):
 
     def test_open_dialogs_and_recent_files_are_format_specific(self):
         self.assertEqual(self.book.menus.open_action.text(), 'Open EPUB…')
-        with patch.object(qt.QFileDialog, 'getOpenFileName', return_value=('', '')) as dialog:
+        with patch('services.reader_resources.choose_editor_resource', return_value=None) as picker:
             self.book.choose_book()
-            self.assertNotIn('cbz', dialog.call_args.args[3].lower())
-            self.assertIn('epub', dialog.call_args.args[3].lower())
+            self.assertEqual(picker.call_args.kwargs['extensions'], ('.epub',))
             self.comic._choose_file()
-            self.assertNotIn('epub', dialog.call_args.args[3].lower())
-            self.assertIn('cbz', dialog.call_args.args[3].lower())
+            self.assertEqual(picker.call_args.kwargs['extensions'], ('.cbz',))
         self.book.open_book(self.comic_path)
         self.assertIsNone(self.book.worker)
         self.assertEqual(self.book.book.path, self.epub_path.resolve())

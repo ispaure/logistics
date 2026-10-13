@@ -90,6 +90,12 @@ with a names callback and opaque context. Folder discovery pairs local folders a
 remote names in `services.folder_sources`/`models.folder_entry`. Keep the selected
 credential in context; do not turn it into global mutable state.
 
+Private folder sources declare `private = True`; their paths identify backend-owned
+ciphertext rather than ordinary local directories. Folder tools default to
+`supports_private_folders=False` and are skipped before availability detection for
+these entries. Opt in only when both detection and actions use that backend's
+supported operations. rclone opts in for encrypted Pull, Push and private browsing.
+
 `FolderFeatureContribution` supplies an availability predicate, action provider and
 optional widget factory for a `FolderEntry`. Detectors/providers run in workers and
 must not prompt, provision software or access widgets. Widget factories run on the

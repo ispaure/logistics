@@ -17,7 +17,7 @@ class MetadataEditor(qt.QDialog):
     idle = qt.Signal()
     saved = qt.Signal(object)
 
-    def __init__(self, path, siblings=None, parent=None):
+    def __init__(self, path, siblings=None, parent=None, *, source=None):
         super().__init__(parent)
         self.setWindowFlag(qt.Qt.WindowType.Window, True)
         # Reference images are 789 x 673/677, including a ~38px title bar.
@@ -26,6 +26,7 @@ class MetadataEditor(qt.QDialog):
         font = self.font()
         font.setPointSizeF(point_size(7.5))
         self.setFont(font)
+        self.source = source
         self.targets = normalize_targets(path)
         self.path = self.targets[0]
         self.siblings = list(siblings or [self.path])
@@ -36,7 +37,7 @@ class MetadataEditor(qt.QDialog):
         self.busy = False
         self.pending_action = None
         self.last_save_error = None
-        self.is_bulk = len(self.targets) > 1 or self.path.is_dir()
+        self.is_bulk = self._bulk_targets()
         self._setup_ui()
         self._load(self.targets)
 
@@ -75,6 +76,13 @@ class MetadataEditor(qt.QDialog):
                        self.cancel_button, self.apply_button):
             button.setFixedSize(*BUTTON_SIZE)
         layout.addLayout(buttons)
+
+    def _bulk_targets(self):
+        if len(self.targets) > 1:
+            return True
+        if self.source is not None:
+            return bool(self.source.entry(self.path)['directory']) if hasattr(self.source, 'entry') else False
+        return self.path.is_dir()
 
     def _changes(self):
         return self.tabs.changes()
@@ -117,19 +125,19 @@ class MetadataEditor(qt.QDialog):
         self.document = None
         self.selection = None
         self.last_save_error = None
-        self.is_bulk = len(self.targets) > 1 or self.path.is_dir()
+        self.is_bulk = self._bulk_targets()
         title = f'{len(self.targets)} selected items' if self.is_bulk else self.path.name
-        self.setWindowTitle(f'Edit Metadata — {title}')
+        self.setWindowTitle(('🕵️ Private - ' if getattr(self.source, 'private', False) else '') + f'Edit Metadata — {title}')
         self.message.setVisible(self.is_bulk)
         self.message.setText('Reading selected comics…')
-        self._operate(lambda: ComicSelection(self.targets, password=password), self._loaded)
+        self._operate(lambda: ComicSelection(self.targets, password=password, source=self.source), self._loaded)
 
     def _loaded(self, selection, error):
         if error:
             self.message.show()
             self.message.setText(f'Cannot read metadata: {error}')
             if not self.is_bulk and is_password_error(error):
-                password = ask_password(self.path, error, self)
+                password = ask_password(self.path, error, self, **({'source': self.source} if self.source else {}))
                 if password is not None:
                     targets = self.targets
                     self.pending_action = lambda: self._load(targets, password=password)
@@ -148,7 +156,7 @@ class MetadataEditor(qt.QDialog):
             # Batch status and field actions need extra room while preserving
             # the compact single-file proportions.
             self.resize(self.width(), max(self.height(), WINDOW_SIZE[1] + 48))
-            self.setWindowTitle(f'Edit Metadata — {count} comics')
+            self.setWindowTitle(('🕵️ Private - ' if getattr(self.source, 'private', False) else '') + f'Edit Metadata — {count} comics')
             self.message.show()
             self.message.setText(f'{count} comics. Muted fields have multiple values. Only fields marked * will change.')
             if selection.load_failures:

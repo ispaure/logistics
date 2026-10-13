@@ -66,6 +66,8 @@ TAR entries and colliding names.
 TAR is checked for readable payloads and valid paths, but has no per-entry checksum.
 Encrypted ZIPs use the existing configured/session password service and ask for
 a password when necessary. Entered passwords are not written to configuration.
+On desktop, an incorrect password keeps the same prompt open with an inline error,
+an empty password field and focus ready for another attempt. Enter submits once.
 
 Long jobs run in the background with progress and cancellation. Cancelling
 creation, extraction or editing discards staged output. Closing Logistics asks

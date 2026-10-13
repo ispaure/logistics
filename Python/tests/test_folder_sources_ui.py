@@ -133,6 +133,42 @@ class FolderSourceTests(QtTestCase):
     def entries(self, page):
         return [item.data(0, qt.Qt.ItemDataRole.UserRole) for item in page._entry_items.values()]
 
+    def test_private_folder_keeps_rclone_tools_without_local_detectors(self):
+        from types import SimpleNamespace
+        from features.contributions import FolderFeatureContribution
+        from features.rclone.local_crypt import LocalCryptFolder
+        from features.rclone.ui_contributions import get_contributions
+        from models.folder_entry import FolderEntry
+        from features.calibre import ui_contributions as calibre
+        from features.obsidian import ui_contributions as obsidian
+        from features.minecraft import ui_contributions as minecraft
+        local_detector = Mock(side_effect=AssertionError('Private copy reached local-only detector'))
+        local_only = FolderFeatureContribution('Local only', local_detector, lambda entry: [])
+        tools = [RegisteredContribution('local', 'Local', local_only)]
+        for module in (calibre, obsidian, minecraft):
+            feature = module.get_contributions()
+            tools.extend(RegisteredContribution(feature.id, feature.label, tool) for tool in feature.folder_features)
+        rclone_tool = get_contributions().folder_features[0]
+        tools.append(RegisteredContribution('rclone', 'rclone', rclone_tool))
+        connection = SimpleNamespace(data=self.root / 'ciphertext', remote='Legacy', package=self.root / 'keys.zip')
+        entry = FolderEntry('Legacy', local=LocalCryptFolder(connection), remote_name='Legacy',
+                            remote_source='rclone', remote_context=self.root / 'keys.session')
+        with patch('features.registry.get_folder_features', return_value=tools):
+            page = self.page()
+            page._show_entry(entry)
+            self.wait(page)
+        local_detector.assert_not_called()
+        self.assertTrue(page._tools_status.isHidden())
+        labels = {button.text() for button in page.detail_scroll.widget().findChildren(qt.QPushButton)}
+        self.assertTrue({'Push...', 'Pull', 'Browse in Logistics'}.issubset(labels), labels)
+        self.assertNotIn('Browse encrypted copy', labels)
+        # Ordinary local entries still go through availability detection.
+        local_detector.side_effect = None
+        local_detector.return_value = False
+        page._show_entry(FolderEntry('Local', local=self.folder('Local')))
+        self.wait(page)
+        local_detector.assert_called_once()
+
     def test_sources_are_read_once_per_refresh_not_again_on_show_or_selection(self):
         read_names = self.remote(['Shared', 'Remote-Only'], 'profile')
         self.local_folders = [self.folder('Local'), self.folder('Shared')]

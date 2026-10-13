@@ -33,14 +33,14 @@ briefcase build iOS --no-input
 
 Staging creates a new directory and refuses to replace an existing payload. Move
 or remove your previous generated `Mobile/payload` before staging again. For local
-development, `--allow-dirty` permits uncommitted mobile sources; such payloads
-cannot pass the mobile runtime evidence verifier.
+development, `--allow-dirty` permits uncommitted mobile and tracked shared sources.
+The release evidence verifier still rejects dirty payloads. Explicit local runs
+use `python ui_tools.py run android --device <device> --local` (or `ios`), verify
+the staged source fingerprint, and retain a separate `*-native-ui-local.json` report.
 
 Briefcase needs the Android SDK/JDK or Xcode/iOS platform resources. A listed iOS
-SDK alone may be insufficient: the local Xcode installation reported
-`iOS 26.5 Platform Not Installed` while compiling the launch storyboard. No local
-simulator devices were installed. Use the hosted build or install the platform
-through Xcode Settings → Components before trying a simulator run.
+SDK alone may be insufficient: install the matching simulator runtime through
+Xcode Settings → Components before trying a simulator run.
 
 Only public, selected Python sources and licenses enter the payload. Private
 INIs, Git metadata, ignored resources and the external emulation link are excluded.
@@ -69,7 +69,7 @@ These commands verify host behavior; they do not certify device interfaces.
 
 [Native builds](../.github/workflows/mobile-build.yml) produce an Android debug APK
 and an iOS Simulator app archive. [Runtime checks](../.github/workflows/mobile-runtime.yml)
-build the pinned CPython 3.14.7 testbeds and execute 28 Logistics document/core
+build the pinned CPython 3.14.7 testbeds and execute 37 Logistics document/core
 cases inside actual Android and iOS interpreters. Result verification requires
 the expected runtime, clean source commits, every case and zero failures or skips.
 
@@ -86,10 +86,18 @@ and Linux validation before a release can be packaged or published. A manual
 Source release run validates and packages without publishing a release.
 
 Native build jobs additionally run the actual Toga app in Briefcase test mode on
-an Android emulator and iPhone Simulator. Nine required UI cases cover the hub,
+an Android emulator and iPhone Simulator. Fifteen required UI cases cover the hub,
 preferences, documents, rendered Markdown, rendered EPUB chapters, bookmarks and
 native comic image decoding, a loopback-only streamed LM conversation and
-embedded rclone credential import/browsing/private copies. Source/backend checks reject missing or stale reports.
+embedded rclone credential import/browsing/private copies, secure credentials,
+and LocalCrypt reading, text/Markdown edits, comic/EPUB metadata edits (including
+inner AES ZIP passwords), save-conflict preservation and locking, plus local folder operations and Save As
+across Local/LocalCrypt boundaries. The file-management case also verifies shared
+list/tile selection, thumbnails, file details, folder taps, Back across storage,
+search/sort and a streamed 40 MiB comic metadata save. The comic-reader case also
+imports and reads a 257 MiB ordinary archive.
+Source/backend checks reject missing or stale reports. Reports are emitted in
+ordered base64 chunks to avoid native log-line truncation.
 Each app run has a 15-minute bound within its build job. These automated cases do
 not interact with real system document pickers.
 

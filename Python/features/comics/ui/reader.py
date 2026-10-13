@@ -38,7 +38,7 @@ class ComicReaderWindow(qt.QMainWindow):
         self.setMinimumSize(640, 420)
         self.pages = pages
         self._state_folder = state_folder
-        self._remember_position = remember_position()
+        self._remember_position = remember_position() and not getattr(pages.document, 'private', False)
         self._has_position = False
         self.save_timer = qt.QTimer(self)
         self.save_timer.setSingleShot(True)
@@ -98,13 +98,18 @@ class ComicReaderWindow(qt.QMainWindow):
     def _configure_file(self):
         self._state = ReadingState(self.pages.path, folder=self._state_folder)
         self.page_cache.set_pages(self.pages)
-        self.setWindowTitle(self.pages.path.name)
+        self.setWindowTitle(('🕵️ Private - ' if getattr(self.pages.document, 'private', False) else '') + self.pages.path.name)
         self.setWindowFilePath(str(self.pages.path))
-        self.menus.shared.remember(self.pages.path)
+        if not getattr(self.pages.document, 'private', False):
+            self.menus.shared.remember(self.pages.path)
         self.controls.set_file(self.pages)
         self._refresh_siblings()
 
     def _refresh_siblings(self):
+        if getattr(self.pages.document, 'private', False):
+            self.siblings = [self.pages.path]
+            self._update_controls()
+            return
         try:
             self.siblings = comic_siblings(self.pages.path)
         except OSError:
@@ -137,7 +142,7 @@ class ComicReaderWindow(qt.QMainWindow):
         self.menus.next_page_action.setEnabled(self.next_button.isEnabled())
         self.menus.go_page_action.setEnabled(not self.file_loading)
         self.menus.shared.open_action.setEnabled(not self.file_loading)
-        self.menus.shared.recent.setEnabled(not self.file_loading)
+        self.menus.shared.recent.setEnabled(not self.file_loading and not self.pages.document.private)
 
     def set_mode(self, mode):
         if mode not in self.menus.mode_actions:
@@ -302,7 +307,9 @@ class ComicReaderWindow(qt.QMainWindow):
         self.boundary = None
         self._update_controls()
         def read():
-            pages = ComicPages(path, password=password)
+            from features.comics.library import ComicDocument
+            source = self.pages.document.source
+            pages = ComicPages(path, ComicDocument(path, password=password, source=source))
             index = page if page is not None else 0
             if page is None and not from_end and self._remember_position:
                 index = ReadingState(pages.path, folder=self._state_folder).position(pages.pages)
@@ -318,7 +325,8 @@ class ComicReaderWindow(qt.QMainWindow):
             self.statusBar().showMessage(f'Cannot open comic: {error}')
             if is_password_error(error):
                 path, from_end, page = self.loading_request
-                password = ask_password(path, error, self)
+                source = self.pages.document.source
+                password = ask_password(path, error, self, **({'source': source} if source else {}))
                 if password is not None:
                     self.pending_file = (path, from_end, page, password)
             self._refresh_siblings()
@@ -344,9 +352,9 @@ class ComicReaderWindow(qt.QMainWindow):
             log(Severity.WARNING, 'Comic Reader', f'Reading position could not be saved: {error}')
 
     def _choose_file(self):
-        path, _ = qt.QFileDialog.getOpenFileName(self, 'Open comic', str(self.pages.path.parent), 'Comic archives (*.cbz *.CBZ)')
-        if path:
-            self._request_file(path)
+        from services.reader_resources import choose_reader_document
+        return choose_reader_document(self, 'comic', current=self.pages.document,
+                                      open_local=None if self.pages.document.private else self._request_file)
 
     def go_to_page(self):
         if self.closing or self.file_loading:
@@ -372,7 +380,7 @@ class ComicReaderWindow(qt.QMainWindow):
                 self.metadata_windows.remove(window)
                 window.deleteLater()
         self._refresh_siblings()
-        editor = MetadataEditor(self.pages.path, self.siblings, self)
+        editor = MetadataEditor(self.pages.path, self.siblings, self, source=self.pages.document.source)
         self.metadata_windows.append(editor)
         editor.idle.connect(self.idle)
         editor.saved.connect(self._metadata_saved)
@@ -428,6 +436,11 @@ class ComicReaderWindow(qt.QMainWindow):
         return CloseOutcome.ACCEPTED if accepted else CloseOutcome.VETOED
 
     def closeEvent(self, event):
+        from commonUtils.ui.resource_picker import resource_tasks_pending
+        if resource_tasks_pending(self):
+            self.closing = True
+            event.ignore()
+            return
         from commonUtils.ui.document_host import host_keeps_document
         owned = [window for window in self.metadata_windows if not host_keeps_document(window)]
         if any(window.busy for window in owned):

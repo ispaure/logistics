@@ -17,9 +17,10 @@ the native app; real-device interaction testing is still required.
 | Preferences / INI settings | Private INI with font size and last-document restore controls; no desktop preference migration |
 | Export | Export a copy through the platform destination picker |
 | Share or save back to the original document | Not implemented |
-| File browser, bulk rename, IDE and Git/Perforce UI | Not ported |
+| File browser | Shared native list/tile views, thumbnails and file information for app-managed Local/LocalCrypt files and remote browsing |
+| Bulk rename, IDE and Git/Perforce UI | Not ported |
 | LM chat | Native text conversations, configured server/model, streaming/cancel, private history and Markdown export |
-| rclone remote files | Credential ZIP import, read-only browsing, private downloads and export; session-only credentials |
+| rclone remote files | Credential ZIP import, ordinary downloads/export, LocalCrypt encrypted offline reading/editing, local folder management and Save As; encrypted saved or session-only credentials |
 | Media/image tools, archives and other desktop integrations | Not ported |
 
 ## Preferences and storage
@@ -39,7 +40,7 @@ Desktop preferences cannot simply be copied wholesale: filesystem paths,
 external executable locations and desktop-only options need validation or
 platform-specific replacements. Document-provider access is a permission-bearing
 platform handle rather than an ordinary path stored in an INI. Preferences
-migration, backup/reset behavior and credential storage remain separate work.
+migration and general app-data backup/reset behavior remain separate work.
 
 ## Document workflow
 
@@ -97,8 +98,11 @@ chapter/page; the bookmark selector returns to saved positions. Comic pages use
 natural filename order. Right-to-left manga metadata is identified; single-page
 Previous/Next controls still refer to reading-order positions.
 
-Imports are limited to 256 MiB, 5,000 archive members, 256 MiB of decompressed
-member data in total, and 8 MiB per member. Native comic images must be PNG/JPEG,
+Ordinary CBZ/ZIP comics stream into the private library without a fixed archive
+or total decompressed-size cap. Reading seeks archive headers and fetches only the
+chosen page. Both EPUB and comic archives are limited to 5,000 entries; EPUB
+imports retain the 256 MiB archive/expanded-total and 8 MiB per-member limits.
+Native comic images must be PNG/JPEG,
 no larger than 8 MiB or 16 megapixels, with each dimension at most 8,192 pixels.
 Comics with other page formats are rejected rather than silently skipping pages.
 EPUB chapters and rendered HTML are limited to 2 MiB. Small PNG/JPEG illustrations
@@ -107,8 +111,10 @@ show an omission label. Raw scripts, forms, embedded objects, source styles and
 external resources are removed. Chapter links are inert; use the chapter selector.
 DRM, encrypted archives, CBR/RAR and fixed-layout SVG books are not supported.
 
-The private book checksum is checked on opening, and the portable reader rejects
-changes while reading. Re-import a changed private copy as a new entry. Malformed
+Imports hash bytes during their streamed copy. The checksum is verified on
+opening after a restart; reopening an unchanged file in the same session reuses
+a bounded revision-keyed verification cache. Changed files invalidate it, and
+individual page reads reject concurrent changes. Re-import a changed private copy as a new entry. Malformed
 library records are preserved and reported. Progress/bookmark writes reject stale
 records rather than overwriting another change.
 
@@ -168,30 +174,169 @@ remote list; it makes no remote connection by itself.
 This first mobile adapter includes Google Drive, Dropbox, OneDrive, S3 and WebDAV,
 plus the memory backend used by the offline diagnostic. Existing authenticated
 settings are required. It accepts a deliberately limited set of backend settings;
-local paths, scripts, service-account files, mounts, alias/crypt wrappers and
+local paths, scripts, service-account files, mounts, alias wrappers and
 other backends are not currently supported. WebDAV URLs and custom S3 endpoints
-must use HTTPS. Certificate verification stays enabled.
+must use HTTPS. Certificate verification stays enabled. A single crypt layer over
+one supported backing remote is available for [LocalCrypt reading](#localcrypt-encrypted-offline-reading).
 
 Choose a remote, optionally enter a relative folder, then **Browse folder**.
-**Open selected folder** and **Parent folder** navigate its entries. A folder
+Tap a folder to open it, or use **Open selected folder** and **Parent folder**.
+**Back** returns through successful folder/storage visits in this browser session.
+**Search** opens a full-width field and searches names in this folder and its
+subfolders, requesting additional remote listings in the background. Scans stop
+after 10,000 entries and report incomplete results. Choose a name, size or modified-time sort. Folders stay first. Search resets when
+the location changes, and hiding a selected file clears its action selection. A folder
 result is limited to 1,000 displayed entries. **Download private copy** reads the
-selected file into this app's private Downloads, up to 32 MiB. It never uploads,
+selected file into this app's private Downloads as a stream, without a fixed whole-file size cap. It never uploads,
 renames, deletes or synchronizes remote files. **Cancel request** cancels the native
 operation; individual network reads have a 15-second timeout and operations have
-a two-minute deadline. Some upstream backends may take until their network call
+a two-minute deadline for browsing and a 30-minute deadline for transfers and archive rewrites. Some upstream backends may take until their network call
 returns to acknowledge cancellation.
 
 Select a private download and choose **Open private copy** to import it into the
 text/Markdown editor or EPUB/CBZ library, subject to those readers' existing format
 and size limits. Other/bigger files can use **Export private copy…**, through the
-system destination picker, up to 32 MiB. Repeated downloads produce separate private
+system destination picker, streamed without a fixed whole-file size cap. Repeated downloads produce separate private
 copies; incomplete copies are excluded from the selector after a restart.
 
-The ZIP password, decrypted credentials and refreshed OAuth tokens are held only
-in this app session. They are not saved to preferences, extracted config files,
-logs or downloaded-file metadata. **Forget session credentials** clears the
-loaded session while preserving downloads. Re-import after restarting. Updated
-tokens are not written back to the ZIP: accounts that rotate refresh tokens may
-need a fresh credential package. A secure persistent credential vault and interactive
-OAuth account setup remain future work. Private download files persist on this
-device and are subject to the platform's normal app-data backup policy.
+**Save credentials on this device** is enabled by default. Turn it off before
+importing to keep credentials only in memory for this app session. A session-only
+import leaves any previously saved package unchanged; **Reload saved credentials**
+returns to that package. One saved package is supported at a time. Its ZIP filename
+appears above the remote selector, so the package and its remote names stay associated.
+
+Saved settings and refreshed OAuth tokens use an AES-256-GCM encrypted private
+vault. Android Keystore protects its key, and the files are outside Android backup;
+iOS Keychain stores a device-only key available while the device is unlocked, and
+the vault folder is excluded from backup. Credentials restore when Remote files
+opens, without contacting a remote. The ZIP password is never saved, and neither
+mode rewrites the source ZIP. A locked device, missing key or damaged vault stops
+restoration; there is no plaintext fallback or silent replacement of saved data.
+Unlock the device and reload, or use **Forget saved credentials** before reimporting.
+
+**Forget saved credentials** unloads the active session and removes the saved
+ciphertext and its known protected key while preserving private downloads. Private
+downloads follow the platform's normal app-data backup policy. Interactive OAuth
+account setup remains future work. Session-only token updates are lost on exit;
+providers that rotate refresh tokens may require a fresh credential package.
+
+## LocalCrypt encrypted offline reading
+
+Mobile can browse an rclone crypt remote whose direct backing remote is supported
+and included in the same credential ZIP. Import/unlock the package in **Remote
+files**, select the crypt remote, then **Browse folder** to see decrypted names.
+Choose a file and **Download encrypted copy**. The app saves the original rclone
+ciphertext under its private LocalCrypt storage; it does not save decrypted content
+or add a plaintext filename to the copy's record. Filename privacy still depends
+on the crypt remote's filename-encryption settings.
+
+Remote browsing and unlocked copies show decrypted names. **Manage local files
+and folders** opens a local browser with **Local files** and the session's
+**LocalCrypt** destinations. **List** and **Tiles** use the same shared browsing
+model as desktop. Visible PNG/JPEG images and comic/EPUB covers load in the
+background, with a bounded memory cache. Select a file to see its name, size and
+modified time, plus available comic/EPUB metadata below the entries. Folder
+navigation supports tapping folder entries, **Parent folder** and **Back** through
+successful folder/storage visits. **Search** opens a full-width field and searches this folder and its subfolders
+in the background; scans stop after 10,000 entries and report incomplete results; sorting supports natural name order, size and modified time in either
+direction, with folders first. A failed folder load preserves the previous
+listing and history. Searching reads folder listings, without reading file contents. Closing search
+restores the current folder listing. Use **Inner
+archive password** and browse again when a protected comic or EPUB needs its own
+password for covers or metadata. File-name browsing and moves do not need this
+inner password. Browse a folder, then create a folder, rename, delete
+or move the selected item. For a move, select the destination storage and enter a
+relative path including the final file/folder name; its parent folder must exist.
+Moving into LocalCrypt encrypts the content and names according to the remote's
+settings; moving out creates decrypted Local files. Inner ZIP passwords remain
+unchanged. These actions affect app-private local storage, not cloud originals or
+arbitrary folders owned by another app.
+
+To organize an older offline encrypted copy, select it on the Remote files screen,
+open the manager and choose **Use selected offline encrypted copy**. Choose a
+private download similarly with **Use selected private download**. Existing copies
+are preserved until their transfer succeeds. Managed crypt files can be read and
+edited directly, including their comic/EPUB metadata.
+
+Text/Markdown editors offer **Open** and **Save As** through one storage browser
+for app-managed Local files and unlocked LocalCrypt folders. Choose storage, browse
+a folder and select a decoded filename, or enter a new name for Save As. Use
+**Browse folder** after changing storage or typing a folder. Folder taps, **Back**,
+search and sorting use the same shared browser controls as the file manager. There is no separate
+decryption action. Drafts opened this way stay in memory, including local exports.
+Saving an ordinary document into LocalCrypt removes its active recovery draft;
+previously saved plaintext originals are preserved.
+A successful Save As preserves the original and switches subsequent saves to the
+new file. Save As and moves refuse existing destination names. Deletion is
+permanent and asks for confirmation. Cross-storage moves verify the destination
+before deleting the source; interrupted cleanup can leave both copies or remaining
+source entries. Refresh and inspect them before retrying. Transfers stream their
+contents; text editing and saves retain the 1 MiB buffer limit.
+
+Choose **Refresh encrypted copies**, select a copy and **Read encrypted copy**.
+Once downloaded, reading works offline while the matching credentials are loaded.
+After restarting, reload saved credentials or import the same package again.
+Copies with unavailable credentials are shown as locked. Forgetting credentials
+preserves ciphertext copies, closes the private reader and removes its displayed
+content. **Close private reader** releases the reader's in-memory content.
+
+The private reader/editor is separate from Documents and the book library. It
+supports text/Markdown editing, EPUB chapter text, and PNG/JPEG comic pages in
+CBZ/ZIP archives. For a password-protected archive inside LocalCrypt, enter its
+password in **Inner ZIP password (if needed)** before opening. Both AES and
+traditional ZIP passwords are supported; the password is not saved. Choose a
+page/chapter, then **Read selected page**.
+
+Edit text or Markdown and choose **Save encrypted copy** to replace the encrypted
+local file. Encoding, BOM and line endings are preserved. Saving does not upload
+anything. Failed saves retain your edits. **Close private reader**, credential
+changes and app exit keep unsaved edits open until you save or choose **Discard
+changes and close**. **Return to private reader/editor** resumes an open editor.
+Unsaved edits remain in memory and cannot survive an app crash or forced exit.
+
+The private reader creates no document recovery file, reading-position record,
+bookmarks, plaintext export or thumbnail cache. Markdown is edited as source text;
+desktop Markdown formatting, folder mirroring and upload are not available here.
+
+For a LocalCrypt comic or EPUB, choose **Edit metadata…** in the private reader,
+change the fields and choose **Save encrypted metadata**. EPUB fields include title,
+authors, language, publisher, tags and description; authors and tags use one value
+per line. Comic fields use ComicInfo metadata, including title, series, number,
+credits and tags. PageCount is preserved rather than manually changed.
+
+Saving preserves pages, chapters, covers and unrelated metadata. Inner ZIP
+passwords remain in effect, and are kept only for the open reader session. Existing
+untouched archive entries are copied intact; rewritten protected metadata uses
+AES-256 with the same password. No plaintext backup or metadata recovery file is
+created. Conflicts, incorrect passwords, cancellation and failed verification keep
+the original encrypted copy. Failed saves keep your edits in the form. **Back to
+reader** keeps the form draft; **Discard changes and close** explicitly discards it.
+
+Encrypted downloads, moves, reads and metadata rewrites have no fixed whole-file
+size cap. Archive headers and individual members are read as needed; metadata
+verification streams every member. Text editing is limited to 1 MiB, archive
+member reads to 16 MiB, and comic pages to
+8 MiB and 16 megapixels. Damaged ciphertext and mismatched crypt settings fail
+without producing a plaintext file. The app does not promise secure erasure of
+RAM or change the device's normal app-data backup policy. A saved credential vault
+protects keys/settings separately from these rclone-encrypted document copies.
+
+If a move saves the verified destination but source cleanup stops, the message
+identifies that partial result. Refresh both locations before retrying cleanup;
+do not repeat the entire move. A save completed just before cancellation still
+counts as saved. If its new revision cannot be read, reopen the saved file before
+continuing to edit; the current draft remains available.
+
+Save As keeps the original draft until the saved destination has been reopened
+successfully. If reopening fails after a verified save, the message says the file
+was saved and retains your draft. Inspect that destination before retrying Save As
+with the same name.
+
+
+Save As keeps the original reader and draft until the new editor has been built
+and displayed. A failure to construct or show it does not discard the original
+buffer; the destination may already have been saved, so inspect it before retrying.
+
+If another operation changes a newly saved destination before it is reopened,
+Save As keeps your original draft and reports the saved-but-not-reopened state.
+Inspect the destination before retrying; it is not silently overwritten.

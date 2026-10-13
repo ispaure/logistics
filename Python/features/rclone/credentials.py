@@ -68,7 +68,8 @@ def get_loaded_credential_config_paths() -> list[Path]:
     """Return available rclone configs independently of original ZIP packages."""
 
     # Generated configs remain usable after the original ZIP is moved away.
-    return configuration.get_all_conf_paths()
+    from . import session
+    return configuration.get_all_conf_paths() + session.paths()
 
 
 def write_remote_credentials_to_config(
@@ -103,15 +104,25 @@ def write_remote_credentials_to_config(
     return True
 
 
-def load_remote_from_zip_to_config(zip_path: str | Path, zip_pw: str) -> bool:
+def load_remote_from_zip_to_config(zip_path: str | Path, zip_pw: str, *, remember=True) -> bool:
     """
     Extract one credential archive and write its dedicated same-named .conf.
 
     The credential ZIP is never modified or deleted.
     """
 
-    logistics_cfg = config.LogisticsConfig()
     zip_path = Path(zip_path)
+    if not remember:
+        from . import session
+        try:
+            values = session.read_package(zip_path, zip_pw)
+        except Exception:
+            ui.display_msg_box_ok('Load Remote Credential',
+                'The password or credential package is invalid. Existing credentials were preserved.')
+            return False
+        session.remember(configuration.get_credential_config_path(zip_path).with_suffix('.session'), values, package_path=zip_path)
+        return True
+    logistics_cfg = config.LogisticsConfig()
     config_path = configuration.get_credential_config_path(zip_path)
     workspace_root = Path(logistics_cfg.temp_path)
     workspace_root.mkdir(parents=True, exist_ok=True)

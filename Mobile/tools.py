@@ -2,30 +2,33 @@
 import argparse
 import importlib.util
 import json
+from hashlib import sha256
 from pathlib import Path
 import shutil
 import subprocess
 
 APP_MODULES = ('__init__.py', '__main__.py', 'documents.py', 'access.py', 'pickers.py', 'app.py', 'smoke.py',
                'preferences.py', 'preview.py', 'library.py', 'reading.py', 'library_ui.py',
-               'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_fixture.py', 'cloud.py', 'cloud_ui.py', 'native_loop.py')
+               'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_fixture.py', 'cloud.py', 'cloud_ui.py', 'native_loop.py', 'credential_vault.py', 'localcrypt.py', 'localcrypt_ui.py', 'file_resources.py', 'files_ui.py', 'crypt_stream.py', 'browser_preview.py')
 DOCUMENT_MODULES = (
     'features/__init__.py', 'features/books/__init__.py', 'features/books/epub.py',
     'features/books/metadata.py', 'features/comics/__init__.py',
     'features/comics/archive_io.py', 'features/comics/comicinfo.py',
     'features/comics/library.py', 'features/comics/pages.py',
-    'services/__init__.py', 'services/zip_passwords.py',
+    'services/__init__.py', 'services/zip_passwords.py', 'services/document_metadata.py',
     'features/lm/__init__.py', 'features/lm/domain.py', 'features/lm/screenshots.py',
 )
 
+
+SHARED_REQUIRED_MODULES = ('runtime/resource_provider.py', 'runtime/local_files.py', 'runtime/resource_mutations.py', 'persistence/publication.py', 'filesystem/local_access.py', 'runtime/resource_selection.py', 'runtime/browsing.py', 'runtime/range_reader.py', 'runtime/archive_source.py', 'runtime/resource_search.py', 'ui/native_browser/__init__.py')
 
 def stage(repo, destination, *, testbed=False, allow_dirty=False):
     repo, destination = Path(repo).resolve(), Path(destination).resolve()
     if destination.exists():
         raise ValueError('Stage into a new directory; existing payloads are preserved.')
     paths = ['Python/logisticsmobile', 'Mobile', 'Python/tests/test_mobile_documents.py', 'Python/tests/test_mobile_hub.py',
-             'Python/tests/test_mobile_readers.py',
-             'Python/tests/test_mobile_chat.py', 'Python/tests/test_mobile_cloud.py',
+             'Python/tests/test_mobile_readers.py', 'Python/tests/test_mobile_localcrypt.py',
+             'Python/tests/test_mobile_chat.py', 'Python/tests/test_mobile_cloud.py', 'Python/tests/test_mobile_vault.py',
              'Python/tests/portable_documents.py', 'Python/tests/books_fixture.py']
     paths.extend('Python/' + name for name in DOCUMENT_MODULES)
     dirty = bool(subprocess.check_output(['git', '-C', str(repo), 'status', '--porcelain', '--', *paths]))
@@ -36,13 +39,23 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     spec = importlib.util.spec_from_file_location('shared_mobile_tools', shared / 'tools/mobile_ci.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    module.stage(shared, destination)
+    module.stage(shared, destination, allow_dirty=allow_dirty)
     def copy(original, relative):
         if original.is_symlink() or any(parent.is_symlink() for parent in original.parents if parent != repo):
             raise ValueError('Refusing linked mobile source: ' + str(relative))
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(original, target)
+    # Explicit portable dependency: local development may include this new API
+    # before it is committed, without admitting arbitrary untracked shared files.
+    new_shared = False
+    for name in SHARED_REQUIRED_MODULES:
+        relative = Path('commonUtils') / name
+        if not (destination / relative).exists():
+            if not allow_dirty:
+                raise ValueError('Commit required shared resource APIs before release staging.')
+            copy(shared / name, relative)
+            new_shared = True
     for name in APP_MODULES:
         copy(repo / 'Python/logisticsmobile' / name, Path('logisticsmobile') / name)
     copy(repo / 'LICENSE.md', Path('logisticsmobile/LICENSE.md'))
@@ -51,11 +64,22 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
         copy(repo / 'Python' / name, Path(name))
     if testbed:
         for name in ('portable_documents.py', 'books_fixture.py', 'test_mobile_documents.py', 'test_mobile_hub.py',
-                     'test_mobile_readers.py', 'test_mobile_chat.py', 'test_mobile_cloud.py'):
+                     'test_mobile_readers.py', 'test_mobile_chat.py', 'test_mobile_cloud.py', 'test_mobile_vault.py', 'test_mobile_localcrypt.py'):
             copy(repo / 'Python/tests' / name, Path(name))
     manifest = json.loads((destination / 'source.json').read_text())
+    manifest['commonUtils_dirty'] = manifest.get('commonUtils_dirty', False) or new_shared
     manifest.update(logistics_commit=subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip(),
-                    dirty=dirty, features=['text', 'markdown', 'epub', 'comics', 'lm', 'rclone'])
+                    dirty=dirty or manifest.get('commonUtils_dirty', False), features=['text', 'markdown', 'epub', 'comics', 'lm', 'rclone'])
+    # Identify the exact local source snapshot independently of commit IDs.
+    digest = sha256()
+    roots = ((destination, ''), (repo / 'Mobile/rclone_bridge', 'bridge/'),
+             (repo / 'Mobile/native_tests', 'native-tests/'))
+    for root, prefix in roots:
+        for path in sorted(root.rglob('*')):
+            if path.is_file() and path.suffix in {'.py', '.go', '.json', '.mod', '.sum'} and path.name != 'source.json':
+                digest.update((prefix + path.relative_to(root).as_posix()).encode() + b'\0')
+                digest.update(path.read_bytes())
+    manifest['source_sha256'] = digest.hexdigest()
     for path in (destination / 'source.json', destination / 'logisticsmobile/source.json'):
         path.write_text(json.dumps(manifest, indent=2) + '\n')
     return manifest

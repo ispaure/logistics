@@ -44,12 +44,5 @@ def register():
 
 
 def launch(parent):
-    from commonUtils.ui import pyside as qt
-    path, _ = qt.QFileDialog.getOpenFileName(parent, 'Open EPUB', '', 'EPUB books (*.epub)')
-    if path:
-        from .controller import BooksController
-        owner = getattr(parent, 'document_service_owner', parent)
-        controller = getattr(owner, '_books_controller', None)
-        if controller is None:
-            controller = owner._books_controller = BooksController(owner)
-        return controller.open(path)
+    from services.reader_resources import choose_reader_document
+    return choose_reader_document(parent, 'epub')
