@@ -17,7 +17,9 @@ def _get_config_path(entry: FolderEntry) -> Path | None:
     if entry.remote_source != 'rclone' or entry.remote_context is None:
         return None
 
-    return Path(entry.remote_context)
+    path = Path(entry.remote_context)
+    # Session-only credentials are owned by Logistics transfers, not detached mounts.
+    return None if path.suffix == '.session' else path
 
 
 def _is_available(entry: FolderEntry) -> bool:

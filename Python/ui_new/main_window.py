@@ -62,6 +62,10 @@ class _ToastStatusGuard(pyside.QObject):
 class MainWindow(pyside.Window):
     def __init__(self):
         super().__init__('Logistics', main_window=True)
+        from services.local_storage import install_local_storage_policy
+        install_local_storage_policy()
+        from services.editor_resources import install_editor_dialogs
+        install_editor_dialogs()
 
         self.updates = None
         self.pending_update = None
@@ -490,7 +494,7 @@ class MainWindow(pyside.Window):
         if page is None:
             return
         view = page.workspace.active_view
-        root = view.file_browser.navigation.library
+        root = view.file_browser.navigation.library if view.file_browser is not None else None
         if root is not None and (path == root or root in path.parents):
             view.file_browser.navigate(path)
         else:
@@ -613,7 +617,9 @@ class MainWindow(pyside.Window):
         self.documents.closing = True
         self.actions.closing = True
         from commonUtils.ui.tasks.process_progress import prepare_close_all
-        ready = prepare_close_all(self.dlg.close)
+        from commonUtils.ui.resource_picker import resource_tasks_pending
+        ready = not resource_tasks_pending(self.dlg)
+        ready = prepare_close_all(self.dlg.close) and ready
         ready = self.documents.prepare_close() and ready
         ready = self.actions.prepare_close() and ready
         if self.bulk_rename is not None:

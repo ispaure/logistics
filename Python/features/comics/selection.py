@@ -53,6 +53,37 @@ def selected_comics(targets, recursive=True):
     return tuple(found.values())
 
 
+def selected_provider_comics(source, targets):
+    """Resolve private ZIP/CBZ files and folders through their provider only."""
+    found, seen = {}, set()
+    pending = [source.entry(path) for path in normalize_targets(targets)]
+    entries = 0
+    while pending:
+        row = pending.pop()
+        relative = source.relative(row['path'])
+        if relative in seen:
+            continue
+        seen.add(relative)
+        entries += 1
+        if entries > 10000:
+            raise ValueError('Select fewer folders: comic metadata selections are limited to 10,000 entries.')
+        if row['directory']:
+            pending.extend(source.list(relative))
+        elif Path(relative).suffix.lower() in {'.cbz', '.zip'}:
+            if Path(relative).suffix.lower() == '.zip':
+                import zipfile
+                from .pages import IMAGE_TYPES
+                with source.open(relative) as stream, zipfile.ZipFile(stream) as archive:
+                    if not any(not item.is_dir() and Path(item.filename).suffix.lower() in IMAGE_TYPES
+                               and '__MACOSX' not in Path(item.filename).parts
+                               and not Path(item.filename).name.startswith('._') for item in archive.infolist()):
+                        continue
+            found[relative] = source.root / relative
+    if not found:
+        raise ValueError('The selection contains no comic ZIP or CBZ files')
+    return tuple(found[key] for key in sorted(found))
+
+
 @dataclass
 class SaveResult:
     saved: list[Path] = field(default_factory=list)
@@ -62,19 +93,27 @@ class SaveResult:
 class ComicSelection:
     """A fixed snapshot of the selected comics, never silently expanded on save."""
 
-    def __init__(self, targets, *, password=None):
+    def __init__(self, targets, *, password=None, source=None):
         self.targets = normalize_targets(targets)
-        paths = selected_comics(self.targets)
+        if source is None:
+            paths = selected_comics(self.targets)
+            folders = any(target.is_dir() for target in self.targets)
+        elif hasattr(source, 'entry'):
+            paths = selected_provider_comics(source, self.targets)
+            folders = any(source.entry(target)['directory'] for target in self.targets)
+        else:
+            paths, folders = self.targets, False
+        bulk = len(paths) > 1 or folders
         for path in paths:
-            if path.stat().st_nlink > 1:
+            if source is None and path.stat().st_nlink > 1:
                 raise ValueError(f'Hard-linked CBZs need independent copies before editing: {path}')
         self.documents = []
         self.load_failures = {}
         for path in paths:
             try:
-                self.documents.append(ComicDocument(path, password=password))
+                self.documents.append(ComicDocument(path, password=password, source=source))
             except Exception as error:
-                if isinstance(error, ArchivePasswordError) and (len(paths) > 1 or any(target.is_dir() for target in self.targets)):
+                if isinstance(error, ArchivePasswordError) and bulk:
                     self.load_failures[path] = str(error)
                     continue
                 raise ValueError(f'Cannot load {path}: {error}') from error
@@ -91,7 +130,7 @@ class ComicSelection:
         # concurrent changes must not leave a preventable partial batch.
         for document in self.documents:
             document.prepare_metadata(changes)
-            if not archive_unchanged(document.path, document.snapshot):
+            if not document.unchanged():
                 raise RuntimeError(f'Comic changed since loading: {document.path}. Reload before saving.')
 
     def save(self, changes):

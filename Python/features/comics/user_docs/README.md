@@ -173,3 +173,38 @@ The independent native app has private EPUB and PNG/JPEG CBZ/ZIP reading,
 chapter/page progress and bookmarks. It has a smaller format/UI scope than this
 desktop guide. See the [mobile guide](../../../logisticsmobile/user_docs/README.md)
 for imports, limits and current validation status.
+
+
+## Metadata inside LocalCrypt
+
+Desktop LocalCrypt provides **Edit comic metadata…**. Mobile encrypted offline
+copies provide **Edit metadata…** in the private reader. Saves preserve page bytes,
+page metadata and the inner ZIP password, and update only the encrypted local
+copy. No plaintext backup or persistent metadata draft is created. Mobile retains
+unsaved fields in memory until saved or explicitly discarded; saving does not
+upload the comic. See the [mobile LocalCrypt guide](../../../logisticsmobile/user_docs/README.md#localcrypt-encrypted-offline-reading).
+
+On desktop, **Edit comic metadata…** in LocalCrypt uses all selected comics and
+folders. Folder selections include nested CBZs and ZIP archives with comic image
+pages; unrelated files and ZIPs without images are ignored. Overlapping folder/file
+selections edit each comic once. The scan is limited to 10,000 entries. Inner ZIP
+passwords for batch editing come from the copy's nearest `remoteConfig.ini`.
+Batch editing reports locked comics it cannot open; it does not silently
+change their passwords. Saves preserve page bytes, untouched metadata and the inner
+ZIP password, and update the encrypted local copy until you explicitly Push.
+
+Comic readers and metadata windows opened from private storage begin their titles with **🕵️ Private -**. Ordinary comic windows keep their existing titles.
+
+Desktop file unlocks validate before closing the password prompt. If the password
+is wrong, the same prompt shows an error, clears the field and keeps focus there
+for another attempt. This applies to ordinary comics and inner passwords in
+LocalCrypt copies; Cancel keeps the current comic open.
+
+Desktop **Open comic…**, including the New Document launcher, uses the shared Local/LocalCrypt file picker with a CBZ filter. A LocalCrypt choice opens a separate private reader; opening a local comic from a private reader creates an ordinary reader.
+
+
+Ordinary Android/iOS CBZ/ZIP library imports stream archives without a 256 MiB
+whole-file or expanded-total cap. Reading loads one page at a time through a
+shared revision-checked archive source; PNG/JPEG page and header-count limits
+remain. The [mobile guide](../../../logisticsmobile/user_docs/README.md) lists the
+current format limits and shared navigation controls.

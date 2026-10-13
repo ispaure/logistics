@@ -1,4 +1,4 @@
-"""Read-only native rclone bridge; credentials exist only in this app session."""
+"""Read-only native rclone bridge; credentials can use device-protected encrypted storage."""
 import base64
 import ctypes
 import json
@@ -9,7 +9,12 @@ DOWNLOAD_LIMIT = 32 * 1024 * 1024
 
 
 class CloudClient:
-    def __init__(self, *, library=None):
+    supports_streaming = True
+    def __init__(self, *, library=None, vault=None):
+        self.vault = vault
+        self.package_name = ""
+        self.vault_attached = False
+        self.generation = 0
         from commonUtils.runtime.platform import get_os, OS
         if library is None:
             current = get_os()
@@ -28,10 +33,10 @@ class CloudClient:
         self.free.restype = None
 
     def request(self, action, **values):
-        if action not in {'import', 'list', 'read', 'probe', 'clear', 'cancel'}:
+        if action not in {'import', 'list', 'read', 'probe', 'clear', 'cancel', 'vault_open', 'vault_info', 'crypt_remotes', 'crypt_fetch', 'crypt_describe', 'crypt_decode', 'crypt_encode', 'crypt_metadata', 'crypt_path', 'crypt_raw_read', 'crypt_raw_write', 'crypt_stat', 'crypt_range', 'crypt_archive', 'crypt_manifest', 'crypt_thumbnail', 'file_thumbnail', 'image_thumbnail', 'remote_thumbnail'}:
             raise ValueError('Unsupported remote operation.')
         data = json.dumps(values, ensure_ascii=False).encode('utf-8')
-        if len(data) > PACKAGE_LIMIT * 2:
+        if len(data) > PACKAGE_LIMIT * (24 if action == 'image_thumbnail' else 2):
             raise ValueError('Credential package exceeds the request limit.')
         pointer = self.call(action.encode('ascii'), data)
         if not pointer:
@@ -41,15 +46,47 @@ class CloudClient:
         finally:
             self.free(pointer)
         if not reply.get('ok'):
+            if reply.get('error_code') == 'archive_password':
+                from commonUtils.archives.zip_access import ArchivePasswordError
+                raise ArchivePasswordError(reply.get('error', 'Inner ZIP password required.'))
             raise ValueError(reply.get('error', 'Remote operation failed.'))
+        if action in {'import', 'clear', 'vault_open'}:
+            self.generation += 1
         return reply.get('result')
 
-    def import_package(self, access, reference, password):
-        with access.open(reference) as (_, source):
+    def import_package(self, access, reference, password, *, remember=True):
+        with access.open(reference) as (name, source):
             data = source.read(PACKAGE_LIMIT + 1)
         if len(data) > PACKAGE_LIMIT:
             raise ValueError('Credential ZIPs are limited to 1 MiB.')
-        return self.request('import', package=base64.b64encode(data).decode('ascii'), password=password)
+        name = download_name(name)
+        if remember and getattr(self, 'vault', None) is not None and not self.vault_attached:
+            self.restore(create=True)
+        names = self.request('import', package=base64.b64encode(data).decode('ascii'),
+                             password=password, package_name=name, session_only=not remember)
+        self.package_name = name
+        if remember and getattr(self, 'vault', None) is not None:
+            self.vault.set_label(name)
+        if not remember:
+            self.vault_attached = False
+        return names
+
+    def restore(self, *, create=False):
+        if self.vault is None:
+            return []
+        values = self.vault.unlock(create=create)
+        if values is None:
+            self.request('clear')
+            self.package_name = ''
+            self.vault_attached = False
+            return []
+        result = self.request('vault_open', **values)
+        self.vault_attached = True
+        self.package_name = result['package_name']
+        return result['remotes']
+
+    def crypt_remotes(self):
+        return self.request('crypt_remotes')
 
     def entries(self, remote, path=''):
         return self.request('list', remote=remote, path=path)
@@ -69,6 +106,10 @@ class CloudClient:
 
     def clear(self):
         self.request('clear')
+        self.package_name = ''
+        self.vault_attached = False
+        if getattr(self, 'vault', None) is not None:
+            self.vault.forget()
 
 
 def download_name(path):
@@ -110,8 +151,6 @@ class Downloads:
         try:
             with os.fdopen(os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as stream:
                 writer(stream)
-                if os.fstat(stream.fileno()).st_size > DOWNLOAD_LIMIT:
-                    raise ValueError('Downloads are limited to 32 MiB.')
                 stream.flush()
                 os.fsync(stream.fileno())
             (folder / '.complete').write_text(name, encoding='utf-8')
@@ -133,7 +172,7 @@ class Downloads:
             try:
                 name = download_name(marker.read_text(encoding='utf-8'))
                 target = folder / name
-                if target.is_file() and not target.is_symlink() and target.stat().st_size <= DOWNLOAD_LIMIT:
+                if target.is_file() and not target.is_symlink():
                     result.append(target)
             except (OSError, ValueError, UnicodeError):
                 continue

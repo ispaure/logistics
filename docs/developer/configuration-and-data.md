@@ -33,7 +33,9 @@ reconfigure an already running worker or reader.
 | Remote credential packages | configured private resource directory | Never commit secrets; package basename identifies generated config |
 | rclone configs | config directory chosen by the rclone integration | Same-named configs/packages can collide; deletion controls act on real configs |
 | FUSE mounts | managed mount root/config-path hash/remote | Moving a credential config changes mount identity |
-| Managed local sync folders | managed local root/remote name | Credential identity does not isolate local destinations |
+| Managed local sync folders | managed local root/remote name | Session Pull records credential ownership separately; conflicting packages cannot claim an associated name |
+| LocalCrypt copies | Logistics per-user root/LocalCrypt | Ciphertext plus nonsecret `.connections` records; legacy Server copies relocate on discovery |
+| Decrypted-copy associations | Logistics per-user root/Connections/Local | ZIP path and remote name; files remain in the managed Local root |
 | Backups and staging | workflow-specific, often beside affected files | Keep documented recovery paths; there is no global application Undo |
 
 Logistics preferences live at `~/Library/Application Support/Logistics` on macOS,
@@ -181,3 +183,18 @@ that storage participates in rollback and preset copy/delete. A failed remote
 Blue Hole check/download can use a recorded, present, compatible installed copy,
 keeping its actual branch/commit distinct from the requested branch and reporting
 a launch warning. First installs and invalid payloads still fail explicitly.
+
+## rclone credential lifetime
+
+Desktop credential unlocks select saved same-named `.conf` files or process-local
+sets in `features/rclone/session.py`. Session packages are bounded/authenticated
+directly in RAM; virtual `.session` paths identify their Folder Hub contexts but
+are never written. CLI launches use a complete per-child environment, safe internal
+remote aliases and the platform null config. Human remote names stay in the UI and
+local destinations. Session mode does not change existing saved configs; it supports
+Push/Pull/preview, while detached FUSE mounts require a saved config. Token updates
+in a short-lived session CLI process do not return to the host. Mobile persistence
+uses the separate protected vault contract in [mobile preparation](mobile-preparation.md).
+
+Local ciphertext mapping, dependent credential revocation and reader ownership are
+described in [LocalCrypt](localcrypt.md).

@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -33,10 +34,10 @@ import (
 	_ "github.com/rclone/rclone/backend/webdav"
 	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/fs/config"
+	"github.com/rclone/rclone/fs/config/configmap"
 	"github.com/rclone/rclone/fs/fspath"
 	"github.com/rclone/rclone/fs/object"
 	"github.com/yeka/zip"
-	"golang.org/x/sys/unix"
 )
 
 const packageLimit = 1024 * 1024
@@ -48,6 +49,7 @@ var active context.CancelFunc
 var admitted = map[string]bool{}
 var clients = map[string]fs.Fs{}
 var allowed = map[string]string{
+	"crypt":    "remote password password2 filename_encryption directory_name_encryption filename_encoding suffix",
 	"drive":    "token client_id client_secret scope root_folder_id team_drive",
 	"dropbox":  "token client_id client_secret root_namespace impersonate",
 	"onedrive": "token client_id client_secret drive_id drive_type root_folder_id region",
@@ -60,8 +62,9 @@ func init() {
 	if runtime.GOOS == "android" {
 		_ = os.Setenv("SSL_CERT_DIR", "/apex/com.android.conscrypt/cacerts:/system/etc/security/cacerts")
 	}
-	// Default config.Storage is in memory. Never install configfile or start RC.
-	_ = config.SetConfigPath("")
+	// A nonempty logical path installs our storage; never install configfile or RC.
+	_ = config.SetConfigPath(filepath.Join(os.TempDir(), "logistics-memory-only"))
+	config.SetData(store)
 	ci := fs.GetConfig(context.Background())
 	ci.LogLevel = fs.LogLevelEmergency
 	ci.ConnectTimeout = fs.Duration(15 * time.Second)
@@ -78,8 +81,13 @@ func cancel() {
 	}
 }
 
-func operation() (context.Context, func()) {
-	ctx, stop := context.WithTimeout(context.Background(), 2*time.Minute)
+func operation(action string) (context.Context, func()) {
+	duration := 2 * time.Minute
+	switch action {
+	case "read", "crypt_fetch", "crypt_raw_write", "crypt_metadata", "crypt_manifest":
+		duration = 30 * time.Minute
+	}
+	ctx, stop := context.WithTimeout(context.Background(), duration)
 	cancellation.Lock()
 	active = stop
 	cancellation.Unlock()
@@ -159,7 +167,8 @@ func parseCredential(text []byte) (string, map[string]string, error) {
 	return name, values, nil
 }
 
-func clearSession() {
+func shutdownClients() {
+	clear(cryptCiphers)
 	ctx, stop := context.WithTimeout(context.Background(), 15*time.Second)
 	defer stop()
 	for _, client := range clients {
@@ -167,14 +176,26 @@ func clearSession() {
 			_ = shutdown(ctx)
 		}
 	}
-	for _, name := range config.Data().GetSectionList() {
-		config.Data().DeleteSection(name)
-	}
-	admitted = map[string]bool{}
+
 	clients = map[string]fs.Fs{}
 }
 
-func importPackage(data []byte, password string) ([]string, error) {
+func clearSession() {
+	shutdownClients()
+	admitted = map[string]bool{}
+	store.detach()
+	store = newStore()
+	config.SetData(store)
+}
+
+func importPackage(data []byte, password string, labels ...string) ([]string, error) {
+	label := "Credentials.zip"
+	if len(labels) > 0 {
+		label = labels[0]
+	}
+	return importPackageMode(data, password, label, false)
+}
+func importPackageMode(data []byte, password, label string, sessionOnly bool) ([]string, error) {
 	if len(data) > packageLimit || len(password) > 4096 {
 		return nil, errors.New("credential package exceeds limits")
 	}
@@ -224,13 +245,30 @@ func importPackage(data []byte, password string) ([]string, error) {
 	if len(pending) == 0 {
 		return nil, errors.New("no credential TXT files found")
 	}
-	// Publish only after every member has authenticated and validated.
-	clearSession()
+	if err := validateCryptRemotes(pending); err != nil {
+		return nil, err
+	}
+	// Publish authenticated settings to disk before replacing the session.
+
+	if !validLabel(label) {
+		return nil, errors.New("invalid credential package name")
+	}
+	candidate := store
+	if sessionOnly {
+		candidate = newStore()
+	}
+	shutdownClients()
+	if err := candidate.replace(snapshot{Label: label, Remotes: pending}); err != nil {
+		return nil, err
+	}
+	if sessionOnly {
+		store.detach()
+		store = candidate
+		config.SetData(store)
+	}
+	admitted = map[string]bool{}
 	names := []string{}
-	for name, values := range pending {
-		for key, value := range values {
-			config.Data().SetValue(name, key, value)
-		}
+	for name := range pending {
 		admitted[name] = true
 		names = append(names, name)
 	}
@@ -245,7 +283,21 @@ func remote(ctx context.Context, name string) (fs.Fs, error) {
 	if f := clients[name]; f != nil {
 		return f, nil
 	}
-	f, err := fs.NewFs(ctx, name+":")
+	kind, _ := store.GetValue(name, "type")
+	if kind == "crypt" {
+		return nil, errors.New("crypt uses the bounded encrypted-copy interface")
+	}
+	info, err := fs.Find(kind)
+	if err != nil {
+		return nil, errors.New("unsupported mobile backend")
+	}
+	values := store.connection(name)
+	options := fs.ConfigMap(info.Prefix, info.Options, "", nil)
+	// Retain registered backend defaults, but admit only our validated settings.
+	options.ClearGetters(configmap.PriorityNormal)
+	options.AddGetter(values, configmap.PriorityNormal)
+	options.ClearSetters().AddSetter(values)
+	f, err := info.NewFs(ctx, name, "", options)
 	if err != nil {
 		return nil, errors.New("could not connect; check credentials and network")
 	}
@@ -262,6 +314,9 @@ type entry struct {
 func list(ctx context.Context, name, dir string) ([]entry, error) {
 	if !validPath(dir) {
 		return nil, errors.New("invalid remote path")
+	}
+	if kind, _ := store.GetValue(name, "type"); kind == "crypt" {
+		return cryptList(ctx, name, dir)
 	}
 	f, err := remote(ctx, name)
 	if err != nil {
@@ -290,6 +345,9 @@ func list(ctx context.Context, name, dir string) ([]entry, error) {
 // readInto writes only to a caller-owned private descriptor. It duplicates
 // that descriptor so Go can close its own handle without closing Python's.
 func readInto(ctx context.Context, name, p string, fd int) (int64, error) {
+	if kind, _ := store.GetValue(name, "type"); kind == "crypt" {
+		return 0, errors.New("use Download encrypted copy for crypt files")
+	}
 	if p == "" || !validPath(p) || fd < 3 {
 		return 0, errors.New("invalid download destination")
 	}
@@ -301,33 +359,24 @@ func readInto(ctx context.Context, name, p string, fd int) (int64, error) {
 	if err != nil {
 		return 0, errors.New("remote file could not be opened")
 	}
-	if obj.Size() < 0 || obj.Size() > downloadLimit {
-		return 0, errors.New("download exceeds 32 MiB")
+	if obj.Size() < 0 {
+		return 0, errors.New("download size is unavailable")
 	}
-	copyfd, err := unix.Dup(fd)
+	target, err := privateOutput(fd)
 	if err != nil {
-		return 0, errors.New("private download destination could not be opened")
+		return 0, err
 	}
-	target := os.NewFile(uintptr(copyfd), "private-download")
 	defer target.Close()
-	offset, seekErr := target.Seek(0, io.SeekCurrent)
-	if seekErr != nil || offset != 0 {
-		return 0, errors.New("private download destination must be at its beginning")
-	}
-	info, err := target.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() != 0 {
-		return 0, errors.New("private download destination must be a new file")
-	}
 	stream, err := obj.Open(ctx)
 	if err != nil {
 		return 0, errors.New("remote file could not be opened")
 	}
-	count, copyErr := io.Copy(target, io.LimitReader(stream, downloadLimit+1))
+	count, copyErr := io.Copy(target, contextReader{ctx, stream})
 	closeErr := stream.Close()
 	if copyErr != nil || closeErr != nil || ctx.Err() != nil {
 		return 0, errors.New("download failed or cancelled")
 	}
-	if count != obj.Size() || count > downloadLimit {
+	if count != obj.Size() {
 		return 0, errors.New("download size changed or exceeds limits")
 	}
 	if target.Sync() != nil {
@@ -379,18 +428,39 @@ func dispatch(action, input string) (output string) {
 	}
 	serial.Lock()
 	defer serial.Unlock()
-	ctx, done := operation()
+	ctx, done := operation(action)
 	defer done()
 	var request struct {
-		Package  string `json:"package"`
-		Password string `json:"password"`
-		Remote   string `json:"remote"`
-		Path     string `json:"path"`
-		FD       int    `json:"fd"`
+		Package        string `json:"package"`
+		Password       string `json:"password"`
+		Remote         string `json:"remote"`
+		Path           string `json:"path"`
+		FD             int    `json:"fd"`
+		OutputFD       int    `json:"output_fd"`
+		Member         string `json:"member"`
+		Identity       string `json:"identity"`
+		Data           string `json:"data"`
+		Key            string `json:"key"`
+		ID             string `json:"id"`
+		Label          string `json:"package_name"`
+		Session        bool   `json:"session_only"`
+		Directory      bool   `json:"directory"`
+		Decode         bool   `json:"decode"`
+		SourceRemote   string `json:"source_remote"`
+		SourcePath     string `json:"source_path"`
+		SourceIdentity string `json:"source_identity"`
+		Offset         int64  `json:"offset"`
+		Count          int    `json:"count"`
+		Width          int    `json:"width"`
+		Height         int    `json:"height"`
 	}
 	var result any
 	var err error
-	if len(input) > 2*packageLimit {
+	requestLimit := 2 * packageLimit
+	if action == "image_thumbnail" {
+		requestLimit = 24 * packageLimit
+	}
+	if len(input) > requestLimit {
 		err = errors.New("request exceeds limits")
 	} else {
 		err = json.Unmarshal([]byte(input), &request)
@@ -401,12 +471,80 @@ func dispatch(action, input string) (output string) {
 			var data []byte
 			data, err = base64.StdEncoding.DecodeString(request.Package)
 			if err == nil {
-				result, err = importPackage(data, request.Password)
+				result, err = importPackageMode(data, request.Password, request.Label, request.Session)
 			}
+		case "vault_open":
+			var key []byte
+			key, err = base64.StdEncoding.DecodeString(request.Key)
+			if err == nil {
+				var next *vaultStorage
+				next, err = openVault(request.Path, request.ID, key)
+				clear(key)
+				if err == nil {
+					shutdownClients()
+					store.detach()
+					store = next
+					admitted = map[string]bool{}
+					config.SetData(store)
+					for _, name := range store.GetSectionList() {
+						admitted[name] = true
+					}
+					result = vaultInfo()
+				}
+			}
+		case "vault_info":
+			result = vaultInfo()
 		case "list":
 			result, err = list(ctx, request.Remote, request.Path)
 		case "read":
 			result, err = readInto(ctx, request.Remote, request.Path, request.FD)
+		case "crypt_remotes":
+			names := []string{}
+			for name := range admitted {
+				if kind, _ := store.GetValue(name, "type"); kind == "crypt" {
+					names = append(names, name)
+				}
+			}
+			sort.Strings(names)
+			result = names
+		case "crypt_fetch":
+			result, err = cryptFetch(ctx, request.Remote, request.Path, request.FD)
+		case "crypt_path":
+			result, err = cryptPath(request.Remote, request.Path, request.Identity, request.Directory, request.Decode)
+		case "crypt_raw_read":
+			result, err = cryptRawRead(ctx, request.Remote, request.Path, request.Identity, request.FD)
+		case "crypt_stat":
+			result, err = cryptStat(ctx, request.Remote, request.Path, request.Identity, request.FD)
+		case "crypt_range":
+			result, err = cryptRange(ctx, request.Remote, request.Path, request.Identity, request.FD, request.Offset, request.Count)
+		case "crypt_archive":
+			result, err = cryptArchive(ctx, request.Remote, request.Path, request.Identity, request.Password, request.Member, request.FD)
+		case "crypt_manifest":
+			result, err = cryptManifest(ctx, request.Remote, request.Path, request.Identity, request.Password, request.FD)
+		case "crypt_thumbnail":
+			result, err = cryptThumbnail(ctx, request.Remote, request.Path, request.Identity, request.Password, request.Member, request.FD, request.Width, request.Height)
+		case "file_thumbnail":
+			result, err = fileThumbnail(ctx, request.FD, request.Width, request.Height)
+		case "image_thumbnail":
+			var data []byte
+			data, err = base64.StdEncoding.DecodeString(request.Data)
+			if err == nil && len(data) <= 16*packageLimit {
+				result, err = nativeThumbnail(ctx, data, request.Width, request.Height)
+			} else {
+				err = errors.New("image exceeds thumbnail buffer")
+			}
+		case "remote_thumbnail":
+			result, err = remoteThumbnail(ctx, request.Remote, request.Path, request.Password, request.Width, request.Height)
+		case "crypt_raw_write":
+			result, err = cryptRawWrite(ctx, request.Remote, request.Path, request.Identity, request.FD, request.OutputFD, request.SourceRemote, request.SourcePath, request.SourceIdentity)
+		case "crypt_describe":
+			result, _, err = cryptDescribe(request.Remote, request.Path, request.Identity)
+		case "crypt_decode":
+			result, err = cryptDecode(ctx, request.Remote, request.Path, request.Identity, request.FD, request.Password)
+		case "crypt_metadata":
+			result, err = cryptStreamMetadata(ctx, request.Remote, request.Path, request.Identity, request.Password, request.Member, request.Data, request.FD, request.OutputFD)
+		case "crypt_encode":
+			result, err = cryptEncode(ctx, request.Remote, request.Path, request.Identity, request.Data, request.FD)
 		case "probe":
 			result, err = selfCheck(ctx)
 		case "clear":
@@ -416,9 +554,15 @@ func dispatch(action, input string) (output string) {
 			err = errors.New("unsupported mobile operation")
 		}
 	}
+	if err == nil && (action == "list" || action == "read" || action == "crypt_fetch") && store.failure() {
+		err = errors.New("Credentials refreshed in memory but could not be saved securely. Retry before closing the app.")
+	}
 	reply := map[string]any{"ok": err == nil}
 	if err != nil {
 		reply["error"] = "Rclone operation failed."
+		if errors.Is(err, archivePasswordError) {
+			reply["error_code"] = "archive_password"
+		}
 		if action != "probe" {
 			reply["error"] = err.Error()
 		}

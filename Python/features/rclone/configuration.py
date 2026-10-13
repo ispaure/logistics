@@ -38,6 +38,10 @@ def get_rclone_remote_names(config_path: str | Path) -> list[str]:
     """Return remote names defined in one explicit rclone config file."""
 
     config_path = Path(config_path)
+    from . import session
+    loaded = session.names(config_path)
+    if loaded is not None:
+        return loaded
 
     if not config_path.is_file():
         return []
@@ -60,6 +64,9 @@ def delete_config_file(config_path: str | Path) -> bool:
     """Delete one rclone .conf file if it exists."""
 
     config_path = Path(config_path)
+    from . import session
+    if session.forget(config_path):
+        return True
 
     if not config_path.is_file():
         return False

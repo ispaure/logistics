@@ -27,7 +27,7 @@ def open_reader(comic):
                     return None
     existing = next((window for window in _windows if window.pages.path == pages.path
                      and not window.closing
-                     and archive_unchanged(pages.path, window.pages.document.snapshot)), None)
+                     and window.pages.document.unchanged()), None)
     if existing is not None:
         # Returning to an already-open reader should preserve full screen or
         # maximization. Only a minimized reader needs its normal state restored.

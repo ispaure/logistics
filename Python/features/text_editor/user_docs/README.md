@@ -199,3 +199,26 @@ Git hunk**. The displayed patch is authoritative: Git may include nearby changes
 in the same hunk. Staging changes only the index and rejects a stale patch.
 Untracked files, conflicts, renames and conversion-filter files require Git's
 file-level workflows. Reopen a review after its buffer or baseline changes.
+
+## LocalCrypt Open and Save As
+
+Open and Save As use one browser with Local files and configured LocalCrypt
+locations. Inside LocalCrypt, folders and filenames are decoded automatically.
+Unlock the matching credentials when asked. The location label distinguishes
+an encrypted destination from a plaintext local export. Save As requires a new
+filename and preserves the original.
+
+LocalCrypt text opens in a session-only editor with Open, Save and Save As.
+Its drafts and recent paths are not stored for recovery; save or discard changes
+before closing. The private text editor is a simpler editing surface than the
+ordinary editor. Markdown uses the private Markdown editor with its preview.
+Desktop private text and Markdown opens are limited to 8 MiB.
+
+Saving an ordinary draft into LocalCrypt removes it from active editor recovery
+and hands it to a session-only editor. If saving or reopening fails, the draft
+remains available. This does not erase plaintext files or backups created before
+you selected LocalCrypt. Raw ciphertext directories remain unavailable through
+ordinary filesystem operations; choosing the LocalCrypt location performs both
+name and content encryption.
+
+Session-only text editor tabs and windows begin with **🕵️ Private -**, followed by the filename. The prefix stays visible after editing or Save As, including export to Local storage, because the draft remains session-only.

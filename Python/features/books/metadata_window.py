@@ -10,11 +10,12 @@ class MetadataWindow(qt.QDialog):
     idle = qt.Signal()
     saved = qt.Signal(object)
 
-    def __init__(self, path, parent=None):
+    def __init__(self, path, parent=None, *, source=None):
         super().__init__(parent, qt.Qt.WindowType.Window)
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
-        self.setWindowTitle('Edit EPUB metadata')
+        self.setWindowTitle(('🕵️ Private - ' if getattr(source, 'private', False) else '') + 'Edit EPUB metadata')
         self.resize(650, 720)
+        self.path, self.source, self.password = path, source, None
         self.book = None
         self.editor = None
         self.worker = None
@@ -27,7 +28,14 @@ class MetadataWindow(qt.QDialog):
         self.close_buttons = qt.QDialogButtonBox(qt.QDialogButtonBox.StandardButton.Close)
         self.close_buttons.rejected.connect(self.close)
         self.layout.addWidget(self.close_buttons)
-        self._run(lambda cancelled: EPUBBook(path), self._loaded)
+        self._load()
+
+    def _load(self):
+        def load(cancelled):
+            from contextlib import nullcontext
+            with self.source.operation(cancelled) if self.source is not None else nullcontext():
+                return EPUBBook(self.path, source=self.source, password=self.password)
+        self._run(load, self._loaded)
 
     def _run(self, operation, done):
         task = BookTask(operation, self)
@@ -46,6 +54,13 @@ class MetadataWindow(qt.QDialog):
                     self.close_buttons.hide()
                 if task.error:
                     self.status.setText(task.error)
+                    from services.zip_passwords import is_password_error
+                    if self.source is not None and self.book is None and is_password_error(task.error):
+                        from ui_new.dialogs.archive_password import ask_password
+                        password = ask_password(self.path, task.error, self, source=self.source)
+                        if password is not None:
+                            self.password = password
+                            qt.QTimer.singleShot(0, self._load)
                 else:
                     done(task.result)
             except Exception as error:
@@ -72,7 +87,7 @@ class MetadataWindow(qt.QDialog):
         if not changes:
             self.close()
             return
-        self.status.setText('Saving metadata and backing up the original…')
+        self.status.setText('Saving encrypted metadata…' if self.book.source is not None else 'Saving metadata and backing up the original…')
         def saved(result):
             self.book, backup = result
             self.saved.emit(self.book.path)

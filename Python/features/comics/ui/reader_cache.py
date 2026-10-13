@@ -32,7 +32,7 @@ class ReaderPageCache(qt.QObject):
         self.wanted = ()
 
     def lookup(self, index, previous, viewport, mode):
-        if not archive_unchanged(self.pages.path, self.pages.document.snapshot):
+        if not self.pages.document.unchanged():
             self.images.clear()
             return None
         def cached(pages, index):

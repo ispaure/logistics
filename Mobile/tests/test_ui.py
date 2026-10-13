@@ -103,7 +103,7 @@ class MobileUITests(unittest.TestCase):
                 app.show_chat()
             class FixtureCloud:
                 forgotten = False
-                def import_package(self, access, reference, password):
+                def import_package(self, access, reference, password, *, remember=True):
                     with access.open(reference) as (_, stream):
                         assert stream.read(1024) == b'synthetic package'
                     assert password == 'synthetic-ui-password'

@@ -10,8 +10,11 @@ Downloader uses it optionally. See the [user guide](user_docs/README.md) for con
 
 ## Credential contract
 
-Loading `Credentials/rclone/Personal.zip` creates `~/.config/rclone/Personal.conf`
-without changing the ZIP. Entries are `.txt` files starting with a rclone section
+With **Save credentials locally** enabled, loading `Credentials/rclone/Personal.zip`
+creates `~/.config/rclone/Personal.conf` without changing the ZIP. With it disabled,
+credentials remain in a process-local session identified by a virtual `.session`
+path; no plaintext config or extracted TXT is written. Forgetting or replacing a
+parent session also revokes private LocalCrypt reader sessions. Entries are `.txt` files starting with a rclone section
 header such as `[Media]`, followed by configuration lines. Removing a loaded
 credential deletes only its `.conf`; Clear All deletes every directly contained
 `.conf`, including a legacy `rclone.conf`, never credential packages.
@@ -36,7 +39,12 @@ the selected config path as opaque backend context through refresh and actions.
 
 Credential labels do not change remote names: managed local folders use
 `Local/<folder>`. FUSE uses `NetworkMount/<config-path-hash>/<remote>` to isolate
-same-named remotes in different configs. Local sync destinations remain shared. Generic local-source
+same-named remotes in different configs. Session Pull associates a local destination
+with its package and blocks conflicting ownership. `storage.py` keeps LocalCrypt
+and decrypted-copy connection records under the Logistics per-user application
+support root, relocating legacy Server storage without replacing existing data.
+Unloaded accounts are represented only by valid associations with existing copies;
+loaded accounts also expose remote-only folders. Generic local-source
 merging and selection restoration belong to the core folder services, not rclone UI.
 Mounting belongs to the separate FUSE feature.
 
@@ -88,3 +96,12 @@ platform-section overrides read by `services.software`. Missing fields fall back
 to the pinned root manifest; other tools still use that manifest. Both download
 and installed hashes remain required. See
 [configuration](../../../CONFIGURATION.md#rclone-download-versions).
+
+
+## LocalCrypt
+
+`local_crypt.py` owns ciphertext mappings, explicit backing-target routing, private
+reader providers and verified encrypted replacements. `ui/local_crypt.py` owns
+unlock prompts and private document presentation. See the [LocalCrypt architecture](../../../docs/developer/localcrypt.md)
+for ownership, cancellation, provider lifetime, desktop/mobile differences and
+validation. Generic resource contracts are documented in commonUtils.

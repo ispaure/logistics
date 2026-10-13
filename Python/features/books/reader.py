@@ -44,14 +44,19 @@ class BooksPage(Bookmarks, qt.QWidget):
         from features.settings import settings_store
         store = settings_store(Path(__file__).with_name('config.ini'))
         self._settings_subscription = subscribe_settings((store.defaults, store.personal), self._check_settings, self)
-        if initial_path:
+        if isinstance(initial_path, EPUBBook):
+            self._loaded(initial_path)
+        elif initial_path:
             self.open_book(initial_path)
 
     def choose_book(self):
-        directory = str(self.book.path.parent) if self.book else ''
-        path, _ = qt.QFileDialog.getOpenFileName(self, 'Open EPUB', directory, 'EPUB books (*.epub *.EPUB)')
-        if path:
-            self.open_book(path)
+        from services.reader_resources import choose_reader_document
+        return choose_reader_document(self.reader_window() or self, 'epub', current=self.book,
+                                      open_local=None if self.private else self.open_book)
+
+    @property
+    def private(self):
+        return self.book is not None and self.book.source is not None
 
     def show_find(self):
         self.find_panel.show()
@@ -166,7 +171,7 @@ class BooksPage(Bookmarks, qt.QWidget):
     def _set_busy(self, busy):
         self.open_button.setEnabled(not busy)
         self.menus.open_action.setEnabled(not busy)
-        self.menus.recent.setEnabled(not busy)
+        self.menus.recent.setEnabled(not busy and not self.private)
         self.menus.metadata_action.setEnabled(self.book is not None and not busy)
         self.menus.find_action.setEnabled(self.book is not None and not busy)
         self.add_bookmark_action.setEnabled(self.book is not None and not busy)
@@ -253,11 +258,12 @@ class BooksPage(Bookmarks, qt.QWidget):
         self.title.setText(book.title)
         self.title.setToolTip(book.title)
         if self.reader_window() is not None:
-            self.reader_window().setWindowTitle(book.title + ' — EPUB reader')
+            self.reader_window().setWindowTitle(('🕵️ Private - ' if self.private else '') + book.title + ' — EPUB reader')
             self.reader_window().setWindowFilePath(str(book.path))
-        self._remember(book.path)
-        self._state = ReadingState(book.path, folder=self._state_folder)
-        state = self._state.load() if self._settings['remember'] else {}
+        if not self.private:
+            self._remember(book.path)
+        self._state = None if self.private else ReadingState(book.path, folder=self._state_folder)
+        state = self._state.load() if self._state and self._settings['remember'] else {}
         self._bookmarks = [item for item in state.get('bookmarks', [])[:50]
                            if isinstance(item, dict) and item.get('path') in book.spine
                            and isinstance(item.get('label'), str) and isinstance(item.get('position'), (int, float))
@@ -496,12 +502,18 @@ class BooksPage(Bookmarks, qt.QWidget):
             self.title.setToolTip(book.title)
             self._current = current
             self._render(location=location)
-            self.status.setText(f'Metadata saved. Original backup: {backup.name}')
-        self._run(lambda cancelled: save_metadata(self.book, changes, cancelled=cancelled), saved, 'Saving metadata and backing up the original…')
+            self.status.setText(f'Metadata saved. Original backup: {backup.name}' if backup else 'Encrypted metadata saved.')
+            if self.reader_window() is not None:
+                self.reader_window().setWindowTitle(('🕵️ Private - ' if self.private else '') + book.title + ' — EPUB reader')
+        self._run(lambda cancelled: save_metadata(self.book, changes, cancelled=cancelled), saved,
+                  'Saving encrypted metadata…' if self.private else 'Saving metadata and backing up the original…')
 
     def prepare_close(self):
-        self.speech.stop()
+        from commonUtils.ui.resource_picker import resource_tasks_pending
         self._closing = True
+        if resource_tasks_pending(self.reader_window() or self):
+            return False
+        self.speech.stop()
         self._save_state()
         if self.worker is not None:
             self.worker.requestInterruption()

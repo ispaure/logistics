@@ -62,14 +62,15 @@ class FileOperations:
         return document
 
     def open_dialog(self, force=False):
-        paths, _ = qt.QFileDialog.getOpenFileNames(
-            self,
-            "Open text files",
-            str(self.current.path.parent) if self.current and self.current.path else "",
-            "All files (*)",
-        )
-        for path in paths:
-            self.open_path(path, force=force)
+        from services.editor_resources import choose_editor_resource, open_editor_choice
+        choice = choose_editor_resource(self, 'open')
+        if choice is None:
+            return
+        if getattr(choice.provider, 'private', False):
+            return open_editor_choice(choice, self)
+        path = choice.provider.root / choice.path
+        choice.close()
+        return self.open_path(path, force=force)
 
     def open_path(self, path, *, force=False, encoding=None):
         path = Path(path).resolve()
@@ -163,15 +164,27 @@ class FileOperations:
         overwrite = False
         destination_stamp = None
         if save_as or path is None:
-            name, _ = qt.QFileDialog.getSaveFileName(
-                self,
-                "Save text file",
-                str(path) if path else "Untitled.txt",
-                "All files (*)",
-            )
-            if not name:
+            from services.editor_resources import choose_editor_resource, publish_handoff
+            choice = choose_editor_resource(self, 'save', name=path.name if path else 'Untitled.txt')
+            if choice is None:
                 return False
-            path = Path(name).resolve()
+            if getattr(choice.provider, 'private', False):
+                try:
+                    data = document.contents()
+                    scrub = self.service.session.privatize(document)
+                except Exception as error:
+                    choice.close()
+                    self.show_error(str(error))
+                    return False
+                def handed_off():
+                    document.replace(document.snapshot)
+                    from commonUtils.ui.document_host import close_document
+                    close_document(self)
+                    if after:
+                        after()
+                return publish_handoff(choice, data, self, completed=handed_off, before=scrub)
+            path = choice.provider.root / choice.path
+            choice.close()
             if any(
                 other is not document and other.path == path for other in self.documents
             ):
@@ -335,6 +348,9 @@ class FileOperations:
         self.service.close_all()
 
     def prepare_close(self):
+        from commonUtils.ui.resource_picker import resource_tasks_pending
+        if resource_tasks_pending(self):
+            return False
         if self.task.busy or self._queue:
             return False
         if hasattr(self, "search") and not self.search.prepare_close():

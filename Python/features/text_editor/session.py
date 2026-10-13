@@ -120,11 +120,27 @@ class EditorSession(qt.QObject):
 
     def capture(self):
         documents = self.retained + [document_record(window.current) for window in self.service.windows
-                     if window.current is not None and not getattr(window, "_suspending", False)]
+                     if window.current is not None and not getattr(window.current, "private", False) and not getattr(window, "_suspending", False)]
         if len(documents) > 100:
             raise ValueError("Session recovery is limited to 100 documents.")
         active = self.service.windows.index(self.service.window) if self.service.window in self.service.windows else 0
         return {"version": 1, "documents": documents, "active": active}
+
+    def privatize(self, document):
+        """Stop future recovery and queue removal of this draft behind pending writes."""
+        document.private = True
+        self.changed()
+        self.start()
+        if self.lock is None or not self.lock.isLocked():
+            raise OSError('Cannot remove the existing recovery checkpoint safely.')
+        payload = self.capture()
+        claimed_path = self.claim[0] if self.claim is not None else None
+        def scrub():
+            self.store.write(payload)
+            if claimed_path is not None:
+                claimed_path.unlink(missing_ok=True)
+        future = self.executor.submit(scrub)
+        return future.result  # Await in the save worker, not the GUI thread.
 
     def checkpoint(self):
         if self.restoring or self.suspended or self.future is not None or not self.service.windows:
@@ -175,6 +191,8 @@ class EditorSession(qt.QObject):
             self.changed()
 
     def ensure_current(self, window):
+        if any(getattr(doc, "private", False) for doc in window.documents):
+            return None  # Private drafts must use Save/Discard/Cancel, never session suspension.
         if self.error and self.future is None:
             # Preserve ordinary save/discard prompts if durable recovery is unavailable.
             self.report(self.error)
@@ -316,7 +334,7 @@ class EditorSession(qt.QObject):
             self.lock = None
 
     def retain_window(self, window):
-        if window.current is not None:
+        if window.current is not None and not getattr(window.current, "private", False):
             self.retained.append(document_record(window.current))
 
     def restore_selected(self, window):

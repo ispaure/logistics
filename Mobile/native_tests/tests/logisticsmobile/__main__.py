@@ -91,6 +91,26 @@ async def exercise(app):
         assert app.book_content.children[0].image.width == 1
         await app.next_book_page()
         assert app.book_record['position'] == 1
+        # Exercise a real archive larger than the former ordinary-library cap.
+        from zipfile import ZipFile
+        large = fixtures / 'large-ordinary.cbz'
+        def make_large():
+            with ZipFile(comic) as original, ZipFile(large, 'w') as archive:
+                archive.writestr('page2.png', original.read('page2.png'))
+                archive.writestr('page10.png', original.read('page10.png'))
+                with archive.open('unrelated.bin', 'w') as output:
+                    for _ in range(257):
+                        output.write(b'x' * 1024 * 1024)
+        await asyncio.to_thread(make_large)
+        record = await asyncio.to_thread(app.library_store.import_book, LocalDocuments(), large)
+        app.refresh_library()
+        await app.open_book(record['id'])
+        assert app.book_reader is not None, app.book_status.text
+        assert app.library_store.path(record['id'], '.cbz').stat().st_size > 256 * 1024 * 1024
+        assert app.book_content.children[0].image.width == 1
+        await app.next_book_page()
+        assert app.book_record['position'] == 1 and app.book_content.children[0].image.width == 1
+        large.unlink()
         passed.append('native_comic_reader')
         from logisticsmobile.chat_fixture import fixture_server
         with fixture_server() as (url, started, release, requests):
@@ -112,6 +132,8 @@ async def exercise(app):
         import base64
         app.cloud_client = CloudClient()
         app.show_cloud()
+        if hasattr(app, 'cloud_restore_task'):
+            await app.cloud_restore_task
         await app.probe_cloud()
         assert 'offline read check passed' in app.cloud_status.value, app.cloud_status.value
         credentials = fixtures / 'credentials.zip'
@@ -125,6 +147,7 @@ async def exercise(app):
         label = next(key for key, row in app.cloud_rows.items() if row['path'] == 'logistics-native-check')
         app.cloud_entries.value = label
         await app.open_cloud_folder()
+        assert app.cloud_rows, app.cloud_status.value
         label = next(key for key, row in app.cloud_rows.items() if row['path'].endswith('fixture.txt'))
         app.cloud_entries.value = label
         await app.download_cloud()
@@ -136,6 +159,41 @@ async def exercise(app):
         assert not list(app.cloud_remote.items)
         assert len(app.downloads.items()) == 1
         passed.append('native_rclone_files')
+        from logisticsmobile.credential_vault import ProtectedVault
+        vault = ProtectedVault.for_app(app)
+        app.cloud_client.vault = vault
+        app.cloud_remember.value = True
+        app.cloud_password.value = 'synthetic-fixture-password'
+        with patch('logisticsmobile.pickers.pick_document', new=AsyncMock(return_value=(LocalDocuments(), credentials))):
+            await app.import_cloud_package()
+        assert vault.ciphertext.is_file(), app.cloud_status.value
+        encrypted = vault.ciphertext.read_bytes()
+        assert b'Fixture' not in encrypted and b'credentials.zip' not in encrypted
+        assert b'synthetic-fixture-password' not in vault.record.read_bytes()
+        app.cloud_client.request('clear')  # Shutdown/detach without erasing saved keys.
+        app.cloud_client = CloudClient(vault=ProtectedVault.for_app(app))
+        await app.restore_cloud()
+        assert app.cloud_remote.value == 'Fixture', app.cloud_status.value
+        assert 'credentials.zip' in app.cloud_package.text
+        # A session-only unlock must leave the saved ciphertext untouched.
+        app.cloud_remember.value = False
+        app.cloud_password.value = 'synthetic-fixture-password'
+        with patch('logisticsmobile.pickers.pick_document', new=AsyncMock(return_value=(LocalDocuments(), credentials))):
+            await app.import_cloud_package()
+        assert vault.ciphertext.read_bytes() == encrypted
+        # Key loss must not regenerate a key or overwrite the saved ciphertext.
+        app.cloud_client.request('clear')
+        vault.keys.delete(vault.metadata()['id'])
+        app.cloud_client = CloudClient(vault=ProtectedVault.for_app(app))
+        await app.restore_cloud()
+        assert 'unavailable' in app.cloud_status.value, app.cloud_status.value
+        assert vault.ciphertext.read_bytes() == encrypted
+        await app.clear_cloud()
+        assert not vault.ciphertext.exists() and not vault.record.exists(), app.cloud_status.value
+        assert vault.unlock() is None
+        passed.append('native_secure_credentials')
+        from .localcrypt_checks import exercise_localcrypt
+        await exercise_localcrypt(app, passed)
         success = set(passed) == set(CASES)
         error = ''
     except Exception:
@@ -147,7 +205,13 @@ async def exercise(app):
     report = dict(schema=1, suite='logistics-native-ui', target='android' if get_os() is OS.ANDROID else 'ios',
                   backend=type(app._impl).__module__, cases=passed, expected_cases=list(CASES),
                   success=success, error=error, source=source, native_picker_tested=False)
-    print('LOGISTICS_NATIVE_UI_RESULT=' + json.dumps(report, sort_keys=True), flush=True)
+    # iOS's OS logger truncates long single-line messages. Emit independently
+    # bounded chunks; the host verifier rejects missing/duplicate chunks.
+    import base64
+    encoded = base64.b64encode(json.dumps(report, sort_keys=True).encode()).decode()
+    chunks = [encoded[index:index + 450] for index in range(0, len(encoded), 450)]
+    for index, chunk in enumerate(chunks):
+        print('LOGISTICS_NATIVE_UI_CHUNK=' + json.dumps(dict(index=index, count=len(chunks), encoding='base64', data=chunk)), flush=True)
     print(f'>>>>>>>>>> EXIT {0 if success else 1} <<<<<<<<<<', flush=True)
     # This is a disposable test-mode app, never the normal app entry point.
     os._exit(0 if success else 1)

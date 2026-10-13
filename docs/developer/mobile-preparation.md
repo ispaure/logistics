@@ -245,8 +245,29 @@ The bridge exposes import, list, bounded read, offline probe, cancel and clear;
 it does not expose generic RC, commands or remote mutation. No RC listener starts.
 Only drive/dropbox/onedrive/s3/webdav/memory backends are linked. Parsed credentials
 are checked against explicit per-backend option allowlists before publication.
-Config uses rclone's default in-memory Storage; configfile.Install is never called.
-Provider token refresh remains in memory, and supported backend Shutdown hooks run
+Config uses the synchronized Storage in `Mobile/rclone_bridge/vault.go`;
+configfile.Install is never called. A nonempty logical config path allows rclone to
+install that custom Storage without using a plaintext config loader. Session mode
+uses only RAM. Saved mode writes AES-256-GCM snapshots with fresh random nonces,
+a versioned vault-ID AAD, exclusive 0600 temporary files and atomic replacement.
+Bounded no-follow reads reject links, and optimistic byte comparisons reject
+concurrent edits. The same encrypted storage path persists rclone token-save callbacks;
+failed saves remain visible to subsequent read/list operations. Native backend
+config maps bind getters/setters to their storage generation; late callbacks from
+retired connections cannot update a replacement package or recreate forgotten files. Plaintext serialization
+is disabled. Import validates all members before publishing the replacement. A
+session-only import detaches persistence and preserves the saved ciphertext.
+
+`credential_vault.py` owns a random 32-byte data key: AndroidKeyStore AES-GCM wraps
+it into bounded metadata under noBackupFilesDir; iOS Security.framework uses a
+non-synchronizing WhenUnlockedThisDeviceOnly generic-password item. The iOS vault
+folder is excluded from backup, and the Keychain item is labeled Logistics plus
+the imported ZIP filename. The data key crosses the internal C boundary only for
+vault attachment. ZIP passwords never persist. Protected-key failures have no
+plaintext fallback or automatic regeneration. Forget unloads native clients and
+disables token writers before deleting the known OS key and private vault files.
+Corrupt metadata can be forgotten without guessing/deleting unrelated key aliases.
+Provider token refresh stays in RAM when session mode is selected, and supported backend Shutdown hooks run
 when replacing/clearing cached clients. Normal rclone diagnostic logging is
 suppressed; API failures use bounded generic messages without provider responses.
 
@@ -265,11 +286,15 @@ excludes incomplete, linked or invalid entries. Export extends the existing syst
 copy adapter to chunked binary output with an explicit 32 MiB maximum; existing
 document/chat exports retain their 1 MiB default.
 
-Three additional portable boundary cases raise the mobile core inventory to 28.
-Native UI evidence requires a ninth case: real linked rclone, AES credential import,
+The mobile core inventory now includes 30 cases, including protected-key lifecycle
+and failure privacy. Native UI evidence includes ten cases. The ninth covers: real linked rclone, AES credential import,
 folder browsing, downloading/opening a private copy and forgetting the session.
 Native entry points retain the explicit `native_picker_tested=false` evidence flag.
-Physical-provider interaction, real-account OAuth rotation, secure vault persistence,
+The tenth exercises native protected-key creation/reload/forget, encrypted package
+restoration, missing-key recovery without regeneration and a session-only import
+preserving ciphertext. These new native tests
+have not yet run on Android/iOS for the local uncommitted implementation.
+Physical-provider interaction, real-account OAuth rotation,
 background transfers and signed/distributed device builds remain unverified work.
 
 Phase 3 was published as [v0.1.1-alpha.19](https://github.com/ispaure/logistics/releases/tag/v0.1.1-alpha.19)
@@ -288,3 +313,171 @@ policy, and restores the previous running-loop context after each dispatch. A
 host regression enters a callback with another loop and verifies owned futures,
 current-task identity and caller-context restoration. Native app checks continue
 to exercise actual Java/WebView callbacks; no failed case is retried into success.
+
+
+## LocalCrypt extension
+
+The bridge now validates a single crypt layer over supported package-local backing
+remotes, downloads original ciphertext as a stream and reads offline copies via
+authenticated ranges and lazy archive members. Local text/Markdown saves stage and verify ciphertext; inner password ZIPs
+are opened lazily through the bundled ZIP library. Comic/EPUB metadata saves replace
+only metadata and preserve inner passwords and untouched archive entries. The native private reader keeps text
+and PNG/JPEG images out of persistent
+document/library records. EPUB uses a generic archive source. See [LocalCrypt](localcrypt.md)
+for API boundaries, limits and host regression coverage. Earlier phase-4 evidence
+predates this extension and does not validate its Android/iOS UI or native binaries.
+
+On 2026-10-13, the local uncommitted implementation passed all 14 native UI cases
+on an iPhone 17 Pro simulator (iOS 26.5) and an ARM64 Android 35 emulator.
+The LocalCrypt cases cover reading, text/Markdown editing, comic/EPUB metadata
+editing with inner AES ZIP passwords, save-conflict preservation and locking.
+Retained local reports: [iOS](mobile-evidence/2026-10-13-localcrypt-ios-native-ui-local.json)
+and [Android](mobile-evidence/2026-10-13-localcrypt-android-native-ui-local.json).
+Both bind the staged source fingerprint
+`e002b8ca59668c23e7decd8255ea394639092484e20564e7afab73cb7664de36`.
+They explicitly record dirty sources and are not release-gate evidence.
+Physical devices, real system pickers and manual touch/keyboard interaction remain
+unverified. Native testing fixed private-label wrapping on iOS and report log-line
+truncation; the failed-save scenario uses an actual stale-file conflict after an
+oversized single-line input stalled the Android native text widget.
+
+
+The subsequent local file-management extension passed 15 native UI cases on both
+runtimes, including mkdir, rename, moves within/into/out of crypt storage, editing
+after a move, Save As to crypt/Local, continued saves, and collision rejection.
+The shared deletion engine is exercised natively; the confirmation/cancel UI is
+covered by the dummy-backend regression. Final source fingerprint:
+`9b9bfd2610615c299fd2d4ca7c35cdfa7eedddbae040763db1205a8caa71922f`.
+Reports: [iOS](mobile-evidence/2026-10-13-localcrypt-files-ios-native-ui-local.json)
+and [Android](mobile-evidence/2026-10-13-localcrypt-files-android-native-ui-local.json).
+These retain the dirty-source marker and do not replace release-gate evidence.
+
+Two review passes covered mutation safety and UI/provider lifecycle. Fixes included
+rejecting different representations of the same physical storage, refreshing iOS
+picker row counts, preserving desktop shutdown wiring, and mapping managed staging
+names through the crypt provider. Host regressions additionally inject a broken
+writer which emits plaintext under an encrypted name, reject corrupted ciphertext,
+preserve inner archives during transfers, verify managed metadata editing, and
+check source retention on verification/cancellation/conflict failures. Go race
+tests cover rewrapping with distinct keys and rejecting the wrong key.
+
+### Shared resource refactor validation (2026-10-13)
+
+The final local payload `154f87ea8cd9ae01c9cf7560aa075a983078059bf63a1aa2f98a31f52b54099b`
+passed all 15 native UI cases on the iPhone 17 Pro / iOS 26.5 simulator and
+LogisticsLocalCrypt / Android API 35 emulator. This rerun includes the shared save
+transaction, explicit capabilities, text-state/editor integration, split provider
+modules, partial-failure reporting, explicit encrypted transfer stream and exclusive
+staging ownership. Cases cover reading, text/Markdown editing, inner-password comic
+and EPUB metadata, file operations, Save As, stale saves and credential locking.
+
+Reports: [iOS](mobile-evidence/2026-10-13-localcrypt-refactor-ios-native-ui-local.json)
+and [Android](mobile-evidence/2026-10-13-localcrypt-refactor-android-native-ui-local.json).
+Both are marked dirty local-development evidence, not release evidence. System file
+picker interaction and physical devices were not tested by these runs.
+
+Targeted shared tests additionally inject verification failures, stale revisions,
+late cancellation, partial source deletion, post-save external writes and temporary
+name collisions. All passed. Desktop Qt/real-rclone tests and host native-bridge
+round trips passed, including inner-password preservation and plaintext-under-encoded-name
+rejection. The mobile dummy-backend UI suite passed all 11 cases.
+
+### Provider bypass audit validation (2026-10-13)
+
+Payload `141c29aff3512f96383b018fe513bbf222e54de06a1aa5c0b5bc8c2b4562f646`
+passed all 15 native cases on both the iOS simulator and Android API 35 emulator.
+Reports: [iOS](mobile-evidence/2026-10-13-provider-audit-ios-native-ui-local.json),
+[Android](mobile-evidence/2026-10-13-provider-audit-android-native-ui-local.json).
+These are dirty local-development reports, not release or physical-device evidence;
+system file pickers remain outside this suite.
+
+Additional validation passed: 75 metadata/core cases, 37 desktop editor/crypt cases,
+19 private-backend cases with registered boundaries, 27 shared persistence/provider
+cases, and all 11 mobile dummy-backend UI cases. The broader browser, removal,
+bulk rename and Markdown run passed 83 tests with one case-sensitive-filesystem
+case skipped on this Mac. Targeted tests also verified ordinary Save As rejection
+inside actual ciphertext storage and draft retention after a successful mobile
+save whose new reader fails to open. Test groups overlap; counts are not additive.
+
+
+## Shared mobile browser extension
+
+The mobile file manager, remote listing and editor chooser use the commonUtils
+portable BrowseTree and native Toga list/tile presentation. Storage/domain work
+remains in Logistics adapters; Local/LocalCrypt selection is retained. Generic
+file fields appear on selection, with worker-loaded comic/EPUB details and covers.
+Only visible thumbnails are queued, at most two concurrently, and caches remain
+bounded in RAM. Stale and credential-locked results cannot repopulate a stopped
+view. Editor selection omits the info panel. Desktop retains its Qt views and
+column mode over the same entry conversion/model contract.
+
+The bridge no longer applies a 32 MiB cap to downloads, crypt transfers or archive
+rewrites. Range reads and decoded members have separate buffer limits, while
+resource verification hashes authenticated streams. A host native-bridge regression
+exercises a 40 MiB archive containing a single 40 MiB unrelated member: Local to
+LocalCrypt, cover/info, metadata save, offline-copy move and back to Local, with
+contents preserved. Native UI checks include this large-file metadata path and
+actual shared list/tile selection, cover decoding, file information and clearing
+on lock. Earlier reports above do not validate these additional checks.
+
+
+On 2026-10-13 the local snapshot
+`036c19b5b81f7ccebb705cb7825ce6d21326988781d9f9ba9e4a9d3afadab547`
+passed all 15 native UI groups on iPhone 17 Pro / iOS 26.5 Simulator and the Android
+API 35 emulator, including the shared browser and 40 MiB archive checks above.
+Reports: [iOS](mobile-evidence/2026-10-13-shared-browser-ios-native-ui-local.json),
+[Android](mobile-evidence/2026-10-13-shared-browser-android-native-ui-local.json).
+These are exact local development snapshots, not committed release evidence or
+physical-device/system-picker validation. The desktop browser suites (19 host
+window checks and 7 shared provider/view checks), 13 dummy mobile UI checks, and
+3 host native-bridge interoperability/large-file/transfer checks also passed.
+
+
+## Ordinary comic streaming and shared native navigation
+
+LibraryStore imports ordinary comics with shared bounded stream iteration and no
+256 MiB archive/expanded-total gate. A shared LocalArchiveSource seeks ZIP headers,
+reads a single bounded page through ComicPages and checks file revisions. Unrelated
+large resources are not loaded into RAM. Per-page 8 MiB/16-megapixel and 5,000-entry
+limits remain; EPUB limits are unchanged. SHA-256 is collected during import,
+verified on reopening after restart and cached against the full file revision and
+record digest in a bounded 32-entry session cache. Changed files invalidate the
+cache; publication and verification reject revision races.
+
+commonUtils owns BrowseHistory, query/sort projection and bounded recursive
+provider searches, with Toga
+controls in NativeBrowser. Logistics supplies folder/open-location callbacks and
+opaque `(storage, relative path)` locations for file manager, remote browser and
+editor picker. Tap folders to load them and Back through successful visits.
+Search toggles a full-width field matching desktop and scans folder names in
+subfolders on a cancellable background worker, with a 10,000-entry bound and
+explicit partial results. Closing search restores the original listing. Natural-name/size/modified sorting keeps folders first.
+Filtered-out selections are cleared; failed navigation preserves the prior listing
+and history. Closing/locking clears navigation and displayed private state.
+
+Host tests cover a real 257 MiB stored archive, page reading, checksum reuse,
+restart verification, member read bounds and changed-file rejection. Native UI
+checks now include a 257 MiB ordinary comic and actual folder-tap/Back/search/sort
+callbacks across Local/LocalCrypt plus the editor picker. Earlier native reports
+do not establish coverage for this extension.
+
+
+The local source snapshot
+`c8c2b958584bebe1ed0b63850c980e40660bcbe3de3bd632a2b0c80452b479b3`
+passed all 15 native UI groups on both iPhone 17 Pro / iOS 26.5 Simulator and
+Android API 35 emulator, including the 257 MiB ordinary comic and shared navigation
+checks. Reports: [iOS](mobile-evidence/2026-10-13-streaming-navigation-ios-native-ui-local.json),
+[Android](mobile-evidence/2026-10-13-streaming-navigation-android-native-ui-local.json).
+The 37 portable host core checks, 14 mobile widget checks, four portable browse
+checks and seven desktop shared-view checks also passed. These reports identify a
+local development snapshot, not a clean release build or physical-device testing.
+Native source updates for hidden compatibility selectors reload their iOS picker
+row counts before assigning a new selection; otherwise a successful folder listing
+could fail while clearing selection after adding the no-selection placeholder.
+
+The final recursive-search and search-layout snapshot
+`494b23ea39d6a48b3adc5a2f1e1207d4358270741a9c7bd36cdd0425fe968aa9`
+passed all 15 native UI groups on both simulators, including nested LocalCrypt
+search results and restoring the folder listing on closing search. Reports:
+[iOS](mobile-evidence/2026-10-13-search-final-ios-native-ui-local.json),
+[Android](mobile-evidence/2026-10-13-search-final-android-native-ui-local.json).

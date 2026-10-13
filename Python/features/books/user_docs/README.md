@@ -170,3 +170,20 @@ The independent native app has private EPUB and PNG/JPEG CBZ/ZIP reading,
 chapter/page progress and bookmarks. It has a smaller format/UI scope than this
 desktop guide. See the [mobile guide](../../../logisticsmobile/user_docs/README.md)
 for imports, limits and current validation status.
+
+
+## Metadata inside LocalCrypt
+
+On desktop, open the LocalCrypt browser and choose **Edit EPUB metadata…** for a
+book. On mobile, open its encrypted offline copy and choose **Edit metadata…**.
+Both save metadata to the encrypted local copy, preserve unrelated resources and
+retain any inner ZIP password. No plaintext backup is made in this workflow, and
+saving does not upload the book. See the [LocalCrypt guide](../../rclone/user_docs/README.md#read-and-edit-a-localcrypt-copy-on-desktop).
+
+EPUB metadata windows opened from private storage begin their titles with **🕵️ Private -**.
+
+Desktop **Open EPUB…**, including the New Document launcher, uses the shared Local/LocalCrypt file picker with an EPUB filter. Local books keep ordinary reading history. LocalCrypt books open in separate **🕵️ Private -** readers without recent-file records or saved reading positions; bookmarks stay in the session. Metadata saves update the encrypted copy without plaintext backups.
+
+Desktop private-book unlocks keep the password prompt open after a wrong attempt,
+show an inline error and clear and focus the field for retry. Enter submits once;
+Cancel abandons that open or metadata unlock.

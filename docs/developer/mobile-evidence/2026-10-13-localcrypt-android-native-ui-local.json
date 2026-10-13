@@ -1,0 +1,56 @@
+{
+  "backend": "toga_android.app",
+  "cases": [
+    "native_hub",
+    "native_preferences",
+    "native_documents",
+    "native_markdown_preview",
+    "native_epub_reader",
+    "native_bookmarks",
+    "native_comic_reader",
+    "native_lm_chat",
+    "native_rclone_files",
+    "native_secure_credentials",
+    "native_localcrypt_reading",
+    "native_localcrypt_text_editing",
+    "native_localcrypt_metadata",
+    "native_localcrypt_failure_and_lock"
+  ],
+  "error": "",
+  "expected_cases": [
+    "native_hub",
+    "native_preferences",
+    "native_documents",
+    "native_markdown_preview",
+    "native_epub_reader",
+    "native_bookmarks",
+    "native_comic_reader",
+    "native_lm_chat",
+    "native_rclone_files",
+    "native_secure_credentials",
+    "native_localcrypt_reading",
+    "native_localcrypt_text_editing",
+    "native_localcrypt_metadata",
+    "native_localcrypt_failure_and_lock"
+  ],
+  "native_picker_tested": false,
+  "schema": 1,
+  "source": {
+    "commonUtils_commit": "18e23630e50a03ad84eade2473a84401e1fb5e1b",
+    "commonUtils_dirty": true,
+    "dirty": true,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm",
+      "rclone"
+    ],
+    "logistics_commit": "ce2e131fce84f342c915842a02b662e8a6877a3f",
+    "source_sha256": "e002b8ca59668c23e7decd8255ea394639092484e20564e7afab73cb7664de36"
+  },
+  "success": true,
+  "suite": "logistics-native-ui",
+  "target": "android"
+}

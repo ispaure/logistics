@@ -113,3 +113,17 @@ def resolve_password(path, *, password=None, configured_only=False, cancelled=la
 
 def is_password_error(message):
     return 'Archive password required:' in message or 'Archive password incorrect' in message
+
+
+def password_from_ini(data):
+    """Parse a bounded virtual INI using the same LogisticsZIP inheritance rule."""
+    if len(data) > 65536:
+        raise ValueError('ZIP password configuration exceeds its size limit.')
+    parser = ConfigParser(interpolation=None)
+    try:
+        parser.read_string(data.decode('utf-8-sig'))
+    except (ConfigError, UnicodeError):
+        raise ValueError('Cannot read ZIP password configuration.') from None
+    parser.defaults().clear()
+    found = parser.has_section('LogisticsZIP')
+    return ((parser.get('LogisticsZIP', 'archive_password', fallback='') or None) if found else None, found)

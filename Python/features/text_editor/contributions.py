@@ -85,9 +85,13 @@ def _service(parent):
 
 
 def launch(parent):
-    from commonUtils.ui import pyside as qt
-    path, _ = qt.QFileDialog.getOpenFileName(parent, 'Open text file', '', 'Text files (*.txt *.log *.py *.json *.ini *.csv);;All files (*)')
-    if path:
+    from services.editor_resources import choose_editor_resource, open_editor_choice
+    choice = choose_editor_resource(parent, 'open')
+    if choice:
+        if getattr(choice.provider, 'private', False):
+            return open_editor_choice(choice, parent)
+        path = choice.provider.root / choice.path
+        choice.close()
         return _service(parent).open(path)
 
 

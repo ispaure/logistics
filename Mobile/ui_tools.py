@@ -1,5 +1,6 @@
 """Bounded native app launch and strict test-mode UI evidence verification."""
 import argparse
+import base64
 import importlib.util
 import json
 import os
@@ -16,11 +17,19 @@ contract = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(contract)
 
 
-def verify(path, target, output):
+def verify(path, target, output, *, local_manifest=None):
     reports = []
+    chunks = []
     for line in Path(path).read_text(errors='replace').splitlines():
+        if 'LOGISTICS_NATIVE_UI_CHUNK=' in line:
+            chunks.append(json.loads(line.split('LOGISTICS_NATIVE_UI_CHUNK=', 1)[1]))
         if PREFIX in line:
             reports.append(json.loads(line.split(PREFIX, 1)[1]))
+    if chunks:
+        if (reports or any(item.get('index') != index or item.get('count') != len(chunks)
+                           or item.get('encoding') != 'base64' or not isinstance(item.get('data'), str) for index, item in enumerate(chunks))):
+            raise ValueError('Incomplete or duplicate native report chunks.')
+        reports.append(json.loads(base64.b64decode(''.join(item['data'] for item in chunks), validate=True)))
     if len(reports) != 1:
         raise ValueError('Expected one native app UI report.')
     report = reports[0]
@@ -34,14 +43,18 @@ def verify(path, target, output):
             or report.get('success') is not True or report.get('target') != target
             or not isinstance(report.get('backend'), str) or not report['backend'].startswith(backend)
             or report.get('cases') != list(contract.CASES) or report.get('expected_cases') != list(contract.CASES)
-            or report.get('error') or source.get('dirty') is not False
+            or report.get('error') or (local_manifest is None and source.get('dirty') is not False)
             or source.get('logistics_commit') != expected_root or source.get('commonUtils_commit') != expected_shared):
         raise ValueError('Native app UI checks failed or came from a different source/backend.')
+    if local_manifest is not None:
+        expected = json.loads(Path(local_manifest).read_text())
+        if source != expected or len(source.get('source_sha256', '')) != 64:
+            raise ValueError('Local native report came from a different staged snapshot.')
     Path(output).write_text(json.dumps(report, indent=2) + '\n')
     return report
 
 
-def run(target, device):
+def run(target, device, *, local=False):
     command = ['briefcase', 'run', 'android' if target == 'android' else 'iOS',
                '--test', '--no-input', '--device', device]
     if target == 'android':
@@ -65,7 +78,8 @@ def run(target, device):
     if code:
         print(path.read_text(errors='replace')[-10000:])
         raise RuntimeError(f'Native app UI run failed ({code}); see retained logs.')
-    return verify(path, target, logs / (target + '-native-ui.json'))
+    return verify(path, target, logs / (target + ('-native-ui-local.json' if local else '-native-ui.json')),
+                  local_manifest=Path('payload/source.json') if local else None)
 
 
 def ios_device():
@@ -108,6 +122,7 @@ if __name__ == '__main__':
     parser.add_argument('command', choices=('run', 'ios-device', 'ios-diagnostics'))
     parser.add_argument('target', choices=('android', 'ios'), nargs='?')
     parser.add_argument('--device')
+    parser.add_argument('--local', action='store_true', help='Verify this exact local payload; not release evidence')
     args = parser.parse_args()
     if args.command == 'ios-device':
         print(ios_device())
@@ -116,4 +131,4 @@ if __name__ == '__main__':
     else:
         if not args.target or not args.device:
             parser.error('run requires a target and --device')
-        run(args.target, args.device)
+        run(args.target, args.device, local=args.local)

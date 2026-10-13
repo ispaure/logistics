@@ -82,6 +82,20 @@ async def export_document(app, name, content, *, max_bytes=None, mime_type=None)
     limit = MAX_BYTES if max_bytes is None else max_bytes
     if not isinstance(limit, int) or not 0 < limit <= 32 * MAX_BYTES or len(content) > limit:
         raise ValueError(f'Export is limited to {limit // MAX_BYTES if isinstance(limit, int) else 1} MiB.')
+    from io import BytesIO
+    return await _export_stream(app, name, lambda: BytesIO(content), mime_type=mime_type)
+
+
+async def export_file(app, path, *, mime_type='application/octet-stream'):
+    """Stream an existing private download to an explicitly chosen destination."""
+    from .documents import document_name
+    path = Path(path)
+    if path.is_symlink() or not path.is_file():
+        raise ValueError('The private download is no longer available.')
+    return await _export_stream(app, document_name(path.name), lambda: path.open('rb'), mime_type=mime_type)
+
+
+async def _export_stream(app, name, open_source, *, mime_type=None):
     current = get_os()
     if current is OS.ANDROID:
         from java import jclass, jarray, jbyte
@@ -105,9 +119,9 @@ async def export_document(app, name, content, *, max_bytes=None, mime_type=None)
             if stream is None:
                 raise OSError('The selected provider did not open a writable document.')
             try:
-                for start in range(0, len(content), 65536):
-                    chunk = content[start:start + 65536]
-                    stream.write(jarray(jbyte)([value if value < 128 else value - 256 for value in chunk]))
+                with open_source() as source:
+                    while chunk := source.read(65536):
+                        stream.write(jarray(jbyte)([value if value < 128 else value - 256 for value in chunk]))
                 stream.flush()
             finally:
                 stream.close()
@@ -116,12 +130,29 @@ async def export_document(app, name, content, *, max_bytes=None, mime_type=None)
     if current is OS.IOS:
         with TemporaryDirectory(prefix='export-', dir=app.paths.data) as directory:
             path = Path(directory) / name
-            path.write_bytes(content)
+            await asyncio.to_thread(_copy_export, open_source, path)
             return await pick_ios(app, path)
     import toga
-    from commonUtils.persistence.text import write_text_file
     path = await app.main_window.dialog(toga.SaveFileDialog('Export document copy', suggested_filename=name))
     if path is None:
         return False
-    await asyncio.to_thread(write_text_file, path, content, allow_overwrite=True)
+    await asyncio.to_thread(_copy_export, open_source, path)
     return True
+
+
+def _copy_export(open_source, path):
+    import os
+    from shutil import copyfileobj
+    from tempfile import NamedTemporaryFile
+    path = Path(path)
+    temporary = None
+    try:
+        with open_source() as source, NamedTemporaryFile(dir=path.parent, prefix='.export-', delete=False) as output:
+            temporary = Path(output.name)
+            copyfileobj(source, output, length=65536)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)

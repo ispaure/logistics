@@ -103,3 +103,39 @@ class MobileReaderTests(unittest.TestCase):
         self.assertNotIn('onerror', html)
         self.assertIn("img-src data:", html)
 
+
+    def test_large_comic_streaming_keeps_unrelated_members_and_bounds_page_reads(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source = root / 'Large.cbz'
+            image = png_page()
+            with ZipFile(source, 'w') as archive:
+                archive.writestr('page2.png', image)
+                archive.writestr('page10.png', image)
+                # Stored payload makes both archive and expanded total exceed 256 MiB.
+                with archive.open('unrelated.bin', 'w') as output:
+                    block = b'x' * 1024 * 1024
+                    for _ in range(257):
+                        output.write(block)
+            store = LibraryStore(root / 'Library')
+            record = store.import_book(LocalDocuments(), source)
+            self.assertGreater(store.path(record['id'], '.cbz').stat().st_size, 256 * 1024 * 1024)
+            # The checksum collected during import avoids another whole-file scan.
+            with patch('logisticsmobile.library.file_sha256', side_effect=AssertionError('Unnecessary rehash')):
+                record, reader = store.open(record['id'])
+                self.assertEqual(reader.read_page(1), (image, 'image/png'))
+            # A reopened store still verifies bytes with a bounded hash stream.
+            record, reader = LibraryStore(store.root).open(record['id'])
+            self.assertEqual(reader.pages, ['page2.png', 'page10.png'])
+            with reader.document.open_archive() as archive:
+                with self.assertRaisesRegex(ValueError, 'buffer'):
+                    archive.read('unrelated.bin')
+                with archive.open('unrelated.bin') as stream:
+                    self.assertEqual(stream.read(16), b'x' * 16)
+            # A changed file invalidates the cached lease even for already loaded pages.
+            target = store.path(record['id'], '.cbz')
+            import os
+            info = target.stat()
+            os.utime(target, ns=(info.st_atime_ns, info.st_mtime_ns + 1000000))
+            with self.assertRaisesRegex(RuntimeError, 'changed'):
+                reader.read_page(0)

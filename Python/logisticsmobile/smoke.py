@@ -27,6 +27,7 @@ EXPECTED_TESTS = (
     'test_mobile_preferences_preserve_invalid_and_concurrent_files',
     'test_mobile_preferences_survive_restart_without_hard_links',
     'test_mobile_comic_reads_native_page_bytes_in_natural_order',
+    'test_large_comic_streaming_keeps_unrelated_members_and_bounds_page_reads',
     'test_mobile_epub_import_navigation_progress_and_bookmarks_preserve_source',
     'test_mobile_epub_sanitizer_removes_active_html_and_external_resources',
     'test_mobile_reader_rejects_unsafe_archives_and_oversized_image_dimensions',
@@ -37,6 +38,14 @@ EXPECTED_TESTS = (
     'test_mobile_cloud_bridge_frees_success_and_invalid_responses',
     'test_mobile_cloud_downloads_recover_only_complete_private_copies',
     'test_mobile_cloud_package_uses_scoped_read_without_saving_credentials',
+    'test_mobile_vault_key_is_device_owned_and_restored_without_password',
+    'test_mobile_vault_missing_corrupt_linked_metadata_never_replaces_keys',
+    'test_metadata_plan_and_verified_transaction_preserve_comic_pages',
+    'test_malformed_comic_metadata_does_not_prevent_reading',
+    'test_verified_save_conflict_cancellation_and_encoding',
+    'test_text_and_comic_reads_are_memory_only',
+    'test_epub_source_reads_without_plaintext_files',
+    'test_ciphertext_storage_locked_listing_and_failed_download_cleanup',
     'test_import_boundary', 'test_runtime_identity',
 )
 
@@ -97,9 +106,11 @@ def main(argv=None):
         from test_mobile_readers import MobileReaderTests
         from test_mobile_chat import MobileChatTests
         from test_mobile_cloud import MobileCloudTests
+        from test_mobile_vault import MobileVaultTests
+        from test_mobile_localcrypt import MobileLocalCryptTests
         RuntimeChecks.target = args.target
         suite = unittest.TestSuite()
-        for case in (MobileDocumentsTests, PortableDocuments, MobileHubTests, MobileReaderTests, MobileChatTests, MobileCloudTests, RuntimeChecks):
+        for case in (MobileDocumentsTests, PortableDocuments, MobileHubTests, MobileReaderTests, MobileChatTests, MobileCloudTests, MobileVaultTests, MobileLocalCryptTests, RuntimeChecks):
             suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(case))
         result = unittest.TextTestRunner(verbosity=2).run(suite)
         report = dict(schema=1, suite='logistics-mobile-documents', target=args.target,

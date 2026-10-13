@@ -242,7 +242,7 @@ class StorageTests(unittest.TestCase):
         self.store.save(data)
         original = deepcopy(data)
         path = self.store.path(data['id'])
-        with patch('commonUtils.persistence.os.link', side_effect=OSError('Disk full')):
+        with patch('commonUtils.persistence.publication.rename_exclusive', side_effect=OSError('Disk full')):
             with self.assertRaises(OSError):
                 self.store.move(data, 'Nested/Folder')
         self.assertEqual(data, original)

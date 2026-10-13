@@ -1,5 +1,8 @@
 """Private, bounded EPUB/CBZ imports and conflict-aware reading progress."""
 from hashlib import sha256
+from collections import OrderedDict
+from commonUtils.runtime.archive_source import LocalArchiveSource
+from commonUtils.runtime.streams import iter_chunks, file_sha256
 import json
 import os
 from pathlib import Path
@@ -23,6 +26,7 @@ class LibraryStore:
             raise ValueError('The library requires an absolute private root.')
         self.root = root.resolve()
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.verified = OrderedDict()
 
     def path(self, key, suffix):
         if (not isinstance(key, str) or len(key) != 32 or any(c not in '0123456789abcdef' for c in key)
@@ -65,12 +69,12 @@ class LibraryStore:
         return sorted(records, key=lambda r: r['name'].casefold()), failures
 
     @staticmethod
-    def validate_archive(path):
+    def validate_archive(path, kind='epub'):
         with ZipFile(path) as archive:
             validate_members(archive)
             infos = archive.infolist()
-            if (len(infos) > 5000 or sum(i.file_size for i in infos) > MAX_BOOK
-                    or any(i.file_size > MAX_MEMBER for i in infos)):
+            if (len(infos) > 5000 or (kind == 'epub' and (sum(i.file_size for i in infos) > MAX_BOOK
+                    or any(i.file_size > MAX_MEMBER for i in infos)))):
                 raise ValueError('Book exceeds the mobile archive limits.')
             if any(i.flag_bits & 1 for i in infos):
                 raise ValueError('Encrypted books/comics are not supported on mobile yet.')
@@ -89,32 +93,37 @@ class LibraryStore:
                 digest, length = sha256(), 0
                 with NamedTemporaryFile(dir=self.root, delete=False) as stream:
                     temporary = Path(stream.name)
-                    while chunk := incoming.read(512 * 1024):
+                    for chunk in iter_chunks(incoming):
                         length += len(chunk)
-                        if length > MAX_BOOK:
+                        if kind == 'epub' and length > MAX_BOOK:
                             raise ValueError('Mobile book imports are limited to 256 MiB.')
                         digest.update(chunk)
                         stream.write(chunk)
                     stream.flush()
                     os.fsync(stream.fileno())
-            self.validate_archive(temporary)
+            prepared = LocalArchiveSource(temporary, max_read=MAX_MEMBER, max_members=5000)
+            self.validate_archive(temporary, kind)
             if kind == 'epub':
                 from features.books.epub import EPUBBook
                 if len(EPUBBook(temporary).spine) > 5000:
                     raise ValueError('Mobile EPUB reading order is limited to 5,000 chapters.')
             else:
-                from features.comics.pages import ComicPages
-                pages = ComicPages(temporary)
+                pages = self.comic_reader(temporary)
                 if any(Path(name).suffix.lower() not in {'.png', '.jpg', '.jpeg'} for name in pages.pages):
                     raise ValueError('The mobile comic reader currently supports PNG/JPEG pages only.')
             destination = self.path(key, '.epub' if kind == 'epub' else '.cbz')
             if destination.exists():
                 raise FileExistsError(destination)
+            prepared.check()
             os.replace(temporary, destination)
+            published = LocalArchiveSource(destination, max_read=MAX_MEMBER, max_members=5000)
+            if published.expected[:-1] != prepared.expected[:-1]:
+                raise ValueError('Imported archive changed during publication.')
             temporary = None
             record = dict(schema=1, id=key, kind=kind, name=name, digest=digest.hexdigest(),
                           position=0, bookmarks=[], revision=0)
             atomic_write_json(self.path(key, '.json'), record, max_bytes=MAX_RECORD, durable_directory=True)
+            self.remember_verified(destination, record['digest'], expected=published.expected)
             return record
         finally:
             if temporary is not None:
@@ -125,26 +134,41 @@ class LibraryStore:
     def open(self, key):
         record, _ = self.read_record(key)
         path = self.path(key, '.epub' if record['kind'] == 'epub' else '.cbz')
-        if path.stat().st_size > MAX_BOOK:
-            raise ValueError('Stored book exceeds the mobile size limit.')
-        digest = sha256()
-        with path.open('rb') as stream:
-            while chunk := stream.read(512 * 1024):
-                digest.update(chunk)
-        if digest.hexdigest() != record['digest']:
-            raise ValueError('Stored book changed; import it again to create a new library entry.')
-        self.validate_archive(path)
+        if record['kind'] == 'epub' and path.stat().st_size > MAX_BOOK:
+            raise ValueError('Stored EPUB exceeds the mobile size limit.')
+        source = LocalArchiveSource(path, max_read=MAX_MEMBER, max_members=5000)
+        cache_key = path, source.expected, record['digest']
+        if cache_key not in self.verified:
+            if file_sha256(path) != record['digest']:
+                raise ValueError('Stored book changed; import it again to create a new library entry.')
+            source.check()
+            self.remember_verified(path, record['digest'], expected=source.expected)
+        self.validate_archive(path, record['kind'])
         if record['kind'] == 'epub':
             from features.books.epub import EPUBBook
             reader = EPUBBook(path)
             if len(reader.spine) > 5000:
                 raise ValueError('Mobile EPUB reading order is limited to 5,000 chapters.')
         else:
-            from features.comics.pages import ComicPages
-            reader = ComicPages(path)
+            reader = self.comic_reader(path)
             if any(Path(p).suffix.lower() not in {'.png', '.jpg', '.jpeg'} for p in reader.pages):
                 raise ValueError('The mobile comic reader currently supports PNG/JPEG pages only.')
         return record, reader
+
+    @staticmethod
+    def comic_reader(path):
+        from features.comics.library import ComicDocument
+        from features.comics.pages import ComicPages
+        source = LocalArchiveSource(path, max_read=MAX_MEMBER, max_members=5000)
+        return ComicPages(path, document=ComicDocument(path, source=source))
+
+    def remember_verified(self, path, digest, *, expected):
+        source = LocalArchiveSource(path, max_read=MAX_MEMBER, max_members=5000)
+        if source.expected != expected:
+            raise ValueError('Archive changed while verifying its checksum.')
+        self.verified[path, expected, digest] = True
+        while len(self.verified) > 32:
+            self.verified.popitem(last=False)
 
     def progress(self, record, position, *, bookmark=False):
         current, original = self.read_record(record['id'])

@@ -91,3 +91,9 @@ existing thumbnail worker so legacy path-only state can be resolved without
 opening archives while painting. The generic commonUtils badge hook reads only
 bounded private reading state, honours remember_position_bool, and omits unread
 or malformed records.
+
+
+`EPUBBook(path, source=provider)` optionally reads a virtual archive through
+`source.open(path)` and `source.version(path)`, without resolving a local file.
+This supports mobile LocalCrypt reading in RAM. The ordinary filesystem constructor
+and metadata-writing workflows are unchanged; source-backed books are read-only.

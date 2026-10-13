@@ -5,7 +5,7 @@ import os
 import shutil
 from tempfile import NamedTemporaryFile
 from xml.etree import ElementTree as ET
-from zipfile import ZipFile, ZIP_STORED
+from zipfile import ZipFile
 from threading import RLock
 
 from .epub import OPF, DC, BookError, EPUBBook, parse_xml
@@ -73,40 +73,47 @@ def save_metadata(book, changes, *, cancelled=lambda: False):
     """
     # Serialize book writes in this process. Waiting callers check their original
     # fingerprint after acquisition, so a second reader cannot overwrite edits.
-    with _save_lock:
-        return _save_metadata(book, changes, cancelled)
+    from commonUtils.runtime.operations import OperationCancelled
+    try:
+        with _save_lock:
+            if book.source is not None:
+                return _save_private_metadata(book, changes, cancelled)
+            return _save_metadata(book, changes, cancelled)
+    except OperationCancelled:
+        raise BookError('Metadata save cancelled; the original EPUB was kept.') from None
 
 
 def _save_metadata(book, changes, cancelled):
+    from commonUtils.persistence.publication import save_transaction
+    from commonUtils.filesystem.local_access import check_local_path
     def check():
+        check_local_path(book.path)
         if cancelled():
             raise BookError('Metadata save cancelled; the original EPUB was kept.')
         if book._signature() != book.signature:
             raise BookError('This book changed on disk. Reopen it before saving metadata.')
     check()
     updated = package_metadata(book, changes)
-    with NamedTemporaryFile(dir=book.path.parent, prefix=f'.{book.path.name}.', suffix='.epub', delete=False) as temporary:
-        staged = Path(temporary.name)
-    try:
+    staged = None
+    backup = None
+    expected = {}
+    def stage():
+        nonlocal staged
+        with NamedTemporaryFile(dir=book.path.parent, prefix=f'.{book.path.name}.', suffix='.epub', delete=False) as temporary:
+            staged = Path(temporary.name)
         with ZipFile(book.path) as original, ZipFile(staged, 'w') as output:
-            output.comment = original.comment
-            infos = sorted(original.infolist(), key=lambda info: info.filename != 'mimetype')
-            for info in infos:
-                check()
-                if info.filename == 'mimetype':
-                    output.writestr(info, b'application/epub+zip', compress_type=ZIP_STORED)
-                elif info.filename == book.package_path:
-                    output.writestr(info, updated)
-                else:
-                    with original.open(info) as source, output.open(info, 'w') as destination:
-                        while chunk := source.read(1024 * 1024):
-                            check()
-                            destination.write(chunk)
-        EPUBBook(staged)  # Do not replace the original with an unreadable package.
+            from services.document_metadata import rewrite_metadata
+            expected.update(rewrite_metadata(original, output, book.package_path, updated, epub=True, cancelled=cancelled))
+    def verify():
+        from commonUtils.archives.zip_access import archive_manifest
+        if archive_manifest(staged) != expected:
+            raise BookError('EPUB resource verification failed; original preserved.')
+        EPUBBook(staged)
         shutil.copymode(book.path, staged)
         with staged.open('r+b') as stream:
             os.fsync(stream.fileno())
-        check()
+    def publish():
+        nonlocal backup
         backup = book.path.with_name(book.path.name + '.bak')
         suffix = 1
         while True:
@@ -129,6 +136,31 @@ def _save_metadata(book, changes, cancelled):
             backup.unlink(missing_ok=True)
             raise
         os.replace(staged, book.path)
-        return EPUBBook(book.path), backup
-    finally:
-        staged.unlink(missing_ok=True)
+    def cleanup():
+        if staged is not None:
+            staged.unlink(missing_ok=True)
+    save_transaction(stage=stage, verify=verify, validate=check, publish=publish,
+                     cleanup=cleanup, cancelled=cancelled)
+    return EPUBBook(book.path), backup
+
+
+def _save_private_metadata(book, changes, cancelled):
+    from commonUtils.archives.zip_access import open_archive, archive_manifest
+    from commonUtils.runtime.operations import check_cancelled
+    from services.document_metadata import epub_metadata, rewrite_metadata
+    member, data = epub_metadata(book, changes)
+    expected = {}
+    def write(stream):
+        check_cancelled(cancelled)
+        with book.open_archive() as original, open_archive(stream, 'w', password=book.password) as output:
+            expected.update(rewrite_metadata(original, output, member, data, epub=True, cancelled=cancelled))
+    def verify(path):
+        check_cancelled(cancelled)
+        with book.source.open(path) as stream:
+            if archive_manifest(stream, password=book.password) != expected:
+                raise BookError('EPUB resource verification failed; original preserved.')
+        EPUBBook(path, source=book.source, password=book.password)
+    # The provider owns cancellation during encryption and before publication.
+    with book.source.operation(cancelled):
+        book.source.replace_stream(book.path, write, expected_revision=book.signature, verify=verify)
+    return EPUBBook(book.path, source=book.source, password=book.password), None
