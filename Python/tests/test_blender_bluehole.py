@@ -126,6 +126,38 @@ class BlueHoleTests(unittest.TestCase):
             self.assertEqual(bluehole.resolve_branch('main', '5.2.0'), 'blender-4.5.1/main')
             self.assertIn('page=2', get.call_args.args[0])
 
+    def test_supported_blender_versions_select_their_own_channel_family(self):
+        self.resolver.stop()
+        names = [f'blender-{version}/{channel}'
+                 for version in ('4.5.1', '5.2.2') for channel in bluehole.BRANCHES]
+        with patch('commonUtils.runtime.updates.github.json_get',
+                   return_value=[{'name': name} for name in names]):
+            for version in ('4.5.1', '5.2.2'):
+                for channel in bluehole.BRANCHES:
+                    with self.subTest(version=version, channel=channel):
+                        self.assertEqual(bluehole.resolve_branch(channel, version),
+                                         f'blender-{version}/{channel}')
+
+    def test_update_uses_managed_blender_version_for_branch_and_cache(self):
+        self.resolver.stop()
+        names = [f'blender-{version}/{channel}'
+                 for version in ('4.5.1', '5.2.2') for channel in bluehole.BRANCHES]
+        releases = {release.version: release for release in load_releases(platform='windows-x64')}
+        with patch('commonUtils.runtime.updates.github.json_get',
+                   return_value=[{'name': name} for name in names]), \
+                patch.object(bluehole, 'branch_commit', return_value='a' * 40) as head, \
+                patch.object(bluehole, 'download', side_effect=self.download):
+            for version in ('4.5.1', '5.2.2'):
+                for channel in bluehole.BRANCHES:
+                    with self.subTest(version=version, channel=channel):
+                        addon, commit = bluehole.update(self.manager, releases[version], channel)
+                        branch = f'blender-{version}/{channel}'
+                        head.assert_called_with(branch)
+                        self.assertEqual(addon.branch, branch)
+                        self.assertEqual(commit, 'a' * 40)
+                        self.assertEqual(addon.package,
+                                         self.manager.root / 'addons/bluehole' / branch / commit / 'addon.zip')
+
     def test_qualified_branch_commit_is_url_encoded(self):
         with patch('commonUtils.runtime.updates.github.json_get', return_value={'commit': {'sha': 'a' * 40}}) as get:
             self.assertEqual(bluehole.branch_commit('blender-4.5.1/main'), 'a' * 40)

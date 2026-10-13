@@ -31,6 +31,7 @@ def valid_branch(branch):
 
 
 def resolve_branch(channel, blender_version):
+    """Resolve against the managed Blender release being launched, not the host Python version."""
     if channel not in BRANCHES:
         raise ValueError('Invalid Blue Hole channel')
     from commonUtils.runtime.updates.github import json_get

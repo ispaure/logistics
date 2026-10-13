@@ -282,8 +282,12 @@ warning. Your selected branch remains requested for the next launch. Deluxe
 changes wait until an online update succeeds. First-time installation still needs
 internet access.
 
-Blue Hole's Main/Beta/Alpha selection automatically chooses the newest supported
-Blender baseline for that channel. For example, Blender 5.2 uses
-`blender-5.1.0/main` if available, otherwise `blender-4.5.1/main`. The installed row
-shows the full resolved branch and commit. Older Blender versions do not receive
-branches intended for newer Blender baselines.
+Blue Hole's Main/Beta/Alpha selection follows the Blender version being launched.
+Blender **4.5.1** uses `blender-4.5.1/main`, `/beta` or `/alpha`; Blender **5.2.2**
+uses `blender-5.2.2/main`, `/beta` or `/alpha`, matching your selected channel.
+The installed row shows the full resolved branch and commit. Selection uses the
+newest available baseline at or below that Blender version, so older Blender
+versions do not receive branches intended for newer baselines.
+
+The 5.2.2 branches start from the 4.5.1 alpha code. They are available for testing;
+full 5.2.2 compatibility, including themes and Deluxe keymaps, remains in progress.
