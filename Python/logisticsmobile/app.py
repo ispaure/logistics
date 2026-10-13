@@ -16,6 +16,13 @@ from .cloud_ui import CloudUI
 class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Install before Android starts cooperative dispatch or registers Java
+        # wake-up callbacks. Desktop/iOS loops lack this method and are unchanged.
+        from .native_loop import bind_cooperative_loop
+        bind_cooperative_loop(self.loop)
+
     def startup(self):
         root = Path(self.storage_root or self.paths.data)
         self.private_root = root

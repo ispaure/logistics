@@ -279,3 +279,12 @@ Its exact commit was promoted to main and `v0.1.1-main.05` was requested without
 waiting for that separate pipeline. Retained native reports:
 [Android](mobile-evidence/2026-10-13-android-native-ui-phase3.json) and
 [iOS](mobile-evidence/2026-10-13-ios-native-ui-phase3.json).
+
+`native_loop.py` binds Toga 0.5.7 Android cooperative dispatch to the app's owned
+asyncio loop. Java callbacks can enter Python with a different callback-local
+running-loop context; the upstream dispatcher establishes it only at startup.
+The app installs its wrapper before native wake-up registration, sets the loop
+policy, and restores the previous running-loop context after each dispatch. A
+host regression enters a callback with another loop and verifies owned futures,
+current-task identity and caller-context restoration. Native app checks continue
+to exercise actual Java/WebView callbacks; no failed case is retried into success.
