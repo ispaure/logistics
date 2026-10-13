@@ -421,7 +421,9 @@ close while reads finish. One pending job per controller and two worker threads
 bound concurrency. Shared gutter APIs are documented in commonUtils.
 
 IDE owns one AutoSave per DocumentBuffer, including Markdown buffers. Project
-metadata stores off/after_delay/focus_change (default after_delay, 1000 ms). Snapshot
+metadata stores off/after_delay/focus_change (default after_delay, 1000 ms). Only
+source-text changes restart the debounce; explicit mode/resume scheduling is
+separate so formatting notifications cannot indefinitely postpone a save. Snapshot
 encoding and conflict-checked publication run on the workspace's retained worker
 queue. Completion compares source text with the text submitted for saving,
 so newer text stays dirty while formatting-only Qt revisions do not force another

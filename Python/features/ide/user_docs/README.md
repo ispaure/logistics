@@ -232,7 +232,8 @@ baseline, markers compare against the last saved file. Large documents/baselines
 (over 250,000 characters) omit markers to keep editing responsive.
 
 **File → Auto Save** offers **After 1 second** (the default), **On focus change**,
-and **Off**, persisted per project. The delay restarts with each edit. Split views
+and **Off**, persisted per project. The delay restarts with each source-text edit;
+syntax/formatting updates do not postpone saving. Split views
 save once per shared buffer; undo remains available. Autosave preserves encoding
 and line endings and runs disk writes in the background. An edit made during a
 save stays unsaved until a later save completes. Formatting-only updates during

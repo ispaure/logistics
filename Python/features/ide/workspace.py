@@ -301,7 +301,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         for doc in self.documents.values():
             doc.buffer.autosave.timer.stop()
             if mode == 'after_delay':
-                doc.buffer.autosave.changed()
+                doc.buffer.autosave.schedule()
         self.changed.emit()
 
     def save_current(self, save_as=False):
