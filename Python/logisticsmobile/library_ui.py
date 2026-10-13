@@ -134,7 +134,7 @@ class LibraryUI:
             content = await asyncio.to_thread(chapter_html, reader, index,
                                               int(self.preferences.values['font_size']))
             view = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False, style=Pack(flex=1))
-            view.set_content('about:blank', content)
+            view.set_content('https://logistics.invalid/', content)
         else:
             data, mime = await asyncio.to_thread(reader.read_page, index)
             image_dimensions(data)

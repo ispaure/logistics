@@ -82,7 +82,7 @@ class LogisticsMobile(LibraryUI, toga.App):
         box.add(toga.Button('Text & Markdown', on_press=self.show_documents, style=Pack(height=52)))
         box.add(toga.Button('Books & Comics', on_press=self.show_library, style=Pack(height=52, margin_top=8)))
         box.add(toga.Label(f'{len(self.labels)} private document(s)', style=Pack(margin_top=8)))
-        box.add(toga.Label('LM chat and remote files are coming in later phases.',
+        box.add(toga.Label('LM chat and remote files\nare coming in later phases.',
                            style=Pack(margin_top=16)))
         if self.preferences.error:
             box.add(toga.Label(self.preferences.error, style=Pack(margin_top=12)))
@@ -131,7 +131,10 @@ class LogisticsMobile(LibraryUI, toga.App):
             return
         self.preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
                                    style=Pack(flex=1))
-        self.preview.set_content('about:blank', content)
+        # A fresh WebView may still be navigating to its initial about:blank.
+        # Give the HTML load a distinct local-document origin so that blank
+        # navigation cannot consume Toga's one approved content navigation.
+        self.preview.set_content('https://logistics.invalid/', content)
         self.show_view(toga.Box(children=[
             toga.Button('Back to editor', on_press=self.show_documents, style=Pack(height=44)),
             self.preview], style=Pack(direction=COLUMN, flex=1)))
