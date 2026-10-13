@@ -1,90 +1,117 @@
-# Mobile preparation and next steps
+# Mobile document host and validation
 
-Logistics remains a desktop application. This phase prepares and tests reusable
-document operations; it does not introduce mobile navigation, a Qt mobile port,
-application packaging or a new dependency policy for existing desktop consumers.
+Logistics has an independent native text/Markdown prototype in
+`Python/logisticsmobile`, with Briefcase configuration and tooling under
+[`Mobile/`](../../Mobile/README.md). The desktop Qt launcher and its dependency
+pins remain separate. The shared Qt facade retains its desktop capability gate:
+the mobile host uses Toga and portable commonUtils persistence rather than
+importing desktop initialization, menus or dialogs.
 
-## Current boundary
+## Ownership and contracts
 
-| Component | Portable foundation | Remaining host work |
-| --- | --- | --- |
-| EPUB | `features.books.epub` reads bounded resources, spine and navigation; `metadata` stages conflict-checked saves while preserving resources | Document-provider access, mobile rendering, navigation and lifecycle |
-| Comics | `ComicDocument` reads/updates ComicInfo; `ComicPages` sorts names and returns compressed page bytes without importing Pillow or legacy archive tools | Image decoding/cover rendering needs Pillow or a future mobile adapter; encrypted archives need cryptography dependencies; conversion remains separate |
-| Text and Markdown | Existing commonUtils text snapshots, encoding preservation, conflict detection and atomic writes; Markdown properties | Editor presentation, unsaved buffers, suspension/recovery, mobile document selection and permission persistence |
-| Desktop integrations | Existing Qt widgets, feature discovery, launchers and tools remain intact | Select only relevant features for a future mobile host; do not import the desktop application as its entry point |
+| Module | Contract |
+| --- | --- |
+| `documents.py` | Explicit absolute app-private root; UUID file identities; 1 MiB bounded Unicode text; original encoding/endings; atomic files and recovery JSON; stale/deleted-file rejection and safe copies |
+| `access.py` | Scoped binary imports; Android content URIs are handled by ContentResolver streams; iOS URLs retain security-scoped access until reading finishes; every handle/scope is closed on failure |
+| `pickers.py` | Android ACTION_OPEN_DOCUMENT and iOS UIDocumentPicker open mode; native grants are consumed immediately to import a private copy; no broad storage permission or persisted external write access |
+| `app.py` | Native selection, title editing, multiline text, New/Import/Save/copy; checkpoints on edit, focus loss and normal exit |
+| `smoke.py` | Fresh-interpreter desktop-dependency rejection, real runtime identity, exact test inventory and structured evidence |
+| `Mobile/tools.py` | Whitelisted Logistics sources, tracked/clean shared Python sources, licenses, source SHAs and dirty-state records; strict emulator/simulator evidence verification |
 
-The comic archive helper now loads legacy tooling only when archive rebuilding is
-requested. Its existing `zipUtils` alias is still lazily available to callers.
-Comic page access loads Pillow only for TIFF conversion or cover rendering; the
-existing `Image`/`ImageOps` exports remain available lazily. Missing Pillow raises
-an explanatory error at decoding. Existing desktop behavior and signatures stay
-unchanged. The EPUB data layer already had the appropriate separation and was
-validated without an unnecessary rewrite. The Qt editor remains a widget; its
-file I/O was already independently reusable.
+The host's `paths.data` supplies private storage. Caller-provided names remain
+metadata; they never become filesystem paths. UUIDs are validated before deriving
+paths, and linked document files are rejected. Saved bytes and the last source
+snapshot stay separate from the draft record. The record contains the original
+bytes and edited text so an externally changed or deleted private file cannot
+silently overwrite recovered edits. A failed save preserves the draft; a failed
+record publication preserves its previous record. Publication after an already
+successful file save can leave a recoverable conflict on reopening, requiring a
+copy rather than assuming both operations committed together.
 
-## Run the headless document check
+Import creates a copy, preserving the selected external source. Android grants
+and iOS scoped URLs need not survive app termination because later edits use the
+private copy. Editing/exporting the original provider document would require a
+separate permission, bookmark and provider-write contract; it is not implemented.
+The iOS picker delegate is retained until selection/cancellation. Android activity
+results use the pinned Toga backend's `start_activity` hook. These backend/native
+interfaces must be rechecked before upgrading Toga.
 
-From the repository root, using a Python interpreter without desktop packages:
+Draft writes currently occur on each edit. This favors simple recovery in the
+small prototype; larger documents need performance work before expanding the
+1 MiB limit. Focus/exit hooks supplement these checkpoints. Physical-device tests
+must still check forced termination, suspension, permission denial/revocation,
+providers with slow I/O, keyboard resizing and accessible touch layouts.
 
-```sh
-PYTHONPATH=Python python Python/tests/portable_documents.py
-```
+## Selected features and dependencies
 
-The suite actively rejects imports of PySide6, Pillow, patoolib and pyzipper,
-even when installed. It creates its own EPUB/CBZ/text fixtures, checks resource
-preservation, metadata saves, natural page order and stale-save rejection. It
-also checks that a cover request reports the missing image decoder clearly.
-The static CI job runs it before installing desktop dependencies; a fresh-process
-regression also enforces the boundary in the normal suite.
+The native app includes text/Markdown and uses Toga 0.5.7 backends with Briefcase
+0.4.5. It installs no desktop PySide, image or archive dependencies. Staging copies
+only whitelisted Logistics Python modules plus tracked shared Python sources and
+licenses. It never follows the local external feature link or copies private INIs,
+Git metadata or untracked shared files. Local dirty payloads are labelled and
+cannot produce accepted mobile runtime evidence.
 
-This is a **host** test, without OS mocks. It is ready to be packaged into a future
-mobile testbed but has not run inside iOS/Android. It does not test image decoding,
-Qt rendering, Android content URIs, iOS security-scoped URLs or physical devices.
+The testbed payload additionally selects portable EPUB metadata/resource reading,
+comic page bytes/ComicInfo updates and generated fixtures. These are headless data
+operations. Image decoding, encrypted archives, mobile EPUB/comic rendering,
+other desktop tools, external export/share and app-store distribution remain
+future work. No desktop capability is enabled by a prototype build.
 
-## Mobile runtime validation
+## Validation gates
 
-The shared-runtime gate is complete, before selecting a mobile UI framework.
-Follow its [mobile test guide](../../Python/commonUtils/docs/developer/mobile-testing.md)
-for the manual Actions controls, artifacts, success criteria and troubleshooting.
-The [hosted smoke run](https://github.com/ispaure/commonUtils/actions/runs/38277821906)
-passed Android and iOS on 2026-10-12 at commonUtils `8ff459a`: seven tests per
-runtime, zero failures/errors/skips. The first iOS attempt exposed a testbed
-package-copy mismatch, which was fixed before the successful rerun. The
-[shared evidence guide](https://github.com/ispaure/commonUtils/blob/main/docs/developer/mobile-testing.md)
-records the runtime details and result JSON. Existing desktop push-triggered CI
-remains enabled.
+[Native builds](../../.github/workflows/mobile-build.yml) create an Android debug
+APK and an unsigned iOS Simulator app archive, with bounded build jobs and retained
+source manifests/logs. Build success proves packaging, not native UI interactions.
 
-For each run, keep the commit SHA, runtime result JSON and build/testbed logs. A
-red build step is a toolchain/setup problem; a red test or missing result is not a
-successful mobile run. The guide distinguishes these cases. Do not enable a
-capability merely because a simulator boots or an app builds.
+[Document runtime checks](../../.github/workflows/mobile-runtime.yml) use the
+already established CPython 3.14.7 testbeds, pinned at
+`823f0323ee6ec1402088b73bce1a38473cac36dc`. Android builds x86_64 on Ubuntu 24.04;
+iOS builds arm64 Simulator on macOS 15. The existing iOS resource-copy workaround
+is retained. Thirteen cases run inside each actual interpreter:
 
-## Next steps after the runtime passes
+- Eight private document, recovery, encoding, conflict and scoped-import contracts.
+- Three existing EPUB/comic/Markdown fixture scenarios.
+- Runtime identity and a desktop-dependency import boundary.
 
-1. Extend the mobile payload with the small Logistics document modules and this
-   headless fixture suite. Keep platform-specific dependencies out of that package.
-2. Build one document prototype: import a file into app-private storage, display
-   text, edit/save safely and reopen it. Choose its mobile UI/framework then;
-   existing desktop Qt widgets do not determine that choice.
-3. Add Android document-provider and iOS document-picker/security-scoped access,
-   then permission persistence and unsaved-change recovery across suspension.
-4. Validate on physical Android and iOS devices before expanding reader features
-   or adding signing/store distribution. Hosted emulator/simulator passes do not
-   certify device behavior.
+The verifier requires one report, expected native `sys.platform`, actual emulator
+or simulator classification, both clean source SHAs, the exact inventory/count,
+zero failures/errors and zero skips. Host runs are explicitly `desktop-harness`
+and cannot pass the mobile verifier. Scoped-import unit cases use provider objects
+to check lifetime/error contracts; they do not prove actual picker permissions.
+Reports explicitly record `native_picker_tested: false`.
 
-No production mobile UI is implemented yet. This sequencing preserves the earlier
-infrastructure-only boundary and avoids choosing a UI stack before verifying the
-shared runtime and dependencies. Hosted commonUtils smoke checks have passed;
-Logistics document tests inside those runtimes and framework/device choices
-remain future gates.
+Source paths on alpha trigger the corresponding mobile jobs; manual target
+controls become available once the workflows are on the default branch. New
+mobile push runs supersede older mobile push runs. Existing desktop release
+validation remains independent. Native artifacts are development outputs, not
+store uploads or physical-device signing.
 
-## Local validation record
+## Evidence status
 
-The preparation changes passed 923 Logistics tests in 91 isolated modules on
-macOS. The three headless document scenarios also passed directly, with optional
-desktop/image/archive packages blocked. Ruff passed across Python and CI scripts,
-and actionlint accepted the updated desktop and new commonUtils mobile workflows.
-The original commonUtils foundation revision passed 735 shared tests and its
-seven-case staged host harness. Hosted commonUtils runtime results are recorded
-above; Logistics document checks remain host-only and no physical-device result
-is claimed.
+The shared foundation previously passed Android and iOS in
+[run 38277821906](https://github.com/ispaure/commonUtils/actions/runs/38277821906),
+with seven cases per runtime. Its
+[mobile test guide](../../Python/commonUtils/docs/developer/mobile-testing.md)
+records those source/runtime details; this is separate from Logistics validation.
+
+The new Logistics 13-case host harness, packaging/verifier tests and Toga dummy
+widget workflow pass locally. Native iOS project generation and dependency
+installation succeeded, but the local Xcode storyboard build failed with
+`iOS 26.5 Platform Not Installed`; no simulator devices were available. Hosted
+native builds and actual Logistics document runtime checks are the next evidence
+gates. No physical-device or actual native picker result is claimed here.
+
+## Next work
+
+1. Validate the hosted native artifacts and document runtime results, then run the
+   app on simulators/emulators and physical devices with real provider selections.
+2. Exercise keyboard/touch/accessibility and suspend/termination recovery before
+   adding reader or IDE features.
+3. Add explicit export/share and provider writeback, with stale-source checks and
+   permission/bookmark handling appropriate to each platform.
+4. Select target-native image/archive dependencies before enabling those features;
+   then introduce signing, distribution and store metadata.
+
+The [mobile user guide](../../Python/logisticsmobile/user_docs/README.md) describes
+the implemented document flow, and [build instructions](../../Mobile/README.md)
+list the independent environment and host checks.

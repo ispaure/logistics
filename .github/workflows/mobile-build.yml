@@ -1,0 +1,82 @@
+name: Native mobile prototype builds
+
+on:
+  push:
+    branches: [alpha]
+    paths: ['Python/logisticsmobile/**', 'Mobile/**', '.github/workflows/mobile-build.yml']
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Native target to build
+        required: true
+        type: choice
+        default: both
+        options: [android, ios, both]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Native ${{ matrix.target }} prototype
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.target == 'android' && '[{"target":"android","os":"ubuntu-24.04"}]' || inputs.target == 'ios' && '[{"target":"ios","os":"macos-15"}]' || '[{"target":"android","os":"ubuntu-24.04"},{"target":"ios","os":"macos-15"}]') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.2'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        if: matrix.target == 'android'
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prepare a clean, curated mobile payload
+        run: |
+          python -m pip install briefcase==0.4.5
+          python Mobile/tools.py stage Mobile/payload
+      - name: Generate and build the Android application
+        if: matrix.target == 'android'
+        working-directory: Mobile
+        env:
+          BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
+        run: |
+          mkdir -p "$BRIEFCASE_HOME"
+          briefcase create android --no-input
+          briefcase build android --no-input
+      - name: Generate and build the iOS Simulator application
+        if: matrix.target == 'ios'
+        working-directory: Mobile
+        env:
+          BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
+        run: |
+          mkdir -p "$BRIEFCASE_HOME"
+          xcodebuild -version
+          xcrun simctl list devices available
+          briefcase create iOS --no-input
+          briefcase build iOS --no-input
+          app=$(find build/logisticsmobile/ios -type d -name 'Logistics Mobile.app' -print -quit)
+          test -n "$app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "$RUNNER_TEMP/Logistics-ios-simulator.zip"
+      - name: Preserve native builds and diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: logistics-native-${{ matrix.target }}
+          path: |
+            Mobile/payload/source.json
+            Mobile/logs/
+            Mobile/build/logisticsmobile/android/**/*.apk
+            ${{ runner.temp }}/Logistics-ios-simulator.zip
+          retention-days: 14

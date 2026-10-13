@@ -56,6 +56,11 @@ Desktop.ini
 # Release dry-run output (CI writes outside the checkout)
 /release.zip
 
+# Curated mobile payloads and native build tool output
+/Mobile/payload/
+/Mobile/logs/
+/Mobile/.briefcase/
+
 # Local private feature link (symlink on Unix; junction on Windows)
 /Python/features/emulation
 

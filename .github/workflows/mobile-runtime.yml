@@ -1,0 +1,144 @@
+name: Logistics mobile document runtimes
+
+on:
+  push:
+    branches: [alpha]
+    paths: ['Python/logisticsmobile/**', 'Python/tests/test_mobile_*.py', 'Mobile/**', '.github/workflows/mobile-runtime.yml']
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Runtime to validate (start with Android)
+        required: true
+        type: choice
+        default: android
+        options: [android, ios, both]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-runtime-${{ github.ref }}-${{ inputs.target }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+jobs:
+  android:
+    if: github.event_name == 'push' || inputs.target == 'android' || inputs.target == 'both'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: logistics
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: python/cpython
+          ref: 823f0323ee6ec1402088b73bce1a38473cac36dc # v3.14.7
+          path: cpython
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.14.7'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prepare source and report build environment
+        run: |
+          mkdir -p reports
+          python logistics/Mobile/tools.py stage payload --repo logistics --testbed
+          cp payload/source.json reports/source.json
+          test -n "$ANDROID_HOME"
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          python --version
+          java -version
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev libffi-dev liblzma-dev
+      - name: Build the pinned host and Android interpreters
+        working-directory: cpython
+        run: |
+          set -o pipefail
+          python Android/android.py build build 2>&1 | tee ../reports/android-build.log
+          python Android/android.py build x86_64-linux-android 2>&1 | tee -a ../reports/android-build.log
+      - name: Run inside the Android testbed application
+        working-directory: cpython
+        run: |
+          set -o pipefail
+          python Android/android.py test --managed maxVersion --site-packages "$GITHUB_WORKSPACE/payload" -- -m logisticsmobile.smoke --target android 2>&1 | tee ../reports/android-testbed.log
+      - name: Require actual emulator evidence
+        run: python logistics/Mobile/tools.py verify reports/android-testbed.log --target android --output reports/android-result.json
+      - name: Preserve diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: logistics-android-documents
+          path: |
+            reports/
+            cpython/Android/testbed/app/build/reports/androidTests/
+          retention-days: 14
+
+  ios:
+    if: github.event_name == 'push' || inputs.target == 'ios' || inputs.target == 'both'
+    runs-on: macos-15
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: logistics
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: python/cpython
+          ref: 823f0323ee6ec1402088b73bce1a38473cac36dc # v3.14.7
+          path: cpython
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.14.7'
+      - name: Prepare source and report build environment
+        run: |
+          mkdir -p reports
+          python logistics/Mobile/tools.py stage payload --repo logistics --testbed
+          cp payload/source.json reports/source.json
+          test "$(uname -m)" = arm64
+          xcodebuild -version
+          xcrun simctl list devices available | tee reports/ios-devices.log
+      - name: Build the pinned host and simulator interpreters
+        working-directory: cpython
+        run: |
+          set -o pipefail
+          python Apple build iOS build 2>&1 | tee ../reports/ios-build.log
+          python Apple build iOS arm64-apple-ios-simulator 2>&1 | tee -a ../reports/ios-build.log
+      - name: Create a minimal embedded test application
+        working-directory: cpython
+        run: |
+          python Apple/testbed clone --platform iOS --framework cross-build/arm64-apple-ios-simulator/Apple/iOS/Frameworks/arm64-iphonesimulator "$GITHUB_WORKSPACE/ios-testbed"
+          # The pinned upstream --app option copies into Testbed/app, but its
+          # iOS Xcode project bundles iOSTestbed/app. Populate that resource root.
+          cp -R "$GITHUB_WORKSPACE/payload/." "$GITHUB_WORKSPACE/ios-testbed/iOSTestbed/app/"
+          test -f "$GITHUB_WORKSPACE/ios-testbed/iOSTestbed/app/logisticsmobile/smoke.py"
+      - name: Run inside the iOS Simulator testbed application
+        run: |
+          set -o pipefail
+          python ios-testbed run -- logisticsmobile.smoke --target ios 2>&1 | tee reports/ios-testbed.log
+      - name: Require actual simulator evidence
+        run: python logistics/Mobile/tools.py verify reports/ios-testbed.log --target ios --output reports/ios-result.json
+      - name: Preserve diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: logistics-ios-documents
+          path: |
+            reports/
+            ios-testbed/DerivedData/Logs/Test/
+          retention-days: 14

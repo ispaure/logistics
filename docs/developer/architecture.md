@@ -26,6 +26,11 @@ The generic `ui_new` package owns only application-level presentation:
 
 ## Startup and refresh
 
+`Python/logisticsmobile` is a separate Toga entry point packaged from curated
+sources under `Mobile/`. It uses portable commonUtils persistence without loading
+desktop feature discovery or the Qt facade. Its storage, native import boundaries
+and runtime/build gates are described in [mobile preparation](mobile-preparation.md).
+
 The root platform launcher reads `launch_config.ini`, synchronizes the pinned
 Python environment and invokes `Python/launch.py`. Startup creates QApplication,
 acquires the per-user lock, applies the theme, loads feature preferences, registers
