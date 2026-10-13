@@ -92,7 +92,9 @@ class HunkLayoutTests(QtTestCase):
         self.assertEqual(events, [(6, 'unstage')])
 
     def test_oversized_hunk_is_bounded_and_can_scroll(self):
-        patch = '@@ -1,300 +1,300 @@\n' + ' context\n' * 300
+        # Stay oversized even at the smallest supported code font. A 300-line
+        # fixture can legitimately fit below the cap with compact Linux metrics.
+        patch = '@@ -1,1000 +1,1000 @@\n' + ' context\n' * 1000
         self.preview.resize(800, 500)
         self.preview.show_diff('large.txt', patch)
         self.settle()
