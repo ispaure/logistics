@@ -4,8 +4,15 @@ from commonUtils.persistence.text import decode_bytes
 from .runner import GitRunner, GitError
 
 
+def editor_runner(timeout, cancel=None):
+    from commonUtils.configuration.settings import get_setting
+    from .configuration import config_path
+    executable = get_setting('Git', 'executable_str', 'git', path=config_path()).strip() or 'git'
+    return GitRunner(executable, timeout=timeout, cancel=cancel)
+
+
 def index_baseline(path, encoding, *, cancel=None):
-    runner = GitRunner(timeout=3, cancel=cancel)
+    runner = editor_runner(3, cancel)
     path = Path(path).resolve()
     root = runner.run(['rev-parse', '--show-toplevel'], cwd=path.parent)
     root = Path(root.stdout.decode().rstrip('\n'))
@@ -37,10 +44,10 @@ def stage_preview(path, encoding, text, start, end):
     path = Path(path).resolve()
     if read_text_file(path, encoding=encoding).text != text:
         raise ValueError('Save the buffer before staging, then reopen the hunk.')
-    repo = Repository(path.parent, runner=GitRunner(timeout=5))
+    repo = Repository(path.parent, runner=editor_runner(5))
     root = repo.root().resolve()
     relative = path.relative_to(root).as_posix()
-    repo = Repository(root, runner=GitRunner(timeout=5))
+    repo = Repository(root, runner=editor_runner(5))
     repo._check_text_attributes(relative)
     patch = repo.diff(relative)
     if read_text_file(path, encoding=encoding).text != text:
@@ -57,4 +64,4 @@ def stage_preview(path, encoding, text, start, end):
 def stage_reviewed(inputs):
     from .repository import Repository
     root, relative, patch, index, _ = inputs
-    Repository(root, runner=GitRunner(timeout=5)).apply_hunk(relative, index, patch)
+    Repository(root, runner=editor_runner(5)).apply_hunk(relative, index, patch)

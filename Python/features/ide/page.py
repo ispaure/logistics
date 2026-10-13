@@ -127,6 +127,12 @@ class IDEPage(qt.QWidget):
             widget = qt.QPlainTextEdit(value) if key.endswith('_paths') else qt.QLineEdit(value)
             fields[key] = widget
             layout.addRow(label, widget)
+        column_guide = qt.QSpinBox(dialog)
+        column_guide.setRange(0, 1000)
+        column_guide.setSpecialValueText('Off')
+        column_guide.setValue(project.column_guide)
+        column_guide.setToolTip('Visual line-length guide for all source editors in this project; does not wrap or limit text.')
+        layout.addRow('Column guide (0 = off)', column_guide)
         buttons = qt.QDialogButtonBox(qt.QDialogButtonBox.StandardButton.Ok | qt.QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -139,6 +145,7 @@ class IDEPage(qt.QWidget):
             value = widget.toPlainText().splitlines() if key.endswith('_paths') else widget.text().strip()
             setattr(project, key, value if key != 'python_interpreter' else value or None)
         project.root_path = str(project.root)
+        project.column_guide = column_guide.value()
         return True
 
     def register_project(self, destination=None):

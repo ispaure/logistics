@@ -11,6 +11,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.configuration.layered import register_settings
 from services import updates
 from ui_new.updater import UpdateController
+from ui_new.landing import LaunchSurface
 from ui_new.pages.settings import ConfigurationPanel
 
 
@@ -63,14 +64,36 @@ class UpdateUITests(QtTestCase):
 
     def controller(self):
         dialog = qt.QMainWindow()
-        button = qt.QPushButton(dialog)
-        owner = SimpleNamespace(dlg=dialog, launch_surface=SimpleNamespace(update_button=button),
+        surface = LaunchSurface(dialog)
+        dialog.setCentralWidget(surface)
+        surface.resize(850, 550)
+        owner = SimpleNamespace(dlg=dialog, launch_surface=surface,
                                 _closing=False, pending_update=None, _update_offer_visibility=Mock())
         with patch('ui_new.updater.preferences_path', return_value=Path('/missing-test/preferences.json')), patch('ui_new.updater.qt.QTimer.singleShot'):
             controller = UpdateController(owner)
         self.addCleanup(dialog.deleteLater)
         controller.timer.stop()
         return controller, owner
+
+    def test_preparation_label_fits_and_remains_anchored_after_reset(self):
+        controller, owner = self.controller()
+        controller.available = {'branch': 'main', 'commit': 'a' * 40}
+        button = owner.launch_surface.update_button
+        font = button.font()
+        font.setPixelSize(32)  # Maximum supported interface size at 96 DPI.
+        button.setFont(font)
+        owner.launch_surface.position_settings()
+        idle_width = button.width()
+        with patch.object(controller.progress, 'start'):
+            controller.install()
+        self.assertGreater(button.width(), idle_width)
+        self.assertGreaterEqual(button.width(), button.sizeHint().width())
+        self.assertGreaterEqual(button.height(), button.sizeHint().height())
+        self.assertEqual(button.x() + button.width(), owner.launch_surface.width() - 12)
+        with patch('ui_new.updater.notify'):
+            controller._finished(None, 'Preparation failed')
+        self.assertEqual(button.width(), idle_width)
+        self.assertEqual(button.x() + button.width(), owner.launch_surface.width() - 12)
 
     def test_successful_prepare_requests_close_without_applying_in_running_process(self):
         controller, owner = self.controller()

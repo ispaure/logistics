@@ -48,6 +48,7 @@ class LandingPage(qt.QWidget):
         self._tool_signature = None
         self._tool_cards = []
         self._document_cards = []
+        self._preparing_layout = False
         self._card_timer = qt.QTimer(self)
         self._card_timer.setSingleShot(True)
         self._card_timer.timeout.connect(self._fit_card_heights)
@@ -126,6 +127,8 @@ class LandingPage(qt.QWidget):
         self._fit_content()
 
     def eventFilter(self, watched, event):
+        if self._preparing_layout:
+            return super().eventFilter(watched, event)
         if watched is self.scroll.viewport() and event.type() == qt.QEvent.Type.Resize:
             self._fit_content()
         if isinstance(watched, qt.QLabel) and (event.type() == qt.QEvent.Type.FontChange
@@ -136,6 +139,35 @@ class LandingPage(qt.QWidget):
         if event.type() in (qt.QEvent.Type.FontChange, qt.QEvent.Type.LayoutRequest, qt.QEvent.Type.Resize):
             self._card_timer.start(0)
         return super().eventFilter(watched, event)
+
+    def showEvent(self, event):
+        # Polish fonts and settle height-for-width before the first visible
+        # paint, rather than showing provisional cards and replacing them later.
+        self._preparing_layout = True
+        try:
+            for widget in (self, *self.findChildren(qt.QWidget)):
+                widget.ensurePolished()
+            previous = None
+            for _ in range(6):
+                self.layout().activate()
+                self.scroll.widget().layout().activate()
+                self._fit_content()
+                self.content.layout().activate()
+                for card in self._tool_cards + self._document_cards + [self.buttons.get('hub')]:
+                    if card is not None:
+                        card.layout().activate()
+                self._fit_card_heights()
+                self.content.layout().activate()
+                self.scroll.widget().layout().activate()
+                state = (self.content.width(), self._document_columns,
+                         tuple((c.width(), c.height()) for c in self._tool_cards + self._document_cards))
+                if state == previous:
+                    break
+                previous = state
+            self._card_timer.stop()
+        finally:
+            self._preparing_layout = False
+        super().showEvent(event)
 
     def _watch_card(self, card):
         card.installEventFilter(self)
@@ -190,7 +222,8 @@ class LandingPage(qt.QWidget):
     def _fit_content(self):
         margin = 16 if self._documents_only else 36
         width = max(240, min(880, self.scroll.viewport().width() - 2 * margin))
-        self.content.setFixedWidth(width)
+        if self.content.minimumWidth() != width or self.content.maximumWidth() != width:
+            self.content.setFixedWidth(width)
         three_column_width = 840
         columns = 3 if width >= three_column_width else 2 if width >= 560 else 1
         self._document_columns = columns
@@ -201,6 +234,10 @@ class LandingPage(qt.QWidget):
 
     @staticmethod
     def _arrange_cards(grid, cards, columns):
+        arrangement = (tuple(id(card) for card in cards), columns)
+        if getattr(grid, '_launch_arrangement', None) == arrangement:
+            return
+        grid._launch_arrangement = arrangement
         for card in cards:
             grid.removeWidget(card)
         for index, card in enumerate(cards):
@@ -295,8 +332,19 @@ class LaunchSurface(qt.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.update_button = qt.QPushButton('Update Logistics', self)
+        self.update_button.setObjectName('updateLogistics')
         self.update_button.setAccessibleName('Update Logistics')
         self.update_button.setMinimumHeight(32)
+        self.update_button.setStyleSheet('''
+            QPushButton#updateLogistics {
+                background: palette(highlight); color: palette(highlighted-text);
+                border: 1px solid palette(highlight); border-radius: 6px;
+                padding: 6px 14px; font-weight: bold;
+            }
+            QPushButton#updateLogistics:hover, QPushButton#updateLogistics:focus {
+                border-color: palette(highlighted-text);
+            }
+        ''')
         self.update_button.hide()
         self.settings_button = qt.QToolButton(self)
         self.settings_button.setObjectName('floatingSettings')

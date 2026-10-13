@@ -37,6 +37,21 @@ class DocumentTests(IDEQtTests):
 
 
 class ProjectTests(unittest.TestCase):
+    def test_column_guide_persistence_legacy_default_and_validation(self):
+        from features.ide.projects import Project, ProjectStore
+        with tempfile.TemporaryDirectory() as directory:
+            store = ProjectStore(Path(directory) / 'workspace.json')
+            project = Project('Example', directory, column_guide=79)
+            store.projects[project.id] = project
+            store.save()
+            self.assertEqual(ProjectStore(store.path).projects[project.id].column_guide, 79)
+            legacy = {'id': 'old', 'name': 'Old', 'root_path': directory}
+            self.assertEqual(Project.from_dict(legacy).column_guide, 120)
+            self.assertEqual(Project.from_dict(dict(legacy, column_guide=0)).column_guide, 0)
+            for value in (-1, 1001, True, '120'):
+                with self.assertRaises(ValueError):
+                    Project.from_dict(dict(legacy, column_guide=value))
+
     def test_roundtrip_missing_root_sources_and_conflicting_instance(self):
         from features.ide.projects import Project, ProjectStore
         with tempfile.TemporaryDirectory() as directory:
@@ -73,6 +88,149 @@ class WorkspaceFixture(IDEQtTests):
 
 
 class WorkspaceTests(WorkspaceFixture):
+    def test_file_tabs_keep_type_icons_and_neutral_close_on_right_after_reorder(self):
+        from commonUtils.ui import pyside as qt
+        from features.ide.projects import Project
+        from features.ide.workspace import ProjectWorkspace
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve()
+            first, second = root / 'file.py', root / 'notes.txt'
+            first.write_text('first\n'); second.write_text('second\n')
+            view = ProjectWorkspace(Project('test', directory, autosave='off'))
+            view.open_path(first); view.open_path(second)
+            self.wait(view)
+            view.resize(900, 500); view.show()
+            self.app.processEvents()
+            group = view.active_group
+            for index in range(group.count()):
+                self.assertFalse(group.tabIcon(index).isNull())
+                self.assertIsNone(group.tabBar().tabButton(index, qt.QTabBar.ButtonPosition.LeftSide))
+                button = group.tabBar().tabButton(index, qt.QTabBar.ButtonPosition.RightSide)
+                self.assertIsInstance(button, qt.QToolButton)
+                self.assertFalse(button.icon().isNull())
+                self.assertEqual(button.text(), '')
+            original = group.widget(0).path
+            button = group.tabBar().tabButton(0, qt.QTabBar.ButtonPosition.RightSide)
+            group.tabBar().moveTab(0, 1)
+            self.app.processEvents()
+            button.click()
+            self.assertNotIn(original, view.documents)
+            self.assertEqual(group.count(), 1)
+
+    def test_rename_open_modified_and_untracked_files_preserves_buffers_and_saves_to_new_paths(self):
+        import subprocess
+        from commonUtils.ui import pyside as qt
+        from features.ide.projects import Project
+        from features.ide.workspace import ProjectWorkspace
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve()
+            path = root / 'tracked.py'
+            path.write_text('original\n')
+            def git(*args):
+                subprocess.run(['git', '-C', str(root), *args], check=True, capture_output=True)
+            git('init'); git('add', 'tracked.py')
+            git('-c', 'user.name=Test', '-c', 'user.email=test@example.test', 'commit', '-m', 'initial')
+            folder = root / 'folder'
+            folder.mkdir()
+            new_file = folder / 'new.py'
+            new_file.write_text('new\n')
+            view = ProjectWorkspace(Project('test', directory, autosave='off'))
+            view.open_path(path)
+            self.wait(view)
+            first = view.current
+            view.split_right()
+            self.wait(view)
+            first.insertPlainText('edited ')
+            buffer = first.buffer
+            position = first.textCursor().position()
+            index = view.browser.proxy.mapFromSource(view.browser.model.index(str(path)))
+            self.assertTrue(view.browser.proxy.flags(index) & qt.Qt.ItemFlag.ItemIsEditable)
+            self.assertTrue(view.browser.proxy.setData(index, 'renamed.py'))
+            renamed = root / 'renamed.py'
+            self.assertIs(view.documents[renamed].buffer, buffer)
+            self.assertEqual(first.textCursor().position(), position)
+            self.assertTrue(buffer.text.isUndoAvailable())
+            self.assertTrue(buffer.text.isModified())
+            for editor in buffer.views:
+                self.assertEqual(editor.path, renamed)
+                self.assertEqual(editor.toPlainText(), 'edited original\n')
+            self.assertNotIn(path, view.documents)
+            self.assertIn(str(renamed), view.watch.files())
+            self.assertTrue(view.save_document(first))
+            self.assertEqual(renamed.read_text(), 'edited original\n')
+            self.assertFalse(path.exists())
+            first.undo()
+            self.assertEqual(first.toPlainText(), 'original\n')
+            view.open_path(new_file)
+            self.wait(view)
+            untracked = view.current
+            untracked.insertPlainText('unsaved ')
+            index = view.browser.proxy.mapFromSource(view.browser.model.index(str(new_file)))
+            self.assertTrue(view.browser.proxy.setData(index, 'new_name.py'))
+            self.assertEqual(untracked.path, folder / 'new_name.py')
+            self.assertTrue(untracked.document().isModified())
+            folder_index = view.browser.proxy.mapFromSource(view.browser.model.index(str(folder)))
+            self.assertTrue(view.browser.proxy.setData(folder_index, 'renamed_folder'))
+            self.assertEqual(untracked.path, root / 'renamed_folder' / 'new_name.py')
+            self.assertTrue(view.save_document(untracked))
+            self.assertEqual(untracked.path.read_text(), 'unsaved new\n')
+            self.assertFalse(folder.exists())
+
+    def test_unsaved_filename_color_undo_and_save_in_non_git_project(self):
+        from commonUtils.ui import pyside as qt
+        from features.ide.projects import Project
+        from features.ide.workspace import ProjectWorkspace
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve()
+            path = root / 'file.py'
+            path.write_text('original\n')
+            view = ProjectWorkspace(Project('test', directory, autosave='off'))
+            view.open_path(path)
+            self.wait(view)
+            editor = view.current
+            editor.insertPlainText('edited ')
+            index = view.browser.proxy.mapFromSource(view.browser.model.index(str(path)))
+            self.assertEqual(view.browser.proxy.data(index, qt.Qt.ItemDataRole.ForegroundRole).color().name(), '#408bd6')
+            self.assertIn('Unsaved changes', view.browser.proxy.data(index, qt.Qt.ItemDataRole.ToolTipRole))
+            self.assertEqual(view.browser.proxy.data(index), 'file.py')
+            source = view.browser.proxy.mapToSource(index)
+            self.assertEqual(view.browser.proxy.data(index, qt.Qt.ItemDataRole.DecorationRole).cacheKey(),
+                             view.browser.model.data(source, qt.Qt.ItemDataRole.DecorationRole).cacheKey())
+            editor.undo()
+            self.assertNotIn(path, view.browser.proxy.unsaved_paths)
+            editor.insertPlainText('saved ')
+            self.assertTrue(view.save_document(editor))
+            self.assertNotIn(path, view.browser.proxy.unsaved_paths)
+
+    def test_project_settings_updates_guide_in_existing_and_split_editors(self):
+        from unittest.mock import patch
+        from commonUtils.ui import pyside as qt
+        from features.ide.page import IDEPage
+        from features.ide.projects import Project
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve()
+            path = root / 'file.py'
+            path.write_text('original\n')
+            page = IDEPage(store_path=root / 'workspace.json')
+            project = Project('test', directory)
+            page.store.projects[project.id] = project
+            view = page.open_project(project)
+            view.open_path(path)
+            self.wait(view)
+            self.assertEqual(view.current.column_guide, 120)
+            view.split_right()
+            self.wait(view)
+            def accept(dialog):
+                dialog.findChild(qt.QSpinBox).setValue(79)
+                return qt.QDialog.DialogCode.Accepted
+            with patch.object(qt.QDialog, 'exec', accept):
+                page.settings(view)
+            self.assertEqual(project.column_guide, 79)
+            for editor in view.views():
+                self.assertEqual(editor.column_guide, 79)
+                self.assertFalse(editor.document().isModified())
+                self.assertEqual(editor.toPlainText(), 'original\n')
+
     def test_navigation_applies_unicode_location_to_requested_view(self):
         from features.ide.projects import Project
         from features.ide.workspace import ProjectWorkspace

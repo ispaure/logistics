@@ -13,7 +13,8 @@ Archives. **Open…** picks a file; **New** appears where creation is supported.
 Cancelling keeps the chooser visible. Opened documents use the shared workspace.
 
 Cards adapt to the available width: up to three per row in landscape windows,
-fewer columns in narrower windows. Wider views give cards more room. Long lists
+fewer columns in narrower windows. Wider views give cards more room. Cards
+settle into their layout before the chooser first appears. Long lists
 scroll vertically with the scrollbar or mouse wheel. The New / Open Document
 chooser is a utility tab and is omitted from the document list and document counts.
 
@@ -39,6 +40,10 @@ a successful open replaces the chooser tab with your document. Settings, tool se
 there. The active tool's menus appear alongside it, including File Browser's
 File, Edit, View, Navigate, Index and Help commands. On macOS these use the native menu bar;
 Windows and Linux show them in the window header without a second embedded bar.
+**F11** toggles the main window's fullscreen mode from any tool, including after
+switching away from a book or comic. **Logistics → Full screen / Exit full screen**
+provides the same command. A previously maximized window returns to maximized.
+On keyboards that assign a system function to F11, use Fn+F11 or the menu.
 File Browser's **File → Selected Items** exposes the same eligible commands and
 feature contributions as right-clicking the current selection.
 
@@ -277,7 +282,8 @@ These are published release channels: main uses stable releases, beta and alpha
 use tags with those suffixes. Unpublished branch commits are not offered.
 
 When a newer eligible release exists, **Update Logistics** appears at the upper
-right of the hub. Clicking it prepares the update, follows the normal close/save
+right of the landing (welcome) page, using your accent color. The offer is shown
+only on that page. Clicking it prepares the update, follows the normal close/save
 flow, installs after Logistics exits, and restarts through the platform launcher.
 Offline checks stay quiet. A failed preparation leaves Logistics open. Software,
 Credentials, .env files, ignored files and personal AppData remain protected.

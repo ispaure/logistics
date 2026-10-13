@@ -16,6 +16,10 @@ class DocumentPane(qt.QWidget):
         super().__init__()
         self.document = window
         self.view_title = window.windowTitle()
+        if getattr(window, 'document_editor_id', None) == 'text':
+            self.setProperty('workspace_show_icon', True)
+            self.setWindowIcon(window.windowIcon())
+            window.windowIconChanged.connect(self.setWindowIcon)
         self.setMinimumSize(320, 220)
         layout = qt.QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0)
         self.workspace_controls = getattr(window, 'workspace_controls', None)

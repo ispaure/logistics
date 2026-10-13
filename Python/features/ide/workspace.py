@@ -1,5 +1,6 @@
 """Project-scoped documents, non-detachable groups and cooperative workers."""
 from collections import Counter, deque
+from dataclasses import replace
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.status_line import StatusLine
@@ -97,6 +98,8 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
 
     def reset_root(self):
         self.browser.reset_root()
+        for doc in self.views():
+            getattr(doc, 'editor', doc).set_column_guide(self.project.column_guide)
         self.status.setText(str(self.project.root) + ('' if self.project.root.is_dir() else ' — unavailable; registration retained'))
 
     def run(self, callback, done, failed=None):
@@ -191,6 +194,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                 document_type = MarkdownDocument if path.suffix.lower() in ('.md', '.markdown') else EditorDocument
                 document_type = type(representative) if representative else document_type
                 doc = document_type(snapshot, self, buffer=representative.buffer if representative else None)
+                getattr(doc, 'editor', doc).set_column_guide(self.project.column_guide)
                 if representative is None:
                     self.documents[path] = doc
                     buffer = doc.buffer
@@ -202,7 +206,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                 if isinstance(doc, EditorDocument):
                     doc.link_requested.connect(lambda request, doc=doc: self.query_link(doc, request))
                     doc.viewport().installEventFilter(self)
-                target.addTab(doc, doc.title)
+                target.addTab(doc, self.document_icon(doc), doc.title)
                 doc.focused.connect(lambda: self.activate(self.group_for(doc)))
                 doc.cursorPositionChanged.connect(self.changed)
                 doc.verticalScrollBar().valueChanged.connect(self.changed)
@@ -253,11 +257,36 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                              scroll=source.verticalScrollBar().value())
 
     def update_buffer_titles(self, buffer):
+        self.browser.refresh_unsaved()
         for view in buffer.views:
             group = self.group_for(view)
             if group:
                 group.setTabText(group.indexOf(view), view.title)
+                group.setTabIcon(group.indexOf(view), self.document_icon(view))
         self.changed.emit()
+
+    def document_icon(self, doc):
+        icon = self.browser.model.fileIcon(self.browser.model.index(str(doc.path)))
+        return icon if not icon.isNull() else qt.QFileIconProvider().icon(qt.QFileInfo(str(doc.path)))
+
+    def retarget_documents(self, old, new):
+        """Follow a successful filesystem rename without replacing live buffers."""
+        def updated(path):
+            return new / path.relative_to(old) if path.is_relative_to(old) else path
+        moved = [(path, updated(path), doc) for path, doc in self.documents.items()
+                 if path.is_relative_to(old)]
+        for path, target, doc in moved:
+            self.documents.pop(path)
+            self.watch.removePath(str(path))
+            doc.buffer.snapshot = replace(doc.buffer.snapshot, path=target)
+            self.documents[target] = doc.buffer.views[0]
+            doc.buffer.configure()
+            doc.buffer.markers.changed()
+            self.watch.addPath(str(target))
+            self.update_buffer_titles(doc.buffer)
+        self.history = [(str(updated(Path(path))), position, scroll, group)
+                        for path, position, scroll, group in self.history]
+        self.browser.refresh_unsaved()
 
     def update_title(self, doc):
         self.update_buffer_titles(doc.buffer)
@@ -356,6 +385,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
             self.documents.pop(doc.path, None)
             self.watch.removePath(str(doc.path))
         doc.release()
+        self.browser.refresh_unsaved()
         self.refresh_autosave_notice()
         if prune:
             self.remove_empty_groups()
@@ -384,7 +414,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                 self.close_document(doc, prune=False)
             else:
                 group.removeTab(0)
-                target.addTab(doc, doc.title)
+                target.addTab(doc, self.document_icon(doc), doc.title)
         self.groups.remove(group)
         group.setParent(None)
         group.deleteLater()
@@ -444,7 +474,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                 doc = existing
             else:
                 source.removeTab(source.indexOf(doc))
-                target.insertTab(target.count() if index is None else index, doc, doc.title)
+                target.insertTab(target.count() if index is None else index, doc, self.document_icon(doc), doc.title)
         target.setCurrentWidget(doc)
         self.activate(target)
         self.remove_empty_groups()
@@ -616,8 +646,11 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         if self.worker:
             self.worker.cancel()
         ready = self.search.prepare_close() and self.worker is None
+        if getattr(self, 'project_find', None) is not None:
+            ready = self.project_find.prepare_close() and ready
         self.closing = ready
         if ready:
+            self.browser.git_status.stop()
             for doc in self.views():
                 doc.buffer.autosave.timer.stop()
                 if hasattr(doc, 'speech'):

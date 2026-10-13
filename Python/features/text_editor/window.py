@@ -209,6 +209,11 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
                     document.editor.comment_prefix is not None
                 )
             self.setWindowTitle(f"{document.title} — Text Editor — Logistics")
+            if not hasattr(self, '_file_icon_path') or self._file_icon_path != document.path:
+                self._file_icon_path = document.path
+                provider = qt.QFileIconProvider()
+                self.setWindowIcon(provider.icon(qt.QFileInfo(str(document.path))) if document.path else
+                                   provider.icon(qt.QFileIconProvider.IconType.File))
             if document.external_changed and not document.external_acknowledged:
                 self.external_bar.show()
             else:

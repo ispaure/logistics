@@ -17,6 +17,7 @@ class Project:
     python_interpreter: str | None = None
     layout: dict = field(default_factory=dict)
     autosave: str = 'after_delay'
+    column_guide: int = 120
 
     @property
     def root(self):
@@ -42,6 +43,8 @@ class Project:
                 raise ValueError(f'Invalid project {key}')
         if data.get('autosave', 'after_delay') not in ('off', 'after_delay', 'focus_change'):
             raise ValueError('Invalid autosave mode')
+        if type(data.get('column_guide', 120)) is not int or not 0 <= data.get('column_guide', 120) <= 1000:
+            raise ValueError('Column guide must be an integer between 0 and 1000')
         if not isinstance(data.get('layout', {}), dict):
             raise ValueError('Invalid project layout')
         if data.get('python_interpreter') is not None and not isinstance(data['python_interpreter'], str):

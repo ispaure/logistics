@@ -1,6 +1,7 @@
 """Index/worktree separation, selection-driven staging, and a commit draft."""
 from commonUtils.ui import pyside as qt
 from .chrome import status_icon
+from ..models import status_label
 
 
 class CommitMessage(qt.QPlainTextEdit):
@@ -135,7 +136,7 @@ class ChangesPanel(qt.QWidget):
                     item=qt.QTreeWidgetItem([display])
                     item.setIcon(0, status_icon(status))
                     item.setData(0,qt.Qt.ItemDataRole.UserRole,(change,staged))
-                    item.setToolTip(0,display + f' · Status: {status}' + (' · submodule' if change.submodule != 'N...' else ''))
+                    item.setToolTip(0,display + f' · Status: {status_label(status)} ({status})' + (' · submodule' if change.submodule != 'N...' else ''))
                     item.setFlags(item.flags() | qt.Qt.ItemFlag.ItemIsUserCheckable)
                     item.setCheckState(0,qt.Qt.CheckState.Checked if staged else qt.Qt.CheckState.Unchecked)
                     tree.addTopLevelItem(item)

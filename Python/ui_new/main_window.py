@@ -174,7 +174,7 @@ class MainWindow(pyside.Window):
     def _update_offer_visibility(self, *args):
         button = self.launch_surface.update_button
         button.setVisible(self.updates is not None and self.updates.available is not None
-                          and self.launch_stack.currentWidget() is self.hub)
+                          and self.launch_stack.currentWidget() is self.landing)
         self.launch_surface.position_settings()
 
     def _update_navigation_menu(self):

@@ -3,6 +3,12 @@ from dataclasses import dataclass, field
 import os
 
 
+def status_label(code):
+    return {'A': 'Added', '?': 'Untracked', 'M': 'Modified', 'D': 'Deleted',
+            'R': 'Renamed', 'C': 'Copied', 'T': 'Type changed',
+            '!': 'Conflict', 'U': 'Conflict'}.get(code, 'Changed')
+
+
 @dataclass(frozen=True)
 class Change:
     path: str

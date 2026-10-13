@@ -1,4 +1,5 @@
 import subprocess
+import shutil
 import tempfile
 import time
 import unittest
@@ -14,6 +15,24 @@ from features.ide.workspace import ProjectWorkspace
 
 
 class BaselineTests(unittest.TestCase):
+    def test_editor_git_reads_honor_configured_executable(self):
+        executable = shutil.which('git')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run([executable, '-C', directory, 'init'], check=True, capture_output=True)
+            path = root / 'file.txt'
+            path.write_text('original\n')
+            subprocess.run([executable, '-C', directory, 'add', 'file.txt'], check=True, capture_output=True)
+            path.write_text('edited\n')
+            # Model a GUI launch where only the configured absolute Git path
+            # is usable; the plain "git" command cannot be resolved.
+            with patch('commonUtils.configuration.settings.get_setting', return_value=executable), \
+                    patch('features.git.runner.shutil.which', side_effect=lambda name: executable if name == executable else None):
+                snapshot = read_text_file(path)
+                changes, label = compare(snapshot, snapshot.text)
+            self.assertEqual(changes[0].kind, 'modify')
+            self.assertIn('Git index', label)
+
     def test_unregistered_repo_index_refresh_and_missing_git_fallback(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -86,6 +105,19 @@ class AutoSaveTests(QtTestCase):
         # Leave the owner alive for the managed fixture to capture marker
         # futures and stop browser workers before deleting the folder. Native
         # Windows handles can outlive deleteLater while an executor task ends.
+
+    def test_saved_git_changes_keep_markers_until_staged(self):
+        root = str(self.path.parent)
+        def git(*args):
+            subprocess.run(['git', '-C', root, *args], check=True, capture_output=True)
+        git('init')
+        git('add', self.path.name)
+        self.doc.insertPlainText('changed ')
+        self.until(lambda: not self.doc.document().isModified())
+        self.until(lambda: bool(self.doc.line_changes))
+        self.assertIn('Git index', self.doc.gutter.toolTip())
+        git('add', self.path.name)
+        self.until(lambda: not self.doc.line_changes)
 
     def test_debounce_shared_buffer_undo_and_external_conflict(self):
         self.view.split_right()

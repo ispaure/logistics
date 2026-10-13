@@ -56,6 +56,9 @@ opens reveal the shared document host with the sidebar by default (the shared
 Menus launch preference can disable it); cancellation leaves the
 chooser visible. Documents opened from the chooser become the return destination
 for the settings menu. The chooser scrolls vertically at compact window heights.
+Before its first paint, the chooser polishes child widgets and settles card
+height-for-width layouts. Deferred resize updates reuse an unchanged card grid
+instead of rebuilding it, avoiding a second visible layout during startup.
 
 `LaunchSurface` parents an opaque, 36-pixel settings icon above the central stack,
 positions it on resize, and raises it when revealing content. It is visible on the
@@ -299,7 +302,9 @@ columns and enables ordinary vertical scrollbar/wheel navigation for long catalo
 
 `services.updates` owns Logistics repository/channel policy, protected roots,
 layered Updates settings and restart launchers. `ui_new.updater.UpdateController`
-checks on an owned worker and offers the hub button. Tests constructing windows
+checks on an owned worker and offers the accent-colored button only on the landing
+page. Label changes resize and reposition the offer so preparation text fits.
+Tests constructing windows
 perform no network checks; production startup calls `start_updates()`.
 
 Preparation validates a checksum-labelled published release and creates a private
@@ -320,3 +325,10 @@ Book and comic metadata editors are feature-owned top-level dialogs. Browser and
 reader actions show them directly rather than registering them with the document
 host; feature controllers retain their normal save, worker and shutdown lifecycle.
 Reading windows continue to use the shared document host.
+
+`ui_new.fullscreen.WindowFullscreen` keeps F11 and the Logistics fullscreen menu
+command scoped to the main OS window across destination changes. Its application
+event filter accepts unmodified F11 at ShortcutOverride and handles KeyPress once,
+avoiding ambiguity with embedded reader actions. Dialogs retain their own keys.
+The existing ReaderFullscreen controller synchronizes native window state,
+reader buttons and the host menu, including restoration of maximized state.

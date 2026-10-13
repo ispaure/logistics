@@ -54,6 +54,9 @@ tokens. Authentication errors appear in the operation log.
 
 Choose **File status** in the left WORKSPACE section. It separates **Staged files**
 and **Unstaged files**, with conflicts marked `!` in the unstaged list.
+Hover over a filename for its full status label (such as Modified, Added,
+Untracked or Renamed) and Git status code. The IDE tree uses the same full
+tooltip wording while keeping its regular file-type icons.
 One file can appear in both staged and unstaged groups when you edit it after staging.
 Select a file to inspect its diff; untracked text files show a bounded content preview.
 Binary files show an explanation instead of text.

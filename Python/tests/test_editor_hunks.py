@@ -72,6 +72,47 @@ class HunkRestoreTests(QtTestCase):
             restore_change(editor, after, before, change)
             self.assertEqual(editor.toPlainText(), before)
 
+    def test_mixed_replacement_markers_restore_without_losing_deleted_lines(self):
+        editor = CodeEdit()
+        self.addCleanup(editor.deleteLater)
+        for before, after in [('old\nremoved', 'new'),
+                              ('old\nremoved\nend\n', 'new\nend\n'),
+                              ('old', 'new\nadded')]:
+            editor.setPlainText(after)
+            changes = line_changes(before, after)
+            for change in reversed(changes):
+                restore_change(editor, editor.toPlainText(), before, change)
+            self.assertEqual(editor.toPlainText(), before)
+
+    def test_click_red_boundary_reviews_deletion_instead_of_overlapping_modify(self):
+        from PySide6.QtTest import QTest
+        from features.text_editor.document import Document
+        from commonUtils.persistence.text import TextSnapshot
+        from features.editor_hunks import HunkReview
+        document = Document(TextSnapshot(None, b'old\nremoved', 'old\nremoved'))
+        self.addCleanup(document.deleteLater)
+        editor = document.editor
+        editor.setPlainText('new')
+        controller = document.markers
+        controller.timer.stop()
+        controller.refresh_timer.stop()
+        controller.request = (document.snapshot, editor.document().revision())
+        controller.baseline = ('old\nremoved', 'Last saved file (unsaved changes)')
+        controller.run = lambda work, done, failed: done(work())
+        editor.set_line_changes(line_changes('old\nremoved', 'new'))
+        editor.gutter.installEventFilter(controller)
+        editor.resize(480, 240)
+        editor.show()
+        self.app.processEvents()
+        block = editor.document().firstBlock()
+        top = round(editor.blockBoundingGeometry(block).translated(editor.contentOffset()).top())
+        height = round(editor.blockBoundingRect(block).height())
+        QTest.mouseClick(editor.gutter, qt.Qt.MouseButton.LeftButton,
+                        pos=qt.QPoint(3, top + height - 2))
+        review = next(w for w in self.app.topLevelWidgets() if isinstance(w, HunkReview))
+        self.addCleanup(review.deleteLater)
+        self.assertEqual(review.change.kind, 'delete')
+
     def test_review_restores_through_host_and_blocks_stale_ui(self):
         from features.text_editor.document import Document
         from commonUtils.persistence.text import TextSnapshot
