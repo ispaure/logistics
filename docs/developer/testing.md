@@ -45,12 +45,23 @@ with `UV_PROJECT_ENVIRONMENT=.venv uv sync --project Python --locked`, then run
 The initial lint policy checks syntax and correctness without forcing a formatting
 rewrite. `commonUtils.tests.qt_test_case.QtTestCase` gives GUI tests ownership of
 new windows: it requests worker shutdown, drains deferred deletion and deletes
-windows before the next test. New Qt tests should use that base and still register
-fixture-specific cleanup. Tests must not depend on windows retained by other tests.
+windows before the next test. Use its `temporary_directory()` for GUI filesystem
+fixtures so windows and watchers are destroyed before their directories are
+removed, including on assertion failures. Register fixture-specific cleanup after
+creating the directory. Use `wait_until()` for condition-based Qt waits with
+operation-specific timeout messages. Tests must not depend on windows retained by
+other tests. See the [shared test guide](../../Python/commonUtils/tests/README.md)
+for lifecycle details.
 
 Platform checks also run on main pushes and launcher changes. The release workflow
 calls those checks before packaging, so a tag cannot bypass failing application
 regressions. Both headless suites and historical archive parity must pass.
+New pushes and PR updates cancel superseded checks for the same branch/PR;
+tag releases and manual runs retain their validation. Windows platform checks
+collect browser screenshot diagnostics alongside their logs. The separate browser
+diagnostic workflow remains available manually and does not repeat on every push.
+Publish a commonUtils commit before pushing a Logistics commit that references it;
+an unavailable submodule revision fails checkout before any test runs.
 
 The platform runner isolates both shared and Logistics test modules in separate
 processes to prevent native Qt state from leaking between suites. Each regression

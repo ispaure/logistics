@@ -1,8 +1,5 @@
 name: Browser presentation diagnostic
 on:
-  push:
-    branches: [alpha]
-    paths: ['.github/workflows/browser-diagnostic.yml', 'Python/commonUtils']
   workflow_dispatch:
 permissions:
   contents: read

@@ -70,7 +70,7 @@ class Preferences:
                 values[key] = style_values()['code_' + key]
                 continue
             bounds = (
-                {"minimum": 7, "maximum": 48}
+                {"minimum": 7, "maximum": 24}
                 if key == "font_size_int"
                 else {"minimum": 1, "maximum": 16}
                 if key == "indent_width_int"

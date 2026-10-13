@@ -1,22 +1,20 @@
 import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-import unittest
 from pathlib import Path
-from tempfile import TemporaryDirectory
-from time import monotonic, sleep
 from unittest.mock import patch
+from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.code_editor.diff import DiffDialog
 from features.text_editor.window import EditorWindow
 
 
-class EditorExtensionTests(unittest.TestCase):
+class EditorExtensionTests(QtTestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def setUp(self):
-        self.temp = TemporaryDirectory()
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name)
         self.window = EditorWindow(history_path=self.root / "recent.json",
                                    preferences_path=self.root / "preferences.ini")
@@ -33,12 +31,8 @@ class EditorExtensionTests(unittest.TestCase):
 
     def wait(self, window=None):
         window = window or self.window
-        end = monotonic() + 5
-        while window.task.busy or window._queue:
-            self.assertLess(monotonic(), end)
-            self.app.processEvents()
-            sleep(.005)
-        self.app.processEvents()
+        self.wait_until(lambda: not window.task.busy and not window._queue,
+                        message='Text Editor extension operation did not finish')
 
     def test_format_selection_undo_and_failure_preserves_buffer(self):
         editor = self.window.current.editor

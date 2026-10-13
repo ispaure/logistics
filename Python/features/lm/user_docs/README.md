@@ -187,3 +187,5 @@ the draft. View can hide the conversation sidebar or show generation settings.
 The compact bottom status bar matches the file-browser workspace spacing.
 Each message shows its creation time in small grayscale text; hover for the full
 local date, time and timezone. Older messages without usable timestamps omit it.
+
+Sent messages fit short text and wrap longer text within 75% of the chat panel width. Assistant messages use up to 95%. Message surfaces, the composer and Markdown code colors follow live light/dark theme changes.

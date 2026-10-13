@@ -29,7 +29,7 @@ class CodeFont:
             self.set_size(editor.font().pointSizeF())
 
     def set_size(self, size, *, save=True, notify=True):
-        size = max(7, min(48, round(size)))
+        size = max(7, min(24, round(size)))
         self.size = size
         self.updating = True
         try:

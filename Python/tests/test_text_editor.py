@@ -4,7 +4,6 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from time import monotonic, sleep
 import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
@@ -26,9 +25,8 @@ class TextEditorTests(QtTestCase):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def setUp(self):
-        self.temp = TemporaryDirectory()
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name)
-        self.addCleanup(self.temp.cleanup)
         self.window = EditorWindow(
             history_path=self.root / "recent.json",
             preferences_path=self.root / "preferences.ini",
@@ -48,12 +46,8 @@ class TextEditorTests(QtTestCase):
         self.app.processEvents()
 
     def wait(self):
-        deadline = monotonic() + 5
-        while self.window.task.busy or self.window._queue:
-            self.assertLess(monotonic(), deadline)
-            self.app.processEvents()
-            sleep(0.005)
-        self.app.processEvents()
+        self.wait_until(lambda: not self.window.task.busy and not self.window._queue,
+                        message='Text Editor file operation did not finish')
 
     def open(self, name, data):
         path = self.root / name
@@ -376,11 +370,7 @@ class TextEditorTests(QtTestCase):
         markdown = self.root / "note.md"
         markdown.write_text("# note")
         self.assertFalse(binding._activate(MarkdownFile(markdown), None))
-        deadline = monotonic() + 5
-        while not host.prepare_close():
-            self.assertLess(monotonic(), deadline)
-            self.app.processEvents()
-            sleep(0.005)
+        self.wait_until(host.prepare_close, message='File browser did not finish shutdown')
         host.close()
         host.deleteLater()
         self.app.processEvents()

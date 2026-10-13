@@ -59,7 +59,7 @@ class SettingsPageTests(QtTestCase):
             root = Path(temporary)
             personal = root / 'configuration/commonUtils/settings.ini'
             personal.parent.mkdir(parents=True)
-            personal.write_text('[Styling]\ncode_font_size_int=30\n')
+            personal.write_text('[Styling]\ncode_font_size_int=23\n')
             with patch('pathlib.Path.home', return_value=root / 'marca'), \
                     patch('features.settings.preferences_path', return_value=root / 'preferences.ini'), \
                     patch.object(registry, 'get_feature_states', return_value=[]):
@@ -67,8 +67,8 @@ class SettingsPageTests(QtTestCase):
                 page.show_category('commonutils')
                 config = page.panels['commonutils']
                 editor = config.stack.currentWidget()
-                self.assertEqual(editor.fields['Styling', 'code_font_size_int'].text(), '30')
-                editor.fields['Styling', 'code_font_size_int'].setValue(31)
+                self.assertEqual(editor.fields['Styling', 'code_font_size_int'].text(), '23')
+                editor.fields['Styling', 'code_font_size_int'].setValue(24)
                 page.scope_selector.setCurrentIndex(page.scope_selector.findData('application'))
                 defaults = config.stack.currentWidget()
                 defaults.fields['Styling', 'code_font_size_int'].setValue(12)
@@ -79,7 +79,7 @@ class SettingsPageTests(QtTestCase):
                 features_reset.assert_called_once()
                 self.assertEqual(editor.pending, {})
                 self.assertEqual(editor.store.overrides(), {})
-                self.assertNotIn(editor.fields['Styling', 'code_font_size_int'].text(), ('30', '31'))
+                self.assertNotIn(editor.fields['Styling', 'code_font_size_int'].text(), ('23', '24'))
                 self.assertEqual(defaults.pending['Styling', 'code_font_size_int'], '12')
                 self.assertIn('All personal settings reset', page.reset_status.text())
                 defaults.pending.clear()

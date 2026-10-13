@@ -18,6 +18,9 @@ class MessageBrowser(MarkdownBrowser):
         self.setFrameShape(qt.QFrame.Shape.NoFrame)
         self.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Fixed)
         styling().changed.connect(self.refresh_font)
+        theme = getattr(qt.QApplication.instance(), '_commonutils_theme', None)
+        if theme is not None:
+            theme.changed.connect(self.refresh_font)
         self.refresh_font()
 
     def loadResource(self, kind, url):
@@ -39,7 +42,7 @@ class MessageBrowser(MarkdownBrowser):
         position, anchor = cursor.position(), cursor.anchor()
         self.document().setMarkdown(source, qt.QTextDocument.MarkdownFeature.MarkdownDialectGitHub |
                                     qt.QTextDocument.MarkdownFeature.MarkdownNoHTML)
-        style_document(self.document(), self.palette(), callouts={})
+        style_document(self.document(), qt.QApplication.palette(), callouts={})
         self.document().setDocumentMargin(8)
         cursor = qt.QTextCursor(self.document())
         end = self.document().characterCount() - 1
@@ -99,7 +102,19 @@ class Bubble(qt.QFrame):
         self.timestamp.setTextFormat(qt.Qt.TextFormat.PlainText)
         footer.addWidget(self.timestamp)
         layout.addLayout(footer)
+        styling().changed.connect(self.refresh_chrome)
+        theme = getattr(qt.QApplication.instance(), '_commonutils_theme', None)
+        if theme is not None:
+            theme.changed.connect(self.refresh_chrome)
         self.update_entry(entry)
+
+    def refresh_chrome(self):
+        # Local stylesheets can retain the previous Base palette; always obtain
+        # theme colors from the application, rather than sampling the bubble.
+        muted = qt.QApplication.palette().color(qt.QPalette.ColorRole.PlaceholderText).name()
+        self.timestamp.setStyleSheet(f'color: {muted}; font-size: 9pt;')
+        if self.role == 'user':
+            self.setStyleSheet('QFrame#userBubble { background: palette(alternate-base); border-radius: 12px; }')
 
     def update_entry(self, entry):
         name = 'You' if self.role == 'user' else 'Assistant'
@@ -110,15 +125,10 @@ class Bubble(qt.QFrame):
             self.timestamp.setToolTip(created.strftime('%Y-%m-%d %H:%M:%S %Z'))
         except (TypeError, ValueError):
             self.timestamp.clear()
-        shade = 112 if self.palette().color(qt.QPalette.ColorRole.Base).lightness() > 128 else 170
-        self.timestamp.setStyleSheet(f'color: rgb({shade}, {shade}, {shade}); font-size: 9pt;')
+        self.refresh_chrome()
         error = entry.get('error', '')
         self.error.setText(error)
         self.error.setVisible(bool(error))
-        if self.role == 'user':
-            light = self.palette().color(qt.QPalette.ColorRole.Base).lightness()
-            gray = max(0, min(255, light + (14 if light < 128 else -14)))
-            self.setStyleSheet(f'QFrame#userBubble {{ background: rgb({gray}, {gray}, {gray}); border-radius: 12px; }}')
         self.browser.set_source(entry['content'])
 
 
@@ -142,6 +152,24 @@ class ConversationView(qt.QScrollArea):
         self.retry_enabled = False
         self.verticalScrollBar().rangeChanged.connect(self._range_changed)
         self.verticalScrollBar().valueChanged.connect(self._scrolled)
+        styling().changed.connect(self._fit_bubbles)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'bubbles'):
+            self._fit_bubbles()
+
+    def _fit_bubbles(self):
+        available = max(100, self.viewport().width() - 24)
+        for bubble in self.bubbles.values():
+            if bubble.role == 'user':
+                text = bubble.browser.document().toPlainText()
+                metrics = bubble.browser.fontMetrics()
+                natural = max((metrics.horizontalAdvance(line) for line in text.splitlines()), default=0) + 40
+                bubble.setFixedWidth(min(round(available * .75), max(120, natural)))
+            else:
+                bubble.setMaximumWidth(round(available * .95))
+            bubble.browser.fit_height()
 
     def _scrolled(self, value):
         self.follow_bottom = value >= self.verticalScrollBar().maximum() - 12
@@ -177,7 +205,7 @@ class ConversationView(qt.QScrollArea):
                 bubble.retry_requested.connect(self.retry_requested)
                 if entry['role'] == 'user':
                     layout.addStretch(1)
-                layout.addWidget(bubble, 4)
+                layout.addWidget(bubble, 0 if entry['role'] == 'user' else 1)
                 self.box.insertWidget(self.box.count() - 1, row)
                 self.bubbles[entry['id']] = bubble
                 self.rows[entry['id']] = row
@@ -196,6 +224,7 @@ class ConversationView(qt.QScrollArea):
                 row.hide()
                 row.deleteLater()
                 self.bubbles.pop(key)
+        self._fit_bubbles()
 
     def set_retry_enabled(self, enabled):
         self.retry_enabled = enabled
