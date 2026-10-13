@@ -65,7 +65,7 @@ class RclonePage(pyside.QWidget):
 
         title = pyside.QLabel('Credential packages')
         title_font = title.font()
-        title_font.setPointSizeF(point_size(setting_size(title_font) + 3))
+        title_font.setPointSizeF(point_size(setting_size(title_font) + 2.25))
         title_font.setBold(True)
         title.setFont(title_font)
 
@@ -124,7 +124,7 @@ class RclonePage(pyside.QWidget):
         package_layout.setSpacing(10)
 
         name_font = self.package_name.font()
-        name_font.setPointSizeF(point_size(setting_size(name_font) + 3))
+        name_font.setPointSizeF(point_size(setting_size(name_font) + 2.25))
         name_font.setBold(True)
         self.package_name.setFont(name_font)
 

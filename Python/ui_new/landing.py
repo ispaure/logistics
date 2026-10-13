@@ -88,7 +88,7 @@ class LandingPage(qt.QWidget):
         layout.setSpacing(16)
         heading = qt.QLabel('New / Open Document' if documents_only else 'Welcome to Logistics')
         font = heading.font()
-        font.setPointSizeF(point_size(26))
+        font.setPointSizeF(point_size(19.5))
         font.setBold(True)
         heading.setFont(font)
         heading.setWordWrap(True)

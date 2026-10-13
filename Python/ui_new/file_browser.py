@@ -21,7 +21,7 @@ class BrowserIndexStatus(WorkspaceIndexStatus):
         content.layout().setSpacing(6)
         font = self.label.font()
         font.setItalic(False)
-        font.setPointSizeF(point_size(max(8.0, setting_size(font) - 1.0)))
+        font.setPointSizeF(point_size(max(7.0, setting_size(font) - .75)))
         self.label.setFont(font)
         self.activity.setFixedSize(100, 6)
         for button in (self.refresh_button, self.details_button):

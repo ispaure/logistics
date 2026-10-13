@@ -24,7 +24,7 @@ class MetadataEditor(qt.QDialog):
         # Qt controls use logical pixels; the OS supplies its own title bar.
         self.resize(*WINDOW_SIZE)
         font = self.font()
-        font.setPointSizeF(point_size(10))
+        font.setPointSizeF(point_size(7.5))
         self.setFont(font)
         self.targets = normalize_targets(path)
         self.path = self.targets[0]

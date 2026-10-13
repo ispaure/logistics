@@ -50,7 +50,7 @@ class CalibreManageDialog(pyside.QDialog):
 
         title = pyside.QLabel(f'Calibre Libraries - {self.folder.name}')
         title_font = title.font()
-        title_font.setPointSizeF(point_size(setting_size(title_font) + 5))
+        title_font.setPointSizeF(point_size(setting_size(title_font) + 3.75))
         title_font.setBold(True)
         title.setFont(title_font)
 
@@ -100,7 +100,7 @@ class CalibreManageDialog(pyside.QDialog):
 
         self.library_name.setText('Select a library')
         name_font = self.library_name.font()
-        name_font.setPointSizeF(point_size(setting_size(name_font) + 4))
+        name_font.setPointSizeF(point_size(setting_size(name_font) + 3))
         name_font.setBold(True)
         self.library_name.setFont(name_font)
 

@@ -141,7 +141,7 @@ In **Logistics Settings → Appearance & shared controls → Styling**, the shar
 reading font and size (7–24) apply to EPUB and Markdown. Sizes use a common
 96-DPI reference across macOS, Windows and Linux, while display scaling follows
 the operating system. The default is Arial
-at 13 pt, a neutral sans serif for books and technical documentation. Automatic uses the
+at 10 pt, a neutral sans serif for books and technical documentation. Automatic uses the
 application text font. Changes made through Aa appear here too. **Feature settings → Books
 & Comics → Options** exposes `line_spacing_int` (100–220), `reading_width_int`
 (480–1400), `theme_mode` and `remember_position_bool`. Larger text or spacing means

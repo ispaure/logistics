@@ -36,7 +36,7 @@ class BlenderPage(qt.QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         title = qt.QLabel('Blender')
         font = title.font()
-        font.setPointSizeF(point_size(setting_size(font) + 7))
+        font.setPointSizeF(point_size(setting_size(font) + 5.25))
         font.setBold(True)
         title.setFont(font)
         layout.addWidget(title)
