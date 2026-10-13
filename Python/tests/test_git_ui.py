@@ -308,6 +308,10 @@ class GitUITests(QtTestCase):
         row = item.data(0, qt.Qt.ItemDataRole.UserRole)
         self.assertEqual(row.outgoing, ((0, 0),))
         history.table.setCurrentItem(item); self.wait()
+        # Filesystem notifications can refresh and replace the table while
+        # the preview loads. Inspect the current HEAD row after that wait.
+        head_item = history.table.topLevelItem(1)
+        self.assertEqual(head_item.data(1, qt.Qt.ItemDataRole.UserRole).oid, history.head_oid)
         self.assertTrue(head_item.font(1).bold())
         self.assertEqual(self.page.views.currentIndex(), 1)
         self.assertIs(self.page.preview.parentWidget(), self.page.history_preview_host)
