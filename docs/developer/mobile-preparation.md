@@ -72,12 +72,13 @@ source manifests/logs. Build success proves packaging, not native UI interaction
 already established CPython 3.14.7 testbeds, pinned at
 `823f0323ee6ec1402088b73bce1a38473cac36dc`. Android builds x86_64 on Ubuntu 24.04;
 iOS builds arm64 Simulator on macOS 15. The existing iOS resource-copy workaround
-is retained. Twenty-one cases run inside each actual interpreter:
+is retained. Twenty-five cases run inside each actual interpreter:
 
 - Nine private document, recovery, encoding, conflict and scoped-import contracts.
 - Three existing EPUB/comic/Markdown fixture scenarios.
 - Three mobile preference and offline-preview contracts.
 - Four mobile library, reading, sanitization, progress and image-bound contracts.
+- Four mobile chat, cancellation, privacy and recovery scenarios using loopback fixtures.
 - Runtime identity and a desktop-dependency import boundary.
 
 The verifier requires one report, expected native `sys.platform`, actual emulator
@@ -202,3 +203,26 @@ Phase 1 was published as [v0.1.1-alpha.11](https://github.com/ispaure/logistics/
 at `99f7653`, after the complete five-platform release gate passed. Its exact
 commit was promoted to main and release `v0.1.1-main.03` was requested without
 waiting for that separate pipeline.
+
+## Phase 3 chat contracts
+
+`chat.py` uses the existing `features.lm.domain` conversation schema, validation and
+whole-turn request budgeting, with a mobile-owned bounded private store. Desktop
+QLockFile/Qt storage and transport are not imported. Optimistic revision/snapshot
+checks reject stale saves; valid recovered streaming messages become interrupted.
+The profile schema deliberately excludes API keys. `chat_transport.py` uses
+HTTPConnection/HTTPSConnection with default certificate verification, no redirects,
+bounded JSON/SSE, explicit socket cancellation and no model tool execution.
+`chat_ui.py` owns native controls, explicit connection/model actions, draft and
+partial-response checkpoints, and retained failure/cancelled states. HTTP remains
+available for existing LAN servers and is labelled as unencrypted in the guide.
+No external server is contacted in tests: `chat_fixture.py` binds loopback only
+with synthetic text/key values. Native UI test mode adds the same workflow to its
+required cases. iOS declares NSLocalNetworkUsageDescription; physical-device
+network consent/ATS/provider behavior remains a separate gate. Conversation export
+uses the existing bounded system export-copy workflow.
+
+Phase 2 was published as [v0.1.1-alpha.13](https://github.com/ispaure/logistics/releases/tag/v0.1.1-alpha.13)
+at `428d1d7` after all desktop, native UI and 21-case mobile runtime gates passed.
+Its exact commit was promoted to main and release `v0.1.1-main.04` was requested
+without waiting for that separate pipeline.
