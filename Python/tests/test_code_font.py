@@ -25,7 +25,7 @@ class CodeFontTests(QtTestCase):
             for editor in editors:
                 self.addCleanup(editor.deleteLater)
                 shared.bind(editor)
-                self.assertEqual(editor.font().pointSize(), 11)
+                self.assertEqual(editor.font().pointSize(), 8)
             editors[0].set_font_size(18)
             self.assertEqual([editor.font().pointSize() for editor in editors], [18] * 3)
             self.assertEqual(Preferences(path).load()['font_size_int'], 18)
@@ -37,7 +37,7 @@ class CodeFontTests(QtTestCase):
             separate = CodeEdit()
             self.addCleanup(separate.deleteLater)
             code_font(Path(directory) / 'other.ini').bind(separate)
-            self.assertEqual(separate.font().pointSize(), 11)
+            self.assertEqual(separate.font().pointSize(), 8)
 
     def test_feature_views_and_review_panes_share_size(self):
         from commonUtils.persistence.text import read_text_file
@@ -60,12 +60,12 @@ class CodeFontTests(QtTestCase):
                 for widget in (ide, preview, window, review):
                     self.addCleanup(widget.deleteLater)
                 text = window.current.editor
-                self.assertEqual([e.font().pointSize() for e in (ide, text, preview.editor)], [11] * 3)
+                self.assertEqual([e.font().pointSize() for e in (ide, text, preview.editor)], [8] * 3)
                 ide.set_font_size(17)
                 self.assertEqual([e.font().pointSize() for e in (ide, text, preview.editor)], [17] * 3)
                 self.assertTrue(all(e.font().pointSize() == 17 for e in review.findChildren(qt.QPlainTextEdit)))
                 window.reset_preferences()
-                self.assertEqual([e.font().pointSize() for e in (ide, text, preview.editor)], [11] * 3)
+                self.assertEqual([e.font().pointSize() for e in (ide, text, preview.editor)], [8] * 3)
                 window._preference_timer.stop()
                 window.close()
 

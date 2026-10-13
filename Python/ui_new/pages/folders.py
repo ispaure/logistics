@@ -72,7 +72,7 @@ class FoldersPage(pyside.QWidget):
 
         title_label = pyside.QLabel('Folder Hub')
         title_font = title_label.font()
-        title_font.setPointSizeF(point_size(setting_size(title_font) + 2))
+        title_font.setPointSizeF(point_size(setting_size(title_font) + 1.5))
         title_font.setBold(True)
         title_label.setFont(title_font)
 
@@ -404,7 +404,7 @@ class FoldersPage(pyside.QWidget):
         title_label = pyside.QLabel(entry.name)
         title_label.setTextFormat(pyside.Qt.TextFormat.PlainText)
         title_font = title_label.font()
-        title_font.setPointSizeF(point_size(setting_size(title_font) + 4))
+        title_font.setPointSizeF(point_size(setting_size(title_font) + 3))
         title_font.setBold(True)
         title_label.setFont(title_font)
 

@@ -39,7 +39,7 @@ class ToolDialog(pyside.QDialog):
 
         title_label = pyside.QLabel(title)
         title_font = title_label.font()
-        title_font.setPointSizeF(point_size(setting_size(title_font) + 5))
+        title_font.setPointSizeF(point_size(setting_size(title_font) + 3.75))
         title_font.setBold(True)
         title_label.setFont(title_font)
 

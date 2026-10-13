@@ -236,6 +236,8 @@ text and control proportions on macOS, Windows and Linux. macOS text is larger
 than in earlier builds at the same setting. Retina and display scaling still
 follow the operating system. Preview sizes and editor zoom use that same scale;
 your saved size values are preserved.
+Defaults are 10 for interface/browser/reading and 8 for code, keeping the previous
+macOS text proportions on every platform. Personal font-size overrides still apply.
 On Windows, moving a normal window between displays with different scaling
 preserves its logical width and height if the native transition changes them.
 Intentional resize gestures and maximized/fullscreen windows retain normal sizing.

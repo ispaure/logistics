@@ -71,7 +71,7 @@ class RclonePushDialog(pyside.QDialog):
 
         title = pyside.QLabel(f'Push - {self.entry.name}')
         title_font = title.font()
-        title_font.setPointSizeF(point_size(setting_size(title_font) + 5))
+        title_font.setPointSizeF(point_size(setting_size(title_font) + 3.75))
         title_font.setBold(True)
         title.setFont(title_font)
 

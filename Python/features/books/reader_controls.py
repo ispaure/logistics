@@ -153,7 +153,7 @@ def build_controls(page):
     heading = qt.QLabel('EPUB reader')
     heading.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
     font = heading.font()
-    font.setPointSizeF(max(point_size(18), font.pointSizeF() * 1.6))
+    font.setPointSizeF(max(point_size(13.5), font.pointSizeF() * 1.6))
     font.setBold(True)
     heading.setFont(font)
     empty.addWidget(heading)

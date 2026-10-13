@@ -113,7 +113,7 @@ class Bubble(qt.QFrame):
         # Local stylesheets can retain the previous Base palette; always obtain
         # theme colors from the application, rather than sampling the bubble.
         muted = qt.QApplication.palette().color(qt.QPalette.ColorRole.PlaceholderText).name()
-        self.timestamp.setStyleSheet(f'color: {muted}; font-size: {point_size(9)}pt;')
+        self.timestamp.setStyleSheet(f'color: {muted}; font-size: {point_size(6.75)}pt;')
         if self.role == 'user':
             self.setStyleSheet('QFrame#userBubble { background: palette(alternate-base); border-radius: 12px; }')
 

@@ -196,7 +196,7 @@ class ActivityButton(qt.QToolButton):
             badge = qt.QRectF(self.width() - 18, 1, 16, 16)
             painter.drawEllipse(badge)
             painter.setPen(qt.QColor('white'))
-            font = painter.font(); font.setPointSizeF(point_size(8)); font.setBold(True); painter.setFont(font)
+            font = painter.font(); font.setPointSizeF(point_size(6)); font.setBold(True); painter.setFont(font)
             painter.drawText(badge, qt.Qt.AlignmentFlag.AlignCenter, str(min(9, self.unread)))
 
 

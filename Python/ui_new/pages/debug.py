@@ -28,7 +28,7 @@ class DebugPage(pyside.QWidget):
 
         title = pyside.QLabel('Debug')
         title_font = title.font()
-        title_font.setPointSizeF(point_size(setting_size(title_font) + 7))
+        title_font.setPointSizeF(point_size(setting_size(title_font) + 5.25))
         title_font.setBold(True)
         title.setFont(title_font)
 

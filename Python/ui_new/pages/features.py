@@ -21,7 +21,7 @@ class FeaturesPage(qt.QWidget):
         content_layout.setContentsMargins(12, 12, 12, 12)
         content_layout.setSpacing(16)
         title = qt.QLabel('Features')
-        font = title.font(); font.setPointSizeF(point_size(setting_size(font) + 5)); font.setBold(True)
+        font = title.font(); font.setPointSizeF(point_size(setting_size(font) + 3.75)); font.setBold(True)
         title.setFont(font)
         content_layout.addWidget(title)
         self.scope_label = qt.QLabel()
