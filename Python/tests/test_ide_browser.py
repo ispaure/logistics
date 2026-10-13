@@ -55,7 +55,9 @@ class ProjectBrowserTests(QtTestCase):
             git('init')
             for name in ('edited.py', 'clean.py'):
                 (root / name).write_text('original\n')
-            (root / '.gitignore').write_text('ignored.py\n')
+            # Keep the ignore rule outside the visible tree: Windows includes
+            # dotfiles that Unix QFileSystemModel hides by default.
+            (root / '.git' / 'info' / 'exclude').write_text('ignored.py\n')
             (root / 'deleted_folder').mkdir()
             (root / 'deleted_folder' / 'gone.py').write_text('gone\n')
             git('add', '.')
