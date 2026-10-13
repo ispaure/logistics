@@ -73,9 +73,15 @@ Code text defaults to 11 points. Text Editor, IDE, Git hunks and Markdown code
 blocks share both the family and size. Ctrl/Cmd+wheel changes the personal shared
 code size (7–24 pt at a common 96-DPI reference). The same saved size now gives
 comparable text proportions on macOS, Windows and Linux; zoom preserves that
-saved scale. Line-number gutters resize with the font. Legacy Cache/TextEditor font
+saved scale. Line-number gutters resize with the font.
+The gutter also fits the current line-number digit count and only reserves
+folding-control space when foldable blocks exist, keeping short files compact.
+Legacy Cache/TextEditor font
 preferences migrate once; recent files and recovery remain in that cache, while
 systemic settings and window geometry use the persistent personal editor INI.
+
+Text Editor windows and hosted document tabs use the file's regular type icon.
+Workspace tabs close with a neutral × on the right, matching IDE file tabs.
 
 In the main app, Text Editor opens in **Open documents**. Drag its tab outside
 the window to detach it; **Bring back** returns it without losing edits.
@@ -177,6 +183,8 @@ controls appear only when needed. Documents owns the outer tab and detached +.
 
 The gutter to the left of line numbers shows additions in green, replacements in
 blue and deleted-line boundaries in red. Hover over the gutter for its baseline.
+An edited block with fewer lines also shows a red boundary for the removed lines;
+extra lines in a replacement block are green.
 When Git is available, markers compare the live buffer (including unsaved edits)
 with the file's index. Repository registration and an enabled Git page are not
 required. Index/branch changes refresh within a few seconds. Otherwise the baseline

@@ -14,6 +14,8 @@ class HeaderMenus(qt.QObject):
         self.menu.addSeparator()
         self.menu.addAction('Bulk Rename…', lambda: owner._show_bulk_rename())
         self.refresh = self.menu.addAction('Refresh Current Tool', self.refresh_current)
+        from .fullscreen import WindowFullscreen
+        self.fullscreen = WindowFullscreen(owner.dlg, self.menu)
         self.menu.addSeparator()
         self.menu.addAction(owner.show_settings_action)
         self.menu.addAction(owner.open_documents_action)

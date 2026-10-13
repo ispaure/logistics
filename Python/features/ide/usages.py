@@ -5,6 +5,25 @@ from commonUtils.ui import pyside as qt
 from commonUtils.persistence.text import read_text_file
 
 
+def position_editor_popup(popup, origin, width, height):
+    """Confine an editor popup to its host window and available screen."""
+    bounds = origin.window().frameGeometry()
+    screen = origin.screen()
+    if screen:
+        bounds = bounds.intersected(screen.availableGeometry())
+    width, height = min(width, max(1, bounds.width() - 24)), min(height, max(1, bounds.height() - 24))
+    popup.setMinimumSize(0, 0)
+    popup.resize(width, height)
+    if hasattr(origin, 'viewport') and hasattr(origin, 'cursorRect'):
+        anchor = origin.viewport().mapToGlobal(origin.cursorRect().bottomLeft()) + qt.QPoint(0, 6)
+    else:
+        anchor = origin.mapToGlobal(qt.QPoint(12, 12))
+    x = max(bounds.left() + 12, min(anchor.x(), bounds.right() - width - 11))
+    y = max(bounds.top() + 12, min(anchor.y(), bounds.bottom() - height - 11))
+    popup.move(x, y)
+    return width, height
+
+
 def usage_previews(targets, source_path, source_code):
     """Run with the analysis worker, never perform file reads in popup painting."""
     texts = {Path(source_path).resolve(): source_code.splitlines()}
@@ -171,20 +190,9 @@ class UsagePopup(qt.QFrame):
             self.tree.addTopLevelItem(item)
         self.filter_rows('')
         # Stay over the application, including near the editor's bottom/right edge.
-        bounds = origin.window().frameGeometry()
-        screen = origin.screen()
-        if screen:
-            bounds = bounds.intersected(screen.availableGeometry())
-        width = min(900, max(1, bounds.width() - 24))
-        height = min(560, max(1, bounds.height() - 24), 175 + max(1, min(10, len(targets))) * 34)
-        self.setMinimumSize(0, 0)
-        self.resize(width, height)
+        width, height = position_editor_popup(self, origin, 900, min(560, 175 + max(1, min(10, len(targets))) * 34))
         self.tree.setColumnWidth(0, min(250, width // 3))
         self.tree.setColumnWidth(1, 55)
         self.tree.header().setStretchLastSection(True)
-        anchor = origin.viewport().mapToGlobal(origin.cursorRect().bottomLeft()) + qt.QPoint(0, 6)
-        x = max(bounds.left() + 12, min(anchor.x(), bounds.right() - width - 11))
-        y = max(bounds.top() + 12, min(anchor.y(), bounds.bottom() - height - 11))
-        self.move(x, y)
         self.show()
         self.tree.setFocus()

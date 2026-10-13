@@ -1,5 +1,53 @@
 # IDE architecture and implementation plan
 
+Find in Files uses the same Qt Popup/host-and-screen anchoring helper as Find
+Usages. Its bounded executor searches immutable root/options/buffer snapshots;
+debounced changes cancel earlier requests and generations reject stale results.
+Search and preview futures are separately retained and polled on the GUI thread.
+Closing/dismissing cancels work, and project shutdown waits for jobs to retire.
+Shared CodeEdit/search supplies bounded PCRE matching, UTF-16 positions, syntax
+preview and selections; navigation converts to code-point columns through the
+existing placement API. Result masks, exclusions and traversal limits remain
+application-owned. Preview reads are off the GUI thread.
+
+Editor baseline reads and reviewed hunk staging use the executable configured in
+Git settings, independently of Git page activation or repository registration.
+ProjectGitStatus reads bounded, cancellable porcelain-v2 snapshots on an executor,
+including individual untracked files, and polls completion on the GUI thread.
+ProjectFilter supplies filename foreground colors and status tooltips from those
+snapshots without changing names, filtering or ordering. Status is confined to
+the project subtree of its containing repository; folder colors aggregate child
+changes. Closing the workspace cancels status reads. Non-Git/unavailable status
+clears the decorations without interrupting browsing.
+Dirty submodule statuses are read from their own indexes, bounded to 16 repositories
+and a five-second snapshot budget. Live modified-buffer paths overlay saved Git
+status, including for non-Git projects, and clear on undo, save or close. The tree
+colors filenames while regular type icons, names, paths, filtering and sorting use the
+original filesystem model. Status hues and gutter shapes avoid relying on color alone.
+IDE and Git tooltips share full status labels from features.git.models.status_label.
+ProjectFilter exposes editing flags for eligible items and rechecks pending opens,
+active autosaves, peer-project ownership and destination document collisions when
+committing a rename. It temporarily enables the shared
+BrowserFileSystemModel rename validator, then restores read-only mode.
+FilenameDelegate supplies File Browser's native inline editing, basename selection
+and Enter/Escape handling. Menu/shortcut edits are deferred until menus close.
+Successful filesystem renames retarget existing TextSnapshots, document maps,
+watchers and navigation history without replacing buffers. Split views, modified
+state and undo history remain intact. Folder renames retarget all open descendants.
+File tabs obtain type icons from the browser model, falling back to QFileIconProvider
+while asynchronous model icons load. Icons are reapplied on insertion/moves and
+buffer title changes. ScopedTabBar uses Workspace's neutral × button on the right.
+Project.column_guide defaults to 120, accepts 0–1000 (zero disables), and remains
+compatible with older version-1 project stores. Project settings apply it to all
+open source editors and newly created views through CodeEdit.set_column_guide.
+Gutter markers compare to the
+index when available and otherwise to the saved snapshot; staged changes and
+autosaved non-Git changes therefore clear their respective markers.
+Unequal replacement blocks expose paired modifications and separate surplus
+additions/deletions. Gutter clicks prioritize the red deletion boundary when it
+shares an EOF row with a modification. Restoring EOF deletions preserves their
+line separator even when the current final line has no trailing newline.
+
 ## Audit and ownership
 
 The existing TextEditor already consumes commonUtils CodeEdit, EditorViews,

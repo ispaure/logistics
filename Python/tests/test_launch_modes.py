@@ -19,6 +19,31 @@ class Settings(qt.QWidget):
 
 
 class LaunchModeTests(QtTestCase):
+    def test_launch_cards_are_stable_from_their_first_paint(self):
+        window = self.window
+        from ui_new.landing import LandingPage
+        page = LandingPage()
+        page.set_tool_launchers(window._tool_launchers())
+        page.set_document_launchers(window.sidebar.launchers)
+        page.resize(1250, 800)
+        self.addCleanup(page.deleteLater)
+        cards = page._tool_cards + page._document_cards
+        first = {}
+        class PaintObserver(qt.QObject):
+            def eventFilter(self, watched, event):
+                if event.type() == qt.QEvent.Type.Paint and watched not in first:
+                    first[watched] = (watched.size(), watched.font().family(), watched.font().pointSizeF())
+                return False
+        observer = PaintObserver(page)
+        for card in cards:
+            card.installEventFilter(observer)
+        page.show()
+        self.wait_until(lambda: bool(first))
+        for _ in range(20):
+            self.app.processEvents()
+        for card in first:
+            self.assertEqual(first[card], (card.size(), card.font().family(), card.font().pointSizeF()))
+
     def setUp(self):
         super().setUp()
         self.app = qt.QApplication.instance() or qt.QApplication([])
@@ -69,6 +94,7 @@ class LaunchModeTests(QtTestCase):
 
     def test_landing_choices_reuse_pages_and_full_hub_restores_sidebar(self):
         window = self.window
+        self.assertIn(window.header_menus.fullscreen.action, window.header_menus.menu.actions())
         self.assertIs(window.launch_stack.currentWidget(), window.landing)
         self.assertTrue(window.sidebar.isHidden())
         self.assertEqual(window.dlg.windowTitle(), 'Logistics')
@@ -84,6 +110,24 @@ class LaunchModeTests(QtTestCase):
         self.assertTrue(window.sidebar.isVisible())
         self.assertTrue(window.settings_button.isHidden())
         self.assertIs(window.tabs.currentWidget(), window._launch_targets()['browser'])
+
+    def test_update_offer_appears_only_on_landing_page(self):
+        window = self.window
+        window.updates = Mock(available={'commit': 'a' * 40})
+        window._update_offer_visibility()
+        button = window.launch_surface.update_button
+        self.assertTrue(button.isVisible())
+        for mode in ('hub', 'git'):
+            window._launch(mode)
+            self.assertFalse(button.isVisible())
+            window._show_landing()
+            self.assertTrue(button.isVisible())
+        window._show_document_chooser()
+        self.assertFalse(button.isVisible())
+        window._show_landing()
+        window.updates.available = None
+        window._update_offer_visibility()
+        self.assertFalse(button.isVisible())
 
     def test_settings_remains_above_content_and_returns_to_original_tool(self):
         window = self.window

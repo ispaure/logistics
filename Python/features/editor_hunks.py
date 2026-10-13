@@ -10,6 +10,9 @@ def restore_change(editor, expected, before, change):
     start = len(''.join(lines[:change.start]).encode('utf-16-le')) // 2
     end = len(''.join(lines[:change.end]).encode('utf-16-le')) // 2
     replacement = ''.join(before.splitlines(keepends=True)[change.old_start:change.old_end])
+    if (change.kind == 'delete' and change.start >= len(lines) and expected
+            and not expected.endswith(('\n', '\r')) and replacement):
+        replacement = '\n' + replacement
     cursor = qt.QTextCursor(editor.document())
     cursor.beginEditBlock()
     cursor.setPosition(start)

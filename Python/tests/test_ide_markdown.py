@@ -34,6 +34,7 @@ class MarkdownTabTests(QtTestCase):
             self.wait(workspace)
             first = workspace.current
             self.assertIsInstance(first, MarkdownDocument)
+            self.assertEqual(first.editor.column_guide, 120)
             self.assertEqual(workspace.active_group.count(), 2)
             self.assertEqual(first.edit_mode.currentData(), 'formatted')
             self.assertTrue(workspace.save_current())
@@ -41,6 +42,7 @@ class MarkdownTabTests(QtTestCase):
             workspace.split_right()
             second = workspace.current
             self.assertIsNot(first, second)
+            self.assertEqual(second.editor.column_guide, 120)
             self.assertIs(first.document(), second.document())
             first.formatted_editor.moveCursor(qt.QTextCursor.MoveOperation.End)
             first.formatted_editor.insertPlainText(' edited')

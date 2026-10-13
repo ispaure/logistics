@@ -1,5 +1,6 @@
 """Project tree wrapper around the shared lazy filesystem model."""
 from pathlib import Path
+import sys
 from subprocess import SubprocessError
 from commonUtils.ui import pyside as qt
 from commonUtils.ui import desktop_actions
@@ -11,7 +12,56 @@ class ProjectFilter(ByteSortModel):
     def __init__(self, project, filesystem, parent):
         super().__init__(filesystem, parent)
         self.project = project
+        self.browser = parent
         self.query = ''
+        self.git_changes = {}
+        self.unsaved_paths = set()
+
+    def data(self, index, role=qt.Qt.ItemDataRole.DisplayRole):
+        if index.isValid() and index.column() == 0 and role in (
+                qt.Qt.ItemDataRole.ForegroundRole, qt.Qt.ItemDataRole.ToolTipRole):
+            path = Path(self.sourceModel().filePath(self.mapToSource(index)))
+            status = self.git_changes.get(path)
+            if path in self.unsaved_paths:
+                status = (status[0], status[1] + '; unsaved changes') if status else ('modify', 'Unsaved changes')
+            if status:
+                if role == qt.Qt.ItemDataRole.ForegroundRole:
+                    from .git_status import COLORS
+                    return qt.QBrush(qt.QColor(COLORS[status[0]]))
+                return str(path) + '\n' + ('Git: ' if path in self.git_changes else '') + status[1]
+        return super().data(index, role)
+
+    def flags(self, index):
+        flags = super().flags(index)
+        if index.isValid() and index.column() == 0:
+            path = Path(self.sourceModel().filePath(self.mapToSource(index)))
+            if path != self.project.root and path.is_relative_to(self.project.root) and not self.browser.rename_blocked(path):
+                return flags | qt.Qt.ItemFlag.ItemIsEditable
+        return flags & ~qt.Qt.ItemFlag.ItemIsEditable
+
+    def setData(self, index, value, role=qt.Qt.ItemDataRole.EditRole):
+        if role != qt.Qt.ItemDataRole.EditRole:
+            return super().setData(index, value, role)
+        browser = self.browser
+        path = browser.path(index)
+        if path == self.project.root or not path.is_relative_to(self.project.root) or browser.rename_blocked(path):
+            browser.rename_error(path)
+            return False
+        source = self.mapToSource(index)
+        try:
+            target = path.with_name(value)
+        except ValueError:
+            target = None  # The shared filename validator supplies the error.
+        occupied = set(getattr(browser.workspace, 'documents', {})) | set(getattr(browser.workspace, 'pending_opens', {}))
+        if target is not None and target != path and any(p.is_relative_to(target) and not p.is_relative_to(path) for p in occupied):
+            browser.workspace.error('The new name is already open in the IDE. Close that file first.')
+            return False
+        browser.model.setReadOnly(False)
+        try:
+            renamed = browser.model.setData(source, value, role)
+        finally:
+            browser.model.setReadOnly(True)
+        return renamed
 
     def filterAcceptsRow(self, row, parent):
         index = self.sourceModel().index(row, 0, parent)
@@ -48,6 +98,17 @@ class ProjectBrowser(qt.QWidget):
         from commonUtils.ui.appearance.styling import bind_font
         bind_font(self.tree, 'browser')
         self.tree.setModel(self.proxy)
+        from commonUtils.ui.file_browser.editing import FilenameDelegate
+        self.tree.setItemDelegate(FilenameDelegate(self.tree))
+        self.tree.setEditTriggers(qt.QAbstractItemView.EditTrigger.SelectedClicked
+                                  | qt.QAbstractItemView.EditTrigger.EditKeyPressed)
+        self.rename_keys = []
+        for key in (('F2', 'Return') if sys.platform == 'darwin' else ('F2',)):
+            shortcut = qt.QShortcut(qt.QKeySequence(key), self.tree)
+            shortcut.setContext(qt.Qt.ShortcutContext.WidgetShortcut)
+            shortcut.activated.connect(lambda: self.rename(self.path()))
+            self.rename_keys.append(shortcut)
+        self.model.edit_failed.connect(getattr(workspace, 'error', lambda message: None))
         for column in (1, 2, 3):
             self.tree.hideColumn(column)
         self.tree.setHeaderHidden(True)
@@ -57,6 +118,7 @@ class ProjectBrowser(qt.QWidget):
         self.expanded_paths = set()
         self.pending_expansion = set()
         self.pending_selection = None
+        self.model.fileRenamed.connect(self.renamed)
         self.tree.selectionModel().currentChanged.connect(self.selection_changed)
         self.tree.expanded.connect(self.expanded)
         self.tree.collapsed.connect(self.collapsed)
@@ -64,12 +126,36 @@ class ProjectBrowser(qt.QWidget):
         layout.addWidget(self.tree)
         self.filter.textChanged.connect(self.filter_changed)
         self.reset_root()
+        from .git_status import ProjectGitStatus
+        self.git_status = ProjectGitStatus(self)
 
     def reset_root(self):
         self.model.setRootPath(str(self.project.root))
         self.proxy.invalidateFilter()
         self.tree.setRootIndex(self.proxy.mapFromSource(self.model.index(str(self.project.root))))
         self.tree.setEnabled(self.project.root.is_dir())
+        if hasattr(self, 'git_status'):
+            self.git_status.refresh()
+
+    def refresh_unsaved(self):
+        documents = getattr(self.workspace, 'documents', {})
+        self.proxy.unsaved_paths = {path for path, doc in documents.items() if doc.document().isModified()}
+        self.tree.viewport().update()
+
+    def renamed(self, directory, old_name, new_name):
+        old, new = Path(directory) / old_name, Path(directory) / new_name
+        retarget = getattr(self.workspace, 'retarget_documents', None)
+        if callable(retarget):
+            retarget(old, new)
+        def updated(value):
+            path = Path(value)
+            return str(new / path.relative_to(old)) if path.is_relative_to(old) else value
+        self.expanded_paths = {updated(path) for path in self.expanded_paths}
+        self.pending_expansion = {updated(path) for path in self.pending_expansion}
+        if self.pending_selection:
+            self.pending_selection = updated(self.pending_selection)
+        self.git_status.refresh()
+        self.changed.emit()
 
     def filter_changed(self, value):
         self.proxy.query = value
@@ -99,7 +185,7 @@ class ProjectBrowser(qt.QWidget):
         path = self.path(self.tree.indexAt(position))
         menu = qt.QMenu(self)
         for label, action in [('New file…', lambda: self.create(path, False)), ('New folder…', lambda: self.create(path, True)),
-                              ('Rename…', lambda: self.rename(path)), ('Delete…', lambda: self.delete(path)),
+                              ('Rename', lambda: self.rename(path)), ('Delete…', lambda: self.delete(path)),
                               (desktop_actions.reveal_label(), lambda: self.reveal(path)),
                               ('Refresh', self.reset_root)]:
             menu.addAction(label).triggered.connect(action)
@@ -122,7 +208,7 @@ class ProjectBrowser(qt.QWidget):
             self.workspace.error(error)
 
     def affected(self, path):
-        paths = set(self.workspace.documents) | set(self.workspace.pending_opens)
+        paths = set(getattr(self.workspace, 'documents', {})) | set(getattr(self.workspace, 'pending_opens', {}))
         resolved = path.resolve()
         return [p for p in paths if p == resolved or resolved in p.parents]
 
@@ -135,20 +221,41 @@ class ProjectBrowser(qt.QWidget):
     def rename(self, path):
         if path == self.project.root:
             return
-        if self.affected(path):
-            self.workspace.error('Close the affected files before renaming this file or folder.')
+        if self.rename_blocked(path):
+            self.rename_error(path)
             return
-        name, ok = qt.QInputDialog.getText(self, 'Rename', 'New name', text=path.name)
-        if ok:
-            if self.affected(path):
-                self.workspace.error('Close the affected files before renaming this file or folder.')
+        def edit():
+            if self.rename_blocked(path):
+                self.rename_error(path)
                 return
-            self.model.setReadOnly(False)
-            try:
-                if not self.model.setData(self.model.index(str(path)), name):
-                    self.workspace.error('Rename failed; check the name and destination.')
-            finally:
-                self.model.setReadOnly(True)
+            if not (path.exists() or path.is_symlink()):
+                return
+            self.locate(path)
+            self.tree.setFocus()
+            self.tree.edit(self.tree.currentIndex())
+        qt.QTimer.singleShot(0, self, edit)
+
+    def rename_error(self, path):
+        self.workspace.error(self.rename_block_reason(path) or 'The project root cannot be renamed here.')
+
+    def rename_blocked(self, path):
+        return bool(self.rename_block_reason(path))
+
+    def rename_block_reason(self, path):
+        affected = self.affected(path)
+        pending = getattr(self.workspace, 'pending_opens', {})
+        documents = getattr(self.workspace, 'documents', {})
+        if any(p in pending for p in affected):
+            return 'Wait for affected files to finish opening, then retry rename.'
+        if any(p in documents and getattr(getattr(documents[p].buffer, 'autosave', None), 'busy', False) for p in affected):
+            return 'Wait for affected autosaves to finish, then retry rename.'
+        page = getattr(self.workspace, 'host_page', None)
+        for other in getattr(page, 'views', ()):
+            if other is self.workspace:
+                continue
+            if other.project.root.is_relative_to(path) or any(p.is_relative_to(path) for p in set(other.documents) | set(other.pending_opens)):
+                return 'Close the affected files or project in the other IDE project before renaming.'
+        return ''
 
     def delete(self, path):
         if path == self.project.root:

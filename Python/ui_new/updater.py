@@ -65,12 +65,14 @@ class UpdateController(qt.QObject):
         self.operation = 'prepare'
         self.button.setText('Preparing update…')
         self.button.setEnabled(False)
+        self.owner.launch_surface.position_settings()
         available = dict(self.available)
         self.progress.start(lambda report, cancelled: updates.prepare(available), show_progress=False)
 
     def _finished(self, result, error):
         self.button.setText('Update Logistics')
         self.button.setEnabled(True)
+        self.owner.launch_surface.position_settings()
         if self.progress.cancelled.is_set():
             # A cancelled preparation must never apply on a later normal exit.
             if self.operation == 'prepare' and result is not None:

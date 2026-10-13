@@ -18,6 +18,10 @@ same docking and detached containers as Documents. A detached window's + opens
 projects there; a registration already open elsewhere moves its existing tab there.
 A detached single project can hide its header while retaining + at the upper right.
 **Project → Project Settings / Source Paths** configures the active project.
+**Column guide** draws a dashed vertical line in source editors (default: 120).
+Choose another column, or 0 to turn it off. The setting is saved per project,
+applies immediately to open/split editors, and does not wrap or restrict text.
+Use your project's style convention; 120 is an IDE default, not a Python limit.
 Closing a project keeps its registration and layout. **Remove registration** asks
 for confirmation and removes only IDE metadata; it never deletes source files.
 Missing roots and missing or temporarily unreadable open files remain recorded,
@@ -58,11 +62,23 @@ each group (for example, `file2` before `file10`). It loads directories lazily,
 hides configured exclusions, and filters
 filenames without recursively crawling the project. **Go to file** searches
 relative paths in a background scan. **Locate file** selects the active document.
-The tree menu creates files/folders, renames closed items, reveals the selected item
+The tree menu creates files and folders.
+Renaming edits the filename directly in its row: select an item and press **F2**,
+or **Return** on macOS, or choose **Rename** in the tree menu. The basename is
+initially selected while its extension is preserved. Enter commits; Escape
+cancels. A second click on the selected filename also starts inline editing.
+Invalid names and collisions leave the original file intact and show a status message.
+The tree menu also reveals the selected item
 in the system file manager (with a containing-folder fallback on Linux), refreshes, and deletes files or empty folders
-with confirmation. Close affected documents before renaming or deleting a subtree;
-pending file opens also block these operations.
+with confirmation. Renaming open files/folders preserves unsaved text, undo history,
+split views and their new save targets. Wait for pending opens or active autosaves
+before renaming. Files or projects open in another IDE project must be closed first.
+Close affected documents before deleting a subtree; pending opens also block deletion.
 Recursive folder deletion is intentionally unavailable.
+
+File tabs show their file-type icon and a neutral × at the right, matching the
+larger workspace tabs. Icons follow renamed/Save As filenames and survive moves
+between editor groups.
 
 The browser and editor panels have font-scaled minimum widths and cannot collapse.
 Editor tabs belong to their project. Drag onto a group header to insert/reorder,
@@ -151,9 +167,16 @@ and builtins without navigable source can return no target. Other open files'
 unsaved edits are not overlaid into Jedi's import analysis; save them first.
 
 Quick-open caps traversal at 100,000 file/directory entries and shows at most 500 matches.
-Project text search examines up to 10,000 files, skips binary/over-1-MiB files,
-and returns up to 500 matching lines. Scans skip excluded folders and directory
-symlinks. Search reads saved files, not unsaved editor content.
+**Ctrl/Cmd+Shift+F** opens Find in Files in an editor-anchored popup, like Find
+Usages. Type to see live counts and highlighted result snippets; select a result
+for a syntax-highlighted source preview. Enter or double-click opens the match at
+its line/column and dismisses the popup. Escape or clicking outside closes it.
+Use **Cc**, **W** and **.*** for case, whole words and regular expressions;
+**File mask** accepts patterns such as `*.py; *.txt`. Choose the whole project,
+configured source folders, or a directory. Open buffers supply their current
+unsaved text. Regex work is bounded and searches cancel when replaced or closed.
+Search examines up to 10,000 files/100,000 entries, skips binary/over-1-MiB files,
+and returns up to 500 matches. Scans skip excluded folders and directory symlinks.
 Analysis accepts up to 1,048,576 source characters. These tools are bounded searches,
 not a complete background project index. Wait for active work before closing a
 project or application, then retry closing.
@@ -168,8 +191,8 @@ expressions combine with HTML/PHP highlighting. Multiline Blade constructs have
 limited highlighting. Unknown text remains editable as plain text. Colors follow
 the application palette.
 
-This initial IDE has no debugger, terminal, automatic diagnostics, automatic hover,
-Git status UI or direct Git handoff. Git remains independently available in its own
+This initial IDE has no debugger, terminal, automatic diagnostics or automatic hover.
+Git staging, commits and repository operations remain available in the Git
 feature. Navigation history is per open project session. File reads use workers;
 bounded saves/reloads and small tree mutations currently run on the GUI thread.
 Windows and Linux still require native desktop validation.
@@ -180,7 +203,31 @@ The code editor gutter shows green added lines, blue replacements and red
 markers where lines were deleted. Hover over the gutter to see the comparison
 baseline. With Git available, it compares the live buffer to the file's Git index,
 including unsaved edits. No Git page or repository registration is needed. Staging
-or changing branches refreshes markers within a few seconds. Without a usable Git
+removes the markers for those changes because the index now includes them. The
+comparison honors the Git executable path in Git settings. Outside Git, autosave
+clears saved-file markers after a successful save. When an edited block also loses
+lines, its edited lines stay blue and the surplus removed lines get a red boundary.
+
+In the project side panel, Git filenames are **blue for modified**, **green for
+new/untracked or added**, **purple for renamed**, and **orange for conflicts**.
+Folders reflect changes inside them; red indicates deletions. Deleted files
+disappear from the filesystem tree, but remain listed in the Git workspace.
+Hover over a colored name to see whether its changes are staged, unstaged or
+untracked. Colors refresh within a few seconds after saves, staging or external
+changes, using the configured Git executable. Staged files retain their status
+color until committed. Ignored and unchanged files keep the normal text color.
+Unsaved edits show an asterisk on the editor tab and color the filename immediately, including in
+non-Git projects; their tooltip says **Unsaved changes**. Saving a non-Git file
+returns its name to the normal color. Dirty Git submodules report their individual
+modified/new files as well as their folder status.
+
+Colors use blue-green additions and orange-red deletions. Tree filenames stay
+plain and keep their regular file-type icons; changes use filename color alone.
+Full status wording appears in tooltips.
+Added-line markers are clean vertical bars;
+deleted-line markers are horizontal.
+
+Staging or changing branches refreshes markers within a few seconds. Without a usable Git
 baseline, markers compare against the last saved file. Large documents/baselines
 (over 250,000 characters) omit markers to keep editing responsive.
 

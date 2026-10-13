@@ -2,7 +2,7 @@
 from pathlib import Path
 from copy import deepcopy
 from commonUtils.ui import pyside as qt
-from .analysis import analyze, project_files, search_project
+from .analysis import analyze, project_files
 
 
 class Navigation:
@@ -213,18 +213,7 @@ class Navigation:
         self.run(resolve, done)
 
     def find_project(self):
-        query, ok = qt.QInputDialog.getText(self, 'Find in project', 'Text contains (case insensitive)')
-        if not ok or not query:
-            return
-        project = deepcopy(self.project)
-        def done(results):
-            if not results:
-                self.error('No matches in the bounded search (10,000 files, 1 MiB per file).')
-                return
-            labels = [f'{Path(path).relative_to(project.root)}:{line} — {text}' for path, line, text in results]
-            value, ok = qt.QInputDialog.getItem(self, 'Project matches', 'Matches (up to 500)', labels, 0, False)
-            if ok:
-                path, line, text = results[labels.index(value)]
-                self.remember()
-                self.navigate_to(path, line=line)
-        self.run(lambda: search_project(project, query, cancelled=self.cancelled), done)
+        from .find_files import FindFiles
+        if getattr(self, 'project_find', None) is None:
+            self.project_find = FindFiles(self)
+        self.project_find.reveal()

@@ -99,8 +99,18 @@ class ChangeMarkers(qt.QObject):
             view = next((v for v in self.views() if getattr(v, 'gutter', None) is watched), None)
             if view is not None:
                 row = view.cursorForPosition(qt.QPoint(0, int(event.position().y()))).blockNumber()
-                change = next((c for c in view.line_changes if c.start <= row < c.end
-                    or c.kind == 'delete' and row == min(c.start, view.blockCount() - 1)), None)
+                block = view.document().findBlockByNumber(row)
+                top = round(view.blockBoundingGeometry(block).translated(view.contentOffset()).top())
+                height = round(view.blockBoundingRect(block).height())
+                # An EOF deletion can share a row with a modification. Match
+                # the red boundary before the vertical added/modified band.
+                change = next((c for c in view.line_changes if c.kind == 'delete'
+                    and row == min(c.start, view.blockCount() - 1)
+                    and (top if c.start < view.blockCount() else top + height - 3)
+                        <= event.position().y()
+                        < (top + 3 if c.start < view.blockCount() else top + height)), None)
+                if change is None:
+                    change = next((c for c in view.line_changes if c.start <= row < c.end), None)
                 if change is not None:
                     from features.editor_hunks import HunkReview
                     review = HunkReview(self, view, change)

@@ -289,7 +289,7 @@ class MainWindowTests(QtTestCase):
             dock = window.documents.records[reader]['dock']
             index = next(i for i in range(bar.count()) if workspace._tab_dock(bar, i) is dock)
             with patch.object(window, 'can_close', wraps=window.can_close) as close_main:
-                QTest.mouseClick(bar.tabButton(index, qt.QTabBar.ButtonPosition.LeftSide), qt.Qt.MouseButton.LeftButton)
+                QTest.mouseClick(bar.tabButton(index, qt.QTabBar.ButtonPosition.RightSide), qt.Qt.MouseButton.LeftButton)
                 for _ in range(10): self.app.processEvents()
                 self.assertEqual(window.documents.count, 1)
                 self.assertTrue(isValid(book))
@@ -312,7 +312,7 @@ class MainWindowTests(QtTestCase):
         bar = next(bar for bar in workspace.findChildren(qt.QTabBar)
                    if bar.parent() is workspace and bar.count())
         index = next(i for i in range(bar.count()) if workspace._tab_dock(bar, i) is dock)
-        button = bar.tabButton(index, qt.QTabBar.ButtonPosition.LeftSide)
+        button = bar.tabButton(index, qt.QTabBar.ButtonPosition.RightSide)
         with patch.object(window, 'can_close', wraps=window.can_close) as close_main:
             QTest.mouseClick(button, qt.Qt.MouseButton.LeftButton)
             for _ in range(10): self.app.processEvents()
@@ -340,7 +340,7 @@ class MainWindowTests(QtTestCase):
         bar = next(bar for bar in workspace.findChildren(qt.QTabBar)
                    if bar.parent() is workspace and bar.count())
         index = next(i for i in range(bar.count()) if workspace._tab_dock(bar, i) is first)
-        QTest.mouseClick(bar.tabButton(index, qt.QTabBar.ButtonPosition.LeftSide), qt.Qt.MouseButton.LeftButton)
+        QTest.mouseClick(bar.tabButton(index, qt.QTabBar.ButtonPosition.RightSide), qt.Qt.MouseButton.LeftButton)
         for _ in range(10): self.app.processEvents()
         self.assertEqual(len(workspace.docks), 1)
         self.assertFalse(workspace.active_dock.close())
