@@ -12,13 +12,18 @@ on:
         type: choice
         default: android
         options: [android, ios, both]
+  workflow_call:
+    inputs:
+      target:
+        type: string
+        default: both
 
 permissions:
   contents: read
 
 concurrency:
-  group: mobile-runtime-${{ github.ref }}-${{ inputs.target }}
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  group: mobile-runtime-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-${{ inputs.target }}
+  cancel-in-progress: ${{ github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   android:

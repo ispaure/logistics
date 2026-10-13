@@ -71,6 +71,11 @@ bound; cold interpreter/testbed jobs have a 90-minute upper bound. Diagnostic
 artifacts remain available for 14 days. New mobile pushes supersede older mobile
 push runs. These workflows do not publish store releases or use signing secrets.
 
+The Source release workflow calls both mobile workflows for Android and iOS.
+Their native builds and runtime checks are mandatory alongside macOS, Windows
+and Linux validation before a release can be packaged or published. A manual
+Source release run validates and packages without publishing a release.
+
 Build success establishes packaging. Runtime core success establishes the tested
 document/storage operations. Native picker interactions, touch/keyboard behavior,
 real suspension and physical devices still need separate validation. Simulator

@@ -6,9 +6,7 @@
     "dirty": false,
     "features": [
       "text",
-      "markdown",
-      "epub",
-      "comics"
+      "markdown"
     ],
     "logistics_commit": "a02a4ba20b43f6660d57e24424611d8c19515e74"
   },
