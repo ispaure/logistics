@@ -34,6 +34,11 @@ def android():
                    CGO_LDFLAGS='-Wl,-z,max-page-size=16384')
         run('go', 'build', '-trimpath', '-ldflags=' + FLAGS, '-buildmode=c-shared',
             '-o', str(destination / 'liblogisticscloud.so'), '.', env=env)
+        headers = subprocess.check_output([str(tools / 'llvm-readelf'), '-l', '--wide',
+                                            str(destination / 'liblogisticscloud.so')], text=True)
+        loads = [line.split() for line in headers.splitlines() if line.strip().startswith('LOAD ')]
+        if not loads or any(int(row[-1], 16) < 16384 for row in loads):
+            raise ValueError('The Android rclone library is missing 16 KiB ELF load alignment.')
         (destination / 'liblogisticscloud.h').unlink()
 
 

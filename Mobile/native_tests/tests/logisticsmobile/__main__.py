@@ -36,7 +36,11 @@ async def wait_for_text(view, expected):
 
 
 async def exercise(app):
-    passed = []
+    class Progress(list):
+        def append(self, case):
+            super().append(case)
+            print('LOGISTICS_NATIVE_CASE=' + case, flush=True)
+    passed = Progress()
     try:
         assert get_os() in {OS.ANDROID, OS.IOS}
         backend = type(app._impl).__module__
@@ -151,6 +155,7 @@ async def exercise(app):
 
 class NativeCheckApp(LogisticsMobile):
     def startup(self):
+        print('LOGISTICS_NATIVE_STARTUP', flush=True)
         self.storage_root = Path(self.paths.cache) / ('native-check-' + uuid4().hex)
         super().startup()
 

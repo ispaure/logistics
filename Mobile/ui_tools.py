@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 
 PREFIX = 'LOGISTICS_NATIVE_UI_RESULT='
@@ -76,14 +77,42 @@ def ios_device():
     return sorted(devices, key=lambda d: d['state'] != 'Booted')[0]['udid']
 
 
+def ios_diagnostics():
+    """Preserve startup stderr and crash reports after a failed native gate."""
+    logs = Path('logs').resolve()
+    logs.mkdir(exist_ok=True)
+    device = ios_device()
+    command = ['xcrun', 'simctl', 'spawn', device, 'log', 'show', '--last', '10m',
+               '--style', 'compact', '--predicate',
+               'process == "Logistics Mobile" OR eventMessage CONTAINS "io.github.ispaure.logisticsmobile"']
+    with (logs / 'ios-system.log').open('w') as output:
+        subprocess.run(command, stdout=output, stderr=subprocess.STDOUT, timeout=60, check=False)
+    # This diagnostic replay never counts as a passing test. Native constructor
+    # failures can write directly to fd 2 before Python's OS logging exists.
+    try:
+        result = subprocess.run(['xcrun', 'simctl', 'launch',
+            '--stdout=' + str(logs / 'ios-launch.stdout'), '--stderr=' + str(logs / 'ios-launch.stderr'),
+            device, 'io.github.ispaure.logisticsmobile'], capture_output=True, timeout=60)
+        (logs / 'ios-launch.result').write_bytes(result.stdout + result.stderr)
+    except subprocess.TimeoutExpired:
+        (logs / 'ios-launch.result').write_text('Diagnostic launch timed out.')
+    for source in (Path.home() / 'Library/Logs/DiagnosticReports').glob('*.ips'):
+        if source.stat().st_size <= 10 * 1024 * 1024:
+            header = source.read_text(errors='replace')[:8192]
+            if 'logistics' in header.lower():
+                shutil.copyfile(source, logs / source.name)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('run', 'ios-device'))
+    parser.add_argument('command', choices=('run', 'ios-device', 'ios-diagnostics'))
     parser.add_argument('target', choices=('android', 'ios'), nargs='?')
     parser.add_argument('--device')
     args = parser.parse_args()
     if args.command == 'ios-device':
         print(ios_device())
+    elif args.command == 'ios-diagnostics':
+        ios_diagnostics()
     else:
         if not args.target or not args.device:
             parser.error('run requires a target and --device')

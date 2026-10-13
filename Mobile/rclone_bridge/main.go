@@ -33,6 +33,7 @@ import (
 	_ "github.com/rclone/rclone/backend/webdav"
 	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/fs/config"
+	"github.com/rclone/rclone/fs/fspath"
 	"github.com/rclone/rclone/fs/object"
 	"github.com/yeka/zip"
 	"golang.org/x/sys/unix"
@@ -117,10 +118,8 @@ func parseCredential(text []byte) (string, map[string]string, error) {
 			if len(name) < 1 || len(name) > 80 {
 				return "", nil, errors.New("invalid remote name")
 			}
-			for _, c := range name {
-				if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-' || c == ' ') {
-					return "", nil, errors.New("invalid remote name")
-				}
+			if fspath.CheckConfigName(name) != nil {
+				return "", nil, errors.New("invalid remote name")
 			}
 			continue
 		}
@@ -311,6 +310,10 @@ func readInto(ctx context.Context, name, p string, fd int) (int64, error) {
 	}
 	target := os.NewFile(uintptr(copyfd), "private-download")
 	defer target.Close()
+	offset, seekErr := target.Seek(0, io.SeekCurrent)
+	if seekErr != nil || offset != 0 {
+		return 0, errors.New("private download destination must be at its beginning")
+	}
 	info, err := target.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Size() != 0 {
 		return 0, errors.New("private download destination must be a new file")
