@@ -1,13 +1,14 @@
 """Native document selection for the pinned Toga 0.5.7 mobile backends."""
 import asyncio
-import sys
+from commonUtils.runtime.platform import get_os, OS
 from .access import AndroidDocuments, IOSDocuments, LocalDocuments
 
 _ios_future = _ios_delegate_class = _ios_delegate = _ios_picker = None
 
 
 async def pick_document(app):
-    if sys.platform == 'android':
+    current = get_os()
+    if current is OS.ANDROID:
         from java import jclass
         Intent = jclass('android.content.Intent')
         Activity = jclass('android.app.Activity')
@@ -22,7 +23,7 @@ async def pick_document(app):
         app._impl.start_activity(intent, on_complete=complete)
         uri = await future
         return (AndroidDocuments(app._impl.native.getContentResolver()), uri) if uri else None
-    if sys.platform == 'ios':
+    if current is OS.IOS:
         return await pick_ios(app)
     import toga
     path = await app.main_window.dialog(toga.OpenFileDialog('Import text document'))

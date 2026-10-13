@@ -17,6 +17,7 @@ EXPECTED_TESTS = (
     'test_import_consumes_a_scoped_stream_and_never_modifies_source',
     'test_invalid_records_names_large_documents_and_links_are_preserved',
     'test_ios_adapter_balances_scope_on_success_and_read_failure',
+    'test_private_creation_works_without_hard_links_and_hides_incomplete_records',
     'test_recovery_after_process_recreation_preserves_unsaved_text',
     'test_comic_pages_and_metadata_work_without_image_decoder',
     'test_epub_read_and_metadata_save_preserve_resources',

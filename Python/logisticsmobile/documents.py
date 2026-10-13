@@ -2,10 +2,11 @@
 import base64
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 from uuid import uuid4
 
-from commonUtils.persistence import atomic_write_bytes, atomic_write_json
+from commonUtils.persistence import atomic_write_json
 from commonUtils.persistence.text import decode_bytes, write_text_file, FileConflictError
 
 MAX_BYTES = 1024 * 1024
@@ -59,8 +60,14 @@ class DocumentStore:
         path = self.path(key, '.data')
         snapshot = decode_bytes(content, path=path)
         doc = Document(key, name, snapshot, snapshot.text)
-        atomic_write_bytes(path, content, overwrite=False)
+        # Android app sandboxes can reject hard links. Reserve the private UUID
+        # exclusively; publish its visible recovery record after durable data.
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         try:
+            with os.fdopen(descriptor, 'wb') as stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
             self.checkpoint(doc)
         except BaseException:
             path.unlink(missing_ok=True)
