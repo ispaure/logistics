@@ -1,6 +1,7 @@
 """Small native mobile text/Markdown prototype with app-private recovery."""
 import asyncio
 from pathlib import Path
+from uuid import uuid4
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
@@ -131,15 +132,20 @@ class LogisticsMobile(LibraryUI, ChatUI, toga.App):
         except ValueError as error:
             self.status.text = str(error)
             return
-        self.preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
-                                   style=Pack(flex=1))
+        if not hasattr(self, 'preview'):
+            self.preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
+                                       style=Pack(flex=1))
         # A fresh WebView may still be navigating to its initial about:blank.
         # Give the HTML load a distinct local-document origin so that blank
         # navigation cannot consume Toga's one approved content navigation.
-        self.preview.set_content('https://logistics.invalid/', content)
-        self.show_view(toga.Box(children=[
+        self.preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
+        previous = getattr(self, 'preview_box', None)
+        if previous is not None:
+            previous.remove(self.preview)
+        self.preview_box = toga.Box(children=[
             toga.Button('Back to editor', on_press=self.show_documents, style=Pack(height=44)),
-            self.preview], style=Pack(direction=COLUMN, flex=1)))
+            self.preview], style=Pack(direction=COLUMN, flex=1))
+        self.show_view(self.preview_box)
 
     def refresh_documents(self):
         previous = self.loading

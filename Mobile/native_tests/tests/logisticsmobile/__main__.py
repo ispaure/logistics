@@ -51,6 +51,11 @@ async def exercise(app):
         passed.append('native_documents')
         app.show_preview()
         await wait_for_text(app.preview, 'Native preview')
+        original_preview = app.preview
+        app.show_documents()
+        app.show_preview()
+        assert app.preview is original_preview
+        await wait_for_text(app.preview, 'Native preview')
         passed.append('native_markdown_preview')
         fixtures = app.private_root / 'fixtures'
         fixtures.mkdir()
@@ -61,7 +66,9 @@ async def exercise(app):
         await app.open_book(record['id'])
         assert app.book_reader is not None, app.book_status.text
         await wait_for_text(app.book_content.children[0], 'Native EPUB first')
+        original_reader = app.book_content.children[0]
         await app.next_book_page()
+        assert app.book_content.children[0] is original_reader
         await wait_for_text(app.book_content.children[0], 'Native EPUB second')
         passed.append('native_epub_reader')
         await app.toggle_bookmark()
