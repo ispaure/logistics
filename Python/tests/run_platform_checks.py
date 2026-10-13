@@ -38,6 +38,14 @@ def main():
     # Qt expands Windows 8.3 aliases; give fixtures matching native long paths.
     native_temp = str(Path(tempfile.gettempdir()).resolve())
     env.update(TEMP=native_temp, TMP=native_temp, TMPDIR=native_temp)
+    if args.install:
+        # Clean runners must exercise real crypt operations, not skip their fixtures.
+        subprocess.run([sys.executable, '-c',
+                        'from services.software import get_software; '
+                        'from commonUtils.runtime.streams.downloads import provision; '
+                        'print(provision(*get_software("rclone")))'],
+                       cwd=REPO, env=env, check=True, timeout=180)
+        env['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] = '1'
     checks = []
     if platform.system() == 'Windows':
         checks.append(('windows-native-ui', ['Python/tests/native_ui_smoke.py'], 60))
@@ -46,7 +54,7 @@ def main():
         ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests', '--isolate-modules'], 600),
         # Windows' Git/process tests keep making progress past five minutes.
         # Leave room for the growing suite within the platform job's budget.
-        ('logistics', ['Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules'], 600),
+        ('logistics', ['Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules'], 900),
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(results / 'parity')], 600),
     ]
     for name, command, timeout in checks:

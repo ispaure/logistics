@@ -11,6 +11,13 @@ from local_crypt_fixture import crypt_fixture
 
 
 class DesktopFileOperationsTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if not executable.get_rclone_path().is_file():
+            if os.environ.get('LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'):
+                raise RuntimeError('Required pinned rclone is missing.')
+            raise unittest.SkipTest('Pinned rclone executable not installed')
+
     def test_folder_round_trip_and_ciphertext_rename(self):
         with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
             crypt = fixture.provider
