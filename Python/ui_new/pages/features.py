@@ -1,4 +1,5 @@
 """Session feature controls with dependency-aware enable/disable behavior."""
+from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils.ui import pyside as qt
 from features import registry
 
@@ -20,7 +21,7 @@ class FeaturesPage(qt.QWidget):
         content_layout.setContentsMargins(12, 12, 12, 12)
         content_layout.setSpacing(16)
         title = qt.QLabel('Features')
-        font = title.font(); font.setPointSize(font.pointSize() + 5); font.setBold(True)
+        font = title.font(); font.setPointSizeF(point_size(setting_size(font) + 5)); font.setBold(True)
         title.setFont(font)
         content_layout.addWidget(title)
         self.scope_label = qt.QLabel()

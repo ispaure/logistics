@@ -231,6 +231,11 @@ interface, browser, reading and code font roles. Each font name in the dropdown
 is shown in its own typeface for a preview while browsing, including the selected
 field. Samples underneath preview pending font and size changes before saving.
 All four font sizes allow 7–24 pt. The code font list is limited to monospace fonts with equal character widths.
+Font sizes use a common 96-DPI reference, so the same setting gives comparable
+text and control proportions on macOS, Windows and Linux. macOS text is larger
+than in earlier builds at the same setting. Retina and display scaling still
+follow the operating system. Preview sizes and editor zoom use that same scale;
+your saved size values are preserved.
 On Windows, moving a normal window between displays with different scaling
 preserves its logical width and height if the native transition changes them.
 Intentional resize gestures and maximized/fullscreen windows retain normal sizing.

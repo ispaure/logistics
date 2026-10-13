@@ -1,4 +1,5 @@
 """Retained LM workspace: one editable conversation, explicit network actions."""
+from commonUtils.ui.appearance.typography import point_size
 from copy import deepcopy
 from pathlib import Path
 from uuid import uuid4
@@ -473,7 +474,7 @@ class LMPage(qt.QWidget):
         family = font.family().replace('\\', '\\\\').replace('"', '\\"')
         self.composer_frame.setStyleSheet(f'QFrame#lmComposerFrame {{ background: {base}; border: 1px solid {border}; border-radius: 12px; }}')
         muted = palette.color(qt.QPalette.ColorRole.PlaceholderText).name()
-        self.disclaimer.setStyleSheet(f'color: {muted}; font-size: {max(8, self.styling.font("ui").pointSize() - 1)}pt;')
+        self.disclaimer.setStyleSheet(f'color: {muted}; font-size: {point_size(max(8, self.styling.values["ui_font_size_int"] - 1))}pt;')
         self.composer.setStyleSheet(f'QPlainTextEdit {{ background: transparent; border: none; padding: 8px; font-family: "{family}"; font-size: {font.pointSizeF()}pt; }}')
         self.composer.document().setDefaultFont(font)
         self.send_button.setStyleSheet(f'QToolButton {{ border: 1px solid {border}; border-radius: 21px; background: {accent}; }} QToolButton:disabled {{ background: {base}; }}')

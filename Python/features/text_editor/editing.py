@@ -1,5 +1,6 @@
 """Editor commands and status controls; native text navigation remains Qt-owned."""
 
+from commonUtils.ui.appearance.typography import setting_size
 from commonUtils.ui import pyside as qt
 from commonUtils.persistence.text import ENCODINGS
 from commonUtils.ui.code_editor.search import SearchPanel
@@ -234,7 +235,7 @@ class EditingCommands:
     def zoom(self, direction):
         if self.current:
             self.current.editor.set_font_size(
-                self.current.editor.font().pointSizeF() + direction
+                setting_size(self.current.editor.font()) + direction
             )
 
     def choose_encoding(self):

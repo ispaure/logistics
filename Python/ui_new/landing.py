@@ -1,5 +1,6 @@
 """Application launch choices and chrome for sidebar-free workspaces."""
 
+from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.icons import set_painted_icon
 from ui_new.sidebar import DestinationGlyph, DestinationIcon
@@ -87,7 +88,7 @@ class LandingPage(qt.QWidget):
         layout.setSpacing(16)
         heading = qt.QLabel('New / Open Document' if documents_only else 'Welcome to Logistics')
         font = heading.font()
-        font.setPointSize(26)
+        font.setPointSizeF(point_size(26))
         font.setBold(True)
         heading.setFont(font)
         heading.setWordWrap(True)

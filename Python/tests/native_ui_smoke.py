@@ -39,7 +39,7 @@ def main():
             phase('initialize isolated settings and styling')
             initialize_settings()
             apply_theme(app)
-            apply_styling(app)
+            styling = apply_styling(app)
             registry.load_feature_preferences()
             pages = registry.get_pages()
             # Optional external plugins and their initialization hooks belong to
@@ -54,8 +54,13 @@ def main():
                 phase('show main window')
                 window.display_ui()
                 screen = window.dlg.screen()
+                ui_pixels = qt.QFontInfo(app.font()).pixelSize()
+                expected_pixels = styling.values['ui_font_size_int'] * 96 / 72
+                if abs(ui_pixels - expected_pixels) > 1:
+                    raise AssertionError(f'Unexpected native UI font size: {ui_pixels}, expected {expected_pixels}')
                 print(json.dumps({'platform': app.platformName(), 'logical_dpi': screen.logicalDotsPerInch(),
                     'device_ratio': screen.devicePixelRatio(), 'window_size': [window.dlg.width(), window.dlg.height()],
+                    'ui_font_pixels': ui_pixels, 'ui_font_setting': styling.values['ui_font_size_int'],
                     'dpi_helper': getattr(app, '_commonutils_window_dpi_fixer', None) is not None}), flush=True)
                 timed_out = []
                 def timeout():

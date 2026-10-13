@@ -71,7 +71,9 @@ language. Whitespace marks can be enabled or disabled without editing text.
 
 Code text defaults to 11 points. Text Editor, IDE, Git hunks and Markdown code
 blocks share both the family and size. Ctrl/Cmd+wheel changes the personal shared
-code size (7–24 pt). Line-number gutters resize with the font. Legacy Cache/TextEditor font
+code size (7–24 pt at a common 96-DPI reference). The same saved size now gives
+comparable text proportions on macOS, Windows and Linux; zoom preserves that
+saved scale. Line-number gutters resize with the font. Legacy Cache/TextEditor font
 preferences migrate once; recent files and recovery remain in that cache, while
 systemic settings and window geometry use the persistent personal editor INI.
 

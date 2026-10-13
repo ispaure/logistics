@@ -2,6 +2,7 @@
 Generic server discovery, selection, and feature actions.
 """
 
+from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils.ui import pyside
 
 from features import registry
@@ -41,7 +42,7 @@ class ServersPage(pyside.QWidget):
 
         title_label = pyside.QLabel('Servers')
         title_font = title_label.font()
-        title_font.setPointSize(title_font.pointSize() + 4)
+        title_font.setPointSizeF(point_size(setting_size(title_font) + 4))
         title_font.setBold(True)
         title_label.setFont(title_font)
 
@@ -196,7 +197,7 @@ class ServersPage(pyside.QWidget):
         title_label = pyside.QLabel(display_name)
         title_label.setTextFormat(pyside.Qt.TextFormat.PlainText)
         title_font = title_label.font()
-        title_font.setPointSize(title_font.pointSize() + 7)
+        title_font.setPointSizeF(point_size(setting_size(title_font) + 7))
         title_font.setBold(True)
         title_label.setFont(title_font)
 

@@ -2,6 +2,7 @@
 Links page for the Logistics feature UI.
 """
 
+from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils.ui import pyside
 
 from features.links import actions, catalog
@@ -25,7 +26,7 @@ class LinksPage(pyside.QWidget):
 
         title = pyside.QLabel('Links')
         title_font = title.font()
-        title_font.setPointSize(title_font.pointSize() + 7)
+        title_font.setPointSizeF(point_size(setting_size(title_font) + 7))
         title_font.setBold(True)
         title.setFont(title_font)
 

@@ -1,5 +1,6 @@
 """Application syntax choices and persistence around shared editor infrastructure."""
 
+from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils.ui import pyside as qt
 from configparser import Error as ConfigError
 from commonUtils.ui.code_editor.widget import monospace_font
@@ -71,7 +72,7 @@ class SyntaxSettings:
             if options["font_family_str"]
             else monospace_font()
         )
-        font.setPointSize(options["font_size_int"])
+        font.setPointSizeF(point_size(options["font_size_int"]))
         editor.setFont(font)
         from features.code_font import code_font
         code_font(self.preferences.font_path).bind(editor)
@@ -166,11 +167,11 @@ class SyntaxSettings:
         editor = self.current.editor
         from features.code_font import code_font
         shared_font = code_font(self.preferences.font_path)
-        if not shared_font.updating and shared_font.size != round(editor.font().pointSizeF()):
+        if not shared_font.updating and shared_font.size != round(setting_size(editor.font())):
             shared_font.changed(editor)
         self.options.update(
             font_family_str=editor.font().family(),
-            font_size_int=round(editor.font().pointSizeF()),
+            font_size_int=round(setting_size(editor.font())),
             indent_width_int=editor.indent_width,
             use_tabs_bool=editor.use_tabs,
             word_wrap_bool=editor.lineWrapMode()

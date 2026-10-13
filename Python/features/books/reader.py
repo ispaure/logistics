@@ -1,4 +1,5 @@
 """Books page and reusable reader: navigation/UI separated from EPUB storage."""
+from commonUtils.ui.appearance.typography import point_size
 from commonUtils.ui import pyside as qt
 from math import isfinite
 from .content import chapter_html
@@ -97,7 +98,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         font = qt.QFont(qt.QApplication.font())
         if self._settings['font_family'].strip():
             font.setFamily(self._settings['font_family'])
-        font.setPointSize(self._settings['font_size'])
+        font.setPointSizeF(point_size(self._settings['font_size']))
         return font
 
     def _save_appearance(self, key, value):
@@ -380,7 +381,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         font = self.reading_font()
         family = font.family().replace('\\', '\\\\').replace('"', '\\"')
         self.text.setStyleSheet(f'QTextBrowser {{ background-color: {background}; color: {foreground}; '
-                               f'font-family: "{family}"; font-size: {font.pointSize()}pt; border: none; padding: 24px; }}')
+                               f'font-family: "{family}"; font-size: {font.pointSizeF()}pt; border: none; padding: 24px; }}')
         self.text.ensurePolished()
         self.text.setFont(font)
         self.text.document().setDefaultFont(font)

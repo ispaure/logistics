@@ -1,4 +1,5 @@
 """One code point size for Logistics editor views; other appearance stays local."""
+from commonUtils.ui.appearance.typography import point_size, setting_size
 import logging
 from configparser import Error as ConfigError
 from weakref import WeakSet, ref
@@ -21,12 +22,12 @@ class CodeFont:
             if hasattr(editor, 'zoom_changed'):
                 editor.zoom_changed.connect(lambda: self.changed(weak_editor()))
         font = editor.font()
-        font.setPointSizeF(self.size)
+        font.setPointSizeF(point_size(self.size))
         editor.setFont(font)
 
     def changed(self, editor):
         if editor is not None and isValid(editor) and not self.updating:
-            self.set_size(editor.font().pointSizeF())
+            self.set_size(setting_size(editor.font()))
 
     def set_size(self, size, *, save=True, notify=True):
         size = max(7, min(24, round(size)))
@@ -36,7 +37,7 @@ class CodeFont:
             for editor in tuple(self.views):
                 if isValid(editor):
                     font = editor.font()
-                    font.setPointSize(size)
+                    font.setPointSizeF(point_size(size))
                     editor.setFont(font)
                     # Refresh each Text Editor window's pending preference snapshot.
                     if notify and hasattr(editor, 'zoom_changed'):

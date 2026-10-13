@@ -1,4 +1,5 @@
 """Compact EPUB controls and discoverable reading panels, independent of loading."""
+from commonUtils.ui.appearance.typography import point_size
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.readers.reader_menus import ReaderMenus
 from commonUtils.ui.readers.reader_chrome import ReaderLabel, ReaderFullscreen, reader_button, READER_MARGINS, READER_SPACING, reading_spin
@@ -152,7 +153,7 @@ def build_controls(page):
     heading = qt.QLabel('EPUB reader')
     heading.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
     font = heading.font()
-    font.setPointSizeF(max(18, font.pointSizeF() * 1.6))
+    font.setPointSizeF(max(point_size(18), font.pointSizeF() * 1.6))
     font.setBold(True)
     heading.setFont(font)
     empty.addWidget(heading)
