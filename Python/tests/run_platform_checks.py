@@ -38,7 +38,10 @@ def main():
     # Qt expands Windows 8.3 aliases; give fixtures matching native long paths.
     native_temp = str(Path(tempfile.gettempdir()).resolve())
     env.update(TEMP=native_temp, TMP=native_temp, TMPDIR=native_temp)
-    checks = [
+    checks = []
+    if platform.system() == 'Windows':
+        checks.append(('windows-native-ui', ['Python/tests/native_ui_smoke.py'], 60))
+    checks += [
         # The full shared suite approaches five minutes on Windows CI.
         ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests', '--isolate-modules'], 600),
         # Windows' Git/process tests keep making progress past five minutes.
@@ -50,7 +53,8 @@ def main():
         print(f'Running {name} on {platform.system()}…', flush=True)
         started = time.monotonic()
         try:
-            completed = subprocess.run([sys.executable, *command], cwd=REPO, env=env, capture_output=True, timeout=timeout)
+            check_env = dict(env, QT_QPA_PLATFORM='windows') if name == 'windows-native-ui' else env
+            completed = subprocess.run([sys.executable, *command], cwd=REPO, env=check_env, capture_output=True, timeout=timeout)
             output = (completed.stdout + completed.stderr).decode('utf-8', errors='replace')
             code = completed.returncode
         except subprocess.TimeoutExpired as error:
@@ -62,6 +66,9 @@ def main():
         print(f'{name}: {"PASS" if code == 0 else "FAIL"} ({code})', flush=True)
         if code:
             print(output[-12000:], flush=True)
+            if name == 'windows-native-ui':
+                print(f'Native Windows startup exit: 0x{code & 0xffffffff:08X}', flush=True)
+                break  # A fatal bootstrap needs fixing before headless regressions.
     print(f'Reports: {results}', flush=True)
     return int(any(check['exit_code'] for check in report['checks']))
 
