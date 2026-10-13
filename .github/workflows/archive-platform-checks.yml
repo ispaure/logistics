@@ -32,7 +32,7 @@ jobs:
         with:
           python-version: '3.12.2'
       - run: python -m pip install ruff==0.14.0
-      - run: ruff check --config Python/pyproject.toml Python .github/scripts
+      - run: ruff check --config Python/pyproject.toml Python Mobile .github/scripts
       - name: Check portable document core without desktop dependencies
         env:
           PYTHONPATH: Python

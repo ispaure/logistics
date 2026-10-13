@@ -63,6 +63,9 @@ credentials and settings. External services need their own accounts/software.
 
 ## What can it do?
 
+An independent [Android/iOS document prototype](Mobile/README.md) is available for
+development builds, with app-private text editing and draft recovery.
+
 | Tool | Use it to… |
 | --- | --- |
 | [File Browser & Markdown](Python/ui_new/user_docs/README.md) | Browse, search, preview files and explore storage usage |

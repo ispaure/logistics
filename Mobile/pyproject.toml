@@ -1,0 +1,22 @@
+[tool.briefcase]
+project_name = "Logistics Mobile"
+bundle = "io.github.ispaure"
+version = "0.1.0"
+url = "https://github.com/ispaure/logistics"
+license = "MIT"
+author = "Marc-Andre Voyer"
+
+[tool.briefcase.app.logisticsmobile]
+formal_name = "Logistics Mobile"
+description = "Native text and Markdown document prototype"
+sources = ["payload/logisticsmobile", "payload/commonUtils"]
+requires = []
+
+[tool.briefcase.app.logisticsmobile.macOS]
+requires = ["toga-cocoa==0.5.7"]
+
+[tool.briefcase.app.logisticsmobile.android]
+requires = ["toga-android==0.5.7"]
+
+[tool.briefcase.app.logisticsmobile.iOS]
+requires = ["toga-iOS==0.5.7"]
