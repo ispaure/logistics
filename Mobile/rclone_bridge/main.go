@@ -35,6 +35,7 @@ import (
 	"github.com/rclone/rclone/fs/config"
 	"github.com/rclone/rclone/fs/object"
 	"github.com/yeka/zip"
+	"golang.org/x/sys/unix"
 )
 
 const packageLimit = 1024 * 1024
@@ -287,34 +288,49 @@ func list(ctx context.Context, name, dir string) ([]entry, error) {
 	return result, nil
 }
 
-func read(ctx context.Context, name, p string) ([]byte, error) {
-	if p == "" || !validPath(p) {
-		return nil, errors.New("invalid remote path")
+// readInto writes only to a caller-owned private descriptor. It duplicates
+// that descriptor so Go can close its own handle without closing Python's.
+func readInto(ctx context.Context, name, p string, fd int) (int64, error) {
+	if p == "" || !validPath(p) || fd < 3 {
+		return 0, errors.New("invalid download destination")
 	}
 	f, err := remote(ctx, name)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	obj, err := f.NewObject(ctx, p)
 	if err != nil {
-		return nil, errors.New("remote file could not be opened")
+		return 0, errors.New("remote file could not be opened")
 	}
 	if obj.Size() < 0 || obj.Size() > downloadLimit {
-		return nil, errors.New("download exceeds 32 MiB")
+		return 0, errors.New("download exceeds 32 MiB")
+	}
+	copyfd, err := unix.Dup(fd)
+	if err != nil {
+		return 0, errors.New("private download destination could not be opened")
+	}
+	target := os.NewFile(uintptr(copyfd), "private-download")
+	defer target.Close()
+	info, err := target.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() != 0 {
+		return 0, errors.New("private download destination must be a new file")
 	}
 	stream, err := obj.Open(ctx)
 	if err != nil {
-		return nil, errors.New("remote file could not be opened")
+		return 0, errors.New("remote file could not be opened")
 	}
-	data, err := io.ReadAll(io.LimitReader(stream, downloadLimit+1))
+	count, copyErr := io.Copy(target, io.LimitReader(stream, downloadLimit+1))
 	closeErr := stream.Close()
-	if err != nil || closeErr != nil || ctx.Err() != nil {
-		return nil, errors.New("download failed or cancelled")
+	if copyErr != nil || closeErr != nil || ctx.Err() != nil {
+		return 0, errors.New("download failed or cancelled")
 	}
-	if len(data) > downloadLimit || int64(len(data)) != obj.Size() {
-		return nil, errors.New("download size changed or exceeds limits")
+	if count != obj.Size() || count > downloadLimit {
+		return 0, errors.New("download size changed or exceeds limits")
 	}
-	return data, nil
+	if target.Sync() != nil {
+		return 0, errors.New("private download could not be flushed")
+	}
+	return count, nil
 }
 
 func selfCheck(ctx context.Context) (string, error) {
@@ -367,6 +383,7 @@ func dispatch(action, input string) (output string) {
 		Password string `json:"password"`
 		Remote   string `json:"remote"`
 		Path     string `json:"path"`
+		FD       int    `json:"fd"`
 	}
 	var result any
 	var err error
@@ -386,11 +403,7 @@ func dispatch(action, input string) (output string) {
 		case "list":
 			result, err = list(ctx, request.Remote, request.Path)
 		case "read":
-			var data []byte
-			data, err = read(ctx, request.Remote, request.Path)
-			if err == nil {
-				result = base64.StdEncoding.EncodeToString(data)
-			}
+			result, err = readInto(ctx, request.Remote, request.Path, request.FD)
 		case "probe":
 			result, err = selfCheck(ctx)
 		case "clear":

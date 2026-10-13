@@ -111,8 +111,9 @@ class MobileUITests(unittest.TestCase):
                 def entries(self, remote, path=''):
                     assert remote == 'Fixture'
                     return [dict(path='fixture.txt', size=22, directory=False)]
-                def download(self, remote, path):
-                    return b'Private cloud fixture\n'
+                def download_into(self, remote, path, descriptor):
+                    import os
+                    os.write(descriptor, b'Private cloud fixture\n')
                 def clear(self):
                     self.forgotten = True
                 def cancel(self):

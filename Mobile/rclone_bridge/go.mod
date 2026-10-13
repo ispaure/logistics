@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/rclone/rclone v1.74.1
 	github.com/yeka/zip v0.0.0-20180914125537-d046722c6feb
+	golang.org/x/sys v0.43.0
 )
 
 require (
@@ -104,7 +105,6 @@ require (
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/term v0.42.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/time v0.15.0 // indirect

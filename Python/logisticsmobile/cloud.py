@@ -55,10 +55,14 @@ class CloudClient:
         return self.request('list', remote=remote, path=path)
 
     def download(self, remote, path):
-        data = base64.b64decode(self.request('read', remote=remote, path=path), validate=True)
-        if len(data) > DOWNLOAD_LIMIT:
-            raise ValueError('Downloads are limited to 32 MiB.')
-        return data
+        from tempfile import TemporaryFile
+        with TemporaryFile() as stream:
+            self.download_into(remote, path, stream.fileno())
+            stream.seek(0)
+            return stream.read(DOWNLOAD_LIMIT + 1)
+
+    def download_into(self, remote, path, descriptor):
+        return self.request('read', remote=remote, path=path, fd=descriptor)
 
     def cancel(self):
         self.request('cancel')
@@ -83,17 +87,26 @@ class Downloads:
         self.root.mkdir(parents=True, exist_ok=True)
 
     def save(self, name, data):
+        if not isinstance(data, bytes) or len(data) > DOWNLOAD_LIMIT:
+            raise ValueError('Downloads are limited to 32 MiB.')
+        return self._write(name, lambda stream: stream.write(data))
+
+    def fetch(self, client, remote, path):
+        name = download_name(path)
+        return self._write(name, lambda stream: client.download_into(remote, path, stream.fileno()))
+
+    def _write(self, name, writer):
         import os
         from uuid import uuid4
         name = download_name(name)
-        if not isinstance(data, bytes) or len(data) > DOWNLOAD_LIMIT:
-            raise ValueError('Downloads are limited to 32 MiB.')
         folder = self.root / uuid4().hex
         folder.mkdir(mode=0o700)
         target = folder / name
         try:
             with os.fdopen(os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as stream:
-                stream.write(data)
+                writer(stream)
+                if os.fstat(stream.fileno()).st_size > DOWNLOAD_LIMIT:
+                    raise ValueError('Downloads are limited to 32 MiB.')
                 stream.flush()
                 os.fsync(stream.fileno())
             (folder / '.complete').write_text(name, encoding='utf-8')

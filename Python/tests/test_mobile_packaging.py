@@ -47,7 +47,7 @@ class MobilePackagingTests(unittest.TestCase):
             payload = base / 'payload'
             manifest = mobile_tools.stage(repo, payload)
             self.assertFalse(manifest['dirty'])
-            self.assertEqual(manifest['features'], ['text', 'markdown', 'epub', 'comics', 'lm'])
+            self.assertEqual(manifest['features'], ['text', 'markdown', 'epub', 'comics', 'lm', 'rclone'])
             self.assertTrue((payload / 'logisticsmobile/app.py').is_file())
             self.assertFalse((payload / 'commonUtils/private.py').exists())
             self.assertFalse((payload / 'commonUtils/remoteConfig.ini').exists())
