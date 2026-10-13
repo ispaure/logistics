@@ -36,7 +36,8 @@ class MobileChatTests(unittest.TestCase):
             self.assertEqual(store.path(data['id']).read_bytes(), b'broken record')
 
     def test_mobile_chat_refresh_and_stream_use_only_configured_endpoint(self):
-        with fixture_server() as (url, started, release, requests):
+        with patch('socket.getfqdn', side_effect=AssertionError('Loopback fixtures must not perform DNS')), \
+                fixture_server() as (url, started, release, requests):
             client = ChatClient(url, 'synthetic-key')
             self.assertEqual(client.models(), ['fixture-model'])
             data = dict(model='fixture-model', settings=DEFAULT_SETTINGS, profile_id='mobile',
