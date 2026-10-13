@@ -46,7 +46,7 @@ jobs:
         if: matrix.target == 'android'
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '17'
       - name: Prepare a clean, curated mobile payload
         run: |
           python -m pip install briefcase==0.4.5
@@ -81,10 +81,8 @@ jobs:
         env:
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
         run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "system-images;android-35;google_apis;x86_64"
-          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --name LogisticsValidation --package "system-images;android-35;google_apis;x86_64" --device pixel_5
           sudo chmod a+rw /dev/kvm
-          python ui_tools.py run android --device "@LogisticsValidation"
+          python ui_tools.py run android --device '{"avd":"LogisticsValidation","device_type":"pixel","skin":null,"system_image":"system-images;android-35;google_apis;x86_64"}'
       - name: Exercise the actual iOS native app
         if: matrix.target == 'ios'
         working-directory: Mobile
