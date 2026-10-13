@@ -1,8 +1,6 @@
 """End-to-end confined gestures, including native capture changing receivers."""
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-import tempfile
-import time
 from pathlib import Path
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
@@ -14,8 +12,7 @@ from features.ide.workspace import ProjectWorkspace
 class IDEDragTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
+        self.directory = self.temporary_directory()
         self.root = Path(self.directory.name).resolve()
         self.view = ProjectWorkspace(Project('drag', str(self.root)))
         self.view.resize(1200, 700); self.view.show(); self.view.activateWindow()
@@ -33,11 +30,8 @@ class IDEDragTests(QtTestCase):
         for _ in range(6): self.app.processEvents()
 
     def wait(self):
-        deadline = time.monotonic() + 8
-        while self.view.worker or self.view.queue:
-            self.settle()
-            self.assertLess(time.monotonic(), deadline)
-            time.sleep(.001)
+        self.wait_until(lambda: not self.view.worker and not self.view.queue, timeout=8,
+                        message='IDE drag worker did not finish')
         self.settle()
 
     def close_view(self):

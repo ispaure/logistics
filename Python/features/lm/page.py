@@ -336,6 +336,9 @@ class LMPage(qt.QWidget):
         self.create_menus(layout)
         self.apply_chrome()
         self.styling.changed.connect(self.apply_chrome)
+        theme = getattr(qt.QApplication.instance(), '_commonutils_theme', None)
+        if theme is not None:
+            theme.changed.connect(self.apply_chrome)
         self.load_profiles()
         self.refresh()
         first = next((item for item in self.tree_items() if item.data(0, qt.Qt.ItemDataRole.UserRole)), None)
@@ -462,7 +465,7 @@ class LMPage(qt.QWidget):
         return button
 
     def apply_chrome(self):
-        palette = self.palette()
+        palette = qt.QApplication.palette()
         border = palette.color(qt.QPalette.ColorRole.Mid).name()
         base = palette.color(qt.QPalette.ColorRole.Base).name()
         accent = palette.color(qt.QPalette.ColorRole.Highlight).name()
@@ -476,6 +479,7 @@ class LMPage(qt.QWidget):
         self.send_button.setStyleSheet(f'QToolButton {{ border: 1px solid {border}; border-radius: 21px; background: {accent}; }} QToolButton:disabled {{ background: {base}; }}')
         self.transcript.setFrameShape(qt.QFrame.Shape.NoFrame)
         self.search.setStyleSheet(f'QLineEdit {{ border: 1px solid {border}; border-radius: 8px; padding: 7px; }}')
+        self.fit_composer()
 
     def fit_composer(self):
         lines = max(2, self.composer.document().blockCount())

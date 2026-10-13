@@ -1,6 +1,4 @@
 """Project tree ordering through the real asynchronous filesystem model."""
-import tempfile
-import time
 from pathlib import Path
 
 from commonUtils.tests.qt_test_case import QtTestCase
@@ -15,19 +13,15 @@ class ProjectBrowserTests(QtTestCase):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def wait_for_names(self, browser, path, expected):
-        deadline = time.monotonic() + 5
-        while True:
-            self.app.processEvents()
+        def matches():
             parent = browser.proxy.mapFromSource(browser.model.index(str(path)))
             names = [browser.proxy.data(browser.proxy.index(row, 0, parent))
                      for row in range(browser.proxy.rowCount(parent))]
-            if names == expected:
-                return
-            self.assertLess(time.monotonic(), deadline, names)
-            time.sleep(.001)
+            return names == expected
+        self.wait_until(matches, message=f'Project browser did not display {expected}')
 
     def test_folders_first_natural_names_nested_filter_and_new_entries(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             for name in ('a10.py', 'a2.py', 'B.py'):
                 (root / name).touch()

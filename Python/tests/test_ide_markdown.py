@@ -1,5 +1,4 @@
 """Markdown tabs participate in the IDE document lifecycle."""
-import tempfile
 import time
 from pathlib import Path
 from unittest.mock import patch
@@ -23,7 +22,7 @@ class MarkdownTabTests(QtTestCase):
             time.sleep(.001)
 
     def test_formatted_edits_share_save_conflict_and_survive_view_destruction(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'guide.md'
             path.write_bytes(b'# Guide\r\n\r\nOriginal\r\n')
             code = path.with_name('code.py')
@@ -66,7 +65,7 @@ class MarkdownTabTests(QtTestCase):
             workspace.close()
 
     def test_links_open_other_tabs_and_save_as_updates_shared_identity(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             path, linked, destination = root / 'a.MARKDOWN', root / 'b.md', root / 'saved.md'
             path.write_text('# First\n\n[Other](b.md)\n')

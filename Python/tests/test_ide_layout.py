@@ -1,6 +1,4 @@
 """Project ownership, compact menus, tab geometry and confined editor gestures."""
-import tempfile
-import time
 from pathlib import Path
 from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
@@ -13,8 +11,7 @@ from features.ide.workspace import ProjectWorkspace
 class IDELayoutTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
+        self.directory = self.temporary_directory()
         self.root = Path(self.directory.name).resolve()
 
     def settle(self):
@@ -22,11 +19,8 @@ class IDELayoutTests(QtTestCase):
             self.app.processEvents()
 
     def wait(self, view):
-        deadline = time.monotonic() + 8
-        while view.worker or view.queue:
-            self.settle()
-            self.assertLess(time.monotonic(), deadline)
-            time.sleep(.001)
+        self.wait_until(lambda: not view.worker and not view.queue, timeout=8,
+                        message='IDE layout worker did not finish')
 
     def page(self):
         page = IDEPage(store_path=self.root / 'state.json')

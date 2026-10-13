@@ -73,7 +73,7 @@ def build_controls(page):
     page.font_family.setAccessibleName('Reading font')
     page.font_family.setMinimumHeight(32)
     form.addRow('Font', page.font_family)
-    page.font_size = reading_spin(page.appearance, minimum=8, maximum=48,
+    page.font_size = reading_spin(page.appearance, minimum=7, maximum=24,
         value=page._settings['font_size'], label='Reading font size', suffix=' pt', changed=lambda value: page._save_appearance('font_size', value))
     form.addRow('Text size', page.font_size)
     page.spacing = reading_spin(page.appearance, minimum=100, maximum=220,

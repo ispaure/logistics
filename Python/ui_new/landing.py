@@ -47,6 +47,9 @@ class LandingPage(qt.QWidget):
         self._tool_signature = None
         self._tool_cards = []
         self._document_cards = []
+        self._card_timer = qt.QTimer(self)
+        self._card_timer.setSingleShot(True)
+        self._card_timer.timeout.connect(self._fit_card_heights)
         self.setStyleSheet('''
             QPushButton#launchCard, QFrame#documentCard {
                 background: palette(base); border: 1px solid palette(mid);
@@ -56,7 +59,7 @@ class LandingPage(qt.QWidget):
             QPushButton#launchCard:focus { border: 2px solid palette(highlight); }
             QPushButton#launchCard:pressed { background: palette(button); }
             QPushButton#launchCard:disabled { background: palette(window); }
-            QLabel#launchTitle { font-weight: bold; font-size: 14px; }
+            QLabel#launchTitle { font-weight: bold; }
             QLabel#launchDetail { color: palette(text); }
             QLabel#sectionTitle { font-weight: bold; font-size: 15px; }
             QPushButton#documentAction { min-height: 0px; padding: 2px 10px; }
@@ -75,6 +78,7 @@ class LandingPage(qt.QWidget):
                                    16 if documents_only else 36, 32 if documents_only else 64)
         centered.addStretch()
         content = self.content = qt.QWidget()
+        content.installEventFilter(self)
         content.setMinimumWidth(240)
         content.setMaximumWidth(880)
         content.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Preferred)
@@ -88,13 +92,16 @@ class LandingPage(qt.QWidget):
         heading.setFont(font)
         heading.setWordWrap(True)
         layout.addWidget(heading)
-        layout.addWidget(qt.QLabel('Choose a format to create, read or edit.' if documents_only
-                                 else 'Choose your workspace, or open something to read or edit.'))
+        introduction = qt.QLabel('Choose a format to create, read or edit.' if documents_only
+                                 else 'Choose your workspace, or open something to read or edit.')
+        introduction.setWordWrap(True)
+        layout.addWidget(introduction)
         self.buttons = {}
         if not documents_only:
             hub = LaunchCard('Open full hub with sidebar', 'All your tools, folders and documents in one place.', 'hub')
             hub.clicked.connect(lambda: self.launch_requested.emit('hub'))
             self.buttons['hub'] = hub
+            self._watch_card(hub)
             layout.addWidget(hub)
             self.tool_grid = qt.QGridLayout()
             self.tool_grid.setSpacing(16)
@@ -120,7 +127,64 @@ class LandingPage(qt.QWidget):
     def eventFilter(self, watched, event):
         if watched is self.scroll.viewport() and event.type() == qt.QEvent.Type.Resize:
             self._fit_content()
+        if isinstance(watched, qt.QLabel) and (event.type() == qt.QEvent.Type.FontChange
+                or event.type() == qt.QEvent.Type.Resize and event.size().width() != event.oldSize().width()):
+            # QLabel's height-for-width includes its minimum height. Discard the
+            # previous measurement when the text metrics or available width change.
+            watched.setMinimumHeight(0)
+        if event.type() in (qt.QEvent.Type.FontChange, qt.QEvent.Type.LayoutRequest, qt.QEvent.Type.Resize):
+            self._card_timer.start(0)
         return super().eventFilter(watched, event)
+
+    def _watch_card(self, card):
+        card.installEventFilter(self)
+        for child in card.findChildren(qt.QWidget):
+            child.installEventFilter(self)
+
+    def _fit_card_heights(self):
+        # Measure at the actual column width, including wrapped labels and
+        # action buttons. Use one height per group, retaining the compact floor.
+        for cards in (self._tool_cards, self._document_cards):
+            if not cards:
+                continue
+            heights = []
+            for card in cards:
+                card.ensurePolished()
+                layout = card.layout()
+                heights.append(max(88, self._layout_text_height(layout) + 2))
+            height = max(heights)
+            for card in cards:
+                if card.minimumHeight() != height or card.maximumHeight() != height:
+                    card.setFixedHeight(height)
+        hub = self.buttons.get('hub')
+        if hub is not None:
+            height = max(88, self._layout_text_height(hub.layout()) + 2)
+            if hub.minimumHeight() != height or hub.maximumHeight() != height:
+                hub.setFixedHeight(height)
+
+    @classmethod
+    def _layout_text_height(cls, layout):
+        heights = []
+        for index in range(layout.count()):
+            item = layout.itemAt(index)
+            if item.layout() is not None:
+                height = cls._layout_text_height(item.layout())
+            elif item.widget() is not None:
+                widget = item.widget()
+                height = max(widget.minimumSizeHint().height(), widget.sizeHint().height())
+                if isinstance(widget, qt.QLabel) and widget.wordWrap():
+                    height = max(0, widget.heightForWidth(widget.width()))
+                    if widget.minimumHeight() != height:
+                        widget.setMinimumHeight(height)
+            else:
+                height = item.sizeHint().height()
+            heights.append(height)
+        margins = layout.contentsMargins()
+        if isinstance(layout, qt.QVBoxLayout):
+            content = sum(heights) + max(0, len(heights) - 1) * layout.spacing()
+        else:
+            content = max(heights, default=0)
+        return margins.top() + content + margins.bottom()
 
     def _fit_content(self):
         margin = 16 if self._documents_only else 36
@@ -132,6 +196,7 @@ class LandingPage(qt.QWidget):
         if hasattr(self, 'tool_grid'):
             self._arrange_cards(self.tool_grid, self._tool_cards, columns)
         self._arrange_cards(self.document_grid, self._document_cards, columns)
+        self._card_timer.start(0)
 
     @staticmethod
     def _arrange_cards(grid, cards, columns):
@@ -158,6 +223,7 @@ class LandingPage(qt.QWidget):
             button.clicked.connect(lambda checked=False, key=key: self.launch_requested.emit(key))
             self.buttons[key] = button
             self._tool_cards.append(button)
+            self._watch_card(button)
         self._fit_content()
 
     def set_document_launchers(self, launchers):
@@ -211,6 +277,7 @@ class LandingPage(qt.QWidget):
             self.editor_buttons[key] = button
             layout.addLayout(actions)
             self._document_cards.append(card)
+            self._watch_card(card)
         self._fit_content()
 
 

@@ -15,7 +15,7 @@ class IDEQtTests(QtTestCase):
 
 class DocumentTests(IDEQtTests):
     def test_shared_editor_preserves_endings_and_refuses_external_overwrite(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             path = Path(directory) / 'example.py'
             path.write_bytes(b'x = 1\r\n')
             editor = EditorDocument(read_text_file(path))
@@ -68,19 +68,15 @@ class ProjectTests(unittest.TestCase):
 
 class WorkspaceFixture(IDEQtTests):
     def wait(self, view):
-        import time
-        deadline = time.monotonic() + 5
-        while view.worker or view.queue:
-            self.app.processEvents()
-            self.assertLess(time.monotonic(), deadline)
-            time.sleep(.001)
+        self.wait_until(lambda: not view.worker and not view.queue,
+                        message='IDE workspace operation did not finish')
 
 
 class WorkspaceTests(WorkspaceFixture):
     def test_navigation_applies_unicode_location_to_requested_view(self):
         from features.ide.projects import Project
         from features.ide.workspace import ProjectWorkspace
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             a, b = root / 'a.py', root / 'b.py'
             a.write_text('header\n😀target\n')
@@ -106,7 +102,7 @@ class WorkspaceTests(WorkspaceFixture):
         from features.ide.projects import Project
         from features.ide.workspace import ProjectWorkspace
         from unittest.mock import patch
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_text('value = 1\n' * 30)
             view = ProjectWorkspace(Project('test', directory))
@@ -143,7 +139,7 @@ class WorkspaceTests(WorkspaceFixture):
         from features.ide.workspace import ProjectWorkspace
         from unittest.mock import patch
         from commonUtils.ui import pyside as qt
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_bytes(b'value = 1\r\nsecond = 2\r\n')
             view = ProjectWorkspace(Project('test', directory))
@@ -191,7 +187,7 @@ class WorkspaceTests(WorkspaceFixture):
         from features.ide.workspace import ProjectWorkspace
         from unittest.mock import patch
         from commonUtils.ui import pyside as qt
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             source, target = root / 'a.py', root / 'b.js'
             source.write_text('value = 1\n')
@@ -241,7 +237,7 @@ class WorkspaceTests(WorkspaceFixture):
     def test_same_file_views_restore_independent_positions(self):
         from features.ide.projects import Project
         from features.ide.workspace import ProjectWorkspace
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_text('value = 1\n' * 300)
             project = Project('test', directory)
@@ -282,7 +278,7 @@ class WorkspaceTests(WorkspaceFixture):
         from features.ide.workspace import ProjectWorkspace
         from unittest.mock import patch
         from commonUtils.ui import pyside as qt
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_text('value = 1\n')
             view = ProjectWorkspace(Project('test', directory))
@@ -310,7 +306,7 @@ class WorkspaceTests(WorkspaceFixture):
     def test_navigation_branch_replaces_forward_history(self):
         from features.ide.projects import Project
         from features.ide.workspace import ProjectWorkspace
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             paths = [root / f'{name}.py' for name in 'abcd']
             for path in paths:
@@ -342,7 +338,7 @@ class WorkspaceTests(WorkspaceFixture):
         from features.ide.projects import Project
         from features.ide.workspace import ProjectWorkspace
         from unittest.mock import patch
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             path = root / 'offline' / 'a.py'
             browser = {'expanded': [str(path.parent)], 'selected': str(path)}
@@ -375,7 +371,7 @@ class WorkspaceTests(WorkspaceFixture):
         from features.ide.workspace import ProjectWorkspace
         from unittest.mock import patch
         from commonUtils.ui import pyside as qt
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             path = Path(directory) / 'a.py'
             path.write_text('value = 1\n')
             view = ProjectWorkspace(Project('one', directory))
@@ -448,7 +444,7 @@ class RestoreTests(WorkspaceFixture):
         from features.ide.projects import Project
         from features.ide.workspace import ProjectWorkspace
         from unittest.mock import patch
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_text('value = 1\n')
             project = Project('test', directory, layout={'groups': [
@@ -465,7 +461,7 @@ class RestoreTests(WorkspaceFixture):
     def test_independent_projects_layout_and_missing_files_survive_restart(self):
         from features.ide.page import IDEPage
         from features.ide.projects import Project
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             state = root / 'IDE' / 'workspace.json'
             a, b = root / 'a.py', root / 'b.py'
@@ -501,7 +497,7 @@ class RestoreTests(WorkspaceFixture):
         from features.ide.workspace import ProjectWorkspace
         from features.ide.projects import Project
         from unittest.mock import patch
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_text('value = 1\nvalue\n')
             view = ProjectWorkspace(Project('test', directory))
@@ -533,7 +529,7 @@ class RestoreTests(WorkspaceFixture):
         from features.ide.projects import Project
         from commonUtils.ui import pyside as qt
         from PySide6.QtTest import QTest
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             source, target = root / 'main.py', root / 'models.py'
             code = 'from models import Thing\nThing()\n'
@@ -566,7 +562,7 @@ class RestoreTests(WorkspaceFixture):
     def test_watcher_distinguishes_own_save_from_external_write(self):
         from features.ide.workspace import ProjectWorkspace
         from features.ide.projects import Project
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_text('original\n')
             view = ProjectWorkspace(Project('test', directory))

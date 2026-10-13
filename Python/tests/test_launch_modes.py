@@ -254,3 +254,44 @@ class LaunchModeTests(QtTestCase):
             self.window.header_menus.update_settings()
         self.assertEqual([action.text() for action in self.window.header_menus.feature_settings.actions()],
                          ['Enabled Tool'])
+
+    def test_cards_grow_uniformly_for_wrapped_large_text(self):
+        from ui_new.landing import LandingPage
+        page = LandingPage()
+        self.addCleanup(page.deleteLater)
+        page.set_tool_launchers([('short', 'Short', 'Small detail.', 'ide'),
+                                 ('long', 'Longer workspace', 'A detailed explanation that wraps over several lines.', 'git')])
+        page.set_document_launchers({str(i): DocumentLauncherContribution(
+            str(i), 'Text Editor', Mock(), 'text', i, Mock(),
+            description='Edit documents.' if i == 0 else 'A detailed description that needs several lines of space.')
+            for i in range(3)})
+        page.resize(950, 650)
+        page.show()
+        for _ in range(5):
+            self.app.processEvents()
+        initial = page._document_cards[0].height()
+        font = qt.QFont(page.font())
+        font.setPointSize(24)
+        for card in page._document_cards + page._tool_cards:
+            for label in card.findChildren(qt.QLabel):
+                label.setFont(font)
+        for width in (950, 650, 420, 950):
+            page.resize(width, 650)
+            for _ in range(8):
+                self.app.processEvents()
+            for cards in (page._document_cards, page._tool_cards):
+                self.assertEqual(len({card.height() for card in cards}), 1)
+                for card in cards:
+                    for label in card.findChildren(qt.QLabel):
+                        self.assertGreaterEqual(label.height(), label.heightForWidth(label.width()),
+                            (width, card.width(), card.height(), card.layout().totalHeightForWidth(card.width()),
+                             label.text(), label.width(), page._layout_text_height(card.layout()), card.minimumHeight(), card.maximumHeight()))
+            self.assertGreater(page._document_cards[0].height(), initial)
+        enlarged = page._document_cards[0].height()
+        font.setPointSize(11)
+        for card in page._document_cards + page._tool_cards:
+            for label in card.findChildren(qt.QLabel):
+                label.setFont(font)
+        for _ in range(8):
+            self.app.processEvents()
+        self.assertLess(page._document_cards[0].height(), enlarged)

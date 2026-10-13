@@ -28,7 +28,7 @@ def defaults():
     def read(key, fallback, **bounds):
         return get_setting('Reader', key, fallback, path=path, **bounds)
     theme = read('theme_mode', 'sepia')
-    return dict(font_size=get_setting('Styling', 'reading_font_size_int', 15, minimum=8, maximum=48),
+    return dict(font_size=get_setting('Styling', 'reading_font_size_int', 15, minimum=7, maximum=24),
                 font_family=get_setting('Styling', 'reading_font_family_str', 'Georgia'),
                 theme=theme if theme in THEMES else 'sepia', remember=read('remember_position_bool', True),
                 reading_width=read('reading_width_int', 820, minimum=480, maximum=1400),

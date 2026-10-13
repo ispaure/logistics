@@ -180,6 +180,9 @@ width. The last normal browser tab still cannot close or detach.
 ## Central settings
 
 Open **Logistics Settings** from the navigation rail or a tool's settings action.
+Mouse-wheel gestures scroll the page without changing numeric fields, dropdowns,
+date/time fields, sliders or dials under the pointer, even when focused. Edit with
+typing, keyboard arrows or clicks; open dropdown lists still scroll their choices.
 Settings opens in **Personal Settings**. Its feature-settings list includes only
 enabled features; the **Features** page lists installed features so you can enable
 or disable them. Hidden feature editors retain pending edits until you close or reset them. **Default Software Configuration** is
@@ -227,7 +230,10 @@ changes remain when switching modes; closing asks Save/Discard/Cancel.
 interface, browser, reading and code font roles. Each font name in the dropdown
 is shown in its own typeface for a preview while browsing, including the selected
 field. Samples underneath preview pending font and size changes before saving.
-The code font list is limited to monospace fonts with equal character widths.
+All four font sizes allow 7–24 pt. The code font list is limited to monospace fonts with equal character widths.
+On Windows, font lists exclude legacy bitmap/vector families such as Terminal
+and Fixedsys. Unsupported typed choices show an error on Save and use a safe
+preview; existing unsupported saved choices fall back automatically.
 The interface font covers settings navigation and application menus. The file
 browser font covers text within browser panels: file lists and headers, tiles,
 folder columns, storage labels, paths, search controls and file details.
@@ -238,7 +244,7 @@ records remain personal data, outside software defaults. The path above each
 editor shows exactly which INI will change.
 
 Launch and Documents pages keep their central content compact on wide windows,
-with a maximum width of 880 pixels. The card layout still adapts to narrower windows.
+with a maximum width of 880 pixels. Cards retain their compact 88-pixel minimum height, grow to fit wrapped text, and share the tallest height within each tool or document group. They recalculate after font and width changes.
 
 New/Open document choices use the same 88-pixel base card height and horizontal
 presentation as launch choices, with compact New/Open actions on the right.

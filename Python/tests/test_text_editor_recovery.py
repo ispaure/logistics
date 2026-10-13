@@ -1,10 +1,8 @@
 import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from pathlib import Path
-from tempfile import TemporaryDirectory
-from time import monotonic, sleep
-import unittest
 from unittest.mock import patch
+from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.persistence.session import SessionStore
 from commonUtils.persistence.text import decode_bytes
@@ -13,13 +11,13 @@ from features.text_editor.service import EditorService
 from features.text_editor.session import document_record, load_document_record
 
 
-class EditorRecoveryTests(unittest.TestCase):
+class EditorRecoveryTests(QtTestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def setUp(self):
-        self.temp = TemporaryDirectory()
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name).resolve()
         self.services = []
 
@@ -30,12 +28,7 @@ class EditorRecoveryTests(unittest.TestCase):
         return service
 
     def wait(self, predicate):
-        end = monotonic() + 8
-        while not predicate():
-            self.assertLess(monotonic(), end)
-            self.app.processEvents()
-            sleep(.005)
-        self.app.processEvents()
+        self.wait_until(predicate, timeout=8, message='Text Editor recovery operation did not finish')
 
     def tearDown(self):
         for service in self.services:

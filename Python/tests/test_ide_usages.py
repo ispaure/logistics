@@ -69,17 +69,12 @@ class UsageNavigationTests(QtTestCase):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def wait(self, view):
-        from PySide6.QtTest import QTest
-        for _ in range(1000):
-            self.app.processEvents()
-            if not view.worker and not view.queue:
-                return
-            QTest.qWait(5)
-        self.fail('Workspace worker did not finish')
+        self.wait_until(lambda: not view.worker and not view.queue,
+                        message='Workspace worker did not finish')
 
     def test_popup_filters_dismisses_outside_and_on_escape(self):
         from PySide6.QtTest import QTest
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             path = root / 'main.py'
             code = 'def action():\n    pass\n\naction()\n'
@@ -121,7 +116,7 @@ class UsageNavigationTests(QtTestCase):
 
     def test_click_declaration_selects_usage_and_returns_through_history(self):
         from PySide6.QtTest import QTest
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             source = root / 'model.py'
             source.write_text('def action():\n    pass\n')

@@ -215,7 +215,7 @@ class ReaderTests(QtTestCase):
         self.page.font_size.setValue(27)
         self.page.spacing.setValue(140)
         self.app.processEvents()
-        self.assertEqual(self.page.text.document().defaultFont().pointSize(), 27)
+        self.assertEqual(self.page.text.document().defaultFont().pointSize(), 24)
         self.assertEqual(self.page.text.document().begin().next().blockFormat().lineHeight(), 140)
         self.page.theme.setCurrentIndex(self.page.theme.findData('dark'))
         from commonUtils.ui.appearance.theme import configured_colors
