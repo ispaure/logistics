@@ -47,9 +47,14 @@ excluded. Budgeting is approximate and the model context limit is configured by
 the user. The UI does not promise cross-conversation memory or model training.
 
 See [implementation contracts](../../Python/features/lm/README.md) and
-[user behavior](../../Python/features/lm/user_docs/README.md). Future agent/tool
-integration would require a separate execution and permission contract; current
-transport rejects tool calls and provides no filesystem/shell tools.
+[user behavior](../../Python/features/lm/user_docs/README.md). Code mode adds a bounded read-only execution contract: a conversation selects an
+IDE registration, snapshots open editor text on the GUI thread, and offers
+list/search/read tools scoped to that root and its exclusions. Ordinary Chat
+continues rejecting tools. No mutation or shell tool is provided. `agent.py` owns
+the HTTP/tool loop and cooperative ResultWorker lifecycle; busy remains true
+through tool execution and subsequent requests. Tool definitions/results share
+the configured context budget. JSON response metadata retains tool activity;
+legacy records default to Chat. See the implementation contracts for limits.
 
 ## Organization and controls
 
@@ -65,3 +70,44 @@ Message timestamps render locally from the existing `created` field. The LM foot
 uses QStatusBar with the browser workspace's 10/8/10/8 content margins and a
 zero-margin StatusLine. Chat action buttons share one accessible construction
 helper. Context menus and header menus reuse the same actions and enabled state.
+
+## Mode-specific conversation navigation
+
+Chat/Code are sidebar tabs above the conversation browser. The persisted mode
+is a conversation property, set on creation rather than changed by navigation.
+Browser records/searches filter by mode; legacy records appear in Chat. Switching
+saves the outgoing draft before releasing its lease and restores the target
+mode’s last conversation, or opens/creates one if needed. Save failure vetoes
+the switch. Tabs are disabled during both HTTP and tool work. Folder placement
+and storage identities remain shared, so existing leases and moves still apply.
+
+HTTP 400 diagnostics retain at most 16 KiB of JSON error text internally for
+static classification (no loaded model, unavailable model, context limit). Raw
+server text is never displayed or persisted; unknown errors retain the generic
+message. Authentication error bodies remain ignored.
+
+## Pasted screenshots
+
+Composer accepts clipboard image MIME data, converts it to bounded PNG records,
+and shows removable native previews. Optional `draft_images` and message `images`
+fields are additive to version-one JSON; legacy text conversations still load.
+Images are embedded, so revision-checked publication, moves, forks and exports
+retain them without external paths. Draft clearing and save-failure rollback
+operate on text and images together. User bubbles render separate native image
+widgets; Markdown's resource-loading restrictions remain in force.
+
+OpenAI-compatible requests use image_url data URLs in user content arrays. Recent
+complete turns retain their images, while omitted/failed turns follow existing
+context policy. Budgeting uses a documented image-token reserve rather than
+base64 length, including Code-mode continuations. Vision support must be supplied
+by the configured model/server; text-only payloads retain their original shape.
+
+Local file URLs take precedence over clipboard imageData: macOS Finder can offer
+a generic file icon as imageData for a copied screenshot. The file loader uses
+bounded bytes and QImageReader format/dimension checks, accepts raster formats
+only, and reports unreadable files without falling back to their icon preview.
+Direct screenshot pixels still use the original image MIME path.
+
+Composer and LMPage explicitly accept image/file-URL drag events and route drops
+through the same bounded clipboard decoder. They do not insert file:// text for
+image files. Ordinary text drops retain the editor’s native behavior.

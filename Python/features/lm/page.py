@@ -8,7 +8,11 @@ from commonUtils.ui import pyside as qt
 from commonUtils.persistence import atomic_write_bytes, atomic_write_json
 from .domain import build_request, conversation, defaults, message, validate_settings
 from .storage import Store, export_markdown
-from .transport import Client
+from .agent import AgentClient
+from .screenshots import encode_screenshot, read_clipboard_image_file, MAX_IMAGES
+from .image_view import ScreenshotView
+from .project_tools import ProjectTools, TOOLS
+from .ide_context import registered_projects, editor_context
 from .icons import chat_icon, action_button
 from .conversation_view import ConversationView
 from .conversation_tree import ConversationTree
@@ -32,6 +36,8 @@ class SamplingSpin(qt.QDoubleSpinBox):
 
 class Composer(qt.QPlainTextEdit):
     send_requested = qt.Signal()
+    image_pasted = qt.Signal(object)
+    image_paste_failed = qt.Signal(str)
 
     def keyPressEvent(self, event):
         if event.key() in (qt.Qt.Key.Key_Return, qt.Qt.Key.Key_Enter):
@@ -41,6 +47,60 @@ class Composer(qt.QPlainTextEdit):
                 self.send_requested.emit()
                 return
         super().keyPressEvent(event)
+
+    def canInsertFromMimeData(self, source):
+        return source.hasImage() or any(url.isLocalFile() for url in source.urls()) or super().canInsertFromMimeData(source)
+
+    def insertFromMimeData(self, source):
+        paths = [url.toLocalFile() for url in source.urls() if url.isLocalFile()]
+        if paths:
+            try:
+                if len(paths) > MAX_IMAGES:
+                    raise ValueError('Paste at most four image files at once.')
+                # Decode the entire selection before accepting any attachment.
+                images = [read_clipboard_image_file(path) for path in paths]
+            except (ValueError, OSError) as error:
+                self.image_paste_failed.emit(str(error))
+                return
+            for image in images:
+                self.image_pasted.emit(image)
+            return
+        if source.hasImage():
+            image = source.imageData()
+            if isinstance(image, qt.QPixmap):
+                image = image.toImage()
+            if isinstance(image, qt.QImage):
+                self.image_pasted.emit(image)
+                return
+        super().insertFromMimeData(source)
+
+    @staticmethod
+    def image_source(source):
+        return source.hasImage() or any(url.isLocalFile() for url in source.urls())
+
+    @staticmethod
+    def accept_image_drop(event):
+        event.setDropAction(qt.Qt.DropAction.CopyAction)
+        event.accept()
+
+    def dragEnterEvent(self, event):
+        if self.image_source(event.mimeData()):
+            Composer.accept_image_drop(event)
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event):
+        if self.image_source(event.mimeData()):
+            Composer.accept_image_drop(event)
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event):
+        if self.image_source(event.mimeData()):
+            self.insertFromMimeData(event.mimeData())
+            Composer.accept_image_drop(event)
+        else:
+            super().dropEvent(event)
 
     def inputMethodEvent(self, event):
         self.composing = bool(event.preeditString())
@@ -109,13 +169,33 @@ class ProfilesDialog(qt.QDialog):
         self.accept()
 
 
+class ModeTabs(qt.QTabBar):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        for label, key in (('Chat', 'chat'), ('Code', 'code')):
+            self.setTabData(self.addTab(label), key)
+        self.setExpanding(True)
+        self.setAccessibleName('Conversation mode')
+
+    def currentData(self):
+        return self.tabData(self.currentIndex())
+
+    def findData(self, value):
+        return next((index for index in range(self.count()) if self.tabData(index) == value), -1)
+
+
 class LMPage(qt.QWidget):
     idle = qt.Signal()
 
     def __init__(self, parent=None, *, store=None, client=None):
         super().__init__(parent)
         self.store = store or Store()
-        self.client = client or Client(self)
+        self.client = client or AgentClient(self)
+        self.projects = {}
+        self.draft_images = []
+        self.browser_mode = 'chat'
+        self.last_conversations = {}
+        self.mode_search = {}
         self.data = None
         self.lease = None
         self._lease_holder = [None]
@@ -128,6 +208,7 @@ class LMPage(qt.QWidget):
         self.dirty = False
         self.discard_approved = False
         self.closing = False
+        self.setAcceptDrops(True)
         self.setProperty('navigation_position', 'workspace')
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -138,6 +219,8 @@ class LMPage(qt.QWidget):
         side = qt.QVBoxLayout(left)
         side.setContentsMargins(8, 8, 8, 8)
         side.setSpacing(10)
+        self.mode = ModeTabs(left)
+        side.addWidget(self.mode)
         self.search = qt.QLineEdit()
         self.search.setPlaceholderText('Search conversations…')
         side.addWidget(self.search)
@@ -205,6 +288,20 @@ class LMPage(qt.QWidget):
         self.test_button = self.icon_button('Test connection / Refresh models', self.refresh_models, 'refresh', row)
         connection.addRow('Model', row)
         body.addWidget(self.connection_box)
+        self.project_box = qt.QWidget()
+        project_row = qt.QHBoxLayout(self.project_box)
+        project_row.setContentsMargins(0, 0, 0, 0)
+        self.project_picker = qt.QComboBox()
+        self.project_picker.setAccessibleName('IDE project')
+        self.project_picker.setMinimumContentsLength(12)
+        self.project_picker.setSizeAdjustPolicy(qt.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        project_row.addWidget(self.project_picker, 1)
+        self.project_refresh = self.button('Refresh projects', self.load_projects, project_row)
+        self.attach_button = self.button('Attach files…', self.attach_files, project_row)
+        self.selection_button = self.button('Attach selection', self.attach_selection, project_row)
+        body.addWidget(self.project_box)
+        self.mode.currentChanged.connect(self.mode_changed)
+        self.project_picker.currentIndexChanged.connect(self.project_changed)
         options = qt.QHBoxLayout()
         self.settings_toggle = qt.QToolButton()
         self.settings_toggle.setText('Generation settings')
@@ -260,6 +357,11 @@ class LMPage(qt.QWidget):
         self.disclaimer.setWordWrap(True)
         self.disclaimer.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         body.addWidget(self.disclaimer)
+        self.image_drafts = qt.QWidget()
+        self.image_draft_layout = qt.QHBoxLayout(self.image_drafts)
+        self.image_draft_layout.setContentsMargins(0, 0, 0, 0)
+        body.addWidget(self.image_drafts)
+        self.image_drafts.hide()
         self.composer_frame = qt.QFrame()
         self.composer_frame.setObjectName('lmComposerFrame')
         row = qt.QHBoxLayout(self.composer_frame)
@@ -268,6 +370,8 @@ class LMPage(qt.QWidget):
         self.composer = Composer()
         self.composer.setPlaceholderText('Message…  Enter to send · Shift+Enter for a new line')
         self.composer.send_requested.connect(self.send)
+        self.composer.image_pasted.connect(self.paste_screenshot)
+        self.composer.image_paste_failed.connect(lambda error: self.status.setText(error))
         self.composer.setFixedHeight(72)
         self.composer.setAccessibleName('Message draft')
         row.addWidget(self.composer, 1)
@@ -329,6 +433,8 @@ class LMPage(qt.QWidget):
         self.client.delta.connect(self.append_delta)
         self.client.models.connect(self.models_loaded)
         self.client.completed.connect(self.completed)
+        if hasattr(self.client, 'activity'):
+            self.client.activity.connect(self.status.setText)
         from commonUtils.ui.appearance.styling import styling
         self.styling = styling(qt.QApplication.instance())
         self.styling.bind(self.transcript, 'reading')
@@ -486,6 +592,201 @@ class LMPage(qt.QWidget):
         lines = max(2, self.composer.document().blockCount())
         self.composer.setFixedHeight(min(150, lines * self.composer.fontMetrics().lineSpacing() + 20))
 
+    def dragEnterEvent(self, event):
+        if Composer.image_source(event.mimeData()) and (self.data is None or self.lease is not None):
+            Composer.accept_image_drop(event)
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        self.dragEnterEvent(event)
+
+    def dropEvent(self, event):
+        if Composer.image_source(event.mimeData()) and (self.data is None or self.lease is not None):
+            self.composer.insertFromMimeData(event.mimeData())
+            Composer.accept_image_drop(event)
+        else:
+            event.ignore()
+
+    def paste_screenshot(self, image):
+        if self.data is None:
+            self.new_conversation()
+        if self.data is None or self.lease is None:
+            return
+        try:
+            if len(self.draft_images) >= MAX_IMAGES:
+                raise ValueError('Attach at most four screenshots per message.')
+            self.draft_images.append(encode_screenshot(image))
+        except ValueError as error:
+            self.status.setText(str(error))
+            return
+        self.refresh_draft_images()
+        self.changed()
+        self.status.setText('Screenshot attached. Add a message or send it directly; image input requires a vision-capable model.')
+
+    def remove_screenshot(self, key):
+        self.draft_images = [image for image in self.draft_images if image['id'] != key]
+        self.refresh_draft_images()
+        self.changed()
+
+    def refresh_draft_images(self):
+        while self.image_draft_layout.count():
+            item = self.image_draft_layout.takeAt(0)
+            if item.widget():
+                item.widget().hide()
+                item.widget().deleteLater()
+        for image in self.draft_images:
+            card = qt.QWidget()
+            layout = qt.QVBoxLayout(card)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.addWidget(ScreenshotView(image, card, preview=True))
+            remove = qt.QPushButton('Remove')
+            remove.setAccessibleName('Remove screenshot')
+            remove.clicked.connect(lambda checked=False, key=image['id']: self.remove_screenshot(key))
+            layout.addWidget(remove)
+            self.image_draft_layout.addWidget(card)
+        self.image_draft_layout.addStretch()
+        self.image_drafts.setVisible(bool(self.draft_images))
+
+    def load_projects(self):
+        key = (self.data.get('project_id', '') if self.loading and self.data
+               else self.project_picker.currentData())
+        try:
+            self.projects = registered_projects(self)
+        except (ValueError, OSError) as error:
+            self.status.setText(str(error))
+            self.projects = {}
+        self.project_picker.blockSignals(True)
+        self.project_picker.clear()
+        self.project_picker.addItem('Select IDE project…', '')
+        for project in sorted(self.projects.values(), key=lambda p: p.name.casefold()):
+            self.project_picker.addItem(project.name, project.id)
+            self.project_picker.setItemData(self.project_picker.count() - 1, str(project.root), qt.Qt.ItemDataRole.ToolTipRole)
+        if key:
+            if key not in self.projects:
+                self.project_picker.addItem('Unavailable project — select another', key)
+            self.project_picker.setCurrentIndex(self.project_picker.findData(key))
+        self.project_picker.blockSignals(False)
+
+    def mode_changed(self):
+        if self.loading:
+            return
+        target = self.mode.currentData()
+        previous = self.browser_mode
+        if self.client.busy or not self.persist():
+            self.mode.blockSignals(True)
+            self.mode.setCurrentIndex(self.mode.findData(previous))
+            self.mode.blockSignals(False)
+            return
+        if self.data:
+            self.last_conversations[previous] = self.data['id']
+        self.mode_search[previous] = self.search.text()
+        self.release_lease()
+        self.data = None
+        self.dirty = False
+        self.browser_mode = target
+        self.loading = True
+        self.composer.clear()
+        self.draft_images = []
+        self.refresh_draft_images()
+        self.transcript.clear()
+        self.search.setText(self.mode_search.get(target, ''))
+        self.loading = False
+        self.list.blockSignals(True)
+        self.list.clear()
+        self.folder_items = {}
+        self.list.blockSignals(False)
+        if target == 'code':
+            self.load_projects()
+        self.refresh()
+        keys = [item.data(0, qt.Qt.ItemDataRole.UserRole) for item in self.tree_items()
+                if item.data(0, qt.Qt.ItemDataRole.UserRole)]
+        remembered = self.last_conversations.get(target)
+        if remembered:
+            try:
+                record = self.store.load(remembered)
+                if record.get('mode', 'chat') != target:
+                    remembered = None
+            except (OSError, ValueError):
+                remembered = None
+        key = remembered or (keys[0] if keys else None)
+        if key:
+            self.open_conversation(key)
+            self.refresh(reveal_current=True)
+        elif not self.search.text():
+            self.new_conversation()
+        self.update_controls()
+
+    def project_changed(self):
+        self.changed()
+        project = self.projects.get(self.project_picker.currentData())
+        if project:
+            self.status.setText(f'Code mode: {project.name}. Project text may be sent to the selected server. Read-only access follows IDE exclusions.')
+
+    def attachment_context(self):
+        if self.client.busy or self.mode.currentData() != 'code':
+            raise ValueError('Select Code mode to attach project context.')
+        project = registered_projects(self).get(self.project_picker.currentData())
+        if project is None:
+            raise ValueError('Choose a registered IDE project first.')
+        buffers, selections = editor_context(self, project)
+        return ProjectTools(project, buffers), selections
+
+    def append_attachment(self, text):
+        draft = self.composer.toPlainText()
+        if len((draft + text).encode('utf-8')) > 65536:
+            raise ValueError('Attached context and draft are limited to 64 KiB. Attach a smaller selection or let the model read relevant lines.')
+        self.composer.setPlainText(draft + ('\n\n' if draft else '') + text)
+        self.composer.moveCursor(qt.QTextCursor.MoveOperation.End)
+
+    def attach_files(self):
+        try:
+            tools, _ = self.attachment_context()
+            paths, _ = qt.QFileDialog.getOpenFileNames(self, 'Attach project text files', str(tools.root))
+            attachments = []
+            for path in paths:
+                supplied = Path(path).absolute()
+                # Accept OS aliases for the project root (e.g. /var on macOS),
+                # preserving every component below it for link/exclusion checks.
+                anchor = next((parent for parent in reversed(supplied.parents)
+                               if parent.resolve() == tools.root), None)
+                if anchor is None:
+                    raise ValueError('Attachments must stay inside the selected project.')
+                relative = supplied.relative_to(anchor).as_posix()
+                text, source = tools.text(relative)
+                attachments.append(f'Project file: {relative} ({source})\n```\n{text}\n```')
+            if attachments:
+                self.append_attachment('\n\n'.join(attachments))
+        except (ValueError, OSError, UnicodeError) as error:
+            self.status.setText(str(error))
+
+    def attach_selection(self):
+        try:
+            tools, selections = self.attachment_context()
+            selections = [entry for entry in selections if self.selection_allowed(tools, entry[0])]
+            if not selections:
+                raise ValueError('Select code in an open editor in this IDE project first.')
+            if len(selections) == 1:
+                selected = selections[0]
+            else:
+                labels = [f'{path}:{line}' for path, line, _ in selections]
+                label, accepted = qt.QInputDialog.getItem(self, 'Attach IDE selection', 'Selection', labels, 0, False)
+                if not accepted:
+                    return
+                selected = selections[labels.index(label)]
+            path, line, text = selected
+            self.append_attachment(f'IDE selection: {path}, starting at line {line}\n```\n{text}\n```')
+        except (ValueError, OSError) as error:
+            self.status.setText(str(error))
+
+    @staticmethod
+    def selection_allowed(tools, path):
+        try:
+            tools.path(path)
+            return True
+        except (ValueError, OSError):
+            return False
+
     def send_or_stop(self):
         if self.client.busy:
             self.client.cancel()
@@ -540,6 +841,7 @@ class LMPage(qt.QWidget):
         expanded = {path: item.isExpanded() for path, item in getattr(self, 'folder_items', {}).items()}
         try:
             records, warnings = self.store.list(self.search.text())
+            records = [record for record in records if record.get('mode', 'chat') == self.mode.currentData()]
             folders = self.store.folders()
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
@@ -660,6 +962,7 @@ class LMPage(qt.QWidget):
             self.status.setText(str(error))
             self.refresh()
             return
+        previous_mode = self.browser_mode
         self.release_lease()
         self.lease, self.data = lease, data
         self._lease_holder[0] = lease
@@ -675,6 +978,8 @@ class LMPage(qt.QWidget):
             self.persist()
         else:
             self.status.setText('Conversation opened.')
+        if previous_mode != self.browser_mode:
+            self.refresh(reveal_current=True)
         self.update_controls()
 
     def release_lease(self):
@@ -689,7 +994,15 @@ class LMPage(qt.QWidget):
         self.profile.setCurrentIndex(self.profile.findData(data['profile_id']))
         self.token.setText(self.session_tokens.get(data['profile_id'], ''))
         self.model.setCurrentText(data['model'])
+        self.mode.setCurrentIndex(self.mode.findData(data.get('mode', 'chat')))
+        self.browser_mode = data.get('mode', 'chat')
+        self.last_conversations[self.browser_mode] = data['id']
+        if data.get('mode') == 'code':
+            self.load_projects()
+        self.project_picker.setCurrentIndex(self.project_picker.findData(data.get('project_id', '')))
         self.composer.setPlainText(data['draft'])
+        self.draft_images = deepcopy(data.get('draft_images', []))
+        self.refresh_draft_images()
         settings = data['settings']
         self.temperature.setValue(settings['temperature'] if settings['temperature'] is not None else -1)
         self.top_p.setValue(settings['top_p'] if settings['top_p'] is not None else -1)
@@ -708,6 +1021,8 @@ class LMPage(qt.QWidget):
         if self.data is None:
             return
         self.data['draft'] = self.composer.toPlainText()
+        self.data['draft_images'] = deepcopy(self.draft_images)
+        self.data['project_id'] = self.project_picker.currentData() or ''
         self.data['model'] = self.model.currentText().strip()
         self.data['profile_id'] = self.profile.currentData() or ''
         self.data['settings'] = validate_settings(dict(
@@ -752,6 +1067,8 @@ class LMPage(qt.QWidget):
             return
         data = conversation(defaults(), self.profile.currentData() or '', self.model.currentText())
         data['folder'] = self.selected_folder()
+        data['mode'] = self.mode.currentData()
+        data['project_id'] = self.project_picker.currentData() or ''
         try:
             lease = self.store.lease(data['id'])
             try:
@@ -812,16 +1129,16 @@ class LMPage(qt.QWidget):
             return
         if self.data is None:
             self.new_conversation()
-        if self.data is None or not self.composer.toPlainText().strip():
+        if self.data is None or (not self.composer.toPlainText().strip() and not self.draft_images):
             return
         if not self.persist():
             return
         self.collect()
         snapshot = deepcopy(self.data)
         text = self.composer.toPlainText()
-        self.data['messages'].append(message('user', text))
+        self.data['messages'].append(message('user', text, images=deepcopy(self.draft_images)))
         if self.data['title'] == 'New conversation':
-            self.data['title'] = next(line.strip() for line in text.splitlines() if line.strip())[:80]
+            self.data['title'] = next((line.strip() for line in text.splitlines() if line.strip()), 'Screenshot')[:80]
         if not self.begin_generation():
             self.data = snapshot
             self.render()
@@ -839,7 +1156,21 @@ class LMPage(qt.QWidget):
             return False
         try:
             self.collect()
-            payload, metadata = build_request(self.data)
+            project_tools = None
+            if self.data.get('mode') == 'code':
+                key = self.project_picker.currentData()
+                self.projects = registered_projects(self)
+                project = self.projects.get(key)
+                if project is None:
+                    raise ValueError('Choose a registered IDE project. Register one in IDE, then refresh projects.')
+                buffers, _ = editor_context(self, project)
+                project_tools = ProjectTools(project, buffers)
+            payload, metadata = build_request(self.data, tools=TOOLS if project_tools else None,
+                                             project_name=project_tools.name if project_tools else None)
+            if project_tools:
+                metadata['project_id'] = project.id
+                metadata['project_name'] = project.name
+                metadata['project_root'] = str(project.root)
         except ValueError as error:
             self.status.setText(str(error))
             return False
@@ -847,8 +1178,12 @@ class LMPage(qt.QWidget):
         entry = message('assistant', status='streaming', request=metadata)
         self.data['messages'].append(entry)
         old_draft = self.data['draft']
+        old_images = deepcopy(self.draft_images)
         if clear_draft:
             self.data['draft'] = ''
+            self.data['draft_images'] = []
+            self.draft_images = []
+            self.refresh_draft_images()
             self.loading = True
             self.composer.clear()
             self.loading = False
@@ -856,13 +1191,20 @@ class LMPage(qt.QWidget):
         if not self.persist():
             self.data['messages'].pop()
             self.data['draft'] = old_draft
+            self.data['draft_images'] = old_images
+            self.draft_images = old_images
+            self.refresh_draft_images()
             self.loading = True
             self.composer.setPlainText(old_draft)
             self.loading = False
             return False
         self.active_message = entry
         try:
-            self.client.start(profile, self.token.text(), payload)
+            if project_tools:
+                self.client.start(profile, self.token.text(), payload, project_tools=project_tools,
+                                  context_tokens=self.data['settings']['context_tokens'])
+            else:
+                self.client.start(profile, self.token.text(), payload)
         except (ValueError, OSError) as error:
             entry['status'] = 'failed'
             entry['error'] = str(error)
@@ -931,6 +1273,12 @@ class LMPage(qt.QWidget):
         for widget in (self.list, self.new_button, self.refresh_button, self.search, self.folder_button):
             widget.setEnabled(not busy)
         self.connection_box.setEnabled(not busy)
+        self.mode.setEnabled(not busy)
+        self.project_box.setVisible(self.mode.currentData() == 'code')
+        self.project_box.setEnabled(editable and not busy)
+        code = self.mode.currentData() == 'code'
+        for widget in (self.project_picker, self.project_refresh, self.attach_button, self.selection_button):
+            widget.setVisible(code)
         self.settings_box.setEnabled(editable and not busy)
         self.composer.setEnabled(editable)
         self.composer.setPlaceholderText('Draft your next message… Send after the current request finishes · Shift+Enter for a new line'
@@ -982,6 +1330,8 @@ class LMPage(qt.QWidget):
             return
         self.release_lease()
         self.data = None
+        self.draft_images = []
+        self.refresh_draft_images()
         self.loading = True
         self.composer.clear()
         self.loading = False
@@ -994,6 +1344,7 @@ class LMPage(qt.QWidget):
             return
         # Export is also available after save/conflict failures, without overwriting the source.
         self.data['draft'] = self.composer.toPlainText()
+        self.data['draft_images'] = deepcopy(self.draft_images)
         path, chosen = qt.QFileDialog.getSaveFileName(self, 'Export conversation', self.data['id'] + '.md',
                                                      'Markdown (*.md);;JSON (*.json)')
         if not path:

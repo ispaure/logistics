@@ -1,9 +1,9 @@
 # LM Chat
 
-LM Chat connects Logistics to an existing LM Studio or OpenAI-compatible text
+LM Chat connects Logistics to an existing LM Studio or OpenAI-compatible
 chat server. The server loads and runs the model; Logistics keeps the interface
 and conversation history on your computer. This feature does not install models
-or execute tools, commands or file edits.
+or execute commands or file edits. Code mode provides read-only project tools.
 
 ## Connect and start a conversation
 
@@ -58,6 +58,80 @@ reads “Language Models can make mistakes. Check important info.”
 Connection/generation messages use the shared muted footer; hover over a
 shortened status to read its full text. Save failures remain visible separately
 with recovery/export instructions.
+
+## Paste screenshots
+
+Copy a screenshot to the clipboard, focus the message composer, and paste
+(**Ctrl+V**, or **Command+V** on macOS). You can also copy an image file
+in Finder or your file manager and paste it, or drag image files into the chat
+or composer. Logistics reads the file contents
+instead of the file icon. PNG, JPEG, WebP, TIFF, BMP and GIF raster files are
+accepted up to 16 MiB (GIF uses its first frame). Its thumbnail appears above the composer;
+use **Remove** to discard an attachment before sending. You can add text or send
+an image-only message. This works in both Chat and Code.
+
+Screenshots remain in the saved conversation history after closing/restarting
+Logistics. Unsent screenshots are saved with your draft. Click a draft or history
+thumbnail to view the saved image at full size; **Copy image** copies it back to
+the clipboard. Moves and forks retain images. JSON exports embed them; Markdown
+exports include PNG data URLs (display support depends on the Markdown viewer).
+
+Image input requires a vision-capable model and a server supporting image parts
+in Chat Completions. Logistics sends the images to your selected server when you
+send or regenerate the message, and retains images in recent completed turns
+when they fit the context budget. It never silently sends just the text instead.
+If the server rejects the request, the sent screenshot remains in history.
+
+Up to four screenshots can be attached per message. Images are stored as PNG,
+scaled to a maximum of 2048 pixels on either side, with a 2 MiB limit per saved
+image. The entire conversation retains the existing 32 MiB save limit. Budgeting
+reserves approximately 2048 tokens per image; actual vision token usage depends
+on the model and server. Increase context size or attach fewer images if needed.
+
+## Discuss an IDE project in Code mode
+
+Use the **Chat** and **Code** tabs above the left conversation browser. Each tab
+shows its own set of conversations; switching saves the outgoing draft and
+restores that mode’s last open conversation. New conversations belong to the
+active tab. Existing conversations without a mode appear under Chat. Folder
+organization is shared, while conversation lists and searches are filtered by mode.
+
+In Code, choose a project already registered in IDE. **Refresh projects** updates the
+picker after registering or changing a project; a missing registration or folder
+blocks sending. Mode and project choice are saved per conversation. Use a new
+conversation for a different project to keep its discussion separate.
+
+**Attach files…** adds project text files to the draft. **Attach selection** copies
+selected code from an open editor in that project; if several editors have a
+selection, choose one. Open editor text includes unsaved changes. Attachments
+are ordinary draft text: review or remove them before sending. The draft plus
+attached context is limited to 64 KiB. Larger files can be explored a few lines
+at a time with the model's read tool.
+
+In Code mode, a model supporting OpenAI-compatible function calling can list
+project files, search their text, and read line ranges as needed. Logistics runs
+these read-only tools on your computer and sends their results to the selected
+server, including a remote LM Studio server. No code is imported or executed,
+and there are no edit or command tools. Ordinary Chat does not offer project
+tools; switching back does not remove project text already sent or in your draft.
+The status footer shows tool names and requested paths/queries while they run.
+
+Tools use the selected project's root and IDE exclusions, always exclude `.git`,
+and refuse symbolic links and paths outside the project. Reads accept UTF-8 text
+up to 256 KiB, at most 200 lines and 10,000 text characters per call. Searches
+are bounded to 5,000 entries, 50 matches, 8 MiB of searched text and five seconds
+of directory traversal; results can be incomplete. Each turn allows six tool
+rounds and 24 calls. Context budgeting includes tool definitions and results;
+if it fills, increase the configured context size or start a shorter conversation.
+Stop and window closing also cancel project searches cooperatively.
+
+Open editor text is captured at the start of each turn, up to 4 MiB across
+eligible open files; subsequent editor changes appear on the next turn. Files
+above the 256 KiB limit cannot supply editor snapshots or tool reads. Tool activity
+and results are saved in the assistant response's JSON metadata. Follow-up turns
+use completed replies, while fresh tool reads can retrieve current source.
+Code mode requires a server/model supporting tool calls; a text-only model can
+still discuss explicitly attached context if its server accepts tool definitions.
 
 ## Generation settings and context
 
@@ -158,15 +232,17 @@ opened or overwritten.
 - Connection failure: check that the server is running and its API base URL is
   reachable. For remote servers, check binding and firewall configuration.
 - Authentication failure: enter the correct session token.
+- No model loaded: load a chat model in LM Studio, then refresh models in Logistics.
+  A remembered model ID does not load it on the server.
 - Missing model: refresh models or enter the exact model ID; load it on the server.
 - Rejected request: check context size, output limit and supported parameters.
 - Interrupted stream: partial text is retained; retry when the server is ready.
 - Redirects are reported rather than followed. Enter the final API URL directly.
 
 LM Studio's OpenAI-compatible text endpoint is the initial target. Other servers
-must support Chat Completions with text messages; model discovery uses `/models`.
-Image/audio inputs, server provisioning, persistent token storage, Codex and local
-tool execution are outside this first version.
+must support Chat Completions; screenshots use image content parts and model discovery uses `/models`.
+Code mode also requires compatible function/tool calls. Audio inputs, server
+provisioning, persistent token storage and a Codex backend are outside this version.
 
 ## Organize conversations and page controls
 
