@@ -184,3 +184,21 @@ printing its result; it is excluded from normal app source paths. Retained nativ
 artifacts are the pre-test normal APK/Simulator archive. Native UI evidence is a
 required build-job result; packaging cannot bypass it. Physical-device pickers,
 keyboard/touch/accessibility and suspension remain independent validation work.
+
+### Phase 2 native UI evidence
+
+At `428d1d7`, [native run 38365625757](https://github.com/ispaure/logistics/actions/runs/38365625757)
+passed all seven actual app cases on Android and iOS, including DOM rendering and
+native PNG decoding. Retained [Android](mobile-evidence/2026-10-13-android-native-ui-phase2.json)
+and [iOS](mobile-evidence/2026-10-13-ios-native-ui-phase2.json) reports identify the
+real backend and source commits. The initial failures exposed an Android AVD/tool
+mismatch, the pinned backend's required AndroidX WebView asset loader, and an iOS
+blank-document navigation race. Briefcase now creates the selected emulator with
+its own tools; Android declares WebKit 1.15.0; HTML uses a distinct offline-document
+origin while navigation handlers and CSP deny external content. These checks do
+not establish physical-device interaction or provider permission behavior.
+
+Phase 1 was published as [v0.1.1-alpha.11](https://github.com/ispaure/logistics/releases/tag/v0.1.1-alpha.11)
+at `99f7653`, after the complete five-platform release gate passed. Its exact
+commit was promoted to main and release `v0.1.1-main.03` was requested without
+waiting for that separate pipeline.
