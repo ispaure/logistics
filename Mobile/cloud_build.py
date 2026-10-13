@@ -30,7 +30,8 @@ def android():
                                  ('amd64', 'x86_64', 'x86_64-linux-android24-clang')]:
         destination = project / 'app/src/main/jniLibs' / abi
         destination.mkdir(parents=True, exist_ok=True)
-        env = dict(os.environ, CGO_ENABLED='1', GOOS='android', GOARCH=arch, CC=str(tools / compiler))
+        env = dict(os.environ, CGO_ENABLED='1', GOOS='android', GOARCH=arch, CC=str(tools / compiler),
+                   CGO_LDFLAGS='-Wl,-z,max-page-size=16384')
         run('go', 'build', '-trimpath', '-ldflags=' + FLAGS, '-buildmode=c-shared',
             '-o', str(destination / 'liblogisticscloud.so'), '.', env=env)
         (destination / 'liblogisticscloud.h').unlink()

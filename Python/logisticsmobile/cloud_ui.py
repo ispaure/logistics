@@ -133,8 +133,8 @@ class CloudUI:
         self.set_cloud_busy(True)
         try:
             name = download_name(row['path'])
-            data = await asyncio.to_thread(self.cloud_client.download, self.cloud_open_remote, row['path'])
-            target = await asyncio.to_thread(self.downloads.save, name, data)
+            target = await asyncio.to_thread(self.downloads.fetch, self.cloud_client,
+                                            self.cloud_open_remote, row['path'])
             self.refresh_downloads(target)
             self.cloud_status.value = f'Downloaded {name}. The remote original was preserved.'
         except Exception as error:

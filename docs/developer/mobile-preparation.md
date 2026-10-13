@@ -235,7 +235,7 @@ without waiting for that separate pipeline.
 
 `Mobile/rclone_bridge` is a pinned Go module using rclone 1.74.1 and yeka/zip for
 WinZip AES/ZipCrypto interoperability. `cloud_build.py` builds Android arm64/x86_64
-C shared libraries with NDK 27.2.12479018, and iOS arm64 device plus host-architecture
+C shared libraries with NDK 27.2.12479018 and explicit 16 KiB ELF page alignment, and iOS arm64 device plus host-architecture
 Simulator C archives. Generated projects link only the narrow C bridge. Go 1.26.9
 is pinned in the native workflow; checks run module tests before native builds.
 Compiled-module license notices and the Go runtime license are included in the
@@ -257,7 +257,9 @@ unsupported filesystem/script settings and retention of the prior session on a
 failed import. All tests use synthetic credentials and an in-memory remote.
 
 `cloud.py` owns the ctypes C allocation/free boundary and app-private completed
-copies. `cloud_ui.py` owns explicit picker/import/connect/download controls. Private
+copies. Downloads stream into a duplicated caller-owned private descriptor;
+only metadata crosses the C/JSON bridge, avoiding base64 amplification for files.
+`cloud_ui.py` owns explicit picker/import/connect/download controls. Private
 copies use exclusive creation in UUID folders and a completion marker, so recovery
 excludes incomplete, linked or invalid entries. Export extends the existing system
 copy adapter to chunked binary output with an explicit 32 MiB maximum; existing

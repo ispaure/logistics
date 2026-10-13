@@ -38,7 +38,29 @@ func TestNativeEngineAndAuthenticatedCredentialPackage(t *testing.T) {
 	}
 	_ = f
 	_ = rows
-	if _, err := read(context.Background(), "Fixture", "../escape"); err == nil {
+
+	file, err := os.CreateTemp(t.TempDir(), "private-copy-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	_, err = selfCheck(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := readInto(context.Background(), "Fixture", "logistics-native-check/fixture.txt", int(file.Fd()))
+	if err != nil || count != int64(len("Native rclone fixture\n")) {
+		t.Fatalf("streamed download: %d %v", count, err)
+	}
+	_, _ = file.Seek(0, 0)
+	content, err := io.ReadAll(file)
+	if err != nil || string(content) != "Native rclone fixture\n" {
+		t.Fatal("private copy differed")
+	}
+	if _, err := readInto(context.Background(), "Fixture", "logistics-native-check/fixture.txt", int(file.Fd())); err == nil {
+		t.Fatal("existing destination accepted")
+	}
+	if _, err := readInto(context.Background(), "Fixture", "../escape", 0); err == nil {
 		t.Fatal("unsafe path accepted")
 	}
 	if _, err := remote(context.Background(), ":local"); err == nil {
