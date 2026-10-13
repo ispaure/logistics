@@ -1,15 +1,16 @@
 [tool.briefcase]
 project_name = "Logistics Mobile"
 bundle = "io.github.ispaure"
-version = "0.1.1"
+version = "0.1.2"
 url = "https://github.com/ispaure/logistics"
 license = "MIT"
 author = "Marc-Andre Voyer"
 
 [tool.briefcase.app.logisticsmobile]
 formal_name = "Logistics Mobile"
-description = "Native mobile hub, preferences, text and Markdown documents"
-sources = ["payload/logisticsmobile", "payload/commonUtils"]
+description = "Native mobile documents, EPUB books and comic readers"
+sources = ["payload/logisticsmobile", "payload/commonUtils", "payload/features", "payload/services"]
+test_sources = ["native_tests/tests"]
 requires = []
 
 [tool.briefcase.app.logisticsmobile.macOS]

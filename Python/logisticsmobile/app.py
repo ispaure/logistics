@@ -7,13 +7,15 @@ from toga.style.pack import COLUMN, ROW
 from .documents import DocumentStore, document_name
 from .preferences import Preferences
 from .preview import markdown_preview
+from .library_ui import LibraryUI
 
 
-class LogisticsMobile(toga.App):
+class LogisticsMobile(LibraryUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def startup(self):
         root = Path(self.storage_root or self.paths.data)
+        self.private_root = root
         self.preferences = Preferences(root)
         self.store = DocumentStore(root / 'Documents')
         self.current = None
@@ -78,8 +80,9 @@ class LogisticsMobile(toga.App):
         box.add(toga.Label('Logistics', style=Pack(font_size=24, margin_bottom=12)))
         box.add(toga.Label('Your documents, on this device.', style=Pack(margin_bottom=12)))
         box.add(toga.Button('Text & Markdown', on_press=self.show_documents, style=Pack(height=52)))
+        box.add(toga.Button('Books & Comics', on_press=self.show_library, style=Pack(height=52, margin_top=8)))
         box.add(toga.Label(f'{len(self.labels)} private document(s)', style=Pack(margin_top=8)))
-        box.add(toga.Label('EPUB/comics, LM chat and remote files are coming in later phases.',
+        box.add(toga.Label('LM chat and remote files are coming in later phases.',
                            style=Pack(margin_top=16)))
         if self.preferences.error:
             box.add(toga.Label(self.preferences.error, style=Pack(margin_top=12)))

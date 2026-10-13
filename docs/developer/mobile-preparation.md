@@ -50,18 +50,17 @@ providers with slow I/O, keyboard resizing and accessible touch layouts.
 
 ## Selected features and dependencies
 
-The native app includes text/Markdown and uses Toga 0.5.7 backends with Briefcase
+The native app includes text/Markdown and EPUB/comic readers and uses Toga 0.5.7 backends with Briefcase
 0.4.5. It installs no desktop PySide, image or archive dependencies. Staging copies
 only whitelisted Logistics Python modules plus tracked shared Python sources and
 licenses. It never follows the local external feature link or copies private INIs,
 Git metadata or untracked shared files. Local dirty payloads are labelled and
 cannot produce accepted mobile runtime evidence.
 
-The testbed payload additionally selects portable EPUB metadata/resource reading,
-comic page bytes/ComicInfo updates and generated fixtures. These are headless data
-operations. Image decoding, encrypted archives, mobile EPUB/comic rendering,
-other desktop tools, external sharing and app-store distribution remain
-future work. No desktop capability is enabled by a prototype build.
+Native payloads select the portable EPUB/comic modules too. The testbed additionally
+selects generated fixtures, including EPUB metadata/resource reading and comic
+page bytes/ComicInfo updates. Encrypted archives, other desktop tools, external
+sharing and app-store distribution remain future work. No desktop capability is enabled by a prototype build.
 
 ## Validation gates
 
@@ -73,11 +72,12 @@ source manifests/logs. Build success proves packaging, not native UI interaction
 already established CPython 3.14.7 testbeds, pinned at
 `823f0323ee6ec1402088b73bce1a38473cac36dc`. Android builds x86_64 on Ubuntu 24.04;
 iOS builds arm64 Simulator on macOS 15. The existing iOS resource-copy workaround
-is retained. Seventeen cases run inside each actual interpreter:
+is retained. Twenty-one cases run inside each actual interpreter:
 
 - Nine private document, recovery, encoding, conflict and scoped-import contracts.
 - Three existing EPUB/comic/Markdown fixture scenarios.
 - Three mobile preference and offline-preview contracts.
+- Four mobile library, reading, sanitization, progress and image-bound contracts.
 - Runtime identity and a desktop-dependency import boundary.
 
 The verifier requires one report, expected native `sys.platform`, actual emulator
@@ -161,3 +161,26 @@ sharing is implied. Picker cancellation and stream cleanup are tested contracts,
 not actual native-provider evidence. Static CI runs the official Toga dummy widget
 and picker contracts before release, while real mobile testbeds cover the added
 portable preference and preview cases.
+
+## Phase 2 reader contracts
+
+`library.py` streams bounded imports into private storage, validates archive member
+paths/counts/sizes and refuses encryption before reusing portable EPUBBook and
+ComicPages. UUID identities and checksums protect record/path associations.
+`reading.py` renders an allowlist of XHTML tags with source attributes/styles and
+active content removed; small validated PNG/JPEG images use data URLs under an
+offline CSP. Native comic inputs have byte/dimension/pixel limits before decoding.
+`library_ui.py` runs archive operations off the event-loop thread and exposes
+reading-order chapter/page selection, bookmarks and optimistic progress updates.
+Progress is chapter/page-granular; precise EPUB scroll restoration is future work.
+
+Native build jobs now capture the normal app before a separate Briefcase
+`--test` rebuild. Test mode runs seven actual native UI cases against generated
+files and private cache data; its exit marker and JSON report must agree with the
+expected backend, case inventory and exact root/shared commits. It exercises real
+WebView DOM rendering and native image decoding, but supplies fixture providers
+rather than opening OS pickers. The test entry point calls `_exit` only after
+printing its result; it is excluded from normal app source paths. Retained native
+artifacts are the pre-test normal APK/Simulator archive. Native UI evidence is a
+required build-job result; packaging cannot bypass it. Physical-device pickers,
+keyboard/touch/accessibility and suspension remain independent validation work.

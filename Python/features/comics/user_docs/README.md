@@ -166,3 +166,10 @@ covers show that saved position as **45/205** at the top-right. Unread comics ha
 no badge. The badge updates as reading position is saved, without changing the
 archive; disabling Remember Position hides it. Older saved positions also work
 once the cover is loaded.
+
+## Mobile development builds
+
+The independent native app has private EPUB and PNG/JPEG CBZ/ZIP reading,
+chapter/page progress and bookmarks. It has a smaller format/UI scope than this
+desktop guide. See the [mobile guide](../../../logisticsmobile/user_docs/README.md)
+for imports, limits and current validation status.

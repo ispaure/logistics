@@ -7,7 +7,7 @@ import shutil
 import subprocess
 
 APP_MODULES = ('__init__.py', '__main__.py', 'documents.py', 'access.py', 'pickers.py', 'app.py', 'smoke.py',
-               'preferences.py', 'preview.py')
+               'preferences.py', 'preview.py', 'library.py', 'reading.py', 'library_ui.py')
 DOCUMENT_MODULES = (
     'features/__init__.py', 'features/books/__init__.py', 'features/books/epub.py',
     'features/books/metadata.py', 'features/comics/__init__.py',
@@ -22,9 +22,9 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     if destination.exists():
         raise ValueError('Stage into a new directory; existing payloads are preserved.')
     paths = ['Python/logisticsmobile', 'Mobile', 'Python/tests/test_mobile_documents.py', 'Python/tests/test_mobile_hub.py',
+             'Python/tests/test_mobile_readers.py',
              'Python/tests/portable_documents.py', 'Python/tests/books_fixture.py']
-    if testbed:
-        paths.extend('Python/' + name for name in DOCUMENT_MODULES)
+    paths.extend('Python/' + name for name in DOCUMENT_MODULES)
     dirty = bool(subprocess.check_output(['git', '-C', str(repo), 'status', '--porcelain', '--', *paths]))
     if dirty and not allow_dirty:
         raise ValueError('Commit mobile sources before creating a release/testbed payload.')
@@ -44,14 +44,15 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
         copy(repo / 'Python/logisticsmobile' / name, Path('logisticsmobile') / name)
     copy(repo / 'LICENSE.md', Path('logisticsmobile/LICENSE.md'))
     copy(shared / 'LICENSE.md', Path('commonUtils/LICENSE.md'))
+    for name in DOCUMENT_MODULES:
+        copy(repo / 'Python' / name, Path(name))
     if testbed:
-        for name in DOCUMENT_MODULES:
-            copy(repo / 'Python' / name, Path(name))
-        for name in ('portable_documents.py', 'books_fixture.py', 'test_mobile_documents.py', 'test_mobile_hub.py'):
+        for name in ('portable_documents.py', 'books_fixture.py', 'test_mobile_documents.py', 'test_mobile_hub.py',
+                     'test_mobile_readers.py'):
             copy(repo / 'Python/tests' / name, Path(name))
     manifest = json.loads((destination / 'source.json').read_text())
     manifest.update(logistics_commit=subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip(),
-                    dirty=dirty, features=['text', 'markdown'] + (['epub', 'comics'] if testbed else []))
+                    dirty=dirty, features=['text', 'markdown', 'epub', 'comics'])
     for path in (destination / 'source.json', destination / 'logisticsmobile/source.json'):
         path.write_text(json.dumps(manifest, indent=2) + '\n')
     return manifest
