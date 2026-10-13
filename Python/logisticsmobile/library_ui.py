@@ -1,5 +1,6 @@
 """Native library controls with archive work off the UI thread."""
 import asyncio
+from uuid import uuid4
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
@@ -133,8 +134,10 @@ class LibraryUI:
         if record['kind'] == 'epub':
             content = await asyncio.to_thread(chapter_html, reader, index,
                                               int(self.preferences.values['font_size']))
-            view = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False, style=Pack(flex=1))
-            view.set_content('https://logistics.invalid/', content)
+            if not hasattr(self, 'epub_view'):
+                self.epub_view = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False, style=Pack(flex=1))
+            view = self.epub_view
+            view.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
         else:
             data, mime = await asyncio.to_thread(reader.read_page, index)
             image_dimensions(data)

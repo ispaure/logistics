@@ -56,7 +56,11 @@ class MobileUITests(unittest.TestCase):
             self.assertNotEqual(app.current.id, conflicted)
             self.assertEqual(app.current.text, 'keep these edits')
             app.show_preview()
+            preview = app.preview
             self.assertIs(app.body.children[0].children[-1], app.preview)
+            app.show_documents()
+            app.show_preview()
+            self.assertIs(app.preview, preview)
             app.show_documents()
             with patch('logisticsmobile.pickers.export_document', new=AsyncMock(return_value=True)) as export:
                 app.loop.run_until_complete(app.export_document())
@@ -73,7 +77,9 @@ class MobileUITests(unittest.TestCase):
             self.assertIsNotNone(app.book_reader, app.book_status.text)
             self.assertFalse(app.previous_page.enabled)
             self.assertTrue(app.next_page.enabled)
+            reader_view = app.book_content.children[0]
             app.loop.run_until_complete(app.next_book_page())
+            self.assertIs(app.book_content.children[0], reader_view)
             self.assertEqual(app.book_record['position'], 1)
             self.assertFalse(app.next_page.enabled)
             app.loop.run_until_complete(app.toggle_bookmark())
