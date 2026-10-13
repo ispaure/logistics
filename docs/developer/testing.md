@@ -17,6 +17,15 @@ environment before synchronizing the environment used by a running application.
 
 ## Testing
 
+The Windows platform runner starts with one native Qt startup smoke using the
+`windows` platform plugin. It constructs the real public main window, applies
+theme/font settings, runs its event loop and closes it under isolated preferences
+and caches. Feature initialization hooks are excluded. Fatal startup exits report
+the Windows exception code and Python faulthandler trace before running headless
+regressions. Cleanup uses the shared Qt fixture lifecycle. Mixed-DPI monitor
+crossings additionally need physical Windows hardware validation; synthetic
+native-message tests cover the preservation policy on every CI host.
+
 Run the regression suite from the repository root:
 
 ```sh

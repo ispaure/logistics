@@ -231,6 +231,9 @@ interface, browser, reading and code font roles. Each font name in the dropdown
 is shown in its own typeface for a preview while browsing, including the selected
 field. Samples underneath preview pending font and size changes before saving.
 All four font sizes allow 7–24 pt. The code font list is limited to monospace fonts with equal character widths.
+On Windows, moving a normal window between displays with different scaling
+preserves its logical width and height if the native transition changes them.
+Intentional resize gestures and maximized/fullscreen windows retain normal sizing.
 On Windows, font lists exclude legacy bitmap/vector families such as Terminal
 and Fixedsys. Unsupported typed choices show an error on Save and use a safe
 preview; existing unsupported saved choices fall back automatically.
