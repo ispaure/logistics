@@ -1,5 +1,40 @@
 # Mobile text documents
 
+## Current feature support
+
+Android and iOS have the same prototype scope. “Implemented” describes code in
+the native app; real-device interaction testing is still required.
+
+| Logistics capability | Mobile status |
+| --- | --- |
+| Plain-text editing | Implemented: create, select, rename, edit and save private documents |
+| Markdown | Implemented as plain-text editing; rendered preview is not implemented |
+| Document import | Native picker adapters implemented; actual provider permissions still need device testing |
+| Draft recovery | Implemented: checkpoints, restored drafts and conflict-safe save-a-copy |
+| Encoding and line endings | Implemented for UTF-8 and recognized Unicode BOMs, with a 1 MiB text limit |
+| EPUB and comics | Selected core operations have headless tests; no mobile reader or library UI |
+| Preferences / INI settings | Shared persistence supports explicit private paths; no mobile settings screen or desktop preference migration yet |
+| Export, share or save back to the original document | Not implemented |
+| File browser, bulk rename, IDE and Git/Perforce UI | Not ported |
+| LM chat, media/image tools, archives and other desktop integrations | Not ported |
+
+## Preferences and storage
+
+INI is a usable format on both mobile platforms. Bundled defaults must remain
+read-only, while personal overrides belong in the app's private persistent data
+directory. The shared settings API accepts explicit default/override paths and
+rejects automatic desktop settings paths on mobile. The prototype currently
+persists documents and recovery records; it does not yet register a mobile
+preferences store or provide settings controls.
+
+Desktop preferences cannot simply be copied wholesale: filesystem paths,
+external executable locations and desktop-only options need validation or
+platform-specific replacements. Document-provider access is a permission-bearing
+platform handle rather than an ordinary path stored in an INI. Preferences
+migration, backup/reset behavior and credential storage remain separate work.
+
+## Document workflow
+
 The mobile prototype has one document screen with native controls. Choose a
 document from the top selector, or tap **New**. Edit its name in the name field and
 its contents in the text area. **Save** publishes the edited file inside the app.

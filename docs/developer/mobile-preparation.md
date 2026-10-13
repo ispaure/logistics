@@ -111,8 +111,18 @@ reported seven errors because its sandbox rejected hard-link publication of new
 files; [the failed record](mobile-evidence/2026-10-13-android-initial.json) is retained.
 New private files now use exclusive creation followed by publication of a durable
 recovery record, and the suite has a fourteenth case enforcing that contract.
-The corrected Android/iOS runs remain the next runtime gate. No physical-device
-or actual native picker result is claimed here.
+The [corrected runtime run](https://github.com/ispaure/logistics/actions/runs/38354610543)
+passed all 14 cases with zero failures, errors or skips on both Android and iOS at
+`5c4a528`; retained reports are [Android](mobile-evidence/2026-10-13-android-corrected.json)
+and [iOS](mobile-evidence/2026-10-13-ios-corrected.json). Both corrected native builds
+also passed in [run 38354610510](https://github.com/ispaure/logistics/actions/runs/38354610510);
+see [build evidence](mobile-evidence/2026-10-13-native-corrected.json).
+No physical-device or actual native picker result is claimed here.
+
+Source releases require both mobile native builds and document runtime checks
+alongside the desktop platform checks before packaging and publication. The same
+commit supplies every called workflow and source payload; standalone branch runs
+do not substitute for this release gate.
 
 ## Next work
 

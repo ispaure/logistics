@@ -16,8 +16,18 @@ jobs:
   validate:
     uses: ./.github/workflows/archive-platform-checks.yml
 
+  mobile-build:
+    uses: ./.github/workflows/mobile-build.yml
+    with:
+      target: both
+
+  mobile-runtime:
+    uses: ./.github/workflows/mobile-runtime.yml
+    with:
+      target: both
+
   package:
-    needs: validate
+    needs: [validate, mobile-build, mobile-runtime]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

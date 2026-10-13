@@ -78,7 +78,16 @@ for lifecycle details.
 
 Platform checks also run on main pushes and launcher changes. The release workflow
 calls those checks before packaging, so a tag cannot bypass failing application
-regressions. Both headless suites and historical archive parity must pass.
+regressions. Every release also calls the native mobile build and document runtime
+workflows with both targets, using workflow files and source from the same release
+commit. Packaging requires macOS, Windows and Linux desktop checks (including
+Fedora and archive parity), Android and iOS native builds, and both mobile runtime
+checks to succeed. Failed, cancelled or skipped prerequisites block packaging and
+publication. A manual Source release run exercises these gates without publishing;
+tag pushes publish only after they pass. Mobile gates cover the prototype and
+portable core, not unported desktop features or physical-device interactions.
+Standalone branch checks cannot cancel a release's mobile jobs, and tag runs
+retain their validation.
 New pushes and PR updates cancel superseded checks for the same branch/PR;
 tag releases and manual runs retain their validation. Windows platform checks
 collect browser screenshot diagnostics alongside their logs. The separate browser
