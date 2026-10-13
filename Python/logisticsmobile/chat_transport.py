@@ -1,8 +1,9 @@
 """Bounded OpenAI-compatible HTTP/SSE; no redirects, tools or implicit requests."""
 import http.client
 import json
+from queue import Queue, Empty, Full
 import socket
-from threading import Event, Lock
+from threading import Event, Lock, Thread
 import time
 from urllib.parse import quote, urlsplit
 
@@ -107,6 +108,48 @@ class ChatClient:
             connection.close()
 
     def stream(self, payload, fragment):
+        # A file-backed HTTP read can remain blocked after socket.shutdown on
+        # Windows. Keep that bounded I/O off the calling worker, so Cancel is
+        # observed promptly on every platform. Only the reader owns/ closes the
+        # response; closing a buffered reader from another thread can itself
+        # block on its I/O lock. Socket reads still have the 15-second timeout.
+        events = Queue(maxsize=2)
+        completed = Event()
+        def publish(kind, value):
+            while not completed.is_set() and not self.cancelled.is_set():
+                try:
+                    events.put((kind, value), timeout=.1)
+                    return
+                except Full:
+                    continue
+        def read():
+            try:
+                result = self._stream(payload, lambda text: publish('text', text))
+                publish('done', result)
+            except Exception as error:
+                if not completed.is_set():
+                    publish('error', error)
+        worker = Thread(target=read, name='mobile-chat-reader', daemon=True)
+        worker.start()
+        try:
+            while True:
+                self.check()
+                try:
+                    kind, value = events.get(timeout=.1)
+                except Empty:
+                    continue
+                self.check()
+                if kind == 'error':
+                    raise value
+                if kind == 'done':
+                    return value
+                fragment(value)
+        finally:
+            completed.set()
+            if worker.is_alive():
+                self.cancel()
+
+    def _stream(self, payload, fragment):
         connection, response = self.request('chat/completions', payload)
         text, finished, reason = '', False, ''
         deadline = time.monotonic() + 600

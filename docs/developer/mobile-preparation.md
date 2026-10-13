@@ -213,6 +213,10 @@ checks reject stale saves; valid recovered streaming messages become interrupted
 The profile schema deliberately excludes API keys. `chat_transport.py` uses
 HTTPConnection/HTTPSConnection with default certificate verification, no redirects,
 bounded JSON/SSE, explicit socket cancellation and no model tool execution.
+An owned background reader isolates file-backed HTTP reads. Cancellation is
+checked every 100 ms by the consumer even when Windows does not wake a blocked
+read after socket shutdown. The reader closes its own response and retains the
+15-second socket timeout; it cannot publish further fragments after cancellation.
 `chat_ui.py` owns native controls, explicit connection/model actions, draft and
 partial-response checkpoints, and retained failure/cancelled states. HTTP remains
 available for existing LAN servers and is labelled as unencrypted in the guide.
