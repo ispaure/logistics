@@ -1,5 +1,6 @@
 """General browser host enriched by available Logistics feature contributions."""
 
+from commonUtils.ui.appearance.typography import point_size, setting_size
 from dataclasses import replace
 from pathlib import Path
 import sys
@@ -20,7 +21,7 @@ class BrowserIndexStatus(WorkspaceIndexStatus):
         content.layout().setSpacing(6)
         font = self.label.font()
         font.setItalic(False)
-        font.setPointSizeF(max(8.0, font.pointSizeF() - 1.0))
+        font.setPointSizeF(point_size(max(8.0, setting_size(font) - 1.0)))
         self.label.setFont(font)
         self.activity.setFixedSize(100, 6)
         for button in (self.refresh_button, self.details_button):

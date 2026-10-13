@@ -138,7 +138,9 @@ Closing the panel, changing chapters, or closing the reader stops playback.
 ## Reading defaults
 
 In **Logistics Settings → Appearance & shared controls → Styling**, the shared
-reading font and size (7–24) apply to EPUB and Markdown. The default is Arial
+reading font and size (7–24) apply to EPUB and Markdown. Sizes use a common
+96-DPI reference across macOS, Windows and Linux, while display scaling follows
+the operating system. The default is Arial
 at 13 pt, a neutral sans serif for books and technical documentation. Automatic uses the
 application text font. Changes made through Aa appear here too. **Feature settings → Books
 & Comics → Options** exposes `line_spacing_int` (100–220), `reading_width_int`

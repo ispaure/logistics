@@ -1,4 +1,5 @@
 """Sidebar settings host: session features, structured INI configuration and custom layouts."""
+from commonUtils.ui.appearance.typography import point_size, setting_size
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.text_editor import TextFileEditor
@@ -119,7 +120,7 @@ class FeatureSettingsPanel(qt.QWidget):
         self.settings_tabs = self.sections.tabs
         self.layout = qt.QVBoxLayout(self)
         self.title = qt.QLabel(state.label)
-        font = self.title.font(); font.setPointSize(font.pointSize() + 5); font.setBold(True)
+        font = self.title.font(); font.setPointSizeF(point_size(setting_size(font) + 5)); font.setBold(True)
         self.title.setFont(font)
         self.title.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         header = qt.QHBoxLayout()

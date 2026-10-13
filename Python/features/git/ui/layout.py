@@ -1,4 +1,5 @@
 """Build the Git workspace layout without owning commands or jobs."""
+from commonUtils.ui.appearance.typography import point_size
 import sys
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.status_line import StatusLine
@@ -117,7 +118,7 @@ class RepositoryLayout:
         self.search_results = SearchPanel()
         self.preview = Preview()
         code_font = qt.QFont(self.preview.editor.font())
-        code_font.setPointSizeF(max(9.0, code_font.pointSizeF()))
+        code_font.setPointSizeF(max(point_size(9.0), code_font.pointSizeF()))
         self.preview.editor.setFont(code_font)
         self.change_split = qt.QSplitter(qt.Qt.Orientation.Horizontal)
         self.change_split.addWidget(self.changes)

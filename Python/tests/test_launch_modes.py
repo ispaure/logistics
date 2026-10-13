@@ -255,7 +255,9 @@ class LaunchModeTests(QtTestCase):
         self.assertEqual([action.text() for action in self.window.header_menus.feature_settings.actions()],
                          ['Enabled Tool'])
 
+    @patch('commonUtils.ui.appearance.typography.font_dpi', new=lambda: 72)
     def test_cards_grow_uniformly_for_wrapped_large_text(self):
+        from commonUtils.ui.appearance.typography import point_size
         from ui_new.landing import LandingPage
         page = LandingPage()
         self.addCleanup(page.deleteLater)
@@ -271,7 +273,7 @@ class LaunchModeTests(QtTestCase):
             self.app.processEvents()
         initial = page._document_cards[0].height()
         font = qt.QFont(page.font())
-        font.setPointSize(24)
+        font.setPointSizeF(point_size(24))
         for card in page._document_cards + page._tool_cards:
             for label in card.findChildren(qt.QLabel):
                 label.setFont(font)
@@ -288,7 +290,7 @@ class LaunchModeTests(QtTestCase):
                              label.text(), label.width(), page._layout_text_height(card.layout()), card.minimumHeight(), card.maximumHeight()))
             self.assertGreater(page._document_cards[0].height(), initial)
         enlarged = page._document_cards[0].height()
-        font.setPointSize(11)
+        font.setPointSizeF(point_size(11))
         for card in page._document_cards + page._tool_cards:
             for label in card.findChildren(qt.QLabel):
                 label.setFont(font)

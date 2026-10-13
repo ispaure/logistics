@@ -1,4 +1,5 @@
 """Feature-owned Blender manager page; all lengthy work uses shared workers."""
+from commonUtils.ui.appearance.typography import point_size, setting_size
 from pathlib import Path
 from configparser import Error as ConfigError
 
@@ -35,7 +36,7 @@ class BlenderPage(qt.QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         title = qt.QLabel('Blender')
         font = title.font()
-        font.setPointSize(font.pointSize() + 7)
+        font.setPointSizeF(point_size(setting_size(font) + 7))
         font.setBold(True)
         title.setFont(font)
         layout.addWidget(title)

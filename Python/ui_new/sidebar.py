@@ -1,4 +1,5 @@
 """Scrollable destinations and a grouped document-launcher overlay."""
+from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.icons import set_painted_icon
 
@@ -195,7 +196,7 @@ class ActivityButton(qt.QToolButton):
             badge = qt.QRectF(self.width() - 18, 1, 16, 16)
             painter.drawEllipse(badge)
             painter.setPen(qt.QColor('white'))
-            font = painter.font(); font.setPointSizeF(8); font.setBold(True); painter.setFont(font)
+            font = painter.font(); font.setPointSizeF(point_size(8)); font.setBold(True); painter.setFont(font)
             painter.drawText(badge, qt.Qt.AlignmentFlag.AlignCenter, str(min(9, self.unread)))
 
 

@@ -2,6 +2,7 @@
 Generic form/dialog helpers used by feature-owned maintenance workflows.
 """
 
+from commonUtils.ui.appearance.typography import point_size, setting_size
 from pathlib import Path
 
 from commonUtils import ui
@@ -38,7 +39,7 @@ class ToolDialog(pyside.QDialog):
 
         title_label = pyside.QLabel(title)
         title_font = title_label.font()
-        title_font.setPointSize(title_font.pointSize() + 5)
+        title_font.setPointSizeF(point_size(setting_size(title_font) + 5))
         title_font.setBold(True)
         title_label.setFont(title_font)
 

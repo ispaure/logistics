@@ -2,6 +2,7 @@
 Calibre library management workflow for the Logistics feature UI.
 """
 
+from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils import ui
 from commonUtils.ui import pyside
 
@@ -49,7 +50,7 @@ class CalibreManageDialog(pyside.QDialog):
 
         title = pyside.QLabel(f'Calibre Libraries - {self.folder.name}')
         title_font = title.font()
-        title_font.setPointSize(title_font.pointSize() + 5)
+        title_font.setPointSizeF(point_size(setting_size(title_font) + 5))
         title_font.setBold(True)
         title.setFont(title_font)
 
@@ -99,7 +100,7 @@ class CalibreManageDialog(pyside.QDialog):
 
         self.library_name.setText('Select a library')
         name_font = self.library_name.font()
-        name_font.setPointSize(name_font.pointSize() + 4)
+        name_font.setPointSizeF(point_size(setting_size(name_font) + 4))
         name_font.setBold(True)
         self.library_name.setFont(name_font)
 

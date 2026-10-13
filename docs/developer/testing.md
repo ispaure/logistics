@@ -25,6 +25,11 @@ the Windows exception code and Python faulthandler trace before running headless
 regressions. Cleanup uses the shared Qt fixture lifecycle. Mixed-DPI monitor
 crossings additionally need physical Windows hardware validation; synthetic
 native-message tests cover the preservation policy on every CI host.
+The startup smoke also checks the rendered application font against the shared
+reference size. Shared styling tests measure text at 72, 96 and 120 font DPI and
+verify that editor zoom persists the reference value. Launch-card tests exercise
+the macOS conversion at maximum size and several window widths. Offscreen tests
+alone use 96 DPI even on macOS, so native macOS font measurements remain relevant.
 
 Run the regression suite from the repository root:
 

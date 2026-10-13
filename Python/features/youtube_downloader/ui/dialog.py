@@ -2,6 +2,7 @@
 YouTube Downloader workflow for the Logistics feature UI.
 """
 
+from commonUtils.ui.appearance.typography import point_size, setting_size
 from pathlib import Path
 
 from commonUtils import ui
@@ -50,7 +51,7 @@ class YouTubeDownloaderDialog(pyside.QDialog):
 
         title = pyside.QLabel(f'YouTube Downloader - {self.entry.name}')
         title_font = title.font()
-        title_font.setPointSize(title_font.pointSize() + 5)
+        title_font.setPointSizeF(point_size(setting_size(title_font) + 5))
         title_font.setBold(True)
         title.setFont(title_font)
 
