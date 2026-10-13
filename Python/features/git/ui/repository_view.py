@@ -7,6 +7,7 @@ after writes, including conflicts and cancelled network operations.
 from pathlib import Path
 import sys
 import shlex
+from shiboken6 import isValid
 
 from commonUtils.ui import pyside as qt
 from ..preferences import Preferences
@@ -60,6 +61,10 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
     def busy(self): return self.worker is not None
 
     def _set_busy(self, busy):
+        if busy:
+            focused = qt.QApplication.focusWidget()
+            if focused is not None and self.content.isAncestorOf(focused):
+                self._busy_focus = focused
         available = self.snapshot is not None
         self.repository_menu.setEnabled(not busy)
         self.toolbar.setEnabled(not busy)
@@ -71,8 +76,14 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         self.progress.setVisible(busy)
         if hasattr(self, 'menu_controls'):
             self.menu_controls.update(busy)
+        if not busy:
+            focused = getattr(self, '_busy_focus', None)
+            self._busy_focus = None
+            if focused is not None and isValid(focused) and focused.isVisible() and focused.isEnabled():
+                focused.setFocus()
 
     def _message(self, text, error=False):
+        self._status_error = text if error else ''
         self.status.setText(redact(text))
         self.status.setStyleSheet('color: #c55b62;' if error else '')
 
@@ -164,6 +175,7 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         # This snapshot also satisfies filesystem notifications already queued
         # by the preceding operation; do not launch a duplicate refresh later.
         self.file_timer.stop()
+        operation_error = operation_error or getattr(self, '_status_error', '')
         path, limit = self.path, self.history_limit
         def render(snapshot):
             self._render(snapshot)

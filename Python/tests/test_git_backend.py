@@ -13,6 +13,18 @@ from features.git.runner import GitRunner, GitError, GitCancelled, redact
 
 @unittest.skipUnless(shutil.which('git'), 'Git executable required')
 class GitBackendTests(unittest.TestCase):
+    def test_status_does_not_rewrite_index_after_file_timestamp_change(self):
+        file = self.repo.path / 'tracked.txt'
+        file.write_text('same content\n')
+        self.repo.stage(['tracked.txt'])
+        self.repo.commit('Initial')
+        index = self.repo.path / '.git' / 'index'
+        before = index.read_bytes()
+        stamp = file.stat().st_mtime_ns + 2_000_000_000
+        os.utime(file, ns=(stamp, stamp))
+        self.assertEqual(self.repo.status().changes, [])
+        self.assertEqual(index.read_bytes(), before)
+
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

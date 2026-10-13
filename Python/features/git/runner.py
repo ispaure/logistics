@@ -82,7 +82,9 @@ class GitRunner:
         for key in ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR',
                     'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_NAMESPACE'):
             env.pop(key, None)
-        env.update(GIT_TERMINAL_PROMPT='0', GCM_INTERACTIVE='never', LC_ALL='C')
+        # Background status/diff reads must not rewrite the index and trigger
+        # our filesystem watcher again. Required locks for mutations still work.
+        env.update(GIT_TERMINAL_PROMPT='0', GCM_INTERACTIVE='never', LC_ALL='C', GIT_OPTIONAL_LOCKS='0')
         if sensitive:
             for key in list(env):
                 if key.startswith('GIT_TRACE') or key == 'GCM_TRACE_SECRETS': env.pop(key, None)

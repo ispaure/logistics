@@ -37,6 +37,7 @@ class GitUITests(QtTestCase):
         self.page = RepositoryView(preferences_path=self.root / 'git.json')
         self.page.resize(1250, 800)
         self.page.show()
+        self.page.activateWindow()
         self.addCleanup(self.release_page)
 
     def release_page(self):
@@ -337,6 +338,11 @@ class GitUITests(QtTestCase):
                  if (item := history.table.topLevelItem(i)).data(1, qt.Qt.ItemDataRole.UserRole)}
         self.assertIn(latest, items)
         history.table.setCurrentItem(items[latest]); self.wait()
+        # Native filesystem notifications can rebuild history while the preview
+        # loads. Inspect the current rows rather than deleted C++ item wrappers.
+        items = {item.data(1, qt.Qt.ItemDataRole.UserRole).oid: item
+                 for i in range(1, history.table.topLevelItemCount())
+                 if (item := history.table.topLevelItem(i)).data(1, qt.Qt.ItemDataRole.UserRole)}
         for oid, item in items.items():
             for column in range(history.table.columnCount()):
                 self.assertEqual(item.font(column).bold(), oid == older)
@@ -605,6 +611,10 @@ class GitUITests(QtTestCase):
         self.assertEqual(self.page.path, original)
         self.assertTrue(self.page.toolbar.isEnabled())
         self.assertIn('invalid' if os.name == 'nt' else 'No such file', self.page.status.text())
+        error = self.page.status.text()
+        self.page.files_changed(str(self.repo.path))
+        self.wait()
+        self.assertEqual(self.page.status.text(), error)
 
     def test_repository_switch_respects_commit_draft(self):
         self.open()

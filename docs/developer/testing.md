@@ -9,6 +9,12 @@ access. [launch_config.ini](../../launch_config.ini) controls launcher paths; th
 point is `Python/launch.py`. Feature-specific software and credentials are covered
 in [configuration](../../CONFIGURATION.md).
 
+Both application manifests pin PySide6 6.12.0. Regenerate `Python/uv.lock`
+with `uv lock --project Python` after changing dependencies; CI exports it with
+`--locked`. The published Qt wheels require macOS 14+, Linux glibc 2.34+ on
+x86-64 or 2.39+ on ARM64, and Windows 10/11. Test runtime upgrades in a separate
+environment before synchronizing the environment used by a running application.
+
 ## Testing
 
 Run the regression suite from the repository root:
