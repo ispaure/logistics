@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+from socketserver import TCPServer
 from threading import Event, Thread
 
 
@@ -47,7 +48,14 @@ def fixture_server(*, mode='reply'):
                     self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
                 pass
-    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    class LoopbackServer(ThreadingHTTPServer):
+        def server_bind(self):
+            # HTTPServer normally reverse-resolves its address for CGI metadata.
+            # This synthetic loopback service never needs DNS or CGI.
+            TCPServer.server_bind(self)
+            self.server_name = 'localhost'
+            self.server_port = self.server_address[1]
+    server = LoopbackServer(('127.0.0.1', 0), Handler)
     server.daemon_threads = True
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
