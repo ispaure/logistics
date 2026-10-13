@@ -1,5 +1,6 @@
 """Run document/core fixtures inside real mobile interpreters, without a UI."""
 import argparse
+import faulthandler
 import importlib.abc
 import json
 from pathlib import Path
@@ -84,6 +85,8 @@ def main(argv=None):
         raise RuntimeError('Mobile evidence requires a clean staged source manifest.')
     blocker = RejectDesktop()
     sys.meta_path.insert(0, blocker)
+    if args.target == 'host':
+        faulthandler.dump_traceback_later(20)
     try:
         from test_mobile_documents import MobileDocumentsTests
         from portable_documents import PortableDocuments
@@ -105,6 +108,8 @@ def main(argv=None):
         print(PREFIX + json.dumps(report, sort_keys=True), flush=True)
         return 0 if report['success'] else 1
     finally:
+        if args.target == 'host':
+            faulthandler.cancel_dump_traceback_later()
         sys.meta_path.remove(blocker)
 
 
