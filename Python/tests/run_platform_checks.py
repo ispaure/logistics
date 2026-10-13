@@ -39,6 +39,11 @@ def main():
     native_temp = str(Path(tempfile.gettempdir()).resolve())
     env.update(TEMP=native_temp, TMP=native_temp, TMPDIR=native_temp)
     if args.install:
+        # Framework Python on macOS may lack a default CA path. Use the locked
+        # dependency bundle while retaining certificate verification.
+        env.setdefault('SSL_CERT_FILE', subprocess.check_output(
+            [sys.executable, '-c', 'import certifi; print(certifi.where())'],
+            text=True).strip())
         # Clean runners must exercise real crypt operations, not skip their fixtures.
         subprocess.run([sys.executable, '-c',
                         'from services.software import get_software; '

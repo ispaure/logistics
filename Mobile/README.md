@@ -49,6 +49,22 @@ modules. Runtime testbeds also contain generated fixture tests. Briefcase test-m
 builds add the separate `native_tests/tests` entry point; normal app artifacts are
 captured before test-mode rebuilds and contain no test entry point.
 
+## Open the app in Xcode
+
+After running native UI tests, restore the normal app launcher before using Xcode:
+
+```sh
+cd Mobile
+briefcase update iOS --no-input
+briefcase build iOS --no-input
+briefcase open iOS
+```
+
+Choose an iPhone Simulator in Xcode and press Run. These commands omit `--test`,
+so the app opens its hub. `ui_tools.py run ios ...` intentionally runs automated
+checks and leaves the generated project in test mode; repeat the normal update
+and build afterward. Generated Xcode settings are local build artifacts.
+
 ## Host validation
 
 ```sh

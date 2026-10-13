@@ -104,3 +104,6 @@ Platform release checks with `--install` provision the platform’s pinned rclon
 using archive and executable SHA-256 verification, then require the real synthetic
 LocalCrypt regressions. They never access user remotes or credential packages.
 Without that provisioning, local runs may skip crypt tests if rclone is absent.
+Release provisioning uses the locked certifi CA bundle if `SSL_CERT_FILE` is not
+already configured, including on macOS framework Python; TLS verification remains
+enabled.
