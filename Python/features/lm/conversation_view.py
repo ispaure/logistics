@@ -5,6 +5,7 @@ from datetime import datetime
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.styling import styling
 from commonUtils.ui.markdown.presentation import MarkdownBrowser, style_document
+from .image_view import ScreenshotView
 from .icons import action_button
 
 
@@ -91,6 +92,12 @@ class Bubble(qt.QFrame):
         self.error.setForegroundRole(qt.QPalette.ColorRole.PlaceholderText)
         layout.addLayout(header)
         layout.addWidget(self.browser)
+        self.images_box = qt.QWidget()
+        self.images_layout = qt.QVBoxLayout(self.images_box)
+        self.images_layout.setContentsMargins(0, 0, 0, 0)
+        self.image_ids = None
+        self.images = []
+        layout.addWidget(self.images_box)
         layout.addWidget(self.error)
         footer = qt.QHBoxLayout()
         footer.setSpacing(4)
@@ -131,6 +138,18 @@ class Bubble(qt.QFrame):
         self.error.setText(error)
         self.error.setVisible(bool(error))
         self.browser.set_source(entry['content'])
+        images = entry.get('images', [])
+        ids = [image['id'] for image in images]
+        if ids != self.image_ids:
+            while self.images_layout.count():
+                item = self.images_layout.takeAt(0)
+                item.widget().hide()
+                item.widget().deleteLater()
+            self.images = [ScreenshotView(image, self.images_box) for image in images]
+            for image in self.images:
+                self.images_layout.addWidget(image)
+            self.image_ids = ids
+        self.images_box.setVisible(bool(images))
 
 
 class ConversationView(qt.QScrollArea):
@@ -167,6 +186,8 @@ class ConversationView(qt.QScrollArea):
                 text = bubble.browser.document().toPlainText()
                 metrics = bubble.browser.fontMetrics()
                 natural = max((metrics.horizontalAdvance(line) for line in text.splitlines()), default=0) + 40
+                if bubble.images:
+                    natural = max(natural, 440)
                 bubble.setFixedWidth(min(round(available * .75), max(120, natural)))
             else:
                 bubble.setMaximumWidth(round(available * .95))

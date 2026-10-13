@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from commonUtils.persistence import atomic_write_bytes, atomic_write_json
+from .screenshots import image_url
 from .domain import base_url, identity, now, validate_conversation
 
 MAX_FILE_BYTES = 32 * 1024 * 1024
@@ -271,4 +272,6 @@ def export_markdown(data):
     for entry in data['messages']:
         status = '' if entry['status'] == 'complete' else f' ({entry["status"]})'
         sections.append(f'## {entry["role"].title()}{status}\n\n{entry["content"]}')
+        for image in entry.get('images', []):
+            sections.append(f'![Screenshot]({image_url(image)})')
     return '\n\n'.join(sections) + '\n'

@@ -8,9 +8,33 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequ
 from .domain import MAX_TEXT, base_url
 
 
+def rejection_hint(body):
+    """Classify bounded JSON errors without displaying server text or credentials."""
+    try:
+        data = json.loads(body)
+        error = data.get('error', {})
+        text = error.get('message', '') if isinstance(error, dict) else error
+        if not isinstance(text, str):
+            return ''
+        text = text.casefold()
+        if 'no models loaded' in text or 'no model loaded' in text:
+            return 'No model is loaded on the server. Load a chat model in LM Studio, refresh models here, then retry.'
+        if 'model' in text and ('not found' in text or 'does not exist' in text):
+            return 'The selected model is unavailable on the server. Load it and refresh the model list, then select its exact ID.'
+        if 'image' in text and any(term in text for term in ('unsupported', 'not support', 'does not support', 'vision')):
+            return 'The server/model could not accept image input. Select a vision-capable model and verify image support on the server.'
+        if any(term in text for term in ('context length', 'context window', 'n_ctx')):
+            return 'The request exceeds the loaded model’s context limit. Start a shorter conversation or increase its context size on the server.'
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return ''
+
+
 class StreamDecoder:
     """SSE framing accepts arbitrary UTF-8/network boundaries and CRLF lines."""
-    def __init__(self):
+    def __init__(self, *, allow_tools=False):
+        self.allow_tools = allow_tools
+        self.tool_calls = {}
         self.buffer = b''
         self.lines = []
         self.done = False
@@ -53,7 +77,23 @@ class StreamDecoder:
                 if not isinstance(delta, dict):
                     raise ValueError('Invalid response delta.')
                 if delta.get('tool_calls') or choice.get('finish_reason') in ('tool_calls', 'function_call'):
-                    raise ValueError('This chat client does not execute model tools.')
+                    if not self.allow_tools:
+                        raise ValueError('This chat client does not execute model tools.')
+                    for fragment in delta.get('tool_calls', []):
+                        index = fragment['index']
+                        if type(index) is not int or not 0 <= index < 8:
+                            raise ValueError('Invalid tool index.')
+                        call = self.tool_calls.setdefault(index, dict(id='', type='function', function=dict(name='', arguments='')))
+                        for key in ('id', 'type'):
+                            if key in fragment:
+                                call[key] = fragment[key]
+                        for key in ('name', 'arguments'):
+                            value = fragment.get('function', {}).get(key, '')
+                            if not isinstance(value, str):
+                                raise ValueError('Invalid tool fragment.')
+                            call['function'][key] += value
+                            if len(call['function'][key]) > 65536:
+                                raise ValueError('Tool call exceeds size limit.')
                 text = delta.get('content') or ''
                 if not isinstance(text, str):
                     raise ValueError('Only text responses are supported.')
@@ -116,8 +156,9 @@ class Client(QObject):
             request.setRawHeader(b'Authorization', ('Bearer ' + token).encode('ascii'))
         self.mode = 'models' if payload is None else 'chat'
         self.body = b''
+        self.error_body = b''
         self.total_bytes = 0
-        self.decoder = StreamDecoder()
+        self.decoder = StreamDecoder(allow_tools=bool(payload and payload.get('tools')))
         self.pending = ''
         self.delivered_chars = 0
         self.cancelled = False
@@ -158,7 +199,9 @@ class Client(QObject):
         self.total_bytes += len(chunk)
         status = self.reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
         if status is not None and status != 200:
-            return  # Never expose a server error body that could echo credentials.
+            if status == 400:
+                self.error_body += chunk[:max(0, 16384 - len(self.error_body))]
+            return  # Only static classifications of error text can reach the UI.
         try:
             if self.total_bytes > 32 * 1024 * 1024:
                 raise ValueError('Server response exceeds the size limit.')
@@ -199,6 +242,8 @@ class Client(QObject):
                          400: 'Server rejected the request; check model parameters and context size.',
                          429: 'Server is busy or rate limited; retry later.'}
                 error = hints.get(code, f'Server request failed (HTTP {code or "unavailable"}). Check the server connection.')
+                if code == 400:
+                    error = rejection_hint(self.error_body) or error
                 status = 'failed'
             elif reply.error() != QNetworkReply.NetworkError.NoError:
                 status, error = 'failed', 'Connection ended before the response completed.'
@@ -214,17 +259,19 @@ class Client(QObject):
             elif self.body:
                 data = json.loads(self.body)
                 choice = data['choices'][0]
-                if choice['message'].get('tool_calls'):
+                calls = choice['message'].get('tool_calls') or []
+                if calls and not self.decoder.allow_tools:
                     raise ValueError('Unsupported tool call')
-                text = choice['message']['content']
+                text = choice['message'].get('content') or ''
                 if not isinstance(text, str) or len(text) > MAX_TEXT:
                     raise ValueError('Invalid text')
                 self.delta.emit(text)
-                metadata = {'finish_reason': choice.get('finish_reason'), 'usage': data.get('usage')}
+                metadata = {'finish_reason': choice.get('finish_reason'), 'usage': data.get('usage'), 'tool_calls': calls}
             elif not (self.decoder.done or self.decoder.finished):
                 status, error = 'failed', 'Server stream ended without a completion marker. Partial output was kept.'
             else:
-                metadata = {'finish_reason': self.decoder.finish_reason, 'usage': self.decoder.usage}
+                metadata = {'finish_reason': self.decoder.finish_reason, 'usage': self.decoder.usage,
+                            'tool_calls': [self.decoder.tool_calls[i] for i in sorted(self.decoder.tool_calls)]}
         except (ValueError, UnicodeError, TypeError, KeyError, IndexError, AttributeError):
             status, error = 'failed', 'Server returned an unsupported response. Verify an OpenAI-compatible text API.'
         finally:
