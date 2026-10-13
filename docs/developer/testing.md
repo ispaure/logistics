@@ -99,3 +99,8 @@ The platform runner isolates both shared and Logistics test modules in separate
 processes to prevent native Qt state from leaking between suites. Each regression
 process uses a private temporary directory index, so browser tests do not compete
 with the running application’s cache or leave test paths in its persistent index.
+
+Platform release checks with `--install` provision the platform’s pinned rclone
+using archive and executable SHA-256 verification, then require the real synthetic
+LocalCrypt regressions. They never access user remotes or credential packages.
+Without that provisioning, local runs may skip crypt tests if rclone is absent.
