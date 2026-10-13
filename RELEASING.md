@@ -71,7 +71,12 @@ The publisher marks numeric alpha/beta tags as prereleases. The updater selects
 the highest numeric published version in the selected channel with a GitHub
 SHA-256-labelled `release.zip`; drafts and unclassified suffixes are excluded.
 Branch pushes alone do not offer an update. The release workflow gates packaging
-on the platform checks before publication.
+on macOS, Windows and Linux platform checks (including Fedora), Android/iOS
+native app builds and UI checks, and actual Android/iOS document/core testbeds
+before publication. Every job uses the tagged source and pinned commonUtils
+commit. Failed, cancelled or skipped prerequisites prevent packaging/publication.
+A manual Source release run exercises the same gates and packages without
+publishing. Mobile artifacts are development builds, not signed store releases.
 
 Packaging writes `.app-install.json` with the source commit and SHA-256 hashes of
 managed files. Preserve this marker when extracting a new release: archive

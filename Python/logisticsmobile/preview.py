@@ -38,7 +38,7 @@ def markdown_preview(text, font_size=16):
     result = ('<!doctype html><html><head><meta charset="utf-8">'
             f'<meta http-equiv="Content-Security-Policy" content="{policy}">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
-            f'<style>body{{font: {size}px system-ui;margin:16px;overflow-wrap:anywhere}}'
+            f'<style>html{{color-scheme:light dark}}body{{font: {size}px system-ui;margin:16px;overflow-wrap:anywhere}}'
             'pre{white-space:pre-wrap}code{font-family:monospace}</style></head><body>'
             + ''.join(output) + '</body></html>')
     if len(result.encode('utf-8')) > 2 * 1024 * 1024:

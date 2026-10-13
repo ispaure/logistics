@@ -163,3 +163,10 @@ for example **Ch 4/12**. Unread books have no badge. It updates as the reader sa
 your position, without changing the EPUB. Chapter numbering matches the reader's
 chapter counter, including front matter in its reading order. Disabling Remember
 Position hides the badge. Existing saved positions work once the cover is loaded.
+
+## Mobile development builds
+
+The independent native app has private EPUB and PNG/JPEG CBZ/ZIP reading,
+chapter/page progress and bookmarks. It has a smaller format/UI scope than this
+desktop guide. See the [mobile guide](../../../logisticsmobile/user_docs/README.md)
+for imports, limits and current validation status.

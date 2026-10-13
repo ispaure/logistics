@@ -36,19 +36,24 @@ class MobilePackagingTests(unittest.TestCase):
             app.mkdir()
             for name in mobile_tools.APP_MODULES:
                 shutil.copyfile(REPO / 'Python/logisticsmobile' / name, app / name)
+            for name in mobile_tools.DOCUMENT_MODULES:
+                target = repo / 'Python' / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(REPO / 'Python' / name, target)
             (repo / 'LICENSE.md').write_text('Application license fixture')
             git(repo, 'init')
-            git(repo, 'add', 'Python/logisticsmobile', 'LICENSE.md')
+            git(repo, 'add', 'Python/logisticsmobile', 'Python/features', 'Python/services', 'LICENSE.md')
             git(repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.test', 'commit', '-m', 'fixture')
             payload = base / 'payload'
             manifest = mobile_tools.stage(repo, payload)
             self.assertFalse(manifest['dirty'])
-            self.assertEqual(manifest['features'], ['text', 'markdown'])
+            self.assertEqual(manifest['features'], ['text', 'markdown', 'epub', 'comics'])
             self.assertTrue((payload / 'logisticsmobile/app.py').is_file())
             self.assertFalse((payload / 'commonUtils/private.py').exists())
             self.assertFalse((payload / 'commonUtils/remoteConfig.ini').exists())
             self.assertFalse((payload / 'commonUtils/.git').exists())
-            self.assertFalse((payload / 'features').exists())
+            self.assertTrue((payload / 'features/books/epub.py').exists())
+            self.assertFalse((payload / 'features/books/reader.py').exists())
             (app / 'documents.py').write_text('# uncommitted change')
             with self.assertRaises(ValueError):
                 mobile_tools.stage(repo, base / 'dirty')

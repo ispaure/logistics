@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 from logisticsmobile.access import LocalDocuments
 from logisticsmobile.app import LogisticsMobile
+from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
 
 
 class MobileUITests(unittest.TestCase):
@@ -61,6 +62,26 @@ class MobileUITests(unittest.TestCase):
                 self.assertEqual(export.await_args.args[2], b'keep these edits')
             self.assertTrue(app.export_button.enabled)
             self.assertIn('exported', app.status.text)
+            app.show_library()
+            fixtures = root / 'fixtures'
+            fixtures.mkdir()
+            epub, comic = make_books(fixtures)
+            record = app.library_store.import_book(LocalDocuments(), epub)
+            app.refresh_library()
+            app.loop.run_until_complete(app.open_book(record['id']))
+            self.assertIsNotNone(app.book_reader, app.book_status.text)
+            self.assertFalse(app.previous_page.enabled)
+            self.assertTrue(app.next_page.enabled)
+            app.loop.run_until_complete(app.next_book_page())
+            self.assertEqual(app.book_record['position'], 1)
+            self.assertFalse(app.next_page.enabled)
+            app.loop.run_until_complete(app.toggle_bookmark())
+            self.assertEqual(app.book_record['bookmarks'], [1])
+            record = app.library_store.import_book(LocalDocuments(), comic)
+            app.refresh_library()
+            app.loop.run_until_complete(app.open_book(record['id']))
+            self.assertEqual(app.book_reader.pages, ['page2.png', 'page10.png'])
+            self.assertIsNotNone(app.book_content.children[0].image)
             app.main_window.close()
             app.loop.close()
 

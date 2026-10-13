@@ -13,7 +13,7 @@ the native app; real-device interaction testing is still required.
 | Document import | Native picker adapters implemented; actual provider permissions still need device testing |
 | Draft recovery | Implemented: checkpoints, restored drafts and conflict-safe save-a-copy |
 | Encoding and line endings | Implemented for UTF-8 and recognized Unicode BOMs, with a 1 MiB text limit |
-| EPUB and comics | Selected core operations have headless tests; no mobile reader or library UI |
+| EPUB and comics | Private library, EPUB chapter navigation and PNG/JPEG CBZ/ZIP pages, saved progress and bookmarks |
 | Preferences / INI settings | Private INI with font size and last-document restore controls; no desktop preference migration |
 | Export | Export a copy through the platform destination picker |
 | Share or save back to the original document | Not implemented |
@@ -76,7 +76,36 @@ hooks supplement checkpoints made while editing; forced termination does not
 require an exit callback to have occurred.
 
 External sharing and editing the original provider document are not
-implemented. EPUB/comic operations have separate headless runtime checks but no
-mobile reader UI yet. Native picker grants, keyboards and suspension need testing
+implemented. EPUB/comics use the private library described below. Native picker grants, keyboards and suspension need testing
 on devices before treating this prototype as a supported mobile product. See
 [build and validation instructions](../../../Mobile/README.md).
+
+## Books and comics
+
+From Home, choose **Books & Comics** and **Import book/comic…**. EPUB and
+unencrypted CBZ/ZIP imports create private copies; the selected source is never
+changed. Choose a library item and **Open selected**. Previous/Next and the
+chapter/page selector navigate the book's reading order. EPUB pages scroll in the
+native web view; comic images fit the native image area. The EPUB view follows
+system light/dark appearance and uses the configured font size.
+
+Progress remembers the current EPUB chapter or comic page, rather than an exact
+scroll position inside a chapter. **Bookmark** / **Unbookmark** toggles that
+chapter/page; the bookmark selector returns to saved positions. Comic pages use
+natural filename order. Right-to-left manga metadata is identified; single-page
+Previous/Next controls still refer to reading-order positions.
+
+Imports are limited to 256 MiB, 5,000 archive members, 256 MiB of decompressed
+member data in total, and 8 MiB per member. Native comic images must be PNG/JPEG,
+no larger than 8 MiB or 16 megapixels, with each dimension at most 8,192 pixels.
+Comics with other page formats are rejected rather than silently skipping pages.
+EPUB chapters and rendered HTML are limited to 2 MiB. Small PNG/JPEG illustrations
+(up to 256 KiB each, 1 MiB total) are embedded; unsupported/large illustrations
+show an omission label. Raw scripts, forms, embedded objects, source styles and
+external resources are removed. Chapter links are inert; use the chapter selector.
+DRM, encrypted archives, CBR/RAR and fixed-layout SVG books are not supported.
+
+The private book checksum is checked on opening, and the portable reader rejects
+changes while reading. Re-import a changed private copy as a new entry. Malformed
+library records are preserved and reported. Progress/bookmark writes reject stale
+records rather than overwriting another change.
