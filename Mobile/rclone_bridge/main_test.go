@@ -81,6 +81,9 @@ func TestNativeEngineAndAuthenticatedCredentialPackage(t *testing.T) {
 }
 
 func TestCredentialInputBoundsAndUnsafeSettings(t *testing.T) {
+	if name, _, err := parseCredential([]byte("[Dépôt.alpha+user@example]\ntype=memory\n")); err != nil || name != "Dépôt.alpha+user@example" {
+		t.Fatal("valid rclone remote name rejected")
+	}
 	for _, text := range []string{
 		"[x]\ntype=local\n", "[x]\ntype=webdav\nurl=http://example.invalid\n",
 		"[x]\ntype=drive\nservice_account_file=/private/key\n",

@@ -19,6 +19,7 @@ the native app; real-device interaction testing is still required.
 | Share or save back to the original document | Not implemented |
 | File browser, bulk rename, IDE and Git/Perforce UI | Not ported |
 | LM chat | Native text conversations, configured server/model, streaming/cancel, private history and Markdown export |
+| rclone remote files | Credential ZIP import, read-only browsing, private downloads and export; session-only credentials |
 | Media/image tools, archives and other desktop integrations | Not ported |
 
 ## Preferences and storage
