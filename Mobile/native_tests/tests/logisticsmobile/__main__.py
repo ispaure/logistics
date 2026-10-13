@@ -76,6 +76,20 @@ async def exercise(app):
         await app.next_book_page()
         assert app.book_record['position'] == 1
         passed.append('native_comic_reader')
+        from logisticsmobile.chat_fixture import fixture_server
+        with fixture_server() as (url, started, release, requests):
+            app.show_chat()
+            app.chat_url.value = url
+            app.chat_key.value = 'synthetic-native-key'
+            await app.refresh_chat_models()
+            assert app.chat_model.value == 'fixture-model', app.chat_status.value
+            app.chat_prompt.value = 'Native chat fixture'
+            await app.send_chat()
+            assert app.chat_current['messages'][-1]['status'] == 'complete', app.chat_status.value
+            assert app.chat_current['messages'][-1]['content'] == 'Native fixture reply'
+            assert 'synthetic-native-key' not in app.chat_store.path(app.chat_current['id']).read_text()
+            assert 'synthetic-native-key' not in (app.chat_store.root / 'profile.json').read_text()
+        passed.append('native_lm_chat')
         success = set(passed) == set(CASES)
         error = ''
     except Exception:

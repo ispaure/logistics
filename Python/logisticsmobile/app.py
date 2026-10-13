@@ -8,9 +8,10 @@ from .documents import DocumentStore, document_name
 from .preferences import Preferences
 from .preview import markdown_preview
 from .library_ui import LibraryUI
+from .chat_ui import ChatUI
 
 
-class LogisticsMobile(LibraryUI, toga.App):
+class LogisticsMobile(LibraryUI, ChatUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def startup(self):
@@ -81,8 +82,9 @@ class LogisticsMobile(LibraryUI, toga.App):
         box.add(toga.Label('Your documents, on this device.', style=Pack(margin_bottom=12)))
         box.add(toga.Button('Text & Markdown', on_press=self.show_documents, style=Pack(height=52)))
         box.add(toga.Button('Books & Comics', on_press=self.show_library, style=Pack(height=52, margin_top=8)))
+        box.add(toga.Button('LM Chat', on_press=self.show_chat, style=Pack(height=52, margin_top=8)))
         box.add(toga.Label(f'{len(self.labels)} private document(s)', style=Pack(margin_top=8)))
-        box.add(toga.Label('LM chat and remote files\nare coming in later phases.',
+        box.add(toga.Label('Remote files are coming\nin the next phase.',
                            style=Pack(margin_top=16)))
         if self.preferences.error:
             box.add(toga.Label(self.preferences.error, style=Pack(margin_top=12)))
@@ -271,6 +273,10 @@ class LogisticsMobile(LibraryUI, toga.App):
             self.export_button.enabled = True
 
     def exit_app(self, app, **kwargs):
+        if getattr(self, 'chat_client', None):
+            self.chat_client.cancel()
+        if hasattr(self, 'chat_current') and not self.checkpoint_chat():
+            return False
         return self.checkpoint()
 
 

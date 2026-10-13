@@ -265,3 +265,12 @@ Each message shows its creation time in small grayscale text; hover for the full
 local date, time and timezone. Older messages without usable timestamps omit it.
 
 Sent messages fit short text and wrap longer text within 75% of the chat panel width. Assistant messages use up to 95%. Message surfaces, the composer and Markdown code colors follow live light/dark theme changes.
+
+## Mobile development builds
+
+The independent native app supports configured-server text chat, streaming and
+cancellation, private conversations/drafts and Markdown export. It reuses the LM
+conversation schema and context budgeting, with a portable transport and native
+controls. API keys stay in the mobile session. Code/project tools, screenshot
+attachments and the desktop folder UI are not available there. See the
+[mobile guide](../../../logisticsmobile/user_docs/README.md) for limits and setup.

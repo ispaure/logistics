@@ -65,7 +65,7 @@ credentials and settings. External services need their own accounts/software.
 
 An independent [Android/iOS document prototype](Mobile/README.md) is available for
 development builds, with a native hub, private preferences, text/Markdown editing
-and EPUB/comic reading. See its guide for format limits and validation status.
+and EPUB/comic reading plus LM text chat. See its guide for format limits and validation status.
 
 | Tool | Use it to… |
 | --- | --- |

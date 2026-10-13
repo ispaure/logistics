@@ -18,7 +18,8 @@ the native app; real-device interaction testing is still required.
 | Export | Export a copy through the platform destination picker |
 | Share or save back to the original document | Not implemented |
 | File browser, bulk rename, IDE and Git/Perforce UI | Not ported |
-| LM chat, media/image tools, archives and other desktop integrations | Not ported |
+| LM chat | Native text conversations, configured server/model, streaming/cancel, private history and Markdown export |
+| Media/image tools, archives and other desktop integrations | Not ported |
 
 ## Preferences and storage
 
@@ -109,3 +110,41 @@ The private book checksum is checked on opening, and the portable reader rejects
 changes while reading. Re-import a changed private copy as a new entry. Malformed
 library records are preserved and reported. Progress/bookmark writes reject stale
 records rather than overwriting another change.
+
+## LM chat
+
+Choose **LM Chat** from Home. Open **Server & generation settings…**, enter your
+existing server's API URL (for example `http://192.168.1.10:1234/v1`), optional
+session API key, and model ID. **Refresh models** contacts that server explicitly
+and fills the model selector. Use the computer's LAN address/hostname when the
+server is on a computer: `localhost` on a phone means the phone itself. HTTPS
+protects requests and credentials; HTTP sends them unencrypted. TLS verification
+is enforced for HTTPS, and redirects are refused. iOS declares the local-network
+purpose; physical-device permission behavior still requires validation.
+
+Choose context tokens and maximum reply tokens, then **Save configuration**.
+These settings, URL and model persist privately. API keys remain in memory for
+this app session and are not written to configuration or conversation fields.
+Re-enter a required key after restarting. Opening chat alone makes no request.
+
+**New conversation** starts a private thread. Drafts are checkpointed while typing.
+**Send** streams a text reply and preserves partial progress during generation.
+**Cancel** stops the connection and retains received text with cancelled status.
+Reopening an interrupted streaming record identifies it as interrupted. Failures
+retain the user message/partial reply; no automatic retry occurs. The selector
+reopens saved conversations. Malformed, oversized or concurrently changed files
+are preserved, and saving reports the problem. Export can preserve a current
+valid in-memory copy before reopening a conflicting file.
+
+Requests reuse the desktop whole-turn context budget: older completed turns may
+be omitted, with their count shown during generation. Server token limits remain
+authoritative. Mobile limits are 200 text messages per conversation, a 64 KiB
+character draft, 2 MiB per stored record, 256 KiB per reply, 64 KiB per server event
+and 1 MiB per request. Reads time out after 15 seconds without data; generation
+has a ten-minute upper bound. Models lists are bounded to 128 IDs / 512 KiB.
+
+**Export conversation…** writes UTF-8 Markdown through the platform export-copy
+picker, subject to its 1 MiB limit. Conversations use the desktop LM domain/schema,
+but mobile currently supports text-only Chat mode: no screenshots, project Code
+mode, model tools, folders, or desktop conversation import UI. Model tool calls
+are rejected rather than executed.

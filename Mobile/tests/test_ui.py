@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, patch
 from logisticsmobile.access import LocalDocuments
 from logisticsmobile.app import LogisticsMobile
 from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
+from logisticsmobile.chat_fixture import fixture_server
 
 
 class MobileUITests(unittest.TestCase):
@@ -82,6 +83,19 @@ class MobileUITests(unittest.TestCase):
             app.loop.run_until_complete(app.open_book(record['id']))
             self.assertEqual(app.book_reader.pages, ['page2.png', 'page10.png'])
             self.assertIsNotNone(app.book_content.children[0].image)
+            with fixture_server() as (url, started, release, requests):
+                app.show_chat()
+                app.chat_url.value = url
+                app.chat_key.value = 'synthetic-ui-key'
+                app.loop.run_until_complete(app.refresh_chat_models())
+                self.assertEqual(app.chat_model.value, 'fixture-model')
+                app.chat_prompt.value = 'Hello fixture'
+                app.loop.run_until_complete(app.send_chat())
+                self.assertEqual(app.chat_current['messages'][-1]['status'], 'complete', app.chat_status.value)
+                self.assertEqual(app.chat_current['messages'][-1]['content'], 'Native fixture reply')
+                self.assertNotIn('synthetic-ui-key', app.chat_store.path(app.chat_current['id']).read_text())
+                app.show_chat_configuration()
+                app.show_chat()
             app.main_window.close()
             app.loop.close()
 
