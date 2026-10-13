@@ -63,7 +63,10 @@ class MobileChatTests(unittest.TestCase):
             thread = Thread(target=stream)
             thread.start()
             self.assertTrue(started.wait(5))
-            client.cancel()
+            # Simulate Windows retaining a blocked file-backed socket read:
+            # cancellation must not depend on shutdown waking that reader.
+            with patch('socket.socket.shutdown', return_value=None):
+                client.cancel()
             thread.join(3)
             self.assertFalse(thread.is_alive())
             self.assertIsInstance(errors[0], ChatCancelled)
