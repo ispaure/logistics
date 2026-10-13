@@ -5,19 +5,24 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from .documents import DocumentStore, document_name
+from .preferences import Preferences
+from .preview import markdown_preview
 
 
 class LogisticsMobile(toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def startup(self):
-        self.store = DocumentStore(Path(self.storage_root or self.paths.data) / 'Documents')
+        root = Path(self.storage_root or self.paths.data)
+        self.preferences = Preferences(root)
+        self.store = DocumentStore(root / 'Documents')
         self.current = None
         self.loading = True
         self.labels = {}
         self.selector = toga.Selection(on_change=self.select_document, style=Pack(flex=1, height=44))
         self.name = toga.TextInput(on_change=self.name_changed, style=Pack(flex=1, height=44))
-        self.editor = toga.MultilineTextInput(on_change=self.text_changed, style=Pack(flex=1))
+        self.editor = toga.MultilineTextInput(on_change=self.text_changed,
+            style=Pack(flex=1, font_size=int(self.preferences.values['font_size'])))
         self.status = toga.Label('', style=Pack(font_size=12))
         self.recovery_notice = toga.Label('', style=Pack(font_size=12))
         self.import_button = toga.Button('Import…', on_press=self.import_document, style=Pack(flex=1, height=44))
@@ -33,16 +38,100 @@ class LogisticsMobile(toga.App):
         box.add(toga.Box(children=[self.save_button,
             toga.Button('Save a copy', on_press=self.save_copy, style=Pack(flex=1, height=44))],
             style=Pack(direction=ROW, margin_top=8)))
-        self.main_window = toga.MainWindow(title='Logistics', content=box,
+        self.export_button = toga.Button('Export…', on_press=self.export_document, style=Pack(flex=1, height=44))
+        box.add(toga.Box(children=[self.export_button,
+            toga.Button('Preview', on_press=self.show_preview, style=Pack(flex=1, height=44))],
+            style=Pack(direction=ROW, margin_top=8)))
+        self.document_view = box
+        self.body = toga.Box(style=Pack(direction=COLUMN, flex=1))
+        self.navigation = toga.Box(children=[
+            toga.Button('Home', on_press=self.show_home, style=Pack(flex=1, height=44)),
+            toga.Button('Documents', on_press=self.show_documents, style=Pack(flex=1, height=44)),
+            toga.Button('Settings', on_press=self.show_settings, style=Pack(flex=1, height=44))],
+            style=Pack(direction=ROW))
+        shell = toga.Box(children=[self.navigation, self.body], style=Pack(direction=COLUMN))
+        self.main_window = toga.MainWindow(title='Logistics', content=shell,
                                            on_lose_focus=self.checkpoint)
         self.on_exit = self.exit_app
         self.refresh_documents()
         self.loading = False
         if self.labels:
-            self.open_document(next(iter(self.labels.values())))
+            key = self.preferences.values['last_document']
+            if self.preferences.values['restore_last_document'] != 'true' or key not in self.labels.values():
+                key = next(iter(self.labels.values()))
+            self.open_document(key)
         else:
             self.new_document()
+        self.show_home()
         self.main_window.show()
+
+    def show_view(self, view):
+        if not self.checkpoint():
+            return False
+        for child in list(self.body.children):
+            self.body.remove(child)
+        self.body.add(view)
+        return True
+
+    def show_home(self, widget=None, **kwargs):
+        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
+        box.add(toga.Label('Logistics', style=Pack(font_size=24, margin_bottom=12)))
+        box.add(toga.Label('Your documents, on this device.', style=Pack(margin_bottom=12)))
+        box.add(toga.Button('Text & Markdown', on_press=self.show_documents, style=Pack(height=52)))
+        box.add(toga.Label(f'{len(self.labels)} private document(s)', style=Pack(margin_top=8)))
+        box.add(toga.Label('EPUB/comics, LM chat and remote files are coming in later phases.',
+                           style=Pack(margin_top=16)))
+        if self.preferences.error:
+            box.add(toga.Label(self.preferences.error, style=Pack(margin_top=12)))
+        self.show_view(box)
+
+    def show_documents(self, widget=None, **kwargs):
+        self.show_view(self.document_view)
+
+    def show_settings(self, widget=None, **kwargs):
+        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
+        box.add(toga.Label('Preferences', style=Pack(font_size=22, margin_bottom=12)))
+        self.font_choice = toga.Selection(items=['12', '14', '16', '18', '20', '24', '28', '32'],
+            value=self.preferences.values['font_size'], style=Pack(height=44))
+        self.restore_choice = toga.Switch('Restore last document',
+            value=self.preferences.values['restore_last_document'] == 'true', style=Pack(height=44))
+        self.settings_status = toga.Label(self.preferences.error, style=Pack(margin_top=12))
+        box.add(toga.Label('Editor and preview font size'))
+        box.add(self.font_choice)
+        box.add(self.restore_choice)
+        box.add(toga.Button('Save preferences', on_press=self.save_preferences, style=Pack(height=44)))
+        box.add(toga.Button('Reload preferences', on_press=self.reload_preferences, style=Pack(height=44)))
+        box.add(self.settings_status)
+        self.show_view(box)
+
+    def save_preferences(self, widget=None, **kwargs):
+        try:
+            self.preferences.save(font_size=self.font_choice.value,
+                restore_last_document='true' if self.restore_choice.value else 'false')
+            self.editor.style.font_size = int(self.preferences.values['font_size'])
+            self.settings_status.text = 'Preferences saved on this device.'
+        except (OSError, ValueError) as error:
+            self.settings_status.text = str(error)
+
+    def reload_preferences(self, widget=None, **kwargs):
+        self.preferences.reload()
+        self.editor.style.font_size = int(self.preferences.values['font_size'])
+        self.show_settings()
+
+    def show_preview(self, widget=None, **kwargs):
+        if self.current is None or not self.checkpoint():
+            return
+        try:
+            content = markdown_preview(self.current.text, int(self.preferences.values['font_size']))
+        except ValueError as error:
+            self.status.text = str(error)
+            return
+        self.preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
+                                   style=Pack(flex=1))
+        self.preview.set_content('about:blank', content)
+        self.show_view(toga.Box(children=[
+            toga.Button('Back to editor', on_press=self.show_documents, style=Pack(height=44)),
+            self.preview], style=Pack(direction=COLUMN, flex=1)))
 
     def refresh_documents(self):
         previous = self.loading
@@ -72,6 +161,10 @@ class LogisticsMobile(toga.App):
             self.status.text = ('Stored file changed. Save a copy to keep recovered edits.' if self.current.conflict
                                 else 'Recovered unsaved edits.' if self.current.modified else 'Saved')
             self.selector.value = next((label for label, identity in self.labels.items() if identity == key), None)
+            try:
+                self.preferences.save(last_document=key)
+            except (OSError, ValueError) as error:
+                self.status.text += ' · ' + str(error)
         except (OSError, ValueError, KeyError, TypeError) as error:
             self.status.text = str(error)
         finally:
@@ -119,6 +212,8 @@ class LogisticsMobile(toga.App):
             return False
 
     def save_document(self, widget=None, **kwargs):
+        if self.current is None:
+            return
         try:
             self.current.name = document_name(self.name.value)
             self.store.save(self.current)
@@ -128,6 +223,8 @@ class LogisticsMobile(toga.App):
             self.status.text = str(error)
 
     def save_copy(self, widget=None, **kwargs):
+        if self.current is None:
+            return
         try:
             copy = self.store.save_copy(self.current, document_name(self.name.value))
             self.current = copy
@@ -152,6 +249,20 @@ class LogisticsMobile(toga.App):
             self.status.text = 'Import failed: ' + str(error)[:500]
         finally:
             self.import_button.enabled = True
+
+    async def export_document(self, widget=None, **kwargs):
+        from .pickers import export_document
+        if self.current is None or not self.checkpoint():
+            return
+        self.export_button.enabled = False
+        try:
+            done = await export_document(self, document_name(self.name.value),
+                                        self.current.snapshot.encode(self.current.text))
+            self.status.text = 'Document copy exported.' if done else 'Export cancelled.'
+        except Exception as error:
+            self.status.text = 'Export failed: ' + str(error)[:500]
+        finally:
+            self.export_button.enabled = True
 
     def exit_app(self, app, **kwargs):
         return self.checkpoint()

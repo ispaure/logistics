@@ -6,10 +6,60 @@ from unittest.mock import AsyncMock, patch
 
 from commonUtils.runtime.platform import OS
 from logisticsmobile.access import AndroidDocuments, IOSDocuments, LocalDocuments
-from logisticsmobile.pickers import pick_document
+from logisticsmobile.pickers import pick_document, export_document
 
 
 class PickerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_android_export_uses_explicit_destination_and_closes_failed_stream(self):
+        class Intent:
+            ACTION_CREATE_DOCUMENT = 'create'
+            CATEGORY_OPENABLE = 'openable'
+            FLAG_GRANT_WRITE_URI_PERMISSION = 2
+            EXTRA_TITLE = 'title'
+            def __init__(self, action): self.action, self.flags = action, []
+            def addCategory(self, category): self.category = category
+            def setType(self, mime): self.mime = mime
+            def addFlags(self, flags): self.flags.append(flags)
+            def putExtra(self, key, value): self.title = value
+        writes, closed, started = [], [], []
+        def write(data):
+            writes.append(data)
+            raise OSError('Provider disconnected')
+        stream = SimpleNamespace(write=write, flush=lambda: None, close=lambda: closed.append(True))
+        resolver = SimpleNamespace(openOutputStream=lambda uri, mode: stream)
+        def start(intent, on_complete):
+            started.append(intent)
+            on_complete(42, SimpleNamespace(getData=lambda: 'destination URI'))
+        app = SimpleNamespace(_impl=SimpleNamespace(start_activity=start,
+            native=SimpleNamespace(getContentResolver=lambda: resolver)))
+        java = SimpleNamespace(jclass=lambda name: Intent if name.endswith('Intent') else SimpleNamespace(RESULT_OK=42),
+                               jarray=lambda dtype: list, jbyte=object())
+        with patch('logisticsmobile.pickers.get_os', return_value=OS.ANDROID), patch.dict('sys.modules', java=java):
+            with self.assertRaises(OSError):
+                await export_document(app, 'Notes.md', b'\xffhello')
+        self.assertEqual(closed, [True])
+        self.assertEqual(writes, [[-1, 104, 101, 108, 108, 111]])
+        self.assertEqual(started[0].flags, [2])
+        self.assertEqual(started[0].title, 'Notes.md')
+        self.assertEqual(started[0].mime, 'text/markdown')
+
+    async def test_export_cancel_does_not_write_and_ios_staging_is_removed(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as directory:
+            app = SimpleNamespace(paths=SimpleNamespace(data=Path(directory)),
+                                  main_window=SimpleNamespace(dialog=AsyncMock(return_value=None)))
+            with patch('logisticsmobile.pickers.get_os', return_value=OS.MAC):
+                self.assertFalse(await export_document(app, 'Notes.txt', b'copy'))
+            observed = []
+            async def picker(app, path):
+                observed.append(path)
+                self.assertEqual(path.read_bytes(), b'copy')
+                return False
+            with patch('logisticsmobile.pickers.get_os', return_value=OS.IOS), \
+                    patch('logisticsmobile.pickers.pick_ios', side_effect=picker):
+                self.assertFalse(await export_document(app, 'Notes.txt', b'copy'))
+            self.assertFalse(observed[0].exists())
+
     async def test_android_uses_shared_detection_and_read_only_native_activity(self):
         class Intent:
             ACTION_OPEN_DOCUMENT = 'open'

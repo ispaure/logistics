@@ -6,7 +6,8 @@ from pathlib import Path
 import shutil
 import subprocess
 
-APP_MODULES = ('__init__.py', '__main__.py', 'documents.py', 'access.py', 'pickers.py', 'app.py', 'smoke.py')
+APP_MODULES = ('__init__.py', '__main__.py', 'documents.py', 'access.py', 'pickers.py', 'app.py', 'smoke.py',
+               'preferences.py', 'preview.py')
 DOCUMENT_MODULES = (
     'features/__init__.py', 'features/books/__init__.py', 'features/books/epub.py',
     'features/books/metadata.py', 'features/comics/__init__.py',
@@ -20,7 +21,7 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     repo, destination = Path(repo).resolve(), Path(destination).resolve()
     if destination.exists():
         raise ValueError('Stage into a new directory; existing payloads are preserved.')
-    paths = ['Python/logisticsmobile', 'Mobile', 'Python/tests/test_mobile_documents.py',
+    paths = ['Python/logisticsmobile', 'Mobile', 'Python/tests/test_mobile_documents.py', 'Python/tests/test_mobile_hub.py',
              'Python/tests/portable_documents.py', 'Python/tests/books_fixture.py']
     if testbed:
         paths.extend('Python/' + name for name in DOCUMENT_MODULES)
@@ -46,7 +47,7 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     if testbed:
         for name in DOCUMENT_MODULES:
             copy(repo / 'Python' / name, Path(name))
-        for name in ('portable_documents.py', 'books_fixture.py', 'test_mobile_documents.py'):
+        for name in ('portable_documents.py', 'books_fixture.py', 'test_mobile_documents.py', 'test_mobile_hub.py'):
             copy(repo / 'Python/tests' / name, Path(name))
     manifest = json.loads((destination / 'source.json').read_text())
     manifest.update(logistics_commit=subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip(),

@@ -22,6 +22,9 @@ EXPECTED_TESTS = (
     'test_comic_pages_and_metadata_work_without_image_decoder',
     'test_epub_read_and_metadata_save_preserve_resources',
     'test_markdown_and_text_save_reject_stale_changes',
+    'test_mobile_markdown_preview_is_offline_and_escapes_active_content',
+    'test_mobile_preferences_preserve_invalid_and_concurrent_files',
+    'test_mobile_preferences_survive_restart_without_hard_links',
     'test_import_boundary', 'test_runtime_identity',
 )
 
@@ -76,9 +79,10 @@ def main(argv=None):
     try:
         from test_mobile_documents import MobileDocumentsTests
         from portable_documents import PortableDocuments
+        from test_mobile_hub import MobileHubTests
         RuntimeChecks.target = args.target
         suite = unittest.TestSuite()
-        for case in (MobileDocumentsTests, PortableDocuments, RuntimeChecks):
+        for case in (MobileDocumentsTests, PortableDocuments, MobileHubTests, RuntimeChecks):
             suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(case))
         result = unittest.TextTestRunner(verbosity=2).run(suite)
         report = dict(schema=1, suite='logistics-mobile-documents', target=args.target,

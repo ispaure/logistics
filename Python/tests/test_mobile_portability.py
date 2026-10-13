@@ -17,6 +17,6 @@ class MobilePortabilityTests(unittest.TestCase):
         line = next(line for line in completed.stdout.splitlines() if line.startswith('LOGISTICS_MOBILE_RESULT='))
         report = json.loads(line.split('=', 1)[1])
         self.assertEqual(report['environment'], 'desktop-harness')
-        self.assertEqual(report['tests_run'], 14)
+        self.assertEqual(report['tests_run'], len(report['expected_tests']))
         self.assertTrue(report['success'])
         self.assertEqual(report['skipped'], 0)
