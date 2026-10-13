@@ -81,11 +81,11 @@ class LocalCryptUITests(unittest.TestCase):
         from zipfile import ZipFile
         from unittest.mock import patch
         from logisticsmobile.localcrypt import PrivateReader
-        from test_mobile_localcrypt import PNG
+        png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=')
         def reader(title):
             data = BytesIO()
             with ZipFile(data, 'w') as archive:
-                archive.writestr('page.png', PNG)
+                archive.writestr('page.png', png)
                 archive.writestr('ComicInfo.xml', f'<ComicInfo><Title>{title}</Title></ComicInfo>')
             return PrivateReader('comic.cbz', data.getvalue())
         class Client:
