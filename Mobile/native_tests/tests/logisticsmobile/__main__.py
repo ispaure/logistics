@@ -24,10 +24,15 @@ async def wait_for_text(view, expected):
             if expected in str(value):
                 return
             await asyncio.sleep(.1)
-    try:
-        await asyncio.wait_for(loaded(), timeout=30)
-    except TimeoutError:
+    # Toga Android can re-enter its cooperative loop from native callbacks;
+    # asyncio's current-task timeout context is not reliable at that boundary.
+    # wait() uses a loop timer without requiring a current-task context.
+    task = asyncio.create_task(loaded())
+    done, _ = await asyncio.wait([task], timeout=30)
+    if not done:
+        task.cancel()
         raise RuntimeError(f'WebView did not render {expected!r}; last value={last!r}, url={view.url!r}') from None
+    await task
 
 
 async def exercise(app):
