@@ -28,3 +28,7 @@ def make_books(root):
         archive.writestr('page10.png', png_page())
         archive.writestr('page2.png', png_page())
     return epub, comic
+
+
+# Synthetic pyzipper WinZip AES-256 fixture; contains only a memory remote.
+AES_CREDENTIALS = 'UEsDBBQAAQBjACcuTV3J2bwINgAAABgAAAALAAsAZml4dHVyZS50eHQBmQcAAQBBRQMIAJ7Y0pSWyQhai4Ta0J12uXz0ODn7tWsc5tNblcWra+jflD6LxE8HzcWxhN7eUoRY9Fl3gDAmjVBLAQIUAxQAAQBjACcuTV3J2bwINgAAABgAAAALAAsAAAAAAAAAAACAAQAAAABmaXh0dXJlLnR4dAGZBwABAEFFAwgAUEsFBgAAAAABAAEARAAAAGoAAAAAAA=='

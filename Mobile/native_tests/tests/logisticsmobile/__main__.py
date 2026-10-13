@@ -102,6 +102,36 @@ async def exercise(app):
             assert 'synthetic-native-key' not in app.chat_store.path(app.chat_current['id']).read_text()
             assert 'synthetic-native-key' not in (app.chat_store.root / 'profile.json').read_text()
         passed.append('native_lm_chat')
+        from logisticsmobile.cloud import CloudClient
+        from .fixtures import AES_CREDENTIALS
+        from unittest.mock import AsyncMock, patch
+        import base64
+        app.cloud_client = CloudClient()
+        app.show_cloud()
+        await app.probe_cloud()
+        assert 'offline read check passed' in app.cloud_status.value, app.cloud_status.value
+        credentials = fixtures / 'credentials.zip'
+        credentials.write_bytes(base64.b64decode(AES_CREDENTIALS))
+        app.cloud_password.value = 'synthetic-fixture-password'
+        with patch('logisticsmobile.pickers.pick_document', new=AsyncMock(return_value=(LocalDocuments(), credentials))):
+            await app.import_cloud_package()
+        assert app.cloud_password.value == ''
+        assert app.cloud_remote.value == 'Fixture' and len(app.cloud_remote.items) == 1, app.cloud_status.value
+        await app.browse_cloud()
+        label = next(key for key, row in app.cloud_rows.items() if row['path'] == 'logistics-native-check')
+        app.cloud_entries.value = label
+        await app.open_cloud_folder()
+        label = next(key for key, row in app.cloud_rows.items() if row['path'].endswith('fixture.txt'))
+        app.cloud_entries.value = label
+        await app.download_cloud()
+        assert len(app.downloads.items()) == 1, app.cloud_status.value
+        await app.open_download()
+        assert app.editor.value == 'Native rclone fixture\n', app.cloud_status.value
+        app.show_cloud()
+        await app.clear_cloud()
+        assert not list(app.cloud_remote.items)
+        assert len(app.downloads.items()) == 1
+        passed.append('native_rclone_files')
         success = set(passed) == set(CASES)
         error = ''
     except Exception:

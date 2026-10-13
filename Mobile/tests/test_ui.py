@@ -1,5 +1,4 @@
 """Widget contracts using Toga's official dummy backend, not device evidence."""
-import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -102,6 +101,40 @@ class MobileUITests(unittest.TestCase):
                 self.assertNotIn('synthetic-ui-key', app.chat_store.path(app.chat_current['id']).read_text())
                 app.show_chat_configuration()
                 app.show_chat()
+            class FixtureCloud:
+                forgotten = False
+                def import_package(self, access, reference, password):
+                    with access.open(reference) as (_, stream):
+                        assert stream.read(1024) == b'synthetic package'
+                    assert password == 'synthetic-ui-password'
+                    return ['Fixture']
+                def entries(self, remote, path=''):
+                    assert remote == 'Fixture'
+                    return [dict(path='fixture.txt', size=22, directory=False)]
+                def download(self, remote, path):
+                    return b'Private cloud fixture\n'
+                def clear(self):
+                    self.forgotten = True
+                def cancel(self):
+                    pass
+            credentials = fixtures / 'credentials.zip'
+            credentials.write_bytes(b'synthetic package')
+            app.cloud_client = FixtureCloud()
+            app.show_cloud()
+            app.cloud_password.value = 'synthetic-ui-password'
+            with patch('logisticsmobile.pickers.pick_document', new=AsyncMock(return_value=(LocalDocuments(), credentials))):
+                app.loop.run_until_complete(app.import_cloud_package())
+            self.assertEqual(app.cloud_password.value, '')
+            app.loop.run_until_complete(app.browse_cloud())
+            app.cloud_entries.value = next(iter(app.cloud_rows))
+            app.loop.run_until_complete(app.download_cloud())
+            self.assertEqual(len(app.downloads.items()), 1)
+            app.loop.run_until_complete(app.open_download())
+            self.assertEqual(app.editor.value, 'Private cloud fixture\n')
+            app.show_cloud()
+            app.loop.run_until_complete(app.clear_cloud())
+            self.assertTrue(app.cloud_client.forgotten)
+            self.assertEqual(len(app.downloads.items()), 1)
             app.main_window.close()
             app.loop.close()
 

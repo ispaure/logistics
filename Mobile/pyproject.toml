@@ -1,14 +1,14 @@
 [tool.briefcase]
 project_name = "Logistics Mobile"
 bundle = "io.github.ispaure"
-version = "0.1.3"
+version = "0.1.4"
 url = "https://github.com/ispaure/logistics"
 license = "MIT"
 author = "Marc-Andre Voyer"
 
 [tool.briefcase.app.logisticsmobile]
 formal_name = "Logistics Mobile"
-description = "Native mobile documents, readers and LM chat"
+description = "Native documents, readers, LM chat and read-only rclone files"
 
 sources = ["payload/logisticsmobile", "payload/commonUtils", "payload/features", "payload/services"]
 test_sources = ["native_tests/tests"]
@@ -30,6 +30,7 @@ chaquopy.defaultConfig.staticProxy("toga_android.widgets.internal.webview")
 """
 
 [tool.briefcase.app.logisticsmobile.iOS]
+min_os_version = "15.0"
 requires = ["toga-iOS==0.5.7"]
 
 [tool.briefcase.app.logisticsmobile.iOS.info]

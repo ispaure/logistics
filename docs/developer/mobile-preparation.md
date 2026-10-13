@@ -230,3 +230,50 @@ Phase 2 was published as [v0.1.1-alpha.13](https://github.com/ispaure/logistics/
 at `428d1d7` after all desktop, native UI and 21-case mobile runtime gates passed.
 Its exact commit was promoted to main and release `v0.1.1-main.04` was requested
 without waiting for that separate pipeline.
+
+## Phase 4 embedded rclone contract
+
+`Mobile/rclone_bridge` is a pinned Go module using rclone 1.74.1 and yeka/zip for
+WinZip AES/ZipCrypto interoperability. `cloud_build.py` builds Android arm64/x86_64
+C shared libraries with NDK 27.2.12479018, and iOS arm64 device plus host-architecture
+Simulator C archives. Generated projects link only the narrow C bridge. Go 1.26.9
+is pinned in the native workflow; checks run module tests before native builds.
+Compiled-module license notices and the Go runtime license are included in the
+native Python payload before Briefcase creates the app.
+
+The bridge exposes import, list, bounded read, offline probe, cancel and clear;
+it does not expose generic RC, commands or remote mutation. No RC listener starts.
+Only drive/dropbox/onedrive/s3/webdav/memory backends are linked. Parsed credentials
+are checked against explicit per-backend option allowlists before publication.
+Config uses rclone's default in-memory Storage; configfile.Install is never called.
+Provider token refresh remains in memory, and supported backend Shutdown hooks run
+when replacing/clearing cached clients. Normal rclone diagnostic logging is
+suppressed; API failures use bounded generic messages without provider responses.
+
+ZIP members are read into bounded buffers, authenticated and validated without
+filesystem extraction. The fixture was generated independently with pyzipper
+AES-256; tests cover wrong passwords, tampering, path traversal, oversized inputs,
+unsupported filesystem/script settings and retention of the prior session on a
+failed import. All tests use synthetic credentials and an in-memory remote.
+
+`cloud.py` owns the ctypes C allocation/free boundary and app-private completed
+copies. `cloud_ui.py` owns explicit picker/import/connect/download controls. Private
+copies use exclusive creation in UUID folders and a completion marker, so recovery
+excludes incomplete, linked or invalid entries. Export extends the existing system
+copy adapter to chunked binary output with an explicit 32 MiB maximum; existing
+document/chat exports retain their 1 MiB default.
+
+Three additional portable boundary cases raise the mobile core inventory to 28.
+Native UI evidence requires a ninth case: real linked rclone, AES credential import,
+folder browsing, downloading/opening a private copy and forgetting the session.
+Native entry points retain the explicit `native_picker_tested=false` evidence flag.
+Physical-provider interaction, real-account OAuth rotation, secure vault persistence,
+background transfers and signed/distributed device builds remain unverified work.
+
+Phase 3 was published as [v0.1.1-alpha.19](https://github.com/ispaure/logistics/releases/tag/v0.1.1-alpha.19)
+at `e3f7194`, after all desktop checks, 25-case core checks and eight native UI
+cases passed on both mobile runtimes in [run 38379277207](https://github.com/ispaure/logistics/actions/runs/38379277207).
+Its exact commit was promoted to main and `v0.1.1-main.05` was requested without
+waiting for that separate pipeline. Retained native reports:
+[Android](mobile-evidence/2026-10-13-android-native-ui-phase3.json) and
+[iOS](mobile-evidence/2026-10-13-ios-native-ui-phase3.json).

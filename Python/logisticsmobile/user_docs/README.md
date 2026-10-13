@@ -148,3 +148,49 @@ picker, subject to its 1 MiB limit. Conversations use the desktop LM domain/sche
 but mobile currently supports text-only Chat mode: no screenshots, project Code
 mode, model tools, folders, or desktop conversation import UI. Model tool calls
 are rejected rather than executed.
+
+## Remote files and credential ZIPs
+
+Choose **Remote files** from Home. The native app embeds rclone 1.74.1; no desktop
+executable, shell, mount, or separate RC server is required. **Check rclone engine**
+performs an offline in-memory read and displays the engine version.
+
+Enter the password, then **Import credential ZIP…** and choose your existing
+Logistics credential package. TXT entries must each contain one `[Remote name]`
+section and rclone settings, including `type`. Plain, ZipCrypto and WinZip AES
+packages are readable; importing never extracts files or modifies the source ZIP.
+ZIPs are limited to 1 MiB, 64 entries and 256 KiB per TXT entry. Duplicate remote
+names, unsafe archive paths and unsupported settings are rejected before replacing
+the previously loaded session. Loading a valid package replaces that session's
+remote list; it makes no remote connection by itself.
+
+This first mobile adapter includes Google Drive, Dropbox, OneDrive, S3 and WebDAV,
+plus the memory backend used by the offline diagnostic. Existing authenticated
+settings are required. It accepts a deliberately limited set of backend settings;
+local paths, scripts, service-account files, mounts, alias/crypt wrappers and
+other backends are not currently supported. WebDAV URLs and custom S3 endpoints
+must use HTTPS. Certificate verification stays enabled.
+
+Choose a remote, optionally enter a relative folder, then **Browse folder**.
+**Open selected folder** and **Parent folder** navigate its entries. A folder
+result is limited to 1,000 displayed entries. **Download private copy** reads the
+selected file into this app's private Downloads, up to 32 MiB. It never uploads,
+renames, deletes or synchronizes remote files. **Cancel request** cancels the native
+operation; individual network reads have a 15-second timeout and operations have
+a two-minute deadline. Some upstream backends may take until their network call
+returns to acknowledge cancellation.
+
+Select a private download and choose **Open private copy** to import it into the
+text/Markdown editor or EPUB/CBZ library, subject to those readers' existing format
+and size limits. Other/bigger files can use **Export private copy…**, through the
+system destination picker, up to 32 MiB. Repeated downloads produce separate private
+copies; incomplete copies are excluded from the selector after a restart.
+
+The ZIP password, decrypted credentials and refreshed OAuth tokens are held only
+in this app session. They are not saved to preferences, extracted config files,
+logs or downloaded-file metadata. **Forget session credentials** clears the
+loaded session while preserving downloads. Re-import after restarting. Updated
+tokens are not written back to the ZIP: accounts that rotate refresh tokens may
+need a fresh credential package. A secure persistent credential vault and interactive
+OAuth account setup remain future work. Private download files persist on this
+device and are subject to the platform's normal app-data backup policy.

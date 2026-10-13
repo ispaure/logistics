@@ -34,6 +34,9 @@ EXPECTED_TESTS = (
     'test_mobile_chat_profile_never_accepts_stored_api_keys',
     'test_mobile_chat_records_recover_drafts_interruptions_and_reject_conflicts',
     'test_mobile_chat_refresh_and_stream_use_only_configured_endpoint',
+    'test_mobile_cloud_bridge_frees_success_and_invalid_responses',
+    'test_mobile_cloud_downloads_recover_only_complete_private_copies',
+    'test_mobile_cloud_package_uses_scoped_read_without_saving_credentials',
     'test_import_boundary', 'test_runtime_identity',
 )
 
@@ -93,9 +96,10 @@ def main(argv=None):
         from test_mobile_hub import MobileHubTests
         from test_mobile_readers import MobileReaderTests
         from test_mobile_chat import MobileChatTests
+        from test_mobile_cloud import MobileCloudTests
         RuntimeChecks.target = args.target
         suite = unittest.TestSuite()
-        for case in (MobileDocumentsTests, PortableDocuments, MobileHubTests, MobileReaderTests, MobileChatTests, RuntimeChecks):
+        for case in (MobileDocumentsTests, PortableDocuments, MobileHubTests, MobileReaderTests, MobileChatTests, MobileCloudTests, RuntimeChecks):
             suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(case))
         result = unittest.TextTestRunner(verbosity=2).run(suite)
         report = dict(schema=1, suite='logistics-mobile-documents', target=args.target,
