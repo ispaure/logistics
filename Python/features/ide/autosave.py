@@ -15,6 +15,7 @@ class AutoSave(qt.QObject):
         self.workspace, self.buffer = workspace, buffer
         self.busy = False
         self.error = ''
+        self.last_text = buffer.text.toPlainText()
         self.timer = qt.QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.setInterval(1000)
@@ -23,6 +24,13 @@ class AutoSave(qt.QObject):
         qt.QApplication.instance().focusChanged.connect(self.focus_changed)
 
     def changed(self):
+        text = self.buffer.text.toPlainText()
+        if text == self.last_text:
+            return  # Qt emits contentsChanged for syntax/format updates too.
+        self.last_text = text
+        self.schedule()
+
+    def schedule(self):
         if self.workspace.project.autosave == 'after_delay' and not self.error:
             self.timer.start()
 
@@ -59,7 +67,7 @@ class AutoSave(qt.QObject):
             workspace.watch.addPath(str(saved.path))
             workspace.update_buffer_titles(buffer)
             if buffer.text.isModified():
-                self.changed()
+                self.schedule()
                 focus = qt.QApplication.focusWidget()
                 if workspace.project.autosave == 'focus_change' and not any(
                         v is focus or focus is not None and v.isAncestorOf(focus) for v in buffer.views):
@@ -85,5 +93,5 @@ def pause_autosave(method):
             if not previous and not workspace.closing:
                 for doc in workspace.documents.values():
                     if doc.buffer.text.isModified() and not doc.buffer.autosave.busy:
-                        doc.buffer.autosave.changed()
+                        doc.buffer.autosave.schedule()
     return paused

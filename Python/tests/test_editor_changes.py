@@ -201,6 +201,25 @@ class AutoSaveTests(QtTestCase):
         self.assertFalse(self.doc.document().isModified())
         self.assertEqual(self.path.read_bytes(), b'edit original\r\n')
 
+    def test_format_only_notifications_do_not_restart_text_debounce(self):
+        self.doc.buffer.autosave.timer.setInterval(150)
+        self.doc.insertPlainText('edit ')
+        color = False
+        def saved():
+            nonlocal color
+            if self.path.read_bytes() == b'edit original\r\n':
+                return True
+            cursor = qt.QTextCursor(self.doc.document())
+            cursor.select(qt.QTextCursor.SelectionType.Document)
+            style = qt.QTextCharFormat()
+            style.setForeground(qt.QColor('blue' if color else 'red'))
+            cursor.mergeCharFormat(style)
+            color = not color
+            return False
+        self.until(saved)
+        self.assertEqual(self.path.read_bytes(), b'edit original\r\n',
+                         'Formatting notifications postponed the source-text autosave indefinitely')
+
     def test_off_and_focus_mode(self):
         self.view.set_autosave('off')
         self.doc.insertPlainText('edit ')
