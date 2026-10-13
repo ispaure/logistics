@@ -71,8 +71,7 @@ class AutoSaveTests(QtTestCase):
             time.sleep(.005)
 
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
+        self.directory = self.temporary_directory()
         self.path = Path(self.directory.name) / 'file.py'
         self.path.write_bytes(b'original\r\n')
         self.view = ProjectWorkspace(Project('Test', self.directory.name))
@@ -84,8 +83,9 @@ class AutoSaveTests(QtTestCase):
     def cleanup_view(self):
         self.until(lambda: not self.view.worker and not self.view.queue)
         self.view.closing = True
-        self.view.deleteLater()
-        self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+        # Leave the owner alive for the managed fixture to capture marker
+        # futures and stop browser workers before deleting the folder. Native
+        # Windows handles can outlive deleteLater while an executor task ends.
 
     def test_debounce_shared_buffer_undo_and_external_conflict(self):
         self.view.split_right()
