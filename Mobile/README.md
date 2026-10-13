@@ -60,7 +60,7 @@ These commands verify host behavior; they do not certify device interfaces.
 
 [Native builds](../.github/workflows/mobile-build.yml) produce an Android debug APK
 and an iOS Simulator app archive. [Runtime checks](../.github/workflows/mobile-runtime.yml)
-build the pinned CPython 3.14.7 testbeds and execute 14 Logistics document/core
+build the pinned CPython 3.14.7 testbeds and execute 17 Logistics document/core
 cases inside actual Android and iOS interpreters. Result verification requires
 the expected runtime, clean source commits, every case and zero failures or skips.
 

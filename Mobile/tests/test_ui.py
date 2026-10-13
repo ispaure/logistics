@@ -16,6 +16,14 @@ class MobileUITests(unittest.TestCase):
             LogisticsMobile.storage_root = root
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
+            self.assertIn('Logistics', app.body.children[0].children[0].text)
+            app.show_settings()
+            app.font_choice.value = '20'
+            app.restore_choice.value = False
+            app.save_preferences()
+            self.assertEqual(app.preferences.values['font_size'], '20')
+            self.assertEqual(app.preferences.values['restore_last_document'], 'false')
+            app.show_documents()
             first = app.current.id
             app.name.value = 'Notes.md'
             app.editor.value = '# Recovered\n'
@@ -45,6 +53,14 @@ class MobileUITests(unittest.TestCase):
             app.save_copy()
             self.assertNotEqual(app.current.id, conflicted)
             self.assertEqual(app.current.text, 'keep these edits')
+            app.show_preview()
+            self.assertIs(app.body.children[0].children[-1], app.preview)
+            app.show_documents()
+            with patch('logisticsmobile.pickers.export_document', new=AsyncMock(return_value=True)) as export:
+                app.loop.run_until_complete(app.export_document())
+                self.assertEqual(export.await_args.args[2], b'keep these edits')
+            self.assertTrue(app.export_button.enabled)
+            self.assertIn('exported', app.status.text)
             app.main_window.close()
             app.loop.close()
 

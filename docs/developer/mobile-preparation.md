@@ -14,7 +14,9 @@ importing desktop initialization, menus or dialogs.
 | `documents.py` | Explicit absolute app-private root; UUID file identities; 1 MiB bounded Unicode text; original encoding/endings; exclusive creation, atomic saves and recovery JSON; stale/deleted-file rejection and safe copies |
 | `access.py` | Scoped binary imports; Android content URIs are handled by ContentResolver streams; iOS URLs retain security-scoped access until reading finishes; every handle/scope is closed on failure |
 | `pickers.py` | Android ACTION_OPEN_DOCUMENT and iOS UIDocumentPicker open mode; native grants are consumed immediately to import a private copy; no broad storage permission or persisted external write access |
-| `app.py` | Native selection, title editing, multiline text, New/Import/Save/copy; checkpoints on edit, focus loss and normal exit |
+| `app.py` | Native Home/Documents/Settings shell; selection, title editing, multiline text, New/Import/Save/copy/export/preview; checkpoints on edit, focus loss and normal exit |
+| `preferences.py` | Immutable defaults and bounded private INI; validation, atomic replace, malformed-file preservation and concurrent-edit rejection |
+| `preview.py` | Bounded basic Markdown HTML; escaped raw input, inert links and offline CSP |
 | `smoke.py` | Fresh-interpreter desktop-dependency rejection, real runtime identity, exact test inventory and structured evidence |
 | `Mobile/tools.py` | Whitelisted Logistics sources, tracked/clean shared Python sources, licenses, source SHAs and dirty-state records; strict emulator/simulator evidence verification |
 
@@ -33,7 +35,7 @@ copy rather than assuming both operations committed together.
 
 Import creates a copy, preserving the selected external source. Android grants
 and iOS scoped URLs need not survive app termination because later edits use the
-private copy. Editing/exporting the original provider document would require a
+private copy. Editing the original provider document would require a
 separate permission, bookmark and provider-write contract; it is not implemented.
 The iOS picker delegate is retained until selection/cancellation. Platform choice uses the shared classifier, including older Android Python
 runtimes that report Linux with `getandroidapilevel`. Android activity
@@ -58,7 +60,7 @@ cannot produce accepted mobile runtime evidence.
 The testbed payload additionally selects portable EPUB metadata/resource reading,
 comic page bytes/ComicInfo updates and generated fixtures. These are headless data
 operations. Image decoding, encrypted archives, mobile EPUB/comic rendering,
-other desktop tools, external export/share and app-store distribution remain
+other desktop tools, external sharing and app-store distribution remain
 future work. No desktop capability is enabled by a prototype build.
 
 ## Validation gates
@@ -71,10 +73,11 @@ source manifests/logs. Build success proves packaging, not native UI interaction
 already established CPython 3.14.7 testbeds, pinned at
 `823f0323ee6ec1402088b73bce1a38473cac36dc`. Android builds x86_64 on Ubuntu 24.04;
 iOS builds arm64 Simulator on macOS 15. The existing iOS resource-copy workaround
-is retained. Fourteen cases run inside each actual interpreter:
+is retained. Seventeen cases run inside each actual interpreter:
 
 - Nine private document, recovery, encoding, conflict and scoped-import contracts.
 - Three existing EPUB/comic/Markdown fixture scenarios.
+- Three mobile preference and offline-preview contracts.
 - Runtime identity and a desktop-dependency import boundary.
 
 The verifier requires one report, expected native `sys.platform`, actual emulator
@@ -138,3 +141,23 @@ do not substitute for this release gate.
 The [mobile user guide](../../Python/logisticsmobile/user_docs/README.md) describes
 the implemented document flow, and [build instructions](../../Mobile/README.md)
 list the independent environment and host checks.
+
+## Phase roadmap
+
+The authorized implementation order is phase 1 (hub/preferences/text/Markdown),
+phase 2 (EPUB and comic readers), phase 3 (LM chat), and phase 4 (rclone credential
+packages and feasible remote access). Each phase is committed with its phase
+prefix, pushed, released on alpha only after every platform gate passes, and the
+successful release commit is promoted to main for a release request. Physical
+device validation and signed distribution remain distinct from source releases.
+
+Phase 1 adds Home/Documents/Settings navigation, private INI preferences,
+platform export-copy pickers and an offline basic Markdown preview. Android's
+pinned WebView needs the declared Chaquopy static proxy for navigation handlers.
+HTML is capped below its 2 MiB default content limit. Active HTML is never passed
+through; default-src none and navigation refusal prevent preview network access.
+System provider export is explicit; neither original-source writeback nor external
+sharing is implied. Picker cancellation and stream cleanup are tested contracts,
+not actual native-provider evidence. Static CI runs the official Toga dummy widget
+and picker contracts before release, while real mobile testbeds cover the added
+portable preference and preview cases.

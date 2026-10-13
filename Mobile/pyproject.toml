@@ -1,14 +1,14 @@
 [tool.briefcase]
 project_name = "Logistics Mobile"
 bundle = "io.github.ispaure"
-version = "0.1.0"
+version = "0.1.1"
 url = "https://github.com/ispaure/logistics"
 license = "MIT"
 author = "Marc-Andre Voyer"
 
 [tool.briefcase.app.logisticsmobile]
 formal_name = "Logistics Mobile"
-description = "Native text and Markdown document prototype"
+description = "Native mobile hub, preferences, text and Markdown documents"
 sources = ["payload/logisticsmobile", "payload/commonUtils"]
 requires = []
 
@@ -17,6 +17,9 @@ requires = ["toga-cocoa==0.5.7"]
 
 [tool.briefcase.app.logisticsmobile.android]
 requires = ["toga-android==0.5.7"]
+build_gradle_extra_content = """
+chaquopy.defaultConfig.staticProxy("toga_android.widgets.internal.webview")
+"""
 
 [tool.briefcase.app.logisticsmobile.iOS]
 requires = ["toga-iOS==0.5.7"]
