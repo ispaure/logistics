@@ -15,13 +15,19 @@ from .fixtures import make_books
 
 
 async def wait_for_text(view, expected):
+    last = None
     async def loaded():
+        nonlocal last
         while True:
             value = await view.evaluate_javascript('document.body ? document.body.textContent : ""')
+            last = str(value)
             if expected in str(value):
                 return
             await asyncio.sleep(.1)
-    await asyncio.wait_for(loaded(), timeout=30)
+    try:
+        await asyncio.wait_for(loaded(), timeout=30)
+    except TimeoutError:
+        raise RuntimeError(f'WebView did not render {expected!r}; last value={last!r}, url={view.url!r}') from None
 
 
 async def exercise(app):
@@ -74,7 +80,8 @@ async def exercise(app):
         error = ''
     except Exception:
         success = False
-        error = traceback.format_exc()
+        traceback.print_exc()
+        error = traceback.format_exc().splitlines()[-1][:600]
     import logisticsmobile
     source = json.loads(Path(logisticsmobile.__file__).with_name('source.json').read_text())
     report = dict(schema=1, suite='logistics-native-ui', target='android' if get_os() is OS.ANDROID else 'ios',
