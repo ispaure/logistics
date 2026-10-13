@@ -30,6 +30,9 @@ reference size. Shared styling tests measure text at 72, 96 and 120 font DPI and
 verify that editor zoom persists the reference value. Launch-card tests exercise
 the macOS conversion at maximum size and several window widths. Offscreen tests
 alone use 96 DPI even on macOS, so native macOS font measurements remain relevant.
+Native startup logs include Git history font, row and header metrics to distinguish
+list density from screen scaling. Filesystem-refresh tests check that activity
+settles without index writes; native watcher notification counts are not portable.
 
 Run the regression suite from the repository root:
 

@@ -58,9 +58,35 @@ def main():
                 expected_pixels = styling.values['ui_font_size_int'] * 96 / 72
                 if abs(ui_pixels - expected_pixels) > 1:
                     raise AssertionError(f'Unexpected native UI font size: {ui_pixels}, expected {expected_pixels}')
+                # Record native list metrics independently of window geometry.
+                # This distinguishes font/style density from display scaling.
+                from features.git.ui.history import HistoryPanel
+                from features.git.ui.chrome import WORKSPACE_STYLE
+                from features.git.models import Commit
+                history = HistoryPanel(window.dlg)
+                history.details.setParent(history)
+                history.setObjectName('gitWorkspace')
+                history.setStyleSheet(WORKSPACE_STYLE)
+                history.uncommitted_count = 1
+                history.head_oid = 'a' * 40
+                history.set_commits([Commit('a' * 40, (), 'Fixture', '2026-10-12', 'Example commit')])
+                history.ensurePolished()
+                typo_font = qt.QFont(history.table.font())
+                typo_font.setStyleStrategy(typo_font.styleStrategy() | qt.QFont.StyleStrategy.PreferTypoLineMetrics)
+                sample_button = qt.QPushButton('Apply settings', history)
+                sample_combo = qt.QComboBox(history)
+                sample_combo.addItem('Automatic')
                 print(json.dumps({'platform': app.platformName(), 'logical_dpi': screen.logicalDotsPerInch(),
                     'device_ratio': screen.devicePixelRatio(), 'window_size': [window.dlg.width(), window.dlg.height()],
                     'ui_font_pixels': ui_pixels, 'ui_font_setting': styling.values['ui_font_size_int'],
+                    'ui_font_family': qt.QFontInfo(app.font()).family(),
+                    'git_history_row_height': history.table.sizeHintForRow(0),
+                    'git_history_clean_row_height': history.table.sizeHintForRow(1),
+                    'git_history_text_height': history.table.fontMetrics().height(),
+                    'git_history_header_height': history.table.header().sizeHint().height(),
+                    'git_history_typo_text_height': qt.QFontMetrics(typo_font).height(),
+                    'preferences_button_height': sample_button.sizeHint().height(),
+                    'preferences_combo_height': sample_combo.sizeHint().height(),
                     'dpi_helper': getattr(app, '_commonutils_window_dpi_fixer', None) is not None}), flush=True)
                 timed_out = []
                 def timeout():
