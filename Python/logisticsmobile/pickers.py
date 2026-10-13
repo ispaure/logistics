@@ -75,12 +75,13 @@ async def pick_ios(app, export_path=None):
         _ios_future = _ios_delegate = _ios_picker = None
 
 
-async def export_document(app, name, content):
+async def export_document(app, name, content, *, max_bytes=None, mime_type=None):
     """Export a copy through an explicit system destination selection."""
     from .documents import document_name, MAX_BYTES
     name = document_name(name)
-    if len(content) > MAX_BYTES:
-        raise ValueError('Export is limited to 1 MiB.')
+    limit = MAX_BYTES if max_bytes is None else max_bytes
+    if not isinstance(limit, int) or not 0 < limit <= 32 * MAX_BYTES or len(content) > limit:
+        raise ValueError(f'Export is limited to {limit // MAX_BYTES if isinstance(limit, int) else 1} MiB.')
     current = get_os()
     if current is OS.ANDROID:
         from java import jclass, jarray, jbyte
@@ -88,7 +89,7 @@ async def export_document(app, name, content):
         Activity = jclass('android.app.Activity')
         intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
         intent.addCategory(Intent.CATEGORY_OPENABLE)
-        intent.setType('text/markdown' if name.lower().endswith('.md') else 'text/plain')
+        intent.setType(mime_type or ('text/markdown' if name.lower().endswith('.md') else 'text/plain'))
         intent.putExtra(Intent.EXTRA_TITLE, name)
         intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         future = asyncio.get_running_loop().create_future()
@@ -104,7 +105,9 @@ async def export_document(app, name, content):
             if stream is None:
                 raise OSError('The selected provider did not open a writable document.')
             try:
-                stream.write(jarray(jbyte)([value if value < 128 else value - 256 for value in content]))
+                for start in range(0, len(content), 65536):
+                    chunk = content[start:start + 65536]
+                    stream.write(jarray(jbyte)([value if value < 128 else value - 256 for value in chunk]))
                 stream.flush()
             finally:
                 stream.close()

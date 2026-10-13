@@ -1,0 +1,41 @@
+{
+  "backend": "toga_android.app",
+  "cases": [
+    "native_hub",
+    "native_preferences",
+    "native_documents",
+    "native_markdown_preview",
+    "native_epub_reader",
+    "native_bookmarks",
+    "native_comic_reader",
+    "native_lm_chat"
+  ],
+  "error": "",
+  "expected_cases": [
+    "native_hub",
+    "native_preferences",
+    "native_documents",
+    "native_markdown_preview",
+    "native_epub_reader",
+    "native_bookmarks",
+    "native_comic_reader",
+    "native_lm_chat"
+  ],
+  "native_picker_tested": false,
+  "schema": 1,
+  "source": {
+    "commonUtils_commit": "18e23630e50a03ad84eade2473a84401e1fb5e1b",
+    "dirty": false,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm"
+    ],
+    "logistics_commit": "e3f7194fb2bb31c8d897498feb755c5528e7ac1c"
+  },
+  "success": true,
+  "suite": "logistics-native-ui",
+  "target": "android"
+}

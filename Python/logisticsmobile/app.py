@@ -10,9 +10,10 @@ from .preferences import Preferences
 from .preview import markdown_preview
 from .library_ui import LibraryUI
 from .chat_ui import ChatUI
+from .cloud_ui import CloudUI
 
 
-class LogisticsMobile(LibraryUI, ChatUI, toga.App):
+class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def startup(self):
@@ -85,8 +86,7 @@ class LogisticsMobile(LibraryUI, ChatUI, toga.App):
         box.add(toga.Button('Books & Comics', on_press=self.show_library, style=Pack(height=52, margin_top=8)))
         box.add(toga.Button('LM Chat', on_press=self.show_chat, style=Pack(height=52, margin_top=8)))
         box.add(toga.Label(f'{len(self.labels)} private document(s)', style=Pack(margin_top=8)))
-        box.add(toga.Label('Remote files are coming\nin the next phase.',
-                           style=Pack(margin_top=16)))
+        box.add(toga.Button('Remote files', on_press=self.show_cloud, style=Pack(height=52, margin_top=8)))
         if self.preferences.error:
             box.add(toga.Label(self.preferences.error, style=Pack(margin_top=12)))
         self.show_view(box)
@@ -279,6 +279,8 @@ class LogisticsMobile(LibraryUI, ChatUI, toga.App):
             self.export_button.enabled = True
 
     def exit_app(self, app, **kwargs):
+        if getattr(self, 'cloud_client', None):
+            self.cloud_client.cancel()
         if getattr(self, 'chat_client', None):
             self.chat_client.cancel()
         if hasattr(self, 'chat_current') and not self.checkpoint_chat():

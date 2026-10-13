@@ -47,6 +47,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.26.9'
+          cache-dependency-path: Mobile/rclone_bridge/go.sum
       - name: Prepare a clean, curated mobile payload
         run: |
           python -m pip install briefcase==0.4.5
@@ -58,7 +62,9 @@ jobs:
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
         run: |
           mkdir -p "$BRIEFCASE_HOME"
+          python cloud_build.py licenses
           briefcase create android --no-input
+          python cloud_build.py android
           briefcase build android --no-input
           cp build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/Logistics-android-debug.apk"
       - name: Generate and build the iOS Simulator application
@@ -70,7 +76,9 @@ jobs:
           mkdir -p "$BRIEFCASE_HOME"
           xcodebuild -version
           xcrun simctl list devices available
+          python cloud_build.py licenses
           briefcase create iOS --no-input
+          python cloud_build.py ios
           briefcase build iOS --no-input
           app=$(find build/logisticsmobile/ios -type d -name 'Logistics Mobile.app' -print -quit)
           test -n "$app"

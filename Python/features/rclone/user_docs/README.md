@@ -100,3 +100,11 @@ not a complete file-by-file deletion preview.
 Sync follows source file links (`--copy-links`), so linked content can be included.
 Two credentials with the same remote name share the managed local sync folder;
 confirm the account before pushing or pulling that folder.
+
+## Android and iOS prototype
+
+The independent mobile app can import the same TXT-in-ZIP credential format into
+an in-memory embedded rclone session, browse supported remotes and download private
+copies. It has its own backend/setting limits and no remote push, sync, mount or
+delete controls. See the [mobile remote-files guide](../../../logisticsmobile/user_docs/README.md#remote-files-and-credential-zips)
+for supported settings, private downloads and session-only credential persistence.

@@ -4,7 +4,8 @@ This independent Toga application targets Android and iOS. It opens imported tex
 and Markdown as app-private copies, edits them, saves their original encoding and
 line endings, and checkpoints drafts for recovery. Its hub also opens a private EPUB/CBZ library
 with chapter/page navigation, bookmarks and saved progress, plus text LM chat
-with private history and explicit server connections. It does not launch the desktop
+with private history and explicit server connections, and embedded read-only
+rclone browsing/downloads using credential ZIPs. It does not launch the desktop
 Qt application or install its dependency list.
 
 See the [user guide](../Python/logisticsmobile/user_docs/README.md) and
@@ -13,16 +14,20 @@ See the [user guide](../Python/logisticsmobile/user_docs/README.md) and
 ## Prepare a native build
 
 Use a separate Python 3.12 environment with `briefcase==0.4.5`. Toga backends are
-pinned to 0.5.7 in `pyproject.toml`. From the repository root, after committing
+pinned to 0.5.7 in `pyproject.toml`. Install Go 1.26.9 for the native rclone
+bridge; Android uses NDK 27.2.12479018 (installed by the build helper if needed). From the repository root, after committing
 source changes:
 
 ```sh
 python Mobile/tools.py stage Mobile/payload
 cd Mobile
+python cloud_build.py licenses
 briefcase create android --no-input
+python cloud_build.py android
 briefcase build android --no-input
 # On a Mac with the iOS platform installed:
 briefcase create iOS --no-input
+python cloud_build.py ios
 briefcase build iOS --no-input
 ```
 
@@ -64,7 +69,7 @@ These commands verify host behavior; they do not certify device interfaces.
 
 [Native builds](../.github/workflows/mobile-build.yml) produce an Android debug APK
 and an iOS Simulator app archive. [Runtime checks](../.github/workflows/mobile-runtime.yml)
-build the pinned CPython 3.14.7 testbeds and execute 25 Logistics document/core
+build the pinned CPython 3.14.7 testbeds and execute 28 Logistics document/core
 cases inside actual Android and iOS interpreters. Result verification requires
 the expected runtime, clean source commits, every case and zero failures or skips.
 
@@ -81,9 +86,10 @@ and Linux validation before a release can be packaged or published. A manual
 Source release run validates and packages without publishing a release.
 
 Native build jobs additionally run the actual Toga app in Briefcase test mode on
-an Android emulator and iPhone Simulator. Eight required UI cases cover the hub,
+an Android emulator and iPhone Simulator. Nine required UI cases cover the hub,
 preferences, documents, rendered Markdown, rendered EPUB chapters, bookmarks and
-native comic image decoding and a loopback-only streamed LM conversation. Source/backend checks reject missing or stale reports.
+native comic image decoding, a loopback-only streamed LM conversation and
+embedded rclone credential import/browsing/private copies. Source/backend checks reject missing or stale reports.
 Each app run has a 15-minute bound within its build job. These automated cases do
 not interact with real system document pickers.
 
