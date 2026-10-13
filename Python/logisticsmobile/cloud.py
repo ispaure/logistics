@@ -2,7 +2,7 @@
 import base64
 import ctypes
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 PACKAGE_LIMIT = 1024 * 1024
 DOWNLOAD_LIMIT = 32 * 1024 * 1024
@@ -72,7 +72,12 @@ class CloudClient:
 
 
 def download_name(path):
-    name = Path(path).name
+    # Remote paths use POSIX separators regardless of the host testing them.
+    # Windows Path would silently turn a forbidden backslash into a separator.
+    if (not isinstance(path, str) or '\\' in path or path.startswith('/')
+            or any(ord(c) < 32 for c in path) or any(part in {'.', '..'} for part in path.split('/'))):
+        raise ValueError('Invalid remote download path.')
+    name = PurePosixPath(path).name
     if not name or name in {'.', '..', '.complete'} or len(name) > 200 or any(ord(c) < 32 or c in '/\\' for c in name):
         raise ValueError('Invalid download filename.')
     return name
