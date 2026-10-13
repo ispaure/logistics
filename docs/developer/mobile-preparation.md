@@ -11,7 +11,7 @@ importing desktop initialization, menus or dialogs.
 
 | Module | Contract |
 | --- | --- |
-| `documents.py` | Explicit absolute app-private root; UUID file identities; 1 MiB bounded Unicode text; original encoding/endings; atomic files and recovery JSON; stale/deleted-file rejection and safe copies |
+| `documents.py` | Explicit absolute app-private root; UUID file identities; 1 MiB bounded Unicode text; original encoding/endings; exclusive creation, atomic saves and recovery JSON; stale/deleted-file rejection and safe copies |
 | `access.py` | Scoped binary imports; Android content URIs are handled by ContentResolver streams; iOS URLs retain security-scoped access until reading finishes; every handle/scope is closed on failure |
 | `pickers.py` | Android ACTION_OPEN_DOCUMENT and iOS UIDocumentPicker open mode; native grants are consumed immediately to import a private copy; no broad storage permission or persisted external write access |
 | `app.py` | Native selection, title editing, multiline text, New/Import/Save/copy; checkpoints on edit, focus loss and normal exit |
@@ -21,7 +21,10 @@ importing desktop initialization, menus or dialogs.
 The host's `paths.data` supplies private storage. Caller-provided names remain
 metadata; they never become filesystem paths. UUIDs are validated before deriving
 paths, and linked document files are rejected. Saved bytes and the last source
-snapshot stay separate from the draft record. The record contains the original
+snapshot stay separate from the draft record. New UUID files are reserved exclusively and flushed before their recovery record
+is published, avoiding hard links rejected by Android app sandboxes. Incomplete
+new data cannot enter the visible document list without that record.
+The record contains the original
 bytes and edited text so an externally changed or deleted private file cannot
 silently overwrite recovered edits. A failed save preserves the draft; a failed
 record publication preserves its previous record. Publication after an already
@@ -32,7 +35,8 @@ Import creates a copy, preserving the selected external source. Android grants
 and iOS scoped URLs need not survive app termination because later edits use the
 private copy. Editing/exporting the original provider document would require a
 separate permission, bookmark and provider-write contract; it is not implemented.
-The iOS picker delegate is retained until selection/cancellation. Android activity
+The iOS picker delegate is retained until selection/cancellation. Platform choice uses the shared classifier, including older Android Python
+runtimes that report Linux with `getandroidapilevel`. Android activity
 results use the pinned Toga backend's `start_activity` hook. These backend/native
 interfaces must be rechecked before upgrading Toga.
 
@@ -67,9 +71,9 @@ source manifests/logs. Build success proves packaging, not native UI interaction
 already established CPython 3.14.7 testbeds, pinned at
 `823f0323ee6ec1402088b73bce1a38473cac36dc`. Android builds x86_64 on Ubuntu 24.04;
 iOS builds arm64 Simulator on macOS 15. The existing iOS resource-copy workaround
-is retained. Thirteen cases run inside each actual interpreter:
+is retained. Fourteen cases run inside each actual interpreter:
 
-- Eight private document, recovery, encoding, conflict and scoped-import contracts.
+- Nine private document, recovery, encoding, conflict and scoped-import contracts.
 - Three existing EPUB/comic/Markdown fixture scenarios.
 - Runtime identity and a desktop-dependency import boundary.
 
@@ -94,12 +98,21 @@ with seven cases per runtime. Its
 [mobile test guide](../../Python/commonUtils/docs/developer/mobile-testing.md)
 records those source/runtime details; this is separate from Logistics validation.
 
-The new Logistics 13-case host harness, packaging/verifier tests and Toga dummy
+The new Logistics 14-case host harness, packaging/verifier tests and Toga dummy
 widget workflow pass locally. Native iOS project generation and dependency
 installation succeeded, but the local Xcode storyboard build failed with
-`iOS 26.5 Platform Not Installed`; no simulator devices were available. Hosted
-native builds and actual Logistics document runtime checks are the next evidence
-gates. No physical-device or actual native picker result is claimed here.
+`iOS 26.5 Platform Not Installed`; no simulator devices were available. Both [hosted native builds](https://github.com/ispaure/logistics/actions/runs/38353619087)
+passed at `a02a4ba`, producing an Android debug APK and iOS Simulator app; see
+[build evidence](mobile-evidence/2026-10-13-native-initial.json). The
+[first Logistics runtime run](https://github.com/ispaure/logistics/actions/runs/38353619071)
+passed all 13 initial cases on iOS, recorded in
+[iOS evidence](mobile-evidence/2026-10-13-ios-initial.json). Android ran all 13 but
+reported seven errors because its sandbox rejected hard-link publication of new
+files; [the failed record](mobile-evidence/2026-10-13-android-initial.json) is retained.
+New private files now use exclusive creation followed by publication of a durable
+recovery record, and the suite has a fourteenth case enforcing that contract.
+The corrected Android/iOS runs remain the next runtime gate. No physical-device
+or actual native picker result is claimed here.
 
 ## Next work
 

@@ -1,0 +1,18 @@
+{
+  "run_id": 38353619087,
+  "run_url": "https://github.com/ispaure/logistics/actions/runs/38353619087",
+  "source": {
+    "commonUtils_commit": "18e23630e50a03ad84eade2473a84401e1fb5e1b",
+    "dirty": false,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics"
+    ],
+    "logistics_commit": "a02a4ba20b43f6660d57e24424611d8c19515e74"
+  },
+  "android_build": "success",
+  "ios_simulator_build": "success",
+  "native_ui_or_picker_tested": false
+}

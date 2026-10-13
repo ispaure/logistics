@@ -32,6 +32,17 @@ class MobileDocumentsTests(unittest.TestCase):
         self.assertEqual(reopened.snapshot.path.read_bytes(), b'original\r\nrecovered\r\n')
         self.assertFalse(self.store.open(doc.id).modified)
 
+    def test_private_creation_works_without_hard_links_and_hides_incomplete_records(self):
+        with patch('logisticsmobile.documents.os.link', side_effect=PermissionError('sandbox forbids links')):
+            doc = self.store.create(content=b'original')
+            doc.text = 'copy'
+            self.assertEqual(self.store.save_copy(doc).text, 'copy')
+        existing = set(self.store.root.iterdir())
+        with patch('logisticsmobile.documents.os.fsync', side_effect=OSError('flush failed')):
+            with self.assertRaises(OSError):
+                self.store.create(content=b'incomplete')
+        self.assertEqual(set(self.store.root.iterdir()), existing)
+
     def test_bom_encoding_and_endings_survive_recovery_and_save(self):
         for prefix, encoding in ((codecs.BOM_UTF8, 'utf-8'), (codecs.BOM_UTF16_LE, 'utf-16-le')):
             original = prefix + 'Café\r\n'.encode(encoding)

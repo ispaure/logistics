@@ -59,7 +59,7 @@ class MobilePackagingTests(unittest.TestCase):
         spec.loader.exec_module(contract)
         report = dict(schema=1, suite='logistics-mobile-documents', target='android',
                       sys_platform='android', environment='android-emulator', success=True,
-                      tests_run=13, expected_tests=list(contract.EXPECTED_TESTS),
+                      tests_run=14, expected_tests=list(contract.EXPECTED_TESTS),
                       failures=0, errors=0, skipped=0,
                       source=dict(dirty=False, logistics_commit='a' * 40, commonUtils_commit='b' * 40))
         with TemporaryDirectory() as directory:

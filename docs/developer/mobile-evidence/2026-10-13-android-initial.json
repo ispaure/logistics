@@ -1,0 +1,44 @@
+{
+  "environment": "android-emulator",
+  "errors": 7,
+  "expected_tests": [
+    "test_android_adapter_closes_cursor_and_stream_on_consumer_failure",
+    "test_bom_encoding_and_endings_survive_recovery_and_save",
+    "test_changed_or_deleted_private_file_preserves_draft_and_requires_copy",
+    "test_failed_checkpoint_and_failed_save_keep_original_and_recovery",
+    "test_import_consumes_a_scoped_stream_and_never_modifies_source",
+    "test_invalid_records_names_large_documents_and_links_are_preserved",
+    "test_ios_adapter_balances_scope_on_success_and_read_failure",
+    "test_recovery_after_process_recreation_preserves_unsaved_text",
+    "test_comic_pages_and_metadata_work_without_image_decoder",
+    "test_epub_read_and_metadata_save_preserve_resources",
+    "test_markdown_and_text_save_reject_stale_changes",
+    "test_import_boundary",
+    "test_runtime_identity"
+  ],
+  "failures": 0,
+  "machine": "x86_64",
+  "native_picker_tested": false,
+  "python": "3.14.7",
+  "schema": 1,
+  "skipped": 0,
+  "source": {
+    "commonUtils_commit": "18e23630e50a03ad84eade2473a84401e1fb5e1b",
+    "dirty": false,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics"
+    ],
+    "logistics_commit": "a02a4ba20b43f6660d57e24424611d8c19515e74"
+  },
+  "success": false,
+  "suite": "logistics-mobile-documents",
+  "sys_platform": "android",
+  "target": "android",
+  "tests_run": 13,
+  "run_id": 38353619071,
+  "run_url": "https://github.com/ispaure/logistics/actions/runs/38353619071",
+  "diagnosis": "App sandbox rejects hard-link publication of new files; exclusive private creation fixes the contract."
+}
