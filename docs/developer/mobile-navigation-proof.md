@@ -66,19 +66,20 @@ The actual app now implements the first navigation/document deliverable. The
 numbered resume commits add explicit dirty-close choices, safe discard against
 current saved bytes, per-document Edit/Preview continuity, callback ownership,
 and unavailable-resource Retry/Remove routes. Both native suites passed all 18
-cases at `ea03d85` (Phase 0 Part 3), including the expanded text-workspace and
-preview cases. The normal iOS and Android launchers also build independently of
+cases at `55a9310` (Phase 0 Part 5), including the expanded text-workspace and
+preview cases, plus contrast assertions for inactive Android icons and labels.
+The normal iOS and Android launchers also build and launch independently of
 test mode. The 45 mobile dummy/tooling tests and 32 portable
 document/workspace/reader/privacy tests pass. Release tooling tests also pass
-(16 cases, one platform-specific skip).
+(17 cases, one platform-specific skip).
 
 Exact reports are retained as `mobile-evidence/2026-10-14-phase0-*-native-ui-local.json`.
 They share staged fingerprint
-`befc99544f2ab69330de4f03837f3eadd62dc826ce06ed7615006d8f6e0a4255`.
+`3d1130bfbba3a1e051c93fd36690c22a071300d127dc08b7721b91f773833ca7`.
 These are local development reports: their dirty marker includes preserved,
 unrelated deployment/TestFlight work. They are not substituted for clean
-automated release evidence. Phase 0 Part 4 changes only documentation and
-release-note selection, so the recorded application revision remains explicit.
+automated release evidence. Phase 0 Part 6 changes only documentation and
+release-note validation, so the recorded application revision remains explicit.
 Earlier lifecycle reports remain evidence for the revisions they exercised.
 The physical-device and minimum-runtime limitations above still apply.
 

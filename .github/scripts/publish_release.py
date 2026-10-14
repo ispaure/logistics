@@ -24,7 +24,8 @@ def publish(repo, tag, archive):
                    '--verify-tag']
         notes = NOTES_DIR / (tag + '.md') if re.fullmatch(r'v[\w.-]+', tag) else None
         if notes is not None and notes.is_file():
-            title = notes.read_text(encoding='utf-8').splitlines()[0].removeprefix('# ').strip()
+            lines = notes.read_text(encoding='utf-8').splitlines()
+            title = lines[0].removeprefix('# ').strip() if lines else ''
             if not title:
                 raise RuntimeError('Release notes require a title on the first line.')
             command.extend(['--title', title, '--notes-file', str(notes)])
