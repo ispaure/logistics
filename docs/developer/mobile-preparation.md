@@ -127,7 +127,10 @@ source manifests/logs. Build success proves packaging, not native UI interaction
 
 [Document runtime checks](../../.github/workflows/mobile-runtime.yml) use the
 already established CPython 3.14.7 testbeds, pinned at
-`823f0323ee6ec1402088b73bce1a38473cac36dc`. Android builds x86_64 on Ubuntu 24.04;
+`823f0323ee6ec1402088b73bce1a38473cac36dc`. Android builds x86_64 on Ubuntu 24.04 and selects Android command-line tools
+19.0, matching the native application gate. The runner-bundled SDK manager failed
+to unpack the current emulator archive; the versioned installation is selected
+through the `latest` path required by the pinned CPython driver.
 iOS builds arm64 Simulator on macOS 15. The existing iOS resource-copy workaround
 is retained. Twenty-five cases run inside each actual interpreter:
 
