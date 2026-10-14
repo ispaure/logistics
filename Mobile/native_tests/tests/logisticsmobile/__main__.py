@@ -78,6 +78,29 @@ async def exercise(app):
         app.save_document()
         assert app.store.open(app.current.id).text == '# Native preview\n'
         passed.append('native_documents')
+        a, a_editor = app.current.id, app.editor
+        app.editor.value = '# Native preview\nA draft\n'
+        app.new_document()
+        b, b_session = app.current.id, app.editor_view.session.id
+        app.name.value = 'Other.md'
+        app.editor.value = 'B draft\n'
+        assert app.editor is not a_editor
+        app.show_locations()
+        app.show_settings()
+        app.open_document(a)
+        app.show_documents()
+        assert app.editor is a_editor
+        assert app.editor.value == '# Native preview\nA draft\n'
+        from logisticsmobile.workspace import Workspace
+        restored = Workspace(app.private_root)
+        assert len(restored.sessions) == 2
+        assert app.store.open(b).text == 'B draft\n'
+        assert app.close_session(b_session)
+        assert app.current.id == a
+        assert app.store.open(b).text == 'B draft\n'
+        app.show_documents()
+        app.editor.value = '# Native preview\n'
+        passed.append('native_text_workspace')
         app.show_preview()
         await wait_for_text(app.preview, 'Native preview')
         original_preview = app.preview
