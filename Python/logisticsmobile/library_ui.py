@@ -46,7 +46,7 @@ class LibraryUI:
             self.refresh_library()
             self.book_loading = False
             self.set_book_busy(False)
-        self.show_view(self.library_view, destination='documents')
+        self.show_view(self.library_view, destination='documents', route='library', title='Books & Comics')
 
     def refresh_library(self):
         previous = self.book_loading

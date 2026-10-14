@@ -62,7 +62,7 @@ class FilesUI:
             toga.Button('Use selected private download', on_press=self.use_local_download, style=Pack(height=44)),
             toga.Label('Moving to Local creates decrypted files.\nCloud originals are unchanged.'), self.file_status],
             style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
-        self.show_view(self.files_view, destination='files')
+        self.show_view(self.files_view, destination='files', route='browser', title='Files and folders')
         await self.browse_files()
 
     async def parent_file_folder(self, widget=None, **kwargs):

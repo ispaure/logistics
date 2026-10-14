@@ -1,5 +1,24 @@
 # Mobile document host and validation
 
+## Native destination routes
+
+The mobile host uses Home, Files, Documents and Settings, with independent screen
+stacks in shared Python navigation state. `routing.py` retains screen views while
+changing destinations. UIKit owns the Apple navigation controllers and reports
+completed pops through a lifecycle-owned delegate. Android uses a small tracked
+`NavigationBack.java` bridge to AndroidX `OnBackPressedDispatcher`, enabled only
+when the current destination has a screen to return from. It is registered to
+the Activity lifecycle and removed when a host detaches. No Java key-event
+override or generated Activity edit is required.
+
+Android source inclusion lives in Briefcase's tracked Gradle configuration;
+recreate the generated Android project when changing that configuration. Back
+returns through screens; document close and private save/discard remain separate
+operations. The native suite includes actual native pop/dispatcher checks.
+
+This uses [Android's recommended Back dispatcher](https://developer.android.com/guide/navigation/custom-back/predictive-back-gesture).
+Custom interactive in-app predictive animations are not yet implemented.
+
 Logistics has an independent native text/Markdown prototype in
 `Python/logisticsmobile`, with Briefcase configuration and tooling under
 [`Mobile/`](../../Mobile/README.md). The desktop Qt launcher and its dependency

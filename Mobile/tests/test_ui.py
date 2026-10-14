@@ -32,7 +32,7 @@ class MobileUITests(unittest.TestCase):
             app.editor.value = '# Recovered\n'
             app.native_host.root.current_tab = 'Settings'
             app.native_host._selected(app.native_host.root)
-            self.assertIs(app.body, app.native_host.bodies['settings'])
+            self.assertIs(app.body, app.routes.body('settings'))
             app.native_host.root.current_tab = 'Documents'
             app.native_host._selected(app.native_host.root)
             self.assertIs(app.body.children[0], app.document_view)

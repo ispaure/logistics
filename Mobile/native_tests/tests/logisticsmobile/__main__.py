@@ -53,6 +53,20 @@ async def exercise(app):
         from .navigation_checks import exercise_navigation
         navigation_proof = await exercise_navigation(app)
         passed.append('native_navigation_foundation')
+        app.show_documents()
+        app.editor.value = 'Draft survives actual Back'
+        import toga
+        app.show_view(toga.Label('Route detail'), route='route-check', title='Route detail')
+        assert app.native_host.state.routes['documents'] == ['editor', 'route-check']
+        if get_os() is OS.IOS:
+            app.native_host.adapter.pop('documents')
+        else:
+            app._impl.native.getOnBackPressedDispatcher().onBackPressed()
+        await asyncio.sleep(.3)
+        assert app.native_host.state.routes['documents'] == ['editor']
+        assert app.body.children[0] is app.document_view
+        assert app.editor.value == 'Draft survives actual Back'
+        passed.append('native_route_back')
         app.show_settings()
         app.font_choice.value = '18'
         app.save_preferences()

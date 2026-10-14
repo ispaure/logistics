@@ -152,6 +152,16 @@ class AppleNavigation:
     def pop(self, destination):
         return self.navigation[DESTINATIONS.index(destination)].popViewControllerAnimated(False)
 
+    def release_pane(self, container):
+        from rubicon.objc import ObjCClass
+        container.controller.view = ObjCClass('UIView').alloc().init()
+        if container.content is not None:
+            container.content.interface.window = None
+            container.content.interface.app = None
+        container.content = None
+        if container in self.panes:
+            self.panes.remove(container)
+
     def prove_split(self, leading, detail):
         from rubicon.objc import ObjCClass
         from toga_iOS.container import ControlledContainer
