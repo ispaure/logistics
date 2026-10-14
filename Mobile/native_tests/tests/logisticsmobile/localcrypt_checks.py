@@ -64,6 +64,10 @@ async def exercise_localcrypt(app, passed):
     assert app.crypt_text.value == 'First native memory-only draft'
     assert second.crypt_text.value == 'Second native memory-only draft'
     assert len(app.private_sessions.controllers) == 2
+    app.memory_pressure.release()
+    await asyncio.sleep(.1)
+    assert first.crypt_text.value == 'First native memory-only draft'
+    assert second.crypt_text.value == 'Second native memory-only draft'
     app.request_close_session(first.session.id)
     assert not app.close_session(first.session.id, choice='cancel')
     first.resume_crypt()
