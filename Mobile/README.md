@@ -3,7 +3,8 @@
 This independent Toga application targets Android and iOS. It opens imported text
 and Markdown as app-private copies, edits them, saves their original encoding and
 line endings, and checkpoints drafts for recovery. Its hub also opens a private EPUB/CBZ library
-with chapter/page navigation, bookmarks and saved progress, plus text LM chat
+with chapter/page navigation, standalone AES/ZipCrypto CBZ password prompts,
+bookmarks and saved progress, plus text LM chat
 with private history and explicit server connections, and embedded read-only
 rclone browsing/downloads using credential ZIPs. It does not launch the desktop
 Qt application or install its dependency list.
@@ -111,7 +112,8 @@ inner AES ZIP passwords), save-conflict preservation and locking, plus local fol
 across Local/LocalCrypt boundaries. The file-management case also verifies shared
 list/tile selection, thumbnails, file details, folder taps, Back across storage,
 search/sort and a streamed 40 MiB comic metadata save. The comic-reader case also
-imports and reads a 257 MiB ordinary archive.
+imports and reads a 257 MiB ordinary archive and standalone AES/ZipCrypto comics,
+including password retry, cancel/lock behavior and unchanged encrypted copies.
 Source/backend checks reject missing or stale reports. Reports are emitted in
 ordered base64 chunks to avoid native log-line truncation.
 Each app run has a 15-minute bound within its build job. These automated cases do

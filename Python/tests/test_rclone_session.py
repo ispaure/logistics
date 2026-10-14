@@ -35,7 +35,7 @@ class RcloneSessionTests(unittest.TestCase):
             environment = run.call_args.kwargs['environment']
             self.assertNotIn('synthetic-secret', str(arguments))
             self.assertIn('synthetic-secret', environment.values())
-            self.assertIn(os.devnull, arguments)
+            self.assertIn(session.NULL_CONFIG, arguments)
             self.assertNotIn('RCLONE_CONFIG_SYNTHETIC_PASS', os.environ)
             self.assertTrue(configuration.delete_config_file(context))
             with self.assertRaisesRegex(ValueError, 'session has ended'):

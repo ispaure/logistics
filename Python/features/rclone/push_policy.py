@@ -135,7 +135,7 @@ def validate_localcrypt_push(item, binary, *, cancelled=lambda: False, report=la
                     raise ValueError('LocalCrypt push refused: names do not match the crypt settings: ' + names)
                 report(0, 0, 'Authenticating all encrypted file contents…')
                 environment, remote, _ = session.launch(provider.context, 'view:', '')
-                output = run_bytes([str(binary), '--config', os.devnull, '--log-level', 'ERROR',
+                output = run_bytes([str(binary), '--config', session.NULL_CONFIG, '--log-level', 'ERROR',
                                     '--retries', '1', '--low-level-retries', '1', 'hashsum', 'SHA256', remote,
                                     '--download', '--checkers', '1'], environment=environment,
                                    max_output=64 * 1024 * 1024, timeout=24 * 60 * 60, cancelled=cancelled)

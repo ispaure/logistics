@@ -198,14 +198,21 @@ class ProtectedVault:
             if self.record.is_symlink() or self.ciphertext.exists() or self.ciphertext.is_symlink():
                 raise VaultUnavailable('The protected-key record is missing. Forget saved credentials before importing again.')
             return None
+        if self.record.is_symlink() or getattr(self.record, 'is_junction', lambda: False)():
+            raise OSError('Protected-key records cannot use links.')
+        before = self.record.lstat()
         descriptor = os.open(self.record, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0))
         try:
             import stat
             info = os.fstat(descriptor)
-            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 4096:
+            if ((info.st_dev, info.st_ino) != (before.st_dev, before.st_ino)
+                    or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 4096):
                 raise VaultUnavailable('Invalid protected-key record.')
             with os.fdopen(descriptor, 'rb', closefd=False) as stream:
-                record = json.loads(stream.read(4097))
+                try:
+                    record = json.loads(stream.read(4097))
+                except (ValueError, UnicodeError) as error:
+                    raise VaultUnavailable('Invalid protected-key record.') from error
         finally:
             os.close(descriptor)
         identity = record.get('id', '') if isinstance(record, dict) else ''

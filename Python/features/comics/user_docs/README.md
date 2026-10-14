@@ -208,3 +208,10 @@ whole-file or expanded-total cap. Reading loads one page at a time through a
 shared revision-checked archive source; PNG/JPEG page and header-count limits
 remain. The [mobile guide](../../../logisticsmobile/user_docs/README.md) lists the
 current format limits and shared navigation controls.
+
+## Native mobile library
+
+On iOS and Android, **Books & Comics → Import book/comic…** accepts standalone
+password-protected AES/ZipCrypto CBZ/ZIP comics. Unlock with the comic’s ZIP password;
+rclone credentials are unnecessary. See the [mobile reading guide](../../../logisticsmobile/user_docs/README.md#books-and-comics)
+for password retries, locking and supported page formats.

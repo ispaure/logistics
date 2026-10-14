@@ -15,10 +15,24 @@ def application_root():
     return preferences_path().parent
 
 
+
+def _without_extended_prefix(value):
+    if value.startswith('\\\\?\\UNC\\'):
+        return '\\\\' + value[8:]
+    if value.startswith('\\\\?\\') and len(value) > 5 and value[5] == ':':
+        return value[4:]
+    return value
+
+
+def _resolved(path):
+    path = Path(path).resolve(strict=False)
+    return Path(_without_extended_prefix(str(path))) if os.name == 'nt' else path
+
+
 def _manifest(root, *, link_root=None):
     """Compare bytes and resolved link targets without following directory links."""
     result = {}
-    link_root = Path(link_root or root).resolve(strict=False)
+    link_root = _resolved(link_root or root)
     def visit(directory):
         for path in directory.iterdir():
             info = path.lstat()
@@ -26,7 +40,7 @@ def _manifest(root, *, link_root=None):
             if path.is_symlink():
                 target = Path(os.readlink(path))
                 target = target if target.is_absolute() else path.parent / target
-                target = target.resolve(strict=False)
+                target = _resolved(target)
                 if target.is_relative_to(link_root):
                     result[relative] = ('internal-link', target.relative_to(link_root).as_posix())
                 else:
@@ -57,7 +71,7 @@ def relocate(source, destination):
         raise ValueError(f'Both storage locations exist. Preserve their contents and resolve the conflict: {source} and {destination}')
     destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if source.is_symlink():
-        target = source.resolve(strict=False)
+        target = _resolved(source)
         destination.symlink_to(target, target_is_directory=True)
         source.unlink()
         return
@@ -66,7 +80,7 @@ def relocate(source, destination):
     # Relative links would change meaning after a move. Copying rebases them to
     # their original absolute targets, including relocated crypt-copy roots.
     relative_links = any(path.is_symlink() and (not Path(os.readlink(path)).is_absolute()
-                                               or path.resolve(strict=False).is_relative_to(source.resolve()))
+                                               or _resolved(path).is_relative_to(_resolved(source)))
                          for folder, directories, files in os.walk(source, followlinks=False)
                          for path in (Path(folder) / name for name in (*directories, *files)))
     if not relative_links:
@@ -85,7 +99,7 @@ def relocate(source, destination):
             if description[0] in {'link', 'internal-link'}:
                 link = copied / relative
                 link.unlink()
-                target = destination.resolve(strict=False) / description[1] if description[0] == 'internal-link' else Path(description[1])
+                target = _resolved(destination) / description[1] if description[0] == 'internal-link' else Path(description[1])
                 link.symlink_to(target, target_is_directory=(source / relative).is_dir())
         if _manifest(copied, link_root=destination) != expected or _manifest(source) != expected:
             raise ValueError('Storage changed during relocation; the original was preserved.')

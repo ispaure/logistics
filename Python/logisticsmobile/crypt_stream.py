@@ -19,7 +19,7 @@ class NativeArchive:
     def __init__(self, source):
         self.source = source
         self.members = []
-        for row in source.request('crypt_archive'):
+        for row in source.request(getattr(source, 'archive_action', 'crypt_archive')):
             info = ZipInfo(row['name'])
             info.file_size, info.CRC = row['size'], row['crc']
             info.flag_bits = 0  # This facade exposes authenticated decoded members.
@@ -55,7 +55,58 @@ class NativeArchive:
             yield stream
 
 
-class NativeSource:
+class NativeArchiveAccess:
+    """One lazy decoded-member facade for ordinary and LocalCrypt archive adapters."""
+    archive_action = 'crypt_archive'
+    max_read = 16 * 1024 * 1024
+    cache_limit = 8 * 1024 * 1024
+
+    def _check_archive_version(self, path):
+        if self.version(path) != self.expected:
+            raise ValueError('The archive changed; reopen it.')
+
+    @contextmanager
+    def open_archive(self, path, password=None):
+        self._check_archive_version(path)
+        if password is not None and password != self.password:
+            self.cache.clear()
+            self.cache_bytes = 0
+            self.password = password
+        archive = NativeArchive(self)
+        if archive.protected:
+            # Validate the supplied inner password before presenting a reader.
+            candidates = [info for info in archive.members if info.filename in archive.protected]
+            archive.read(min(candidates, key=lambda info: info.file_size))
+        yield archive
+        self._check_archive_version(path)
+
+    def archive_password(self, path):
+        return self.password or None
+
+    def read_member(self, member):
+        self._check_archive_version(self.path)
+        key = member, self.password
+        if key in self.cache:
+            self.cache.move_to_end(key)
+            return self.cache[key]
+        data = base64.b64decode(self.request(self.archive_action, member=member)['data'], validate=True)
+        if len(data) > self.max_read:
+            raise ValueError('Archive member exceeds the read buffer limit.')
+        self.cache[key] = data
+        self.cache_bytes += len(data)
+        while self.cache_bytes > self.cache_limit or len(self.cache) > 32:
+            _, removed = self.cache.popitem(last=False)
+            self.cache_bytes -= len(removed)
+        return data
+
+    def close(self):
+        self.password = None
+        self.headers = None
+        self.cache.clear()
+        self.cache_bytes = 0
+
+
+class NativeSource(NativeArchiveAccess):
     private = True
     def __init__(self, client, record, path, *, password='', cancelled=lambda: False):
         self.client, self.record, self.path = client, dict(record), Path(path)
@@ -97,33 +148,3 @@ class NativeSource:
             return base64.b64decode(self.request('crypt_range', offset=offset, count=count)['data'], validate=True)
         with RangeReader(self.size, read, cache_blocks=2, validate=lambda: self.version(self.path)) as stream:
             yield stream
-
-    @contextmanager
-    def open_archive(self, path, password=None):
-        if password is not None:
-            self.password = password
-        archive = NativeArchive(self)
-        if archive.protected:
-            # Validate the supplied inner password before presenting a reader.
-            candidates = [info for info in archive.members if info.filename in archive.protected]
-            archive.read(min(candidates, key=lambda info: info.file_size))
-        yield archive
-
-    def archive_password(self, path):
-        return self.password or None
-
-    def read_member(self, member):
-        self.version(self.path)
-        key = member, self.password
-        if key in self.cache:
-            self.cache.move_to_end(key)
-            return self.cache[key]
-        data = base64.b64decode(self.request('crypt_archive', member=member)['data'], validate=True)
-        if len(data) > 16 * 1024 * 1024:
-            raise ValueError('Archive member exceeds the read buffer limit.')
-        self.cache[key] = data
-        self.cache_bytes += len(data)
-        while self.cache_bytes > 8 * 1024 * 1024 or len(self.cache) > 32:
-            _, removed = self.cache.popitem(last=False)
-            self.cache_bytes -= len(removed)
-        return data

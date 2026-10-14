@@ -11,6 +11,14 @@ from features.rclone import storage, local_crypt, local_connections
 
 
 class RcloneStorageTests(unittest.TestCase):
+    def test_windows_extended_link_paths_compare_in_the_same_namespace(self):
+        from pathlib import PureWindowsPath
+        for value, expected in ((r'\\?\C:\folder\copy', r'C:\folder\copy'),
+                                (r'\\?\UNC\server\share\copy', r'\\server\share\copy')):
+            self.assertEqual(storage._without_extended_prefix(value), expected)
+        self.assertTrue(PureWindowsPath(storage._without_extended_prefix(r'\\?\C:\folder\copy'))
+                        .is_relative_to(PureWindowsPath(r'C:\folder')))
+
     def test_application_root_uses_logistics_preferences_location(self):
         from features import preferences
         with patch.object(preferences.sys, 'platform', 'darwin'), patch.object(Path, 'home', return_value=Path('/fixture/home')):

@@ -1,5 +1,6 @@
 """Exercise the actual native app in Briefcase test mode on an emulator/simulator."""
 import asyncio
+import base64
 import json
 import os
 from pathlib import Path
@@ -111,6 +112,45 @@ async def exercise(app):
         await app.next_book_page()
         assert app.book_record['position'] == 1 and app.book_content.children[0].image.width == 1
         large.unlink()
+        protected_fixture = json.loads(Path(__file__).with_name('comic_fixture.json').read_text())
+        from commonUtils.archives.zip_access import ArchivePasswordError
+        from logisticsmobile.library import LibraryStore
+        for codec in ('aes', 'legacy'):
+            protected_comic = fixtures / (codec + '-standalone.cbz')
+            original = base64.b64decode(protected_fixture[codec])
+            protected_comic.write_bytes(original)
+            protected_record = await asyncio.to_thread(app.library_store.import_book, LocalDocuments(), protected_comic)
+            app.refresh_library()
+            await app.open_book(protected_record['id'])
+            assert app.book_reader is None and app.book_pending_key == protected_record['id'], app.book_status.text
+            assert app.book_unlock_panel in app.library_view.children
+            app.book_password.value = 'wrong password'
+            await app.unlock_book()
+            assert app.book_reader is None and app.book_pending_key == protected_record['id'], app.book_status.text
+            assert app.book_password.value == '' and 'Try again' in app.book_status.text
+            app.book_password.value = protected_fixture['password']
+            await app.unlock_book()
+            assert app.book_reader is not None, app.book_status.text
+            assert app.book_reader.right_to_left and app.book_reader.pages == ['page2.png', 'page10.png']
+            assert app.book_content.children[0].image.width == 1
+            assert app.book_password.value == '' and app.book_unlock_panel not in app.library_view.children
+            await app.next_book_page()
+            await app.toggle_bookmark()
+            assert app.book_record['position'] == 1 and app.book_record['bookmarks'] == [1]
+            raw_source = app.book_reader.document.source
+            app.lock_book()
+            assert app.book_reader is None and not app.book_content.children
+            assert raw_source.password is None and not raw_source.cache
+            assert app.library_store.path(protected_record['id'], '.cbz').read_bytes() == original
+            assert protected_fixture['password'].encode() not in app.library_store.path(protected_record['id'], '.json').read_bytes()
+            reopened_store = LibraryStore(app.library_store.root)
+            try:
+                reopened_store.open(protected_record['id'])
+            except ArchivePasswordError:
+                pass
+            else:
+                raise AssertionError('Standalone comic password persisted across reader restart.')
+            assert protected_comic.read_bytes() == original
         passed.append('native_comic_reader')
         from logisticsmobile.chat_fixture import fixture_server
         with fixture_server() as (url, started, release, requests):
@@ -129,7 +169,6 @@ async def exercise(app):
         from logisticsmobile.cloud import CloudClient
         from .fixtures import AES_CREDENTIALS
         from unittest.mock import AsyncMock, patch
-        import base64
         app.cloud_client = CloudClient()
         app.show_cloud()
         if hasattr(app, 'cloud_restore_task'):
@@ -207,7 +246,6 @@ async def exercise(app):
                   success=success, error=error, source=source, native_picker_tested=False)
     # iOS's OS logger truncates long single-line messages. Emit independently
     # bounded chunks; the host verifier rejects missing/duplicate chunks.
-    import base64
     encoded = base64.b64encode(json.dumps(report, sort_keys=True).encode()).decode()
     chunks = [encoded[index:index + 450] for index in range(0, len(encoded), 450)]
     for index, chunk in enumerate(chunks):
