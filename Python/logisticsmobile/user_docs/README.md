@@ -83,6 +83,8 @@ launch, with a maximum of 32 open items. Private resource restoration remains
 excluded. Native cursor/selection and scroll offsets are recorded for text views.
 Opening an item from the open/stored list also resumes its Edit or Preview mode.
 Back to the editor selects Edit for that document.
+If a restored item is unavailable, **Try again** retries it and **Remove from
+open documents** removes only its open entry. Stored files are preserved.
 
 On regular-width Apple layouts, native split navigation keeps the document list
 beside its detail view. Android shows both at 840 dp or wider and uses the

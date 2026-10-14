@@ -6,6 +6,8 @@ import re
 import subprocess
 from urllib.parse import quote
 
+NOTES_DIR = Path(__file__).resolve().parents[1] / 'release-notes'
+
 
 def publish(repo, tag, archive):
     archive = Path(archive)
@@ -19,7 +21,15 @@ def publish(repo, tag, archive):
         if not re.search(r'^HTTP/\S+ 404\b', result.stdout, re.MULTILINE):
             raise RuntimeError(f'Cannot check existing release: {result.stderr}')
         command = ['gh', 'release', 'create', tag, str(archive), '--repo', repo,
-                   '--verify-tag', '--generate-notes']
+                   '--verify-tag']
+        notes = NOTES_DIR / (tag + '.md') if re.fullmatch(r'v[\w.-]+', tag) else None
+        if notes is not None and notes.is_file():
+            title = notes.read_text(encoding='utf-8').splitlines()[0].removeprefix('# ').strip()
+            if not title:
+                raise RuntimeError('Release notes require a title on the first line.')
+            command.extend(['--title', title, '--notes-file', str(notes)])
+        else:
+            command.append('--generate-notes')
         if re.fullmatch(r'v\d+(?:\.\d+){1,2}-(alpha|beta)(?:[.-]\d+)?', tag):
             command.append('--prerelease')
         subprocess.run(command, check=True)

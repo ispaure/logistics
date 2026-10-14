@@ -30,8 +30,8 @@ The resume sequence uses numbered commit subjects; earlier history is preserved:
 | Phase 0 Part 3 | Unavailable restored resources offer Retry/Remove without displaying another document |
 | Phase 0 Part 4 | Final native evidence, submission notes and validation status |
 
-The Phase 0 implementation is ready for an alpha submission after the final
-native suites pass. Existing lifecycle evidence covers two ordinary drafts
+The Phase 0 implementation passed both final native suites and is ready for
+an alpha submission. Existing lifecycle evidence covers two ordinary drafts
 through Apple rotation/background/process restart and Android live resizing,
 Activity recreation and process restart. The final submission reruns both native
 suites against the current sources. Device-specific manual checks remain release
