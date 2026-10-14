@@ -9,6 +9,36 @@ from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
 
 
 class ReaderSessionTests(unittest.TestCase):
+    def test_cold_workspace_keeps_reader_selection_until_documents_are_opened(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            LogisticsMobile.storage_root = root
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            app.show_library()
+            fixtures = root / 'fixtures'
+            fixtures.mkdir()
+            epub, _ = make_books(fixtures)
+            record = app.library_store.import_book(LocalDocuments(), epub)
+            app.loop.run_until_complete(app.open_book(record['id']))
+            app.loop.run_until_complete(app.next_book_page())
+            selected = app.workspace.active
+            app.show_settings()
+            app.checkpoint()
+            restored = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.assertEqual(restored.workspace.active, selected)
+            self.assertEqual(restored.pending_reader_restore, selected)
+            restored.native_host.root.current_tab = 2
+            import asyncio
+            async def wait_reader():
+                for _ in range(100):
+                    if getattr(restored, 'book_reader', None) is not None:
+                        break
+                    await asyncio.sleep(.01)
+            restored.loop.run_until_complete(wait_reader())
+            self.assertIsNotNone(restored.book_reader)
+            self.assertEqual(restored.book_record['position'], 1)
+            self.assertEqual(restored.workspace.active, selected)
     def test_duplicate_open_switch_reopen_and_close(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

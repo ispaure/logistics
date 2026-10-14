@@ -8,13 +8,14 @@ both mobile platforms. This supersedes references to three destinations in the
 original milestone text below. Desktop also has a first-position Home toolbar
 action returning to its landing page.
 
-Milestone 0 foundation is committed; actual native destination wiring is committed
-with native Back/routes and independently editable text documents. Adaptive
-Documents panes and recovery are implemented. The current checkpoint adds library
-sessions and brings forward part of milestone 4: Settings connection setup,
-visible remote action feedback and one-time folder pulls to local storage.
-Full private-session integration, unified Files refinement, repeatable sync,
-reader visual refinement and independent windows remain unfinished.
+Milestones 0–5 are implemented in the Toga prototype, with native navigation,
+independent mixed/private sessions, retained Files locations and reader/editor
+refinement. Milestone 6 adds verified independent ordinary iPad scenes, exclusive
+writers, secondary close and restoration. Original-window OS closure and physical
+interaction checks remain explicitly unverified. Android independent activities
+stay disabled after evaluation; Android resize/split-screen remains supported.
+The requested managed mobile Local/LocalCrypt pull/push follow-up is implemented.
+Final alpha publication is in progress.
 
 ## Selected runtime
 
@@ -35,7 +36,7 @@ Phase 1 Part 2 adds a native mixed/private workspace case; all 19 native cases
 pass on both the iOS 27.1 Duo simulator and Android 15 emulator. Phase 1 Part 3 adds native memory-pressure cleanup; both native suites pass
 with private drafts preserved. Phase 2 Part 1 adds repeatable pull jobs, safe local
 conflict snapshots, publication reconciliation and private-copy import identity.
-Phase 2 Part 3 completes retained Files presentation, native command menus and safe ordinary folder pins. Both native suites pass all 20 cases, including repeatable pull conflicts and pins. Phase 3 Part 1 adds compact reader controls, immersive restore, EPUB appearance, native comic zoom/pan and optional wide Markdown preview. Both native suites pass all 21 cases. Phase 4 Part 1 adds independently owned ordinary iPad scenes, exclusive writers, per-window pickers and restoration. All 22 native cases pass on iPad, iPhone and Android; actual scene creation is required on iPad. Android independent activities remain disabled after evaluation. Physical device interactions remain unverified. The next phase adds the separately requested mobile pull/push workflow.
+Phase 2 Part 3 completes retained Files presentation, native command menus and safe ordinary folder pins. Both native suites pass all 20 cases, including repeatable pull conflicts and pins. Phase 3 Part 1 adds compact reader controls, immersive restore, EPUB appearance, native comic zoom/pan and optional wide Markdown preview. Both native suites pass all 21 cases. Phase 4 Part 1 adds independently owned ordinary iPad scenes, exclusive writers, per-window pickers and restoration. All 22 native cases pass on iPad, iPhone and Android; actual scene creation is required on iPad. Android independent activities remain disabled after evaluation. Physical device interactions remain unverified. Phase 5 Parts 1–2 complete the separately requested managed mobile Local/LocalCrypt pull/push workflow, account scopes, authentication preflight and background progress. All 25 native cases pass on iPhone, iPad and Android.
 
 ## Phase 0 submission boundary and numbered checkpoints
 
@@ -54,8 +55,8 @@ The resume sequence uses numbered commit subjects; earlier history is preserved:
 | Phase 0 Part 6 | Final contrast checks, normal-launch verification and release submission |
 | Phase 0 Part 7 | Correct the portable evidence checklist to include both added Discard fixtures; keep publication gated |
 
-The Phase 0 implementation passed both final native suites and is ready for
-an alpha submission. Existing lifecycle evidence covers two ordinary drafts
+The Phase 0 implementation passed both final native suites. It is included in the
+full Toga alpha submission. Existing lifecycle evidence covers two ordinary drafts
 through Apple rotation/background/process restart and Android live resizing,
 Activity recreation and process restart. The final submission reruns both native
 suites against the current sources. Device-specific manual checks remain release
@@ -63,9 +64,9 @@ limits: the retained iOS minimum, physical document-provider permissions, real
 fold gestures, accessibility combinations and physical BOOX/E Ink behavior have
 not all been verified. Independent windows are not part of Phase 0.
 
-Milestone 3 private-session expansion, milestone 4 repeatable sync and the unified
-Files experience, milestone 5 reader/visual refinement, and milestone 6 independent
-windows remain future phases. This submission does not claim those are complete.
+Milestones 3–6 are implemented in the numbered continuation above. The original
+requirements below remain the design record; explicit device validation limits
+are listed with the implementation evidence.
 
 Status: proposed implementation plan, agreed design direction. Prepared October
 13, 2026. Milestones below describe future work, not shipped behavior.
@@ -569,3 +570,8 @@ and cancellation, and ordinary writing/comic reading during a pull. Native check
 pass all 25 cases on Android and iOS, including actual iPad scenes. Mobile pushes
 keep remote-only files; destructive sync is not enabled. Further preflight checks,
 empty-folder handling and the final alpha release are in progress.
+
+Phase 5 Part 2 adds account-scoped ciphertext trees, complete authentication before
+push, OAuth-stable identities, empty folders, live push phases, record conflict
+guards, stale-review invalidation and lazy cold reader restoration. Legacy data is
+preserved. Final native checks and alpha publication remain in progress.

@@ -578,3 +578,25 @@ Unlock the matching connection to browse decrypted names or edit supported files
 Both mobile targets have native fixture checks for Local/LocalCrypt pull, editing,
 verified push and ordinary document use during a pull. Physical network interruptions
 and provider permissions still need device testing.
+
+### Linked LocalCrypt folders and final push checks
+
+Pulled LocalCrypt folders appear as **LocalCrypt: account (pulled)** in file and
+editor destination selectors. They use a separate connection scope, so two accounts
+with the same encryption key do not share a live folder. Existing older encrypted
+locations stay available; a new Pull populates the linked location before Push can
+use it. Retained older snapshots remain readable without moving their bytes.
+Filename privacy follows the chosen crypt settings: disabling filename or directory
+name encryption keeps those stored names visible on disk.
+
+Push authenticates every LocalCrypt file before uploading anything, supports empty
+subfolders, stages an unchanged source, and shows authentication, backup, sending
+and verification progress. Credential changes close pending reviews and invalidate
+their confirmation buttons. OAuth refresh preserves a connection's original identity;
+importing another account creates a different identity. Edited transfer records stop
+further operations and remain preserved.
+
+Ordinary reader selection now survives cold workspace restoration and resumes when
+Documents is opened. Closing secondary iPad windows releases their callbacks, widget
+registries and writers. The beta simulator vetoed or terminated the process during destruction of
+its launch scene, so original-window OS close remains unverified on a physical iPad.

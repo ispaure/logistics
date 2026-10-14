@@ -8,12 +8,31 @@ from .mirror_jobs import MirrorJobs
 
 
 class MirrorUI:
+    def linked_crypt_locations(self):
+        result = {}
+        client = getattr(self, 'cloud_client', None)
+        if client is None:
+            return result
+        from .file_resources import CryptFiles
+        store = self.mirror_store()
+        for job in store.jobs.values():
+            if not job['crypt'] or job['remote'] not in getattr(self, 'cloud_crypt_remotes', ()):
+                continue
+            try:
+                if client.connection_identity(job['remote']) != job['identity'] or not store.target(job).exists():
+                    continue
+                provider = CryptFiles(self.private_root / 'LocalCryptFolders', client, job['remote'], namespace=job['identity'])
+                result['LocalCrypt: ' + job['remote'] + ' (pulled)'] = provider
+            except (OSError, ValueError):
+                continue
+        return result
+
     def mirror_store(self):
         if not hasattr(self, 'mirrors'):
             self.mirrors = MirrorJobs(self.private_root)
         return self.mirrors
 
-    def show_transfers(self, widget=None, **kwargs):
+    def show_transfers(self, widget=None, *, present=True, **kwargs):
         store = self.mirror_store()
         box = toga.Box(style=Pack(direction=COLUMN, margin=12))
         box.add(toga.Label('Local copies & transfers', style=Pack(font_size=22)))
@@ -54,7 +73,9 @@ class MirrorUI:
                     self.transfer_notice.text = str(error)
             box.add(toga.Button('Remove mapping (keep files)', on_press=remove, style=Pack(height=44)))
         box.add(toga.Button('Choose a remote to pull', on_press=self.show_cloud, style=Pack(height=44, margin_top=12)))
-        self.show_view(toga.ScrollContainer(content=box, style=Pack(flex=1)), destination='files', route='transfers', title='Local copies & transfers')
+        self.transfer_view = toga.ScrollContainer(content=box, style=Pack(flex=1))
+        if present:
+            self.show_view(self.transfer_view, destination='files', route='transfers', title='Local copies & transfers')
         if getattr(self, 'transfer_busy', False):
             self.transfer_progress.max = None
             self.transfer_progress.start()
@@ -98,7 +119,7 @@ class MirrorUI:
         if getattr(self, 'transfer_busy', False):
             return False
         if not await self.mirror_connection_ready():
-            self.show_transfers()
+            self.show_transfers(present=self.native_host.state.destination == 'files')
             return False
         client, generation = self.cloud_client, self.cloud_client.generation
         self.transfer_busy = True
@@ -107,7 +128,7 @@ class MirrorUI:
         self._crypt_cancel = Event()
         cancel = self._crypt_cancel
         self.transfer_message = 'Preparing transfer…'
-        self.show_transfers()
+        self.show_transfers(present=self.native_host.state.destination == 'files')
         epoch = self.transfer_epoch = getattr(self, 'transfer_epoch', 0) + 1
         def progress(**values):
             self.loop.call_soon_threadsafe(self.publish_mirror_progress, epoch, values)
@@ -186,23 +207,48 @@ class MirrorUI:
     def show_mirror_push_review(self):
         plan = self.mirror_push_plan
         job = self.mirror_store().jobs[plan['job']]
+        folder = job['prefix']
+        if job['crypt']:
+            try:
+                if self.cloud_client.connection_identity(job['remote']) != job['identity']:
+                    raise ValueError('The matching connection is unavailable.')
+                folder = self.cloud_client.request('crypt_path', remote=job['remote'], identity=job['cipher_identity'],
+                                                   path=folder, directory=True, decode=True)['path']
+            except (OSError, ValueError):
+                self.invalidate_mirror_review()
+                self.transfer_message = 'Unlock the matching connection and review this push again.'
+                self.show_transfers()
+                return
         replaced = sum(bool(item['expected']) for item in plan['writes'])
-        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Review push to ' + job['remote'], style=Pack(font_size=22)))
-        box.add(toga.Label(f'{len(plan["writes"])} file(s) to send, including {replaced} replacement(s).\n'
+        box = self.mirror_review_view = toga.Box(style=Pack(direction=COLUMN, margin=16))
+        from .cloud_ui import import_hint
+        box.add(toga.Label(import_hint('Review push to ' + job['remote']), style=Pack(font_size=22)))
+        source = ('LocalCrypt' if job['crypt'] else 'Local') + '/' + (folder if job['crypt'] else job['target'])
+        box.add(toga.Label(import_hint(f'From: {source}\nTo: {job["remote"]}:/{folder or "Root"}\n'
+                          f'{len(plan["writes"])} file(s) to send, including {replaced} replacement(s).\n'
                           f'{plan["unchanged"]} file(s) already match.\nRemote-only files are kept.\n'
-                          'Replaced remote files get verified backups.\nCancelled pushes can leave completed files on the remote.'))
+                          f'{len(plan["directories"])} folder(s) will be checked or created.\n'
+                          'Replaced remote files get verified backups.\nCancelled pushes can leave completed files on the remote.\n'
+                          'Avoid another writer in this remote folder during Push.')))
         def confirm(widget=None, **kw):
-            if not getattr(self, 'transfer_busy', False):
+            if self.active_host and self.mirror_push_plan is plan and not getattr(self, 'transfer_busy', False):
                 self.mirror_push_plan = None
                 self.transfer_task = self.loop.create_task(self.run_mirror_work(
                     lambda client, cancel, progress: self.mirror_store().push(plan, client, cancelled=cancel, progress=progress), 'push'))
         def cancel(widget=None, **kw):
             self.mirror_push_plan = None
             self.show_transfers()
-        box.add(toga.Button('Push these files', on_press=confirm, enabled=bool(plan['writes']), style=Pack(height=48)))
+        box.add(toga.Button('Push these files', on_press=confirm, enabled=bool(plan['writes'] or plan['directories']), style=Pack(height=48)))
         box.add(toga.Button('Cancel', on_press=cancel, style=Pack(height=44)))
         self.show_view(box, destination='files', route='push-review', title='Review push')
+
+    def invalidate_mirror_review(self):
+        self.mirror_push_plan = None
+        box = getattr(self, 'mirror_review_view', None)
+        if box is not None:
+            for child in list(box.children):
+                box.remove(child)
+            box.add(toga.Label('Push review closed. Review again with the current connection.'))
 
     async def open_mirror_copy(self, key, *, snapshot=None):
         if getattr(self, 'cloud_busy', False):
@@ -220,14 +266,23 @@ class MirrorUI:
             if not matched:
                 self.file_status.value = 'Unlock the matching connection before opening this LocalCrypt copy.'
                 return False
-            label = 'LocalCrypt: ' + job['remote']
+            label = 'LocalCrypt: ' + job['remote'] + ' (pulled)'
             if snapshot is None:
                 folder = self.cloud_client.request('crypt_path', remote=job['remote'], identity=job['cipher_identity'],
                                                  path=job['prefix'], directory=True, decode=True)['path']
+                from .file_resources import CryptFiles
+                provider = CryptFiles(self.private_root / 'LocalCryptFolders', self.cloud_client, job['remote'], namespace=job['identity'])
+                self.file_roots[label] = provider
+                self.update_file_locations()
                 return await self.browser_file_location((label, folder))
             from .file_resources import CryptFiles
             root = self.private_root / 'TransferSnapshots' / snapshot
-            provider = CryptFiles(root, self.cloud_client, job['remote'])
+            source = store.snapshot(job, snapshot)
+            if not source.exists():
+                self.file_status.value = 'The retained snapshot is missing; its mapping was preserved.'
+                return False
+            namespace = source.relative_to(root).parts[0]
+            provider = CryptFiles(root, self.cloud_client, job['remote'], namespace=namespace)
             folder = provider.mapping(job['prefix'], directory=True, decode=True)
         else:
             if snapshot is None:
@@ -237,5 +292,5 @@ class MirrorUI:
             folder = ''
         label = 'Retained snapshot ' + snapshot[:8]
         self.file_roots[label] = provider
-        self.file_storage.items = list(self.file_roots)
+        self.update_file_locations()
         return await self.browser_file_location((label, folder))

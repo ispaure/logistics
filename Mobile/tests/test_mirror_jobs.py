@@ -1,6 +1,7 @@
 """Publication recovery, push conflicts and ciphertext-only mapping records."""
 from hashlib import sha256
 import os
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -56,6 +57,61 @@ class MirrorClient:
 
 
 class MirrorJobTests(unittest.TestCase):
+    def test_legacy_crypto_tree_is_preserved_and_requires_a_new_scoped_pull(self):
+        with TemporaryDirectory() as directory:
+            store, client = MirrorJobs(directory), MirrorClient()
+            job, _ = store.create(client, 'Secret', 'private folder title')
+            legacy = store.root / 'LocalCryptFolders' / job['cipher_identity'] / job['prefix']
+            legacy.parent.mkdir(parents=True)
+            store.target(job).rename(legacy)
+            (legacy / 'opaque-name').write_bytes(b'legacy local edits')
+            value = json.loads(store.path.read_bytes())
+            value['schema'] = 1
+            store.path.write_text(json.dumps(value))
+            restored = MirrorJobs(directory)
+            with self.assertRaisesRegex(ValueError, 'Pull this folder'):
+                restored.push_plan(job['id'], client)
+            self.assertEqual(restored.pull(job['id'], client), ('updated', None))
+            self.assertEqual((legacy / 'opaque-name').read_bytes(), b'legacy local edits')
+            self.assertEqual((restored.target(job) / 'opaque-name').read_bytes(), b'ciphertext')
+
+    def test_empty_subfolder_push_and_stable_source_snapshot(self):
+        with TemporaryDirectory() as directory:
+            store, client = MirrorJobs(directory), MirrorClient()
+            job, _ = store.create(client, 'Remote', 'folder')
+            (store.target(job) / 'empty').mkdir()
+            plan = store.push_plan(job['id'], client)
+            self.assertEqual(plan['directories'], ['empty'])
+            self.assertEqual(store.push(plan, client), 0)
+            self.assertIsNone(store.jobs[job['id']]['baseline']['empty'])
+
+    def test_crypto_accounts_with_the_same_cipher_get_distinct_live_trees(self):
+        with TemporaryDirectory() as directory:
+            store, client = MirrorJobs(directory), MirrorClient()
+            first, _ = store.create(client, 'Secret', 'private folder title')
+            first_file = store.target(first) / 'opaque-name'
+            first_file.write_bytes(b'first account local edits')
+            client.identity = 'c' * 64
+            client.data['encoded/opaque-name'] = b'second account ciphertext'
+            second, result = store.create(client, 'Secret', 'private folder title')
+            self.assertEqual(result, ('updated', None))
+            self.assertNotEqual(store.target(first), store.target(second))
+            self.assertEqual(first_file.read_bytes(), b'first account local edits')
+            self.assertEqual((store.target(second) / 'opaque-name').read_bytes(), b'second account ciphertext')
+
+    def test_external_record_edits_refuse_push_without_replacing_metadata(self):
+        with TemporaryDirectory() as directory:
+            store, client = MirrorJobs(directory), MirrorClient()
+            job, _ = store.create(client, 'Remote', 'folder')
+            (store.target(job) / 'note.txt').write_bytes(b'local edit')
+            plan = store.push_plan(job['id'], client)
+            external = store.path.read_bytes() + b'\n'
+            store.path.write_bytes(external)
+            with self.assertRaisesRegex(OSError, 'records changed'):
+                store.push(plan, client)
+            self.assertEqual(store.path.read_bytes(), external)
+            self.assertEqual(client.data['folder/note.txt'], b'first')
+
     def test_local_edit_conflict_snapshot_push_backup_and_remote_conflict(self):
         with TemporaryDirectory() as directory:
             store, client = MirrorJobs(directory), MirrorClient()

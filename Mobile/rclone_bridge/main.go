@@ -1,4 +1,4 @@
-// Package main is a deliberately small, read-only mobile rclone C bridge.
+// Package main is a scoped mobile rclone C bridge with verified copy operations.
 package main
 
 /*
@@ -84,7 +84,7 @@ func cancel() {
 func operation(action string) (context.Context, func()) {
 	duration := 2 * time.Minute
 	switch action {
-	case "read", "crypt_read", "crypt_fetch", "crypt_raw_write", "crypt_metadata", "crypt_manifest", "mirror_read", "mirror_stat", "mirror_write":
+	case "read", "crypt_read", "crypt_fetch", "crypt_raw_write", "crypt_metadata", "crypt_manifest", "mirror_read", "mirror_stat", "mirror_validate", "mirror_write":
 		duration = 30 * time.Minute
 	}
 	ctx, stop := context.WithTimeout(context.Background(), duration)
@@ -258,7 +258,7 @@ func importPackageMode(data []byte, password, label string, sessionOnly bool) ([
 		candidate = newStore()
 	}
 	shutdownClients()
-	if err := candidate.replace(snapshot{Label: label, Remotes: pending}); err != nil {
+	if err := candidate.replace(snapshot{Label: label, Remotes: pending, Pins: initialConnectionPins(pending)}); err != nil {
 		return nil, err
 	}
 	if sessionOnly {
@@ -426,6 +426,9 @@ func dispatch(action, input string) (output string) {
 		cancel()
 		return `{"ok":true}`
 	}
+	if action == "mirror_progress" {
+		return mirrorProgress(input)
+	}
 	// Local archive/image work uses no rclone configuration and can continue
 	// while a remote transfer owns the credential engine. It also must not
 	// replace that transfer's cancellation handle.
@@ -517,6 +520,10 @@ func dispatch(action, input string) (output string) {
 			result, err = mirrorRead(ctx, request.Remote, request.Path, request.Identity, request.FD)
 		case "mirror_stat":
 			result, err = mirrorStat(ctx, request.Remote, request.Path, request.Identity)
+		case "mirror_mkdir":
+			result, err = mirrorMkdir(ctx, request.Remote, request.Path, request.Identity)
+		case "mirror_validate":
+			result, err = mirrorValidate(ctx, request.Remote, request.Path, request.Identity, request.FD)
 		case "mirror_write":
 			if store.failure() {
 				err = errors.New("credentials could not be saved securely; push was not started")

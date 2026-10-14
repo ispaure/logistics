@@ -137,9 +137,12 @@ A missing or invalid credential mapping blocks Push rather than guessing a remot
 
 The independent mobile app can import the same TXT-in-ZIP credential format into
 an in-memory embedded rclone session, browse supported remotes and download private
-copies. It has its own backend/setting limits and no remote push, sync, mount or
-delete controls. See the [mobile remote-files guide](../../../logisticsmobile/user_docs/README.md#remote-files-and-credential-zips)
-for supported settings, private downloads and session-only credential persistence.
+copies. Managed Local and LocalCrypt folders support repeatable Pull and reviewed
+Push with progress while ordinary writing or reading continues. Pull retains local
+changes as conflict snapshots; Push checks revisions, verifies uploads and retains
+remote backups without deleting remote-only files. Mobile does not offer mounts or
+destructive desktop sync. See the [mobile transfer guide](../../../logisticsmobile/user_docs/README.md#local--localcrypt-pulls-and-pushes)
+for connection scopes, encrypted storage, cancellation and credential persistence.
 
 ## Read and edit a LocalCrypt copy on desktop
 

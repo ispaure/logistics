@@ -3,10 +3,10 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import shutil
-from threading import RLock
+from threading import RLock, Event, Thread
 from uuid import uuid4
 
-from commonUtils.persistence import atomic_write_json
+from commonUtils.persistence import atomic_write_bytes
 from commonUtils.persistence.publication import mutation_lock, rename_exclusive
 from commonUtils.runtime.resource_provider import resource_path
 from .pull_jobs import folder_state, validate_state, digest
@@ -20,14 +20,18 @@ class MirrorJobs:
             raise ValueError('Transfers require private storage.')
         self.path = self.root / 'mirror-jobs.json'
         self.jobs, self.pending, self.error = {}, None, ''
+        self.original = None
+        self.loaded_schema = 2
         self.lock = RLock()
         try:
             if self.path.exists():
                 if self.path.is_symlink() or self.path.stat().st_size > 4 * 1024 * 1024:
                     raise ValueError('Invalid transfer records.')
-                value = json.loads(self.path.read_text())
-                if not isinstance(value, dict) or set(value) != {'schema', 'jobs', 'pending'} or value['schema'] != 1:
+                self.original = self.path.read_bytes()
+                value = json.loads(self.original)
+                if not isinstance(value, dict) or set(value) != {'schema', 'jobs', 'pending'} or value['schema'] not in (1, 2):
                     raise ValueError('Invalid transfer records.')
+                self.loaded_schema = value['schema']
                 if not isinstance(value['jobs'], list) or len(value['jobs']) > 16:
                     raise ValueError('Invalid transfer records.')
                 for job in value['jobs']:
@@ -66,19 +70,43 @@ class MirrorJobs:
             raise ValueError(self.error or 'Transfer records cannot be linked.')
         for job in self.jobs.values():
             self.validate(job)
-        atomic_write_json(self.path, {'schema': 1, 'jobs': list(self.jobs.values()), 'pending': self.pending},
-                          max_bytes=4 * 1024 * 1024, durable_directory=True)
+        data = json.dumps({'schema': 2, 'jobs': list(self.jobs.values()), 'pending': self.pending},
+                          ensure_ascii=False, allow_nan=False).encode('utf-8')
+        if len(data) > 4 * 1024 * 1024:
+            raise ValueError('Transfer records exceed the size limit.')
+        atomic_write_bytes(self.path, data, validate=self.check_records)
+        self.original = data
+        self.loaded_schema = 2
+        descriptor = os.open(self.path.parent, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    def check_records(self):
+        self.guard(self.path)
+        current = None
+        if self.path.exists():
+            with self.path.open('rb') as stream:
+                current = stream.read(4 * 1024 * 1024 + 1)
+        if current != self.original:
+            raise OSError('Local copy records changed; reopen Logistics before transferring again.')
 
     def target(self, job):
         if job['crypt']:
-            return self.root / 'LocalCryptFolders' / job['cipher_identity'] / job['prefix']
+            return self.root / 'LocalCryptFolders' / job['identity'] / job['prefix']
         return self.root / 'LocalFiles' / job['target']
 
     def snapshot(self, job, key):
         if not uuid(key):
             raise ValueError('Invalid snapshot identity.')
         root = self.root / 'TransferSnapshots' / key
-        return root / job['cipher_identity'] / job['prefix'] if job['crypt'] else root / 'tree'
+        if not job['crypt']:
+            return root / 'tree'
+        scoped = root / job['identity'] / job['prefix']
+        legacy = root / job['cipher_identity'] / job['prefix']
+        # Retained pre-scope snapshots remain readable without moving their bytes.
+        return legacy if not scoped.exists() and legacy.exists() else scoped
 
     def guard(self, path):
         path = Path(path)
@@ -103,6 +131,7 @@ class MirrorJobs:
 
     def create(self, client, remote, folder='', *, cancelled=lambda: False, progress=lambda **kw: None):
         with self.lock:
+            self.check_records()
             self.reconcile()
             if self.error or len(self.jobs) >= 16:
                 raise ValueError(self.error or 'Remove a local copy mapping before adding another (limit: 16).')
@@ -164,6 +193,7 @@ class MirrorJobs:
 
     def pull(self, key, client, *, cancelled=lambda: False, progress=lambda **kw: None, initial=False):
         with self.lock:
+            self.check_records()
             self.reconcile()
             job = self.jobs[key]
             self.check(client, job, cancelled)
@@ -211,6 +241,10 @@ class MirrorJobs:
         pending = self.pending
         job = self.jobs[pending['job']]
         target = self.target(job)
+        if self.loaded_schema == 1 and job['crypt']:
+            # Resolve an old journal against its original physical tree. Future
+            # pulls populate the new account scope; the legacy tree is retained.
+            target = self.root / 'LocalCryptFolders' / job['cipher_identity'] / job['prefix']
         backup = self.snapshot(job, pending['backup'])
         incoming = self.snapshot(job, pending['incoming'])
         current = self.state(target)
@@ -235,6 +269,7 @@ class MirrorJobs:
 
     def push_plan(self, key, client, *, cancelled=lambda: False, progress=lambda **kw: None):
         with self.lock:
+            self.check_records()
             self.reconcile()
             job = self.jobs[key]
             self.check(client, job, cancelled)
@@ -248,6 +283,11 @@ class MirrorJobs:
                     continue
                 self.check(client, job, cancelled)
                 remote_path = '/'.join(part for part in (job['prefix'], path) if part)
+                with (self.target(job) / path).open('rb') as stream:
+                    checked = client.request('mirror_validate', remote=job['remote'], path=remote_path,
+                                             identity=job['identity'], fd=stream.fileno())
+                if checked != value:
+                    raise ValueError('A local file changed during push inspection; review again.')
                 progress(phase='Checking remote files', files=len(writes) + unchanged, done=0, total=0)
                 remote = client.request('mirror_stat', remote=job['remote'], path=remote_path, identity=job['identity'])
                 if remote == value:
@@ -256,15 +296,19 @@ class MirrorJobs:
                 if remote != (job['baseline'].get(path) or ''):
                     raise ValueError('A remote file changed. Pull it into a separate snapshot before reviewing this push.')
                 writes.append(dict(path=path, remote=remote_path, expected=remote, digest=value))
-            return dict(job=key, local=local, writes=writes, unchanged=unchanged, run=uuid4().hex)
+            directories = [path for path, value in local.items() if value is None]
+            return dict(job=key, local=local, writes=writes, directories=directories, unchanged=unchanged, run=uuid4().hex)
 
     def push(self, plan, client, *, cancelled=lambda: False, progress=lambda **kw: None):
         with self.lock:
-            if (not isinstance(plan, dict) or set(plan) != {'job', 'local', 'writes', 'unchanged', 'run'}
+            self.check_records()
+            if (not isinstance(plan, dict) or set(plan) != {'job', 'local', 'writes', 'directories', 'unchanged', 'run'}
                     or plan['job'] not in self.jobs or not uuid(plan['run'])
                     or not isinstance(plan['writes'], list) or len(plan['writes']) > 10000):
                 raise ValueError('Invalid push review; review the source again.')
             validate_state(plan['local'])
+            if plan['directories'] != [path for path, value in plan['local'].items() if value is None]:
+                raise ValueError('Invalid push folders; review the source again.')
             job = self.jobs[plan['job']]
             seen = set()
             for item in plan['writes']:
@@ -285,17 +329,53 @@ class MirrorJobs:
             staging.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             # A stable private copy prevents edits during an upload from becoming
             # a different push than the reviewed one. Ciphertext stays ciphertext.
-            shutil.copytree(target, staging, symlinks=True)
             try:
+                staging.mkdir(mode=0o700)
+                for path, value in plan['local'].items():
+                    destination = staging / path
+                    if cancelled():
+                        raise ValueError('Push staging cancelled; remote files were unchanged.')
+                    if value is None:
+                        destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+                        continue
+                    destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    with (target / path).open('rb') as source, destination.open('xb') as output:
+                        while block := source.read(64 * 1024):
+                            if cancelled():
+                                raise ValueError('Push staging cancelled; remote files were unchanged.')
+                            output.write(block)
+                        output.flush()
+                        os.fsync(output.fileno())
                 if folder_state(staging, cancelled) != plan['local'] or self.state(target, cancelled) != plan['local']:
                     raise ValueError('Files changed during push staging; review again.')
+                for directory in ['', *plan['directories']]:
+                    self.check_records()
+                    self.check(client, job, cancelled)
+                    remote_path = '/'.join(part for part in (job['prefix'], directory) if part)
+                    client.request('mirror_mkdir', remote=job['remote'], path=remote_path, identity=job['identity'])
                 for count, item in enumerate(plan['writes']):
+                    self.check_records()
                     self.check(client, job, cancelled)
                     progress(phase='Validating and pushing', files=count, done=count, total=len(plan['writes']))
                     source = staging / item['path']
                     with source.open('rb') as stream:
-                        actual = client.request('mirror_write', remote=job['remote'], path=item['remote'], identity=job['identity'],
-                                                expected=item['expected'], run=plan['run'], fd=stream.fileno())
+                        done = Event()
+                        def monitor(completed=count):
+                            while not done.wait(.2):
+                                try:
+                                    state = client.request('mirror_progress', run=plan['run'])
+                                    if state['phase']:
+                                        progress(phase=state['phase'], files=completed, done=state['done'], total=state['total'])
+                                except (OSError, ValueError, TypeError, KeyError):
+                                    pass
+                        watcher = Thread(target=monitor, daemon=True)
+                        watcher.start()
+                        try:
+                            actual = client.request('mirror_write', remote=job['remote'], path=item['remote'], identity=job['identity'],
+                                                    expected=item['expected'], run=plan['run'], fd=stream.fileno())
+                        finally:
+                            done.set()
+                            watcher.join()
                     if actual != item['digest']:
                         raise ValueError('Remote verification differed; inspect the retained remote backup.')
                     # Record each successful file so a cancelled multi-file push

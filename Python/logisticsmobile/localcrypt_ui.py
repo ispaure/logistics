@@ -72,6 +72,8 @@ class LocalCryptUI(FilesUI):
         return True
 
     def clear_private_catalog(self):
+        self.invalidate_mirror_review()
+        self.editor_linked_roots = {}
         if hasattr(self, 'pull_jobs'):
             self.pull_jobs.forget_private()
         if hasattr(self, 'pull_job_box'):

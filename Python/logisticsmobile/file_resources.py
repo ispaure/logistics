@@ -52,15 +52,19 @@ def native_transfer(client, record, path, encrypted):
 class CryptFiles(LocalFiles):
     private = True
 
-    def __init__(self, root, client, remote):
+    def __init__(self, root, client, remote, *, namespace=None):
         self.client, self.remote = client, remote
         self.identity = client.request('crypt_path', remote=remote, path='', directory=True)['identity']
-        root = Path(root) / self.identity
+        if namespace is not None and (not isinstance(namespace, str) or len(namespace) != 64
+                                      or any(c not in '0123456789abcdef' for c in namespace)):
+            raise ValueError('Invalid encrypted storage namespace.')
+        namespace = namespace or self.identity
+        root = Path(root) / namespace
         if root.is_symlink() or root.parent.is_symlink():
             raise ValueError('Managed encrypted storage cannot use linked folders.')
         root.mkdir(parents=True, exist_ok=True, mode=0o700)
         super().__init__(root)
-        self.storage_namespace = self.identity
+        self.storage_namespace = namespace
 
     def mapping(self, path, directory=False, decode=False):
         return self.client.request('crypt_path', remote=self.remote, identity=self.identity,

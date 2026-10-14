@@ -358,6 +358,8 @@ async def exercise(app):
                   success=success, error=error, source=source, native_picker_tested=False)
     report['navigation'] = locals().get('navigation_proof')
     report['independent_windows_tested'] = app.scene_manager.supported
+    report['original_scene_close_tested'] = getattr(app, 'original_scene_close_tested', False)
+    report['scene_environment_limit'] = getattr(app, 'scene_environment_limit', '')
     # iOS's OS logger truncates long single-line messages. Emit independently
     # bounded chunks; the host verifier rejects missing/duplicate chunks.
     encoded = base64.b64encode(json.dumps(report, sort_keys=True).encode()).decode()

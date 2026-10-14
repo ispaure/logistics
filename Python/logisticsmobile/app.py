@@ -29,6 +29,10 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if type(self._impl).__module__.startswith('toga_iOS.'):
+            from .window_scenes import SceneManager
+            self.window_id = 'primary'
+            self.scene_manager = SceneManager(self, prepare_only=True)
         # Install before Android starts cooperative dispatch or registers Java
         # wake-up callbacks. Desktop/iOS loops lack this method and are unchanged.
         from .native_loop import bind_cooperative_loop
@@ -49,12 +53,17 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
             cancelled = getattr(previous_host, '_crypt_cancel', None)
             if cancelled is not None:
                 cancelled.set()
+                client = getattr(previous_host, 'cloud_client', None)
+                if client is not None:
+                    client.cancel()
         self.active_host = True
         _active_hosts[host_identity] = self
         workspace_root = getattr(self, 'workspace_root', root)
         self.preferences = Preferences(workspace_root)
         self.store = DocumentStore(root / 'Documents')
         self.workspace = Workspace(workspace_root)
+        restored_reader = self.workspace.sessions.get(self.workspace.active)
+        self.pending_reader_restore = None
         if hasattr(self, 'scene_manager'):
             self.scene_manager.owners.attach(self.window_id, self)
             self.scene_manager.bind_workspace(self.window_id, self)
@@ -75,6 +84,7 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
         if not hasattr(self, 'scene_manager'):
             from .window_scenes import install_scenes
             install_scenes(self)
+        self.scene_manager.activate()
         self.on_exit = self.exit_app
         self.refresh_documents()
         self.loading = False
@@ -100,6 +110,10 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
         self.adaptive.install()
         from .native_memory import MemoryPressure
         self.memory_pressure = MemoryPressure(self)
+        if restored_reader is not None and restored_reader.provider == 'library':
+            self.pending_reader_restore = restored_reader.id
+            self.workspace.active = restored_reader.id
+            self.save_workspace()
 
     def select_destination(self, destination):
         if not self.checkpoint():
@@ -109,6 +123,12 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
         # Material selection is reported before the shared destination commits.
         if self.routes.back_callback is not None:
             self.routes.back_callback.setEnabled(bool(self.routes.screens[destination]))
+        key = self.pending_reader_restore
+        if destination == 'documents' and key is not None:
+            self.pending_reader_restore = None
+            session = self.workspace.sessions.get(key)
+            if session is not None and self.workspace.active == key:
+                self.loop.create_task(self.resume_library_session(session))
         return True
 
     def route_changed(self, body):
@@ -236,7 +256,8 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
         try:
             await self.open_book(session.resource)
         except (OSError, ValueError, KeyError, TypeError):
-            if session.id in self.workspace.sessions:
+            if (session.id in self.workspace.sessions and self.workspace.active == session.id
+                    and self.native_host.state.destination == 'documents'):
                 self.show_unavailable_session(session.id)
 
     def show_unavailable_session(self, key):
@@ -358,6 +379,8 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
             self.new_document()
         if self.current is None:
             return False
+        self.pending_reader_restore = None
+        self.workspace.activate(self.editor_view.session.id)
         preview = resume and self.editor_view.session.view.get('markdown_mode') == 'preview'
         self.editor_view.session.view['markdown_mode'] = 'edit'
         self.show_view(self.document_view, destination='documents', route='editor', title='Text & Markdown')
@@ -480,6 +503,7 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
                 view.document.conflict = True
                 view.status.text = 'Stored file changed. Save a copy to keep recovered edits.'
             view.bind()
+            self.pending_reader_restore = None
             opened = True
             session.title = self.current.name
             self.selector.items = list(self.labels)
