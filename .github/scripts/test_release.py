@@ -147,6 +147,20 @@ class PublishTests(unittest.TestCase):
                 publishing.publish('owner/repo', tag, self.archive)
             self.assertIn('--prerelease', gh.call_args.args[0])
 
+    def test_tag_specific_notes_set_numbered_title_without_bypassing_verification(self):
+        notes_dir = Path(self.temp.name)
+        notes = notes_dir / 'v1.0.0-alpha.3.md'
+        notes.write_text('# Phase 0 Part 4: Validated mobile foundation\n\nRelease description.\n')
+        with patch.object(publishing, 'NOTES_DIR', notes_dir), patch(
+                'publish_release.subprocess.run', side_effect=[self.response(404), None]) as gh:
+            publishing.publish('owner/repo', 'v1.0.0-alpha.3', self.archive)
+        args = gh.call_args.args[0]
+        self.assertEqual(args[args.index('--title') + 1], 'Phase 0 Part 4: Validated mobile foundation')
+        self.assertEqual(args[args.index('--notes-file') + 1], str(notes))
+        self.assertIn('--verify-tag', args)
+        self.assertIn('--prerelease', args)
+        self.assertNotIn('--generate-notes', args)
+
     def test_numbered_main_tags_publish_as_stable(self):
         with patch('publish_release.subprocess.run', side_effect=[self.response(404), None]) as gh:
             publishing.publish('owner/repo', 'v0.1.0-main.01', self.archive)
