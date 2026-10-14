@@ -1,12 +1,12 @@
 """Platform-independent destination state; native widgets are presentation only."""
 from dataclasses import dataclass, field
 
-DESTINATIONS = ('files', 'documents', 'settings')
+DESTINATIONS = ('home', 'files', 'documents', 'settings')
 
 
 @dataclass
 class NavigationState:
-    destination: str = 'files'
+    destination: str = 'home'
     routes: dict = field(default_factory=lambda: {key: [] for key in DESTINATIONS})
 
     def select(self, destination):

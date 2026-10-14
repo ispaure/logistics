@@ -1,5 +1,17 @@
 # Mobile native navigation and document workspace plan
 
+## Current decisions and implementation status
+
+The user updated the destination order after the initial shell: **Home, Files,
+Documents, Settings**. Home is a landing page with a house icon before Files on
+both mobile platforms. This supersedes references to three destinations in the
+original milestone text below. Desktop also has a first-position Home toolbar
+action returning to its landing page.
+
+Milestone 0 foundation is committed; actual native destination wiring is committed
+as the first milestone 1 chunk. Native Back/routes, the durable multi-document
+workspace and later feature/visual/window milestones remain in progress.
+
 Status: proposed implementation plan, agreed design direction. Prepared October
 13, 2026. Milestones below describe future work, not shipped behavior.
 

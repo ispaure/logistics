@@ -8,7 +8,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN
 from .navigation import DESTINATIONS, NavigationState
 
-LABELS = ('Files', 'Documents', 'Settings')
+LABELS = ('Home', 'Files', 'Documents', 'Settings')
 
 
 class NativeNavigationHost:
@@ -97,7 +97,7 @@ class AppleNavigation:
             self.parent.addChildViewController(self.controller)
             self.controller.didMoveToParentViewController(self.parent)
         self.controller.setViewControllers([], animated=False)
-        symbols = ('folder', 'doc.on.doc', 'gearshape')
+        symbols = ('house', 'folder', 'doc.on.doc', 'gearshape')
         for label, symbol, container in zip(LABELS, symbols, self.impl.sub_containers):
             content = container.controller
             content.title = label
@@ -263,13 +263,34 @@ class AndroidNavigation:
         self.bottom.setOnItemSelectedListener(self.impl.onItemSelectedListener)
         self.impl.resize_tab_content = self.resize_content
         window.on_resize = self.window_resized
-        resources = (R.drawable.ic_menu_agenda, R.drawable.ic_menu_edit, R.drawable.ic_menu_preferences)
+        resources = (None, R.drawable.ic_menu_agenda,
+                     R.drawable.ic_menu_edit, R.drawable.ic_menu_preferences)
         self.bottom.getMenu().clear()
         for index, (option, resource) in enumerate(zip(self.impl.options, resources)):
             option.menu_item = self.bottom.getMenu().add(0, index + 1, index, option.text)
-            option.menu_item.setIcon(resource)
+            option.menu_item.setIcon(resource if resource is not None else self.home_icon())
         self.impl.set_current_tab_index(DESTINATIONS.index(host.state.destination))
         self.window_resized(window)
+
+    @staticmethod
+    def home_icon():
+        from android.graphics import Path, Paint
+        from android.graphics.drawable import ShapeDrawable
+        from android.graphics.drawable.shapes import PathShape
+        path = Path()
+        path.moveTo(2, 11)
+        path.lineTo(12, 3)
+        path.lineTo(22, 11)
+        path.moveTo(5, 9)
+        for x, y in ((5, 21), (9, 21), (9, 14), (15, 14), (15, 21), (19, 21), (19, 9)):
+            path.lineTo(x, y)
+        drawable = ShapeDrawable(PathShape(path, 24, 24))
+        drawable.getPaint().setStyle(Paint.Style.STROKE)
+        drawable.getPaint().setStrokeWidth(1.6)
+        drawable.getPaint().setAntiAlias(True)
+        drawable.setIntrinsicWidth(24)
+        drawable.setIntrinsicHeight(24)
+        return drawable
 
     def window_resized(self, window, **kwargs):
         self.layout_events += 1
@@ -307,10 +328,9 @@ class AndroidNavigation:
                     MaterialR.style.Theme_MaterialComponents_DayNight)
                 self.rail = NavigationRailView(context)
                 self.rail.setLabelVisibilityMode(1)  # LABEL_VISIBILITY_LABELED
-                from android import R
-                for index, (label, resource) in enumerate(zip(LABELS, (
-                    R.drawable.ic_menu_agenda, R.drawable.ic_menu_edit, R.drawable.ic_menu_preferences))):
-                    self.rail.getMenu().add(0, index + 1, index, label).setIcon(resource)
+                for index, label in enumerate(LABELS):
+                    self.rail.getMenu().add(0, index + 1, index, label).setIcon(
+                        self.bottom.getMenu().getItem(index).getIcon())
             view = self.rail
             self.impl.native.setOrientation(LinearLayout.HORIZONTAL)
             self.impl.native_content.setLayoutParams(LinearLayout.LayoutParams(0, -1, 1))

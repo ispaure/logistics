@@ -7,7 +7,7 @@ from logisticsmobile.native_navigation import NativeNavigationHost
 
 class NavigationTests(unittest.TestCase):
     def test_destination_routes_are_independent_and_back_does_not_switch_tabs(self):
-        state = NavigationState()
+        state = NavigationState(destination='files')
         state.push('folder')
         state.select('documents')
         state.push('editor')
@@ -22,7 +22,7 @@ class NavigationTests(unittest.TestCase):
 
     def test_native_selection_guard_and_programmatic_activation(self):
         host = NativeNavigationHost(on_select=lambda key: key != 'settings')
-        self.assertEqual(host.root.current_tab.text, 'Files')
+        self.assertEqual(host.root.current_tab.text, 'Home')
         host.activate('documents')
         self.assertEqual(host.state.destination, 'documents')
         host.root.current_tab = 'Settings'

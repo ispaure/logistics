@@ -54,7 +54,7 @@ class FilesUI:
             ('Move selected', self.move_file), ('Use selected offline encrypted copy', self.use_downloaded_file),
             ('Cancel operation', self.cancel_cloud), ('Back to remote files', self.files_back))]
         self.files_view = toga.ScrollContainer(content=toga.Box(children=[
-            toga.Button('Locations', on_press=self.show_home, style=Pack(height=44)),
+            toga.Button('Locations', on_press=self.show_locations, style=Pack(height=44)),
             toga.Label('Local files and folders'), self.file_storage, self.file_location, buttons[0],
             toga.Button('Parent folder', on_press=self.parent_file_folder, style=Pack(height=44)),
             self.file_password, self.file_browser.widget, buttons[1], buttons[2], self.file_name, *buttons[3:6],
