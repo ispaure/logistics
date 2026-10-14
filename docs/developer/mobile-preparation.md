@@ -877,8 +877,11 @@ validate the clean tagged source before publication. Local snapshot evidence is
 retained under `mobile-evidence/2026-10-14-phase5-part2-*-native-ui-local.json` and
 correctly records its pre-commit dirty source identity.
 
-The submission is `v0.1.1-alpha.33`, with title **Phase 5 Part 3: Toga workspaces
-and mobile Local/LocalCrypt transfers**. Consult its GitHub release and CI results
+The original submission was `v0.1.1-alpha.33`. Its Windows comic-library fixture
+cleanup race blocked publication. Phase 5 Part 4 uses the existing Qt-aware
+temporary-directory scope and passes all 31 comic-library tests locally without
+suppressing errors. The corrected submission is `v0.1.1-alpha.34`, with title
+**Phase 5 Part 5: Toga workspaces and validated mobile transfers**. Consult its GitHub release and CI results
 for actual publication status. Physical original-window destruction remains
 unverified, as do the manual device checks listed above; no simulator request is
 reported as a successful OS closure. This release packages source and does not
