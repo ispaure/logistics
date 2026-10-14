@@ -12,6 +12,7 @@ from .library_ui import LibraryUI
 from .chat_ui import ChatUI
 from .cloud_ui import CloudUI
 from .native_navigation import NativeNavigationHost
+from .routing import Routes
 
 
 class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
@@ -60,8 +61,9 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
             style=Pack(direction=ROW, margin_top=8)))
         self.document_view = box
         self.native_host = NativeNavigationHost(on_select=self.select_destination)
+        self.routes = Routes(self.native_host, guard=self.checkpoint, changed=self.route_changed)
         self.navigation = self.native_host.root
-        self.body = self.native_host.bodies['files']
+        self.body = self.routes.body()
         self.main_window = toga.MainWindow(title='Logistics', content=self.navigation,
                                            on_lose_focus=self.checkpoint)
         self.on_exit = self.exit_app
@@ -80,30 +82,24 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         self.show_home()
         self.main_window.show()
         self.native_host.install(self.main_window)
+        self.routes.install()
 
     def select_destination(self, destination):
         if not self.checkpoint():
             return False
-        self.body = self.native_host.bodies[destination]
+        self.body = self.routes.body(destination)
+        # Material selection is reported before the shared destination commits.
+        if self.routes.back_callback is not None:
+            self.routes.back_callback.setEnabled(bool(self.routes.screens[destination]))
         return True
 
-    def show_view(self, view, *, checkpoint=True, destination=None):
+    def route_changed(self, body):
+        self.body = body
+
+    def show_view(self, view, *, checkpoint=True, destination=None, route=None, title='', root=False):
         if checkpoint and not self.checkpoint():
             return False
-        if destination is not None:
-            self.native_host.activate(destination)
-            self.body = self.native_host.bodies[destination]
-        previous = list(self.body.children)
-        try:
-            for child in previous:
-                self.body.remove(child)
-            self.body.add(view)
-        except Exception:
-            for child in list(self.body.children):
-                self.body.remove(child)
-            for child in previous:
-                self.body.add(child)
-            raise
+        self.routes.show(view, destination=destination, route=route, title=title, root=root)
         return True
 
     def show_home(self, widget=None, **kwargs):
@@ -113,7 +109,7 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         for title, action in (('Files', self.show_locations), ('Text & Markdown', self.show_documents),
                               ('Books & Comics', self.show_library), ('LM Chat', self.show_chat)):
             box.add(toga.Button(title, on_press=action, style=Pack(height=52, margin_bottom=8)))
-        self.show_view(box, destination='home')
+        self.show_view(box, destination='home', root=True)
 
     def show_locations(self, widget=None, **kwargs):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
@@ -123,7 +119,7 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         box.add(toga.Button('Remote files & LocalCrypt', on_press=self.show_cloud, style=Pack(height=52, margin_top=8)))
         if self.preferences.error:
             box.add(toga.Label(self.preferences.error, style=Pack(margin_top=12)))
-        self.show_view(box, destination='files')
+        self.show_view(box, destination='files', root=True)
 
     async def show_local_location(self, widget=None, **kwargs):
         self.show_cloud(present=False)
@@ -140,10 +136,10 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         box.add(toga.Button('Books & Comics', on_press=self.show_library, style=Pack(height=52, margin_top=8)))
         box.add(toga.Button('LM Chat', on_press=self.show_chat, style=Pack(height=52, margin_top=8)))
         box.add(toga.Label(f'{len(self.labels)} private document(s)', style=Pack(margin_top=8)))
-        self.show_view(box, destination='documents')
+        self.show_view(box, destination='documents', root=True)
 
     def show_documents(self, widget=None, **kwargs):
-        self.show_view(self.document_view, destination='documents')
+        self.show_view(self.document_view, destination='documents', route='editor', title='Text & Markdown')
 
     def show_settings(self, widget=None, **kwargs):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
@@ -159,7 +155,7 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         box.add(toga.Button('Save preferences', on_press=self.save_preferences, style=Pack(height=44)))
         box.add(toga.Button('Reload preferences', on_press=self.reload_preferences, style=Pack(height=44)))
         box.add(self.settings_status)
-        self.show_view(box, destination='settings')
+        self.show_view(box, destination='settings', root=True)
 
     def save_preferences(self, widget=None, **kwargs):
         try:
@@ -196,7 +192,7 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         self.preview_box = toga.Box(children=[
             toga.Button('Back to editor', on_press=self.show_documents, style=Pack(height=44)),
             self.preview], style=Pack(direction=COLUMN, flex=1))
-        self.show_view(self.preview_box)
+        self.show_view(self.preview_box, route='preview', title='Markdown preview')
 
     def refresh_documents(self):
         previous = self.loading

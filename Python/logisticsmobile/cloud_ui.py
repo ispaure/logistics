@@ -61,7 +61,7 @@ class CloudUI(LocalCryptUI):
                 self.set_cloud_busy(True)
                 self.cloud_restore_task = self.loop.create_task(self.restore_cloud(initial=True))
         if present:
-            self.show_view(self.cloud_view, destination='files')
+            self.show_view(self.cloud_view, destination='files', route='connections', title='Remote files')
 
     def set_cloud_busy(self, value):
         self.cloud_busy = value

@@ -68,7 +68,7 @@ class ChatUI:
                 self.open_chat(next(iter(self.chat_labels.values())))
             else:
                 self.new_chat()
-        self.show_view(self.chat_view, destination='documents')
+        self.show_view(self.chat_view, destination='documents', route='chat', title='LM Chat')
 
     def show_chat_configuration(self, widget=None, **kwargs):
         self.show_view(self.chat_config_view, destination='documents')

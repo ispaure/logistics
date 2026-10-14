@@ -7,7 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
-APP_MODULES = ('__init__.py', '__main__.py', 'documents.py', 'access.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'native_navigation.py',
+APP_MODULES = ('__init__.py', '__main__.py', 'documents.py', 'access.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'native_navigation.py', 'routing.py',
                'preferences.py', 'preview.py', 'library.py', 'reading.py', 'library_ui.py',
                'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_fixture.py', 'cloud.py', 'cloud_ui.py', 'native_loop.py', 'credential_vault.py', 'localcrypt.py', 'localcrypt_ui.py', 'file_resources.py', 'files_ui.py', 'crypt_stream.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
@@ -73,10 +73,11 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     # Identify the exact local source snapshot independently of commit IDs.
     digest = sha256()
     roots = ((destination, ''), (repo / 'Mobile/rclone_bridge', 'bridge/'),
-             (repo / 'Mobile/native_tests', 'native-tests/'))
+             (repo / 'Mobile/native_tests', 'native-tests/'),
+             (repo / 'Mobile/native_navigation', 'native-navigation/'))
     for root, prefix in roots:
         for path in sorted(root.rglob('*')):
-            if path.is_file() and path.suffix in {'.py', '.go', '.json', '.mod', '.sum'} and path.name != 'source.json':
+            if path.is_file() and path.suffix in {'.py', '.go', '.java', '.json', '.mod', '.sum'} and path.name != 'source.json':
                 digest.update((prefix + path.relative_to(root).as_posix()).encode() + b'\0')
                 digest.update(path.read_bytes())
     manifest['source_sha256'] = digest.hexdigest()
