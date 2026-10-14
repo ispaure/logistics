@@ -70,7 +70,7 @@ class CredentialImportUITests(unittest.TestCase):
                 self.assertIn('decrypted filenames', app.cloud_remote_help.text.replace('\n', ' '))
                 self.assertTrue(app.crypt_download.enabled)
                 self.assertTrue(app.cloud_download.enabled)
-                self.assertEqual(app.cloud_download.text, 'Download decrypted copy')
+                self.assertEqual(app.cloud_download.text, 'Download decrypted')
                 app.cloud_crypt_remotes = set()
                 app.cloud_remote.value = 'Dropbox'
                 self.assertIn('No crypt remote', app.cloud_remote_help.text)

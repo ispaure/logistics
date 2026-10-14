@@ -58,3 +58,29 @@ class ActionMenu:
             self.popup.show()
         else:
             owner.app.show_editor_actions(owner)
+
+
+class FeatureOwner:
+    def __init__(self, app):
+        self.app = app
+
+
+class FeatureCommands(ActionMenu):
+    """Feature-owned native commands without editor rebinding."""
+    def __init__(self, button, app, actions, fallback):
+        self.feature_owner = FeatureOwner(app)
+        self.fallback = fallback
+        super().__init__(button, self.feature_owner, actions)
+
+    def invoke(self, callback):
+        app = self.feature_owner.app
+        if not app.active_host or getattr(app, 'cloud_busy', False):
+            return
+        result = callback()
+        if inspect.isawaitable(result):
+            app.loop.create_task(result)
+
+    def show(self, widget=None, **kwargs):
+        if type(self.button._impl).__module__.startswith('toga_android.'):
+            return super().show(widget, **kwargs)
+        return self.fallback()

@@ -730,3 +730,24 @@ to its imported text/library UUID. Reopening a downloaded/local archive copy
 activates that imported resource instead of duplicating it. The index stores
 no source path, title, draft, password or permission handle; encrypted provider
 readers remain outside this index and the ordinary recovery store.
+
+## Unified Files milestone
+
+Toga remains the selected mobile runtime; the Qt experiment is retained separately.
+Files caches its native browser route, so destination switching does not rebuild
+its history, selected item, search/sort or presentation. Secondary local/remote
+commands use the isolated native FeatureCommands menu and separate routes.
+Widget ownership remains exclusive when controls move between routes.
+
+`locations.py` persists at most 32 ordinary folder pins in a 16 KiB record, using
+private-relative local paths or opaque native connection identities. No encrypted
+folder paths or credentials enter that record. Publication checks the previous
+bytes, rejects linked files and preserves malformed input. Remote opening resolves
+exactly one current ordinary connection; changed/missing identities fail closed.
+
+Both native suites pass 20 cases, including real bridge folder pulls, preserved
+local edits and separate conflict snapshots, local/remote pins, persistence and
+retained browser state. Reports: [iOS](mobile-evidence/2026-10-14-phase2-ios-native-ui-local.json)
+and [Android](mobile-evidence/2026-10-14-phase2-android-native-ui-local.json). These
+are labeled local source snapshots; physical provider/device checks remain limits.
+The 57 host widget/workflow tests and native Go bridge suite also pass.

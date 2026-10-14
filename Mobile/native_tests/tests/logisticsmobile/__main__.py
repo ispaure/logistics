@@ -282,6 +282,8 @@ async def exercise(app):
         imported_id = app.current.id
         await app.open_download()
         assert app.current.id == imported_id
+        from .files_checks import exercise_files
+        await exercise_files(app, passed)
         app.show_cloud()
         await app.clear_cloud()
         assert not list(app.cloud_remote.items)
