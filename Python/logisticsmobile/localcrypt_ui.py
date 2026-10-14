@@ -4,7 +4,7 @@ import threading
 import textwrap
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN
+from toga.style.pack import COLUMN, ROW
 
 def private_label(value):
     # Native labels use their longest line as a minimum width. Bound messages
@@ -165,7 +165,8 @@ class LocalCryptUI(FilesUI):
             view.crypt_page.value = reader.labels[0]
             view.crypt_read_page = toga.Button('Read selected page', on_press=self.read_crypt_page, style=Pack(height=44))
             view.crypt_text = toga.MultilineTextInput(readonly=not reader.editable, style=Pack(flex=1))
-            view.crypt_image = toga.ImageView(style=Pack(flex=1))
+            from .comic_canvas import ComicCanvas
+            view.crypt_image = ComicCanvas(on_page=self.swipe_crypt_page, style=Pack(flex=1))
             view.crypt_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
             self._show_crypt_content(kind, content, view=view)
             view.crypt_save = toga.Button('Save encrypted copy' if getattr(copies, 'encrypted', True) else 'Save local file', on_press=self.save_crypt, enabled=reader.editable, style=Pack(height=44))
@@ -180,6 +181,7 @@ class LocalCryptUI(FilesUI):
                 toga.Button('Discard changes and close', on_press=self.discard_crypt, style=Pack(height=44)),
                 toga.Button('Close private reader', on_press=self.close_crypt, style=Pack(height=44))],
                 style=Pack(direction=COLUMN, flex=1, margin=12))
+            self.compact_private_view(view)
             handoff = (prepared is not None and getattr(self, 'save_as_source_document', None) is self.current
                        and getattr(self.current, 'private', False))
             if not self.show_view(view.crypt_view, checkpoint=not handoff, destination='documents'):
@@ -319,6 +321,41 @@ class LocalCryptUI(FilesUI):
         finally:
             self.crypt_read_page.enabled = True
             self.set_cloud_busy(False)
+
+    def swipe_crypt_page(self, direction):
+        if self.cloud_busy or self.crypt_reader is None or self.crypt_reader.editable:
+            return
+        if getattr(self.crypt_reader, 'right_to_left', False):
+            direction = -direction
+        index = self.crypt_reader.labels.index(self.crypt_page.value) + direction
+        if 0 <= index < len(self.crypt_reader.labels):
+            self.crypt_page.value = self.crypt_reader.labels[index]
+            self.loop.create_task(self.read_crypt_page())
+
+    def compact_private_view(self, view):
+        from .action_menu import FeatureCommands
+        old = view.crypt_view
+        view.crypt_actions = toga.Button('Actions', style=Pack(height=44))
+        for control in (view.crypt_title, view.crypt_page, view.crypt_read_page, view.crypt_content, view.crypt_save):
+            old.remove(control)
+        view.crypt_tools_view = toga.ScrollContainer(content=old, style=Pack(flex=1))
+        old.add(toga.Button('Return to private document', on_press=self.resume_crypt, style=Pack(height=44)))
+        view.crypt_actions_menu = FeatureCommands(view.crypt_actions, self, [
+            ('Open / Save As / Metadata…', self.show_private_tools), ('Fit comic page', self.fit_private_page),
+            ('Close private document', self.close_crypt)], self.show_private_tools)
+        view.crypt_title.style.flex = 1
+        view.crypt_page.style.flex = 1
+        view.crypt_view = toga.Box(children=[
+            toga.Box(children=[view.crypt_title, view.crypt_actions], style=Pack(direction=ROW)),
+            toga.Box(children=[view.crypt_page, view.crypt_read_page], style=Pack(direction=ROW)),
+            view.crypt_content, view.crypt_save], style=Pack(direction=COLUMN, margin=8, flex=1))
+
+    def show_private_tools(self, widget=None, **kwargs):
+        if not self.cloud_busy:
+            self.show_view(self.crypt_tools_view, destination='documents', route='private-tools', title='Private document actions')
+
+    def fit_private_page(self, widget=None, **kwargs):
+        self.crypt_image.fit_page()
 
     def close_crypt(self, widget=None, **kwargs):
         if not self.cloud_busy and self.clear_private_reader():

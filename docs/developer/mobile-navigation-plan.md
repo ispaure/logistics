@@ -35,7 +35,7 @@ Phase 1 Part 2 adds a native mixed/private workspace case; all 19 native cases
 pass on both the iOS 27.1 Duo simulator and Android 15 emulator. Phase 1 Part 3 adds native memory-pressure cleanup; both native suites pass
 with private drafts preserved. Phase 2 Part 1 adds repeatable pull jobs, safe local
 conflict snapshots, publication reconciliation and private-copy import identity.
-Phase 2 Part 3 completes retained Files presentation, native command menus and safe ordinary folder pins. Both native suites pass all 20 cases, including repeatable pull conflicts and pins. Reader refinements and independent windows remain pending.
+Phase 2 Part 3 completes retained Files presentation, native command menus and safe ordinary folder pins. Both native suites pass all 20 cases, including repeatable pull conflicts and pins. Phase 3 Part 1 adds compact reader controls, immersive restore, EPUB appearance, native comic zoom/pan and optional wide Markdown preview. Both native suites pass all 21 cases. Independent windows remain pending.
 
 ## Phase 0 submission boundary and numbered checkpoints
 

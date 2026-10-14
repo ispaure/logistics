@@ -8,7 +8,7 @@ import shutil
 import subprocess
 
 APP_MODULES = ('__init__.py', '__main__.py', 'documents.py', 'access.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'native_navigation.py', 'routing.py', 'workspace.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'native_memory.py',
-               'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library.py', 'reading.py', 'library_ui.py',
+               'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library.py', 'reading.py', 'library_ui.py', 'reader_chrome.py', 'comic_canvas.py',
                'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_fixture.py', 'cloud.py', 'resource_imports.py', 'folder_download.py', 'pull_jobs.py', 'pull_jobs_ui.py', 'cloud_ui.py', 'native_loop.py', 'credential_vault.py', 'localcrypt.py', 'localcrypt_ui.py', 'file_resources.py', 'files_ui.py', 'crypt_stream.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
     'features/__init__.py', 'features/books/__init__.py', 'features/books/epub.py',

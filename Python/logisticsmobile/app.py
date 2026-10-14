@@ -108,6 +108,8 @@ class LogisticsMobile(LocationsUI, PullJobsUI, ReaderWorkspace, ChatUI, CloudUI,
 
     def resize_workspace(self, widget=None, *args, **kwargs):
         self.adaptive.render()
+        for owner in self.text_views.values():
+            owner.apply_split(self.main_window.size.width)
 
     def show_view(self, view, *, checkpoint=True, destination=None, route=None, title='', root=False):
         if checkpoint and not self.checkpoint():
@@ -305,6 +307,8 @@ class LogisticsMobile(LocationsUI, PullJobsUI, ReaderWorkspace, ChatUI, CloudUI,
         if not self.workspace.close(key, guard=guard):
             return False
         self.text_views.pop(key, None)
+        if owner is not None:
+            owner.dispose()
         if was_current:
             self.current = None
             remaining = self.workspace.sessions.get(self.workspace.active)

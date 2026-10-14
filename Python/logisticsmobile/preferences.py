@@ -5,7 +5,8 @@ from pathlib import Path
 from commonUtils.formats.iniType import INIFile
 from commonUtils.persistence import atomic_write_bytes
 
-DEFAULTS = {'font_size': '16', 'restore_last_document': 'true', 'last_document': ''}
+DEFAULTS = {'font_size': '16', 'restore_last_document': 'true', 'last_document': '',
+            'reading_margin': '16', 'reading_theme': 'system'}
 
 
 class Preferences:
@@ -49,6 +50,8 @@ class Preferences:
             raise ValueError('Choose a supported font size.')
         if values['restore_last_document'] not in {'true', 'false'}:
             raise ValueError('Invalid document restore preference.')
+        if values['reading_margin'] not in {'8', '16', '24', '32'} or values['reading_theme'] not in {'system', 'light', 'dark'}:
+            raise ValueError('Invalid reader appearance preference.')
         key = values['last_document']
         if key and (len(key) != 32 or any(c not in '0123456789abcdef' for c in key)):
             raise ValueError('Invalid last-document identity.')

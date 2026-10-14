@@ -8,9 +8,10 @@ from toga.style.pack import COLUMN, ROW
 from .library import LibraryStore
 from .reading import chapter_html, image_dimensions
 from commonUtils.archives.zip_access import ArchivePasswordError
+from .reader_chrome import ReaderChrome
 
 
-class LibraryUI:
+class LibraryUI(ReaderChrome):
     def show_library(self, widget=None, **kwargs):
         if not hasattr(self, 'library_store'):
             self.library_store = LibraryStore(self.private_root / 'Library')
@@ -43,6 +44,8 @@ class LibraryUI:
                 toga.Box(children=[self.previous_page, self.next_page, self.bookmark_button],
                          style=Pack(direction=ROW)), self.bookmark_selector, self.book_status],
                 style=Pack(direction=COLUMN, margin=12, flex=1))
+            if getattr(self, 'session', None) is not None:
+                self.compact_reader()
             self.refresh_library()
             self.book_loading = False
             self.set_book_busy(False)
@@ -216,7 +219,8 @@ class LibraryUI:
             return
         if record['kind'] == 'epub':
             content = await asyncio.to_thread(chapter_html, reader, index,
-                                              int(self.preferences.values['font_size']))
+                int(self.preferences.values['font_size']), margin=int(self.preferences.values['reading_margin']),
+                theme=self.preferences.values['reading_theme'])
             if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
                 return
             if not hasattr(self, 'epub_view'):
@@ -228,7 +232,8 @@ class LibraryUI:
             if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
                 return
             image_dimensions(data)
-            view = toga.ImageView(image=toga.Image(src=data), style=Pack(flex=1))
+            from .comic_canvas import ComicCanvas
+            view = ComicCanvas(image=toga.Image(src=data), on_page=self.swipe_book_page, style=Pack(flex=1))
         updated = await asyncio.to_thread(self.library_store.progress, record, index)
         if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
             return
@@ -265,12 +270,17 @@ class LibraryUI:
                 self.next_page.enabled = self.book_record['position'] + 1 < count
 
     def select_chapter(self, widget, **kwargs):
-        if not self.book_loading and not self.book_busy and widget.value in getattr(self, 'chapter_labels', ()):
-            self.loop.create_task(self.move_book_page(self.chapter_labels.index(widget.value)))
+        if self.book_loading or self.book_busy or self.book_reader is None:
+            return
+        try:
+            value = widget.value
+        except IndexError:
+            return
+        if value in getattr(self, 'chapter_labels', ()):
+            self.loop.create_task(self.move_book_page(self.chapter_labels.index(value)))
 
     def select_bookmark(self, widget, **kwargs):
-        if not self.book_loading and not self.book_busy and widget.value in getattr(self, 'chapter_labels', ()):
-            self.loop.create_task(self.move_book_page(self.chapter_labels.index(widget.value)))
+        self.select_chapter(widget, **kwargs)
 
     async def previous_book_page(self, widget=None, **kwargs):
         if self.book_record:

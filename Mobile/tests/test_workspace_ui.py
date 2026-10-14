@@ -117,3 +117,23 @@ class WorkspaceUITests(unittest.TestCase):
             restored.open_document(a)
             self.assertEqual(len(restored.workspace.sessions), 2)
 
+
+    def test_wide_preview_belongs_to_its_document_and_close_cancels_render(self):
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                owner = app.editor_view
+                owner.session.view['markdown_split'] = True
+                owner.apply_split(1200)
+                self.assertIn(owner.split_preview, owner.editor_area.children)
+                self.assertIsNotNone(owner.preview_pending)
+                owner.apply_split(800)
+                self.assertNotIn(owner.split_preview, owner.editor_area.children)
+                self.assertTrue(owner.session.view['markdown_split'])
+                self.assertTrue(app.close_session(owner.session.id))
+                self.assertIsNone(owner.preview_pending)
+            finally:
+                app.main_window.close()
+                app.loop.close()

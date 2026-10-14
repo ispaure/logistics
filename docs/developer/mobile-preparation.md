@@ -751,3 +751,20 @@ retained browser state. Reports: [iOS](mobile-evidence/2026-10-14-phase2-ios-nat
 and [Android](mobile-evidence/2026-10-14-phase2-android-native-ui-local.json). These
 are labeled local source snapshots; physical provider/device checks remain limits.
 The 57 host widget/workflow tests and native Go bridge suite also pass.
+
+## Phase 3 Part 1: native reader presentation
+
+`ComicCanvas` extends the pinned Toga ImageView backend through its widget factory.
+iOS owns a UIScrollView/UIImageView zoom container; Android owns a tracked Java
+AppCompatImageView with scale and gesture detectors. Neither edits generated
+backend packages. Zoom is limited to 1–6, page gestures are gated at fit size, and
+edge touches are reserved for platform navigation. ReaderChrome publishes session
+commands, compact controls, appearance and a recoverable immersive view. Private
+controllers own their separate tools views and decoded images.
+
+Wide Markdown preview is per TextEditorView. Delayed rendering captures a workspace
+generation token, checks host lifetime, and is cancelled on close. The optional
+flag is whitelisted in the bounded ordinary manifest. Native UI coverage adds
+`native_reader_presentation`; WebView ownership assertions wait for a single
+rendered text snapshot instead of reading a transient empty document during reload.
+Android evidence runs cold-start the emulator rather than restoring renderer state.

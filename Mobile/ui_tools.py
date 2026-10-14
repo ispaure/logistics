@@ -58,7 +58,7 @@ def run(target, device, *, local=False):
     command = ['briefcase', 'run', 'android' if target == 'android' else 'iOS',
                '--test', '--no-input', '--device', device]
     if target == 'android':
-        command.extend(['--Xemulator=-no-window', '--Xemulator=-no-audio', '--Xemulator=-gpu',
+        command.extend(['--Xemulator=-no-window', '--Xemulator=-no-audio', '--Xemulator=-no-snapshot-load', '--Xemulator=-gpu',
                         '--Xemulator=swiftshader_indirect', '--shutdown-on-exit'])
     logs = Path('logs')
     logs.mkdir(exist_ok=True)

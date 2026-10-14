@@ -496,3 +496,25 @@ Folder pulls can refresh a local folder repeatedly. Local changes produce a
 separate incoming snapshot; they are never overwritten by a refresh. Unchanged
 folders can update while their previous copies remain available. Removing a job
 keeps all local folders. Remote data is never changed by a folder pull.
+
+## Reader and editor presentation (Phase 3 Part 1)
+
+Open EPUB and comic sessions now give content the main area, with compact page
+navigation and an Actions menu for contents, bookmarks, appearance and reading
+mode. Reading mode hides those controls and keeps a visible Restore controls
+button. EPUB appearance offers supported font sizes, margins and system/light/dark
+colors without changing the current chapter. Progress remains chapter/page based.
+
+Comic pages use native pinch zoom and panning on iOS and Android. Fit page resets
+zoom; left/right page swipes operate at fit size, respect manga reading order,
+and leave the outer edge available for system navigation. Private comic pages
+use the same presentation while their content and position remain session-only.
+
+Text actions offer Preview beside editor in wide windows. The preview stays beside
+the editor at widths of at least 1100 points and collapses in narrower windows;
+the preference belongs to that document session. Compact Edit/Preview remains
+available. Both previews retain the existing offline renderer restrictions.
+
+Simulator/emulator checks exercise zoom, fit, page direction, reading-mode restore,
+appearance and session ownership. Physical pinch/Back gestures, screen-reader
+interaction and large-text usability still require device evidence.
