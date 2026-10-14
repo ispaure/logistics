@@ -653,3 +653,11 @@ Restored ordinary resources whose records cannot be opened display an unavailabl
 route with Try again and Remove from open documents. Selecting one leaves the
 previous editor owner untouched; removing the unavailable entry does not delete
 source or recovery files. Library activation failures use the same route.
+
+
+Android navigation uses a Material DayNight context for both bottom and rail
+views. The pinned backend's AppCompat-created bottom view is detached while the
+adapter is installed and restored on disposal, including its layout/selection
+listeners and menu ownership. Native checks require visible inactive icon and
+label contrast against each bar's surface. This prevents normal launch from
+showing only the selected destination against an incompatible black background.

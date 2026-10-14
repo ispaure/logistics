@@ -28,7 +28,9 @@ The resume sequence uses numbered commit subjects; earlier history is preserved:
 | Phase 0 Part 1 `165a4f0` | Save, Keep draft, Discard and Cancel on dirty text Close; conflict-safe discard and owner-targeted close |
 | Phase 0 Part 2 `261c68e` | Per-document Edit/Preview continuity and preview callback ownership |
 | Phase 0 Part 3 | Unavailable restored resources offer Retry/Remove without displaying another document |
-| Phase 0 Part 4 | Final native evidence, submission notes and validation status |
+| Phase 0 Part 4 `8619493` | Native evidence, submission notes and validation status |
+| Phase 0 Part 5 | Material-themed Android bars keep inactive destinations visible |
+| Phase 0 Part 6 | Final contrast checks, normal-launch verification and release submission |
 
 The Phase 0 implementation passed both final native suites and is ready for
 an alpha submission. Existing lifecycle evidence covers two ordinary drafts

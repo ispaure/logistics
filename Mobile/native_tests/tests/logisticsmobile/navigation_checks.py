@@ -8,6 +8,19 @@ from commonUtils.runtime.platform import get_os, OS
 from logisticsmobile.native_navigation import NativeNavigationHost
 
 
+def assert_navigation_contrast(view):
+    background = view.getBackground().getFillColor().getDefaultColor()
+    def luminance(color):
+        values = [((int(color) >> shift) & 255) / 255 for shift in (16, 8, 0)]
+        linear = [value / 12.92 if value <= .04045 else ((value + .055) / 1.055)**2.4 for value in values]
+        return sum(value * weight for value, weight in zip(linear, (.2126, .7152, .0722)))
+    for colors in (view.getItemIconTintList(), view.getItemTextColor()):
+        assert colors is not None
+        foreground = colors.getDefaultColor()
+        high, low = sorted((luminance(foreground), luminance(background)), reverse=True)
+        assert (high + .05) / (low + .05) >= 3, 'Inactive navigation items need visible contrast'
+
+
 async def exercise_navigation(app):
     original = app.main_window.content
     original_widgets = set(app.widgets.keys())
@@ -32,6 +45,7 @@ async def exercise_navigation(app):
             assert host.root.current_tab.text.lower() == destination
         assert editor.value == 'Native navigation draft'
         if get_os() is OS.ANDROID:
+            assert_navigation_contrast(host.adapter.impl.native_navigationview)
             host.adapter.impl.native_navigationview.setSelectedItemId(4)
             assert host.state.destination == 'settings'
             assert host.root.current_tab.text == 'Settings'
@@ -118,6 +132,7 @@ async def exercise_navigation(app):
         else:
             adapter = host.adapter
             adapter.set_mode('rail')
+            assert_navigation_contrast(adapter.impl.native_navigationview)
             assert 'NavigationRailView' in adapter.diagnostics()['native_tabs']
             host.activate('settings')
             assert host.state.destination == 'settings'
