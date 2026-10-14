@@ -69,7 +69,7 @@ any personal field restores inheritance; click **Save Settings** to apply it.
 Saved options apply to both split views and keep the document’s chosen syntax
 language. Whitespace marks can be enabled or disabled without editing text.
 
-Code text defaults to 11 points. Text Editor, IDE, Git hunks and Markdown code
+Code text defaults to 9 points. Text Editor, IDE, Git hunks and Markdown code
 blocks share both the family and size. Ctrl/Cmd+wheel changes the personal shared
 code size (7–24 pt at a common 96-DPI reference). The same saved size now gives
 comparable text proportions on macOS, Windows and Linux; zoom preserves that

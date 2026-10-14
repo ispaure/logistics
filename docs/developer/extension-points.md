@@ -31,6 +31,12 @@ dispatcher resolves the corresponding feature-contributed workflow.
 
 The Debug page never imports feature implementations directly.
 
+System Tools owns its Windows repair command payloads. Its Debug actions use the
+commonUtils PowerShell wrapper to start an administrator console (`Start-Process
+-Verb RunAs`, `-NoExit`, and an encoded command), without repair files in `Scripts/`.
+The configured CHKDSK drive is validated before launch. The action result reports
+console startup after UAC, rather than completion of the repair.
+
 ## Feature settings
 
 Features contribute settings independently of navigation/action pages. Settings

@@ -4,7 +4,8 @@ import json
 import os
 import toga
 from toga.style import Pack
-from logisticsmobile.native_navigation import NativeNavigationHost
+from commonUtils.ui.native.navigation import NativeNavigationHost
+from logisticsmobile.navigation import DESTINATION_ITEMS
 from commonUtils.persistence import atomic_write_json
 from commonUtils.runtime.platform import get_os, OS
 
@@ -19,7 +20,7 @@ async def hold_navigation(app):
     app.adaptive.uninstall()
     app.routes.uninstall()
     app.native_host.uninstall()
-    host = NativeNavigationHost()
+    host = NativeNavigationHost(DESTINATION_ITEMS)
     if previous.get('destination') in host.bodies:
         host.activate(previous['destination'])
 

@@ -20,11 +20,12 @@ class MobileLocalCryptTests(unittest.TestCase):
         data = BytesIO()
         with ZipFile(data, 'w') as archive:
             archive.writestr('page10.png', PNG)
-            archive.writestr('page2.png', PNG)
+            archive.writestr('page2.webp', base64.b64decode('UklGRhwAAABXRUJQVlA4TA8AAAAvAYAAEAcQ/Y8CBiKi/wEA'))
         with patch.object(Path, 'open', side_effect=AssertionError('Reader must not open disk files')):
             reader = PrivateReader('comic.cbz', data.getvalue())
-            self.assertEqual(reader.pages, ['page2.png', 'page10.png'])
+            self.assertEqual(reader.pages, ['page2.webp', 'page10.png'])
             self.assertEqual(reader.page(1), ('image', PNG))
+            self.assertEqual(reader.page(0), ('image', base64.b64decode('UklGRhwAAABXRUJQVlA4TA8AAAAvAYAAEAcQ/Y8CBiKi/wEA')))
         with self.assertRaises(ValueError):
             PrivateReader('note.md', b'x' * (1024 * 1024 + 1))
 

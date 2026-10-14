@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 
+	_ "golang.org/x/image/webp"
 	"golang.org/x/sys/unix"
 )
 

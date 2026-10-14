@@ -7,7 +7,7 @@ Operating-system maintenance actions for the Logistics System Tools feature.
 
 from pathlib import Path
 
-import config
+import base64
 import json
 import re
 from commonUtils.configuration.layered import effective_settings
@@ -16,14 +16,25 @@ from features.preferences import preferences_path
 
 from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.runtime.platform import OS, get_os
-from commonUtils.integrations.wrappers import cmdShellWrapper
+from commonUtils.integrations.wrappers import cmdShellWrapper, powerShellWrapper
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 # WINDOWS
 
+def _launch_windows_repair(command: str) -> bool:
+    """Use the shared PowerShell wrapper to request a separate elevated console."""
+    encoded = base64.b64encode(command.encode('utf-16-le')).decode('ascii')
+    launcher = ("Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -Verb RunAs "
+                "-ArgumentList '-NoProfile', '-NoExit', '-EncodedCommand', "
+                f"'{encoded}' -ErrorAction Stop")
+    # Wait only for console startup/UAC, not for the repair commands to finish.
+    # The wrapper's synchronous path passes arguments directly, without CMD.
+    return powerShellWrapper.exec_powershell(launcher) is not None
+
+
 def run_repair_windows_script() -> bool:
-    """Launch the Windows system-files repair script."""
+    """Run the system-files repair commands in an administrator console."""
 
     tool_name = 'Repair Windows System Files'
 
@@ -31,16 +42,18 @@ def run_repair_windows_script() -> bool:
         log(Severity.WARNING, tool_name, 'This command is only supported on Windows.')
         return False
 
-    script_path = Path(config.LogisticsConfig().path_logistics_scripts, 'windows_system_files_repair.bat')
-    command = f'start "" "{script_path}"'
-
-    if not script_path.is_file():
-        raise FileNotFoundError(script_path)
-    return cmdShellWrapper.exec_cmd(command, wait_for_output=False) is not False
+    return _launch_windows_repair(
+        "$Host.UI.RawUI.WindowTitle = 'Logistics - Windows System Files Repair'; "
+        r'& "$env:SystemRoot\System32\Dism.exe" /Online /Cleanup-Image /ScanHealth; '
+        r'& "$env:SystemRoot\System32\Dism.exe" /Online /Cleanup-Image /RestoreHealth; '
+        r'& "$env:SystemRoot\System32\sfc.exe" /scannow; '
+        'Get-AppxPackage -AllUsers | ForEach-Object { '
+        "Add-AppxPackage -DisableDevelopmentMode -Register (Join-Path $_.InstallLocation 'AppXManifest.xml') }"
+    )
 
 
 def run_repair_ntfs_on_d() -> bool:
-    """Launch the Windows NTFS repair script for D:."""
+    """Run CHKDSK for the configured drive in an administrator console."""
 
     tool_name = 'Repair NTFS'
 
@@ -48,15 +61,14 @@ def run_repair_ntfs_on_d() -> bool:
         log(Severity.WARNING, tool_name, 'This command is only supported on Windows.')
         return False
 
-    script_path = Path(config.LogisticsConfig().path_logistics_scripts, 'repair_ntfs_on_D.bat')
     drive = effective_settings(Path(__file__).with_name('config.ini')).get('Windows', 'ntfs_drive', fallback='D:').strip().upper()
     if re.fullmatch(r'[A-Z]:', drive) is None:
         raise ValueError('NTFS drive must be a drive letter such as D:.')
-    command = f'start "" "{script_path}" {drive}'
-
-    if not script_path.is_file():
-        raise FileNotFoundError(script_path)
-    return cmdShellWrapper.exec_cmd(command, wait_for_output=False) is not False
+    return _launch_windows_repair(
+        f"$Host.UI.RawUI.WindowTitle = 'Logistics - Repair {drive}'; "
+        f"Write-Host 'Repairing {drive}'; "
+        rf'& "$env:SystemRoot\System32\chkdsk.exe" {drive} /f /r'
+    )
 
 
 # ----------------------------------------------------------------------------------------------------------------------

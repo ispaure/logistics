@@ -11,7 +11,8 @@ import zlib
 from books_fixture import make_book
 from logisticsmobile.access import LocalDocuments
 from logisticsmobile.library import LibraryStore
-from logisticsmobile.reading import chapter_html, image_dimensions
+from features.books.mobile.content import chapter_html
+from features.comics.mobile.validation import image_dimensions
 
 
 def png_page():
@@ -19,6 +20,9 @@ def png_page():
         return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
     return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 6, 0, 0, 0))
             + chunk(b'IDAT', zlib.compress(b'\x00\xff\x00\x00\xff')) + chunk(b'IEND', b''))
+
+
+WEBP = base64.b64decode('UklGRhwAAABXRUJQVlA4TA8AAAAvAYAAEAcQ/Y8CBiKi/wEA')
 
 
 class MobileReaderTests(unittest.TestCase):
@@ -51,19 +55,24 @@ class MobileReaderTests(unittest.TestCase):
             image = png_page()
             with ZipFile(source, 'w') as archive:
                 archive.writestr('page10.png', image)
-                archive.writestr('page2.png', image)
+                archive.writestr('page2.webp', WEBP)
                 archive.writestr('ComicInfo.xml', '<ComicInfo><Manga>YesAndRightToLeft</Manga></ComicInfo>')
             store = LibraryStore(root / 'Library')
             record = store.import_book(LocalDocuments(), source)
             record, reader = store.open(record['id'])
-            self.assertEqual(reader.pages, ['page2.png', 'page10.png'])
+            self.assertEqual(reader.pages, ['page2.webp', 'page10.png'])
             self.assertTrue(reader.right_to_left)
+            original = source.read_bytes()
+            self.assertEqual(reader.read_page(0), (WEBP, 'image/webp'))
+            self.assertEqual(image_dimensions(WEBP), (2, 3))
             data, mime = reader.read_page(1)
             self.assertEqual(data, image)
             self.assertEqual(mime, 'image/png')
             self.assertEqual(image_dimensions(data), (1, 1))
             record = store.progress(record, 1, bookmark=True)
             self.assertEqual(store.open(record['id'])[0]['bookmarks'], [1])
+            self.assertEqual(source.read_bytes(), original)
+            self.assertEqual(store.path(record['id'], '.cbz').read_bytes(), original)
             store.path(record['id'], '.cbz').write_bytes(b'changed')
             with self.assertRaises(ValueError):
                 store.open(record['id'])
@@ -86,6 +95,9 @@ class MobileReaderTests(unittest.TestCase):
                 image_dimensions(bytes(large))
             with self.assertRaises(ValueError):
                 image_dimensions(b'not an image')
+            for data in (WEBP[:-1], WEBP[:16], WEBP[:21] + (0x3fff | (0x3fff << 14)).to_bytes(4, 'little') + WEBP[25:]):
+                with self.assertRaises(ValueError):
+                    image_dimensions(data)
 
     def test_mobile_epub_sanitizer_removes_active_html_and_external_resources(self):
         from types import SimpleNamespace

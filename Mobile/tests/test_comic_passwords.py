@@ -34,32 +34,32 @@ class ComicPasswordUITests(unittest.TestCase):
                 source = root / 'protected.cbz'
                 source.write_bytes(base64.b64decode(fixture['aes']))
                 app.show_library()
-                app.library_store.archive_client = LocalArchiveClient()
-                record = app.library_store.import_book(LocalDocuments(), source)
+                app.reader_manager().catalog.library_store.archive_client = LocalArchiveClient()
+                record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), source)
                 app.refresh_library()
                 app.loop.run_until_complete(app.open_book(record['id']))
-                self.assertIsNone(app.book_reader)
-                self.assertEqual(app.book_pending_key, record['id'])
-                app.book_password.value = 'wrong'
+                self.assertIsNone(app.reader_manager().active.book_reader)
+                self.assertEqual(app.reader_manager().active.book_pending_key, record['id'])
+                app.reader_manager().active.book_password.value = 'wrong'
                 app.loop.run_until_complete(app.unlock_book())
-                self.assertEqual(app.book_password.value, '')
-                self.assertIn('Try again', app.book_status.text)
-                self.assertIn(app.book_unlock_panel, app.library_view.children)
+                self.assertEqual(app.reader_manager().active.book_password.value, '')
+                self.assertIn('Try again', app.reader_manager().active.book_status.text)
+                self.assertIn(app.reader_manager().active.book_unlock_panel, app.reader_manager().active.library_view.children)
                 app.cancel_book_unlock()
-                self.assertIsNone(app.book_pending_key)
+                self.assertIsNone(app.reader_manager().active.book_pending_key)
                 app.loop.run_until_complete(app.open_book(record['id']))
-                app.book_password.value = fixture['password']
+                app.reader_manager().active.book_password.value = fixture['password']
                 app.loop.run_until_complete(app.unlock_book())
-                self.assertIsNotNone(app.book_reader, app.book_status.text)
-                self.assertNotIn(app.book_unlock_panel, app.library_view.children)
-                raw_source = app.book_reader.document.source
+                self.assertIsNotNone(app.reader_manager().active.book_reader, app.reader_manager().active.book_status.text)
+                self.assertNotIn(app.reader_manager().active.book_unlock_panel, app.reader_manager().active.library_view.children)
+                raw_source = app.reader_manager().active.book_reader.document.source
                 app.loop.run_until_complete(app.next_book_page())
-                self.assertEqual(app.book_record['position'], 1)
+                self.assertEqual(app.reader_manager().active.book_record['position'], 1)
                 app.lock_book()
                 self.assertIsNone(raw_source.password)
                 self.assertEqual(raw_source.cache_bytes, 0)
-                self.assertFalse(app.book_content.children)
-                self.assertTrue(app.library_store.path(record['id'], '.cbz').exists())
+                self.assertFalse(app.reader_manager().active.book_content.children)
+                self.assertTrue(app.reader_manager().catalog.library_store.path(record['id'], '.cbz').exists())
             finally:
                 app.main_window.close()
                 app.loop.close()

@@ -1,0 +1,44 @@
+"""Discover logical mobile folders without creating crypt storage or copying files."""
+from pathlib import Path
+from services.folder_policy import read_exclusions, visible_name, folder_parts
+
+
+def exclusions():
+    root = Path(__file__).resolve().parents[1]
+    source = root / 'configFile.ini'
+    if not source.is_file():
+        source = root / 'services/configFile.ini'
+    return read_exclusions(source)
+
+
+def visible_remotes(names):
+    rules = exclusions()
+    return sorted((name for name in names if visible_name(name, rules, remote=True)), key=str.casefold)
+
+
+def hub_entries(root, jobs, remotes=(), crypt_locations=()):
+    root, rules = Path(root), exclusions()
+    entries = {}
+    def add(name, source, reference):
+        if visible_name(name, rules, remote=source == 'Remote'):
+            entries.setdefault(name, []).append((source, reference))
+    mapped = set()
+    for job in jobs.values():
+        target = (root / 'LocalCryptFolders' / job['identity'] / job['prefix'] if job['crypt']
+                  else root / 'LocalFiles' / job['target'])
+        if target.is_dir() and not target.is_symlink():
+            add(job['remote'], 'LocalCrypt' if job['crypt'] else 'Local', ('job', job['id']))
+            if not job['crypt']:
+                mapped.add(job['target'])
+    represented = {job['remote'] for job in jobs.values() if job['crypt']}
+    for label, remote in crypt_locations:
+        if remote not in represented:
+            add(remote, 'LocalCrypt', ('crypt', label))
+    local = root / 'LocalFiles'
+    if local.is_dir() and not local.is_symlink():
+        for path in local.iterdir():
+            if path.is_dir() and not path.is_symlink() and path.name not in mapped:
+                add(path.name, 'Local', ('local', path.name))
+    for remote in visible_remotes(remotes):
+        add(remote, 'Remote', ('remote', remote))
+    return [(name, folder_parts(name), entries[name]) for name in sorted(entries, key=str.casefold)]

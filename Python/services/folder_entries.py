@@ -5,8 +5,8 @@ Merged logical-folder construction for Logistics.
 from collections.abc import Iterable
 
 import config
+from services.folder_policy import configured_values
 
-from commonUtils.configuration import legacy as configUtils
 from models import folder_discovery
 from models.folder_entry import FolderEntry
 from models.local_folder import LocalFolder
@@ -20,20 +20,7 @@ EXCLUDED_FOLDER_NAME_SUFFIXES_KEY = 'excluded_folder_name_suffixes'
 def _get_configured_name_values(key: str) -> list[str]:
     """Return one comma-separated Folders setting as a cleaned list."""
 
-    value = configUtils.config_section_map(
-        config.get_config_file_path(),
-        FOLDERS_SECTION,
-        key
-    )
-
-    if not value:
-        return []
-
-    return [
-        item.strip()
-        for item in value.split(',')
-        if item.strip()
-    ]
+    return configured_values(config.get_config_file_path(), key)
 
 
 def _get_excluded_remote_names() -> set[str]:

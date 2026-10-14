@@ -103,6 +103,95 @@ so the app opens its hub. `ui_tools.py run ios ...` intentionally runs automated
 checks and leaves the generated project in test mode; repeat the normal update
 and build afterward. Generated Xcode settings are local build artifacts.
 
+## Build and deploy to a paired iPhone over Wi-Fi
+
+On a configured Mac, double-click `Mobile/deploy_ios.command` in Finder, or run
+it from any directory. Its default action builds, installs and launches over
+Wi-Fi. It also accepts `build`, `status` and `launch` (launch without rebuilding).
+Keep the iPhone unlocked on the same Wi-Fi as the Mac.
+
+The launcher uses `Mobile/.venv` and an optional local Go installation at
+`Mobile/.tools/go`. To prepare another Mac:
+
+```sh
+python3.12 -m venv Mobile/.venv
+Mobile/.venv/bin/python -m pip install briefcase==0.4.5
+# Install Go 1.26.9 on PATH, or extract it into Mobile/.tools/go.
+Mobile/deploy_ios.command configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
+Mobile/deploy_ios.command
+```
+
+Use the Python 3.12 environment containing Briefcase 0.4.5, with Go 1.26.9
+on `PATH`. The helper selects an installed Xcode with SDK 27.1 or newer,
+independently of the Mac's default command-line Xcode selection. Sign in to
+Xcode's Apple Accounts settings and obtain your existing development team ID
+from Signing & Capabilities. Configure once from the repository root:
+
+```sh
+python Mobile/device_tools.py configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
+python Mobile/device_tools.py status
+python Mobile/device_tools.py deploy
+```
+
+The device can be omitted during configuration if exactly one paired physical
+iPhone is discoverable. Team and device choices are stored in ignored
+`Mobile/.device.json`; no account credentials are stored. To deploy wirelessly,
+pair the iPhone in Xcode, enable Developer Mode, put both devices on the same
+Wi-Fi, unlock the iPhone, and unplug USB. Check `status` for `localNetwork` or
+`wireless` transport. Deployment refuses a wired connection by default;
+`deploy --allow-wired` permits an initial USB deployment if desired.
+See Apple's [device pairing guide](https://help.apple.com/xcode/mac/current/en.lproj/devbc48d1bad.html).
+
+Each `deploy` stages current local sources (including uncommitted mobile
+changes), refreshes the Briefcase project and native licenses, rebuilds the
+rclone bridge, restores the normal Logistics launcher, builds a signed arm64
+iPhone app, verifies its signature/profile, installs it in place, and launches
+it. `build` performs the same preparation and signed build without installing.
+This is local development, not release evidence or TestFlight automation.
+
+The bundle ID `io.github.ispaure.logisticsmobile`, saved team, application
+identifier and Keychain groups are preserved. Once recorded, a changed signing
+identity causes deployment to stop. The helper never uninstalls, resets or
+unpairs the device; resolve any reported installation error and rerun.
+Do not change the bundle ID or uninstall to work around a signing error.
+Enrollment pending may leave Xcode showing a Personal Team. Review the saved
+signing identity before switching to a newly available paid team.
+Logs are in `Mobile/logs/device-*.log`, the signed app in
+`Mobile/build/physical-device/Build/Products/Debug-iphoneos`, and successful
+deployment details in `Mobile/logs/device-deployment.json`.
+
+For the first Personal Team launch, iOS may require trusting the developer in
+Settings → General → VPN & Device Management. After trusting, run
+`Mobile/deploy_ios.command launch`; a rebuild or uninstall is unnecessary.
+If another launch error appears, inspect the device error instead of treating
+every security error as a trust problem.
+
+If building directly in Xcode after simulator test runs, run `configure` again
+with the saved team/device first. Briefcase `update` alone does not restore
+the `MainModule` launcher left by test mode. Configuration also reapplies the
+saved team to regenerated Debug and Release configurations.
+
+## Prepare a TestFlight release
+
+The [TestFlight guide](../docs/developer/mobile-testflight.md) covers local
+archive/export/upload commands and the manual GitHub workflow. Release packaging
+uses a separate workspace and preserves `io.github.ispaure.logisticsmobile` plus
+the existing application signing identifier and effective Keychain groups.
+Uploads default to off. Enrollment was confirmed approved on 2026-10-14; App Store
+Connect configuration, distribution signing assets, clean committed sources and
+encryption compliance answers are still needed before the first TestFlight upload.
+The guide includes prepared beta description, testing instructions and review notes.
+Future explicit uploads are configured to assign their processed build to the
+external **Friends** group, submit beta review when needed and enable tester
+notifications. This requires a one-time App Store Connect API key setup; follow
+[external distribution configuration](../docs/developer/mobile-testflight.md#automatic-distribution-to-friends).
+If Apple processing or review prerequisites block distribution, the `distribute`
+command retries the existing build without uploading it again.
+Native iOS builds also embed the Python provider's OpenSSL privacy manifests for
+the bundled SSL and hashing libraries. Release inspection checks those manifests
+before export/upload to catch the missing-manifest issue Apple reported for the
+first uploaded build.
+
 ## Host validation
 
 ```sh

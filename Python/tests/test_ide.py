@@ -14,6 +14,35 @@ class IDEQtTests(QtTestCase):
 
 
 class DocumentTests(IDEQtTests):
+    def test_theme_switch_preserves_unsaved_shared_buffer_and_finishes_highlighting(self):
+        import io
+        from contextlib import redirect_stderr
+        from commonUtils.ui import pyside as qt
+        from commonUtils.ui.appearance.theme import apply_theme
+        with self.temporary_directory() as directory:
+            path = Path(directory) / 'example.py'
+            path.write_text('x = 1\n' * 1000)
+            editor = EditorDocument(read_text_file(path))
+            editor.show()
+            editor.moveCursor(qt.QTextCursor.MoveOperation.End)
+            editor.insertPlainText('# unsaved\n')
+            original = editor.toPlainText()
+            font = qt.QFont(editor.font())
+            theme = apply_theme(self.app, mode='light')
+            errors = io.StringIO()
+            with redirect_stderr(errors):
+                for mode in ('dark', 'light', 'dark'):
+                    theme.set_mode(mode)
+                    self.wait_until(lambda: not editor.buffer.highlighter.theme_timer.isActive(),
+                                    message='IDE palette update did not finish')
+                    self.assertEqual(editor.toPlainText(), original)
+                    self.assertEqual(editor.font(), font)
+                    self.assertTrue(editor.document().isModified())
+            self.assertNotIn('Error calling Python override', errors.getvalue())
+            self.assertNotIn('IndexError', errors.getvalue())
+            editor.undo()
+            self.assertEqual(editor.toPlainText(), path.read_text())
+
     def test_shared_editor_preserves_endings_and_refuses_external_overwrite(self):
         with self.temporary_directory() as directory:
             path = Path(directory) / 'example.py'

@@ -9,7 +9,7 @@ Provides operating-system maintenance actions for Logistics.
 
 ## Responsibilities
 
-- Launch Windows maintenance scripts bundled with Logistics.
+- Run embedded Windows maintenance commands in a separate administrator console.
 - Run macOS lid-sleep configuration commands.
 
 ## Structure
@@ -18,10 +18,16 @@ Provides operating-system maintenance actions for Logistics.
 
 ## Windows Actions
 
-- Repair Windows system files.
-- Run the bundled NTFS repair script for the configured drive (default D:).
+- Repair Windows system files with DISM ScanHealth/RestoreHealth, SFC, and AppX re-registration.
+- Run CHKDSK `/f /r` for the configured drive (default D:).
 
-These actions are available only on Windows.
+These actions are available only on Windows. The existing commonUtils PowerShell
+wrapper starts a separate elevated PowerShell console through `Start-Process`
+with `-Verb RunAs`. The command payload is UTF-16LE base64 for `-EncodedCommand`;
+`-NoExit` keeps results and interactive CHKDSK prompts visible. Drive input must
+match one drive letter and colon. Startup waits for UAC/console creation, not for
+repair completion. A denied or failed launch returns False. No batch files or
+temporary scripts are used.
 
 ## macOS Actions
 
@@ -34,6 +40,6 @@ return value reports terminal startup, not successful system modification.
 
 ## Safety Notes
 
-System Tools can modify operating-system configuration or launch repair scripts.
+System Tools can modify operating-system configuration or run disk repairs.
 
 These actions should only be run deliberately on the intended platform.

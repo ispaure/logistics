@@ -24,21 +24,21 @@ def callbacks(provider, client, password=''):
                 member = reader.book.cover_path() if reader.book else reader.pages[0]
                 if not member:
                     return b''
-            elif suffix not in {'.png', '.jpg', '.jpeg'}:
+            elif suffix not in {'.png', '.jpg', '.jpeg', '.webp'}:
                 return b''
             data = item.request('crypt_thumbnail', member=member, width=size[0], height=size[1])
-        elif suffix in {'.png', '.jpg', '.jpeg'}:
+        elif suffix in {'.png', '.jpg', '.jpeg', '.webp'}:
             with provider.open(row['path']) as stream:
                 data = client.request('file_thumbnail', fd=stream.fileno(), width=size[0], height=size[1])
         else:
             # Ordinary ZIP/EPUB cover bytes also stay in memory.
             from zipfile import ZipFile
-            from .reading import image_dimensions
+            from features.comics.mobile.validation import image_dimensions
             member_data = None
             if suffix in {'.zip', '.cbz'}:
                 from features.comics.pages import natural_key
                 with provider.open(row['path']) as stream, ZipFile(stream) as archive:
-                    pages = sorted((info for info in archive.infolist() if Path(info.filename).suffix.lower() in {'.png', '.jpg', '.jpeg'}), key=lambda info: natural_key(info.filename))
+                    pages = sorted((info for info in archive.infolist() if Path(info.filename).suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}), key=lambda info: natural_key(info.filename))
                     if pages and pages[0].file_size <= 8 * 1024 * 1024:
                         member_data = archive.read(pages[0])
             elif suffix == '.epub':

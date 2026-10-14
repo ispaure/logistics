@@ -42,7 +42,7 @@ class MobilePackagingTests(unittest.TestCase):
                 shutil.copyfile(REPO / 'Python' / name, target)
             (repo / 'LICENSE.md').write_text('Application license fixture')
             git(repo, 'init')
-            git(repo, 'add', 'Python/logisticsmobile', 'Python/features', 'Python/services', 'LICENSE.md')
+            git(repo, 'add', 'Python/logisticsmobile', 'Python/features', 'Python/services', 'Python/configFile.ini', 'LICENSE.md')
             git(repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.test', 'commit', '-m', 'fixture')
             payload = base / 'payload'
             manifest = mobile_tools.stage(repo, payload)
@@ -53,6 +53,14 @@ class MobilePackagingTests(unittest.TestCase):
             self.assertFalse((payload / 'commonUtils/remoteConfig.ini').exists())
             self.assertFalse((payload / 'commonUtils/.git').exists())
             self.assertTrue((payload / 'features/books/epub.py').exists())
+            self.assertTrue((payload / 'commonUtils/ui/native/android/io/github/ispaure/commonutils/NavigationBack.java').exists())
+            bridge = shared / 'ui/native/android/io/github/ispaure/commonutils/NavigationBack.java'
+            bridge.write_text(bridge.read_text() + '\n// local fixture mutation\n')
+            with self.assertRaises(ValueError):
+                mobile_tools.stage(repo, base / 'dirty-native-release')
+            local_manifest = mobile_tools.stage(repo, base / 'dirty-native-local', allow_dirty=True)
+            self.assertTrue(local_manifest['commonUtils_dirty'])
+            self.assertNotEqual(manifest['source_sha256'], local_manifest['source_sha256'])
             self.assertFalse((payload / 'features/books/reader.py').exists())
             (app / 'documents.py').write_text('# uncommitted change')
             with self.assertRaises(ValueError):

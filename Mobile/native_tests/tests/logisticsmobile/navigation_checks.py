@@ -5,7 +5,8 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
 from commonUtils.runtime.platform import get_os, OS
-from logisticsmobile.native_navigation import NativeNavigationHost
+from commonUtils.ui.native.navigation import NativeNavigationHost
+from logisticsmobile.navigation import DESTINATION_ITEMS
 
 
 def assert_navigation_contrast(view):
@@ -24,16 +25,25 @@ def assert_navigation_contrast(view):
 async def exercise_navigation(app):
     original = app.main_window.content
     original_widgets = set(app.widgets.keys())
+    def descendants(widget):
+        result = {widget.id}
+        for child in getattr(widget, 'children', ()):
+            result.update(descendants(child))
+        if isinstance(widget, toga.OptionContainer):
+            for item in widget.content:
+                result.update(descendants(item.content))
+        return result
     original_document = (app.current.id, app.current.text)
     app.adaptive.uninstall()
     app.routes.uninstall()
     app.native_host.uninstall()
-    host = NativeNavigationHost()
+    host = NativeNavigationHost(DESTINATION_ITEMS)
     editor = toga.MultilineTextInput(value='Native navigation draft', style=Pack(flex=1))
     for key, box in host.bodies.items():
         box.add(toga.Label(key.title(), style=Pack(margin=12)))
     host.bodies['documents'].add(editor)
     app.main_window.content = host.root
+    proof_widgets = descendants(host.root)
     try:
         host.install(app.main_window)
         await asyncio.sleep(.5)
@@ -117,7 +127,7 @@ async def exercise_navigation(app):
             assert diagnostics['editor_focused']
             capture('keyboard')
             editor._impl.native.resignFirstResponder()
-            fallback = NativeNavigationHost(prefer_sidebar=False)
+            fallback = NativeNavigationHost(DESTINATION_ITEMS, prefer_sidebar=False)
             app.main_window.content = fallback.root
             try:
                 fallback.install(app.main_window)
@@ -166,6 +176,8 @@ async def exercise_navigation(app):
         app.routes.install()
         app.adaptive.install()
         assert (app.current.id, app.current.text) == original_document
-        assert set(app.widgets.keys()) == original_widgets
+        # Home can legitimately refresh on restoring the selected native tab.
+        # Verify disposal of the temporary proof hierarchy itself.
+        assert not proof_widgets.intersection(app.widgets.keys())
     result['widget_cleanup_verified'] = True
     return result

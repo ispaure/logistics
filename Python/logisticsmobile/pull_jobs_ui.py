@@ -21,7 +21,7 @@ class PullJobsUI:
         box.add(toga.Label('Refresh a local folder from its remote.\nLocal edits produce a separate snapshot.\nRemote files are never changed.'))
         for job in list(store.jobs.values()):
             key = job['id']
-            box.add(toga.Label(import_hint(job['remote'] + ':/' + job['folder'] + (' · session only' if job['transient'] else ''))))
+            box.add(toga.Label(import_hint(job['remote'] + ':' + job['folder'] + (' · session only' if job['transient'] else ''))))
             async def refresh(widget=None, selected=key, **kw):
                 await self.run_pull_job(selected)
             async def open_folder(widget=None, selected=key, **kw):

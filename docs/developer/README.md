@@ -17,7 +17,12 @@ user guide for the workflow you are changing, then follow this map.
 | Develop encrypted local copies and private readers | [LocalCrypt](localcrypt.md) |
 | Change paths, stored state or configuration | [Configuration and data](configuration-and-data.md) |
 | Prepare the document core for mobile runtimes | [Mobile preparation](mobile-preparation.md) |
+| Review the three-pass alpha audit and its local verification scope | [Alpha verification](mobile-alpha-verification.md) |
+| Review the local mobile presentation changes and actual screen evidence | [Mobile UI refresh](mobile-ui-refresh.md) |
+| Plan mobile reader ownership, feature organization and reusable native UI cleanup | [Mobile architecture roadmap](mobile-architecture-roadmap.md) |
 | Assess existing Qt browser/editor/reader reuse on iOS | [PySide6 iOS proof](mobile-qt-proof.md) |
+| Build, sign and deploy to a paired iPhone over Wi-Fi | [Local iPhone deployment](mobile-device-deployment.md) |
+| Prepare an identity-preserving TestFlight archive and upload | [TestFlight workflow](mobile-testflight.md) |
 | Plan native mobile navigation and open documents across Apple and Android | [Mobile navigation plan](mobile-navigation-plan.md) |
 | Inspect native mobile foundation evidence and remaining device limits | [Native navigation proof](mobile-navigation-proof.md) |
 | Set up, test and contribute | [Development and validation](testing.md) |

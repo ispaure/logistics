@@ -12,19 +12,22 @@ from .preview import markdown_preview
 from .reader_sessions import ReaderWorkspace
 from .chat_ui import ChatUI
 from .cloud_ui import CloudUI
-from .native_navigation import NativeNavigationHost
-from .routing import Routes
+from commonUtils.ui.native.navigation import NativeNavigationHost
+from commonUtils.ui.native.routes import Routes
+from .navigation import DESTINATION_ITEMS
 from .workspace import Workspace, MAX_SESSIONS
 from .mirror_ui import MirrorUI
 from .editors import TextEditorView
 from .adaptive_workspace import AdaptiveWorkspace
 from .pull_jobs_ui import PullJobsUI
 from .locations_ui import LocationsUI
+from .folder_hub_ui import FolderHubUI
+from .hub_ui import HubUI
 
 _active_hosts = weakref.WeakValueDictionary()
 
 
-class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI, CloudUI, toga.App):
+class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI, CloudUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def __init__(self, *args, **kwargs):
@@ -39,6 +42,8 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
         bind_cooperative_loop(self.loop)
 
     def startup(self):
+        from .appearance import install_appearance
+        install_appearance(self)
         root = Path(self.storage_root or self.paths.data)
         self.private_root = root
         host_identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
@@ -57,6 +62,7 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
                 if client is not None:
                     client.cancel()
         self.active_host = True
+        self.navigation_generation = 0
         _active_hosts[host_identity] = self
         workspace_root = getattr(self, 'workspace_root', root)
         self.preferences = Preferences(workspace_root)
@@ -73,8 +79,9 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
         self.labels = {}
         self.editor_view = TextEditorView(self)
         self.editor_view.bind()
-        self.native_host = NativeNavigationHost(on_select=self.select_destination)
-        self.routes = Routes(self.native_host, guard=self.checkpoint, changed=self.route_changed)
+        self.native_host = NativeNavigationHost(DESTINATION_ITEMS, on_select=self.select_destination)
+        self.routes = Routes(self.native_host, guard=self.checkpoint, changed=self.route_changed,
+                             intent=self.mark_navigation)
         self.adaptive = AdaptiveWorkspace(self)
         self.routes.on_render = self.adaptive.render
         self.navigation = self.native_host.root
@@ -102,11 +109,12 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
             self.new_document()
         self.show_documents_hub()
         self.show_settings()
-        self.show_locations()
+        self.show_folder_picker(initialize=False)
         self.show_home()
         self.main_window.show()
         self.native_host.install(self.main_window)
         self.routes.install()
+        self.refresh_native_theme()
         self.adaptive.install()
         from .native_memory import MemoryPressure
         self.memory_pressure = MemoryPressure(self)
@@ -118,11 +126,27 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
                 self.workspace.active = None
             self.save_workspace()
 
+        # Explicit local developer launch only; ordinary launches do no capture.
+        import os
+        if os.environ.get('LOGISTICS_COMIC_LAYOUT_CHECK') == '1' and type(self.main_window._impl).__module__.startswith('toga_iOS.'):
+            from .comic_layout_check import run
+            self.loop.create_task(run(self))
+
     def select_destination(self, destination):
         if not self.checkpoint():
             return False
+        if destination != self.native_host.state.destination:
+            self.mark_navigation()
         self.save_workspace()
-        self.body = self.routes.body(destination)
+        self.refresh_hub(destination)
+        adaptive = getattr(self, 'adaptive', None)
+        if (destination == 'documents' and adaptive is not None and adaptive.split is not None
+                and adaptive.in_detail and adaptive.detail_routes):
+            self.body = adaptive.detail_routes[-1][1]
+        else:
+            self.body = self.routes.body(destination)
+        from .reader_chrome import sync_comic_chrome
+        sync_comic_chrome(self, self.body)
         # Material selection is reported before the shared destination commits.
         if self.routes.back_callback is not None:
             self.routes.back_callback.setEnabled(bool(self.routes.screens[destination]))
@@ -134,20 +158,37 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
                 self.loop.create_task(self.resume_library_session(session))
         return True
 
+    def mark_navigation(self):
+        self.navigation_generation += 1
+
     def route_changed(self, body):
         self.body = body
+        private = getattr(self, 'private_sessions', None)
+        if private is not None and getattr(self, 'files_view', None) in body.children:
+            # Native Back does not call show_view. Apply the same hidden private
+            # preview/image cleanup while retaining drafts and their sessions.
+            private.suspend()
+        from .reader_chrome import sync_comic_chrome
+        sync_comic_chrome(self, body)
         if (hasattr(self, 'editor_view') and self.editor_view.session is not None
                 and self.document_view in body.children):
             self.editor_view.session.view['markdown_mode'] = 'edit'
 
     def resize_workspace(self, widget=None, *args, **kwargs):
         self.adaptive.render()
+        if hasattr(self, 'home_panels') and self.main_window.content is self.native_host.root:
+            self.home_panels.reflow(self.main_window.size.width)
         for owner in self.text_views.values():
             owner.apply_split(self.main_window.size.width)
+
+    def refresh_native_theme(self):
+        from .appearance import refresh_appearance
+        refresh_appearance(self)
 
     def show_view(self, view, *, checkpoint=True, destination=None, route=None, title='', root=False):
         if checkpoint and not self.checkpoint():
             return False
+        self.mark_navigation()
         target = destination or self.native_host.state.destination
         private = getattr(self, 'private_sessions', None)
         if private is not None:
@@ -157,6 +198,8 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
         if self.adaptive.split is not None and target == 'documents' and not root:
             self.native_host.activate('documents')
             self.adaptive.present(view, route=route, title=title)
+            from .reader_chrome import sync_comic_chrome
+            sync_comic_chrome(self, self.body)
             return True
         self.routes.show(view, destination=destination, route=route, title=title, root=root)
         if root and target == 'documents':
@@ -164,33 +207,10 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
         return True
 
     def show_home(self, widget=None, **kwargs):
-        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Welcome to Logistics', style=Pack(font_size=24, margin_bottom=12)))
-        box.add(toga.Label('Your files, reading and writing.', style=Pack(margin_bottom=12)))
-        for title, action in (('Files', self.show_locations), ('Text & Markdown', self.show_documents),
-                              ('Books & Comics', self.show_library), ('LM Chat', self.show_chat)):
-            box.add(toga.Button(title, on_press=action, style=Pack(height=52, margin_bottom=8)))
-        self.show_view(box, destination='home', root=True)
+        self.show_view(self.build_home(), destination='home', root=True)
 
     def show_locations(self, widget=None, **kwargs):
-        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Files', style=Pack(font_size=24, margin_bottom=12)))
-        box.add(toga.Label('Choose a location', style=Pack(margin_bottom=12)))
-        box.add(toga.Button('On this device', on_press=self.show_local_location, style=Pack(height=52)))
-        box.add(toga.Button('Remote files & LocalCrypt', on_press=self.show_cloud, style=Pack(height=52, margin_top=8)))
-        box.add(toga.Button('Folder pulls', on_press=self.show_pull_jobs, style=Pack(height=52, margin_top=8)))
-        box.add(toga.Button('Local / LocalCrypt & transfers', on_press=self.show_transfers, style=Pack(height=52, margin_top=8)))
-        box.add(toga.Button('Manage connections…', on_press=self.show_cloud_connections, style=Pack(height=44)))
-        pins = self.pinned_locations()
-        for item in pins.items:
-            title = ('On device: ' if item['kind'] == 'local' else 'Remote: ') + (item['path'] or 'Root')
-            box.add(toga.Box(children=[toga.Button(title[:45], on_press=self.pinned_opener(item), style=Pack(flex=1, height=44)),
-                toga.Button('Remove pin', on_press=self.pinned_remover(item['id']), style=Pack(height=44))], style=Pack(direction=ROW)))
-        if pins.error or getattr(self, 'location_error', ''):
-            box.add(toga.Label(pins.error or self.location_error))
-        if self.preferences.error:
-            box.add(toga.Label(self.preferences.error, style=Pack(margin_top=12)))
-        self.show_view(toga.ScrollContainer(content=box, style=Pack(flex=1)), destination='files', root=True)
+        self.show_folder_picker()
 
     async def show_local_location(self, widget=None, **kwargs):
         self.show_cloud(present=False)
@@ -199,39 +219,14 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
             await restore
         await self.show_files()
 
+    async def show_home_files(self, widget=None, **kwargs):
+        # A local shortcut must not wait for credentials or reuse a previous
+        # remote/private location and its search filter.
+        self.show_cloud(present=False)
+        self.show_locations()
+
     def show_documents_hub(self, widget=None, **kwargs):
-        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Documents', style=Pack(font_size=24, margin_bottom=12)))
-        box.add(toga.Label('Read, write and continue your work.', style=Pack(margin_bottom=12)))
-        box.add(toga.Button('Text & Markdown', on_press=self.show_documents, style=Pack(height=52)))
-        box.add(toga.Button('Books & Comics', on_press=self.show_library, style=Pack(height=52, margin_top=8)))
-        box.add(toga.Button('LM Chat', on_press=self.show_chat, style=Pack(height=52, margin_top=8)))
-        box.add(toga.Label(f'{len(self.labels)} private document(s)', style=Pack(margin_top=8)))
-        box.add(toga.Label('Open documents', style=Pack(font_size=18, margin_top=12)))
-        for session in list(self.workspace.sessions.values()):
-            try:
-                if session.provider == 'managed-text':
-                    title = session.title or self.store.open(session.resource).name
-                elif session.provider == 'library':
-                    title = session.title or self.reader_manager().catalog.library_store.read_record(session.resource)[0]['name']
-                elif session.provider == 'provider-session':
-                    title = session.title
-                else:
-                    continue
-            except (OSError, ValueError, KeyError, TypeError):
-                title = 'Unavailable document'
-            box.add(toga.Box(children=[
-                toga.Button(title if len(title) <= 32 else title[:29] + '…',
-                            on_press=self.session_opener(session.id), style=Pack(flex=1, height=44)),
-                toga.Button('Close', on_press=self.session_closer(session.id), style=Pack(height=44))],
-                style=Pack(direction=ROW)))
-        box.add(toga.Label('Stored documents', style=Pack(font_size=18, margin_top=12)))
-        for title, resource in self.labels.items():
-            box.add(toga.Button(title if len(title) <= 32 else title[:29] + '…',
-                on_press=self.stored_document_opener(resource), style=Pack(height=44)))
-        if self.workspace.error:
-            box.add(toga.Label(self.workspace.error, style=Pack(margin_top=8)))
-        self.show_view(toga.ScrollContainer(content=box, style=Pack(flex=1)), destination='documents', root=True)
+        self.show_view(self.build_documents_hub(), destination='documents', root=True)
 
     def stored_document_opener(self, resource):
         def activate(widget=None, **kwargs):
@@ -358,7 +353,7 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
         self.show_documents_hub()
         if was_current and self.adaptive.split is not None:
             if self.current is not None:
-                self.adaptive.present(self.document_view, route='editor', title='Text & Markdown')
+                self.adaptive.present(self.document_view, route='editor', title=self.current.name if self.current else 'New document')
                 self.adaptive.show_list()
             else:
                 self.adaptive.clear_details()
@@ -377,7 +372,7 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
         except (OSError, ValueError) as error:
             self.recovery_notice.text = str(error)
 
-    def show_documents(self, widget=None, *, resume=False, **kwargs):
+    def show_documents(self, widget=None, *, resume=False, destination='documents', **kwargs):
         if self.current is None:
             self.new_document()
         if self.current is None:
@@ -386,7 +381,7 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
         self.workspace.activate(self.editor_view.session.id)
         preview = resume and self.editor_view.session.view.get('markdown_mode') == 'preview'
         self.editor_view.session.view['markdown_mode'] = 'edit'
-        self.show_view(self.document_view, destination='documents', route='editor', title='Text & Markdown')
+        self.show_view(self.document_view, destination=destination, route='editor', title=self.current.name if self.current else 'New document')
         if preview:
             return self.show_preview()
 
@@ -396,7 +391,7 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
             def command(widget=None, target=action, **kwargs):
                 owner.actions.invoke(target)
             box.add(toga.Button(title, on_press=command, style=Pack(height=44)))
-        self.show_view(toga.ScrollContainer(content=box, style=Pack(flex=1)), route='actions', title='Document actions')
+        self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), route='actions', title='Document actions')
 
     def show_settings(self, widget=None, **kwargs):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
@@ -656,7 +651,7 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
         if getattr(self, 'cloud_busy', False):
             self.cancel_cloud()
             return False
-        if hasattr(self, "crypt_reader"):
+        if getattr(self, 'private_sessions', None) is not None:
             if not self.clear_private_reader():
                 return False
         if getattr(self, 'cloud_client', None):
@@ -691,12 +686,12 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
             self.private_sessions = PrivateSessions(self)
         return self.private_sessions
 
-    async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, **kwargs):
+    async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, destination='documents', **kwargs):
         copies = copies or self.crypt_copies
         key = key if key is not None else self.crypt_labels.get(self.crypt_selector.value)
         if key is None:
             return False
-        return await self.provider_sessions().open(copies, key, prepared=prepared)
+        return await self.provider_sessions().open(copies, key, prepared=prepared, destination=destination)
 
     def private_dirty(self):
         return self.provider_sessions().dirty()

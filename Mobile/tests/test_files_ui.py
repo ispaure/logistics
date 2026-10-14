@@ -7,6 +7,88 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class FileUITests(unittest.TestCase):
+    def test_encrypted_provider_cannot_take_local_transfer_bypass(self):
+        from logisticsmobile.file_resources import CryptFiles
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory).resolve()
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                app.show_cloud(present=False)
+                app.loop.run_until_complete(app.show_files())
+                provider = object.__new__(CryptFiles)
+                app.file_provider = provider
+                app.file_rows = {'note': {'path': 'note.md', 'name': 'note.md', 'directory': False}}
+                app.file_selection.items = ['note']
+                app.file_selection.value = 'note'
+                app.cloud_busy = app.transfer_busy = True
+                with patch.object(CryptFiles, 'entry', side_effect=AssertionError('Encrypted engine used during Pull')):
+                    app.loop.run_until_complete(app.read_managed_file())
+                # Pulled providers carry their own namespace. Browsing and
+                # editor picking must return that same object, not reconstruct
+                # one from its display label and lose the association.
+                label = 'LocalCrypt: Fixture (pulled)'
+                app.file_roots = app.editor_storage_roots = {label: provider}
+                self.assertIs(app.file_provider_for(label), provider)
+                self.assertIs(app.editor_provider(label), provider)
+            finally:
+                app.cloud_busy = app.transfer_busy = False
+                app.main_window.close()
+                app.loop.close()
+
+    def test_superseded_host_ignores_late_folder_results_and_errors(self):
+        import asyncio
+        from threading import Event
+        from commonUtils.runtime.local_files import LocalFiles
+        for failed in (False, True):
+            with self.subTest(failed=failed), TemporaryDirectory() as directory:
+                LogisticsMobile.storage_root = Path(directory).resolve()
+                self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+                app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                replacement = None
+                started, release = Event(), Event()
+                original = LocalFiles.list
+                def delayed(provider, *args, **kwargs):
+                    started.set()
+                    if not release.wait(5):
+                        raise RuntimeError('Folder fixture was not released')
+                    if failed:
+                        raise OSError('Late folder failure')
+                    return original(provider, *args, **dict(kwargs, cancelled=lambda: False))
+                async def exercise():
+                    nonlocal replacement
+                    app.show_cloud(present=False)
+                    await app.show_files()
+                    status = app.file_status.value
+                    with patch.object(LocalFiles, 'list', new=delayed), patch.object(app, 'populate_file_browser') as publish:
+                        task = asyncio.create_task(app.browse_files())
+                        try:
+                            for _ in range(100):
+                                if started.is_set():
+                                    break
+                                await asyncio.sleep(.01)
+                            self.assertTrue(started.is_set())
+                            replacement = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                            self.assertFalse(app.active_host)
+                            body = replacement.body
+                            release.set()
+                            self.assertFalse(await task)
+                            publish.assert_not_called()
+                            self.assertEqual(app.file_status.value, status)
+                            self.assertIs(replacement.body, body)
+                        finally:
+                            release.set()
+                            await task
+                try:
+                    app.loop.run_until_complete(exercise())
+                finally:
+                    hosts = [app, *([replacement] if replacement is not None else [])]
+                    for host in hosts:
+                        host.main_window.close()
+                    for loop in {host.loop for host in hosts}:
+                        if not loop.is_closed():
+                            loop.close()
+
     def test_local_delete_confirmation_and_save_as_retarget(self):
         class Client:
             def crypt_remotes(self): return []
@@ -35,18 +117,18 @@ class FileUITests(unittest.TestCase):
                 app.save_as_name.value = 'saved.md'
                 app.loop.run_until_complete(app.save_text_destination())
                 self.assertEqual((root / 'saved.md').read_text(), 'ordinary draft saved through provider')
-                app.crypt_text.value = 'updated at the new destination'
+                app.provider_sessions().active.crypt_text.value = 'updated at the new destination'
                 app.loop.run_until_complete(app.save_crypt())
                 self.assertEqual((root / 'saved.md').read_text(), 'updated at the new destination')
-                app.crypt_text.value = 'keep this draft when reopening fails'
-                previous = app.crypt_reader
+                app.provider_sessions().active.crypt_text.value = 'keep this draft when reopening fails'
+                previous = (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None)
                 app.loop.run_until_complete(app.show_crypt_save_as())
                 app.save_as_name.value = 'published-but-not-reopened.md'
                 with patch('logisticsmobile.file_resources.LocalTextCopies.open', side_effect=OSError('injected reopen failure')):
                     app.loop.run_until_complete(app.save_text_destination())
                 self.assertEqual((root / 'published-but-not-reopened.md').read_text(), 'keep this draft when reopening fails')
-                self.assertIs(app.crypt_reader, previous)
-                self.assertEqual(app.crypt_text.value, 'keep this draft when reopening fails')
+                self.assertIs((app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None), previous)
+                self.assertEqual(app.provider_sessions().active.crypt_text.value, 'keep this draft when reopening fails')
                 self.assertIsNotNone(app.save_as_data)
                 self.assertIn('was saved', app.save_as_status.value)
                 app.save_as_name.value = 'changed-before-reopen.md'
@@ -57,20 +139,20 @@ class FileUITests(unittest.TestCase):
                     return original_open(copies, key, **kwargs)
                 with patch.object(LocalTextCopies, 'open', changed_open):
                     app.loop.run_until_complete(app.save_text_destination())
-                self.assertIs(app.crypt_reader, previous)
-                self.assertEqual(app.crypt_text.value, 'keep this draft when reopening fails')
+                self.assertIs((app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None), previous)
+                self.assertEqual(app.provider_sessions().active.crypt_text.value, 'keep this draft when reopening fails')
                 self.assertIn('was saved', app.save_as_status.value)
                 app.save_as_name.value = 'published-but-ui-failed.md'
                 with patch.object(app, '_show_crypt_content', side_effect=ValueError('injected widget failure')):
                     app.loop.run_until_complete(app.save_text_destination())
-                self.assertIs(app.crypt_reader, previous)
-                self.assertEqual(app.crypt_text.value, 'keep this draft when reopening fails')
+                self.assertIs((app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None), previous)
+                self.assertEqual(app.provider_sessions().active.crypt_text.value, 'keep this draft when reopening fails')
                 self.assertIsNotNone(app.save_as_data)
                 app.save_as_name.value = 'published-but-navigation-refused.md'
                 with patch.object(app, 'show_view', return_value=False):
                     app.loop.run_until_complete(app.save_text_destination())
-                self.assertIs(app.crypt_reader, previous)
-                self.assertEqual(app.crypt_text.value, 'keep this draft when reopening fails')
+                self.assertIs((app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None), previous)
+                self.assertEqual(app.provider_sessions().active.crypt_text.value, 'keep this draft when reopening fails')
                 app.clear_private_reader(discard=True)
 
             finally:

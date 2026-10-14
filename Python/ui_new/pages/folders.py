@@ -10,6 +10,7 @@ from commonUtils.ui.tasks.operation_progress import OperationProgress
 
 from features import registry
 from features.contributions import UIAction
+from services.folder_policy import folder_parts
 from services.folder_entries import get_folder_entries
 from services.folder_sources import discover_folder_sources
 from ui_new.actions import execute_action
@@ -307,7 +308,7 @@ class FoldersPage(pyside.QWidget):
         tree_items = {}
 
         for entry in entries:
-            name_parts = entry.name.split('-')
+            name_parts = folder_parts(entry.name)
             parent_item = None
             path_parts = []
             entry_key = self._entry_key(entry)

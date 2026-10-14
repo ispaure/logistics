@@ -17,6 +17,8 @@ class LaunchTests(unittest.TestCase):
             patcher.start(); self.addCleanup(patcher.stop)
         patcher = patch.object(launch.registry, 'load_feature_preferences')
         patcher.start(); self.addCleanup(patcher.stop)
+        patcher = patch.object(launch.pyside.QTimer, 'singleShot')
+        self.schedule = patcher.start(); self.addCleanup(patcher.stop)
 
     def test_independent_launches_start_their_own_index_participant(self):
         with patch.object(launch, 'log'), patch.object(launch.pyside, 'initialize_q_app') as app, \
@@ -60,9 +62,46 @@ class LaunchTests(unittest.TestCase):
         create_app.assert_called_once_with()
         create_window.assert_not_called()
         create_app.return_value.exec.assert_not_called()
+        self.schedule.assert_not_called()
 
     def test_module_launcher_uses_the_application_entry_point(self):
         self.assertIs(module_launcher.main, launch.main)
+
+    def test_windows_console_minimizes_after_window_display_in_event_loop(self):
+        events = []
+        callbacks = []
+        window = Mock(pending_update=None)
+        window.display_ui.side_effect = lambda: events.append('landing displayed')
+        self.schedule.side_effect = lambda delay, owner, callback: callbacks.append(callback)
+
+        def event_loop():
+            events.append('event loop')
+            for callback in callbacks:
+                callback()
+            return 0
+
+        with patch.object(launch, 'get_os', return_value=launch.OS.WIN), \
+                patch.object(launch, 'minimize_console_window',
+                             side_effect=lambda: events.append('console minimized')) as minimize, \
+                patch.object(launch.pyside, 'initialize_q_app') as app, \
+                patch.object(launch.registry, 'initialize_features'), \
+                patch.object(launch, 'apply_theme'), patch.object(launch, 'MainWindow', return_value=window):
+            app.return_value.exec.side_effect = event_loop
+            self.assertEqual(launch.main(), 0)
+            self.schedule.assert_called_once_with(0, window.dlg, minimize)
+        self.assertEqual(events, ['landing displayed', 'event loop', 'console minimized'])
+
+    def test_other_platforms_do_not_schedule_windows_console_helper(self):
+        for platform in (launch.OS.MAC, launch.OS.LINUX):
+            with self.subTest(platform=platform), \
+                    patch.object(launch, 'get_os', return_value=platform), \
+                    patch.object(launch.pyside, 'initialize_q_app') as app, \
+                    patch.object(launch.registry, 'initialize_features'), \
+                    patch.object(launch, 'apply_theme'), patch.object(launch, 'MainWindow') as window:
+                window.return_value.pending_update = None
+                app.return_value.exec.return_value = 0
+                self.assertEqual(launch.main(), 0)
+        self.schedule.assert_not_called()
 
     def test_update_helper_starts_after_event_loop_and_index_shutdown(self):
         events = []

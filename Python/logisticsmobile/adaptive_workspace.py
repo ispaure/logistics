@@ -18,7 +18,7 @@ def workspace_delegate():
             @objc_method
             def navigationController_didShowViewController_animated_(self, navigation, controller, animated: bool) -> None:
                 if self.owner is not None:
-                    self.owner.native_shown(controller)
+                    self.owner.native_shown(controller, animated=animated)
 
             @objc_method
             def splitViewController_topColumnForCollapsingToProposedTopColumn_(self, split, proposed: int) -> int:
@@ -125,12 +125,18 @@ class AdaptiveWorkspace:
                 adapter.panes.append(container)
                 self.detail_routes.append((route, panel, container))
                 self.secondary.setViewControllers([item[2].controller for item in self.detail_routes], animated=False)
+            self.detail_routes[-1][2].controller.title = title
             self.app.native_host.state.routes['documents'] = [item[0] for item in self.detail_routes]
             self.app.body = panel
             self.in_detail = True
             self.split.showColumn(2)
         finally:
             self.changing = False
+
+    def update_title(self, view, title):
+        if (self.split is not None and self.detail_routes
+                and view in self.detail_routes[-1][1].children):
+            self.detail_routes[-1][2].controller.title = title
 
     def show_list(self):
         if self.split is not None:
@@ -151,11 +157,13 @@ class AdaptiveWorkspace:
         finally:
             self.changing = False
 
-    def native_shown(self, controller):
+    def native_shown(self, controller, *, animated=False):
         if self.changing or self.split is None:
             return
         shown = next((index for index, item in enumerate(self.detail_routes) if item[2].controller == controller), None)
         if shown is not None:
+            if shown < len(self.detail_routes) - 1:
+                self.app.mark_navigation()
             for _, _, container in self.detail_routes[shown + 1:]:
                 self.app.native_host.adapter.release_pane(container)
             self.detail_routes = self.detail_routes[:shown + 1]
@@ -165,10 +173,18 @@ class AdaptiveWorkspace:
                 self.app.route_changed(self.app.body)
             self.in_detail = True
         elif controller == self.app.native_host.adapter.containers[DESTINATIONS.index('documents')][1]:
+            # UIKit also reports the primary root while presenting/collapsing
+            # the secondary column. Explicit show_list already changes this
+            # state; only an animated Back should retire a visible detail.
+            if self.in_detail and not animated:
+                return
+            if animated and self.in_detail and self.app.native_host.state.destination == 'documents':
+                self.app.mark_navigation()
             self.in_detail = False
             self.app.native_host.state.routes['documents'] = []
             if self.app.native_host.state.destination == 'documents':
                 self.app.body = self.app.routes.roots['documents']
+                self.app.route_changed(self.app.body)
 
     def render(self):
         host, routes = self.app.native_host, self.app.routes

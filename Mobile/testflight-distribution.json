@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "app_id": "6822787800",
+  "bundle_id": "io.github.ispaure.logisticsmobile",
+  "external_group": "Friends",
+  "locale": "en-US",
+  "what_to_test": "Try creating and reopening text and Markdown documents, browsing files, and reading EPUB books or comics. Report your device, steps and any unexpected behavior through TestFlight feedback. This is an early beta; use disposable documents and test remote folders.",
+  "processing_timeout_seconds": 1800,
+  "poll_interval_seconds": 30
+}

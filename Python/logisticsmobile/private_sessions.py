@@ -2,18 +2,13 @@
 from hashlib import sha256
 from pathlib import Path
 from .localcrypt_ui import LocalCryptUI
+from .reader_host import ReaderHost
 
 MAX_PRIVATE_SESSIONS = 4
 MAX_PRIVATE_BYTES = 32 * 1024 * 1024
-FIELDS = ('crypt_reader', '_crypt_reader_store', 'crypt_title', 'crypt_page',
-          'crypt_read_page', 'crypt_text', 'crypt_image', 'crypt_content', 'crypt_save',
-          'crypt_view', 'crypt_metadata_fields', 'crypt_metadata_initial',
-          'crypt_metadata_values', 'crypt_metadata_view', 'crypt_metadata_status',
-          'crypt_metadata_save', 'crypt_tools_view', 'crypt_actions', 'crypt_actions_menu')
-SHARED = {'crypt_password', 'crypt_copies', 'crypt_labels', 'crypt_selector'}
 
 
-class PrivateController(LocalCryptUI):
+class PrivateController(ReaderHost, LocalCryptUI):
     def __init__(self, manager, session):
         self.manager, self.app, self.session = manager, manager.app, session
         self.crypt_reader = None
@@ -21,29 +16,42 @@ class PrivateController(LocalCryptUI):
         self.crypt_metadata_initial = {}
         self.crypt_metadata_values = {}
         self._crypt_cancel = None
+        self.operation_busy = False
+        self.presentation_destination = 'documents'
 
-    def __getattr__(self, name):
-        if (name.startswith('crypt_') and name not in SHARED) or name == '_crypt_reader_store':
-            raise AttributeError(name)
-        return getattr(self.app, name)
-
-    def __setattr__(self, name, value):
-        object.__setattr__(self, name, value)
-        if name == '_crypt_cancel' and hasattr(self, 'app'):
-            self.app._crypt_cancel = value
+    @property
+    def cloud_busy(self):
+        return self.operation_busy
 
     def set_cloud_busy(self, busy):
-        self.app.set_cloud_busy(busy)
-        self.manager.publish(self)
+        self.operation_busy = busy
+        self.manager.update_session(self)
+
+    def cancel_cloud(self, widget=None, **kwargs):
+        if self._crypt_cancel is not None:
+            self._crypt_cancel.set()
 
     def _show_crypt_content(self, kind, content, *, view=None):
         return self.app._show_crypt_content(kind, content, view=view or self)
 
     def show_view(self, view, **kwargs):
+        origin = getattr(self, '_opening_origin', None)
+        if origin is not None:
+            if not self.app.active_host or not self.app.workspace.accepts(self._opening_token):
+                return False
+            destination, navigation, selection = origin
+            if (self.app.native_host.state.destination != destination or self.app.navigation_generation != navigation
+                    or self.app.workspace.active != selection):
+                # The loaded session stays available without taking over the
+                # view or selection the user chose while its bytes were read.
+                return True
         self.manager.bind(self)
-        kwargs.update(destination='documents', route=kwargs.get('route') or 'private:' + self.session.id,
+        kwargs.update(destination=self.__dict__.get('presentation_destination', 'documents'), route=kwargs.get('route') or 'private:' + self.session.id,
                       title=kwargs.get('title') or 'Private document')
-        return self.app.show_view(view, **kwargs)
+        presented = self.app.show_view(view, **kwargs)
+        if origin is not None:
+            self._open_presented = bool(presented)
+        return presented
 
     def resume_crypt(self, widget=None, **kwargs):
         if self.session.id in self.app.workspace.sessions and self.crypt_reader is not None:
@@ -69,7 +77,7 @@ class PrivateController(LocalCryptUI):
         if self.app.cloud_busy or self.session.id not in self.app.workspace.sessions:
             return
         self.manager.bind(self)
-        return await self.app.show_crypt_save_as(widget, **kwargs)
+        return await self.app.show_crypt_save_as(widget, owner=self, **kwargs)
 
 
 class PrivateSessions:
@@ -94,19 +102,16 @@ class PrivateSessions:
             readers.active.suspend()
         self.active = owner
         self.app.workspace.activate(owner.session.id)
-        self.publish(owner)
+        self.update_session(owner)
 
-    def publish(self, owner):
+    def update_session(self, owner):
         owner.session.dirty = owner.private_dirty()
-        if self.active is owner:
-            for field in FIELDS:
-                if field in owner.__dict__:
-                    setattr(self.app, field, owner.__dict__[field])
 
     def suspend(self, *, except_owner=None):
         for owner in self.controllers.values():
             if owner is except_owner:
                 continue
+            owner.clear_private_preview()
             image = getattr(owner, 'crypt_image', None)
             if image is not None and image.image is not None:
                 image.image = None
@@ -116,13 +121,15 @@ class PrivateSessions:
                 source.cache.clear()
                 source.cache_bytes = 0
 
-    async def open(self, copies, key, *, prepared=None):
-        if self.app.cloud_busy:
+    async def open(self, copies, key, *, prepared=None, destination='documents'):
+        independent = self.app.cloud_busy and getattr(self.app, 'transfer_busy', False) and getattr(copies, 'offline', False)
+        if self.app.cloud_busy and not independent:
             return False
         identity = self.identity(copies, key)
         existing = next((owner for owner in self.controllers.values()
                          if owner.session.resource == identity), None)
         if existing is not None and prepared is None:
+            existing.presentation_destination = destination
             self.app.crypt_password.value = ''
             self.bind(existing)
             existing.resume_crypt()
@@ -133,42 +140,54 @@ class PrivateSessions:
         if prepared is None and not self.app.checkpoint():
             return False
         previous = self.active
+        selection = self.app.workspace.active
+        origin = self.app.native_host.state.destination, self.app.navigation_generation, selection
         session = self.app.workspace.open('provider-session', identity, 'text', transient=True)
+        self.app.workspace.active = selection
         owner = PrivateController(self, session)
+        owner.presentation_destination = destination
+        owner._independent_operation = independent
         self.controllers[session.id] = owner
         token = self.app.workspace.token(session.id)
+        owner._opening_origin, owner._opening_token, owner._open_presented = origin, token, False
+        def retire_open():
+            bound = self.active is owner
+            self.close(session.id, discard=True, force=True)
+            if bound and self.app.active_host and previous is not None and previous.session.id in self.controllers:
+                previous.resume_crypt()
         try:
-            opened = await LocalCryptUI.open_crypt(owner, copies=copies, key=key, prepared=prepared)
+            opened = await LocalCryptUI.open_crypt(owner, copies=copies, key=key, prepared=prepared, independent=independent)
             if not opened or not self.app.active_host or not self.app.workspace.accepts(token):
-                self.close(session.id, discard=True, force=True)
-                if previous is not None and previous.session.id in self.controllers:
-                    self.bind(previous)
+                retire_open()
                 return False
             reader = owner.crypt_reader
             total = sum(len(getattr(value.crypt_reader, 'data', b'') or b'')
                         for value in self.controllers.values())
             if total > MAX_PRIVATE_BYTES:
-                self.close(session.id, discard=True, force=True)
-                if previous is not None and previous.session.id in self.controllers:
-                    self.bind(previous)
+                retire_open()
                 self.app.cloud_status.value = 'Private content exceeds the 32 MiB memory budget. Close an item and retry; existing edits were kept.'
                 return False
             session.kind = ('epub' if reader.kind == '.epub' else 'comic' if not reader.editable
                             else 'markdown' if reader.kind in {'.md', '.markdown'} else 'text')
             session.title = reader.name
-            self.bind(owner)
+            if owner._open_presented:
+                self.bind(owner)
+            else:
+                self.suspend(except_owner=self.active)
             self.app.save_workspace()
             return True
         except Exception:
-            self.close(session.id, discard=True, force=True)
-            if previous is not None and previous.session.id in self.controllers:
-                self.bind(previous)
+            retire_open()
             raise
+        finally:
+            owner._opening_origin = owner._opening_token = None
+            owner._independent_operation = False
 
-    def activate(self, key):
+    def activate(self, key, *, destination='documents'):
         owner = self.controllers.get(key)
-        if owner is None or self.app.cloud_busy:
+        if owner is None or (self.app.cloud_busy and not (getattr(self.app, 'transfer_busy', False) and getattr(getattr(owner, '_crypt_reader_store', None), 'offline', False))):
             return False
+        owner.presentation_destination = destination
         self.bind(owner)
         owner.resume_crypt()
         return True
@@ -180,7 +199,8 @@ class PrivateSessions:
         owner = self.controllers.get(key)
         if owner is None:
             return False
-        if not force and (self.app.cloud_busy or owner._crypt_cancel is not None):
+        local = getattr(self.app, 'transfer_busy', False) and getattr(getattr(owner, '_crypt_reader_store', None), 'offline', False)
+        if not force and ((self.app.cloud_busy and not local) or owner._crypt_cancel is not None or owner.operation_busy):
             return False
         if not force and owner.private_dirty() and not discard:
             owner.resume_crypt()
@@ -200,15 +220,14 @@ class PrivateSessions:
         self.app.workspace.close(key, guard=lambda session: True)
         del self.controllers[key]
         if self.active is owner:
-            self.publish(owner)
+            self.update_session(owner)
             self.active = None
-            self.app.crypt_reader = None
         self.app.save_workspace()
         return True
 
     def clear(self, *, discard=False):
         owners = list(self.controllers.values())
-        if any(owner._crypt_cancel is not None for owner in owners):
+        if any(owner._crypt_cancel is not None or owner.operation_busy for owner in owners):
             return False
         dirty = next((owner for owner in owners if owner.private_dirty()), None)
         if dirty is not None and not discard:

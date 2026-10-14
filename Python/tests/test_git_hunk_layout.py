@@ -102,6 +102,17 @@ class HunkLayoutTests(QtTestCase):
         self.assertEqual(editor.height(), 4096)
         self.assertGreater(editor.verticalScrollBar().maximum(), 0)
 
+    def test_embedded_paragraphs_in_hunk_content_keep_preview_aligned(self):
+        self.preview.show_diff('demo.py', patch_with_hunks(1, 'first\u2029continued'))
+        self.settle()
+        editor = self.preview.cards.editors[0]
+        self.assertEqual(editor.blockCount(), 4)
+        self.assertEqual(editor.diff_rows, [('1', '1', ''), ('2', '', 'remove'),
+                                          ('', '2', 'add'), ('', '', 'add')])
+        editor.highlight_cursor()
+        self.assertEqual(len(editor.extraSelections()), 3)
+        editor.gutter.grab()
+
     def test_font_changes_resize_content_and_replaced_cards_hide_immediately(self):
         self.preview.resize(800, 650)
         self.preview.show_diff('demo.py', patch_with_hunks(2))

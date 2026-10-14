@@ -18,7 +18,7 @@ class MobileUITests(unittest.TestCase):
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
             self.assertEqual(app.native_host.state.destination, 'home')
-            self.assertEqual(app.body.children[0].children[0].text, 'Welcome to Logistics')
+            self.assertEqual(app.body.children[0].content.children[0].text, 'Logistics')
             app.show_settings()
             app.font_choice.value = '20'
             app.restore_choice.value = False
@@ -79,24 +79,24 @@ class MobileUITests(unittest.TestCase):
             fixtures = root / 'fixtures'
             fixtures.mkdir()
             epub, comic = make_books(fixtures)
-            record = app.library_store.import_book(LocalDocuments(), epub)
+            record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), epub)
             app.refresh_library()
             app.loop.run_until_complete(app.open_book(record['id']))
-            self.assertIsNotNone(app.book_reader, app.book_status.text)
-            self.assertFalse(app.previous_page.enabled)
-            self.assertTrue(app.next_page.enabled)
-            reader_view = app.book_content.children[0]
+            self.assertIsNotNone(app.reader_manager().active.book_reader, app.reader_manager().active.book_status.text)
+            self.assertFalse(app.reader_manager().active.previous_page.enabled)
+            self.assertTrue(app.reader_manager().active.next_page.enabled)
+            reader_view = app.reader_manager().active.book_content.children[0]
             app.loop.run_until_complete(app.next_book_page())
-            self.assertIs(app.book_content.children[0], reader_view)
-            self.assertEqual(app.book_record['position'], 1)
-            self.assertFalse(app.next_page.enabled)
+            self.assertIs(app.reader_manager().active.book_content.children[0], reader_view)
+            self.assertEqual(app.reader_manager().active.book_record['position'], 1)
+            self.assertFalse(app.reader_manager().active.next_page.enabled)
             app.loop.run_until_complete(app.toggle_bookmark())
-            self.assertEqual(app.book_record['bookmarks'], [1])
-            record = app.library_store.import_book(LocalDocuments(), comic)
+            self.assertEqual(app.reader_manager().active.book_record['bookmarks'], [1])
+            record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), comic)
             app.refresh_library()
             app.loop.run_until_complete(app.open_book(record['id']))
-            self.assertEqual(app.book_reader.pages, ['page2.png', 'page10.png'])
-            self.assertIsNotNone(app.book_content.children[0].image)
+            self.assertEqual(app.reader_manager().active.book_reader.pages, ['page2.png', 'page10.png'])
+            self.assertIsNotNone(app.reader_manager().active.book_content.children[0].image)
             with fixture_server() as (url, started, release, requests):
                 app.show_chat()
                 app.chat_url.value = url
