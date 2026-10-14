@@ -48,6 +48,9 @@ async def exercise(app):
         assert backend.startswith('toga_android.' if get_os() is OS.ANDROID else 'toga_iOS.')
         assert app.body.children[0].children[0].text == 'Logistics'
         passed.append('native_hub')
+        from .navigation_checks import exercise_navigation
+        navigation_proof = await exercise_navigation(app)
+        passed.append('native_navigation_foundation')
         app.show_settings()
         app.font_choice.value = '18'
         app.save_preferences()
@@ -244,6 +247,7 @@ async def exercise(app):
     report = dict(schema=1, suite='logistics-native-ui', target='android' if get_os() is OS.ANDROID else 'ios',
                   backend=type(app._impl).__module__, cases=passed, expected_cases=list(CASES),
                   success=success, error=error, source=source, native_picker_tested=False)
+    report['navigation'] = locals().get('navigation_proof')
     # iOS's OS logger truncates long single-line messages. Emit independently
     # bounded chunks; the host verifier rejects missing/duplicate chunks.
     encoded = base64.b64encode(json.dumps(report, sort_keys=True).encode()).decode()
@@ -258,11 +262,17 @@ async def exercise(app):
 class NativeCheckApp(LogisticsMobile):
     def startup(self):
         print('LOGISTICS_NATIVE_STARTUP', flush=True)
-        self.storage_root = Path(self.paths.cache) / ('native-check-' + uuid4().hex)
+        self.navigation_hold = os.environ.get('LOGISTICS_NAVIGATION_HOLD') == '1'
+        self.storage_root = Path(self.paths.cache) / ('navigation-foundation-probe' if self.navigation_hold
+                                                     else 'native-check-' + uuid4().hex)
         super().startup()
 
     def on_running(self):
-        self.loop.create_task(exercise(self))
+        if self.navigation_hold:
+            from .navigation_hold import hold_navigation
+            self.loop.create_task(hold_navigation(self))
+        else:
+            self.loop.create_task(exercise(self))
 
 
 NativeCheckApp('Logistics Mobile', 'io.github.ispaure.logisticsmobile').main_loop()
