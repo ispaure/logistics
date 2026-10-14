@@ -131,7 +131,9 @@ class MobileWorkflowTests(unittest.TestCase):
             def request(self, action, **values):
                 if action == 'mirror_read' and not started.is_set():
                     started.set()
-                    if not release.wait(10):
+                    # Keep the fixture transfer pending through cold CI widget
+                    # and reader startup; the test releases it in finally.
+                    if not release.wait(30):
                         raise RuntimeError('Pull fixture was not released')
                 return super().request(action, **values)
         app.cloud_client = Client()
@@ -180,7 +182,7 @@ class MobileWorkflowTests(unittest.TestCase):
                     browser = app.file_browser
                     entry = next(item for item in browser.entries if item.label == name)
                     await browser._select_pressed(entry, browser.buttons[entry.identity])
-                    self.assertIs(app._crypt_cancel, cancel)
+                    self.assertIs(app._crypt_cancel, cancel, app.transfer_message)
                     self.assertFalse(cancel.is_set())
                     self.assertTrue(app.cloud_busy and app.transfer_busy)
                 await tap('Notes.md')
