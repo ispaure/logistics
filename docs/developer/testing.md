@@ -76,7 +76,15 @@ operation-specific timeout messages. Tests must not depend on windows retained b
 other tests. See the [shared test guide](../../Python/commonUtils/tests/README.md)
 for lifecycle details.
 
-Platform checks also run on main pushes and launcher changes. The release workflow
+Platform checks also run on main pushes and launcher changes.
+
+Release packaging stamps `.app-version.json` with the tag, packaged commit and
+commit time, and includes its hash in the installed-file manifest. The desktop
+launch label reads this managed file in ZIP installations and reads Git locally
+in checkouts. Commit time identifies the source revision, rather than a variable
+packaging timestamp. No release version file needs a manual edit.
+
+The release workflow
 calls those checks before packaging, so a tag cannot bypass failing application
 regressions. Every release also calls the native mobile build and document runtime
 workflows with both targets, using workflow files and source from the same release

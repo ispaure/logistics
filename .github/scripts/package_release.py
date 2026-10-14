@@ -46,6 +46,22 @@ def tracked_files(root):
     return sorted({os.fsdecode(name) for name in data.split(b'\0') if name})
 
 
+def build_identity(root, revision):
+    timestamp = subprocess.check_output(['git', 'show', '-s', '--format=%cI', revision],
+                                        cwd=root, text=True).strip()
+    tag = os.environ.get('GITHUB_REF_NAME', '')
+    if tag.startswith('v'):
+        tagged_revision = subprocess.check_output(['git', 'rev-parse', tag + '^{commit}'],
+                                                  cwd=root, text=True).strip()
+        if tagged_revision != revision:
+            raise RuntimeError('Release tag differs from the packaged commit')
+    else:
+        result = subprocess.run(['git', 'describe', '--tags', '--exact-match', revision],
+                                cwd=root, capture_output=True, text=True)
+        tag = result.stdout.strip() if result.returncode == 0 else ''
+    return dict(schema=1, tag=tag, revision=revision, committed_at=timestamp)
+
+
 def package(root, output, names=None, required=REQUIRED):
     root, output = Path(root).resolve(), Path(output).resolve()
     explicit_names = names is not None
@@ -77,6 +93,10 @@ def package(root, output, names=None, required=REQUIRED):
                 manifest['files'][name] = hashlib.sha256(data).hexdigest()
             else:
                 raise RuntimeError(f'Tracked release file is unavailable: {name}')
+        if not explicit_names:
+            data = (json.dumps(build_identity(root, revision), indent=2) + '\n').encode('utf-8')
+            archive.writestr('Logistics/.app-version.json', data)
+            manifest['files']['.app-version.json'] = hashlib.sha256(data).hexdigest()
         archive.writestr('Logistics/.app-install.json', json.dumps(manifest, indent=2))
     with zipfile.ZipFile(output) as archive:
         if archive.testzip() is not None:

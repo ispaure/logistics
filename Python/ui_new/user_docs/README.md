@@ -261,6 +261,12 @@ editor shows exactly which INI will change.
 Launch and Documents pages keep their central content compact on wide windows,
 with a maximum width of 880 pixels. Cards retain their compact 88-pixel minimum height, grow to fit wrapped text, and share the tallest height within each tool or document group. They recalculate after font and width changes.
 
+The upper right of the launch page shows a subdued grey release tag, short commit
+and commit time in your local timezone. Hover over it for the full commit and
+original timestamp. Releases include this
+information automatically, including ZIP installations without Git. A checkout
+shows its exact tag or branch and marks tracked local changes as **modified**.
+
 New/Open document choices use the same 88-pixel base card height and horizontal
 presentation as launch choices, with compact New/Open actions on the right.
 
@@ -282,7 +288,7 @@ These are published release channels: main uses stable releases, beta and alpha
 use tags with those suffixes. Unpublished branch commits are not offered.
 
 When a newer eligible release exists, **Update Logistics** appears at the upper
-right of the landing (welcome) page, using your accent color. The offer is shown
+right of the landing (welcome) page below the version, using your accent color. The offer is shown
 only on that page. Clicking it prepares the update, follows the normal close/save
 flow, installs after Logistics exits, and restarts through the platform launcher.
 Offline checks stay quiet. A failed preparation leaves Logistics open. Software,
