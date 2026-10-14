@@ -101,6 +101,8 @@ class LaunchModeTests(QtTestCase):
         label = window.launch_surface.version_label
         self.assertTrue(label.isVisible())
         self.assertEqual(label.x() + label.width(), window.launch_surface.width() - 12)
+        home = window.sidebar.home_button
+        self.assertIs(home.parentWidget().layout().itemAt(0).widget(), home)
         for mode, page in window._launch_targets().items():
             window.landing.buttons[mode].click()
             self.app.processEvents()
@@ -109,7 +111,9 @@ class LaunchModeTests(QtTestCase):
             self.assertTrue(window.sidebar.isHidden())
             self.assertTrue(window.settings_button.isVisible())
             self.assertFalse(label.isVisible())
-            window._show_landing()
+            home.click()
+            self.assertIs(window.launch_stack.currentWidget(), window.landing)
+            self.assertIs(window.tabs.currentWidget(), page)
             self.assertTrue(label.isVisible())
         window.landing.buttons['hub'].click()
         self.assertTrue(window.sidebar.isVisible())

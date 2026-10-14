@@ -277,6 +277,9 @@ workspaces without the sidebar; the floating settings button remains available.
 The setting applies on the next launch-page selection. Opening the full hub always
 shows the sidebar.
 
+The house icon at the top of the left toolbar returns to the landing page.
+Open tools and documents remain available when you choose a workspace again.
+
 The Bulk Rename (A→B) rail button uses the accent color while Bulk Rename is the
 active destination, matching the other destination buttons.
 
