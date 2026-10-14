@@ -17,6 +17,7 @@ class ResourceImportTests(unittest.TestCase):
                 path = app.downloads.save('same.md', b'original')
                 app.refresh_downloads(path)
                 app.loop.run_until_complete(app.open_download())
+                self.assertEqual(app.editor.value, 'original', app.cloud_status.value)
                 key = app.current.id
                 app.editor.value = 'kept draft'
                 app.loop.run_until_complete(app.open_download())
@@ -27,6 +28,10 @@ class ResourceImportTests(unittest.TestCase):
                 self.assertNotIn('kept draft', raw)
                 from logisticsmobile.resource_imports import ResourceImports
                 self.assertEqual(ResourceImports(root).find(path)['resource'], key)
+                linked = root / 'linked.md'
+                linked.symlink_to(path)
+                with self.assertRaises(ValueError):
+                    ResourceImports(root).find(linked)
             finally:
                 app.main_window.close()
                 app.loop.close()
