@@ -65,6 +65,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev libffi-dev liblzma-dev
+      - name: Select the Android command-line tools used by the native app gate
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'cmdline-tools;19.0'
+          test -x "$ANDROID_HOME/cmdline-tools/19.0/bin/sdkmanager"
+          mv "$ANDROID_HOME/cmdline-tools/latest" "$RUNNER_TEMP/android-command-line-tools-original"
+          ln -s 19.0 "$ANDROID_HOME/cmdline-tools/latest"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
       - name: Build the pinned host and Android interpreters
         working-directory: cpython
         run: |
