@@ -14,7 +14,9 @@ EXPECTED_TESTS = (
     'test_android_adapter_closes_cursor_and_stream_on_consumer_failure',
     'test_bom_encoding_and_endings_survive_recovery_and_save',
     'test_changed_or_deleted_private_file_preserves_draft_and_requires_copy',
+    'test_discard_preserves_external_change_and_deleted_source',
     'test_failed_checkpoint_and_failed_save_keep_original_and_recovery',
+    'test_failed_discard_retains_draft_and_baseline',
     'test_import_consumes_a_scoped_stream_and_never_modifies_source',
     'test_invalid_records_names_large_documents_and_links_are_preserved',
     'test_ios_adapter_balances_scope_on_success_and_read_failure',
@@ -112,6 +114,8 @@ def main(argv=None):
         suite = unittest.TestSuite()
         for case in (MobileDocumentsTests, PortableDocuments, MobileHubTests, MobileReaderTests, MobileChatTests, MobileCloudTests, MobileVaultTests, MobileLocalCryptTests, RuntimeChecks):
             suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(case))
+        if sorted(test._testMethodName for test in suite) != sorted(EXPECTED_TESTS):
+            raise RuntimeError('Mobile fixture discovery differs from the declared evidence contract.')
         result = unittest.TextTestRunner(verbosity=2).run(suite)
         report = dict(schema=1, suite='logistics-mobile-documents', target=args.target,
                       sys_platform=sys.platform, environment=environment(),
