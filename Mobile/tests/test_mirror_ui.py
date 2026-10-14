@@ -9,6 +9,30 @@ from test_mirror_jobs import MirrorClient
 
 
 class MirrorUITests(unittest.TestCase):
+    def test_unchanged_progress_does_not_repeat_native_layout_updates(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from logisticsmobile.mirror_ui import MirrorUI
+        bar = SimpleNamespace(max=100, value=0, start=Mock(), stop=Mock())
+        app = SimpleNamespace(active_host=True, transfer_epoch=1, transfer_busy=True,
+            transfer_message='', transfer_notice=SimpleNamespace(text=''),
+            cloud_status=SimpleNamespace(value=''), transfer_progress=bar,
+            cloud_transfer_progress=None, refresh_transfer_status=Mock())
+        values = dict(phase='Transferring', files=1, done=20, total=100)
+        MirrorUI.publish_mirror_progress(app, 1, values)
+        self.assertEqual(bar.value, 20)
+        for _ in range(10):
+            MirrorUI.publish_mirror_progress(app, 1, values)
+        app.refresh_transfer_status.assert_called_once()
+        MirrorUI.publish_mirror_progress(app, 1, dict(values, done=50))
+        self.assertEqual(bar.value, 50)
+        self.assertEqual(app.refresh_transfer_status.call_count, 2)
+        self.assertEqual(app.cloud_status.value, app.transfer_notice.text)
+        app.transfer_progress = replacement = SimpleNamespace(max=100, value=0)
+        MirrorUI.publish_mirror_progress(app, 1, dict(values, done=50))
+        self.assertEqual(replacement.value, 50)
+        self.assertEqual(app.refresh_transfer_status.call_count, 3)
+
     def test_immersive_banner_hides_without_discarding_transfer_state(self):
         import toga
         directory = TemporaryDirectory()

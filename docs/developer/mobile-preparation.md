@@ -848,7 +848,9 @@ Push preflight authenticates all local ciphertext, verifies source hashes, check
 remote revisions, and handles directories before writeback. Stable source staging
 is cancellable. A bounded native progress channel, independent of the credential
 engine lock, reports authentication, backup, sending and verification without names
-or credentials. Transfer metadata uses optimistic byte checks before atomic writes;
+or credentials. Repeated unchanged progress samples do not update native text,
+progress widgets or transfer banners, avoiding redundant layout work during local
+document use. Transfer metadata uses optimistic byte checks before atomic writes;
 external record edits stop writes and are preserved. Stale review callbacks cannot
 confirm after credential reload/forget. Native selector assignment guards prevent
 re-entrant iOS browse requests from racing explicit linked-location routing.
