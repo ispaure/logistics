@@ -7,6 +7,11 @@ pins remain separate. The shared Qt facade retains its desktop capability gate:
 the mobile host uses Toga and portable commonUtils persistence rather than
 importing desktop initialization, menus or dialogs.
 
+The proposed [native navigation and open documents plan](mobile-navigation-plan.md)
+defines the next UI architecture for iPhone, iPhone Duo, iPad and Android.
+Its milestones describe future work; the contracts and evidence below describe
+the existing implementation and its development history.
+
 ## Ownership and contracts
 
 | Module | Contract |
