@@ -9,7 +9,9 @@ from .pull_jobs import digest
 
 class ResourceImports:
     def __init__(self, root):
-        self.root = Path(root)
+        if Path(root).is_symlink():
+            raise ValueError('Import storage cannot be linked.')
+        self.root = Path(root).resolve()
         self.path = self.root / 'resource-imports.json'
         self.items, self.error = {}, ''
         if self.path.exists():
@@ -31,8 +33,9 @@ class ResourceImports:
 
     def identity(self, path):
         path = Path(path)
-        relative = path.relative_to(self.root)
-        if path.is_symlink() or any(part.is_symlink() for part in path.parents if part != self.root):
+        relative = path.resolve().relative_to(self.root)
+        components = [path, *list(path.parents)[:max(0, len(relative.parts) - 1)]]
+        if any(part.is_symlink() for part in components):
             raise ValueError('Linked private-copy imports are not supported.')
         return sha256(relative.as_posix().encode()).hexdigest()
 
