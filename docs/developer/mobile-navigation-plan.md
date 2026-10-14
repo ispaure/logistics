@@ -560,3 +560,12 @@ desktop navigation fallback and external-feature documentation boundary.
 - [Toga OptionContainer](https://toga.beeware.org/en/stable/reference/api/containers/optioncontainer.html)
   documents mobile root placement and the Android Material dependency. Check the
   selected pinned backend as well as current documentation before implementation.
+
+## Phase 5 follow-up requested by the user
+
+Phase 5 Part 1 adds desktop-style managed Local/LocalCrypt folder entry points,
+repeatable pulls, explicit reviewed push with retained remote backups, progress
+and cancellation, and ordinary writing/comic reading during a pull. Native checks
+pass all 25 cases on Android and iOS, including actual iPad scenes. Mobile pushes
+keep remote-only files; destructive sync is not enabled. Further preflight checks,
+empty-folder handling and the final alpha release are in progress.

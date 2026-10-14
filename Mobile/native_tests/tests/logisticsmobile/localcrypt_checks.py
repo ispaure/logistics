@@ -331,6 +331,9 @@ async def exercise_localcrypt(app, passed):
     assert app.picker_folder.value == ''
     await editor.back_button.on_press()
     assert app.save_as_storage.value == 'Local files'
+    from .mirror_checks import exercise_crypt_mirror
+    await exercise_crypt_mirror(app, fixture)
+    passed.append('native_localcrypt_folder_pull_push')
     await app.clear_cloud()
     assert not browser.icons and not browser.info.children and not browser.entries
     passed.append('native_localcrypt_file_management')

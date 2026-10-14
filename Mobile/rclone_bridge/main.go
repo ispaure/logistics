@@ -84,7 +84,7 @@ func cancel() {
 func operation(action string) (context.Context, func()) {
 	duration := 2 * time.Minute
 	switch action {
-	case "read", "crypt_read", "crypt_fetch", "crypt_raw_write", "crypt_metadata", "crypt_manifest":
+	case "read", "crypt_read", "crypt_fetch", "crypt_raw_write", "crypt_metadata", "crypt_manifest", "mirror_read", "mirror_stat", "mirror_write":
 		duration = 30 * time.Minute
 	}
 	ctx, stop := context.WithTimeout(context.Background(), duration)
@@ -426,9 +426,18 @@ func dispatch(action, input string) (output string) {
 		cancel()
 		return `{"ok":true}`
 	}
-	serial.Lock()
-	defer serial.Unlock()
-	ctx, done := operation(action)
+	// Local archive/image work uses no rclone configuration and can continue
+	// while a remote transfer owns the credential engine. It also must not
+	// replace that transfer's cancellation handle.
+	var ctx context.Context
+	var done context.CancelFunc
+	if action == "file_archive" || action == "file_thumbnail" || action == "image_thumbnail" {
+		ctx, done = context.WithTimeout(context.Background(), 2*time.Minute)
+	} else {
+		serial.Lock()
+		defer serial.Unlock()
+		ctx, done = operation(action)
+	}
 	defer done()
 	var request struct {
 		Package        string `json:"package"`
@@ -439,6 +448,8 @@ func dispatch(action, input string) (output string) {
 		OutputFD       int    `json:"output_fd"`
 		Member         string `json:"member"`
 		Identity       string `json:"identity"`
+		Expected       string `json:"expected"`
+		Run            string `json:"run"`
 		Data           string `json:"data"`
 		Key            string `json:"key"`
 		ID             string `json:"id"`
@@ -498,6 +509,20 @@ func dispatch(action, input string) (output string) {
 			result, err = list(ctx, request.Remote, request.Path)
 		case "connection_identity":
 			result, err = connectionIdentity(request.Remote)
+		case "mirror_info":
+			result, err = mirrorInfo(ctx, request.Remote, request.Path)
+		case "mirror_list":
+			result, err = mirrorList(ctx, request.Remote, request.Path, request.Identity)
+		case "mirror_read":
+			result, err = mirrorRead(ctx, request.Remote, request.Path, request.Identity, request.FD)
+		case "mirror_stat":
+			result, err = mirrorStat(ctx, request.Remote, request.Path, request.Identity)
+		case "mirror_write":
+			if store.failure() {
+				err = errors.New("credentials could not be saved securely; push was not started")
+			} else {
+				result, err = mirrorWrite(ctx, request.Remote, request.Path, request.Identity, request.Expected, request.Run, request.FD)
+			}
 		case "read":
 			result, err = readInto(ctx, request.Remote, request.Path, request.FD)
 		case "crypt_read":
