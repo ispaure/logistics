@@ -29,7 +29,7 @@ class TextEditorView:
             ('Import…', lambda: app.import_document(origin=self)), ('Open from Files…', app.show_editor_open),
             ('Save', app.save_document), ('Save a copy', app.save_copy),
             ('Save As…', app.show_document_save_as), ('Export…', lambda: app.export_document(origin=self)),
-            ('Close document', lambda: app.close_session(self.session.id))])
+            ('Close document', lambda: app.request_close_session(self.session.id))])
         box.add(toga.Box(children=[self.name, self.actions_button], style=Pack(direction=ROW, margin_bottom=8)))
         box.add(self.editor)
         box.add(self.status)

@@ -86,6 +86,34 @@ class MobileDocumentsTests(unittest.TestCase):
         self.assertEqual(doc.snapshot.path.read_bytes(), b'before')
         self.assertEqual(self.store.open(doc.id).text, 'after')
 
+    def test_discard_preserves_external_change_and_deleted_source(self):
+        doc = self.store.create(content=b'original')
+        doc.text = 'draft'
+        self.store.checkpoint(doc)
+        doc.snapshot.path.write_bytes(codecs.BOM_UTF8 + b'external\r\n')
+        self.store.discard(doc)
+        self.assertEqual(doc.text, 'external\n')
+        self.assertFalse(self.store.open(doc.id).modified)
+        self.assertEqual(doc.snapshot.path.read_bytes(), codecs.BOM_UTF8 + b'external\r\n')
+        doc.text = 'another draft'
+        self.store.checkpoint(doc)
+        doc.snapshot.path.unlink()
+        self.store.discard(doc)
+        self.assertFalse(doc.snapshot.path.exists())
+        self.assertTrue(self.store.open(doc.id).conflict)
+
+    def test_failed_discard_retains_draft_and_baseline(self):
+        doc = self.store.create(content=b'original')
+        doc.text = 'draft'
+        self.store.checkpoint(doc)
+        doc.snapshot.path.write_bytes(b'external')
+        with patch('logisticsmobile.documents.atomic_write_json', side_effect=OSError('disk full')):
+            with self.assertRaises(OSError):
+                self.store.discard(doc)
+        self.assertEqual(doc.text, 'draft')
+        self.assertEqual(doc.snapshot.original, b'original')
+        self.assertEqual(self.store.open(doc.id).text, 'draft')
+
     def test_invalid_records_names_large_documents_and_links_are_preserved(self):
         with self.assertRaises(ValueError):
             DocumentStore(Path('relative'))

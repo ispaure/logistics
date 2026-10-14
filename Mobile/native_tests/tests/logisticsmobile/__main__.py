@@ -98,9 +98,23 @@ async def exercise(app):
         restored = Workspace(app.private_root)
         assert len(restored.sessions) == 2
         assert app.store.open(b).text == 'B draft\n'
-        assert app.close_session(b_session)
+        app.request_close_session(b_session)
+        assert app.close_session(b_session, choice='cancel') is False
+        assert b_session in app.workspace.sessions
+        app.cancel_close_session(b_session)
+        assert app.current.id == b
+        app.open_document(a)
+        assert app.close_session(b_session, choice='keep')
         assert app.current.id == a
         assert app.store.open(b).text == 'B draft\n'
+        app.open_document(b)
+        b_session = app.editor_view.session.id
+        app.store.path(b, '.data').write_bytes(b'External saved bytes\n')
+        assert app.close_session(b_session, choice='save') is False
+        assert app.editor.value == 'B draft\n'
+        assert app.close_session(b_session, choice='discard')
+        assert app.store.open(b).text == 'External saved bytes\n'
+        app.open_document(a)
         app.show_documents()
         app.editor.value = '# Native preview\n'
         passed.append('native_text_workspace')
