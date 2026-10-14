@@ -36,6 +36,9 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
         self.private_root = root
         previous_host = _active_hosts.get(str(root.resolve()))
         if previous_host is not None:
+            memory = getattr(previous_host, 'memory_pressure', None)
+            if memory is not None:
+                memory.dispose()
             previous_host.active_host = False
             for session in previous_host.workspace.sessions.values():
                 previous_host.workspace.invalidate(session.id)
@@ -82,6 +85,8 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
         self.native_host.install(self.main_window)
         self.routes.install()
         self.adaptive.install()
+        from .native_memory import MemoryPressure
+        self.memory_pressure = MemoryPressure(self)
 
     def select_destination(self, destination):
         if not self.checkpoint():
@@ -600,7 +605,25 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
             self.chat_client.cancel()
         if hasattr(self, 'chat_current') and not self.checkpoint_chat():
             return False
-        return self.checkpoint()
+        saved = self.checkpoint()
+        if saved:
+            self.memory_pressure.dispose()
+        return saved
+
+    def release_disposable_resources(self):
+        if not self.active_host:
+            return
+        private = getattr(self, 'private_sessions', None)
+        if private is not None:
+            private.suspend()
+        readers = getattr(self, 'readers', None)
+        if readers is not None:
+            for owner in readers.controllers.values():
+                owner.suspend()
+        for name in ('file_browser', 'remote_browser', 'editor_browser'):
+            browser = getattr(self, name, None)
+            if browser is not None:
+                browser.icons.clear()
 
     def provider_sessions(self):
         from .private_sessions import PrivateSessions

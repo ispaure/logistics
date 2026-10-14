@@ -693,3 +693,11 @@ that forgetting credentials cannot discard either draft, checks manifest privacy
 and invalidates callbacks when both owners are explicitly discarded. Reports in
 `mobile-evidence/2026-10-14-phase1-*-native-ui-local.json` retain the exact local
 staged fingerprint. They remain development evidence, not clean release gates.
+
+
+Phase 1 Part 3 adds scoped memory-pressure subscriptions: iOS memory-warning
+notifications and Android application ComponentCallbacks2 trim/low-memory events
+schedule cleanup on the owning UI loop. Disposal unregisters each subscription
+when a host is replaced or exits. Cleanup releases decoder/image/thumbnail caches
+while preserving private text and metadata widgets. Native mixed-session checks
+also exercise the cleanup callback without losing either draft.

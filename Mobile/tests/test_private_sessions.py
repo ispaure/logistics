@@ -53,6 +53,9 @@ class PrivateSessionTests(unittest.TestCase):
         for value in ['provider-session', 'A.md', 'B.md', 'memory draft']:
             self.assertNotIn(value, raw)
         self.assertEqual(len(self.app.private_sessions.controllers), 2)
+        self.app.release_disposable_resources()
+        self.assertEqual(a.crypt_text.value, 'A memory draft')
+        self.assertEqual(b.crypt_text.value, 'B memory draft')
 
     def test_lock_checks_all_dirty_owners_before_clearing_any(self):
         a = self.open('A.txt')
