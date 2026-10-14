@@ -17,6 +17,7 @@ user guide for the workflow you are changing, then follow this map.
 | Develop encrypted local copies and private readers | [LocalCrypt](localcrypt.md) |
 | Change paths, stored state or configuration | [Configuration and data](configuration-and-data.md) |
 | Prepare the document core for mobile runtimes | [Mobile preparation](mobile-preparation.md) |
+| Assess existing Qt browser/editor/reader reuse on iOS | [PySide6 iOS proof](mobile-qt-proof.md) |
 | Plan native mobile navigation and open documents across Apple and Android | [Mobile navigation plan](mobile-navigation-plan.md) |
 | Inspect native mobile foundation evidence and remaining device limits | [Native navigation proof](mobile-navigation-proof.md) |
 | Set up, test and contribute | [Development and validation](testing.md) |

@@ -16,6 +16,16 @@ visible remote action feedback and one-time folder pulls to local storage.
 Full private-session integration, unified Files refinement, repeatable sync,
 reader visual refinement and independent windows remain unfinished.
 
+## Current runtime experiment
+
+The user requested a separate PySide6 iOS proof before choosing further mobile
+runtime work. The Toga implementation and its numbered checkpoints are retained.
+The [Qt reuse proof](mobile-qt-proof.md) exercises the actual commonUtils browser
+with tabs, highlighted editor, Markdown reader and native rclone bridge. All four
+programmatic checks pass on phone/tablet simulators, with column navigation
+explicitly omitted and an iOS 18 proof target. This is not a runtime migration or
+completion of the remaining phase exit gates.
+
 ## Remaining phase numbering
 
 The continuation uses Phase 1 for milestone 3 (mixed/private sessions), Phase 2
