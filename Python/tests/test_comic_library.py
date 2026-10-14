@@ -14,8 +14,11 @@ from features.comics.library import ComicDocument
 
 class ComicFixture:
     def setUp(self):
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        if isinstance(self, QtTestCase):
+            self.temp = self.temporary_directory()
+        else:
+            self.temp = TemporaryDirectory()
+            self.addCleanup(self.temp.cleanup)
         self.path = Path(self.temp.name) / 'comic.cbz'
 
     def archive(self, xml=b'<ComicInfo><Writer>Old</Writer><Pages><Page Image="0" Bookmark="Keep"/></Pages></ComicInfo>'):
