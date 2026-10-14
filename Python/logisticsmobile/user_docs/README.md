@@ -71,11 +71,18 @@ stored document, and successful imports add it to **Documents → Open documents
 opening the same stored identity again activates it. Documents with the same name
 remain separate. Switch using the open or stored lists. Closing a document keeps
 it available in Stored documents.
-**Close** removes an item from that list after preserving its ordinary draft;
-it does not delete its stored document. Session-only unsaved drafts require a save
-before closing. Ordinary open items and active selection restore at the next
+**Close** removes an item from that list without deleting its stored document.
+For an ordinary unsaved document, choose **Save and close**, **Keep draft and
+close**, **Discard changes and close**, or **Cancel**. Retained drafts remain in
+Stored documents. Discard resets recovery to the current saved file without
+overwriting changes made outside the editor or recreating a deleted file. A
+failed save or conflict keeps the document open; use **Save a copy** to preserve
+both versions. Session-only drafts offer Save, Discard, and Cancel without durable
+draft retention. Ordinary open items and active selection restore at the next
 launch, with a maximum of 32 open items. Private resource restoration remains
 excluded. Native cursor/selection and scroll offsets are recorded for text views.
+Opening an item from the open/stored list also resumes its Edit or Preview mode.
+Back to the editor selects Edit for that document.
 
 On regular-width Apple layouts, native split navigation keeps the document list
 beside its detail view. Android shows both at 840 dp or wider and uses the

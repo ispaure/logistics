@@ -639,3 +639,11 @@ baseline before changing the in-memory draft, and never writes or recreates the
 source file. A deleted source remains unavailable/conflicted. Ordinary retained
 drafts stay accessible through Stored documents; private drafts cannot use Keep.
 The direct controller close API defaults to Keep for existing callers.
+
+
+Markdown presentation mode belongs to each text session. Activating a session
+first installs its own editor beneath the preview route, then renders that
+session's text if Preview was selected. Returning through native Back records
+Edit mode. Preview buttons capture an owner/generation so a closed owner's
+callback cannot activate another document. The shared WebView is refreshed on
+activation and navigation remains offline and restricted.

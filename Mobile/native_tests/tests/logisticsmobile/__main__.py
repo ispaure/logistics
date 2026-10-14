@@ -121,6 +121,15 @@ async def exercise(app):
         app.show_preview()
         await wait_for_text(app.preview, 'Native preview')
         original_preview = app.preview
+        a_session = app.editor_view.session.id
+        app.new_document()
+        app.editor.value = '# Different preview owner\n'
+        app.show_documents()
+        app.session_opener(a_session)()
+        assert app.current.id == a
+        assert app.editor_view.session.view['markdown_mode'] == 'preview'
+        await wait_for_text(app.preview, 'Native preview')
+        assert await app.preview.evaluate_javascript('document.body.innerText.indexOf("Different preview owner")') == -1
         app.show_documents()
         app.show_preview()
         assert app.preview is original_preview
