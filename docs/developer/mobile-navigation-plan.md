@@ -55,6 +55,7 @@ The resume sequence uses numbered commit subjects; earlier history is preserved:
 | Phase 0 Part 4 `8619493` | Native evidence, submission notes and validation status |
 | Phase 0 Part 5 `55a9310` | Material-themed Android bars keep inactive destinations visible |
 | Phase 0 Part 6 | Final contrast checks, normal-launch verification and release submission |
+| Phase 0 Part 7 | Correct the portable evidence checklist to include both added Discard fixtures; keep publication gated |
 
 The Phase 0 implementation passed both final native suites and is ready for
 an alpha submission. Existing lifecycle evidence covers two ordinary drafts
