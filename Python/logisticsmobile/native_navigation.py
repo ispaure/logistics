@@ -272,7 +272,24 @@ class AndroidNavigation:
         import weakref
         self.host, self.window = host, window
         self.impl = host.root._impl
-        self.bottom = self.impl.native_navigationview
+        # The pinned backend constructs Material navigation with an AppCompat
+        # context. Its fallback surface can be black while inactive items are
+        # also black. Give both native presentations the same Material theme.
+        from android.view import ContextThemeWrapper
+        from android.widget import LinearLayout
+        from com.google.android.material import R as MaterialR
+        from com.google.android.material.bottomnavigation import BottomNavigationView
+        self.original_bottom = self.impl.native_navigationview
+        self.original_bottom.setOnItemSelectedListener(None)
+        self.original_bottom.removeOnLayoutChangeListener(self.impl.onLayoutChangeListener)
+        self.impl.native.removeView(self.original_bottom)
+        context = ContextThemeWrapper(self.impl._native_activity,
+            MaterialR.style.Theme_MaterialComponents_DayNight)
+        self.bottom = BottomNavigationView(context)
+        self.bottom.setLabelVisibilityMode(1)
+        self.bottom.addOnLayoutChangeListener(self.impl.onLayoutChangeListener)
+        self.impl.native.addView(self.bottom, LinearLayout.LayoutParams(-1, -2))
+        self.impl.native_navigationview = self.bottom
         self.rail = None
         self.old_resize = self.impl.resize_tab_content
         self.old_window_resize = window.on_resize
@@ -418,8 +435,18 @@ class AndroidNavigation:
 
     def dispose(self):
         self.set_mode('bottom')
+        from android.widget import LinearLayout
+        self.bottom.setOnItemSelectedListener(None)
+        self.bottom.removeOnLayoutChangeListener(self.impl.onLayoutChangeListener)
+        self.impl.native.removeView(self.bottom)
+        self.impl.native.addView(self.original_bottom, LinearLayout.LayoutParams(-1, -2))
+        self.impl.native_navigationview = self.original_bottom
+        for index, option in enumerate(self.impl.options):
+            option.menu_item = self.original_bottom.getMenu().getItem(index)
+        self.original_bottom.addOnLayoutChangeListener(self.impl.onLayoutChangeListener)
         self.impl.onItemSelectedListener = self.old_listener
-        self.bottom.setOnItemSelectedListener(self.old_listener)
+        self.original_bottom.setOnItemSelectedListener(self.old_listener)
+        self.impl.set_current_tab_index(DESTINATIONS.index(self.host.state.destination))
         self.impl.resize_tab_content = self.old_resize
         self.window.on_resize = self.old_window_resize
         self.native_window.setSoftInputMode(self.old_soft_input)
