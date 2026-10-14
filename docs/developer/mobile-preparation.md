@@ -828,3 +828,41 @@ OS background-transfer entitlement. The guided CopyUI workflow is integrated and
 now uses atomic no-replace rename rather than hard-link publication, which Android
 sandboxes reject. Native cases exercise guided copy, ordinary background pull/push,
 and ciphertext folder pull/edit/push; all 25 cases pass on Android and iPad/iOS.
+
+## Phase 5 Part 2: scoped ciphertext and complete preflight
+
+Schema 2 keys live ciphertext trees by full connection identity, while the cipher
+identity continues to validate encryption settings. CryptFiles accepts a separate
+physical namespace for linked copies. Existing cipher-only trees are preserved;
+old journals resolve against their original tree, and subsequent pulls populate
+the connection scope. Snapshot lookup retains old physical namespaces. Files and
+editor selectors expose linked providers without changing legacy destinations.
+
+OAuth connection pins are established before backend connection/token refresh and
+stored only inside the authenticated credential vault. They retain the original
+full configuration hash while non-token scope settings remain unchanged. Importing
+another package replaces pins, and older vaults migrate at first use. Tests cover
+refresh, vault restoration, account replacement and separate trees using one cipher.
+
+Push preflight authenticates all local ciphertext, verifies source hashes, checks
+remote revisions, and handles directories before writeback. Stable source staging
+is cancellable. A bounded native progress channel, independent of the credential
+engine lock, reports authentication, backup, sending and verification without names
+or credentials. Transfer metadata uses optimistic byte checks before atomic writes;
+external record edits stop writes and are preserved. Stale review callbacks cannot
+confirm after credential reload/forget. Native selector assignment guards prevent
+re-entrant iOS browse requests from racing explicit linked-location routing.
+
+The UIKit delegate is registered before UIApplicationMain through scene_build.py,
+not replaced after launch. Closed secondary hosts detach widget registries and leave
+the process host map. The original warm owner can move its window to a replacement
+scene using UIKit's supported windowScene setter, with open-session reconciliation
+and idempotent discard/disconnect handling. Original launch-scene destruction was
+vetoed or ended the process on the beta simulator; evidence records that path as unverified rather
+than treating a request as successful. See [Apple's windowScene contract](https://developer.apple.com/documentation/uikit/uiwindow/windowscene).
+
+Cold library workspaces retain the selected reader and resume it lazily when the
+Documents destination is selected. Explicit text activation clears that pending
+reader selection. The iOS CI gate shuts down its completed iPhone simulator before
+launching iPad; both inventories still require all native cases, and iPad requires
+actual independent-window evidence.

@@ -7,17 +7,28 @@ from .window_owners import WindowOwners
 
 
 class SceneManager:
-    def __init__(self, app):
+    def __init__(self, app, *, prepare_only=False):
         self.app = app
         self.owners = WindowOwners()
-        self.owners.attach('primary', app)
-        self.bind_workspace('primary', app)
+        if not prepare_only:
+            self.owners.attach('primary', app)
+            self.bind_workspace('primary', app)
         self.scenes = {}
+        self.primary_disconnected = False
+        self.primary_disconnects = 0
         self.supported = False
         self.error = ''
         self.delegate = self.old_delegate = None
         if type(app._impl).__module__.startswith('toga_iOS.'):
             self.install_ios()
+
+    def activate(self):
+        if type(self.app._impl).__module__.startswith('toga_iOS.'):
+            from rubicon.objc import ObjCClass
+            application = ObjCClass('UIApplication').sharedApplication
+            self.delegate = application.delegate
+            self.supported = (ObjCClass('UIDevice').currentDevice.userInterfaceIdiom == 1
+                              and bool(application.supportsMultipleScenes))
 
     def bind_workspace(self, key, host):
         host.window_id = key
@@ -33,7 +44,8 @@ class SceneManager:
                 pass
 
     def new_window(self, widget=None, *, workspace_id=None, **kwargs):
-        if not self.supported or not self.owners.can_add():
+        self.reconcile_scenes()
+        if not self.supported or (not self.primary_disconnected and not self.owners.can_add()):
             self.error = 'Close protected items or another window before opening a new window.'
             self.app.settings_status.text = self.error
             return False
@@ -54,6 +66,15 @@ class SceneManager:
         ObjCClass('UIApplication').sharedApplication.requestSceneSessionActivation(
             None, userActivity=activity, options=None, errorHandler=self.request_error)
         return True
+
+    def reconcile_scenes(self):
+        if not self.supported:
+            return
+        from rubicon.objc import ObjCClass
+        opened = {str(session.persistentIdentifier) for session in ObjCClass('UIApplication').sharedApplication.openSessions.allObjects()}
+        for host in list(self.scenes.values()):
+            if str(host.native_scene.session.persistentIdentifier) not in opened:
+                self.disconnect(host)
 
     def failed(self, error):
         self.error = 'The system could not open another window.'
@@ -122,6 +143,7 @@ class SceneManager:
             def scene_willConnectToSession_options_(self, scene, session, options) -> None:
                 identifier = sha256(str(session.persistentIdentifier).encode()).hexdigest()[:32]
                 from .workspace import uuid
+                requested_workspace = False
                 activities = list(options.userActivities.allObjects())
                 if session.stateRestorationActivity is not None:
                     activities.append(session.stateRestorationActivity)
@@ -130,9 +152,11 @@ class SceneManager:
                         candidate = activity.userInfo['workspace'] if activity.userInfo is not None else None
                         if uuid(str(candidate)):
                             identifier = str(candidate)
+                            requested_workspace = True
                             break
-                if not manager.scenes:
+                if not requested_workspace and (manager.primary_disconnected or not hasattr(manager.app, 'native_scene')):
                     host = manager.app
+                    manager.primary_disconnected = False
                 else:
                     if not manager.owners.can_add():
                         manager.failed(None)
@@ -156,11 +180,13 @@ class SceneManager:
             @objc_method
             def sceneDidBecomeActive_(self, scene) -> None:
                 if hasattr(self, 'host'):
+                    self.host.scene_active = True
                     self.host.main_window.on_gain_focus()
 
             @objc_method
             def sceneWillResignActive_(self, scene) -> None:
                 if hasattr(self, 'host'):
+                    self.host.scene_active = False
                     self.host.checkpoint()
 
             @objc_method
@@ -175,18 +201,21 @@ class SceneManager:
 
         class LogisticsSceneAppDelegate(PythonAppDelegate):
             @objc_method
+            def application_didDiscardSceneSessions_(self, application, sessions) -> None:
+                discarded = {str(session.persistentIdentifier) for session in sessions.allObjects()}
+                for host in list(manager.scenes.values()):
+                    if str(host.native_scene.session.persistentIdentifier) in discarded:
+                        manager.disconnect(host)
+
+            @objc_method
             def application_configurationForConnectingSceneSession_options_(self, application, session, options):
+                manager.reconcile_scenes()
                 configuration = ObjCClass('UISceneConfiguration').alloc().initWithName(
                     'Logistics workspace', sessionRole=session.role)
                 configuration.delegateClass = LogisticsSceneDelegate
                 return configuration
 
-        application = ObjCClass('UIApplication').sharedApplication
-        self.old_delegate = application.delegate
-        self.delegate = LogisticsSceneAppDelegate.alloc().init()
-        application.delegate = self.delegate
-        self.supported = (ObjCClass('UIDevice').currentDevice.userInterfaceIdiom == 1
-                          and bool(application.supportsMultipleScenes))
+        self.delegate_class = LogisticsSceneAppDelegate
 
     def make_host(self, identifier):
         from .app import LogisticsMobile
@@ -216,14 +245,19 @@ class SceneManager:
         return host
 
     def disconnect(self, host):
-        if host is self.app:
-            host.checkpoint()
+        if not host.active_host or (host is self.app and self.primary_disconnected):
             return
-        host.checkpoint()
         from .pickers import _ios_pickers
         picker = _ios_pickers.get(host.main_window.id)
         if picker is not None:
             picker[0].cancel()
+        if host is self.app:
+            host.checkpoint()
+            self.primary_disconnected = True
+            self.primary_disconnects += 1
+            self.scenes = {key: value for key, value in self.scenes.items() if value is not host}
+            return
+        host.checkpoint()
         host.release_disposable_resources()
         for view in host.text_views.values():
             view.dispose()
@@ -231,16 +265,23 @@ class SceneManager:
         host.adaptive.uninstall()
         host.routes.uninstall()
         host.native_host.dispose()
+        host.navigation.window = None
+        host.navigation.app = None
         host.active_host = False
         for session in host.workspace.sessions.values():
             host.workspace.invalidate(session.id)
         self.owners.detach(host.window_id)
+        from .app import _active_hosts
+        identity = str(host.private_root.resolve()) + ':' + host.window_id
+        if _active_hosts.get(identity) is host:
+            _active_hosts.pop(identity)
         self.scenes = {key: value for key, value in self.scenes.items() if value is not host}
         self.app.windows.remove(host.main_window)
         if len(self.owners.hosts) == 1 and hasattr(self.app, 'native_scene'):
             from rubicon.objc import ObjCClass
             ObjCClass('UIApplication').sharedApplication.requestSceneSessionActivation(
-                self.app.native_scene.session, userActivity=None, options=None, errorHandler=None)
+                None if self.primary_disconnected else self.app.native_scene.session,
+                userActivity=None, options=None, errorHandler=None)
 
 
 def install_scenes(app):

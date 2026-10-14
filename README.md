@@ -67,14 +67,16 @@ credentials and settings. External services need their own accounts/software.
 
 An independent [Android/iOS document prototype](Mobile/README.md) is available for
 development builds, with a native hub, private preferences, text/Markdown editing
-and EPUB/comic reading, LM text chat, read-only rclone remote files and encrypted
+and EPUB/comic reading, LM text chat, managed rclone Local/LocalCrypt copies and encrypted
 LocalCrypt offline reading, text and comic/EPUB metadata editing, local file/folder
 management with shared list/tile views, thumbnails and file information, and text
 Save As across Local/LocalCrypt storage. Encrypted transfers and archive metadata
 updates and ordinary comic imports stream large files without a fixed whole-file
 size cap. Standalone AES/legacy password-protected CBZ/ZIP comics open with an
 inline password prompt and can be locked after reading. Shared mobile browsing includes folder taps, Back history and search/sort. See its
-guide for format limits and validation status.
+guide for format limits and validation status. Mobile Pull and reviewed Push show
+progress while ordinary documents remain usable. Independent ordinary iPad windows
+have separate workspaces and prevent duplicate writers.
 
 | Tool | Use it to… |
 | --- | --- |

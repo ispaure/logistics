@@ -1,6 +1,7 @@
 package main
 
 import (
+	stdzip "archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -93,6 +94,34 @@ func TestMirrorAuthenticatedPullVerifiedPushAndRemoteConflict(t *testing.T) {
 		}
 		source.Write(updated)
 		source.Seek(0, 0)
+		checked, err := mirrorValidate(ctx, name, p, identity, int(source.Fd()))
+		if err != nil || checked == expected {
+			t.Fatal("local preflight failed", err)
+		}
+		if name == "Secret" {
+			corrupt, e := os.CreateTemp(t.TempDir(), "corrupt")
+			if e != nil {
+				t.Fatal(e)
+			}
+			corrupt.Write(updated[:len(updated)-1])
+			corrupt.Seek(0, 0)
+			if _, e = mirrorValidate(ctx, name, p, identity, int(corrupt.Fd())); e == nil {
+				t.Fatal("corrupt ciphertext passed preflight")
+			}
+			corrupt.Close()
+			current, e := mirrorStat(ctx, name, p, identity)
+			if e != nil || current != expected {
+				t.Fatal("preflight changed remote bytes")
+			}
+		}
+		source.Seek(0, 0)
+		folder := "empty-folder"
+		if name == "Secret" {
+			folder = cipher.EncryptDirName(folder)
+		}
+		if _, err = mirrorMkdir(ctx, name, folder, identity); err != nil {
+			t.Fatal(err)
+		}
 		next, err := mirrorWrite(ctx, name, p, identity, expected, strings.Repeat("a", 32), int(source.Fd()))
 		if err != nil || next == expected {
 			t.Fatal(err)
@@ -129,18 +158,43 @@ func rootFor(name, root string) string {
 }
 
 func TestLocalImageDispatchDoesNotWaitForRemoteTransfer(t *testing.T) {
+	archive, err := os.CreateTemp(t.TempDir(), "ordinary-comic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := stdzip.NewWriter(archive)
+	member, err := writer.Create("page.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	member.Write([]byte("synthetic comic page bytes"))
+	writer.Close()
+	input, _ := json.Marshal(map[string]any{"fd": int(archive.Fd()), "member": "page.png"})
+	defer archive.Close()
 	serial.Lock()
+	ctx, finish := operation("mirror_read")
+	defer finish()
 	done := make(chan string, 1)
-	go func() { done <- dispatch("image_thumbnail", `{"data":"not-base64"}`) }()
+	go func() { done <- dispatch("file_archive", string(input)) }()
 	select {
 	case reply := <-done:
 		var value map[string]any
-		if json.Unmarshal([]byte(reply), &value) != nil || value["ok"] != false {
-			t.Fatal("invalid image was accepted")
+		if json.Unmarshal([]byte(reply), &value) != nil || value["ok"] != true {
+			serial.Unlock()
+			t.Fatal("ordinary comic member failed", reply)
 		}
 	case <-time.After(time.Second):
 		serial.Unlock()
 		t.Fatal("local image work blocked behind remote transfer")
+	}
+	if ctx.Err() != nil {
+		serial.Unlock()
+		t.Fatal("local reading cancelled the transfer")
+	}
+	cancel()
+	if ctx.Err() == nil {
+		serial.Unlock()
+		t.Fatal("local reading lost the transfer cancellation handle")
 	}
 	serial.Unlock()
 }

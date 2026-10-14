@@ -211,6 +211,27 @@ func mirrorStat(ctx context.Context, name, p, identity string) (string, error) {
 	return mirrorDigest(ctx, obj)
 }
 
+func mirrorMkdir(ctx context.Context, name, p, identity string) (bool, error) {
+	f, root, cipher, _, err := mirrorConnection(ctx, name, identity)
+	if err != nil {
+		return false, err
+	}
+	if _, err = mirrorPlain(cipher, p, true); err != nil {
+		return false, err
+	}
+	folder := path.Join(root, p)
+	if folder == "." {
+		folder = ""
+	}
+	if folder == "" {
+		return true, nil
+	}
+	if err = f.Mkdir(ctx, folder); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // Changed destinations get a verified remote backup before explicit writeback.
 // No delete or arbitrary command endpoint is exposed. Concurrent external changes
 // are checked before backup and again immediately before writing.
@@ -236,7 +257,8 @@ func mirrorWrite(ctx context.Context, name, p, identity, expected, run string, f
 		return "", err
 	}
 	if cipher != nil {
-		decrypted, e := cipher.DecryptData(io.NopCloser(contextReader{ctx, source}))
+		mirrorPhase(run, "Authenticating local ciphertext", before.Size())
+		decrypted, e := cipher.DecryptData(io.NopCloser(mirrorCounter{contextReader{ctx, source}, run}))
 		if e != nil {
 			return "", e
 		}
@@ -250,6 +272,7 @@ func mirrorWrite(ctx context.Context, name, p, identity, expected, run string, f
 			return "", err
 		}
 	}
+	mirrorPhase(run, "Checking remote revision", 0)
 	current, err := mirrorStat(ctx, name, p, identity)
 	if err != nil {
 		return "", err
@@ -270,11 +293,13 @@ func mirrorWrite(ctx context.Context, name, p, identity, expected, run string, f
 		if e != nil {
 			return "", e
 		}
-		saved, e := f.Put(ctx, contextReader{ctx, input}, object.NewStaticObjectInfo(path.Join(root, backup), time.Now(), old.Size(), true, nil, f))
+		mirrorPhase(run, "Saving remote backup", old.Size())
+		saved, e := f.Put(ctx, mirrorCounter{contextReader{ctx, input}, run}, object.NewStaticObjectInfo(path.Join(root, backup), time.Now(), old.Size(), true, nil, f))
 		input.Close()
 		if e != nil {
 			return "", errors.New("remote backup failed; destination was not replaced")
 		}
+		mirrorPhase(run, "Verifying remote backup", 0)
 		check, e := mirrorDigest(ctx, saved)
 		if e != nil || check != expected {
 			return "", errors.New("remote backup verification failed; destination was not replaced")
@@ -284,7 +309,8 @@ func mirrorWrite(ctx context.Context, name, p, identity, expected, run string, f
 			return "", errors.New("remote changed during backup; destination was not replaced")
 		}
 	}
-	result, err := f.Put(ctx, contextReader{ctx, source}, object.NewStaticObjectInfo(path.Join(root, p), time.Now(), before.Size(), true, nil, f))
+	mirrorPhase(run, "Sending file", before.Size())
+	result, err := f.Put(ctx, mirrorCounter{contextReader{ctx, source}, run}, object.NewStaticObjectInfo(path.Join(root, p), time.Now(), before.Size(), true, nil, f))
 	if err != nil {
 		return "", errors.New("push failed or cancelled; inspect the destination and retained remote backup")
 	}
@@ -296,6 +322,7 @@ func mirrorWrite(ctx context.Context, name, p, identity, expected, run string, f
 	if err != nil {
 		return "", err
 	}
+	mirrorPhase(run, "Verifying uploaded bytes", 0)
 	hash := sha256.New()
 	_, err = io.Copy(hash, contextReader{ctx, source})
 	if err != nil {
@@ -305,6 +332,10 @@ func mirrorWrite(ctx context.Context, name, p, identity, expected, run string, f
 	if err != nil || check != hex.EncodeToString(hash.Sum(nil)) {
 		return "", errors.New("push verification failed; inspect destination and backup")
 	}
+	mirrorPhase(run, "File verified", before.Size())
+	mirrorProgressState.Lock()
+	mirrorProgressState.Done = before.Size()
+	mirrorProgressState.Unlock()
 	return check, nil
 }
 
@@ -325,4 +356,51 @@ func mirrorInput(fd int) (*os.File, error) {
 		return nil, errors.New("push requires an unchanged independent regular file")
 	}
 	return file, nil
+}
+
+func mirrorValidate(ctx context.Context, name, p, identity string, fd int) (string, error) {
+	current, err := connectionIdentity(name)
+	if err != nil || current != identity {
+		return "", errors.New("connection changed")
+	}
+	kind, _ := store.GetValue(name, "type")
+	var cipher *crypt.Cipher
+	if kind == "crypt" {
+		cipher, _, _, _, err = cryptConnection(name)
+		if err != nil {
+			return "", err
+		}
+	}
+	if _, err = mirrorPlain(cipher, p, false); err != nil {
+		return "", err
+	}
+	file, err := mirrorInput(fd)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	before, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.New()
+	var reader io.Reader = contextReader{ctx, file}
+	if cipher != nil {
+		decrypted, e := cipher.DecryptData(io.NopCloser(io.TeeReader(reader, hash)))
+		if e != nil {
+			return "", e
+		}
+		defer decrypted.Close()
+		_, err = io.Copy(io.Discard, contextReader{ctx, decrypted})
+	} else {
+		_, err = io.Copy(hash, reader)
+	}
+	if err != nil {
+		return "", errors.New("ciphertext authentication or source inspection failed")
+	}
+	after, err := file.Stat()
+	if err != nil || before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime()) {
+		return "", errors.New("push source changed during inspection")
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }

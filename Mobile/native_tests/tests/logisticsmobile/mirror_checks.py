@@ -78,7 +78,7 @@ async def exercise_crypt_mirror(app, fixture):
     assert job['crypt']
     assert b'mobile-mirror-fixture' not in store.path.read_bytes()
     assert b'note.md' not in store.path.read_bytes()
-    assert await app.open_mirror_copy(job['id'])
+    assert await app.open_mirror_copy(job['id']), app.file_status.value
     row = next(row for row in app.file_rows.values() if Path(row['path']).name == 'note.md')
     app.browser_file_selected(row)
     await app.read_managed_file()

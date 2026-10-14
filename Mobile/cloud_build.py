@@ -6,11 +6,17 @@ import os
 from pathlib import Path
 import platform
 import plistlib
+import shlex
 import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parent
 FLAGS = '-s -w -X github.com/rclone/rclone/fs.Version=v1.74.1'
+
+
+def ios_compiler(target, sdk_path):
+    # Go parses CC into arguments; the SDK may live in "Xcode 27.1.app".
+    return shlex.join(['clang', '-target', target, '-isysroot', sdk_path])
 
 
 def run(*args, env=None, cwd=ROOT / 'rclone_bridge'):
@@ -54,7 +60,7 @@ def ios():
         ('iphoneos', 'device', 'arm64', 'arm64-apple-ios15.0')]:
         path = subprocess.check_output(['xcrun', '--sdk', sdk, '--show-sdk-path'], text=True).strip()
         env = dict(os.environ, CGO_ENABLED='1', GOOS='ios', GOARCH=go_arch,
-                   CC=f'clang -target {target} -isysroot {path}')
+                   CC=ios_compiler(target, path))
         run('go', 'build', '-trimpath', '-ldflags=' + FLAGS, '-buildmode=c-archive',
             '-o', str(support / f'liblogisticscloud-{variant}.a'), '.', env=env)
     pbx = project / 'Logistics Mobile.xcodeproj/project.pbxproj'

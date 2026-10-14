@@ -1,8 +1,54 @@
 package main
 
 import (
+	"bytes"
+	"path/filepath"
 	"testing"
 )
+
+func TestOAuthIdentitySurvivesRefreshAndEncryptedVaultRestoration(t *testing.T) {
+	clearSession()
+	t.Cleanup(clearSession)
+	file := filepath.Join(t.TempDir(), "credentials.bin")
+	key := bytes.Repeat([]byte{71}, 32)
+	id := "0123456789abcdef0123456789abcdef"
+	next, err := openVault(file, id, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remotes := map[string]map[string]string{"Account": {"type": "drive", "token": "original-account-token"}}
+	if err = next.replace(snapshot{Label: "Accounts.zip", Remotes: remotes, Pins: initialConnectionPins(remotes)}); err != nil {
+		t.Fatal(err)
+	}
+	store = next
+	admitted["Account"] = true
+	original, err := connectionIdentity("Account")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.connection("Account").Set("token", "refreshed-account-token")
+	refreshed, err := connectionIdentity("Account")
+	if err != nil || refreshed != original {
+		t.Fatal("refresh changed the copy identity", err)
+	}
+	restored, err := openVault(file, id, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store = restored
+	reopened, err := connectionIdentity("Account")
+	if err != nil || reopened != original {
+		t.Fatal("vault restoration changed the copy identity", err)
+	}
+	replacement := map[string]map[string]string{"Account": {"type": "drive", "token": "different-account-token"}}
+	if err = store.replace(snapshot{Label: "Accounts.zip", Remotes: replacement, Pins: initialConnectionPins(replacement)}); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := connectionIdentity("Account")
+	if err != nil || changed == original {
+		t.Fatal("account replacement reused its identity", err)
+	}
+}
 
 func TestConnectionIdentityRequiresAdmissionAndDetectsReplacement(t *testing.T) {
 	name := "identity-fixture"

@@ -37,6 +37,7 @@ class FilesUI:
             await self.file_browser.close()
         self.file_roots = {'Local files': None}
         self.file_roots.update({'LocalCrypt: ' + remote: remote for remote in sorted(self.cloud_crypt_remotes)})
+        self.file_roots.update(self.linked_crypt_locations())
         self.file_storage = toga.Selection(items=list(self.file_roots), style=Pack(height=44))
         self.file_storage.value = 'Local files'
         self.file_location = toga.TextInput(placeholder='Folder path (empty for root)', style=Pack(height=44))
@@ -95,7 +96,8 @@ class FilesUI:
         self.file_storage.on_change = self.change_file_storage
 
     async def change_file_storage(self, widget=None, **kwargs):
-        if not self.cloud_busy and self.file_storage.value != getattr(self, 'file_loaded_location', (None, ''))[0]:
+        if (not getattr(self, 'file_changing_location', False) and not self.cloud_busy
+                and self.file_storage.value != getattr(self, 'file_loaded_location', (None, ''))[0]):
             self.file_location.value = ''
             await self.browse_files()
 
@@ -127,8 +129,22 @@ class FilesUI:
     async def browser_file_location(self, location):
         if self.cloud_busy:
             return False
-        self.file_storage.value, self.file_location.value = location
+        self.file_changing_location = True
+        try:
+            self.file_storage.value, self.file_location.value = location
+        finally:
+            self.file_changing_location = False
         return await self.browse_files()
+
+    def update_file_locations(self):
+        self.file_changing_location = True
+        try:
+            self.file_storage.items = list(self.file_roots)
+            picker = getattr(self.file_storage._impl, 'native_picker', None)
+            if picker is not None:
+                picker.reloadAllComponents()
+        finally:
+            self.file_changing_location = False
 
     def files_back(self, widget=None, **kwargs):
         if not self.cloud_busy:
@@ -358,6 +374,8 @@ class FilesUI:
         self.editor_picker_mode = mode
         self.save_as_data = data
         roots = ['Local files'] + ['LocalCrypt: ' + remote for remote in sorted(self.cloud_crypt_remotes)]
+        self.editor_linked_roots = self.linked_crypt_locations()
+        roots += list(self.editor_linked_roots)
         self.editor_picker_rows = {}
         self.save_as_storage = toga.Selection(items=roots, style=Pack(height=44))
         self.picker_folder = toga.TextInput(placeholder='Folder within storage', style=Pack(height=44))
@@ -407,6 +425,8 @@ class FilesUI:
         return await self.refresh_editor_browser()
 
     def editor_provider(self, label):
+        if label in getattr(self, 'editor_linked_roots', {}):
+            return self.editor_linked_roots[label]
         if label == 'Local files':
             root = self.private_root / 'LocalFiles'
             root.mkdir(exist_ok=True)

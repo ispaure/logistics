@@ -8,7 +8,7 @@ author = "Marc-Andre Voyer"
 
 [tool.briefcase.app.logisticsmobile]
 formal_name = "Logistics Mobile"
-description = "Native documents, readers, LM chat and read-only rclone files"
+description = "Native document workspaces, readers, LM chat and managed rclone copies"
 
 sources = ["payload/logisticsmobile", "payload/commonUtils", "payload/features", "payload/services"]
 test_sources = ["native_tests/tests"]

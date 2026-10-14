@@ -24,6 +24,7 @@ var vaultError = errors.New("Saved credentials could not be accessed safely; unl
 type snapshot struct {
 	Label   string                       `json:"package_name"`
 	Remotes map[string]map[string]string `json:"remotes"`
+	Pins    map[string]connectionPin     `json:"connection_pins,omitempty"`
 }
 type vaultStorage struct {
 	mu            sync.Mutex
@@ -244,6 +245,14 @@ func openVault(p, id string, key []byte) (*vaultStorage, error) {
 	}
 	if validateCryptRemotes(s.values.Remotes) != nil {
 		return nil, vaultError
+	}
+	if len(s.values.Pins) > 64 {
+		return nil, vaultError
+	}
+	for name, pin := range s.values.Pins {
+		if s.values.Remotes[name] == nil || !validDigest(pin.Signature) || !validDigest(pin.Identity) {
+			return nil, vaultError
+		}
 	}
 	return s, nil
 }
