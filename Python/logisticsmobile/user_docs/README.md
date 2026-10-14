@@ -8,7 +8,7 @@ the native app; real-device interaction testing is still required.
 | Logistics capability | Mobile status |
 | --- | --- |
 | Plain-text editing | Implemented: create, select, rename, edit and save private documents |
-| Hub and navigation | Implemented: Home, Documents and Settings |
+| Hub and navigation | Native Files, Documents and Settings destinations; retained screen per destination |
 | Markdown | Text editing and offline basic preview: headings, list items, bold and code blocks |
 | Document import | Native picker adapters implemented; actual provider permissions still need device testing |
 | Draft recovery | Implemented: checkpoints, restored drafts and conflict-safe save-a-copy |
@@ -33,7 +33,7 @@ in-code defaults and an app-private `preferences.ini`. **Settings** controls the
 editor/preview font size and whether the last selected document is restored.
 Reads do not create the INI; saving does. Invalid files are preserved and defaults
 are used; saving refuses to overwrite them. Reload after repairing or moving such
-a file. Concurrent external edits also require reload. Home remains the launch
+a file. Concurrent external edits also require reload. Files remains the launch
 screen; restoring a document makes it ready under Documents.
 
 Desktop preferences cannot simply be copied wholesale: filesystem paths,
@@ -44,7 +44,16 @@ migration and general app-data backup/reset behavior remain separate work.
 
 ## Document workflow
 
-The app opens on Home. Tap **Text & Markdown** or **Documents**. Choose a
+The app opens on **Files**, a location hub for **On this device** and
+**Remote files & LocalCrypt**. Local browsing uses app-managed files rather than
+the entire device filesystem. Choose **Documents**, then **Text & Markdown**.
+The Documents hub also contains **Books & Comics** and **LM Chat**. Native tab
+controls adapt to the Apple layout; Android uses bottom navigation in compact
+windows and a rail at 600 dp or wider. Switching destinations retains each
+screen. **Locations** returns to the Files hub and **All documents** returns
+from the editor to the Documents hub.
+
+Choose a
 document from the top selector, or tap **New**. Edit its name in the name field and
 its contents in the text area. **Save** publishes the edited file inside the app.
 Text and Markdown use the same plain-text editor.
@@ -85,7 +94,7 @@ on devices before treating this prototype as a supported mobile product. See
 
 ## Books and comics
 
-From Home, choose **Books & Comics** and **Import book/comic…**. EPUB and
+From Documents, choose **Books & Comics** and **Import book/comic…**. EPUB and
 CBZ/ZIP imports create private copies; the selected source is never
 changed. Choose a library item and **Open selected**. Previous/Next and the
 chapter/page selector navigate the book's reading order. EPUB pages scroll in the
@@ -130,7 +139,7 @@ records rather than overwriting another change.
 
 ## LM chat
 
-Choose **LM Chat** from Home. Open **Server & generation settings…**, enter your
+Choose **LM Chat** from Documents. Open **Server & generation settings…**, enter your
 existing server's API URL (for example `http://192.168.1.10:1234/v1`), optional
 session API key, and model ID. **Refresh models** contacts that server explicitly
 and fills the model selector. Use the computer's LAN address/hostname when the
@@ -168,7 +177,7 @@ are rejected rather than executed.
 
 ## Remote files and credential ZIPs
 
-Choose **Remote files** from Home. The native app embeds rclone 1.74.1; no desktop
+Choose **Remote files & LocalCrypt** from Files. The native app embeds rclone 1.74.1; no desktop
 executable, shell, mount, or separate RC server is required. **Check rclone engine**
 performs an offline in-memory read and displays the engine version.
 

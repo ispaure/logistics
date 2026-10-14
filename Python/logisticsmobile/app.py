@@ -11,6 +11,7 @@ from .preview import markdown_preview
 from .library_ui import LibraryUI
 from .chat_ui import ChatUI
 from .cloud_ui import CloudUI
+from .native_navigation import NativeNavigationHost
 
 
 class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
@@ -40,6 +41,7 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         self.import_button = toga.Button('Import…', on_press=self.import_document, style=Pack(flex=1, height=44))
         self.save_button = toga.Button('Save', on_press=self.save_document, style=Pack(flex=1, height=44))
         box = toga.Box(style=Pack(direction=COLUMN, margin=12))
+        box.add(toga.Button('All documents', on_press=self.show_documents_hub, style=Pack(height=44)))
         box.add(toga.Box(children=[self.selector], style=Pack(direction=ROW, margin_bottom=8)))
         box.add(self.recovery_notice)
         box.add(toga.Box(children=[toga.Button('New', on_press=self.new_document, style=Pack(flex=1, height=44)),
@@ -57,14 +59,10 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
             toga.Button('Preview', on_press=self.show_preview, style=Pack(flex=1, height=44))],
             style=Pack(direction=ROW, margin_top=8)))
         self.document_view = box
-        self.body = toga.Box(style=Pack(direction=COLUMN, flex=1))
-        self.navigation = toga.Box(children=[
-            toga.Button('Home', on_press=self.show_home, style=Pack(flex=1, height=44)),
-            toga.Button('Documents', on_press=self.show_documents, style=Pack(flex=1, height=44)),
-            toga.Button('Settings', on_press=self.show_settings, style=Pack(flex=1, height=44))],
-            style=Pack(direction=ROW))
-        shell = toga.Box(children=[self.navigation, self.body], style=Pack(direction=COLUMN))
-        self.main_window = toga.MainWindow(title='Logistics', content=shell,
+        self.native_host = NativeNavigationHost(on_select=self.select_destination)
+        self.navigation = self.native_host.root
+        self.body = self.native_host.bodies['files']
+        self.main_window = toga.MainWindow(title='Logistics', content=self.navigation,
                                            on_lose_focus=self.checkpoint)
         self.on_exit = self.exit_app
         self.refresh_documents()
@@ -76,12 +74,24 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
             self.open_document(key)
         else:
             self.new_document()
+        self.show_documents_hub()
+        self.show_settings()
         self.show_home()
         self.main_window.show()
+        self.native_host.install(self.main_window)
 
-    def show_view(self, view, *, checkpoint=True):
+    def select_destination(self, destination):
+        if not self.checkpoint():
+            return False
+        self.body = self.native_host.bodies[destination]
+        return True
+
+    def show_view(self, view, *, checkpoint=True, destination=None):
         if checkpoint and not self.checkpoint():
             return False
+        if destination is not None:
+            self.native_host.activate(destination)
+            self.body = self.native_host.bodies[destination]
         previous = list(self.body.children)
         try:
             for child in previous:
@@ -97,19 +107,33 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
 
     def show_home(self, widget=None, **kwargs):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Logistics', style=Pack(font_size=24, margin_bottom=12)))
-        box.add(toga.Label('Your documents, on this device.', style=Pack(margin_bottom=12)))
+        box.add(toga.Label('Files', style=Pack(font_size=24, margin_bottom=12)))
+        box.add(toga.Label('Choose a location', style=Pack(margin_bottom=12)))
+        box.add(toga.Button('On this device', on_press=self.show_local_location, style=Pack(height=52)))
+        box.add(toga.Button('Remote files & LocalCrypt', on_press=self.show_cloud, style=Pack(height=52, margin_top=8)))
+        if self.preferences.error:
+            box.add(toga.Label(self.preferences.error, style=Pack(margin_top=12)))
+        self.show_view(box, destination='files')
+
+    async def show_local_location(self, widget=None, **kwargs):
+        self.show_cloud(present=False)
+        restore = getattr(self, 'cloud_restore_task', None)
+        if restore is not None and not restore.done():
+            await restore
+        await self.show_files()
+
+    def show_documents_hub(self, widget=None, **kwargs):
+        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
+        box.add(toga.Label('Documents', style=Pack(font_size=24, margin_bottom=12)))
+        box.add(toga.Label('Read, write and continue your work.', style=Pack(margin_bottom=12)))
         box.add(toga.Button('Text & Markdown', on_press=self.show_documents, style=Pack(height=52)))
         box.add(toga.Button('Books & Comics', on_press=self.show_library, style=Pack(height=52, margin_top=8)))
         box.add(toga.Button('LM Chat', on_press=self.show_chat, style=Pack(height=52, margin_top=8)))
         box.add(toga.Label(f'{len(self.labels)} private document(s)', style=Pack(margin_top=8)))
-        box.add(toga.Button('Remote files', on_press=self.show_cloud, style=Pack(height=52, margin_top=8)))
-        if self.preferences.error:
-            box.add(toga.Label(self.preferences.error, style=Pack(margin_top=12)))
-        self.show_view(box)
+        self.show_view(box, destination='documents')
 
     def show_documents(self, widget=None, **kwargs):
-        self.show_view(self.document_view)
+        self.show_view(self.document_view, destination='documents')
 
     def show_settings(self, widget=None, **kwargs):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
@@ -125,7 +149,7 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         box.add(toga.Button('Save preferences', on_press=self.save_preferences, style=Pack(height=44)))
         box.add(toga.Button('Reload preferences', on_press=self.reload_preferences, style=Pack(height=44)))
         box.add(self.settings_status)
-        self.show_view(box)
+        self.show_view(box, destination='settings')
 
     def save_preferences(self, widget=None, **kwargs):
         try:

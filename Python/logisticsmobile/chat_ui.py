@@ -58,6 +58,7 @@ class ChatUI:
                 toga.Button('Save configuration', on_press=self.save_chat_configuration, style=Pack(height=44))],
                 style=Pack(direction=COLUMN, margin=12))
             self.chat_view = toga.Box(children=[
+                toga.Button('All documents', on_press=self.show_documents_hub, style=Pack(height=44)),
                 toga.Button('Server & generation settings…', on_press=self.show_chat_configuration, style=Pack(height=44)),
                 self.chat_selector, self.chat_new, self.chat_transcript,
                 self.chat_prompt, toga.Box(children=[self.chat_send, self.chat_cancel], style=Pack(direction=ROW)),
@@ -67,10 +68,10 @@ class ChatUI:
                 self.open_chat(next(iter(self.chat_labels.values())))
             else:
                 self.new_chat()
-        self.show_view(self.chat_view)
+        self.show_view(self.chat_view, destination='documents')
 
     def show_chat_configuration(self, widget=None, **kwargs):
-        self.show_view(self.chat_config_view)
+        self.show_view(self.chat_config_view, destination='documents')
 
     def save_chat_configuration(self, widget=None, **kwargs):
         if self.chat_busy:

@@ -8,7 +8,7 @@ from .localcrypt_ui import LocalCryptUI
 
 
 class CloudUI(LocalCryptUI):
-    def show_cloud(self, widget=None, **kwargs):
+    def show_cloud(self, widget=None, *, present=True, **kwargs):
         if not hasattr(self, 'cloud_view'):
             self.cloud_busy = False
             self.cloud_path = ''
@@ -47,6 +47,7 @@ class CloudUI(LocalCryptUI):
             self.download_open = toga.Button('Open private copy', on_press=self.open_download, style=Pack(flex=1, height=44))
             self.download_export = toga.Button('Export private copy…', on_press=self.export_download, style=Pack(flex=1, height=44))
             self.cloud_view = toga.ScrollContainer(content=toga.Box(children=[
+                toga.Button('Locations', on_press=self.show_home, style=Pack(height=44)),
                 toga.Label('Remote files', style=Pack(font_size=22)), self.cloud_remember, toga.Label('Off: use credentials only for this app session.'), self.cloud_password, self.cloud_import,
                  self.cloud_probe, self.cloud_reload, self.cloud_package, self.cloud_remote, self.cloud_location,
                 toga.Box(children=[self.cloud_browse, self.cloud_up], style=Pack(direction=ROW)),
@@ -59,7 +60,8 @@ class CloudUI(LocalCryptUI):
             if self.cloud_client is not None and getattr(self.cloud_client, 'vault', None) is not None:
                 self.set_cloud_busy(True)
                 self.cloud_restore_task = self.loop.create_task(self.restore_cloud(initial=True))
-        self.show_view(self.cloud_view)
+        if present:
+            self.show_view(self.cloud_view, destination='files')
 
     def set_cloud_busy(self, value):
         self.cloud_busy = value
