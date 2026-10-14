@@ -33,7 +33,7 @@ class CloudClient:
         self.free.restype = None
 
     def request(self, action, **values):
-        if action not in {'import', 'list', 'read', 'crypt_read', 'probe', 'clear', 'cancel', 'vault_open', 'vault_info', 'crypt_remotes', 'crypt_fetch', 'crypt_describe', 'crypt_decode', 'crypt_encode', 'crypt_metadata', 'crypt_path', 'crypt_raw_read', 'crypt_raw_write', 'crypt_stat', 'crypt_range', 'crypt_archive', 'crypt_manifest', 'crypt_thumbnail', 'file_thumbnail', 'image_thumbnail', 'remote_thumbnail', 'file_archive'}:
+        if action not in {'import', 'list', 'connection_identity', 'read', 'crypt_read', 'probe', 'clear', 'cancel', 'vault_open', 'vault_info', 'crypt_remotes', 'crypt_fetch', 'crypt_describe', 'crypt_decode', 'crypt_encode', 'crypt_metadata', 'crypt_path', 'crypt_raw_read', 'crypt_raw_write', 'crypt_stat', 'crypt_range', 'crypt_archive', 'crypt_manifest', 'crypt_thumbnail', 'file_thumbnail', 'image_thumbnail', 'remote_thumbnail', 'file_archive'}:
             raise ValueError('Unsupported remote operation.')
         data = json.dumps(values, ensure_ascii=False).encode('utf-8')
         if len(data) > PACKAGE_LIMIT * (24 if action == 'image_thumbnail' else 2):
@@ -90,6 +90,9 @@ class CloudClient:
 
     def entries(self, remote, path=''):
         return self.request('list', remote=remote, path=path)
+
+    def connection_identity(self, remote):
+        return self.request('connection_identity', remote=remote)
 
     def download(self, remote, path):
         from tempfile import TemporaryFile

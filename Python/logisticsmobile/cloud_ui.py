@@ -95,6 +95,7 @@ class CloudUI(LocalCryptUI):
                 self.cloud_location, toga.Box(children=[self.cloud_browse, self.cloud_up], style=Pack(direction=ROW)),
                 self.cloud_status, self.cloud_cancel, self.remote_browser.widget,
                 self.cloud_open, self.cloud_download_help, self.cloud_download, self.cloud_folder_open,
+                toga.Button('Save repeatable folder pull', on_press=self.create_pull_job, style=Pack(height=44)),
                 toga.Label('Downloaded copies', style=Pack(font_size=18, margin_top=12)), self.download_selector,
                 toga.Box(children=[self.download_open, self.download_export], style=Pack(direction=ROW)),
                 *self.build_localcrypt()], style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
@@ -424,6 +425,8 @@ class CloudUI(LocalCryptUI):
             if not self.clear_private_reader():
                 return
             self.clear_private_catalog()
+            if hasattr(self, 'pull_jobs'):
+                self.pull_jobs.forget_private()
             await asyncio.to_thread(self.cloud_client.clear)
             self.cloud_crypt_remotes = set()
             self.cloud_remote.items = self.cloud_entries.items = []
@@ -453,13 +456,27 @@ class CloudUI(LocalCryptUI):
             return
         self.set_cloud_busy(True)
         try:
+            from .resource_imports import ResourceImports
+            if not hasattr(self, 'resource_imports'):
+                self.resource_imports = ResourceImports(self.private_root)
+            imported = self.resource_imports.find(selected)
+            if imported is not None:
+                if imported['provider'] == 'library':
+                    await self.open_book(imported['resource'])
+                elif self.open_document(imported['resource']):
+                    self.show_documents(resume=True)
+                else:
+                    raise ValueError('The imported copy is unavailable; its index and source were preserved.')
+                return
             if selected.suffix.lower() in {'.epub', '.cbz', '.zip'}:
                 self.show_library()
                 record = await asyncio.to_thread(self.library_store.import_book, LocalDocuments(), selected)
+                self.resource_imports.remember(selected, 'library', record['id'])
                 self.refresh_library()
                 await self.open_book(record['id'])
             else:
                 doc = await asyncio.to_thread(self.store.import_document, LocalDocuments(), selected)
+                self.resource_imports.remember(selected, 'managed-text', doc.id)
                 self.refresh_documents()
                 self.open_document(doc.id)
                 self.show_documents()
