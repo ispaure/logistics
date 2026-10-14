@@ -18,6 +18,7 @@ user guide for the workflow you are changing, then follow this map.
 | Change paths, stored state or configuration | [Configuration and data](configuration-and-data.md) |
 | Prepare the document core for mobile runtimes | [Mobile preparation](mobile-preparation.md) |
 | Plan native mobile navigation and open documents across Apple and Android | [Mobile navigation plan](mobile-navigation-plan.md) |
+| Inspect native mobile foundation evidence and remaining device limits | [Native navigation proof](mobile-navigation-proof.md) |
 | Set up, test and contribute | [Development and validation](testing.md) |
 | Understand the optional external feature host boundary | [Optional integration](optional-integration.md) |
 | Review documentation findings and unresolved concerns | [Documentation audit](documentation-audit.md) |

@@ -43,6 +43,41 @@ Briefcase needs the Android SDK/JDK or Xcode/iOS platform resources. A listed iO
 SDK alone may be insufficient: install the matching simulator runtime through
 Xcode Settings → Components before trying a simulator run.
 
+For native iPhone Duo display/bar adaptation, select an installed iOS 27.1 SDK
+or newer before creating/building the iOS app:
+
+```sh
+export DEVELOPER_DIR="$(python Mobile/select_ios_sdk.py --path-only)"
+```
+
+Run this from the repository root. It selects a compatible installed Xcode;
+it does not install one. The iOS native CI job uses GitHub's `xcode-27` image and
+rejects an older SDK rather than claiming Duo adaptation. The declared iOS 15
+deployment minimum is retained, with newer sidebar APIs guarded at runtime;
+an iOS 15 device/runtime remains a separate compatibility check.
+
+## Native navigation foundation checks
+
+The native test-mode suite additionally exercises a three-destination native
+container, Apple navigation/split controllers, Android bottom/rail presentation,
+native selection callbacks, draft retention, focus and widget cleanup. This
+foundation is not yet the normal app's navigation shell.
+
+For live resize and lifecycle checks, build/install the test-mode app first and
+run from `Mobile` with a booted validation device:
+
+```sh
+python navigation_tools.py --adb /path/to/android-sdk/platform-tools/adb --device emulator-5554
+python navigation_tools.py --ios --device <simulator-uuid> --output logs/navigation/apple-lifecycle
+```
+
+These commands activate an isolated, synthetic draft under the test app's cache.
+Android exercises keyboard insets, phone/tablet sizes, real activity recreation
+and process restoration, and resets its size/density overrides afterward. Apple
+exercises scene rotation, background/resume and process restoration. Reports and
+screenshots go under `Mobile/logs/navigation`. They do not establish physical
+BOOX E Ink/stylus behavior, an actual fold gesture, or independent app windows.
+
 Only public, selected Python sources and licenses enter the payload. Private
 INIs, Git metadata, ignored resources and the external emulation link are excluded.
 Native builds contain the host, commonUtils and selected portable EPUB/comic
