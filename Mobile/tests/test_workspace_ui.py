@@ -6,6 +6,34 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class WorkspaceUITests(unittest.TestCase):
+    def test_preview_mode_restores_per_session_and_back_targets_its_owner(self):
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            app.show_documents()
+            a = app.editor_view
+            a.editor.value = '# A'
+            app.show_preview()
+            self.assertEqual(a.session.view['markdown_mode'], 'preview')
+            back = app.preview_box.children[0].on_press
+            app.new_document()
+            b = app.editor_view
+            b.editor.value = '# B'
+            app.show_documents()
+            app.session_opener(a.session.id)()
+            self.assertIs(app.editor_view, a)
+            self.assertIs(app.body.children[0], app.preview_box)
+            app.routes.back()
+            self.assertEqual(a.session.view['markdown_mode'], 'edit')
+            app.session_opener(b.session.id)()
+            back()
+            self.assertIs(app.editor_view, a)
+            self.assertEqual(app.editor.value, '# A')
+            app.close_session(a.session.id)
+            back()
+            self.assertIs(app.editor_view, b)
+
     def test_close_choices_target_owner_and_failed_save_keeps_it_open(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)

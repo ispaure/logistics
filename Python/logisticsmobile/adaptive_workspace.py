@@ -162,6 +162,7 @@ class AdaptiveWorkspace:
             self.app.native_host.state.routes['documents'] = [item[0] for item in self.detail_routes]
             if self.app.native_host.state.destination == 'documents':
                 self.app.body = self.detail_routes[-1][1]
+                self.app.route_changed(self.app.body)
             self.in_detail = True
         elif controller == self.app.native_host.adapter.containers[DESTINATIONS.index('documents')][1]:
             self.in_detail = False

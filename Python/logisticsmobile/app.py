@@ -95,6 +95,9 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
 
     def route_changed(self, body):
         self.body = body
+        if (hasattr(self, 'editor_view') and self.editor_view.session is not None
+                and self.document_view in body.children):
+            self.editor_view.session.view['markdown_mode'] = 'edit'
 
     def resize_workspace(self, widget=None, *args, **kwargs):
         self.adaptive.render()
@@ -174,7 +177,7 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
         def activate(widget=None, **kwargs):
             if self.checkpoint():
                 self.open_document(resource)
-                self.show_documents()
+                self.show_documents(resume=True)
         return activate
 
     def session_opener(self, key):
@@ -185,7 +188,7 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
                     self.loop.create_task(self.open_book(session.resource))
                 else:
                     self.open_document(session.resource)
-                    self.show_documents()
+                    self.show_documents(resume=True)
         return activate
 
     def session_closer(self, key):
@@ -285,10 +288,16 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
         except (OSError, ValueError) as error:
             self.recovery_notice.text = str(error)
 
-    def show_documents(self, widget=None, **kwargs):
+    def show_documents(self, widget=None, *, resume=False, **kwargs):
         if self.current is None:
             self.new_document()
+        if self.current is None:
+            return False
+        preview = resume and self.editor_view.session.view.get('markdown_mode') == 'preview'
+        self.editor_view.session.view['markdown_mode'] = 'edit'
         self.show_view(self.document_view, destination='documents', route='editor', title='Text & Markdown')
+        if preview:
+            return self.show_preview()
 
     def show_editor_actions(self, owner):
         box = toga.Box(style=Pack(direction=COLUMN, margin=12))
@@ -348,8 +357,17 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
         previous = getattr(self, 'preview_box', None)
         if previous is not None:
             previous.remove(self.preview)
+        owner = self.editor_view
+        token = self.workspace.token(owner.session.id)
+        def back_to_editor(widget=None, **kwargs):
+            if self.active_host and self.workspace.accepts(token):
+                if not self.checkpoint():
+                    return
+                owner.bind()
+                self.workspace.activate(owner.session.id)
+                self.show_documents()
         self.preview_box = toga.Box(children=[
-            toga.Button('Back to editor', on_press=self.show_documents, style=Pack(height=44)),
+            toga.Button('Back to editor', on_press=back_to_editor, style=Pack(height=44)),
             self.preview], style=Pack(direction=COLUMN, flex=1))
         self.show_view(self.preview_box, route='preview', title='Markdown preview')
         self.save_workspace()
@@ -404,7 +422,7 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
             self.loading = False
         self.save_workspace(capture=False)
         if displaying:
-            self.show_documents()
+            self.show_documents(resume=True)
         self.editor_view.restore()
 
     def select_document(self, widget, **kwargs):
