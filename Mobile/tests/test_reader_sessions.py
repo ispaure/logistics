@@ -9,6 +9,50 @@ from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
 
 
 class ReaderSessionTests(unittest.TestCase):
+    def test_disabled_restore_keeps_reader_available_without_selecting_it(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            LogisticsMobile.storage_root = root
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            restored = None
+            try:
+                app.show_library()
+                fixtures = root / 'fixtures'
+                fixtures.mkdir()
+                epub, _ = make_books(fixtures)
+                record = app.library_store.import_book(LocalDocuments(), epub)
+                app.loop.run_until_complete(app.open_book(record['id']))
+                app.loop.run_until_complete(app.next_book_page())
+                reader_session = app.workspace.active
+                app.preferences.save(restore_last_document='false')
+                app.checkpoint()
+                restored = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                self.assertIsNone(restored.pending_reader_restore)
+                self.assertNotEqual(restored.workspace.active, reader_session)
+                self.assertIn(reader_session, restored.workspace.sessions)
+                restored.native_host.root.current_tab = 2
+                import asyncio
+                restored.loop.run_until_complete(asyncio.sleep(.05))
+                self.assertIsNone(getattr(restored, 'book_reader', None))
+                restored.session_opener(reader_session)()
+                async def wait_reader():
+                    for _ in range(100):
+                        if getattr(restored, 'book_reader', None) is not None:
+                            return
+                        await asyncio.sleep(.01)
+                    self.fail('Explicit reader reopening did not finish')
+                restored.loop.run_until_complete(wait_reader())
+                self.assertEqual(restored.book_record['position'], 1)
+                self.assertEqual(restored.workspace.active, reader_session)
+            finally:
+                hosts = [app, *([restored] if restored is not None else [])]
+                for host in hosts:
+                    host.main_window.close()
+                for loop in {host.loop for host in hosts}:
+                    if not loop.is_closed():
+                        loop.close()
+
     def test_cold_workspace_keeps_reader_selection_until_documents_are_opened(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

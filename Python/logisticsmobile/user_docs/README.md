@@ -78,9 +78,11 @@ Stored documents. Discard resets recovery to the current saved file without
 overwriting changes made outside the editor or recreating a deleted file. A
 failed save or conflict keeps the document open; use **Save a copy** to preserve
 both versions. Session-only drafts offer Save, Discard, and Cancel without durable
-draft retention. Ordinary open items and active selection restore at the next
-launch, with a maximum of 32 open items. Private resource restoration remains
-excluded. Native cursor/selection and scroll offsets are recorded for text views.
+draft retention. Ordinary open items remain available at the next launch, with a
+maximum of 32 open items. Their active selection resumes when **Restore last
+document** is enabled; turning it off also prevents automatic EPUB/comic reopening.
+You can still explicitly reopen those readers from Open documents with their saved
+progress. Private resource restoration remains excluded. Native cursor/selection and scroll offsets are recorded for text views.
 Opening an item from the open/stored list also resumes its Edit or Preview mode.
 Back to the editor selects Edit for that document.
 If a restored item is unavailable, **Try again** retries it and **Remove from

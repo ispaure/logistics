@@ -903,3 +903,32 @@ Clean native reports are retained under
 `mobile-evidence/2026-10-14-alpha34-*-native-ui-ci.json`. Physical original-window
 closure remains explicitly unverified, and the device limits above still apply.
 This final documentation checkpoint changes no released runtime behavior.
+
+## Phase 6 Part 1: brief verification and restoration preference
+
+The user requested three verification passes against the navigation brief and
+current alpha. Pass 1 traces navigation, resource identities, recovery/privacy,
+adaptive presentation, readers, Files/connection ownership and independent scenes
+against their implementation and existing fixtures. The current baseline passes
+all 67 tracked host tests. A new cold-reader regression then demonstrates that
+startup restored a selected library session despite `restore_last_document=false`.
+The fix retains the open reader and saved chapter/page while respecting the
+preference; explicit reopening still works. All 68 tracked host tests and all 39
+portable core tests pass after the fix.
+
+The feature matrix's physical permissions, cancelled system gestures, physical
+fold poses, original iPad window closure, large-text/screen-reader combinations and
+minimum-iOS coverage remain unverified. Existing simulator resize and programmatic
+checks are not substitutes for those device-specific claims. The Home-first order
+in the brief's updated decisions overrides its older three-destination milestone
+text; the separately authorized managed Push also supersedes its original remote
+read-only boundary. No desktop emulator documentation boundary changed.
+
+The exact prior alpha.34 commit was separately promoted to main and published as
+[v0.1.1-main.07](https://github.com/ispaure/logistics/releases/tag/v0.1.1-main.07)
+after every [release gate](https://github.com/ispaure/logistics/actions/runs/38570954429)
+passed. Its signed normal-launcher build matches the validated source fingerprint
+and installed over Wi-Fi without uninstalling or changing identity. All 16 existing
+document files remained listed with matching sizes; file contents were not copied
+or byte-compared. Physical launch initially requires the user to unlock the phone.
+The alpha verification fixes do not alter that exact-commit main release.

@@ -111,8 +111,11 @@ class LogisticsMobile(LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI
         from .native_memory import MemoryPressure
         self.memory_pressure = MemoryPressure(self)
         if restored_reader is not None and restored_reader.provider == 'library':
-            self.pending_reader_restore = restored_reader.id
-            self.workspace.active = restored_reader.id
+            if self.preferences.values['restore_last_document'] == 'true':
+                self.pending_reader_restore = restored_reader.id
+                self.workspace.active = restored_reader.id
+            elif self.workspace.active == restored_reader.id:
+                self.workspace.active = None
             self.save_workspace()
 
     def select_destination(self, destination):
