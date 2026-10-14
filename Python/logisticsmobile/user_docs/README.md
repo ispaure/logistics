@@ -8,7 +8,7 @@ the native app; real-device interaction testing is still required.
 | Logistics capability | Mobile status |
 | --- | --- |
 | Plain-text editing | Implemented: create, select, rename, edit and save private documents |
-| Hub and navigation | Native Files, Documents and Settings destinations; retained screen per destination |
+| Hub and navigation | Native Home, Files, Documents and Settings destinations; retained screen per destination |
 | Markdown | Text editing and offline basic preview: headings, list items, bold and code blocks |
 | Document import | Native picker adapters implemented; actual provider permissions still need device testing |
 | Draft recovery | Implemented: checkpoints, restored drafts and conflict-safe save-a-copy |
@@ -33,7 +33,7 @@ in-code defaults and an app-private `preferences.ini`. **Settings** controls the
 editor/preview font size and whether the last selected document is restored.
 Reads do not create the INI; saving does. Invalid files are preserved and defaults
 are used; saving refuses to overwrite them. Reload after repairing or moving such
-a file. Concurrent external edits also require reload. Files remains the launch
+a file. Concurrent external edits also require reload. Home remains the launch
 screen; restoring a document makes it ready under Documents.
 
 Desktop preferences cannot simply be copied wholesale: filesystem paths,
@@ -44,7 +44,9 @@ migration and general app-data backup/reset behavior remain separate work.
 
 ## Document workflow
 
-The app opens on **Files**, a location hub for **On this device** and
+The app opens on **Home**, a landing page with quick access to files, editors,
+books/comics and chat. The house icon is the first native destination, before
+**Files**, **Documents** and **Settings**. **Files** is a location hub for **On this device** and
 **Remote files & LocalCrypt**. Local browsing uses app-managed files rather than
 the entire device filesystem. Choose **Documents**, then **Text & Markdown**.
 The Documents hub also contains **Books & Comics** and **LM Chat**. Native tab

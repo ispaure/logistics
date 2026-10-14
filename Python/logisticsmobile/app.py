@@ -76,6 +76,7 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
             self.new_document()
         self.show_documents_hub()
         self.show_settings()
+        self.show_locations()
         self.show_home()
         self.main_window.show()
         self.native_host.install(self.main_window)
@@ -106,6 +107,15 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         return True
 
     def show_home(self, widget=None, **kwargs):
+        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
+        box.add(toga.Label('Welcome to Logistics', style=Pack(font_size=24, margin_bottom=12)))
+        box.add(toga.Label('Your files, reading and writing.', style=Pack(margin_bottom=12)))
+        for title, action in (('Files', self.show_locations), ('Text & Markdown', self.show_documents),
+                              ('Books & Comics', self.show_library), ('LM Chat', self.show_chat)):
+            box.add(toga.Button(title, on_press=action, style=Pack(height=52, margin_bottom=8)))
+        self.show_view(box, destination='home')
+
+    def show_locations(self, widget=None, **kwargs):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         box.add(toga.Label('Files', style=Pack(font_size=24, margin_bottom=12)))
         box.add(toga.Label('Choose a location', style=Pack(margin_bottom=12)))

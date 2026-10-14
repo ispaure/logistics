@@ -46,9 +46,9 @@ async def exercise(app):
         assert get_os() in {OS.ANDROID, OS.IOS}
         backend = type(app._impl).__module__
         assert backend.startswith('toga_android.' if get_os() is OS.ANDROID else 'toga_iOS.')
-        assert app.body.children[0].children[0].text == 'Files'
-        assert app.native_host.state.destination == 'files'
-        assert [tab.text for tab in app.navigation.content] == ['Files', 'Documents', 'Settings']
+        assert app.body.children[0].children[0].text == 'Welcome to Logistics'
+        assert app.native_host.state.destination == 'home'
+        assert [tab.text for tab in app.navigation.content] == ['Home', 'Files', 'Documents', 'Settings']
         passed.append('native_hub')
         from .navigation_checks import exercise_navigation
         navigation_proof = await exercise_navigation(app)

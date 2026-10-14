@@ -61,7 +61,7 @@ an iOS 15 device/runtime remains a separate compatibility check.
 The native test-mode suite additionally exercises a three-destination native
 container, Apple navigation/split controllers, Android bottom/rail presentation,
 native selection callbacks, draft retention, focus and widget cleanup. This
-fixture supplements the normal app's Files/Documents/Settings navigation shell.
+fixture supplements the normal app's Home/Files/Documents/Settings navigation shell.
 
 For live resize and lifecycle checks, build/install the test-mode app first and
 run from `Mobile` with a booted validation device:

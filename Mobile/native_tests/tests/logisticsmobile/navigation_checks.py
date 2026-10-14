@@ -22,7 +22,7 @@ async def exercise_navigation(app):
     try:
         host.install(app.main_window)
         await asyncio.sleep(.5)
-        assert len(host.root.content) == 3
+        assert len(host.root.content) == 4
         for destination in ('documents', 'settings', 'files', 'documents'):
             host.activate(destination)
             await asyncio.sleep(.1)
@@ -30,15 +30,15 @@ async def exercise_navigation(app):
             assert host.root.current_tab.text.lower() == destination
         assert editor.value == 'Native navigation draft'
         if get_os() is OS.ANDROID:
-            host.adapter.impl.native_navigationview.setSelectedItemId(3)
+            host.adapter.impl.native_navigationview.setSelectedItemId(4)
             assert host.state.destination == 'settings'
             assert host.root.current_tab.text == 'Settings'
-            host.adapter.impl.native_navigationview.setSelectedItemId(2)
+            host.adapter.impl.native_navigationview.setSelectedItemId(3)
             assert host.state.destination == 'documents'
         else:
             native = host.adapter.controller
-            native.selectedViewController = host.adapter.navigation[2]
-            native.tabBar_didSelectItem_(native.tabBar, host.adapter.navigation[2].tabBarItem)
+            native.selectedViewController = host.adapter.navigation[3]
+            native.tabBar_didSelectItem_(native.tabBar, host.adapter.navigation[3].tabBarItem)
             assert host.state.destination == 'settings'
             host.activate('documents')
         editor.value = 'Draft survives native containers'
@@ -73,10 +73,10 @@ async def exercise_navigation(app):
             adapter.push('files', detail, 'Folder')
             host.activate('files')
             await asyncio.sleep(.3)
-            assert len(adapter.navigation[0].viewControllers) == 2
+            assert len(adapter.navigation[1].viewControllers) == 2
             capture('stack')
             adapter.pop('files')
-            assert len(adapter.navigation[0].viewControllers) == 1
+            assert len(adapter.navigation[1].viewControllers) == 1
             leading = toga.Box(children=[toga.Label('Open documents')],
                                style=Pack(direction=COLUMN, flex=1))
             detail = toga.Box(children=[toga.MultilineTextInput(value=editor.value, style=Pack(flex=1))],
