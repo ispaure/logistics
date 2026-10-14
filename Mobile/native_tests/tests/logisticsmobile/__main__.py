@@ -228,6 +228,9 @@ async def exercise(app):
                 raise AssertionError('Standalone comic password persisted across reader restart.')
             assert protected_comic.read_bytes() == original
         passed.append('native_comic_reader')
+        from .scene_checks import exercise_scenes
+        await exercise_scenes(app)
+        passed.append('native_independent_windows')
         from logisticsmobile.chat_fixture import fixture_server
         with fixture_server() as (url, started, release, requests):
             app.show_chat()
@@ -337,6 +340,7 @@ async def exercise(app):
                   backend=type(app._impl).__module__, cases=passed, expected_cases=list(CASES),
                   success=success, error=error, source=source, native_picker_tested=False)
     report['navigation'] = locals().get('navigation_proof')
+    report['independent_windows_tested'] = app.scene_manager.supported
     # iOS's OS logger truncates long single-line messages. Emit independently
     # bounded chunks; the host verifier rejects missing/duplicate chunks.
     encoded = base64.b64encode(json.dumps(report, sort_keys=True).encode()).decode()

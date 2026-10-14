@@ -90,11 +90,13 @@ def apple_backend(interface):
             if image is None or min(key) <= 0 or key == self.last_size:
                 return
             self.last_size = key
+            zoom = float(self.native.zoomScale)
             self.native.setZoomScale(1, animated=False)
             scale = min(size.width / image.width, size.height / image.height)
             width, height = image.width * scale, image.height * scale
             self.picture.frame = CGRect((0, 0), (width, height))
             self.native.contentSize = CGSize(width, height)
+            self.native.setZoomScale(zoom, animated=False)
             self.center_image()
 
         def center_image(self):

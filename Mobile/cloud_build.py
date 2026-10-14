@@ -44,6 +44,8 @@ def android():
 
 def ios():
     project = ROOT / 'build/logisticsmobile/ios/xcode'
+    from scene_build import configure
+    configure(project)
     support = project / 'Support'
     support.mkdir(parents=True, exist_ok=True)
     arch = {'arm64': 'arm64', 'aarch64': 'arm64', 'x86_64': 'amd64'}[platform.machine()]

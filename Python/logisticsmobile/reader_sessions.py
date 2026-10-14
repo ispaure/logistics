@@ -100,6 +100,9 @@ class Readers:
         self.catalog.show_library()
 
     async def open(self, resource, *, password=None):
+        manager = getattr(self.app, 'scene_manager', None)
+        if password is not None and manager is not None and len(manager.owners.hosts) > 1:
+            raise ValueError('Close other windows before opening protected content.')
         if not self.app.checkpoint():
             return False
         record = self.catalog.library_store.read_record(resource)[0]

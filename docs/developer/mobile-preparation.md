@@ -768,3 +768,32 @@ flag is whitelisted in the bounded ordinary manifest. Native UI coverage adds
 `native_reader_presentation`; WebView ownership assertions wait for a single
 rendered text snapshot instead of reading a transient empty document during reload.
 Android evidence runs cold-start the emulator rather than restoring renderer state.
+
+## Phase 4 Part 1: independent UIKit scenes
+
+`window_scenes.py` installs a tracked UIApplicationDelegate/UISceneDelegate
+extension around the pinned Toga backend. A separate Window frontend uses the
+native MainWindow container without the pinned secondary-window rejection. Each
+scene owns a Logistics workflow controller, native navigation, adaptive container,
+editor/reader callbacks, preferences and a bounded workspace under `Windows/<id>`.
+Only app infrastructure and ordinary document storage are shared. Scene IDs are
+validated UUIDs or hashes of system session identifiers; restoration activities
+contain only that opaque ID. The scene's destination record is bounded and
+malformed records are preserved.
+
+WindowOwners grants exclusive process-local resource writers. The original
+window retains connection/transfer/chat ownership; protected sessions cannot
+coexist with multiple windows. Picker futures/delegates belong to the presenting
+window, and disconnect cancels its picker. Secondary disconnect checkpoints,
+invalidates callbacks, releases writer leases, native subscriptions and readers,
+then activates the original scene. A forced original-scene disconnect retains
+its checkpointed owner until process restoration; it does not grant a competing
+writer. No independent Android activity capability is enabled.
+
+`Mobile/scene_build.py` applies scene support reproducibly to the generated plist
+because the pinned template otherwise forces it off. It does not modify Toga
+packages. The iOS release job runs both iPhone and iPad tests, requiring explicit
+`independent_windows_tested` evidence on iPad rather than accepting resize as a
+substitute. The native case creates actual scenes, rejects duplicate writers,
+closes and restores a distinct draft and selected destination. Device-specific
+picker and OS eviction checks remain unverified.

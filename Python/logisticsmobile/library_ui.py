@@ -139,6 +139,10 @@ class LibraryUI(ReaderChrome):
             self.library_view.remove(self.book_unlock_panel)
 
     def ask_book_password(self, key, message):
+        manager = getattr(self, 'scene_manager', None)
+        if manager is not None and len(manager.owners.hosts) > 1:
+            self.book_status.text = 'Close other windows before opening protected content.'
+            return
         self.book_pending_key = key
         self.book_password.value = ''
         if self.book_unlock_panel not in self.library_view.children:
