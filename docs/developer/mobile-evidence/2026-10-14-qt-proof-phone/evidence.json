@@ -1,0 +1,18 @@
+{
+  "qt": "6.12.0",
+  "platform": "ios",
+  "root": "<private proof container>",
+  "passed": [
+    "existing_file_browser_independent_tabs",
+    "existing_code_editor_highlighting_save",
+    "existing_markdown_reader",
+    "native_rclone_import_list_download_probe"
+  ],
+  "rclone": {
+    "version": "v1.74.1",
+    "entries": 1,
+    "download_bytes": 22
+  },
+  "column_navigation": false,
+  "verification": "Programmatic real Qt widgets and compiled rclone bridge; not physical touch/provider verification"
+}
