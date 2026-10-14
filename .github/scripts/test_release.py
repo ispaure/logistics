@@ -166,6 +166,15 @@ class PublishTests(unittest.TestCase):
             publishing.publish('owner/repo', 'v0.1.0-main.01', self.archive)
         self.assertNotIn('--prerelease', gh.call_args.args[0])
 
+    def test_empty_tag_notes_abort_before_creating_a_release(self):
+        notes_dir = Path(self.temp.name)
+        (notes_dir / 'v1.0.md').write_text('')
+        with patch.object(publishing, 'NOTES_DIR', notes_dir), patch(
+                'publish_release.subprocess.run', return_value=self.response(404)) as gh:
+            with self.assertRaisesRegex(RuntimeError, 'require a title'):
+                publishing.publish('owner/repo', 'v1.0', self.archive)
+        self.assertEqual(gh.call_count, 1)
+
     def test_existing_release_uploads_without_clobber(self):
         with patch('publish_release.subprocess.run', side_effect=[self.response(), None]) as gh:
             publishing.publish('owner/repo', 'v1.0', self.archive)

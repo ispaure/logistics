@@ -54,9 +54,9 @@
     "platform": "android",
     "resize_events": 12,
     "screenshots": [
-      "/data/user/0/io.github.ispaure.logisticsmobile/cache/native-check-cfc2161bafe5425f9c36c9f360c348db/navigation-tabs.png",
-      "/data/user/0/io.github.ispaure.logisticsmobile/cache/native-check-cfc2161bafe5425f9c36c9f360c348db/navigation-rail.png",
-      "/data/user/0/io.github.ispaure.logisticsmobile/cache/native-check-cfc2161bafe5425f9c36c9f360c348db/navigation-keyboard.png"
+      "/data/user/0/io.github.ispaure.logisticsmobile/cache/native-check-64d971edcc074fa3ad7c57dda6ea4f85/navigation-tabs.png",
+      "/data/user/0/io.github.ispaure.logisticsmobile/cache/native-check-64d971edcc074fa3ad7c57dda6ea4f85/navigation-rail.png",
+      "/data/user/0/io.github.ispaure.logisticsmobile/cache/native-check-64d971edcc074fa3ad7c57dda6ea4f85/navigation-keyboard.png"
     ],
     "widget_cleanup_verified": true,
     "width": 411
@@ -74,8 +74,8 @@
       "lm",
       "rclone"
     ],
-    "logistics_commit": "ea03d85dde7114f2873cf9fb50ac9cecfb41672b",
-    "source_sha256": "befc99544f2ab69330de4f03837f3eadd62dc826ce06ed7615006d8f6e0a4255"
+    "logistics_commit": "55a93107e1a7c4b1ed9eef053a74b350bb7f527e",
+    "source_sha256": "3d1130bfbba3a1e051c93fd36690c22a071300d127dc08b7721b91f773833ca7"
   },
   "success": true,
   "suite": "logistics-native-ui",

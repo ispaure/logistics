@@ -55,10 +55,10 @@
     "native_tabs": "TogaTabBarController",
     "platform": "ios",
     "screenshots": [
-      "/Users/marca/Library/Developer/CoreSimulator/Devices/31EF08AC-5055-4978-8D54-867928A474EB/data/Containers/Data/Application/689F0E40-2317-4061-B326-7D1E500F906E/Library/Caches/native-check-96075c316fed461db416efbe8764279c/navigation-tabs.png",
-      "/Users/marca/Library/Developer/CoreSimulator/Devices/31EF08AC-5055-4978-8D54-867928A474EB/data/Containers/Data/Application/689F0E40-2317-4061-B326-7D1E500F906E/Library/Caches/native-check-96075c316fed461db416efbe8764279c/navigation-stack.png",
-      "/Users/marca/Library/Developer/CoreSimulator/Devices/31EF08AC-5055-4978-8D54-867928A474EB/data/Containers/Data/Application/689F0E40-2317-4061-B326-7D1E500F906E/Library/Caches/native-check-96075c316fed461db416efbe8764279c/navigation-split.png",
-      "/Users/marca/Library/Developer/CoreSimulator/Devices/31EF08AC-5055-4978-8D54-867928A474EB/data/Containers/Data/Application/689F0E40-2317-4061-B326-7D1E500F906E/Library/Caches/native-check-96075c316fed461db416efbe8764279c/navigation-keyboard.png"
+      "/Users/marca/Library/Developer/CoreSimulator/Devices/31EF08AC-5055-4978-8D54-867928A474EB/data/Containers/Data/Application/FC36A42D-65EF-4D36-B08A-FDF16BF1B6D7/Library/Caches/native-check-1cca3ae589ba46e185c3fa6622b64559/navigation-tabs.png",
+      "/Users/marca/Library/Developer/CoreSimulator/Devices/31EF08AC-5055-4978-8D54-867928A474EB/data/Containers/Data/Application/FC36A42D-65EF-4D36-B08A-FDF16BF1B6D7/Library/Caches/native-check-1cca3ae589ba46e185c3fa6622b64559/navigation-stack.png",
+      "/Users/marca/Library/Developer/CoreSimulator/Devices/31EF08AC-5055-4978-8D54-867928A474EB/data/Containers/Data/Application/FC36A42D-65EF-4D36-B08A-FDF16BF1B6D7/Library/Caches/native-check-1cca3ae589ba46e185c3fa6622b64559/navigation-split.png",
+      "/Users/marca/Library/Developer/CoreSimulator/Devices/31EF08AC-5055-4978-8D54-867928A474EB/data/Containers/Data/Application/FC36A42D-65EF-4D36-B08A-FDF16BF1B6D7/Library/Caches/native-check-1cca3ae589ba46e185c3fa6622b64559/navigation-keyboard.png"
     ],
     "sidebar_available": true,
     "sidebar_used": true,
@@ -81,8 +81,8 @@
       "lm",
       "rclone"
     ],
-    "logistics_commit": "ea03d85dde7114f2873cf9fb50ac9cecfb41672b",
-    "source_sha256": "befc99544f2ab69330de4f03837f3eadd62dc826ce06ed7615006d8f6e0a4255"
+    "logistics_commit": "55a93107e1a7c4b1ed9eef053a74b350bb7f527e",
+    "source_sha256": "3d1130bfbba3a1e051c93fd36690c22a071300d127dc08b7721b91f773833ca7"
   },
   "success": true,
   "suite": "logistics-native-ui",
