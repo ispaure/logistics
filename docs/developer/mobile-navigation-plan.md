@@ -24,7 +24,9 @@ for milestone 4 (Files/connections and repeatable pulls), Phase 3 for milestone 
 Each phase uses numbered Part commits. Phase 1 Part 1 introduces four bounded
 provider-session owners, independent private drafts/metadata, duplicate activation,
 Open documents access, all-owner credential guards and exclusion from recovery.
-Native verification and the later phase exit gates remain pending.
+Phase 1 Part 2 adds a native mixed/private workspace case; all 19 native cases
+pass on both the iOS 27.1 Duo simulator and Android 15 emulator. Resource-pressure
+hooks and later phase exit gates remain pending.
 
 ## Phase 0 submission boundary and numbered checkpoints
 
