@@ -886,3 +886,20 @@ for actual publication status. Physical original-window destruction remains
 unverified, as do the manual device checks listed above; no simulator request is
 reported as a successful OS closure. This release packages source and does not
 imply device signing or App Store/TestFlight publication.
+
+## Phase 5 Part 6: published alpha and clean CI evidence
+
+[v0.1.1-alpha.34](https://github.com/ispaure/logistics/releases/tag/v0.1.1-alpha.34)
+is published with its source ZIP. The [release workflow](https://github.com/ispaure/logistics/actions/runs/38542171235)
+passed every platform gate (Windows, macOS, Ubuntu, Fedora and static validation),
+both embedded mobile runtimes, both native builds, packaging and publication.
+Clean tagged native reports verify all 25 cases on Android, iPhone and iPad; iPad
+reports actual independent scenes. Both embedded runtime inventories contain all
+39 expected tests. The published ZIP's version identifies commit
+`8416b248f33b87837783edefde3d2658b4e2b0f2`; its recorded file hashes and tagged
+transfer/runtime sources were verified after download.
+
+Clean native reports are retained under
+`mobile-evidence/2026-10-14-alpha34-*-native-ui-ci.json`. Physical original-window
+closure remains explicitly unverified, and the device limits above still apply.
+This final documentation checkpoint changes no released runtime behavior.

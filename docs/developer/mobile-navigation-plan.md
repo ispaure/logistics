@@ -15,7 +15,7 @@ writers, secondary close and restoration. Original-window OS closure and physica
 interaction checks remain explicitly unverified. Android independent activities
 stay disabled after evaluation; Android resize/split-screen remains supported.
 The requested managed mobile Local/LocalCrypt pull/push follow-up is implemented.
-Final alpha publication is in progress.
+The complete source alpha is published as [v0.1.1-alpha.34](https://github.com/ispaure/logistics/releases/tag/v0.1.1-alpha.34). All native, runtime and platform release gates passed.
 
 ## Selected runtime
 
