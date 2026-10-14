@@ -203,12 +203,20 @@ are rejected rather than executed.
 
 ## Remote files and credential ZIPs
 
-Choose **Remote files & LocalCrypt** from Files. The native app embeds rclone 1.74.1; no desktop
+Choose **Remote files & LocalCrypt** from Files. Credential setup is under
+**Settings → Remote connections** (also reached through **Manage connections…**
+in the remote browser). The native app embeds rclone 1.74.1; no desktop
 executable, shell, mount, or separate RC server is required. **Check rclone engine**
 performs an offline in-memory read and displays the engine version.
 
-Enter the password, then **Import credential ZIP…** and choose your existing
-Logistics credential package. TXT entries must each contain one `[Remote name]`
+Tap **Choose credential ZIP…** and select your existing Logistics credential
+package. Its filename appears under the button. Enter its password, then tap
+**Load remotes** beside the password field, or press Return. Leave the password
+blank for an unencrypted ZIP. A failed load clears the password and keeps the
+selected ZIP ready: correct the password and tap **Load remotes** again without
+selecting the file again. After loading, choose a remote and tap **Browse folder**.
+The ZIP password is never saved; selecting a ZIP alone does not load credentials
+or connect to a remote. TXT entries must each contain one `[Remote name]`
 section and rclone settings, including `type`. Plain, ZipCrypto and WinZip AES
 packages are readable; importing never extracts files or modifies the source ZIP.
 ZIPs are limited to 1 MiB, 64 entries and 256 KiB per TXT entry. Duplicate remote
@@ -231,12 +239,29 @@ Tap a folder to open it, or use **Open selected folder** and **Parent folder**.
 subfolders, requesting additional remote listings in the background. Scans stop
 after 10,000 entries and report incomplete results. Choose a name, size or modified-time sort. Folders stay first. Search resets when
 the location changes, and hiding a selected file clears its action selection. A folder
-result is limited to 1,000 displayed entries. **Download private copy** reads the
+result is limited to 1,000 displayed entries. **Download selected item** reads the
 selected file into this app's private Downloads as a stream, without a fixed whole-file size cap. It never uploads,
 renames, deletes or synchronizes remote files. **Cancel request** cancels the native
 operation; individual network reads have a 15-second timeout and operations have
 a two-minute deadline for browsing and a 30-minute deadline for transfers and archive rewrites. Some upstream backends may take until their network call
 returns to acknowledge cancellation.
+
+When a crypt remote is selected, that button becomes **Download decrypted copy**.
+It decrypts the selected file while streaming and saves an **unencrypted** copy
+under Private downloads using the readable filename. You can open or export it
+like any other private download; it follows the app's normal data/backup policy.
+**Download encrypted copy** remains available to keep ciphertext in LocalCrypt
+instead. A failed, cancelled or unauthenticated decrypted transfer is removed and
+does not appear as a completed download. Neither choice modifies the remote file.
+
+Select a folder and choose **Download selected item** (or **Download decrypted
+copy** for a crypt remote) to pull its contents into **On this device**. Progress
+shows the number of completed files. **Open downloaded folder** opens the finished
+copy. Empty subfolders are preserved. Folder pulls are limited to 10,000 items;
+failed or cancelled pulls leave no completed or partial local folder. Each pull
+creates a separate named folder, preserving existing copies and local edits.
+This is a one-time download, not a repeatable sync job. The copy is unencrypted,
+including when pulled from crypt; remote originals are unchanged.
 
 Select a private download and choose **Open private copy** to import it into the
 text/Markdown editor or EPUB/CBZ library, subject to those readers' existing format
@@ -269,7 +294,13 @@ providers that rotate refresh tokens may require a fresh credential package.
 
 Mobile can browse an rclone crypt remote whose direct backing remote is supported
 and included in the same credential ZIP. Import/unlock the package in **Remote
-files**, select the crypt remote, then **Browse folder** to see decrypted names.
+files**. Under **Choose remote · tap the name below**, tap the currently displayed
+remote name to open the picker and select your crypt remote, then tap
+**Browse folder** to see decrypted names. The hint below the picker identifies
+available crypt remotes and confirms when a crypt is selected. If it reports
+no crypt remote, the loaded ZIP must include both the crypt configuration and
+its backing remote configuration; choosing only the backing Dropbox/Drive/etc.
+remote does not apply crypt decryption.
 Choose a file and **Download encrypted copy**. The app saves the original rclone
 ciphertext under its private LocalCrypt storage; it does not save decrypted content
 or add a plaintext filename to the copy's record. Filename privacy still depends
@@ -385,3 +416,10 @@ buffer; the destination may already have been saved, so inspect it before retryi
 If another operation changes a newly saved destination before it is reopened,
 Save As keeps your original draft and reports the saved-but-not-reopened state.
 Inspect the destination before retrying; it is not silently overwritten.
+
+
+Library items also appear in Documents' open list. Opening an already open book
+returns to its existing session. Each book owns its reader; switching books
+releases the inactive decoder and rendered content, and reopening resumes stored
+reading progress. Closing removes the open session and keeps the imported book.
+Password-unlocked comics are excluded from workspace restoration.

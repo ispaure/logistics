@@ -9,7 +9,7 @@ from toga.style.pack import COLUMN, ROW
 from .documents import DocumentStore, document_name
 from .preferences import Preferences
 from .preview import markdown_preview
-from .library_ui import LibraryUI
+from .reader_sessions import ReaderWorkspace
 from .chat_ui import ChatUI
 from .cloud_ui import CloudUI
 from .native_navigation import NativeNavigationHost
@@ -21,7 +21,7 @@ from .adaptive_workspace import AdaptiveWorkspace
 _active_hosts = weakref.WeakValueDictionary()
 
 
-class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
+class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def __init__(self, *args, **kwargs):
@@ -148,10 +148,13 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         box.add(toga.Label(f'{len(self.labels)} private document(s)', style=Pack(margin_top=8)))
         box.add(toga.Label('Open documents', style=Pack(font_size=18, margin_top=12)))
         for session in list(self.workspace.sessions.values()):
-            if session.provider != 'managed-text':
-                continue
             try:
-                title = session.title or self.store.open(session.resource).name
+                if session.provider == 'managed-text':
+                    title = session.title or self.store.open(session.resource).name
+                elif session.provider == 'library':
+                    title = session.title or self.reader_manager().catalog.library_store.read_record(session.resource)[0]['name']
+                else:
+                    continue
             except (OSError, ValueError, KeyError, TypeError):
                 title = 'Unavailable document'
             box.add(toga.Box(children=[
@@ -178,8 +181,11 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         def activate(widget=None, **kwargs):
             session = self.workspace.sessions.get(key)
             if session is not None and self.checkpoint():
-                self.open_document(session.resource)
-                self.show_documents()
+                if session.provider == 'library':
+                    self.loop.create_task(self.open_book(session.resource))
+                else:
+                    self.open_document(session.resource)
+                    self.show_documents()
         return activate
 
     def session_closer(self, key):
@@ -190,6 +196,8 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
     def close_session(self, key):
         if key not in self.workspace.sessions:
             return False
+        if self.workspace.sessions[key].provider == 'library':
+            return self.reader_manager().close(key)
         owner = self.text_views.get(key)
         def guard(session):
             if owner is None:
@@ -264,6 +272,7 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         box.add(toga.Button('Save preferences', on_press=self.save_preferences, style=Pack(height=44)))
         box.add(toga.Button('Reload preferences', on_press=self.reload_preferences, style=Pack(height=44)))
         box.add(self.settings_status)
+        box.add(toga.Button('Remote connections…', on_press=self.show_cloud_connections, style=Pack(height=44, margin_top=12)))
         self.show_view(box, destination='settings', root=True)
 
     def save_preferences(self, widget=None, **kwargs):

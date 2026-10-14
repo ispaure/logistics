@@ -40,7 +40,8 @@ class LocalCryptUITests(unittest.TestCase):
                 app.show_cloud()
                 app.loop.run_until_complete(app._load_crypt_remote_names())
                 app.cloud_remote.items = ['Secret']
-                self.assertFalse(app.cloud_download.enabled)
+                self.assertTrue(app.cloud_download.enabled)
+                self.assertEqual(app.cloud_download.text, 'Download decrypted copy')
                 self.assertTrue(app.crypt_download.enabled)
                 app.cloud_open_remote = 'Secret'
                 app.cloud_rows = {'note.md': dict(path='note.md', directory=False)}

@@ -1,0 +1,83 @@
+{
+  "backend": "toga_android.app",
+  "cases": [
+    "native_hub",
+    "native_navigation_foundation",
+    "native_route_back",
+    "native_preferences",
+    "native_documents",
+    "native_text_workspace",
+    "native_markdown_preview",
+    "native_epub_reader",
+    "native_bookmarks",
+    "native_comic_reader",
+    "native_lm_chat",
+    "native_rclone_files",
+    "native_secure_credentials",
+    "native_localcrypt_reading",
+    "native_localcrypt_text_editing",
+    "native_localcrypt_metadata",
+    "native_localcrypt_failure_and_lock",
+    "native_localcrypt_file_management"
+  ],
+  "error": "",
+  "expected_cases": [
+    "native_hub",
+    "native_navigation_foundation",
+    "native_route_back",
+    "native_preferences",
+    "native_documents",
+    "native_text_workspace",
+    "native_markdown_preview",
+    "native_epub_reader",
+    "native_bookmarks",
+    "native_comic_reader",
+    "native_lm_chat",
+    "native_rclone_files",
+    "native_secure_credentials",
+    "native_localcrypt_reading",
+    "native_localcrypt_text_editing",
+    "native_localcrypt_metadata",
+    "native_localcrypt_failure_and_lock",
+    "native_localcrypt_file_management"
+  ],
+  "native_picker_tested": false,
+  "navigation": {
+    "content_height": 571,
+    "editor_focused": true,
+    "height": 627,
+    "keyboard_inset": 0,
+    "layout_events": 7,
+    "main_thread": true,
+    "mode": "bottom",
+    "native_tabs": "com.google.android.material.bottomnavigation.BottomNavigationView",
+    "platform": "android",
+    "resize_events": 12,
+    "screenshots": [
+      "/data/user/0/io.github.ispaure.logisticsmobile/cache/native-check-5afb045d335e4976b7f324d878b94ca0/navigation-tabs.png",
+      "/data/user/0/io.github.ispaure.logisticsmobile/cache/native-check-5afb045d335e4976b7f324d878b94ca0/navigation-rail.png",
+      "/data/user/0/io.github.ispaure.logisticsmobile/cache/native-check-5afb045d335e4976b7f324d878b94ca0/navigation-keyboard.png"
+    ],
+    "widget_cleanup_verified": true,
+    "width": 411
+  },
+  "schema": 1,
+  "source": {
+    "commonUtils_commit": "fa95986fd1d7d3c29b7717caa2b8194a5a425af2",
+    "commonUtils_dirty": false,
+    "dirty": true,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm",
+      "rclone"
+    ],
+    "logistics_commit": "7788fb8e4a84a12c88054ad4b3f0cbdf5efdd72a",
+    "source_sha256": "3862ab9c3f839f7c79b3cb9c92a0dbeef62a9f31225941e9867721e6b005724e"
+  },
+  "success": true,
+  "suite": "logistics-native-ui",
+  "target": "android"
+}

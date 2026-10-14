@@ -109,6 +109,7 @@ class LibraryUI:
             self.set_book_busy(False)
 
     def release_book_reader(self):
+        self.book_epoch = getattr(self, 'book_epoch', 0) + 1
         document = getattr(self.book_reader, 'document', None)
         source = getattr(document, 'source', None)
         if hasattr(source, 'close'):
@@ -117,7 +118,14 @@ class LibraryUI:
             document.password = None
         self.book_record = self.book_reader = None
         for child in list(self.book_content.children):
+            if hasattr(child, 'image'):
+                child.image = None
             self.book_content.remove(child)
+        if hasattr(self, 'epub_view'):
+            native = getattr(self.epub_view._impl, 'native', None)
+            if native is not None:
+                native.stopLoading()
+            self.epub_view.set_content('https://logistics.invalid/closed-' + uuid4().hex + '/', '<p>Reader closed.</p>')
         self.chapter_selector.items = []
         self.bookmark_selector.items = []
 
@@ -161,8 +169,14 @@ class LibraryUI:
         self.book_status.text = 'Opening…'
         self.book_loading = True
         self.release_book_reader()
+        epoch = self.book_epoch
         try:
             record, reader = await asyncio.to_thread(self.library_store.open, key, password=password)
+            if epoch != self.book_epoch or not self.active_host:
+                source = getattr(getattr(reader, 'document', None), 'source', None)
+                if hasattr(source, 'close'):
+                    source.close()
+                return
             self.hide_book_unlock()
             self.book_record, self.book_reader = record, reader
             count = len(reader.spine if record['kind'] == 'epub' else reader.pages)
@@ -196,21 +210,28 @@ class LibraryUI:
         if self.book_reader is None:
             return
         reader, record = self.book_reader, self.book_record
+        epoch = self.book_epoch
         count = len(reader.spine if record['kind'] == 'epub' else reader.pages)
         if not 0 <= index < count:
             return
         if record['kind'] == 'epub':
             content = await asyncio.to_thread(chapter_html, reader, index,
                                               int(self.preferences.values['font_size']))
+            if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
+                return
             if not hasattr(self, 'epub_view'):
                 self.epub_view = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False, style=Pack(flex=1))
             view = self.epub_view
             view.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
         else:
             data, mime = await asyncio.to_thread(reader.read_page, index)
+            if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
+                return
             image_dimensions(data)
             view = toga.ImageView(image=toga.Image(src=data), style=Pack(flex=1))
         updated = await asyncio.to_thread(self.library_store.progress, record, index)
+        if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
+            return
         for child in list(self.book_content.children):
             self.book_content.remove(child)
         self.book_content.add(view)

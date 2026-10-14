@@ -222,14 +222,25 @@ async def exercise(app):
         assert 'offline read check passed' in app.cloud_status.value, app.cloud_status.value
         credentials = fixtures / 'credentials.zip'
         credentials.write_bytes(base64.b64decode(AES_CREDENTIALS))
-        app.cloud_password.value = 'synthetic-fixture-password'
+        assert app.cloud_import.text == 'Load remotes' and not app.cloud_import.enabled
         with patch('logisticsmobile.pickers.pick_document', new=AsyncMock(return_value=(LocalDocuments(), credentials))):
+            await app.choose_cloud_package()
+            assert app.cloud_import.enabled and 'credentials.zip' in app.cloud_selected_zip.text
+            app.cloud_password.value = 'synthetic-fixture-password'
             await app.import_cloud_package()
         assert app.cloud_password.value == ''
+        assert app.cloud_pending_zip is None and 'Browse folder' in app.cloud_import_message.text.replace('\n', ' ')
         assert app.cloud_remote.value == 'Fixture' and len(app.cloud_remote.items) == 1, app.cloud_status.value
         await app.browse_cloud()
         label = next(key for key, row in app.cloud_rows.items() if row['path'] == 'logistics-native-check')
         app.cloud_entries.value = label
+        assert await app.download_cloud(), app.cloud_status.value
+        assert app.cloud_folder_open.enabled, app.cloud_status.value
+        await app.open_downloaded_folder()
+        assert app.file_path == app.cloud_downloaded_folder
+        local_fixture = app.private_root / 'LocalFiles' / app.file_path / 'fixture.txt'
+        assert local_fixture.read_text() == 'Native rclone fixture\n'
+        app.show_cloud()
         await app.open_cloud_folder()
         assert app.cloud_rows, app.cloud_status.value
         label = next(key for key, row in app.cloud_rows.items() if row['path'].endswith('fixture.txt'))

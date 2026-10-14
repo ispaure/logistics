@@ -155,6 +155,56 @@ func cryptFetch(ctx context.Context, name, p string, fd int) (map[string]string,
 	return map[string]string{"remote": name, "encrypted_path": encrypted, "identity": identity}, nil
 }
 
+// Explicit decrypted download. Ordinary read/crypt_fetch keep their existing
+// storage contracts; the caller publishes plaintext only after authentication.
+func cryptReadInto(ctx context.Context, name, p string, fd int) (int64, error) {
+	if p == "" || !validPath(p) {
+		return 0, errors.New("invalid decrypted download path")
+	}
+	cipher, backing, root, _, err := cryptConnection(name)
+	if err != nil {
+		return 0, err
+	}
+	f, err := remote(ctx, backing)
+	if err != nil {
+		return 0, err
+	}
+	obj, err := f.NewObject(ctx, path.Join(root, cipher.EncryptFileName(p)))
+	if err != nil {
+		return 0, errors.New("encrypted remote file could not be opened")
+	}
+	expected, err := cipher.DecryptedSize(obj.Size())
+	if err != nil || expected < 0 {
+		return 0, errors.New("decrypted download size is unavailable")
+	}
+	target, err := privateOutput(fd)
+	if err != nil {
+		return 0, err
+	}
+	defer target.Close()
+	stream, err := obj.Open(ctx)
+	if err != nil {
+		return 0, errors.New("encrypted remote file could not be opened")
+	}
+	reader, err := cipher.DecryptData(stream)
+	if err != nil {
+		_ = stream.Close()
+		return 0, errors.New("encrypted download authentication failed")
+	}
+	count, copyErr := io.Copy(target, contextReader{ctx, reader})
+	closeErr := reader.Close()
+	if copyErr != nil || closeErr != nil || ctx.Err() != nil {
+		return 0, errors.New("decrypted download authentication failed or cancelled")
+	}
+	if count != expected {
+		return 0, errors.New("decrypted download size changed")
+	}
+	if target.Sync() != nil {
+		return 0, errors.New("decrypted download could not be flushed")
+	}
+	return count, nil
+}
+
 func cryptDescribe(name, encrypted, identity string) (string, *crypt.Cipher, error) {
 	cipher, _, _, expected, err := cryptConnection(name)
 	if err != nil {

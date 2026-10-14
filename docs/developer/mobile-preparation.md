@@ -290,6 +290,22 @@ without waiting for that separate pipeline.
 
 ## Phase 4 embedded rclone contract
 
+The credential import UI exposes **Choose credential ZIP…**, the selected
+filename, a password field and adjacent **Load remotes** button. Selection
+immediately reads at most 1 MiB into memory while picker access is held, then
+releases the provider handle. It does not load credentials or contact a remote.
+Loading consumes that in-memory selection, clears the password and shows
+**Browse folder** as the next action. A failed load keeps the selected ZIP ready
+for another password attempt; a successful load or forgetting credentials
+releases it. No additional ZIP or plaintext credential file is persisted.
+Focused dummy-backend tests cover selection, cancellation, wrong-password retry,
+oversized ZIP rejection and success; the native fixture exercises the new
+choose/password/load sequence.
+The remote picker retains actual backend remote names and includes an explicit
+tap-to-choose label. Its hint lists available crypt remote names, identifies a
+selected crypt, and explains when the ZIP has no crypt configuration. It does
+not silently choose a backing remote or remap remote identifiers.
+
 `Mobile/rclone_bridge` is a pinned Go module using rclone 1.74.1 and yeka/zip for
 WinZip AES/ZipCrypto interoperability. `cloud_build.py` builds Android arm64/x86_64
 C shared libraries with NDK 27.2.12479018 and explicit 16 KiB ELF page alignment, and iOS arm64 device plus host-architecture
@@ -342,6 +358,21 @@ copies use exclusive creation in UUID folders and a completion marker, so recove
 excludes incomplete, linked or invalid entries. Export extends the existing system
 copy adapter to chunked binary output with an explicit 32 MiB maximum; existing
 document/chat exports retain their 1 MiB default.
+
+Crypt downloads have two explicit storage contracts. The ordinary `read` action
+continues to reject crypt remotes. `crypt_fetch` saves original ciphertext into
+LocalCrypt. The explicit `crypt_read` action resolves an admitted crypt/backing
+pair, opens the encrypted object, authenticates/decrypts it as a stream and writes
+to a new caller-owned private descriptor. It verifies the decrypted byte count,
+completion, cancellation and flush; no whole-file buffer or fixed size cap is
+introduced. Python `Downloads.fetch(..., decrypted=True)` publishes the readable
+filename in Private downloads only after success, and removes partial plaintext
+on failure. The UI labels this action **Download decrypted copy** and explains
+that it stores unencrypted data, alongside **Download encrypted copy**. Ordinary
+open/export and normal app-data backup behavior apply to the explicit plaintext
+copy. Tests cover a transfer larger than the in-memory reader limit, remote
+ciphertext preservation, corrupted input, cancellation, existing destinations,
+unsafe paths and failed-copy cleanup.
 
 The mobile core inventory now includes 30 cases, including protected-key lifecycle
 and failure privacy. Native UI evidence includes ten cases. The ninth covers: real linked rclone, AES credential import,
@@ -566,3 +597,32 @@ Reports: [iOS](mobile-evidence/2026-10-13-standalone-comics-ios-native-ui-local.
 These are local development snapshots; native file pickers and physical devices
 were not exercised. The host native decoder, Go bridge suite and 15 mobile widget
 checks also passed, including AES and legacy passwords, retry and locking.
+
+
+### Remote action checkpoint
+
+Credential controls live in a Settings route; the Files remote route keeps browse
+status before the entries and download actions. Invalid selections report the
+next action instead of silently returning. `folder_download.pull_folder` streams
+ordinary or decrypted files into a private staging directory, validates direct
+child paths and duplicate entries, checks cancellation and credential generation,
+and publishes a new local folder only after all entries complete. Failures remove
+staging; repeated pulls never overwrite local edits. This is a one-time pull, not
+synchronization. The 10,000-entry bound matches the mobile traversal budget.
+
+Library sessions use `reader_sessions.Readers` with per-session native views and
+one shared LibraryStore adapter. Inactive decoders suspend; asynchronous page/open
+results check reader generation and host lifetime. Protected comic sessions remain
+transient. LocalCrypt still uses its existing guarded private reader; full private
+session integration and independent windows remain later work.
+
+Checkpoint validation: 42 mobile widget/workflow tests, six shared workspace/cloud
+checks and the Go bridge suite passed. Both native suites passed all 18 cases,
+including a real embedded-rclone folder pull, opening its local copy and checking
+its bytes: [iPhone Duo](mobile-evidence/2026-10-14-mobile-checkpoint-ios-native-ui-local.json)
+and [Android](mobile-evidence/2026-10-14-mobile-checkpoint-android-native-ui-local.json).
+Both reports identify local snapshot
+`3862ab9c3f839f7c79b3cb9c92a0dbeef62a9f31225941e9867721e6b005724e`.
+These are local development checks, not a published release or physical-device
+validation. Work pauses here at the user's request; unfinished milestones remain
+listed in the mobile navigation plan.

@@ -1,10 +1,34 @@
 """Native remote-file browser and private downloads; no remote mutations."""
 import asyncio
+from contextlib import contextmanager
+from io import BytesIO
+from textwrap import fill
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
-from .cloud import CloudClient, Downloads, download_name
+from .cloud import CloudClient, Downloads, PACKAGE_LIMIT, download_name
 from .localcrypt_ui import LocalCryptUI
+
+
+def import_hint(text):
+    # Toga's native Label is single-line by default. Explicit short lines
+    # keep the next action visible on narrow phones without clipping.
+    return '\n'.join(fill(line, width=38) for line in text.splitlines())
+
+
+class SelectedCredentialZIP:
+    """Consume picker access immediately; retain only bounded ZIP bytes in memory."""
+    def __init__(self, access, reference):
+        with access.open(reference) as (name, source):
+            self.data = source.read(PACKAGE_LIMIT + 1)
+        if len(self.data) > PACKAGE_LIMIT:
+            raise ValueError('Credential ZIPs are limited to 1 MiB.')
+        self.name = download_name(name)
+
+    @contextmanager
+    def open(self, reference=None):
+        with BytesIO(self.data) as stream:
+            yield self.name, stream
 
 
 class CloudUI(LocalCryptUI):
@@ -24,13 +48,19 @@ class CloudUI(LocalCryptUI):
                     self.cloud_client = CloudClient(vault=ProtectedVault.for_app(self))
                 except Exception:
                     error = 'The native remote engine or device credential protection is unavailable.'
-            self.cloud_password = toga.PasswordInput(placeholder='Credential ZIP password', style=Pack(height=44))
-            self.cloud_import = toga.Button('Import credential ZIP…', on_press=self.import_cloud_package, style=Pack(height=44))
+            self.cloud_pending_zip = None
+            self.cloud_choose = toga.Button('Choose credential ZIP…', on_press=self.choose_cloud_package, style=Pack(height=44))
+            self.cloud_selected_zip = toga.Label('No ZIP selected', style=Pack(font_size=14))
+            self.cloud_import_message = toga.Label(import_hint('Choose a ZIP, then enter its password and tap Load remotes.'), style=Pack(font_size=14))
+            self.cloud_password = toga.PasswordInput(placeholder='ZIP password (if encrypted)', on_confirm=self.import_cloud_package, style=Pack(flex=1, height=44))
+            self.cloud_import = toga.Button('Load remotes', on_press=self.import_cloud_package, style=Pack(height=44, font_weight='bold'))
             self.cloud_probe = toga.Button('Check rclone engine', on_press=self.probe_cloud, style=Pack(height=44))
             self.cloud_remember = toga.Switch('Save credentials on this device', value=True, style=Pack(height=44))
             self.cloud_package = toga.Label('Credential package: none', style=Pack(font_size=14))
             self.cloud_reload = toga.Button('Reload saved credentials', on_press=self.restore_cloud, style=Pack(height=44))
             self.cloud_remote = toga.Selection(on_change=self.cloud_remote_changed, style=Pack(height=44))
+            self.cloud_remote_heading = toga.Label('Choose remote · tap the name below', style=Pack(font_size=14))
+            self.cloud_remote_help = toga.Label('Load a credential ZIP to see its remotes.', style=Pack(font_size=14))
             self.cloud_location = toga.TextInput(placeholder='Folder within remote', style=Pack(height=44))
             self.cloud_browse = toga.Button('Browse folder', on_press=self.browse_cloud, style=Pack(flex=1, height=44))
             self.cloud_up = toga.Button('Parent folder', on_press=self.parent_cloud, style=Pack(flex=1, height=44))
@@ -39,6 +69,10 @@ class CloudUI(LocalCryptUI):
             self.remote_browser = NativeBrowser(selected=self.browser_cloud_selected, open_folder=self.browser_cloud_folder, navigate=self.browser_cloud_location)
             self.cloud_open = toga.Button('Open selected folder', on_press=self.open_cloud_folder, style=Pack(height=44))
             self.cloud_download = toga.Button('Download private copy', on_press=self.download_cloud, style=Pack(height=44))
+            self.cloud_download_help = toga.Label('', style=Pack(font_size=14))
+            self.cloud_downloaded_folder = None
+            self.cloud_folder_open = toga.Button('Open downloaded folder', on_press=self.open_downloaded_folder,
+                                                enabled=False, style=Pack(height=44))
             self.cloud_cancel = toga.Button('Cancel request', on_press=self.cancel_cloud, style=Pack(height=44))
             self.cloud_clear = toga.Button('Forget saved credentials', on_press=self.clear_cloud, style=Pack(height=44))
             self.cloud_status = toga.MultilineTextInput(value=error or 'Choose saved or session-only credentials, then import a ZIP. Its password is never saved.',
@@ -46,22 +80,35 @@ class CloudUI(LocalCryptUI):
             self.download_selector = toga.Selection(style=Pack(height=44))
             self.download_open = toga.Button('Open private copy', on_press=self.open_download, style=Pack(flex=1, height=44))
             self.download_export = toga.Button('Export private copy…', on_press=self.export_download, style=Pack(flex=1, height=44))
-            self.cloud_view = toga.ScrollContainer(content=toga.Box(children=[
-                toga.Button('Locations', on_press=self.show_locations, style=Pack(height=44)),
-                toga.Label('Remote files', style=Pack(font_size=22)), self.cloud_remember, toga.Label('Off: use credentials only for this app session.'), self.cloud_password, self.cloud_import,
-                 self.cloud_probe, self.cloud_reload, self.cloud_package, self.cloud_remote, self.cloud_location,
-                toga.Box(children=[self.cloud_browse, self.cloud_up], style=Pack(direction=ROW)),
-                self.remote_browser.widget, self.cloud_open, self.cloud_download, *self.build_localcrypt(), self.cloud_cancel, self.cloud_clear,
-                self.cloud_status, toga.Label('Private downloads'), self.download_selector,
-                toga.Box(children=[self.download_open, self.download_export], style=Pack(direction=ROW))],
+            self.cloud_connections_view = toga.ScrollContainer(content=toga.Box(children=[
+                toga.Label('Remote connections', style=Pack(font_size=22)),
+                self.cloud_choose, self.cloud_selected_zip, self.cloud_import_message,
+                toga.Box(children=[self.cloud_password, self.cloud_import], style=Pack(direction=ROW)),
+                self.cloud_remember, toga.Label('Off: use credentials only for this app session.'),
+                self.cloud_package, self.cloud_reload, self.cloud_probe, self.cloud_clear,
+                toga.Button('Browse remote files', on_press=self.show_cloud, style=Pack(height=44))],
                 style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+            self.cloud_view = toga.ScrollContainer(content=toga.Box(children=[
+                toga.Label('Remote files', style=Pack(font_size=22)),
+                toga.Button('Manage connections…', on_press=self.show_cloud_connections, style=Pack(height=44)),
+                self.cloud_remote_heading, self.cloud_remote, self.cloud_remote_help,
+                self.cloud_location, toga.Box(children=[self.cloud_browse, self.cloud_up], style=Pack(direction=ROW)),
+                self.cloud_status, self.cloud_cancel, self.remote_browser.widget,
+                self.cloud_open, self.cloud_download_help, self.cloud_download, self.cloud_folder_open,
+                toga.Label('Downloaded copies', style=Pack(font_size=18, margin_top=12)), self.download_selector,
+                toga.Box(children=[self.download_open, self.download_export], style=Pack(direction=ROW)),
+                *self.build_localcrypt()], style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
             self.refresh_downloads()
             self.set_cloud_busy(False)
             if self.cloud_client is not None and getattr(self.cloud_client, 'vault', None) is not None:
                 self.set_cloud_busy(True)
                 self.cloud_restore_task = self.loop.create_task(self.restore_cloud(initial=True))
         if present:
-            self.show_view(self.cloud_view, destination='files', route='connections', title='Remote files')
+            self.show_view(self.cloud_view, destination='files', route='remote-browser', title='Remote files')
+
+    def show_cloud_connections(self, widget=None, **kwargs):
+        self.show_cloud(present=False)
+        self.show_view(self.cloud_connections_view, destination='settings', route='connections', title='Remote connections')
 
     def selected_cloud_remote(self):
         try:
@@ -72,24 +119,47 @@ class CloudUI(LocalCryptUI):
 
     def set_cloud_busy(self, value):
         self.cloud_busy = value
-        for item in (self.cloud_password, self.cloud_import, self.cloud_probe, self.cloud_remote,
+        for item in (self.cloud_choose, self.cloud_password, self.cloud_import, self.cloud_probe, self.cloud_remote,
                      self.cloud_location, self.cloud_browse, self.cloud_up, self.cloud_entries,
                      self.cloud_open, self.cloud_download, self.cloud_clear, self.cloud_reload, self.cloud_remember,
                      self.crypt_download, self.crypt_open, self.crypt_refresh, self.crypt_selector, self.crypt_password):
             item.enabled = not value and self.cloud_client is not None
-        self.cloud_download.enabled = not value and self.cloud_client is not None and self.selected_cloud_remote() not in self.cloud_crypt_remotes
+        self.cloud_import.enabled = not value and self.cloud_client is not None and self.cloud_pending_zip is not None
+        is_crypt = self.selected_cloud_remote() in self.cloud_crypt_remotes
+        self.cloud_download.enabled = not value and self.cloud_client is not None
+        self.cloud_download.text = 'Download decrypted copy' if is_crypt else 'Download selected item'
+        self.cloud_folder_open.enabled = not value and self.cloud_downloaded_folder is not None
+        self.cloud_download_help.text = import_hint('Decrypted copy: saved unencrypted in Private downloads.\nEncrypted copy: kept encrypted in LocalCrypt.') if is_crypt else ''
         self.crypt_download.enabled = not value and self.cloud_client is not None and self.selected_cloud_remote() in self.cloud_crypt_remotes
         self.cloud_cancel.enabled = value
         self.download_open.enabled = self.download_export.enabled = not value and bool(self.download_labels)
 
     def cloud_remote_changed(self, widget=None, **kwargs):
+        self.refresh_cloud_remote_help()
         if hasattr(self, 'download_labels'):
             self.set_cloud_busy(self.cloud_busy)
+
+    def refresh_cloud_remote_help(self):
+        if not hasattr(self, 'cloud_remote_help'):
+            return
+        selected = self.selected_cloud_remote()
+        if not selected:
+            message = 'Load a credential ZIP to see its remotes.'
+        elif selected in self.cloud_crypt_remotes:
+            message = 'Crypt remote selected: ' + selected + '.\nTap Browse folder to see decrypted filenames.'
+        elif self.cloud_crypt_remotes:
+            names = sorted(self.cloud_crypt_remotes)
+            available = ', '.join(names[:3]) + (f' (+{len(names) - 3} more)' if len(names) > 3 else '')
+            message = 'Regular remote selected: ' + selected + '.\nCrypt remotes: ' + available + '.\nTap the remote name above to choose a crypt.'
+        else:
+            message = 'No crypt remote in the loaded ZIP.\nTo use crypt, include its configuration and its backing remote in the ZIP.'
+        self.cloud_remote_help.text = import_hint(message)
 
     async def _load_crypt_remote_names(self):
         # Alternate client adapters may expose ordinary downloads only.
         kinds = getattr(self.cloud_client, 'crypt_remotes', lambda: ())
         self.cloud_crypt_remotes = set(await asyncio.to_thread(kinds))
+        self.refresh_cloud_remote_help()
 
     async def restore_cloud(self, widget=None, *, initial=False, **kwargs):
         if (self.cloud_busy and not initial) or self.cloud_client is None:
@@ -107,6 +177,9 @@ class CloudUI(LocalCryptUI):
             self.cloud_open_remote = None
             self.cloud_location.value = self.cloud_path = ''
             self.cloud_package.text = 'Credential package: ' + (self.cloud_client.package_name or 'none')
+            if self.cloud_pending_zip is None and names:
+                self.cloud_selected_zip.text = import_hint('Saved ZIP: ' + (self.cloud_client.package_name or 'saved package'))
+                self.cloud_import_message.text = import_hint('Saved remotes are ready. Choose a remote below, then tap Browse folder.\nTo replace them, choose another ZIP.')
             self.cloud_status.value = (f'{len(names)} saved remote(s) restored. Choose a remote, then browse.'
                                        if names else 'No saved credential package. Import a ZIP to get started.')
         except Exception:
@@ -126,22 +199,48 @@ class CloudUI(LocalCryptUI):
         finally:
             self.set_cloud_busy(False)
 
-    async def import_cloud_package(self, widget=None, **kwargs):
+    async def choose_cloud_package(self, widget=None, **kwargs):
         from .pickers import pick_document
         if self.cloud_busy or self.cloud_client is None:
             return
-        password = self.cloud_password.value
-        self.cloud_password.value = ''
         self.set_cloud_busy(True)
         try:
             selected = await pick_document(self)
             if selected is None:
-                self.cloud_status.value = 'Import cancelled.'
+                self.cloud_import_message.text = import_hint('ZIP selection cancelled. Your loaded remotes are unchanged.')
                 return
+            package = await asyncio.to_thread(SelectedCredentialZIP, *selected)
+            self.cloud_pending_zip = package
+            self.cloud_selected_zip.text = import_hint('Selected ZIP: ' + package.name)
+            self.cloud_import_message.text = import_hint('Enter the ZIP password, then tap Load remotes (or Return).\nLeave it blank for an unencrypted ZIP.')
+        except Exception as error:
+            self.cloud_import_message.text = import_hint('Could not select ZIP: ' + str(error)[:150])
+        finally:
+            self.set_cloud_busy(False)
+
+    async def import_cloud_package(self, widget=None, **kwargs):
+        if self.cloud_busy or self.cloud_client is None:
+            return
+        # Retain the direct-call API for native validation clients; the visible
+        # Load remotes button is enabled only after Choose ZIP succeeds.
+        if self.cloud_pending_zip is None:
+            if widget is not None:
+                self.cloud_import_message.text = import_hint('Tap Choose credential ZIP first, then enter its password and tap Load remotes.')
+                return
+            await self.choose_cloud_package()
+            if self.cloud_pending_zip is None:
+                return
+        password = self.cloud_password.value
+        self.cloud_password.value = ''
+        selected = self.cloud_pending_zip
+        self.set_cloud_busy(True)
+        self.cloud_import_message.text = 'Loading remotes…'
+        try:
             if not self.clear_private_reader():
+                self.cloud_import_message.text = import_hint('Save or discard your private edits before loading another package.')
                 return
             self.clear_private_catalog()
-            names = await asyncio.to_thread(self.cloud_client.import_package, *selected, password, remember=self.cloud_remember.value)
+            names = await asyncio.to_thread(self.cloud_client.import_package, selected, None, password, remember=self.cloud_remember.value)
             await self._load_crypt_remote_names()
             self.cloud_remote.items = names
             self.cloud_package.text = 'Logistics credential package: ' + getattr(self.cloud_client, 'package_name', 'Imported ZIP')
@@ -149,19 +248,27 @@ class CloudUI(LocalCryptUI):
             self.cloud_open_remote = None
             self.cloud_rows = {}
             self.cloud_entries.items = []
+            self.cloud_pending_zip = None
+            self.cloud_selected_zip.text = import_hint('Loaded ZIP: ' + selected.name)
+            self.cloud_import_message.text = import_hint(f'{len(names)} remote(s) loaded. Choose a remote below, then tap Browse folder.')
             self.cloud_status.value = f'{len(names)} {'saved' if self.cloud_remember.value else 'session'} remote(s) loaded. Choose a remote, then browse. No connection has been made yet.'
         except Exception as error:
             self.cloud_status.value = 'Import failed: ' + str(error)[:300]
+            self.cloud_import_message.text = import_hint('Could not load ZIP. Check the password and tap Load remotes again.\n' + str(error)[:150])
         finally:
             password = None
             self.set_cloud_busy(False)
 
     async def browse_cloud(self, widget=None, **kwargs):
-        if self.cloud_busy or self.cloud_client is None or not self.selected_cloud_remote():
+        if self.cloud_busy:
             return
+        if self.cloud_client is None or not self.selected_cloud_remote():
+            self.cloud_status.value = 'Choose a remote first. Use Manage connections to load your remotes.'
+            return False
         remote, folder = self.selected_cloud_remote(), self.cloud_location.value.strip('/')
         previous_rows = self.cloud_rows
         previous_selected = self.cloud_entries.value
+        self.cloud_status.value = f'Opening {remote}:/{folder}…'
         self.set_cloud_busy(True)
         self.cloud_rows = {}
         self.cloud_entries.items = []
@@ -198,7 +305,7 @@ class CloudUI(LocalCryptUI):
             self.remote_browser.closed = False
             self.remote_browser.thumbnail = thumbnail
             self.remote_browser.set_entries(provider, folder, [dict(row, name=Path(row['path']).name, modified='') for row in rows], location=(remote, folder))
-            self.cloud_status.value = f'{len(rows)} entry/entries. Remote files are read-only.'
+            self.cloud_status.value = (f'{remote}:/{folder} · {len(rows)} items.\nTap an item to select it; use Open selected folder or Download below.' if rows else f'{remote}:/{folder} is empty.')
             return True
         except Exception as error:
             self.cloud_status.value = 'Browse failed: ' + str(error)[:300]
@@ -231,6 +338,7 @@ class CloudUI(LocalCryptUI):
             self.cloud_rows[label] = row
             self.browser_cloud_selected(None)
         self.cloud_entries.value = label
+        self.cloud_status.value = ('Selected folder: ' if row['directory'] else 'Selected file: ') + row['path']
 
     async def browser_cloud_folder(self, row):
         if self.cloud_busy:
@@ -245,25 +353,61 @@ class CloudUI(LocalCryptUI):
 
     async def open_cloud_folder(self, widget=None, **kwargs):
         row = self.cloud_rows.get(self.cloud_entries.value)
-        if not self.cloud_busy and row and row['directory'] and self.selected_cloud_remote() == self.cloud_open_remote:
-            self.cloud_location.value = row['path']
-            await self.browse_cloud()
+        if self.cloud_busy:
+            return
+        if not row or not row['directory']:
+            self.cloud_status.value = 'Select a folder in the list above, then tap Open selected folder.'
+            return False
+        if self.selected_cloud_remote() != self.cloud_open_remote:
+            self.cloud_status.value = 'The remote changed. Tap Browse folder to open it first.'
+            return False
+        self.cloud_location.value = row['path']
+        return await self.browse_cloud()
 
     async def download_cloud(self, widget=None, **kwargs):
         row = self.cloud_rows.get(self.cloud_entries.value)
-        if self.cloud_busy or not row or row['directory'] or self.selected_cloud_remote() != self.cloud_open_remote:
+        if self.cloud_busy:
             return
+        if not row:
+            self.cloud_status.value = 'Select a file or folder in the list above, then tap Download.'
+            return False
+        if self.selected_cloud_remote() != self.cloud_open_remote:
+            self.cloud_status.value = 'The remote changed. Tap Browse folder to open it first.'
+            return False
+        self.cloud_status.value = 'Downloading ' + row['path'] + '…'
         self.set_cloud_busy(True)
         try:
             name = download_name(row['path'])
+            decrypted = self.cloud_open_remote in self.cloud_crypt_remotes
+            if row['directory']:
+                from .folder_download import pull_folder
+                from threading import Event
+                self._crypt_cancel = Event()
+                remote = self.cloud_open_remote
+                def progress(count, path):
+                    self.loop.call_soon_threadsafe(setattr, self.cloud_status, 'value', f'Downloading folder: {count} files saved\n{path}')
+                target = await asyncio.to_thread(pull_folder, self.cloud_client, remote, row['path'],
+                    self.private_root / 'LocalFiles', decrypted=decrypted, cancelled=self._crypt_cancel.is_set, progress=progress)
+                self.cloud_downloaded_folder = target.name
+                self.cloud_status.value = f'Downloaded folder to On this device/{target.name}.\nThis is an unencrypted local copy. The remote original is unchanged.'
+                return True
             target = await asyncio.to_thread(self.downloads.fetch, self.cloud_client,
-                                            self.cloud_open_remote, row['path'])
+                                            self.cloud_open_remote, row['path'], decrypted=decrypted)
             self.refresh_downloads(target)
-            self.cloud_status.value = f'Downloaded {name}. The remote original was preserved.'
+            self.cloud_status.value = (f'Downloaded decrypted {name} to Private downloads; this copy is unencrypted. Tap Open private copy below.' if decrypted
+                                       else f'Downloaded {name}. Tap Open private copy below. The remote original was preserved.')
         except Exception as error:
             self.cloud_status.value = 'Download failed: ' + str(error)[:300]
         finally:
+            if row['directory']:
+                self._crypt_cancel = None
             self.set_cloud_busy(False)
+
+    async def open_downloaded_folder(self, widget=None, **kwargs):
+        if self.cloud_busy or self.cloud_downloaded_folder is None:
+            return
+        await self.show_local_location()
+        await self.browser_file_location(('Local files', self.cloud_downloaded_folder))
 
     def cancel_cloud(self, widget=None, **kwargs):
         if getattr(self, '_crypt_cancel', None) is not None:
@@ -286,6 +430,9 @@ class CloudUI(LocalCryptUI):
             self.cloud_rows = {}
             self.cloud_open_remote = None
             self.cloud_password.value = ''
+            self.cloud_pending_zip = None
+            self.cloud_selected_zip.text = 'No ZIP selected'
+            self.cloud_import_message.text = import_hint('Choose a ZIP, then enter its password and tap Load remotes.')
             self.cloud_package.text = 'Credential package: none'
             self.cloud_status.value = 'Saved and session credentials forgotten. Private downloads remain available.'
         except Exception:

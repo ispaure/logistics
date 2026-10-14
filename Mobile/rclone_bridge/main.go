@@ -84,7 +84,7 @@ func cancel() {
 func operation(action string) (context.Context, func()) {
 	duration := 2 * time.Minute
 	switch action {
-	case "read", "crypt_fetch", "crypt_raw_write", "crypt_metadata", "crypt_manifest":
+	case "read", "crypt_read", "crypt_fetch", "crypt_raw_write", "crypt_metadata", "crypt_manifest":
 		duration = 30 * time.Minute
 	}
 	ctx, stop := context.WithTimeout(context.Background(), duration)
@@ -498,6 +498,8 @@ func dispatch(action, input string) (output string) {
 			result, err = list(ctx, request.Remote, request.Path)
 		case "read":
 			result, err = readInto(ctx, request.Remote, request.Path, request.FD)
+		case "crypt_read":
+			result, err = cryptReadInto(ctx, request.Remote, request.Path, request.FD)
 		case "crypt_remotes":
 			names := []string{}
 			for name := range admitted {
@@ -556,7 +558,7 @@ func dispatch(action, input string) (output string) {
 			err = errors.New("unsupported mobile operation")
 		}
 	}
-	if err == nil && (action == "list" || action == "read" || action == "crypt_fetch") && store.failure() {
+	if err == nil && (action == "list" || action == "read" || action == "crypt_read" || action == "crypt_fetch") && store.failure() {
 		err = errors.New("Credentials refreshed in memory but could not be saved securely. Retry before closing the app.")
 	}
 	reply := map[string]any{"ok": err == nil}
