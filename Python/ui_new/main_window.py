@@ -176,6 +176,7 @@ class MainWindow(pyside.Window):
         self.updates.idle.connect(self._retry_close)
 
     def _update_offer_visibility(self, *args):
+        self.launch_surface.version_label.setVisible(self.launch_stack.currentWidget() is self.landing)
         button = self.launch_surface.update_button
         button.setVisible(self.updates is not None and self.updates.available is not None
                           and self.launch_stack.currentWidget() is self.landing)

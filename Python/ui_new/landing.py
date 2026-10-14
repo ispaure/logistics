@@ -331,6 +331,20 @@ class LaunchSurface(qt.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        from services.build_version import installed_build
+        identity = installed_build()
+        self.version_label = qt.QLabel(identity.label, self)
+        self.version_label.setObjectName('buildVersion')
+        self.version_label.setToolTip(identity.details)
+        self.version_label.setAccessibleName('Installed Logistics version: ' + identity.label)
+        self.version_label.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.version_label.setAlignment(qt.Qt.AlignmentFlag.AlignRight)
+        palette = self.version_label.palette()
+        grey = palette.color(qt.QPalette.ColorGroup.Disabled, qt.QPalette.ColorRole.Text)
+        for group in (qt.QPalette.ColorGroup.Active, qt.QPalette.ColorGroup.Inactive):
+            palette.setColor(group, qt.QPalette.ColorRole.WindowText, grey)
+        self.version_label.setPalette(palette)
+        self.version_label.setStyleSheet('QLabel#buildVersion { padding: 4px; }')
         self.update_button = qt.QPushButton('Update Logistics', self)
         self.update_button.setObjectName('updateLogistics')
         self.update_button.setAccessibleName('Update Logistics')
@@ -372,8 +386,14 @@ class LaunchSurface(qt.QWidget):
         button.move(12, max(12, self.height() - button.height() - 12))
         button.raise_()
         update = self.update_button
+        version = self.version_label
+        version.setMaximumWidth(max(0, self.width() - 24))
+        version.adjustSize()
+        version.move(max(12, self.width() - version.width() - 12), 12)
+        version.raise_()
         update.adjustSize()
-        update.move(max(12, self.width() - update.width() - 12), 12)
+        update.move(max(12, self.width() - update.width() - 12),
+                    12 + version.height() + 6 if version.isVisible() else 12)
         update.raise_()
 
     def resizeEvent(self, event):

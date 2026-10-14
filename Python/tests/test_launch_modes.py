@@ -98,6 +98,9 @@ class LaunchModeTests(QtTestCase):
         self.assertIs(window.launch_stack.currentWidget(), window.landing)
         self.assertTrue(window.sidebar.isHidden())
         self.assertEqual(window.dlg.windowTitle(), 'Logistics')
+        label = window.launch_surface.version_label
+        self.assertTrue(label.isVisible())
+        self.assertEqual(label.x() + label.width(), window.launch_surface.width() - 12)
         for mode, page in window._launch_targets().items():
             window.landing.buttons[mode].click()
             self.app.processEvents()
@@ -105,7 +108,9 @@ class LaunchModeTests(QtTestCase):
             self.assertIs(window.launch_stack.currentWidget(), window.hub)
             self.assertTrue(window.sidebar.isHidden())
             self.assertTrue(window.settings_button.isVisible())
+            self.assertFalse(label.isVisible())
             window._show_landing()
+            self.assertTrue(label.isVisible())
         window.landing.buttons['hub'].click()
         self.assertTrue(window.sidebar.isVisible())
         self.assertTrue(window.settings_button.isHidden())
