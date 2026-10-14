@@ -35,8 +35,22 @@ aliases for existing feature controllers. Asynchronous import/export captures it
 origin and rejects UI completion after that session closes; a background import
 does not switch a different active document. Closed ordinary drafts remain stored.
 Session generations prevent late results from reviving closed or invalidated
-resources. Adaptive workspace panes and mixed reader controllers are subsequent
-integration chunks; this registry alone does not establish OS window support.
+resources. `adaptive_workspace.py` embeds a managed UISplitViewController directly
+as the Documents tab on Apple, with native primary/detail navigation. Android
+uses measured width to place its retained list and current route beside each
+other at 840 dp; a Material rail starts separately at 600 dp. Resizing never
+closes a session. `action_menu.py` isolates native editor command presentation.
+
+A replacement host for the same app-private root retires its predecessor,
+invalidates old session generations and cancels pending private file work. This
+is the single-workspace Activity-recreation contract; independent OS windows
+require a separate writer/scene ownership model before enabling them.
+
+The --workspace mode of Mobile/navigation_tools.py drives the actual app, rather
+than the minimal foundation fixture. Local matrices passed two-draft keyboard,
+phone/tablet resize, Activity recreation and restart on Android, and rotation,
+background/resume and restart on Duo and iPad. Physical BOOX, real fold gestures,
+iOS 15 runtime interaction and accessibility/device touch checks remain unverified.
 
 Logistics has an independent native text/Markdown prototype in
 `Python/logisticsmobile`, with Briefcase configuration and tooling under

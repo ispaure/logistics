@@ -483,6 +483,8 @@ class FilesUI:
                     return copies, destination, (reader, kind, content)
                 return save_resource_and_reopen(provider, destination, data, reopen=reopen, cancelled=self._crypt_cancel.is_set)
             copies, destination, prepared = await asyncio.to_thread(save)
+            if not self.active_host:
+                return
             self._crypt_cancel = None
             self.set_cloud_busy(False)
             if await self.open_crypt(copies=copies, key=destination, prepared=prepared):

@@ -59,7 +59,10 @@ async def exercise(app):
         app.show_view(toga.Label('Route detail'), route='route-check', title='Route detail')
         assert app.native_host.state.routes['documents'] == ['editor', 'route-check']
         if get_os() is OS.IOS:
-            app.native_host.adapter.pop('documents')
+            if app.adaptive.split is not None:
+                app.adaptive.secondary.popViewControllerAnimated(False)
+            else:
+                app.native_host.adapter.pop('documents')
         else:
             app._impl.native.getOnBackPressedDispatcher().onBackPressed()
         await asyncio.sleep(.3)
@@ -302,12 +305,16 @@ class NativeCheckApp(LogisticsMobile):
     def startup(self):
         print('LOGISTICS_NATIVE_STARTUP', flush=True)
         self.navigation_hold = os.environ.get('LOGISTICS_NAVIGATION_HOLD') == '1'
-        self.storage_root = Path(self.paths.cache) / ('navigation-foundation-probe' if self.navigation_hold
+        self.workspace_hold = os.environ.get('LOGISTICS_WORKSPACE_HOLD') == '1'
+        self.storage_root = Path(self.paths.cache) / ('workspace-navigation-probe' if self.workspace_hold else 'navigation-foundation-probe' if self.navigation_hold
                                                      else 'native-check-' + uuid4().hex)
         super().startup()
 
     def on_running(self):
-        if self.navigation_hold:
+        if self.workspace_hold:
+            from .workspace_hold import hold_workspace
+            self.loop.create_task(hold_workspace(self))
+        elif self.navigation_hold:
             from .navigation_hold import hold_navigation
             self.loop.create_task(hold_navigation(self))
         else:
