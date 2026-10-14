@@ -647,3 +647,9 @@ session's text if Preview was selected. Returning through native Back records
 Edit mode. Preview buttons capture an owner/generation so a closed owner's
 callback cannot activate another document. The shared WebView is refreshed on
 activation and navigation remains offline and restricted.
+
+
+Restored ordinary resources whose records cannot be opened display an unavailable
+route with Try again and Remove from open documents. Selecting one leaves the
+previous editor owner untouched; removing the unavailable entry does not delete
+source or recovery files. Library activation failures use the same route.

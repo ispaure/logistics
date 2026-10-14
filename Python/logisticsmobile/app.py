@@ -176,8 +176,8 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
     def stored_document_opener(self, resource):
         def activate(widget=None, **kwargs):
             if self.checkpoint():
-                self.open_document(resource)
-                self.show_documents(resume=True)
+                if self.open_document(resource):
+                    self.show_documents(resume=True)
         return activate
 
     def session_opener(self, key):
@@ -185,11 +185,29 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
             session = self.workspace.sessions.get(key)
             if session is not None and self.checkpoint():
                 if session.provider == 'library':
-                    self.loop.create_task(self.open_book(session.resource))
+                    self.loop.create_task(self.resume_library_session(session))
                 else:
-                    self.open_document(session.resource)
-                    self.show_documents(resume=True)
+                    if self.open_document(session.resource):
+                        self.show_documents(resume=True)
+                    else:
+                        self.show_unavailable_session(key)
         return activate
+
+    async def resume_library_session(self, session):
+        try:
+            await self.open_book(session.resource)
+        except (OSError, ValueError, KeyError, TypeError):
+            if session.id in self.workspace.sessions:
+                self.show_unavailable_session(session.id)
+
+    def show_unavailable_session(self, key):
+        box = toga.Box(style=Pack(direction=COLUMN, margin=16, flex=1))
+        box.add(toga.Label('Document unavailable', style=Pack(font_size=18)))
+        box.add(toga.Label('Its stored data could not be opened.\nExisting files have been preserved.'))
+        box.add(toga.Button('Try again', on_press=self.session_opener(key), style=Pack(height=44)))
+        box.add(toga.Button('Remove from open documents', on_press=self.session_closer(key), style=Pack(height=44)))
+        box.add(toga.Button('All documents', on_press=self.show_documents_hub, style=Pack(height=44)))
+        self.show_view(box, destination='documents', route='unavailable:' + key, title='Unavailable document')
 
     def session_closer(self, key):
         def close(widget=None, **kwargs):
@@ -392,6 +410,7 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
                                      if failures else '')
 
     def open_document(self, key):
+        opened = False
         previous_view = self.document_view
         displaying = (hasattr(self, 'routes') and previous_view in self.routes.body('documents').children)
         self.editor_view.capture()
@@ -409,6 +428,7 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
                 view.document.conflict = True
                 view.status.text = 'Stored file changed. Save a copy to keep recovered edits.'
             view.bind()
+            opened = True
             session.title = self.current.name
             self.selector.items = list(self.labels)
             self.selector.value = next((label for label, identity in self.labels.items() if identity == key), None)
@@ -424,6 +444,7 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
         if displaying:
             self.show_documents(resume=True)
         self.editor_view.restore()
+        return opened
 
     def select_document(self, widget, **kwargs):
         if not self.loading and widget.value in self.labels:

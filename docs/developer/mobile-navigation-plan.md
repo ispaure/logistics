@@ -16,6 +16,33 @@ visible remote action feedback and one-time folder pulls to local storage.
 Full private-session integration, unified Files refinement, repeatable sync,
 reader visual refinement and independent windows remain unfinished.
 
+## Phase 0 submission boundary and numbered checkpoints
+
+Phase 0 is the first end-to-end deliverable described below (milestones 0–2),
+with the later reader/Files improvements already present in checkpoint `8de00ed`.
+The resume sequence uses numbered commit subjects; earlier history is preserved:
+
+| Checkpoint | Result |
+| --- | --- |
+| Baseline `8de00ed` | Native Home/Files/Documents/Settings, routes, recovery, adaptive text panes, library sessions and explicit one-time local folder pulls |
+| Phase 0 Part 1 `165a4f0` | Save, Keep draft, Discard and Cancel on dirty text Close; conflict-safe discard and owner-targeted close |
+| Phase 0 Part 2 `261c68e` | Per-document Edit/Preview continuity and preview callback ownership |
+| Phase 0 Part 3 | Unavailable restored resources offer Retry/Remove without displaying another document |
+| Phase 0 Part 4 | Final native evidence, submission notes and validation status |
+
+The Phase 0 implementation is ready for an alpha submission after the final
+native suites pass. Existing lifecycle evidence covers two ordinary drafts
+through Apple rotation/background/process restart and Android live resizing,
+Activity recreation and process restart. The final submission reruns both native
+suites against the current sources. Device-specific manual checks remain release
+limits: the retained iOS minimum, physical document-provider permissions, real
+fold gestures, accessibility combinations and physical BOOX/E Ink behavior have
+not all been verified. Independent windows are not part of Phase 0.
+
+Milestone 3 private-session expansion, milestone 4 repeatable sync and the unified
+Files experience, milestone 5 reader/visual refinement, and milestone 6 independent
+windows remain future phases. This submission does not claim those are complete.
+
 Status: proposed implementation plan, agreed design direction. Prepared October
 13, 2026. Milestones below describe future work, not shipped behavior.
 

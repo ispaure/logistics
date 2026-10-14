@@ -117,6 +117,13 @@ async def exercise(app):
         app.open_document(a)
         app.show_documents()
         app.editor.value = '# Native preview\n'
+        missing = app.workspace.open('managed-text', 'f' * 32, 'text')
+        app.session_opener(missing.id)()
+        assert app.body.children[0].children[0].text == 'Document unavailable'
+        assert app.current.id == a
+        assert app.close_session(missing.id)
+        assert missing.id not in app.workspace.sessions
+        app.show_documents()
         passed.append('native_text_workspace')
         app.show_preview()
         await wait_for_text(app.preview, 'Native preview')

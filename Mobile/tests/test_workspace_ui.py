@@ -6,6 +6,22 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class WorkspaceUITests(unittest.TestCase):
+    def test_unavailable_restored_entry_can_retry_or_remove_without_switching_editor(self):
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            owner = app.editor_view
+            missing = app.workspace.open('managed-text', 'f' * 32, 'text')
+            app.session_opener(missing.id)()
+            self.assertIs(app.editor_view, owner)
+            self.assertEqual(app.body.children[0].children[0].text, 'Document unavailable')
+            app.session_opener(missing.id)()
+            self.assertEqual(app.body.children[0].children[0].text, 'Document unavailable')
+            self.assertTrue(app.close_session(missing.id))
+            self.assertNotIn(missing.id, app.workspace.sessions)
+            self.assertTrue(owner.document.snapshot.path.exists())
+
     def test_preview_mode_restores_per_session_and_back_targets_its_owner(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)
