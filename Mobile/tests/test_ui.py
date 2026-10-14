@@ -131,8 +131,10 @@ class MobileUITests(unittest.TestCase):
             credentials.write_bytes(b'synthetic package')
             app.cloud_client = FixtureCloud()
             app.show_cloud()
-            app.cloud_password.value = 'synthetic-ui-password'
             with patch('logisticsmobile.pickers.pick_document', new=AsyncMock(return_value=(LocalDocuments(), credentials))):
+                app.loop.run_until_complete(app.choose_cloud_package())
+                self.assertTrue(app.cloud_import.enabled)
+                app.cloud_password.value = 'synthetic-ui-password'
                 app.loop.run_until_complete(app.import_cloud_package())
             self.assertEqual(app.cloud_password.value, '')
             app.loop.run_until_complete(app.browse_cloud())

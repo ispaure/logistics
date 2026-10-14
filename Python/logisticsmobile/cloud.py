@@ -33,7 +33,7 @@ class CloudClient:
         self.free.restype = None
 
     def request(self, action, **values):
-        if action not in {'import', 'list', 'read', 'probe', 'clear', 'cancel', 'vault_open', 'vault_info', 'crypt_remotes', 'crypt_fetch', 'crypt_describe', 'crypt_decode', 'crypt_encode', 'crypt_metadata', 'crypt_path', 'crypt_raw_read', 'crypt_raw_write', 'crypt_stat', 'crypt_range', 'crypt_archive', 'crypt_manifest', 'crypt_thumbnail', 'file_thumbnail', 'image_thumbnail', 'remote_thumbnail', 'file_archive'}:
+        if action not in {'import', 'list', 'read', 'crypt_read', 'probe', 'clear', 'cancel', 'vault_open', 'vault_info', 'crypt_remotes', 'crypt_fetch', 'crypt_describe', 'crypt_decode', 'crypt_encode', 'crypt_metadata', 'crypt_path', 'crypt_raw_read', 'crypt_raw_write', 'crypt_stat', 'crypt_range', 'crypt_archive', 'crypt_manifest', 'crypt_thumbnail', 'file_thumbnail', 'image_thumbnail', 'remote_thumbnail', 'file_archive'}:
             raise ValueError('Unsupported remote operation.')
         data = json.dumps(values, ensure_ascii=False).encode('utf-8')
         if len(data) > PACKAGE_LIMIT * (24 if action == 'image_thumbnail' else 2):
@@ -101,6 +101,9 @@ class CloudClient:
     def download_into(self, remote, path, descriptor):
         return self.request('read', remote=remote, path=path, fd=descriptor)
 
+    def download_decrypted_into(self, remote, path, descriptor):
+        return self.request('crypt_read', remote=remote, path=path, fd=descriptor)
+
     def cancel(self):
         self.request('cancel')
 
@@ -137,9 +140,10 @@ class Downloads:
             raise ValueError('Downloads are limited to 32 MiB.')
         return self._write(name, lambda stream: stream.write(data))
 
-    def fetch(self, client, remote, path):
+    def fetch(self, client, remote, path, *, decrypted=False):
         name = download_name(path)
-        return self._write(name, lambda stream: client.download_into(remote, path, stream.fileno()))
+        download = client.download_decrypted_into if decrypted else client.download_into
+        return self._write(name, lambda stream: download(remote, path, stream.fileno()))
 
     def _write(self, name, writer):
         import os

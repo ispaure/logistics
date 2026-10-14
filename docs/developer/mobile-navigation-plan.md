@@ -9,8 +9,12 @@ original milestone text below. Desktop also has a first-position Home toolbar
 action returning to its landing page.
 
 Milestone 0 foundation is committed; actual native destination wiring is committed
-as the first milestone 1 chunk. Native Back/routes, the durable multi-document
-workspace and later feature/visual/window milestones remain in progress.
+with native Back/routes and independently editable text documents. Adaptive
+Documents panes and recovery are implemented. The current checkpoint adds library
+sessions and brings forward part of milestone 4: Settings connection setup,
+visible remote action feedback and one-time folder pulls to local storage.
+Full private-session integration, unified Files refinement, repeatable sync,
+reader visual refinement and independent windows remain unfinished.
 
 Status: proposed implementation plan, agreed design direction. Prepared October
 13, 2026. Milestones below describe future work, not shipped behavior.
