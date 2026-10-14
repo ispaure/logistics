@@ -2,9 +2,8 @@
 import asyncio
 
 
-async def assert_comic_centered(view, *, fullscreen=False):
-    """Measure the rendered page in the actual native viewport after layout."""
-    await asyncio.sleep(.3)
+def _assert_comic_centered(view, *, fullscreen=False):
+    """Measure the rendered page in the actual native viewport."""
     native = view._impl.native
     if hasattr(view._impl, 'picture'):
         picture = view._impl.picture
@@ -44,6 +43,26 @@ async def assert_comic_centered(view, *, fullscreen=False):
         assert abs(dy) < 2, ('Comic misses screen centre', dy,
             float(native.bounds.size.height) if hasattr(view._impl, 'picture') else
             (list(location), native.getHeight(), decor.getHeight(), bars.top, bars.bottom))
+
+
+async def assert_comic_centered(view, *, fullscreen=False):
+    """Wait for native chrome/layout to settle, retaining exact geometry checks."""
+    deadline = asyncio.get_running_loop().time() + 15
+    centered = 0
+    while True:
+        await asyncio.sleep(.1)
+        try:
+            _assert_comic_centered(view, fullscreen=fullscreen)
+        except AssertionError:
+            centered = 0
+            if asyncio.get_running_loop().time() >= deadline:
+                raise
+        else:
+            centered += 1
+            if centered >= 3:
+                return
+            if asyncio.get_running_loop().time() >= deadline:
+                raise AssertionError('Comic geometry did not settle before the deadline')
 
 
 async def exercise_reader(app, passed):

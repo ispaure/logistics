@@ -947,3 +947,8 @@ tracking that tolerates UIKit container refreshes. All 72 frozen host tests,
 39 core tests and 25 native cases on each of Android, iPad and iPhone pass.
 Concurrent folder improvements are excluded from this frozen audit. These fixes
 and evidence remain local under the user's commit hold; main.07 stays unchanged.
+
+Native comic geometry checks wait for three consecutive centered samples after
+chrome transitions, with a 15-second deadline. This replaces a fixed 300 ms delay
+that could sample the previous viewport during slow hosted Android layout. The
+same two-pixel centering and fullscreen-height assertions still apply.
