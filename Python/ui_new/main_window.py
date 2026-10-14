@@ -83,6 +83,7 @@ class MainWindow(pyside.Window):
         self.sidebar = DestinationRail(self.documents, self.dlg)
         self.sidebar.actions = self.actions
         self.sidebar.selected.connect(self._destination_changed)
+        self.sidebar.home_requested.connect(self._show_landing)
         self.documents.changed.connect(self._documents_changed)
         self.documents.idle.connect(self._retry_close)
         self.actions.changed.connect(self._actions_changed)

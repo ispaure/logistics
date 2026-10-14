@@ -47,6 +47,11 @@ class DestinationIcon(qt.QIconEngine):
             for y in (3, 10, 17):
                 painter.drawRoundedRect(qt.QRectF(3, y, 18, 4), 1, 1)
                 painter.drawPoint(qt.QPointF(17, y+2))
+        elif self.name == 'home':
+            painter.drawPolyline(qt.QPolygonF([qt.QPointF(x, y) for x, y in
+                ((2, 11), (12, 3), (22, 11))]))
+            painter.drawPolyline(qt.QPolygonF([qt.QPointF(x, y) for x, y in
+                ((5, 9), (5, 21), (9, 21), (9, 14), (15, 14), (15, 21), (19, 21), (19, 9))]))
         elif self.name == 'smart_home':
             painter.drawPolyline(qt.QPolygonF([qt.QPointF(x, y) for x, y in
                 ((2, 11), (12, 3), (22, 11))]))
@@ -202,6 +207,7 @@ class ActivityButton(qt.QToolButton):
 
 class DestinationRail(qt.QWidget):
     selected = qt.Signal(object)
+    home_requested = qt.Signal()
 
     def __init__(self, documents, parent=None):
         super().__init__(parent)
@@ -265,6 +271,10 @@ class DestinationRail(qt.QWidget):
         layout = qt.QVBoxLayout(icons)
         layout.setContentsMargins(2, 10, 2, 10)
         layout.setSpacing(8)
+        self.home_button = self._button('home', 'Home — landing page')
+        self.home_button.setCheckable(False)
+        self.home_button.clicked.connect(self._home)
+        layout.addWidget(self.home_button)
         for key, title in [('browser', 'File Browser'), ('hub', 'Folder Hub'),
                            ('actions', 'Folder Actions'), ('documents', 'Open documents')]:
             button = self._button(key, title)
@@ -317,10 +327,14 @@ class DestinationRail(qt.QWidget):
         button.setToolTip(title)
         button.setText(title)
         button.setToolButtonStyle(qt.Qt.ToolButtonStyle.ToolButtonIconOnly)
-        if key not in ('tools', 'documents', 'rename') and not key.startswith('editor:'):
+        if key not in ('home', 'tools', 'documents', 'rename') and not key.startswith('editor:'):
             button.clicked.connect(lambda checked=False, name=key: self.selected.emit(self.pages.get(name)))
         self.buttons[key] = button
         return button
+
+    def _home(self):
+        self.document_overlay.hide()
+        self.home_requested.emit()
 
     def refresh(self, tabs, core):
         core = {page: (order, name) for order, name, page in core}
