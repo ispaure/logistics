@@ -7,6 +7,7 @@ from hashlib import sha256
 import threading
 import os
 from pathlib import Path
+from xml.etree.ElementTree import ParseError
 from uuid import uuid4
 from zipfile import ZipFile
 
@@ -295,6 +296,10 @@ class PrivateReader:
                     if not self.pages:
                         raise ValueError('The comic contains no PNG/JPEG pages.')
                     self.labels = [f'Page {i + 1}' for i in range(len(self.pages))]
+                    try:
+                        self.right_to_left = self.comic.info.get_field('Manga') == 'YesAndRightToLeft'
+                    except (OSError, ValueError, ParseError):
+                        self.right_to_left = False
             if self.kind == '.epub':
                 from features.books.epub import EPUBBook
                 self.book = EPUBBook(Path(name), source=self.source)

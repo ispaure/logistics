@@ -76,6 +76,9 @@ class FeatureCommands(ActionMenu):
         app = self.feature_owner.app
         if not app.active_host or getattr(app, 'cloud_busy', False):
             return
+        session = getattr(app, 'session', None)
+        if session is not None and session.id not in app.workspace.sessions:
+            return
         result = callback()
         if inspect.isawaitable(result):
             app.loop.create_task(result)

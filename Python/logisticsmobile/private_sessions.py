@@ -9,7 +9,7 @@ FIELDS = ('crypt_reader', '_crypt_reader_store', 'crypt_title', 'crypt_page',
           'crypt_read_page', 'crypt_text', 'crypt_image', 'crypt_content', 'crypt_save',
           'crypt_view', 'crypt_metadata_fields', 'crypt_metadata_initial',
           'crypt_metadata_values', 'crypt_metadata_view', 'crypt_metadata_status',
-          'crypt_metadata_save')
+          'crypt_metadata_save', 'crypt_tools_view', 'crypt_actions', 'crypt_actions_menu')
 SHARED = {'crypt_password', 'crypt_copies', 'crypt_labels', 'crypt_selector'}
 
 
@@ -41,8 +41,8 @@ class PrivateController(LocalCryptUI):
 
     def show_view(self, view, **kwargs):
         self.manager.bind(self)
-        kwargs.update(destination='documents', route='private:' + self.session.id,
-                      title='Private document')
+        kwargs.update(destination='documents', route=kwargs.get('route') or 'private:' + self.session.id,
+                      title=kwargs.get('title') or 'Private document')
         return self.app.show_view(view, **kwargs)
 
     def resume_crypt(self, widget=None, **kwargs):

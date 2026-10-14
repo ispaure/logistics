@@ -13,6 +13,8 @@ class TextEditorView:
     def __init__(self, app):
         self.app, self.document, self.session = app, None, None
         self.loading = True
+        self.preview_pending = None
+        self.split_preview = None
         self.selector = toga.Selection(on_change=self.selected, style=Pack(flex=1, height=44))
         self.name = toga.TextInput(on_change=self.name_changed, style=Pack(flex=1, height=44))
         self.editor = toga.MultilineTextInput(on_change=self.text_changed,
@@ -29,9 +31,11 @@ class TextEditorView:
             ('Import…', lambda: app.import_document(origin=self)), ('Open from Files…', app.show_editor_open),
             ('Save', app.save_document), ('Save a copy', app.save_copy),
             ('Save As…', app.show_document_save_as), ('Export…', lambda: app.export_document(origin=self)),
-            ('Close document', lambda: app.request_close_session(self.session.id))])
+            ('Close document', lambda: app.request_close_session(self.session.id)),
+            ('Preview beside editor (wide windows)', self.toggle_split)])
         box.add(toga.Box(children=[self.name, self.actions_button], style=Pack(direction=ROW, margin_bottom=8)))
-        box.add(self.editor)
+        self.editor_area = toga.Box(children=[self.editor], style=Pack(direction=ROW, flex=1))
+        box.add(self.editor_area)
         box.add(self.status)
         box.add(toga.Box(children=[self.save_button,
             toga.Button('Preview', on_press=app.show_preview, style=Pack(flex=1, height=44))],
@@ -50,6 +54,8 @@ class TextEditorView:
         self.app.current = self.document
         for field in FIELDS:
             setattr(self.app, field, getattr(self, field))
+        if isinstance(getattr(self.app, '_main_window', None), toga.Window):
+            self.apply_split(self.app.main_window.size.width)
 
     def selected(self, widget, **kwargs):
         if not self.loading and self.app.editor_view is self:
@@ -73,6 +79,50 @@ class TextEditorView:
             return
         self.document.text = widget.value
         self.preserve()
+        self.schedule_preview()
+
+    def toggle_split(self):
+        if self.session is None:
+            return
+        self.session.view['markdown_split'] = not self.session.view.get('markdown_split', False)
+        self.apply_split(self.app.main_window.size.width)
+
+    def apply_split(self, width):
+        if self.session is None:
+            return
+        show = width >= 1100 and self.session.view.get('markdown_split', False)
+        if show and self.split_preview is None:
+            self.split_preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False, style=Pack(flex=1))
+        if show and self.split_preview not in self.editor_area.children:
+            self.editor_area.add(self.split_preview)
+            self.schedule_preview()
+        elif not show and self.split_preview in self.editor_area.children:
+            self.editor_area.remove(self.split_preview)
+
+    def schedule_preview(self):
+        if self.preview_pending is not None:
+            self.preview_pending.cancel()
+        if self.split_preview is None or self.split_preview not in self.editor_area.children:
+            return
+        token = self.app.workspace.token(self.session.id)
+        def render():
+            self.preview_pending = None
+            if self.app.active_host and self.app.workspace.accepts(token):
+                from .preview import markdown_preview
+                from uuid import uuid4
+                try:
+                    self.split_preview.set_content('https://logistics.invalid/' + uuid4().hex + '/',
+                        markdown_preview(self.document.text, int(self.app.preferences.values['font_size'])))
+                except ValueError as error:
+                    self.status.text = str(error)
+        self.preview_pending = self.app.loop.call_later(.25, render)
+
+    def dispose(self):
+        if self.preview_pending is not None:
+            self.preview_pending.cancel()
+            self.preview_pending = None
+        if self.split_preview is not None:
+            self.split_preview.set_content('https://logistics.invalid/closed/', '<p>Document closed.</p>')
 
     def preserve(self):
         if self.session.id not in self.app.workspace.sessions:

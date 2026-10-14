@@ -31,6 +31,9 @@ def view_state(value):
         elif key == 'markdown_mode':
             if item not in ('edit', 'preview'):
                 raise ValueError('Invalid Markdown mode.')
+        elif key == 'markdown_split':
+            if type(item) is not bool:
+                raise ValueError('Invalid Markdown split preference.')
         else:
             raise ValueError('Unsupported workspace view field.')
     return dict(value)

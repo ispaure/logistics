@@ -15,14 +15,14 @@ from . import CASES
 from .fixtures import make_books
 
 
-async def wait_for_text(view, expected):
+async def wait_for_text(view, expected, *, absent=None):
     last = None
     async def loaded():
         nonlocal last
         while True:
             value = await view.evaluate_javascript('document.body ? document.body.textContent : ""')
             last = str(value)
-            if expected in str(value):
+            if expected in str(value) and (absent is None or absent not in str(value)):
                 return
             await asyncio.sleep(.1)
     # Toga Android can re-enter its cooperative loop from native callbacks;
@@ -135,8 +135,7 @@ async def exercise(app):
         app.session_opener(a_session)()
         assert app.current.id == a
         assert app.editor_view.session.view['markdown_mode'] == 'preview'
-        await wait_for_text(app.preview, 'Native preview')
-        assert await app.preview.evaluate_javascript('document.body.innerText.indexOf("Different preview owner")') == -1
+        await wait_for_text(app.preview, 'Native preview', absent='Different preview owner')
         app.show_documents()
         app.show_preview()
         assert app.preview is original_preview
@@ -167,6 +166,8 @@ async def exercise(app):
         assert app.book_content.children[0].image.width == 1
         await app.next_book_page()
         assert app.book_record['position'] == 1
+        from .reader_checks import exercise_reader
+        await exercise_reader(app, passed)
         # Exercise a real archive larger than the former ordinary-library cap.
         from zipfile import ZipFile
         large = fixtures / 'large-ordinary.cbz'

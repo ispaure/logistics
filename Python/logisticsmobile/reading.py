@@ -47,12 +47,14 @@ def image_dimensions(data):
     return width, height
 
 
-def chapter_html(book, index, font_size=16):
+def chapter_html(book, index, font_size=16, *, margin=16, theme='system'):
     if not 0 <= index < len(book.spine):
         raise IndexError('Chapter does not exist.')
     size = int(font_size)
     if not 12 <= size <= 32:
         raise ValueError('Invalid reading font size.')
+    if margin not in (8, 16, 24, 32) or theme not in ('system', 'light', 'dark'):
+        raise ValueError('Invalid reader appearance.')
     path = book.spine[index]
     source = book.read(path)
     if len(source) > 2 * 1024 * 1024:
@@ -99,7 +101,7 @@ def chapter_html(book, index, font_size=16):
     result = ('<!doctype html><html><head><meta charset="utf-8">'
               '<meta name="viewport" content="width=device-width, initial-scale=1">'
               '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">'
-              f'<style>html{{color-scheme:light dark}}body{{font:{size}px system-ui;line-height:1.5;margin:16px;overflow-wrap:anywhere}}'
+              f'<style>html{{color-scheme:{"light dark" if theme == "system" else theme}}}body{{font:{size}px system-ui;line-height:1.5;margin:{margin}px;overflow-wrap:anywhere}}'
               'img{max-width:100%;height:auto}pre{white-space:pre-wrap}table{max-width:100%}</style>'
               '</head><body>' + content + '</body></html>')
     if len(result.encode('utf-8')) > 2 * 1024 * 1024:
