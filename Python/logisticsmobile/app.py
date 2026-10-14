@@ -2,6 +2,7 @@
 import asyncio
 from pathlib import Path
 from uuid import uuid4
+import weakref
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
@@ -13,8 +14,11 @@ from .chat_ui import ChatUI
 from .cloud_ui import CloudUI
 from .native_navigation import NativeNavigationHost
 from .routing import Routes
-from .workspace import Workspace
+from .workspace import Workspace, MAX_SESSIONS
 from .editors import TextEditorView
+from .adaptive_workspace import AdaptiveWorkspace
+
+_active_hosts = weakref.WeakValueDictionary()
 
 
 class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
@@ -30,6 +34,16 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
     def startup(self):
         root = Path(self.storage_root or self.paths.data)
         self.private_root = root
+        previous_host = _active_hosts.get(str(root.resolve()))
+        if previous_host is not None:
+            previous_host.active_host = False
+            for session in previous_host.workspace.sessions.values():
+                previous_host.workspace.invalidate(session.id)
+            cancelled = getattr(previous_host, '_crypt_cancel', None)
+            if cancelled is not None:
+                cancelled.set()
+        self.active_host = True
+        _active_hosts[str(root.resolve())] = self
         self.preferences = Preferences(root)
         self.store = DocumentStore(root / 'Documents')
         self.workspace = Workspace(root)
@@ -41,10 +55,12 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         self.editor_view.bind()
         self.native_host = NativeNavigationHost(on_select=self.select_destination)
         self.routes = Routes(self.native_host, guard=self.checkpoint, changed=self.route_changed)
+        self.adaptive = AdaptiveWorkspace(self)
+        self.routes.on_render = self.adaptive.render
         self.navigation = self.native_host.root
         self.body = self.routes.body()
         self.main_window = toga.MainWindow(title='Logistics', content=self.navigation,
-                                           on_lose_focus=self.checkpoint)
+                                           on_lose_focus=self.checkpoint, on_resize=self.resize_workspace)
         self.on_exit = self.exit_app
         self.refresh_documents()
         self.loading = False
@@ -65,6 +81,7 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         self.main_window.show()
         self.native_host.install(self.main_window)
         self.routes.install()
+        self.adaptive.install()
 
     def select_destination(self, destination):
         if not self.checkpoint():
@@ -79,10 +96,20 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
     def route_changed(self, body):
         self.body = body
 
+    def resize_workspace(self, widget=None, *args, **kwargs):
+        self.adaptive.render()
+
     def show_view(self, view, *, checkpoint=True, destination=None, route=None, title='', root=False):
         if checkpoint and not self.checkpoint():
             return False
+        target = destination or self.native_host.state.destination
+        if self.adaptive.split is not None and target == 'documents' and not root:
+            self.native_host.activate('documents')
+            self.adaptive.present(view, route=route, title=title)
+            return True
         self.routes.show(view, destination=destination, route=route, title=title, root=root)
+        if root and target == 'documents':
+            self.adaptive.show_list()
         return True
 
     def show_home(self, widget=None, **kwargs):
@@ -128,12 +155,24 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
             except (OSError, ValueError, KeyError, TypeError):
                 title = 'Unavailable document'
             box.add(toga.Box(children=[
-                toga.Button(title, on_press=self.session_opener(session.id), style=Pack(flex=1, height=44)),
+                toga.Button(title if len(title) <= 32 else title[:29] + '…',
+                            on_press=self.session_opener(session.id), style=Pack(flex=1, height=44)),
                 toga.Button('Close', on_press=self.session_closer(session.id), style=Pack(height=44))],
                 style=Pack(direction=ROW)))
+        box.add(toga.Label('Stored documents', style=Pack(font_size=18, margin_top=12)))
+        for title, resource in self.labels.items():
+            box.add(toga.Button(title if len(title) <= 32 else title[:29] + '…',
+                on_press=self.stored_document_opener(resource), style=Pack(height=44)))
         if self.workspace.error:
             box.add(toga.Label(self.workspace.error, style=Pack(margin_top=8)))
-        self.show_view(box, destination='documents', root=True)
+        self.show_view(toga.ScrollContainer(content=box, style=Pack(flex=1)), destination='documents', root=True)
+
+    def stored_document_opener(self, resource):
+        def activate(widget=None, **kwargs):
+            if self.checkpoint():
+                self.open_document(resource)
+                self.show_documents()
+        return activate
 
     def session_opener(self, key):
         def activate(widget=None, **kwargs):
@@ -178,9 +217,17 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
                 self.editor_view.bind()
         self.save_workspace()
         self.show_documents_hub()
+        if was_current and self.adaptive.split is not None:
+            if self.current is not None:
+                self.adaptive.present(self.document_view, route='editor', title='Text & Markdown')
+                self.adaptive.show_list()
+            else:
+                self.adaptive.clear_details()
         return True
 
     def save_workspace(self, *, capture=True):
+        if not self.active_host:
+            return
         if capture:
             self.editor_view.capture()
         for view in self.text_views.values():
@@ -194,6 +241,14 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         if self.current is None:
             self.new_document()
         self.show_view(self.document_view, destination='documents', route='editor', title='Text & Markdown')
+
+    def show_editor_actions(self, owner):
+        box = toga.Box(style=Pack(direction=COLUMN, margin=12))
+        for title, action in owner.actions.actions:
+            def command(widget=None, target=action, **kwargs):
+                owner.actions.invoke(target)
+            box.add(toga.Button(title, on_press=command, style=Pack(height=44)))
+        self.show_view(toga.ScrollContainer(content=box, style=Pack(flex=1)), route='actions', title='Document actions')
 
     def show_settings(self, widget=None, **kwargs):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
@@ -312,9 +367,11 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
         if not self.checkpoint():
             return
         try:
-            self.current = self.store.create()
+            if len(self.workspace.sessions) >= MAX_SESSIONS:
+                raise ValueError('Close an open document before creating another (limit: 32).')
+            created = self.store.create()
             self.refresh_documents()
-            self.open_document(self.current.id)
+            self.open_document(created.id)
         except (OSError, ValueError) as error:
             self.status.text = str(error)
 
@@ -335,6 +392,8 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
             self.status.text = 'Draft preserved' if self.current.modified else 'Saved'
 
     def checkpoint(self, *args, **kwargs):
+        if not self.active_host:
+            return False
         if self.current is None or self.loading:
             return True
         if getattr(self.current, 'private', False):
@@ -342,6 +401,7 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
             return not self.current.modified
         try:
             self.store.checkpoint(self.current)
+            self.save_workspace()
             return True
         except (OSError, ValueError) as error:
             self.status.text = 'Could not preserve edits: ' + str(error)
@@ -363,24 +423,25 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
             return
         try:
             copy = self.store.save_copy(self.current, document_name(self.name.value))
-            self.current = copy
             self.refresh_documents()
             self.open_document(copy.id)
         except (OSError, ValueError) as error:
             self.status.text = str(error)
 
-    async def import_document(self, widget=None, **kwargs):
+    async def import_document(self, widget=None, *, origin=None, **kwargs):
         from .pickers import pick_document
+        origin = origin or self.editor_view
+        if origin.session is None or origin.session.id not in self.workspace.sessions or not origin.import_button.enabled:
+            return
         if not self.checkpoint():
             return
-        origin = self.editor_view
         token = self.workspace.token(origin.session.id)
         origin.import_button.enabled = False
         try:
             selected = await pick_document(self)
             if selected:
                 imported = await asyncio.to_thread(self.store.import_document, *selected)
-                if not self.workspace.accepts(token):
+                if not self.active_host or not self.workspace.accepts(token):
                     return  # The stored import remains available; never reopen a closed screen.
                 if self.editor_view is not origin:
                     active = self.workspace.active
@@ -394,31 +455,32 @@ class LogisticsMobile(LibraryUI, ChatUI, CloudUI, toga.App):
                     self.refresh_documents()
                     self.save_workspace()
                     return
-                self.current = imported
                 self.refresh_documents()
-                self.open_document(self.current.id)
+                self.open_document(imported.id)
         except Exception as error:
             # Native bridge errors are not necessarily OSError subclasses.
-            if self.workspace.accepts(token):
+            if self.active_host and self.workspace.accepts(token):
                 origin.status.text = 'Import failed: ' + str(error)[:500]
         finally:
             origin.import_button.enabled = True
 
-    async def export_document(self, widget=None, **kwargs):
+    async def export_document(self, widget=None, *, origin=None, **kwargs):
         from .pickers import export_document
+        origin = origin or self.editor_view
+        if origin.session is None or origin.session.id not in self.workspace.sessions or not origin.export_button.enabled:
+            return
         if self.current is None or not self.checkpoint():
             return
-        origin = self.editor_view
         token = self.workspace.token(origin.session.id)
         origin.export_button.enabled = False
         try:
             document = origin.document
             done = await export_document(self, document_name(origin.name.value),
                                         document.snapshot.encode(document.text))
-            if self.workspace.accepts(token):
+            if self.active_host and self.workspace.accepts(token):
                 origin.status.text = 'Document copy exported.' if done else 'Export cancelled.'
         except Exception as error:
-            if self.workspace.accepts(token):
+            if self.active_host and self.workspace.accepts(token):
                 origin.status.text = 'Export failed: ' + str(error)[:500]
         finally:
             origin.export_button.enabled = True

@@ -34,6 +34,7 @@ class Routes:
         self.changing = False
         self.back_callback = None
         self.delegate = None
+        self.on_render = None
         for key in DESTINATIONS:
             host.bodies[key].add(self.roots[key])
 
@@ -68,6 +69,8 @@ class Routes:
             self.listener = Listener(self)
             self.back_callback = NavigationBack.install(self.host.adapter.impl._native_activity, self.listener)
         self.selection_changed()
+        if self.on_render is not None:
+            self.on_render()
 
     def uninstall(self):
         if self.delegate is not None and self.apple:
@@ -123,6 +126,8 @@ class Routes:
                     outer.remove(child)
                 outer.add(panel)
         self.selection_changed()
+        if self.on_render is not None:
+            self.on_render()
 
     def trim(self, destination, count, *, native=True):
         screens = self.screens[destination]

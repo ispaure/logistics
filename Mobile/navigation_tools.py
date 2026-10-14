@@ -16,19 +16,21 @@ BUNDLE = 'io.github.ispaure.logisticsmobile'
 PROBE = 'cache/navigation-foundation-probe'
 
 
-def android(adb, device, output):
+def android(adb, device, output, *, workspace=False):
     output.mkdir(parents=True, exist_ok=True)
     prefix = [str(adb), '-s', device]
+    probe = 'cache/workspace-navigation-probe' if workspace else PROBE
     def run(*args, data=None, check=True):
         return subprocess.run([*prefix, *args], input=data, capture_output=True, check=check, timeout=30)
     def launch():
         run('shell', 'am', 'start', '-n', BUNDLE + '/org.beeware.android.MainActivity',
-            '--es', 'org.beeware.ENVIRON', shlex.quote(json.dumps({'LOGISTICS_NAVIGATION_HOLD': '1'})))
+            '--es', 'org.beeware.ENVIRON', shlex.quote(json.dumps({
+                'LOGISTICS_WORKSPACE_HOLD' if workspace else 'LOGISTICS_NAVIGATION_HOLD': '1'})))
     def wait(predicate, timeout=30):
         end = time.monotonic() + timeout
         last = None
         while time.monotonic() < end:
-            result = run('exec-out', 'run-as', BUNDLE, 'cat', PROBE + '/probe.json', check=False)
+            result = run('exec-out', 'run-as', BUNDLE, 'cat', probe + '/probe.json', check=False)
             try:
                 last = json.loads(result.stdout)
             except (ValueError, UnicodeError):
@@ -43,7 +45,7 @@ def android(adb, device, output):
         sequence += 1
         payload = json.dumps(dict(sequence=sequence, action=action, **values)).encode()
         # Fixed fixture path; stdin carries data rather than shell interpolation.
-        script = 'cat > ' + PROBE + '/control.tmp && mv ' + PROBE + '/control.tmp ' + PROBE + '/control.json'
+        script = 'cat > ' + probe + '/control.tmp && mv ' + probe + '/control.tmp ' + probe + '/control.json'
         run('shell', 'run-as', BUNDLE, 'sh', '-c', "'" + script + "'", data=payload)
         return wait(lambda state: state['sequence'] == sequence)
     checks = []
@@ -53,7 +55,7 @@ def android(adb, device, output):
         print('NAVIGATION_LIFECYCLE_CASE=' + name, flush=True)
     try:
         run('shell', 'am', 'force-stop', BUNDLE)
-        run('shell', 'run-as', BUNDLE, 'rm', '-rf', PROBE)
+        run('shell', 'run-as', BUNDLE, 'rm', '-rf', probe)
         run('shell', 'wm', 'size', 'reset')
         run('shell', 'wm', 'density', 'reset')
         launch()
@@ -61,6 +63,12 @@ def android(adb, device, output):
         record('phone', initial)
         changed = command('edit', text='Durable native navigation draft')
         assert changed['recovered_text'] == changed['text']
+        if workspace:
+            second = command('create', name='Second.md', text='Independent B workspace draft')
+            changed = command('activate', resource=changed['document_id'])
+            assert len(changed['documents']) == 2
+            assert changed['documents'][second['document_id']] == 'Independent B workspace draft'
+            record('two_documents', changed)
         record('draft', command('select', destination='documents'))
         command('focus')
         keyboard = wait(lambda state: state['content_height'] < initial['content_height'] - 100)
@@ -74,6 +82,8 @@ def android(adb, device, output):
         run('shell', 'wm', 'size', '1860x2480')
         run('shell', 'wm', 'density', '300')
         tablet = wait(lambda state: state['width'] >= 600 and state['mode'] == 'rail')
+        if workspace:
+            tablet = wait(lambda state: state['workspace']['layout'] == 'list-detail')
         assert tablet['text'] == changed['text']
         record('android15_tablet', tablet)
         run('shell', 'wm', 'size', '2480x1860')
@@ -92,6 +102,8 @@ def android(adb, device, output):
         restored = wait(lambda state: state['boots'] > recreated['boots'] and state['pid'] != recreated['pid']
                        and state['width'] > 0 and state['height'] > 0)
         assert restored['pid'] != recreated['pid'] and restored['text'] == changed['text']
+        if workspace:
+            assert restored['documents'] == changed['documents']
         record('process_restoration', restored)
         run('shell', 'wm', 'size', 'reset')
         run('shell', 'wm', 'density', 'reset')
@@ -108,18 +120,19 @@ def android(adb, device, output):
         run('shell', 'am', 'force-stop', BUNDLE, check=False)
 
 
-def apple(device, output):
+def apple(device, output, *, workspace=False):
     output.mkdir(parents=True, exist_ok=True)
     prefix = ['xcrun', 'simctl']
     def run(*args, env=None):
         return subprocess.run([*prefix, *args], env=env, capture_output=True, check=True, timeout=30)
     data_root = Path(run('get_app_container', device, BUNDLE, 'data').stdout.decode().strip())
-    root = data_root / 'Library/Caches/navigation-foundation-probe'
+    root = data_root / ('Library/Caches/workspace-navigation-probe' if workspace else 'Library/Caches/navigation-foundation-probe')
     if root.exists():
         shutil.rmtree(root)  # Only this explicitly isolated test fixture.
     def launch():
         run('launch', '--terminate-running-process', device, BUNDLE,
-            env=dict(os.environ, SIMCTL_CHILD_LOGISTICS_NAVIGATION_HOLD='1'))
+            env=dict(os.environ, **{'SIMCTL_CHILD_LOGISTICS_WORKSPACE_HOLD' if workspace
+                                   else 'SIMCTL_CHILD_LOGISTICS_NAVIGATION_HOLD': '1'}))
     def wait(predicate, timeout=30):
         end, last = time.monotonic() + timeout, None
         while time.monotonic() < end:
@@ -149,6 +162,12 @@ def apple(device, output):
         initial = wait(lambda state: state['width'] > 0)
         record('initial', initial)
         changed = command('edit', text='Durable Apple navigation draft')
+        if workspace:
+            second = command('create', name='Second.md', text='Independent B workspace draft')
+            changed = command('activate', resource=changed['document_id'])
+            assert len(changed['documents']) == 2
+            assert changed['documents'][second['document_id']] == 'Independent B workspace draft'
+            record('two_documents', changed)
         command('select', destination='documents')
         command('rotate', orientation='portrait')
         portrait = wait(lambda state: state['height'] > state['width'])
@@ -167,6 +186,8 @@ def apple(device, output):
         launch()
         restored = wait(lambda state: state['pid'] != initial['pid'])
         assert restored['text'] == changed['text'] and restored['document_id'] == changed['document_id']
+        if workspace:
+            assert restored['documents'] == changed['documents']
         record('process_restoration', restored)
         report = dict(schema=1, suite='navigation-apple-lifecycle-matrix', success=True,
                       source=json.loads(Path('payload/source.json').read_text()), checks=checks)
@@ -181,9 +202,10 @@ if __name__ == '__main__':
     parser.add_argument('--adb', type=Path, default=Path(os.environ.get('ANDROID_HOME', '')) / 'platform-tools/adb')
     parser.add_argument('--device', required=True)
     parser.add_argument('--ios', action='store_true', help='Exercise an installed Apple test-mode app')
+    parser.add_argument('--workspace', action='store_true', help='Exercise the actual two-document workspace instead of the foundation fixture')
     parser.add_argument('--output', type=Path, default=Path('logs/navigation/android-lifecycle'))
     args = parser.parse_args()
     if args.ios:
-        apple(args.device, args.output)
+        apple(args.device, args.output, workspace=args.workspace)
     else:
-        android(args.adb, args.device, args.output)
+        android(args.adb, args.device, args.output, workspace=args.workspace)

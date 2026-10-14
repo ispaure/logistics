@@ -63,6 +63,13 @@ class CloudUI(LocalCryptUI):
         if present:
             self.show_view(self.cloud_view, destination='files', route='connections', title='Remote files')
 
+    def selected_cloud_remote(self):
+        try:
+            return self.cloud_remote.value
+        except IndexError:
+            # Native spinners can report the previous row during a source reset.
+            return None
+
     def set_cloud_busy(self, value):
         self.cloud_busy = value
         for item in (self.cloud_password, self.cloud_import, self.cloud_probe, self.cloud_remote,
@@ -70,8 +77,8 @@ class CloudUI(LocalCryptUI):
                      self.cloud_open, self.cloud_download, self.cloud_clear, self.cloud_reload, self.cloud_remember,
                      self.crypt_download, self.crypt_open, self.crypt_refresh, self.crypt_selector, self.crypt_password):
             item.enabled = not value and self.cloud_client is not None
-        self.cloud_download.enabled = not value and self.cloud_client is not None and self.cloud_remote.value not in self.cloud_crypt_remotes
-        self.crypt_download.enabled = not value and self.cloud_client is not None and self.cloud_remote.value in self.cloud_crypt_remotes
+        self.cloud_download.enabled = not value and self.cloud_client is not None and self.selected_cloud_remote() not in self.cloud_crypt_remotes
+        self.crypt_download.enabled = not value and self.cloud_client is not None and self.selected_cloud_remote() in self.cloud_crypt_remotes
         self.cloud_cancel.enabled = value
         self.download_open.enabled = self.download_export.enabled = not value and bool(self.download_labels)
 
@@ -150,9 +157,9 @@ class CloudUI(LocalCryptUI):
             self.set_cloud_busy(False)
 
     async def browse_cloud(self, widget=None, **kwargs):
-        if self.cloud_busy or self.cloud_client is None or not self.cloud_remote.value:
+        if self.cloud_busy or self.cloud_client is None or not self.selected_cloud_remote():
             return
-        remote, folder = self.cloud_remote.value, self.cloud_location.value.strip('/')
+        remote, folder = self.selected_cloud_remote(), self.cloud_location.value.strip('/')
         previous_rows = self.cloud_rows
         previous_selected = self.cloud_entries.value
         self.set_cloud_busy(True)
@@ -238,13 +245,13 @@ class CloudUI(LocalCryptUI):
 
     async def open_cloud_folder(self, widget=None, **kwargs):
         row = self.cloud_rows.get(self.cloud_entries.value)
-        if not self.cloud_busy and row and row['directory'] and self.cloud_remote.value == self.cloud_open_remote:
+        if not self.cloud_busy and row and row['directory'] and self.selected_cloud_remote() == self.cloud_open_remote:
             self.cloud_location.value = row['path']
             await self.browse_cloud()
 
     async def download_cloud(self, widget=None, **kwargs):
         row = self.cloud_rows.get(self.cloud_entries.value)
-        if self.cloud_busy or not row or row['directory'] or self.cloud_remote.value != self.cloud_open_remote:
+        if self.cloud_busy or not row or row['directory'] or self.selected_cloud_remote() != self.cloud_open_remote:
             return
         self.set_cloud_busy(True)
         try:

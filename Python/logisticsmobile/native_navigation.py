@@ -78,13 +78,22 @@ class NativeNavigationHost:
 
 class AppleNavigation:
     def __init__(self, host, window):
-        from rubicon.objc import ObjCClass, SEL
+        from rubicon.objc import ObjCClass, SEL, Block, objc_id
         self.host, self.window = host, window
         self.impl = host.root._impl
         self.controller = self.impl.native_controller
         self.parent = window._impl.container.content_controller
         self.old_layout = window._impl.container.on_native_layout
         self.old_get_size = window._impl.get_size
+        self.old_additional_insets = self.parent.additionalSafeAreaInsets
+        self.keyboard_inset = 0
+        self.keyboard_live = True
+        self.keyboard_block = Block(self.refresh_keyboard, None, objc_id)
+        self.notification_center = ObjCClass('NSNotificationCenter').defaultCenter
+        if callable(self.notification_center):
+            self.notification_center = self.notification_center()
+        self.keyboard_observer = self.notification_center.addObserverForName(
+            'UIKeyboardDidChangeFrameNotification', object=None, queue=None, usingBlock=self.keyboard_block)
         self.outer_navigation = window._impl.native.rootViewController
         self.old_bar_hidden = bool(self.outer_navigation.isNavigationBarHidden())
         self.outer_navigation.setNavigationBarHidden(True, animated=False)
@@ -136,6 +145,34 @@ class AppleNavigation:
         container.top_inset, container.bottom_inset = insets.top, insets.bottom
         container.left_inset, container.right_inset = insets.left, insets.right
         self.window._impl.notify_resize(container)
+
+    def refresh_keyboard(self, notification):
+        if not self.keyboard_live:
+            return
+        from rubicon.objc import ObjCInstance
+        value = ObjCInstance(notification).userInfo.objectForKey('UIKeyboardFrameEndUserInfoKey')
+        if not value:
+            return
+        frame = value.CGRectValue
+        if callable(frame):
+            frame = frame()
+        # Convert from the owning window's screen, never UIScreen.main. Floating
+        # iPad keyboards do not consume a full-width bottom inset.
+        native = self.window._impl.native
+        frame = native.convertRect(frame, fromCoordinateSpace=native.screen.coordinateSpace)
+        frame = self.parent.view.convertRect(frame, fromView=native)
+        bounds = self.parent.view.bounds.size
+        docked = (frame.origin.y + frame.size.height >= bounds.height - 1
+                  and frame.origin.x < bounds.width and frame.origin.x + frame.size.width > 0)
+        cover = max(0, bounds.height - max(0, frame.origin.y)) if docked else 0
+        baseline = max(0, self.parent.view.safeAreaInsets.bottom - self.keyboard_inset)
+        overlap = max(0, float(cover) - float(baseline))
+        if abs(overlap - self.keyboard_inset) > .5:
+            insets = self.parent.additionalSafeAreaInsets
+            insets.bottom = self.old_additional_insets.bottom + overlap
+            self.keyboard_inset = overlap
+            self.parent.additionalSafeAreaInsets = insets
+            self.parent.view.setNeedsLayout()
 
     def push(self, destination, widget, title):
         from toga_iOS.container import ControlledContainer
@@ -198,9 +235,13 @@ class AppleNavigation:
                     width=float(bounds.width), height=float(bounds.height),
                     bar_axis='vertical' if bar.height > bar.width else 'horizontal',
                     application_active=int(application.applicationState) == 0,
+                    keyboard_inset=self.keyboard_inset,
                     main_thread=bool(ObjCClass('NSThread').isMainThread))
 
     def dispose(self):
+        self.keyboard_live = False
+        self.notification_center.removeObserver(self.keyboard_observer)
+        self.parent.additionalSafeAreaInsets = self.old_additional_insets
         if getattr(self, 'split', None):
             self.split.dismissViewControllerAnimated(False, completion=None)
         for container in self.panes:

@@ -61,20 +61,28 @@ Android uses the lifecycle-owned AndroidX Back dispatcher. At a destination root
 Android yields Back to the system. Existing save/checkpoint failures block a
 Back action that would leave the screen.
 
-Choose a
-document from the top selector, or tap **New**. Edit its name in the name field and
+Choose a document from **Open documents** or **Stored documents** in Documents,
+or use **Actions → New document**. Edit its name in the name field and
 its contents in the text area. **Save** publishes the edited file inside the app.
 Text and Markdown use the same plain-text editor.
 
 Each open text/Markdown document owns its editor and draft. **New**, opening a
 stored document, and successful imports add it to **Documents → Open documents**;
 opening the same stored identity again activates it. Documents with the same name
-remain separate. Switch using the stored-document selector or the open list.
+remain separate. Switch using the open or stored lists. Closing a document keeps
+it available in Stored documents.
 **Close** removes an item from that list after preserving its ordinary draft;
 it does not delete its stored document. Session-only unsaved drafts require a save
 before closing. Ordinary open items and active selection restore at the next
 launch, with a maximum of 32 open items. Private resource restoration remains
 excluded. Native cursor/selection and scroll offsets are recorded for text views.
+
+On regular-width Apple layouts, native split navigation keeps the document list
+beside its detail view. Android shows both at 840 dp or wider and uses the
+compact route stack below that threshold. Layout changes retain the same editor
+and session. The editor keeps its name, text, status, Save and Preview visible;
+**Actions** opens a native Apple button menu or Android popup for New, Import,
+Open from Files, Save a copy, Save As, Export and Close.
 
 **Preview** renders basic Markdown offline. Raw HTML is escaped, links are inert,
 and scripts/images/network resources are blocked. It supports headings, list

@@ -3,6 +3,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from .documents import document_name
+from .action_menu import ActionMenu
 
 FIELDS = ('selector', 'name', 'editor', 'status', 'recovery_notice', 'import_button',
           'save_button', 'export_button', 'document_view')
@@ -22,20 +23,17 @@ class TextEditorView:
         self.save_button = toga.Button('Save', on_press=app.save_document, style=Pack(flex=1, height=44))
         self.export_button = toga.Button('Export…', on_press=app.export_document, style=Pack(flex=1, height=44))
         box = self.document_view = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=12))
-        box.add(toga.Button('All documents', on_press=app.show_documents_hub, style=Pack(height=44)))
-        box.add(self.selector)
-        box.add(self.recovery_notice)
-        box.add(toga.Box(children=[toga.Button('New', on_press=app.new_document, style=Pack(flex=1, height=44)),
-            self.import_button], style=Pack(direction=ROW, margin_bottom=8)))
-        box.add(self.name)
-        box.add(toga.Button('Open…', on_press=app.show_editor_open, style=Pack(height=44)))
+        self.actions_button = toga.Button('Actions', style=Pack(height=44))
+        self.actions = ActionMenu(self.actions_button, self, [
+            ('Open documents', app.show_documents_hub), ('New document', app.new_document),
+            ('Import…', lambda: app.import_document(origin=self)), ('Open from Files…', app.show_editor_open),
+            ('Save', app.save_document), ('Save a copy', app.save_copy),
+            ('Save As…', app.show_document_save_as), ('Export…', lambda: app.export_document(origin=self)),
+            ('Close document', lambda: app.close_session(self.session.id))])
+        box.add(toga.Box(children=[self.name, self.actions_button], style=Pack(direction=ROW, margin_bottom=8)))
         box.add(self.editor)
         box.add(self.status)
         box.add(toga.Box(children=[self.save_button,
-            toga.Button('Save a copy', on_press=app.save_copy, style=Pack(flex=1, height=44)),
-            toga.Button('Save As…', on_press=app.show_document_save_as, style=Pack(flex=1, height=44))],
-            style=Pack(direction=ROW, margin_top=8)))
-        box.add(toga.Box(children=[self.export_button,
             toga.Button('Preview', on_press=app.show_preview, style=Pack(flex=1, height=44))],
             style=Pack(direction=ROW, margin_top=8)))
 
@@ -58,7 +56,7 @@ class TextEditorView:
             self.app.select_document(widget, **kwargs)
 
     def name_changed(self, widget, **kwargs):
-        if (self.loading or self.document is None or self.session.id not in self.app.workspace.sessions
+        if (self.loading or not self.app.active_host or self.document is None or self.session.id not in self.app.workspace.sessions
                 or (self.app.loading and self.app.editor_view is self)):
             return
         try:
@@ -70,7 +68,7 @@ class TextEditorView:
             pass
 
     def text_changed(self, widget, **kwargs):
-        if (self.loading or self.document is None or self.session.id not in self.app.workspace.sessions
+        if (self.loading or not self.app.active_host or self.document is None or self.session.id not in self.app.workspace.sessions
                 or (self.app.loading and self.app.editor_view is self)):
             return
         self.document.text = widget.value

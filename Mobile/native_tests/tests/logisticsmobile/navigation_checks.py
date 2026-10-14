@@ -12,6 +12,7 @@ async def exercise_navigation(app):
     original = app.main_window.content
     original_widgets = set(app.widgets.keys())
     original_document = (app.current.id, app.current.text)
+    app.adaptive.uninstall()
     app.routes.uninstall()
     app.native_host.uninstall()
     host = NativeNavigationHost()
@@ -148,6 +149,7 @@ async def exercise_navigation(app):
         app.main_window.content = original
         app.native_host.install(app.main_window)
         app.routes.install()
+        app.adaptive.install()
         assert (app.current.id, app.current.text) == original_document
         assert set(app.widgets.keys()) == original_widgets
     result['widget_cleanup_verified'] = True
