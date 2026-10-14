@@ -36,7 +36,9 @@ class LibraryUI:
             self.next_page = toga.Button('Next', on_press=self.next_book_page, style=Pack(flex=1, height=44))
             self.bookmark_button = toga.Button('Bookmark', on_press=self.toggle_bookmark, style=Pack(flex=1, height=44))
             self.bookmark_selector = toga.Selection(on_change=self.select_bookmark, style=Pack(height=44))
-            self.library_view = toga.Box(children=[self.book_selector, self.book_import, self.book_open, self.book_lock,
+            self.library_view = toga.Box(children=[
+                toga.Button('All documents', on_press=self.show_documents_hub, style=Pack(height=44)),
+                self.book_selector, self.book_import, self.book_open, self.book_lock,
                 self.chapter_selector, self.book_content,
                 toga.Box(children=[self.previous_page, self.next_page, self.bookmark_button],
                          style=Pack(direction=ROW)), self.bookmark_selector, self.book_status],
@@ -44,7 +46,7 @@ class LibraryUI:
             self.refresh_library()
             self.book_loading = False
             self.set_book_busy(False)
-        self.show_view(self.library_view)
+        self.show_view(self.library_view, destination='documents')
 
     def refresh_library(self):
         previous = self.book_loading

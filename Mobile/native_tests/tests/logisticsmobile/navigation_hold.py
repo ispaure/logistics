@@ -16,6 +16,7 @@ async def hold_navigation(app):
     boots = previous.get('boots', 0) + 1
     sequence = previous.get('sequence', 0)
     original = app.main_window.content
+    app.native_host.uninstall()
     host = NativeNavigationHost()
     if previous.get('destination') in host.bodies:
         host.activate(previous['destination'])
@@ -94,3 +95,4 @@ async def hold_navigation(app):
     finally:
         host.dispose()
         app.main_window.content = original
+        app.native_host.install(app.main_window)

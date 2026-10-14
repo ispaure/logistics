@@ -17,7 +17,8 @@ class MobileUITests(unittest.TestCase):
             LogisticsMobile.storage_root = root
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
-            self.assertIn('Logistics', app.body.children[0].children[0].text)
+            self.assertEqual(app.native_host.state.destination, 'files')
+            self.assertEqual(app.body.children[0].children[0].text, 'Files')
             app.show_settings()
             app.font_choice.value = '20'
             app.restore_choice.value = False
@@ -26,8 +27,16 @@ class MobileUITests(unittest.TestCase):
             self.assertEqual(app.preferences.values['restore_last_document'], 'false')
             app.show_documents()
             first = app.current.id
+            self.assertEqual(app.native_host.state.destination, 'documents')
             app.name.value = 'Notes.md'
             app.editor.value = '# Recovered\n'
+            app.native_host.root.current_tab = 'Settings'
+            app.native_host._selected(app.native_host.root)
+            self.assertIs(app.body, app.native_host.bodies['settings'])
+            app.native_host.root.current_tab = 'Documents'
+            app.native_host._selected(app.native_host.root)
+            self.assertIs(app.body.children[0], app.document_view)
+            self.assertEqual(app.editor.value, '# Recovered\n')
             recovered = app.store.open(first)
             self.assertEqual(recovered.name, 'Notes.md')
             self.assertTrue(recovered.modified)

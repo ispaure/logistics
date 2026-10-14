@@ -41,7 +41,7 @@ class LocalCryptUI(FilesUI):
 
     def resume_crypt(self, widget=None, **kwargs):
         if self.crypt_reader is not None:
-            self.show_view(self.crypt_view)
+            self.show_view(self.crypt_view, destination='documents')
 
     def clear_private_reader(self, *, discard=False):
         if getattr(self, '_crypt_cancel', None) is not None:
@@ -175,7 +175,7 @@ class LocalCryptUI(FilesUI):
                 style=Pack(direction=COLUMN, flex=1, margin=12))
             handoff = (prepared is not None and getattr(self, 'save_as_source_document', None) is self.current
                        and getattr(self.current, 'private', False))
-            if not self.show_view(view.crypt_view, checkpoint=not handoff):
+            if not self.show_view(view.crypt_view, checkpoint=not handoff, destination='documents'):
                 return False
             self._crypt_cancel = None
             self.clear_private_reader(discard=True)

@@ -54,11 +54,22 @@ class NativeNavigationHost:
         elif backend.startswith('toga_android.'):
             self.adapter = AndroidNavigation(self, window)
 
-    def dispose(self):
+    def uninstall(self):
         if self.adapter is not None:
             self.adapter.dispose()
             self.adapter = None
         self.window = None
+
+    def dispose(self):
+        self.uninstall()
+        if type(self.root._impl).__module__.startswith('toga_iOS.'):
+            from rubicon.objc import ObjCClass
+            impl = self.root._impl
+            ObjCClass('NSObject').cancelPreviousPerformRequestsWithTarget(impl.native_controller)
+            impl.native_controller.delegate = None
+            impl.native_controller.setViewControllers([], animated=False)
+            for container in impl.sub_containers:
+                container.controller.view = ObjCClass('UIView').alloc().init()
         self.on_select = None
 
     def diagnostics(self):
@@ -183,6 +194,8 @@ class AppleNavigation:
         if getattr(self, 'split', None):
             self.split.dismissViewControllerAnimated(False, completion=None)
         for container in self.panes:
+            from rubicon.objc import ObjCClass
+            container.controller.view = ObjCClass('UIView').alloc().init()
             container.on_native_layout = None
             if container.content is not None:
                 container.content.interface.window = None
