@@ -51,6 +51,35 @@ async def exercise_localcrypt(app, passed):
         app.close_crypt()
     passed.append('native_localcrypt_reading')
 
+    await open_copy('note.md')
+    first = app.private_sessions.active
+    first.crypt_text.value = 'First native memory-only draft'
+    await open_copy('text.txt')
+    second = app.private_sessions.active
+    second.crypt_text.value = 'Second native memory-only draft'
+    await app.show_files()
+    app.show_settings()
+    await open_copy('note.md')
+    assert app.private_sessions.active is first
+    assert app.crypt_text.value == 'First native memory-only draft'
+    assert second.crypt_text.value == 'Second native memory-only draft'
+    assert len(app.private_sessions.controllers) == 2
+    app.request_close_session(first.session.id)
+    assert not app.close_session(first.session.id, choice='cancel')
+    first.resume_crypt()
+    await app.clear_cloud()
+    assert len(app.private_sessions.controllers) == 2
+    assert first.crypt_text.value == 'First native memory-only draft'
+    app.save_workspace()
+    manifest = (app.private_root / 'workspace.json').read_text()
+    assert 'provider-session' not in manifest and 'native memory-only draft' not in manifest
+    token = app.workspace.token(second.session.id)
+    assert app.clear_private_reader(discard=True)
+    assert not app.workspace.accepts(token)
+    assert first.crypt_text.value == second.crypt_text.value == ''
+    assert app.crypt_reader is None
+    passed.append('native_private_workspace')
+
     for name in ('note.md', 'text.txt'):
         reader = await open_copy(name)
         app.crypt_text.value = '# Native LocalCrypt edited sentinel\n'

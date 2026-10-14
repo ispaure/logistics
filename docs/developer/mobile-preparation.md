@@ -684,3 +684,12 @@ session-only, including provider-backed local text, until explicitly saved to
 its verified provider destination. File mutation retains the conservative guard
 that all private work must be saved/discarded; ordinary folder browsing does not
 close sessions. Native resource and mixed-session checks remain required.
+
+
+Phase 1 native mixed-session verification passes on both platforms (19 cases
+including `native_private_workspace`). It edits two encrypted resources, browses
+Files, switches through Settings, reopens the same owner, cancels Close, verifies
+that forgetting credentials cannot discard either draft, checks manifest privacy,
+and invalidates callbacks when both owners are explicitly discarded. Reports in
+`mobile-evidence/2026-10-14-phase1-*-native-ui-local.json` retain the exact local
+staged fingerprint. They remain development evidence, not clean release gates.
