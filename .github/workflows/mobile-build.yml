@@ -102,6 +102,10 @@ jobs:
         run: |
           device=$(python ui_tools.py ios-device)
           python ui_tools.py run ios --device "$device"
+          cp logs/ios-native-ui.json logs/iphone-native-ui.json
+          device=$(python ui_tools.py ios-ipad)
+          python ui_tools.py run ios --device "$device" --require-independent-windows
+          cp logs/ios-native-ui.json logs/ipad-native-ui.json
       - name: Capture iOS startup and crash diagnostics
         if: failure() && matrix.target == 'ios'
         working-directory: Mobile

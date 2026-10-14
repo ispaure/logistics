@@ -101,13 +101,18 @@ class Workspace:
                 or kind not in KINDS or (not transient and (provider not in PROVIDERS or not uuid(resource)))):
             raise ValueError('Unsupported workspace resource.')
         existing = next((session for session in self.sessions.values() if session.identity == (provider, resource)), None)
+        owners = getattr(self, 'window_owners', None)
         if existing is not None:
             if existing.transient != transient:
                 raise ValueError('Resource privacy cannot change while it is open.')
+            if owners is not None:
+                owners.claim(self.window_id, (provider, resource), private=transient)
             self.active = existing.id
             return existing
         if len(self.sessions) >= MAX_SESSIONS:
             raise ValueError('Close an open document before opening another (limit: 32).')
+        if owners is not None:
+            owners.claim(self.window_id, (provider, resource), private=transient)
         session = Session(uuid4().hex, provider, resource, kind, title, transient)
         self.sessions[session.id] = session
         self.active = session.id
@@ -135,6 +140,9 @@ class Workspace:
             return False
         self.invalidate(key)
         del self.sessions[key]
+        owners = getattr(self, 'window_owners', None)
+        if owners is not None:
+            owners.release(self.window_id, session.identity)
         if self.active == key:
             self.active = next(reversed(self.sessions), None)
         return True

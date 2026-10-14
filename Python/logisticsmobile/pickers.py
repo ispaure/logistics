@@ -5,7 +5,8 @@ from tempfile import TemporaryDirectory
 from commonUtils.runtime.platform import get_os, OS
 from .access import AndroidDocuments, IOSDocuments, LocalDocuments
 
-_ios_future = _ios_delegate_class = _ios_delegate = _ios_picker = None
+_ios_delegate_class = None
+_ios_pickers = {}
 
 
 async def pick_document(app):
@@ -33,46 +34,49 @@ async def pick_document(app):
 
 
 async def pick_ios(app, export_path=None):
-    global _ios_future, _ios_delegate_class, _ios_delegate, _ios_picker
+    global _ios_delegate_class
     from rubicon.objc import ObjCClass, ObjCProtocol, objc_method
-    if _ios_future is not None:
-        raise RuntimeError('A document picker is already open.')
+    key = app.main_window.id
+    if key in _ios_pickers:
+        raise RuntimeError('A document picker is already open in this window.')
     if _ios_delegate_class is None:
         NSObject = ObjCClass('NSObject')
         class LogisticsDocumentPickerDelegate(NSObject, protocols=(ObjCProtocol('UIDocumentPickerDelegate'),)):
             @objc_method
             def documentPicker_didPickDocumentsAtURLs_(self, picker, urls) -> None:
-                if _ios_future is not None and not _ios_future.done():
-                    _ios_future.set_result(urls[0] if len(urls) else None)
+                if not self.future.done():
+                    self.future.set_result(urls[0] if len(urls) else None)
 
             @objc_method
             def documentPickerWasCancelled_(self, picker) -> None:
-                if _ios_future is not None and not _ios_future.done():
-                    _ios_future.set_result(None)
+                if not self.future.done():
+                    self.future.set_result(None)
         _ios_delegate_class = LogisticsDocumentPickerDelegate
     # Open mode returns a scoped source URL. The adapter copies its bytes into
     # private storage while access is held, so no permission/bookmark is retained.
     if export_path is None:
-        _ios_picker = ObjCClass('UIDocumentPickerViewController').alloc().initWithDocumentTypes(
+        picker = ObjCClass('UIDocumentPickerViewController').alloc().initWithDocumentTypes(
             ['public.data'], inMode=1)
     else:
         url = ObjCClass('NSURL').fileURLWithPath(str(export_path))
-        _ios_picker = ObjCClass('UIDocumentPickerViewController').alloc().initWithURL(url, inMode=2)
-    _ios_delegate = _ios_delegate_class.alloc().init()
-    _ios_picker.delegate = _ios_delegate
-    _ios_picker.allowsMultipleSelection = False
-    _ios_future = asyncio.get_running_loop().create_future()
+        picker = ObjCClass('UIDocumentPickerViewController').alloc().initWithURL(url, inMode=2)
+    delegate = _ios_delegate_class.alloc().init()
+    picker.delegate = delegate
+    picker.allowsMultipleSelection = False
+    future = asyncio.get_running_loop().create_future()
+    delegate.future = future
+    _ios_pickers[key] = (future, delegate, picker)
     try:
         controller = app.main_window._impl.native.rootViewController
         while controller.presentedViewController:
             controller = controller.presentedViewController
-        controller.presentViewController(_ios_picker, animated=True, completion=None)
-        url = await _ios_future
+        controller.presentViewController(picker, animated=True, completion=None)
+        url = await future
         if export_path is not None:
             return url is not None
         return (IOSDocuments(), url) if url is not None else None
     finally:
-        _ios_future = _ios_delegate = _ios_picker = None
+        _ios_pickers.pop(key, None)
 
 
 async def export_document(app, name, content, *, max_bytes=None, mime_type=None):

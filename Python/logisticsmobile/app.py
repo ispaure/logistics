@@ -36,7 +36,8 @@ class LogisticsMobile(LocationsUI, PullJobsUI, ReaderWorkspace, ChatUI, CloudUI,
     def startup(self):
         root = Path(self.storage_root or self.paths.data)
         self.private_root = root
-        previous_host = _active_hosts.get(str(root.resolve()))
+        host_identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
+        previous_host = _active_hosts.get(host_identity)
         if previous_host is not None:
             memory = getattr(previous_host, 'memory_pressure', None)
             if memory is not None:
@@ -48,10 +49,14 @@ class LogisticsMobile(LocationsUI, PullJobsUI, ReaderWorkspace, ChatUI, CloudUI,
             if cancelled is not None:
                 cancelled.set()
         self.active_host = True
-        _active_hosts[str(root.resolve())] = self
-        self.preferences = Preferences(root)
+        _active_hosts[host_identity] = self
+        workspace_root = getattr(self, 'workspace_root', root)
+        self.preferences = Preferences(workspace_root)
         self.store = DocumentStore(root / 'Documents')
-        self.workspace = Workspace(root)
+        self.workspace = Workspace(workspace_root)
+        if hasattr(self, 'scene_manager'):
+            self.scene_manager.owners.attach(self.window_id, self)
+            self.scene_manager.bind_workspace(self.window_id, self)
         self.text_views = {}
         self.current = None
         self.loading = True
@@ -64,12 +69,17 @@ class LogisticsMobile(LocationsUI, PullJobsUI, ReaderWorkspace, ChatUI, CloudUI,
         self.routes.on_render = self.adaptive.render
         self.navigation = self.native_host.root
         self.body = self.routes.body()
-        self.main_window = toga.MainWindow(title='Logistics', content=self.navigation,
+        self.main_window = getattr(self, 'window_class', toga.MainWindow)(title='Logistics', content=self.navigation,
                                            on_lose_focus=self.checkpoint, on_resize=self.resize_workspace)
+        if not hasattr(self, 'scene_manager'):
+            from .window_scenes import install_scenes
+            install_scenes(self)
         self.on_exit = self.exit_app
         self.refresh_documents()
         self.loading = False
-        if self.labels:
+        if self.window_id != 'primary' and self.workspace.active is None:
+            self.new_document()
+        elif self.labels:
             key = self.preferences.values['last_document']
             active = self.workspace.sessions.get(self.workspace.active)
             if active is not None and active.provider == 'managed-text':
@@ -337,6 +347,7 @@ class LogisticsMobile(LocationsUI, PullJobsUI, ReaderWorkspace, ChatUI, CloudUI,
             view.session.transient = bool(getattr(view.document, 'private', False))
         try:
             self.workspace.save()
+            self.scene_manager.save_destination(self)
         except (OSError, ValueError) as error:
             self.recovery_notice.text = str(error)
 
@@ -373,6 +384,11 @@ class LogisticsMobile(LocationsUI, PullJobsUI, ReaderWorkspace, ChatUI, CloudUI,
         box.add(toga.Button('Save preferences', on_press=self.save_preferences, style=Pack(height=44)))
         box.add(toga.Button('Reload preferences', on_press=self.reload_preferences, style=Pack(height=44)))
         box.add(self.settings_status)
+        if self.scene_manager.supported:
+            box.add(toga.Button('New window', on_press=self.scene_manager.new_window, style=Pack(height=44)))
+            if self.window_id != 'primary':
+                box.add(toga.Button('Close window', on_press=lambda widget, **kw:
+                    self.scene_manager.close_window(self), style=Pack(height=44)))
         box.add(toga.Button('Remote connections…', on_press=self.show_cloud_connections, style=Pack(height=44, margin_top=12)))
         self.show_view(box, destination='settings', root=True)
 

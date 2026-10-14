@@ -54,7 +54,7 @@ def verify(path, target, output, *, local_manifest=None):
     return report
 
 
-def run(target, device, *, local=False):
+def run(target, device, *, local=False, require_independent_windows=False):
     command = ['briefcase', 'run', 'android' if target == 'android' else 'iOS',
                '--test', '--no-input', '--device', device]
     if target == 'android':
@@ -78,16 +78,19 @@ def run(target, device, *, local=False):
     if code:
         print(path.read_text(errors='replace')[-10000:])
         raise RuntimeError(f'Native app UI run failed ({code}); see retained logs.')
-    return verify(path, target, logs / (target + ('-native-ui-local.json' if local else '-native-ui.json')),
-                  local_manifest=Path('payload/source.json') if local else None)
+    report = verify(path, target, logs / (target + ('-native-ui-local.json' if local else '-native-ui.json')),
+                    local_manifest=Path('payload/source.json') if local else None)
+    if require_independent_windows and report.get('independent_windows_tested') is not True:
+        raise ValueError('This run did not verify independent system windows.')
+    return report
 
 
-def ios_device():
+def ios_device(*, ipad=False):
     data = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '--json']))
     devices = [d for runtime, items in data['devices'].items() if '.iOS-' in runtime
-               for d in items if d.get('isAvailable') and d['name'].startswith('iPhone')]
+               for d in items if d.get('isAvailable') and d['name'].startswith('iPad' if ipad else 'iPhone')]
     if not devices:
-        raise RuntimeError('No available iPhone Simulator device.')
+        raise RuntimeError('No available requested iOS Simulator device.')
     return sorted(devices, key=lambda d: d['state'] != 'Booted')[0]['udid']
 
 
@@ -119,16 +122,19 @@ def ios_diagnostics():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('run', 'ios-device', 'ios-diagnostics'))
+    parser.add_argument('command', choices=('run', 'ios-device', 'ios-ipad', 'ios-diagnostics'))
     parser.add_argument('target', choices=('android', 'ios'), nargs='?')
     parser.add_argument('--device')
     parser.add_argument('--local', action='store_true', help='Verify this exact local payload; not release evidence')
+    parser.add_argument('--require-independent-windows', action='store_true')
     args = parser.parse_args()
     if args.command == 'ios-device':
         print(ios_device())
+    elif args.command == 'ios-ipad':
+        print(ios_device(ipad=True))
     elif args.command == 'ios-diagnostics':
         ios_diagnostics()
     else:
         if not args.target or not args.device:
             parser.error('run requires a target and --device')
-        run(args.target, args.device, local=args.local)
+        run(args.target, args.device, local=args.local, require_independent_windows=args.require_independent_windows)
