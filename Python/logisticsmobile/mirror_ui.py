@@ -374,6 +374,7 @@ class MirrorUI:
     def publish_mirror_progress(self, epoch, values):
         if not self.active_host or epoch != getattr(self, 'transfer_epoch', None) or not self.transfer_busy:
             return
+        previous = getattr(self, 'transfer_message', None)
         phase, files = values['phase'], values['files']
         done, total = values['done'], values['total']
         self.transfer_message = f'{phase} · {files:,} file(s) completed'
@@ -387,6 +388,13 @@ class MirrorUI:
             self.transfer_message += f' · {done:,} / {total:,} bytes (known so far)'
         elif done > 0:
             self.transfer_message += f' · {done:,} bytes transferred'
+        widgets = (id(self.transfer_notice), id(self.cloud_status), id(self.transfer_progress),
+                   id(getattr(self, 'cloud_transfer_progress', None)))
+        if self.transfer_message == previous and widgets == getattr(self, '_mirror_progress_widgets', None):
+            # Repeated polling must not force native text/layout redraws while
+            # the user opens an unrelated local document during a transfer.
+            return
+        self._mirror_progress_widgets = widgets
         self.transfer_notice.text = self.transfer_message
         self.cloud_status.value = self.transfer_message
         origin = getattr(self, 'cloud_transfer_progress', None)

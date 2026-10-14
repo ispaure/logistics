@@ -13,7 +13,10 @@ async def exercise_mirrors(app, comic_key):
     def gated(action, **values):
         if action == 'mirror_sync' and not started.is_set():
             started.set()
-            if not release.wait(30):
+            # Cold native widget/layout startup is slower on hosted emulators.
+            # Keep the synthetic transfer pending until the test releases it,
+            # with a bounded escape so a deadlock still fails the native gate.
+            if not release.wait(120):
                 raise RuntimeError('Native background transfer fixture timed out.')
         return request(action, **values)
     original = app.editor.value
@@ -65,7 +68,7 @@ async def exercise_mirrors(app, comic_key):
                 browser = app.file_browser
                 entry = next(item for item in browser.entries if item.label == name)
                 await browser._select_pressed(entry, browser.buttons[entry.identity])
-                assert app.cloud_busy and app.transfer_busy and app._crypt_cancel is cancel
+                assert app.cloud_busy and app.transfer_busy and app._crypt_cancel is cancel, app.transfer_message
                 assert not cancel.is_set()
             await tap('Local note.txt')
             local_editor = app.private_sessions.active
