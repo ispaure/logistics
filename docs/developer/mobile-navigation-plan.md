@@ -16,6 +16,16 @@ visible remote action feedback and one-time folder pulls to local storage.
 Full private-session integration, unified Files refinement, repeatable sync,
 reader visual refinement and independent windows remain unfinished.
 
+## Remaining phase numbering
+
+The continuation uses Phase 1 for milestone 3 (mixed/private sessions), Phase 2
+for milestone 4 (Files/connections and repeatable pulls), Phase 3 for milestone 5
+(reader/editor presentation), and Phase 4 for milestone 6 (independent windows).
+Each phase uses numbered Part commits. Phase 1 Part 1 introduces four bounded
+provider-session owners, independent private drafts/metadata, duplicate activation,
+Open documents access, all-owner credential guards and exclusion from recovery.
+Native verification and the later phase exit gates remain pending.
+
 ## Phase 0 submission boundary and numbered checkpoints
 
 Phase 0 is the first end-to-end deliverable described below (milestones 0–2),

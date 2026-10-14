@@ -28,7 +28,7 @@ class FilesUI:
         return toga.Button('Manage local files and folders…', on_press=self.show_files, style=Pack(height=44))
 
     async def show_files(self, widget=None, **kwargs):
-        if self.cloud_busy or not self.clear_private_reader():
+        if self.cloud_busy:
             return
         if hasattr(self, 'file_browser'):
             await self.file_browser.close()
@@ -101,8 +101,8 @@ class FilesUI:
         return (LocalFiles(self.private_root / 'LocalFiles') if remote is None else
                 CryptFiles(self.private_root / 'LocalCryptFolders', self.cloud_client, remote))
 
-    async def file_work(self, work):
-        if self.cloud_busy or not self.clear_private_reader():
+    async def file_work(self, work, *, mutation=True):
+        if self.cloud_busy or (mutation and not self.clear_private_reader()):
             return False
         # Capture selection on the GUI thread before handing work to a worker.
         row = self.file_rows.get(self.file_selection.value)
@@ -141,7 +141,7 @@ class FilesUI:
             path = provider.relative(folder)
             rows = provider.list(path, cancelled=cancelled)
             result.extend((provider, path, rows))
-        if await self.file_work(work):
+        if await self.file_work(work, mutation=False):
             self.file_provider, self.file_path, rows = result
             self.file_rows = {f'{i + 1}. {"Folder" if row["directory"] else "File"}: {row["name"]}': row for i, row in enumerate(rows)}
             self.set_file_items(list(self.file_rows))
@@ -295,7 +295,7 @@ class FilesUI:
             self.show_cloud()
             if getattr(self, 'cloud_restore_task', None):
                 await self.cloud_restore_task
-        if self.cloud_busy or not self.clear_private_reader():
+        if self.cloud_busy:
             return
         self.save_as_source_document = self.current
         await self.show_text_destination(name, data)

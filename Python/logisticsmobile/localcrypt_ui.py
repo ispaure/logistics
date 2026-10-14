@@ -302,7 +302,10 @@ class LocalCryptUI(FilesUI):
         self.crypt_read_page.enabled = False
         try:
             index = self.crypt_reader.labels.index(self.crypt_page.value)
+            reader = self.crypt_reader
             kind, content = await asyncio.to_thread(self.crypt_reader.page, index)
+            if not self.active_host or self.crypt_reader is not reader:
+                return
             self._show_crypt_content(kind, content)
         except Exception as error:
             self.crypt_title.text = private_label('Cannot read page: ' + str(error)[:200])

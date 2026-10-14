@@ -432,3 +432,24 @@ returns to its existing session. Each book owns its reader; switching books
 releases the inactive decoder and rendered content, and reopening resumes stored
 reading progress. Closing removes the open session and keeps the imported book.
 Password-unlocked comics are excluded from workspace restoration.
+
+
+### Open provider and private documents
+
+Files opened from local or LocalCrypt folders now have separate entries in
+**Documents → Open documents**. Up to four provider items may remain open,
+including independent text edits and metadata forms. Opening the same resource
+returns to its existing item. Browsing folders or switching destinations keeps
+these edits in memory. Ordinary imported documents remain independently open.
+
+Private Close offers **Save and close**, **Discard and close**, and **Cancel**.
+Failed saves retain the item and its edits. Credential reload, replacement and
+forget check all unsaved provider items before clearing any of them. Save or
+explicitly discard private work before a file mutation or credential change.
+
+Provider items are session-only: their titles, paths, content and positions are
+excluded from workspace recovery. Reopen/unlock them after process termination.
+The four-item and 32 MiB retained-input limits reject a new item without evicting
+existing drafts. Inactive comic images and archive caches are released and
+recreated on activation. Saving local text updates its local file; LocalCrypt
+continues to save encrypted bytes through the existing verified transaction.

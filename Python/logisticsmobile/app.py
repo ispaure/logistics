@@ -106,6 +106,11 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
         if checkpoint and not self.checkpoint():
             return False
         target = destination or self.native_host.state.destination
+        private = getattr(self, 'private_sessions', None)
+        if private is not None:
+            owner = private.active
+            if owner is None or view not in (getattr(owner, 'crypt_view', None), getattr(owner, 'crypt_metadata_view', None)):
+                private.suspend()
         if self.adaptive.split is not None and target == 'documents' and not root:
             self.native_host.activate('documents')
             self.adaptive.present(view, route=route, title=title)
@@ -156,6 +161,8 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
                     title = session.title or self.store.open(session.resource).name
                 elif session.provider == 'library':
                     title = session.title or self.reader_manager().catalog.library_store.read_record(session.resource)[0]['name']
+                elif session.provider == 'provider-session':
+                    title = session.title
                 else:
                     continue
             except (OSError, ValueError, KeyError, TypeError):
@@ -186,6 +193,8 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
             if session is not None and self.checkpoint():
                 if session.provider == 'library':
                     self.loop.create_task(self.resume_library_session(session))
+                elif session.provider == 'provider-session':
+                    self.provider_sessions().activate(session.id)
                 else:
                     if self.open_document(session.resource):
                         self.show_documents(resume=True)
@@ -215,6 +224,9 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
         return close
 
     def request_close_session(self, key):
+        private = self.provider_sessions().controllers.get(key)
+        if private is not None and private.private_dirty():
+            return self.request_provider_close(private)
         owner = self.text_views.get(key)
         if owner is None or not owner.document.modified:
             return self.close_session(key)
@@ -249,6 +261,8 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
             return False
         if choice not in ('keep', 'save', 'discard'):
             raise ValueError('Unsupported close action.')
+        if self.workspace.sessions[key].provider == 'provider-session':
+            return self.provider_sessions().close(key, discard=choice == 'discard')
         if self.workspace.sessions[key].provider == 'library':
             return self.reader_manager().close(key)
         owner = self.text_views.get(key)
@@ -587,6 +601,79 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
         if hasattr(self, 'chat_current') and not self.checkpoint_chat():
             return False
         return self.checkpoint()
+
+    def provider_sessions(self):
+        from .private_sessions import PrivateSessions
+        if not hasattr(self, 'private_sessions'):
+            self.private_sessions = PrivateSessions(self)
+        return self.private_sessions
+
+    async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, **kwargs):
+        copies = copies or self.crypt_copies
+        key = key if key is not None else self.crypt_labels.get(self.crypt_selector.value)
+        if key is None:
+            return False
+        return await self.provider_sessions().open(copies, key, prepared=prepared)
+
+    def private_dirty(self):
+        return self.provider_sessions().dirty()
+
+    def clear_private_reader(self, *, discard=False):
+        return self.provider_sessions().clear(discard=discard)
+
+    def resume_crypt(self, widget=None, **kwargs):
+        owner = self.provider_sessions().active
+        if owner is not None:
+            return owner.resume_crypt()
+
+    async def save_crypt(self, widget=None, **kwargs):
+        owner = self.provider_sessions().active
+        if owner is not None:
+            return await owner.save_crypt()
+
+    def edit_crypt_metadata(self, widget=None, **kwargs):
+        owner = self.provider_sessions().active
+        if owner is not None:
+            return owner.edit_crypt_metadata()
+
+    async def save_crypt_metadata(self, widget=None, **kwargs):
+        owner = self.provider_sessions().active
+        if owner is not None:
+            return await owner.save_crypt_metadata()
+
+    async def read_crypt_page(self, widget=None, **kwargs):
+        owner = self.provider_sessions().active
+        if owner is not None:
+            return await owner.read_crypt_page()
+
+    def close_crypt(self, widget=None, **kwargs):
+        owner = self.provider_sessions().active
+        if owner is not None:
+            return owner.close_crypt()
+
+    def discard_crypt(self, widget=None, **kwargs):
+        owner = self.provider_sessions().active
+        if owner is not None:
+            return owner.discard_crypt()
+
+    def request_provider_close(self, owner):
+        import textwrap
+        box = toga.Box(style=Pack(direction=COLUMN, margin=16, flex=1))
+        box.add(toga.Label(textwrap.fill('Close ' + owner.session.title, 30), style=Pack(font_size=18)))
+        box.add(toga.Label('Private edits stay in memory.\nSave or discard before closing.'))
+        async def save(widget=None, **kwargs):
+            if owner.session.id not in self.workspace.sessions or self.cloud_busy:
+                return
+            if owner.crypt_metadata_fields:
+                await owner.save_crypt_metadata()
+            else:
+                await owner.save_crypt()
+            if self.provider_sessions().close(owner.session.id):
+                self.show_documents_hub()
+        box.add(toga.Button('Save and close', on_press=save, style=Pack(height=44)))
+        box.add(toga.Button('Discard and close', on_press=owner.discard_crypt, style=Pack(height=44)))
+        box.add(toga.Button('Cancel', on_press=owner.resume_crypt, style=Pack(height=44)))
+        self.show_view(box, destination='documents', route='private-close:' + owner.session.id, title='Close private document')
 
 
 def main():
