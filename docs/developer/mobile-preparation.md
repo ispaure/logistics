@@ -797,3 +797,34 @@ packages. The iOS release job runs both iPhone and iPad tests, requiring explici
 substitute. The native case creates actual scenes, rejects duplicate writers,
 closes and restores a distinct draft and selected destination. Device-specific
 picker and OS eviction checks remain unverified.
+
+## Phase 5 Part 1: managed mobile transfers
+
+MirrorJobs adds bounded, versioned managed-copy mappings and interrupted-publication
+recovery. Ordinary copies live beneath LocalFiles; ciphertext copies use the
+existing CryptFiles namespace beneath LocalCryptFolders. Pull stages a complete
+snapshot, checks the local baseline again at publication, preserves previous
+copies and leaves edited destinations intact. Crypto metadata records raw stored
+paths and opaque configuration identities, never decrypted document content.
+Snapshots are retained outside the live ciphertext tree so temporary names cannot
+break crypt browsing. Removing a mapping is metadata-only.
+
+The native bridge exposes scoped mirror info/list/read/stat/write requests for
+admitted remote names. Ciphertext pulls authenticate while streaming raw bytes
+into the private descriptor. Push stages a stable source copy, checks remote
+hashes, retains and verifies a remote backup before replacing a file, and verifies
+uploaded bytes. Per-file completed baselines support reviewing a partially
+completed push. No remote-delete, shell, arbitrary filesystem or generic RC API
+is added. These checks are not a provider-independent atomic compare-and-swap;
+external concurrent writers can still race a backend Put, and the review/user guide
+must explain folder-level partial completion and avoiding concurrent writers.
+
+Transfer callbacks carry host/generation and operation-epoch guards. Native local
+archive/image operations use independent contexts outside the credential-engine
+lock so ordinary comics remain usable during remote I/O. This does not make
+protected provider operations concurrent: transfer setup preserves dirty work and
+releases clean provider views. Active-app background work is distinct from an
+OS background-transfer entitlement. The guided CopyUI workflow is integrated and
+now uses atomic no-replace rename rather than hard-link publication, which Android
+sandboxes reject. Native cases exercise guided copy, ordinary background pull/push,
+and ciphertext folder pull/edit/push; all 25 cases pass on Android and iPad/iOS.

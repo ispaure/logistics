@@ -258,6 +258,8 @@ def workspace_class():
             self.show_window_boundary()
         def show_pull_jobs(self, widget=None, **kwargs):
             self.show_window_boundary()
+        def show_transfers(self, widget=None, **kwargs):
+            self.show_window_boundary()
         async def show_local_location(self, widget=None, **kwargs):
             # The primary host owns local mutations and connection workers.
             self.show_window_boundary()

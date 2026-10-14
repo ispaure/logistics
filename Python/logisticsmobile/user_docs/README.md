@@ -241,36 +241,37 @@ other backends are not currently supported. WebDAV URLs and custom S3 endpoints
 must use HTTPS. Certificate verification stays enabled. A single crypt layer over
 one supported backing remote is available for [LocalCrypt reading](#localcrypt-encrypted-offline-reading).
 
-Choose a remote, optionally enter a relative folder, then **Browse folder**.
-Tap a folder to open it, or use **Open selected folder** and **Parent folder**.
-**Back** returns through successful folder/storage visits in this browser session.
-**Search** opens a full-width field and searches names in this folder and its
-subfolders, requesting additional remote listings in the background. Scans stop
-after 10,000 entries and report incomplete results. Choose a name, size or modified-time sort. Folders stay first. Search resets when
-the location changes, and hiding a selected file clears its action selection. A folder
-result is limited to 1,000 displayed entries. **Download selected item** reads the
-selected file into this app's private Downloads as a stream, without a fixed whole-file size cap. It never uploads,
-renames, deletes or synchronizes remote files. **Cancel request** cancels the native
-operation; individual network reads have a 15-second timeout and operations have
-a two-minute deadline for browsing and a 30-minute deadline for transfers and archive rewrites. Some upstream backends may take until their network call
-returns to acknowledge cancellation.
+Choose a connection and tap **Open remote**. **Connections…** opens credential
+setup. Tap folders to open them; **Back** in the browser returns through successful
+folder visits. **Locations** returns to local and remote locations. Choose a file
+and tap **Copy to device…**, or open a folder and tap **Copy this folder…**.
+The copy screen shows the source and a browsable **On this device** destination.
+Open a destination folder and tap **Copy here**; no path typing is required.
+Existing files are preserved, with a separate copy name when needed.
+**Open copied location** opens the result in the local browser and selects a
+copied file so **Open file** is immediately available.
 
-When a crypt remote is selected, that button becomes **Download decrypted copy**.
-It decrypts the selected file while streaming and saves an **unencrypted** copy
-under Private downloads using the readable filename. You can open or export it
-like any other private download; it follows the app's normal data/backup policy.
-**Download encrypted copy** remains available to keep ciphertext in LocalCrypt
-instead. A failed, cancelled or unauthenticated decrypted transfer is removed and
-does not appear as a completed download. Neither choice modifies the remote file.
+The progress bar tracks bytes for the current file when its size is known,
+with an animated bar when the size is unavailable. Folder copies also show the
+number of completed files. **Cancel** stops the transfer; unsuccessful transfers
+do not publish a partial copy. The bar reaches 100% after the copy is published.
+Folder copies preserve empty folders and are limited to 10,000 items. Each folder
+copy gets a separate name to preserve previous copies and local edits.
 
-Select a folder and choose **Download selected item** (or **Download decrypted
-copy** for a crypt remote) to pull its contents into **On this device**. Progress
-shows the number of completed files. **Open downloaded folder** opens the finished
-copy. Empty subfolders are preserved. Folder pulls are limited to 10,000 items;
-failed or cancelled pulls leave no completed or partial local folder. Each pull
-creates a separate named folder, preserving existing copies and local edits.
-This is a one-time download, not a repeatable sync job. The copy is unencrypted,
-including when pulled from crypt; remote originals are unchanged.
+Crypt sources show an explicit **unencrypted copy** notice before copying.
+**Actions → Encrypted offline copies…** provides encrypted LocalCrypt downloads.
+**Actions → Downloaded copies…** retains the older private-download workflow,
+including **Download** / **Download decrypted**, opening and system export.
+The mobile bridge copies from remote to device; uploads and remote rename/delete
+are not implemented. Individual network reads have a 15-second timeout; browsing
+has a two-minute deadline and transfers have a 30-minute deadline. Cancellation
+may wait for an upstream network call to return.
+
+**Search** searches names in this folder and its subfolders in the background,
+up to 10,000 scanned entries and 1,000 displayed results. Sort by name, size or
+modified time; folders remain first. Changing folders clears search, and hiding a
+selected file clears its copy selection. Failed navigation preserves the prior
+listing and history.
 
 Select a private download and choose **Open private copy** to import it into the
 text/Markdown editor or EPUB/CBZ library, subject to those readers' existing format
@@ -320,8 +321,9 @@ and folders** opens a local browser with **Local files** and the session's
 **LocalCrypt** destinations. **List** and **Tiles** use the same shared browsing
 model as desktop. Visible PNG/JPEG images and comic/EPUB covers load in the
 background, with a bounded memory cache. Select a file to see its name, size and
-modified time, plus available comic/EPUB metadata below the entries. Folder
-navigation supports tapping folder entries, **Parent folder** and **Back** through
+modified time, plus available comic/EPUB metadata below the entries.
+The storage picker and **Parent folder** are visible directly in the local browser.
+Changing storage opens its root. Navigation supports tapping folder entries, **Parent folder** and **Back** through
 successful folder/storage visits. **Search** opens a full-width field and searches this folder and its subfolders
 in the background; scans stop after 10,000 entries and report incomplete results; sorting supports natural name order, size and modified time in either
 direction, with folders first. A failed folder load preserves the previous
@@ -539,3 +541,40 @@ Android resizing and split-screen presentation remain available.
 System scenes are verified on an iPad simulator. Real-device document pickers,
 OS-driven scene eviction, assistive input and physical multitasking still require
 separate evidence.
+
+## Local / LocalCrypt pulls and pushes
+
+Open a remote in Files and choose **Pull to Local / LocalCrypt**. A selected
+folder is the source; otherwise the currently browsed folder is used. Ordinary
+remotes populate a managed Local folder. Crypt remotes populate the matching
+LocalCrypt tree with original ciphertext, including encrypted stored names.
+Open the completed copy from **Files → Local / LocalCrypt & transfers**.
+
+Each copy offers **Open**, **Pull** and **Push…**. Pull refreshes an unchanged
+local copy and retains its previous version. If you edited local files, it keeps
+them and saves the remote version as a separate retained snapshot. Removing a
+mapping keeps its files and snapshots. A missing or changed connection blocks
+transfers rather than redirecting the copy to another account.
+
+Push checks the local copy and remote revisions, then presents a review before
+sending files. Changed remote files block that review. Replaced remote files get
+verified backups under the remote's reserved `.logistics-backups` folder; a crypt
+remote stores those backups encrypted. Uploaded bytes are read back and verified.
+Remote-only files are kept: mobile Push does not delete them. Unlike desktop
+sync, mobile transfers do not make the destination an exact destructive mirror.
+Do not run another writer against the same remote folder during Push; a remote
+folder is not an atomic transaction. Cancellation may leave already completed
+uploads and their backups. Review again to resume the remaining work.
+
+Transfers have a progress screen, cancellation and feedback in the remote browser.
+Ordinary writing and comic/EPUB reading continue while a pull runs, and completion
+does not replace the active document. Save or close unsaved provider edits before
+transferring their files. Protected provider views are released during transfer
+setup. This supports doing other work inside Logistics; continuing indefinitely
+while iOS/Android suspends the app is not promised.
+
+LocalCrypt content stays ciphertext during pull, staging, snapshots and push.
+Unlock the matching connection to browse decrypted names or edit supported files.
+Both mobile targets have native fixture checks for Local/LocalCrypt pull, editing,
+verified push and ordinary document use during a pull. Physical network interruptions
+and provider permissions still need device testing.

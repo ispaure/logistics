@@ -159,6 +159,7 @@ async def exercise(app):
         assert app.library_store.open(record['id'])[0]['bookmarks'] == [1]
         passed.append('native_bookmarks')
         record = await asyncio.to_thread(app.library_store.import_book, LocalDocuments(), comic)
+        background_comic = record['id']
         app.refresh_library()
         await app.open_book(record['id'])
         assert app.book_reader is not None, app.book_status.text
@@ -288,6 +289,22 @@ async def exercise(app):
         assert app.current.id == imported_id
         from .files_checks import exercise_files
         await exercise_files(app, passed)
+        app.show_cloud()
+        app.cloud_remote.value = 'Fixture'
+        app.cloud_location.value = 'logistics-native-check'
+        await app.browse_cloud(preserve_path=True)
+        row = next(row for row in app.cloud_rows.values() if row['path'].endswith('fixture.txt'))
+        app.browser_cloud_selected(row)
+        assert await app.choose_cloud_copy()
+        assert await app.confirm_cloud_copy(), app.copy_status.value
+        assert app.copy_progress.value == 100
+        assert (app.private_root / 'LocalFiles' / app.copy_result[0]).read_text() == 'Native rclone fixture\n'
+        await app.open_cloud_copy()
+        assert app.file_rows[app.file_selection.value]['path'] == app.copy_result[0]
+        passed.append('native_guided_remote_copy')
+        from .mirror_checks import exercise_mirrors
+        await exercise_mirrors(app, background_comic)
+        passed.append('native_background_local_pull_push')
         app.show_cloud()
         await app.clear_cloud()
         assert not list(app.cloud_remote.items)

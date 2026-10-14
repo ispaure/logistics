@@ -72,6 +72,7 @@ class FilesUI:
         operation_box.remove(self.file_status)
         operation_box.remove(buttons[1])
         operation_box.remove(buttons[2])
+        operation_box.remove(self.file_storage)
         from .action_menu import FeatureCommands
         self.file_actions_button = toga.Button('Actions', style=Pack(height=44))
         self.file_actions = FeatureCommands(self.file_actions_button, self,
@@ -82,6 +83,8 @@ class FilesUI:
         self.files_view = toga.Box(children=[
             toga.Box(children=[toga.Button('Locations', on_press=self.show_locations, style=Pack(height=44, flex=1)),
                                self.file_actions_button], style=Pack(direction=ROW)),
+            toga.Label('Storage', style=Pack(font_size=14)), self.file_storage,
+            toga.Button('Parent folder', on_press=self.parent_file_folder, style=Pack(height=44)),
             self.file_status,
             toga.ScrollContainer(content=self.file_browser.widget, style=Pack(flex=1)),
             toga.Box(children=[buttons[1], buttons[2]], style=Pack(direction=ROW))],
@@ -89,6 +92,12 @@ class FilesUI:
         buttons[1].style.flex = buttons[2].style.flex = 1
         self.show_view(self.files_view, destination='files', route='browser', title='Files and folders')
         await self.browse_files()
+        self.file_storage.on_change = self.change_file_storage
+
+    async def change_file_storage(self, widget=None, **kwargs):
+        if not self.cloud_busy and self.file_storage.value != getattr(self, 'file_loaded_location', (None, ''))[0]:
+            self.file_location.value = ''
+            await self.browse_files()
 
     def show_file_actions(self, widget=None, **kwargs):
         if not self.cloud_busy:
@@ -127,6 +136,8 @@ class FilesUI:
 
     def file_provider_for(self, label):
         remote = self.file_roots[label]
+        if isinstance(remote, LocalFiles):
+            return remote
         return (LocalFiles(self.private_root / 'LocalFiles') if remote is None else
                 CryptFiles(self.private_root / 'LocalCryptFolders', self.cloud_client, remote))
 
@@ -176,7 +187,7 @@ class FilesUI:
             self.set_file_items(list(self.file_rows))
             self.file_loaded_location = label, self.file_path
             self.populate_file_browser(rows, password, location=self.file_loaded_location)
-            self.file_status.value = f'{len(rows)} entries. Names are resolved while unlocked.'
+            self.file_status.value = f'{label}/{self.file_path} · {len(rows)} items.\nTap folders to open them; select a file, then Open file.'
             return True
         else:
             if self.file_provider is not None and self.file_browser.tree is not None:
