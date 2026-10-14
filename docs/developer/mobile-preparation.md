@@ -626,3 +626,16 @@ Both reports identify local snapshot
 These are local development checks, not a published release or physical-device
 validation. Work pauses here at the user's request; unfinished milestones remain
 listed in the mobile navigation plan.
+
+
+### Explicit text-session close
+
+User Close actions open a destination-local choice screen when text is dirty.
+Cancellation and native Back have no close side effects. `close_session` targets
+the captured session owner, with Save, Keep draft, Discard and Cancel choices.
+Save conflicts and checkpoint failures retain that owner and report the failure.
+`DocumentStore.discard` reads bounded current source bytes, checkpoints a new
+baseline before changing the in-memory draft, and never writes or recreates the
+source file. A deleted source remains unavailable/conflicted. Ordinary retained
+drafts stay accessible through Stored documents; private drafts cannot use Keep.
+The direct controller close API defaults to Keep for existing callers.

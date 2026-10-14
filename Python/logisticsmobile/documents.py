@@ -142,6 +142,23 @@ class DocumentStore:
     def save_copy(self, doc, name=None):
         return self.create(name or doc.name, doc.snapshot.encode(doc.text))
 
+    def discard(self, doc):
+        """Reset recovery to the current saved bytes without writing the source."""
+        source = self.path(doc.id, '.data')
+        try:
+            with source.open('rb') as stream:
+                content = stream.read(MAX_BYTES + 1)
+            if len(content) > MAX_BYTES:
+                raise ValueError('Saved file is too large; the draft was preserved.')
+            snapshot = decode_bytes(content, path=source)
+            conflict = False
+        except FileNotFoundError:
+            # Discarding a draft must not recreate a concurrently deleted file.
+            snapshot, conflict = doc.snapshot, True
+        baseline = Document(doc.id, doc.name, snapshot, snapshot.text, conflict)
+        self.checkpoint(baseline)
+        doc.snapshot, doc.text, doc.conflict = snapshot, snapshot.text, conflict
+
     def import_document(self, provider, reference):
         # Platform handles are consumed as streams, never treated as file paths.
         with provider.open(reference) as opened:

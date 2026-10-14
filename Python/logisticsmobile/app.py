@@ -190,26 +190,65 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
 
     def session_closer(self, key):
         def close(widget=None, **kwargs):
-            self.close_session(key)
+            self.request_close_session(key)
         return close
 
-    def close_session(self, key):
+    def request_close_session(self, key):
+        owner = self.text_views.get(key)
+        if owner is None or not owner.document.modified:
+            return self.close_session(key)
+        box = toga.Box(style=Pack(direction=COLUMN, margin=16, flex=1))
+        from .cloud_ui import import_hint
+        box.add(toga.Label(import_hint('Close ' + owner.document.name), style=Pack(font_size=18)))
+        box.add(toga.Label('Choose what to do with\nyour unsaved changes.', style=Pack(margin_bottom=12)))
+        def choose(choice):
+            def action(widget=None, **kwargs):
+                self.close_session(key, choice=choice)
+            return action
+        box.add(toga.Button('Save and close', on_press=choose('save'), style=Pack(height=44)))
+        if not getattr(owner.document, 'private', False):
+            box.add(toga.Button('Keep draft and close', on_press=choose('keep'), style=Pack(height=44)))
+        box.add(toga.Button('Discard changes and close', on_press=choose('discard'), style=Pack(height=44)))
+        box.add(toga.Button('Cancel', on_press=lambda widget, **kw: self.cancel_close_session(key), style=Pack(height=44)))
+        self.close_notice = toga.Label('', style=Pack(margin_top=8))
+        box.add(self.close_notice)
+        return self.show_view(box, checkpoint=False, route='close:' + key, destination='documents', title='Close document')
+
+    def cancel_close_session(self, key):
+        owner = self.text_views.get(key)
+        if owner is not None:
+            owner.bind()
+            self.workspace.activate(key)
+            self.show_documents()
+
+    def close_session(self, key, *, choice='keep'):
         if key not in self.workspace.sessions:
             return False
+        if choice == 'cancel':
+            return False
+        if choice not in ('keep', 'save', 'discard'):
+            raise ValueError('Unsupported close action.')
         if self.workspace.sessions[key].provider == 'library':
             return self.reader_manager().close(key)
         owner = self.text_views.get(key)
         def guard(session):
             if owner is None:
                 return True
-            if getattr(owner.document, 'private', False) and owner.document.modified:
+            if choice == 'keep' and getattr(owner.document, 'private', False) and owner.document.modified:
                 owner.status.text = 'Save this session-only draft before closing.'
                 return False
             try:
-                self.store.checkpoint(owner.document)
+                if choice == 'save':
+                    self.store.save(owner.document)
+                elif choice == 'discard':
+                    self.store.discard(owner.document)
+                else:
+                    self.store.checkpoint(owner.document)
                 return True
             except (OSError, ValueError) as error:
-                owner.status.text = 'Could not preserve edits: ' + str(error)
+                owner.status.text = 'Could not close; edits retained: ' + str(error)
+                if hasattr(self, 'close_notice'):
+                    self.close_notice.text = owner.status.text
                 return False
         was_current = owner is self.editor_view
         if not self.workspace.close(key, guard=guard):
@@ -224,6 +263,7 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
                 self.editor_view = TextEditorView(self)
                 self.editor_view.bind()
         self.save_workspace()
+        self.refresh_documents()
         self.show_documents_hub()
         if was_current and self.adaptive.split is not None:
             if self.current is not None:

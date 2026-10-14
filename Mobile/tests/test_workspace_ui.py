@@ -6,6 +6,29 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class WorkspaceUITests(unittest.TestCase):
+    def test_close_choices_target_owner_and_failed_save_keeps_it_open(self):
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            app.show_documents()
+            a = app.editor_view
+            a.editor.value = 'A draft'
+            app.new_document()
+            b = app.editor_view
+            b.editor.value = 'B draft'
+            self.assertFalse(app.close_session(a.session.id, choice='cancel'))
+            self.assertEqual(a.document.text, 'A draft')
+            a.document.snapshot.path.write_bytes(b'External change')
+            self.assertFalse(app.close_session(a.session.id, choice='save'))
+            self.assertIn(a.session.id, app.workspace.sessions)
+            self.assertEqual(app.current.id, b.document.id)
+            self.assertTrue(app.close_session(a.session.id, choice='discard'))
+            self.assertEqual(app.store.open(a.document.id).text, 'External change')
+            self.assertEqual(app.current.text, 'B draft')
+            self.assertTrue(app.close_session(b.session.id, choice='save'))
+            self.assertEqual(app.store.open(b.document.id).snapshot.original, b'B draft')
+
     def test_two_drafts_have_independent_widgets_recovery_and_close(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
