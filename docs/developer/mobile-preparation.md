@@ -661,3 +661,26 @@ adapter is installed and restored on disposal, including its layout/selection
 listeners and menu ownership. Native checks require visible inactive icon and
 label contrast against each bar's surface. This prevents normal launch from
 showing only the selected destination against an incompatible black background.
+
+
+### Phase 1: memory-only provider session ownership
+
+`private_sessions.PrivateSessions` owns up to four provider controllers alongside
+the ordinary text/library registries. Resource identities hash the stable storage
+root and provider key; all provider entries are transient and omit names, paths,
+content and view state from ordinary workspace persistence. Each controller owns
+its text widgets, metadata form, reader and save callbacks. Switching never
+replaces another private draft. Failed Save As presentation rebinds the previous
+owner. Credential reload/replace/forget checks every dirty owner before clearing
+any owner. Dirty Close offers Save, Discard and Cancel without a durable Keep
+choice. Lock/removal invalidates its workspace generation and clears its views.
+
+The private registry admits at most 32 MiB of retained whole-file input across
+four owners. Streaming archives retain bounded source caches; inactive owners
+release decoded images and native member caches, recreating the selected page
+on activation. No dirty text/form is evicted to meet a budget. Ordinary library
+readers suspend when a provider owner binds. Existing private text remains
+session-only, including provider-backed local text, until explicitly saved to
+its verified provider destination. File mutation retains the conservative guard
+that all private work must be saved/discarded; ordinary folder browsing does not
+close sessions. Native resource and mixed-session checks remain required.
