@@ -866,3 +866,20 @@ Documents destination is selected. Explicit text activation clears that pending
 reader selection. The iOS CI gate shuts down its completed iPhone simulator before
 launching iPad; both inventories still require all native cases, and iPad requires
 actual independent-window evidence.
+
+## Phase 5 Part 3: final alpha submission
+
+The final local validation passes all 25 native cases on iPhone iOS 27.1, iPad
+simulator iOS 27.0 and Android 15, including actual secondary iPad scenes and managed
+Local/LocalCrypt folder transfers. The tracked mobile host suite passes 67 tests;
+Go bridge race tests and Python lint pass. The source alpha gates independently
+validate the clean tagged source before publication. Local snapshot evidence is
+retained under `mobile-evidence/2026-10-14-phase5-part2-*-native-ui-local.json` and
+correctly records its pre-commit dirty source identity.
+
+The submission is `v0.1.1-alpha.33`, with title **Phase 5 Part 3: Toga workspaces
+and mobile Local/LocalCrypt transfers**. Consult its GitHub release and CI results
+for actual publication status. Physical original-window destruction remains
+unverified, as do the manual device checks listed above; no simulator request is
+reported as a successful OS closure. This release packages source and does not
+imply device signing or App Store/TestFlight publication.

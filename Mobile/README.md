@@ -5,8 +5,10 @@ and Markdown as app-private copies, edits them, saves their original encoding an
 line endings, and checkpoints drafts for recovery. Its hub also opens a private EPUB/CBZ library
 with chapter/page navigation, standalone AES/ZipCrypto CBZ password prompts,
 bookmarks and saved progress, plus text LM chat
-with private history and explicit server connections, and embedded read-only
-rclone browsing/downloads using credential ZIPs. It does not launch the desktop
+with private history and explicit server connections, and embedded rclone
+browsing/downloads using credential ZIPs. Managed Local/LocalCrypt folders support
+repeatable Pull and reviewed Push with progress while ordinary documents remain
+usable. Ordinary iPad windows have independent workspaces and exclusive writers. It does not launch the desktop
 Qt application or install its dependency list.
 
 See the [user guide](../Python/logisticsmobile/user_docs/README.md) and
