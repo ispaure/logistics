@@ -1,14 +1,14 @@
 """Shared state and dummy-host contracts; actual adapters have native cases."""
 import unittest
 import toga
-from logisticsmobile.navigation import NavigationState
-from logisticsmobile.native_navigation import NativeNavigationHost
-from logisticsmobile.routing import Routes
+from logisticsmobile.navigation import NavigationState, DESTINATION_ITEMS
+from commonUtils.ui.native.navigation import NativeNavigationHost
+from commonUtils.ui.native.routes import Routes
 
 
 class NavigationTests(unittest.TestCase):
     def test_back_is_destination_local_and_preserves_screen_and_guard(self):
-        host = NativeNavigationHost()
+        host = NativeNavigationHost(DESTINATION_ITEMS)
         allowed = [True]
         routes = Routes(host, guard=lambda: allowed[0], changed=lambda body: None)
         root = toga.Label('Open documents')
@@ -49,7 +49,7 @@ class NavigationTests(unittest.TestCase):
             state.select('unknown')
 
     def test_native_selection_guard_and_programmatic_activation(self):
-        host = NativeNavigationHost(on_select=lambda key: key != 'settings')
+        host = NativeNavigationHost(DESTINATION_ITEMS, on_select=lambda key: key != 'settings')
         self.assertEqual(host.root.current_tab.text, 'Home')
         host.activate('documents')
         self.assertEqual(host.state.destination, 'documents')

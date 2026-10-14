@@ -1,0 +1,93 @@
+name: Logistics TestFlight preparation
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: Unique increasing numeric iOS build number (up to 9 digits)
+        type: string
+        required: true
+      upload:
+        description: Upload the verified build to App Store Connect
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: logistics-testflight
+  cancel-in-progress: false
+
+jobs:
+  native-validation:
+    uses: ./.github/workflows/mobile-build.yml
+    with:
+      target: ios
+  runtime-validation:
+    uses: ./.github/workflows/mobile-runtime.yml
+    with:
+      target: ios
+  distribution:
+    needs: [native-validation, runtime-validation]
+    runs-on: xcode-27
+    timeout-minutes: 60
+    environment: testflight
+    env:
+      IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
+      IOS_APP_IDENTIFIER: ${{ vars.IOS_APP_IDENTIFIER }}
+      ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
+      BUILD_NUMBER: ${{ inputs.build_number }}
+      BRIEFCASE_HOME: ${{ runner.temp }}/briefcase-testflight
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.2'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.26.9'
+          cache-dependency-path: Mobile/rclone_bridge/go.sum
+      - name: Check configuration and identity before reading signing assets
+        run: |
+          python -m pip install briefcase==0.4.5 toga-dummy==0.5.7 -r Mobile/requirements-testflight.txt
+          python Mobile/select_ios_sdk.py --github-env "$GITHUB_ENV"
+          python Mobile/testflight_tools.py plan --build-number "$BUILD_NUMBER" --team "$IOS_TEAM_ID" --expected-app-identifier "$IOS_APP_IDENTIFIER"
+          PYTHONPATH=Python TOGA_BACKEND=toga_dummy python -m unittest Mobile.tests.test_testflight_tools Mobile.tests.test_testflight_external Mobile.tests.test_privacy_build Mobile.tests.test_device_tools Mobile.tests.test_cloud_import_ui -v
+      - name: Install temporary signing assets
+        env:
+          IOS_DISTRIBUTION_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          IOS_DISTRIBUTION_P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          IOS_APP_STORE_PROFILE_BASE64: ${{ secrets.IOS_APP_STORE_PROFILE_BASE64 }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: python Mobile/testflight_signing.py setup --directory "$RUNNER_TEMP/testflight-signing"
+      - name: Archive committed sources with the existing app identity
+        run: python Mobile/testflight_tools.py archive --build-number "$BUILD_NUMBER" --team "$IOS_TEAM_ID" --expected-app-identifier "$IOS_APP_IDENTIFIER" --profile "$IOS_PROFILE_PATH"
+      - name: Export and verify the distribution IPA without uploading
+        run: python Mobile/testflight_tools.py export --build-number "$BUILD_NUMBER" --team "$IOS_TEAM_ID" --expected-app-identifier "$IOS_APP_IDENTIFIER"
+      - name: Upload and distribute to the configured external TestFlight group
+        if: inputs.upload
+        env:
+          TESTFLIGHT_UPLOAD: '1'
+        run: python Mobile/testflight_tools.py upload --build-number "$BUILD_NUMBER" --team "$IOS_TEAM_ID" --expected-app-identifier "$IOS_APP_IDENTIFIER"
+      - name: Preserve release artifact and diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: logistics-testflight-${{ inputs.build_number }}
+          path: |
+            Mobile/build/testflight/*/export/*.ipa
+            Mobile/build/testflight/*/release.json
+            Mobile/build/testflight/*/export-verified.json
+            Mobile/build/testflight/*/ExportOptions.plist
+            Mobile/build/testflight/*/upload-result.json
+            Mobile/build/testflight/*/external-distribution.json
+            Mobile/build/testflight/*/logs/
+          retention-days: 14
+      - name: Remove temporary signing assets
+        if: always()
+        run: python Mobile/testflight_signing.py cleanup --directory "$RUNNER_TEMP/testflight-signing"

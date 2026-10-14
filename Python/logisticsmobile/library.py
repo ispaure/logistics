@@ -83,8 +83,8 @@ class LibraryStore:
             if kind == 'comic':
                 from features.comics.pages import comic_page_names
                 pages = comic_page_names(archive)
-                if not pages or any(Path(name).suffix.lower() not in {'.png', '.jpg', '.jpeg'} for name in pages):
-                    raise ValueError('Import a comic with PNG/JPEG pages.')
+                if not pages or any(Path(name).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'} for name in pages):
+                    raise ValueError('Import a comic with PNG/JPEG/WebP pages.')
             return protected
 
     def import_book(self, provider, reference):
@@ -117,8 +117,8 @@ class LibraryStore:
                     raise ValueError('Mobile EPUB reading order is limited to 5,000 chapters.')
             elif not protected:
                 pages = self.comic_reader(temporary)
-                if any(Path(name).suffix.lower() not in {'.png', '.jpg', '.jpeg'} for name in pages.pages):
-                    raise ValueError('The mobile comic reader currently supports PNG/JPEG pages only.')
+                if any(Path(name).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'} for name in pages.pages):
+                    raise ValueError('The mobile comic reader currently supports PNG/JPEG/WebP pages only.')
             destination = self.path(key, '.epub' if kind == 'epub' else '.cbz')
             if destination.exists():
                 raise FileExistsError(destination)
@@ -159,8 +159,8 @@ class LibraryStore:
                 raise ValueError('Mobile EPUB reading order is limited to 5,000 chapters.')
         else:
             reader = self.comic_reader(path, password=password, protected=protected)
-            if any(Path(p).suffix.lower() not in {'.png', '.jpg', '.jpeg'} for p in reader.pages):
-                raise ValueError('The mobile comic reader currently supports PNG/JPEG pages only.')
+            if any(Path(p).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'} for p in reader.pages):
+                raise ValueError('The mobile comic reader currently supports PNG/JPEG/WebP pages only.')
         return record, reader
 
     def comic_reader(self, path, *, password=None, protected=False):

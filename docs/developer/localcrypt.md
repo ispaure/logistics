@@ -135,7 +135,7 @@ EPUBBook accepts an optional generic archive source so portable reading can use
 memory without a temporary file. Ordinary EPUB filesystem behavior is unchanged.
 
 Mobile streams encrypted downloads and transfers without a fixed whole-file cap,
-text/Markdown editing up to 1 MiB, EPUB chapter text and PNG/JPEG CBZ pages.
+text/Markdown editing up to 1 MiB, EPUB chapter text and PNG/JPEG/WebP CBZ pages.
 `crypt_encode` writes only to an empty independent ciphertext staging descriptor.
 Python verifies staged plaintext through its native archive/range source, checks the original's
 revision and cancellation, then atomically replaces the local ciphertext. Shared
@@ -427,3 +427,37 @@ Private archive rewrites use the shared binary subprocess writer’s explicitly
 nonseekable sink. This prevents Windows pipe seek behavior from corrupting ZIP
 member offsets while streaming comic and EPUB metadata to rclone. Verification
 still completes before publication, preserving the original on failure.
+
+## Mobile sync progress and copy names
+
+The embedded `mirrorSync` uses rclone accounting scoped to its transaction ID.
+`mirror_progress` returns transferred/total known bytes, completed/total known
+files, active transfers, listed entries and checks. It publishes a final snapshot
+before resetting the accounting group. Python forwards those counters without
+substituting zero file counts. The UI distinguishes discovery, transfer and final
+checking, shows activity when totals are unknown, and changes animation mode only
+when a known byte total appears or disappears. Percentages describe known work;
+only the sync result and subsequent local verification establish completion.
+
+New managed copy targets keep the remote's spelling, or the selected plaintext
+subfolder's name. LocalCrypt target labels use the remote name without storing a
+decoded private subfolder title; its physical account-identity scope is unchanged.
+Case-insensitive mapping conflicts are refused. Existing exact-name plaintext
+folders can be adopted by an explicit pull, retaining the prior destination-sync
+behavior. Generated UUID suffixes on existing mappings are removed at the next
+pull; plaintext directories move without replacement, while crypt storage stays
+in its existing scope. A failed record publication rolls back the directory move.
+Migration refuses occupied destinations. Existing arbitrary target names remain
+readable. `test_mirror_jobs.py` covers forwarding, display transitions, naming and
+conflicts; the embedded bridge suite exercises throttled crypt pulls in both
+plaintext and ciphertext modes and verifies live counters and downloaded bytes.
+
+### Mobile transfer approval
+
+The mobile Files selector opens source-specific folder actions. New-copy and
+mapped-copy Pull writes require a native OK/Cancel confirmation; reviewed Push
+requires another native confirmation at the final write boundary. Cancellation
+leaves the destination unchanged. The UI checks captured connection generation
+and mapping/plan identity again after approval, so changing credentials or targets
+while the dialog is open cannot authorize an old transfer. The existing rclone
+Sync scope and comparison rules are unchanged.

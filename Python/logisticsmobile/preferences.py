@@ -1,12 +1,13 @@
 """Mobile-owned INI preferences in an explicitly supplied private directory."""
 from configparser import Error
+import json
 from pathlib import Path
 
 from commonUtils.formats.iniType import INIFile
 from commonUtils.persistence import atomic_write_bytes
 
 DEFAULTS = {'font_size': '16', 'restore_last_document': 'true', 'last_document': '',
-            'reading_margin': '16', 'reading_theme': 'system'}
+            'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]'}
 
 
 class Preferences:
@@ -52,6 +53,14 @@ class Preferences:
             raise ValueError('Invalid document restore preference.')
         if values['reading_margin'] not in {'8', '16', '24', '32'} or values['reading_theme'] not in {'system', 'light', 'dark'}:
             raise ValueError('Invalid reader appearance preference.')
+        packages = json.loads(values['remote_packages'])
+        if (not isinstance(packages, list) or len(packages) > 32 or any(
+                not isinstance(item, dict) or set(item) != {'zip', 'remotes', 'session_only'}
+                or not isinstance(item['zip'], str) or not 0 < len(item['zip']) <= 255
+                or type(item['session_only']) is not bool or not isinstance(item['remotes'], list)
+                or len(item['remotes']) > 256 or any(not isinstance(name, str) or not 0 < len(name) <= 80 for name in item['remotes'])
+                for item in packages)):
+            raise ValueError('Invalid remote credential associations.')
         key = values['last_document']
         if key and (len(key) != 32 or any(c not in '0123456789abcdef' for c in key)):
             raise ValueError('Invalid last-document identity.')

@@ -49,26 +49,30 @@ class LocalCryptUITests(unittest.TestCase):
                 app.loop.run_until_complete(app.download_crypt())
                 self.assertEqual(len(app.crypt_labels), 1)
                 app.loop.run_until_complete(app.open_crypt())
-                self.assertIsNotNone(app.crypt_reader, app.cloud_status.value)
-                self.assertEqual(app.crypt_text.value, '# private reader sentinel')
-                app.crypt_text.value = '# edited private reader sentinel'
+                owner = app.provider_sessions().active
+                self.assertIsNotNone(owner, app.cloud_status.value)
+                self.assertIsNotNone(owner.crypt_reader)
+                self.assertEqual(owner.crypt_text.value, '# private reader sentinel')
+                owner.crypt_text.value = '# edited private reader sentinel'
                 app.close_crypt()
-                self.assertIsNotNone(app.crypt_reader)
+                self.assertIsNotNone(owner.crypt_reader)
                 self.assertFalse(app.exit_app(app))
                 app.loop.run_until_complete(app.clear_cloud())
-                self.assertIsNotNone(app.crypt_reader)
-                self.assertEqual(app.crypt_text.value, '# edited private reader sentinel')
+                self.assertIsNotNone(owner.crypt_reader)
+                self.assertEqual(owner.crypt_text.value, '# edited private reader sentinel')
                 app.loop.run_until_complete(app.save_crypt())
-                self.assertIn('Saved encrypted', app.crypt_title.text)
+                self.assertIn('Saved encrypted', owner.crypt_title.text)
                 self.assertFalse(app.private_dirty())
                 app.close_crypt()
-                self.assertIsNone(app.crypt_reader)
-                self.assertEqual(app.crypt_text.value, '')
+                self.assertIsNone(app.provider_sessions().active)
+                self.assertIsNone(owner.crypt_reader)
+                self.assertEqual(owner.crypt_text.value, '')
                 app.loop.run_until_complete(app.open_crypt())
+                owner = app.provider_sessions().active
                 app.show_cloud()
                 app.loop.run_until_complete(app.clear_cloud())
-                self.assertIsNone(app.crypt_reader)
-                self.assertEqual(app.crypt_text.value, '')
+                self.assertIsNone(app.provider_sessions().active)
+                self.assertEqual(owner.crypt_text.value, '')
                 for file in root.rglob('*'):
                     if file.is_file():
                         self.assertNotIn(b'private reader sentinel', file.read_bytes())
@@ -102,22 +106,23 @@ class LocalCryptUITests(unittest.TestCase):
                 app.crypt_selector.items = ['comic']
                 with patch.object(app.crypt_copies, 'open', return_value=reader('Before')):
                     app.loop.run_until_complete(app.open_crypt())
+                owner = app.provider_sessions().active
                 app.edit_crypt_metadata()
-                app.crypt_metadata_fields['Title'].value = 'After'
+                owner.crypt_metadata_fields['Title'].value = 'After'
                 app.close_crypt()
-                self.assertIsNotNone(app.crypt_reader)
+                self.assertIsNotNone(owner.crypt_reader)
                 app.edit_crypt_metadata()
                 with patch.object(app.crypt_copies, 'save_metadata', side_effect=ValueError('conflict')):
                     app.loop.run_until_complete(app.save_crypt_metadata())
-                self.assertEqual(app.crypt_metadata_fields['Title'].value, 'After')
-                self.assertIn('edits retained', app.crypt_metadata_status.text)
+                self.assertEqual(owner.crypt_metadata_fields['Title'].value, 'After')
+                self.assertIn('edits retained', owner.crypt_metadata_status.text)
                 with patch.object(app.crypt_copies, 'save_metadata', return_value=reader('After')):
                     app.loop.run_until_complete(app.save_crypt_metadata())
                 self.assertFalse(app.private_dirty())
                 app.close_crypt()
-                self.assertEqual(app.crypt_metadata_initial, {})
-                self.assertEqual(app.crypt_metadata_fields, {})
-                self.assertIsNone(app.crypt_metadata_view.content)
+                self.assertEqual(owner.crypt_metadata_initial, {})
+                self.assertEqual(owner.crypt_metadata_fields, {})
+                self.assertIsNone(owner.crypt_metadata_view.content)
             finally:
                 app.main_window.close()
                 app.loop.close()

@@ -215,3 +215,9 @@ On iOS and Android, **Books & Comics → Import book/comic…** accepts standalo
 password-protected AES/ZipCrypto CBZ/ZIP comics. Unlock with the comic’s ZIP password;
 rclone credentials are unnecessary. See the [mobile reading guide](../../../logisticsmobile/user_docs/README.md#books-and-comics)
 for password retries, locking and supported page formats.
+
+Mobile Local and LocalCrypt comics use the same fit/zoom/swipe and reading-mode
+controls, with Previous/Next available when controls are visible. LocalCrypt
+bookmarks stay in memory and are cleared on close; ordinary library bookmarks
+retain their existing saved behavior. Readers opened from Files return to the
+same folder through Back, including after visiting reader tools.

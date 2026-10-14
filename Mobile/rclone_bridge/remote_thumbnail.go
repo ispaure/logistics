@@ -81,7 +81,7 @@ func remoteThumbnail(ctx context.Context, name, p, password string, width, heigh
 		images := []*zip.File{}
 		for _, file := range archive.File {
 			extension := strings.ToLower(path.Ext(file.Name))
-			if validPath(file.Name) && !file.FileInfo().IsDir() && (extension == ".png" || extension == ".jpg" || extension == ".jpeg") && file.UncompressedSize64 <= 16*1024*1024 {
+			if validPath(file.Name) && !file.FileInfo().IsDir() && (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".webp") && file.UncompressedSize64 <= 16*1024*1024 {
 				images = append(images, file)
 			}
 		}

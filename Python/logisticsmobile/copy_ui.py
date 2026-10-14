@@ -6,7 +6,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
 from commonUtils.runtime.local_files import LocalFiles
-from commonUtils.ui.native_browser import NativeBrowser
+from .browser_ui import FileBrowser as NativeBrowser
 from .folder_download import pull_item
 
 
@@ -36,7 +36,7 @@ class CopyUI:
         self.copy_confirm = toga.Button('Copy here', on_press=self.confirm_cloud_copy, style=Pack(height=48))
         self.copy_cancel = toga.Button('Cancel', on_press=self.cancel_cloud_copy, style=Pack(height=48))
         self.copy_open = toga.Button('Open copied location', on_press=self.open_cloud_copy, style=Pack(height=48), enabled=False)
-        source = f'From: {self.cloud_open_remote}:/{row["path"]}'
+        source = f'From: {self.cloud_open_remote}:{row["path"]}'
         from .cloud_ui import import_hint
         note = ('This saves an unencrypted copy.' if self.cloud_open_remote in self.cloud_crypt_remotes
                 else 'The remote original stays in place.')

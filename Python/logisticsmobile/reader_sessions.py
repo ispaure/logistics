@@ -1,31 +1,25 @@
 """Library-session controllers retain identity while inactive decoders suspend."""
-from .library_ui import LibraryUI
-
-FIELDS = ('library_store', 'library_view', 'book_reader', 'book_record', 'book_busy',
-          'book_selector', 'book_status', 'book_content', 'book_import', 'book_open',
-          'book_password', 'book_unlock', 'book_unlock_cancel', 'book_unlock_panel',
-          'book_lock', 'chapter_selector', 'chapter_labels', 'previous_page',
-          'next_page', 'bookmark_button', 'bookmark_selector', 'book_pending_key')
+from .reader_ui import ReaderUI
+from .reader_host import ReaderHost
 
 
-class ReaderController(LibraryUI):
+class ReaderController(ReaderHost, ReaderUI):
     def __init__(self, manager, session=None):
         self.manager, self.app, self.session = manager, manager.app, session
-
-    def __getattr__(self, name):
-        if name.startswith(('book_', 'library_', 'chapter_', 'epub_')):
-            raise AttributeError(name)
-        return getattr(self.app, name)
+        self.presentation_destination = 'documents'
 
     def show_view(self, view, **kwargs):
         self.manager.bind(self)
-        return self.app.show_view(view, destination='documents',
-            route='reader:' + self.session.id if self.session is not None else 'library',
-            title=self.session.title if self.session is not None else 'Books & Comics')
+        route = 'reader:' + self.session.id if self.session is not None else 'library'
+        suffix = kwargs.pop('reader_route', None)
+        kwargs.update(destination=self.presentation_destination,
+                      route=route + (':' + suffix if suffix else ''),
+                      title=kwargs.get('title') or (self.session.title if self.session else 'Books & Comics'))
+        return self.app.show_view(view, **kwargs)
 
     def set_book_busy(self, busy):
         super().set_book_busy(busy)
-        self.manager.publish(self)
+        self.manager.update_session(self)
 
     async def open_book(self, key, *, password=None):
         if self.session is None or key != self.session.resource:
@@ -42,7 +36,7 @@ class ReaderController(LibraryUI):
                                       or self.book_pending_key is not None)
         if self.manager.active is not self:
             self.suspend()
-        self.manager.publish(self)
+        self.manager.update_session(self)
         self.app.save_workspace()
         return self.book_reader is not None
 
@@ -50,17 +44,17 @@ class ReaderController(LibraryUI):
         await super().display_book_page(index)
         if self.session is not None and self.book_record is not None:
             self.session.view['position'] = self.book_record['position']
-        self.manager.publish(self)
+        self.manager.update_session(self)
 
     def lock_book(self, widget=None, **kwargs):
         if self.session is not None:
             self.app.workspace.invalidate(self.session.id)
         super().lock_book(widget, **kwargs)
-        self.manager.publish(self)
+        self.manager.update_session(self)
 
     def cancel_book_unlock(self, widget=None, **kwargs):
         super().cancel_book_unlock(widget, **kwargs)
-        self.manager.publish(self)
+        self.manager.update_session(self)
 
     def suspend(self):
         if self.book_busy:
@@ -68,7 +62,7 @@ class ReaderController(LibraryUI):
         self.release_book_reader()
         self.hide_book_unlock()
         self.book_status.text = 'Reader suspended. Open this item to continue.'
-        self.manager.publish(self)
+        self.manager.update_session(self)
         return True
 
 
@@ -78,7 +72,7 @@ class Readers:
         self.controllers = {}
         self.active = None
         self.catalog = ReaderController(self)
-        self.catalog.show_library()
+        self.catalog.show_library(present=False)
 
     def bind(self, owner):
         for other in self.controllers.values():
@@ -87,19 +81,17 @@ class Readers:
         self.active = owner
         if owner.session is not None:
             self.app.workspace.activate(owner.session.id)
-        self.publish(owner)
+        self.update_session(owner)
 
-    def publish(self, owner):
-        if self.active is owner:
-            for name in FIELDS:
-                if hasattr(owner, name):
-                    setattr(self.app, name, getattr(owner, name))
+    def update_session(self, owner):
+        if owner.session is not None and owner.book_record is not None:
+            owner.session.view['position'] = owner.book_record['position']
 
     def show_catalog(self):
         self.catalog.refresh_library()
         self.catalog.show_library()
 
-    async def open(self, resource, *, password=None):
+    async def open(self, resource, *, password=None, destination='documents'):
         manager = getattr(self.app, 'scene_manager', None)
         if password is not None and manager is not None and len(manager.owners.hosts) > 1:
             raise ValueError('Close other windows before opening protected content.')
@@ -113,6 +105,7 @@ class Readers:
         owner = self.controllers.get(session.id)
         if owner is None:
             owner = ReaderController(self, session)
+            owner.presentation_destination = destination
             self.controllers[session.id] = owner
             owner.show_library()
             # Each view owns its decoder; the catalog owns the shared storage
@@ -120,6 +113,7 @@ class Readers:
             owner.library_store = self.catalog.library_store
             owner.refresh_library()
         else:
+            owner.presentation_destination = destination
             self.bind(owner)
             owner.show_library()
         return await owner.open_book(resource, password=password)
@@ -136,7 +130,7 @@ class Readers:
             self.controllers.pop(key, None)
         if self.active is owner:
             self.active = self.catalog
-            self.publish(self.catalog)
+            self.update_session(self.catalog)
         self.app.save_workspace()
         self.app.show_documents_hub()
         return True
@@ -156,10 +150,10 @@ class ReaderWorkspace:
         manager.catalog.refresh_library()
         if manager.active is not None:
             manager.active.refresh_library()
-            manager.publish(manager.active)
+            manager.update_session(manager.active)
 
-    async def open_book(self, key, *, password=None):
-        return await self.reader_manager().open(key, password=password)
+    async def open_book(self, key, *, password=None, destination='documents'):
+        return await self.reader_manager().open(key, password=password, destination=destination)
 
     async def import_book(self, widget=None, **kwargs):
         return await self.reader_manager().active.import_book(widget, **kwargs)

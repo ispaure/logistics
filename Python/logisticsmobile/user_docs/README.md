@@ -13,7 +13,7 @@ the native app; real-device interaction testing is still required.
 | Document import | Native picker adapters implemented; actual provider permissions still need device testing |
 | Draft recovery | Implemented: checkpoints, restored drafts and conflict-safe save-a-copy |
 | Encoding and line endings | Implemented for UTF-8 and recognized Unicode BOMs, with a 1 MiB text limit |
-| EPUB and comics | Private library, EPUB chapter navigation and PNG/JPEG CBZ/ZIP pages, saved progress and bookmarks |
+| EPUB and comics | Private library, EPUB chapter navigation and PNG/JPEG/WebP CBZ/ZIP pages, saved progress and bookmarks |
 | Preferences / INI settings | Private INI with font size and last-document restore controls; no desktop preference migration |
 | Export | Export a copy through the platform destination picker |
 | Share or save back to the original document | Not implemented |
@@ -24,6 +24,13 @@ the native app; real-device interaction testing is still required.
 | Media/image tools, archives and other desktop integrations | Not ported |
 
 ## Preferences and storage
+
+Developers can update Logistics on a paired iPhone over Wi-Fi using the
+[local deployment workflow](../../../Mobile/README.md#build-and-deploy-to-a-paired-iphone-over-wi-fi).
+Its launcher builds, installs in place and opens the app while retaining its
+bundle and signing identity. Keep the iPhone unlocked on the same Wi-Fi as the
+Mac. Do not uninstall Logistics to fix deployment errors: uninstalling removes
+its private documents and preferences.
 
 INI is a usable format on both mobile platforms. Bundled defaults must remain
 read-only, while personal overrides belong in the app's private persistent data
@@ -41,6 +48,25 @@ external executable locations and desktop-only options need validation or
 platform-specific replacements. Document-provider access is a permission-bearing
 platform handle rather than an ordinary path stored in an INI. Preferences
 migration and general app-data backup/reset behavior remain separate work.
+
+## Home panels and document search
+
+Home uses icon panels for Files, Documents, Text & Markdown, Books & Comics and
+LM Chat. Panels stack on phones and use two or three columns in wider windows.
+**Continue** returns to the selected open document, including its Edit/Preview
+mode. **New document** creates and displays a separate editor; **Open file…**
+opens the existing Local/LocalCrypt file picker. Documents has the same launch
+panels plus open and stored document cards. Open cards show document type,
+unsaved changes, session-only status and known conflicts. Closing an open card
+uses the existing save/discard workflow and keeps its stored file.
+
+The ordinary text/Markdown editor offers **Find** beside Save and Preview.
+Search is literal, wraps through the active document, and supports **Match case**,
+**Replace** and **Replace all**. Replacement text is literal too. Search controls
+belong to each editor, so switching documents keeps their separate queries and
+drafts. **Done** hides the controls. Replacements update the draft and use the
+same checkpoint and conflict-aware save behavior as typing; press Save to publish
+them. Search does not include other files or the separate private reader editor.
 
 ## Document workflow
 
@@ -158,10 +184,12 @@ Ordinary CBZ/ZIP comics stream into the private library without a fixed archive
 or total decompressed-size cap. Reading seeks archive headers and fetches only the
 chosen page. Both EPUB and comic archives are limited to 5,000 entries; EPUB
 imports retain the 256 MiB archive/expanded-total and 8 MiB per-member limits.
-Native comic images must be PNG/JPEG,
+Native comic images must be PNG/JPEG/WebP,
 no larger than 8 MiB or 16 megapixels, with each dimension at most 8,192 pixels.
-Comics with other page formats are rejected rather than silently skipping pages.
-EPUB chapters and rendered HTML are limited to 2 MiB. Small PNG/JPEG illustrations
+Static lossy, lossless and transparent WebP pages render directly at their original
+resolution; archives are preserved. Animated WebP is not supported. Comics with
+other page formats are rejected rather than silently skipping pages.
+EPUB chapters and rendered HTML are limited to 2 MiB. Small PNG/JPEG/WebP illustrations
 (up to 256 KiB each, 1 MiB total) are embedded; unsupported/large illustrations
 show an omission label. Raw scripts, forms, embedded objects, source styles and
 external resources are removed. Chapter links are inert; use the chapter selector.
@@ -319,9 +347,9 @@ or add a plaintext filename to the copy's record. Filename privacy still depends
 on the crypt remote's filename-encryption settings.
 
 Remote browsing and unlocked copies show decrypted names. **Manage local files
-and folders** opens a local browser with **Local files** and the session's
-**LocalCrypt** destinations. **List** and **Tiles** use the same shared browsing
-model as desktop. Visible PNG/JPEG images and comic/EPUB covers load in the
+and folders** opens a local browser with **Local files** and existing
+**LocalCrypt** copies. **List** and **Tiles** use the same shared browsing
+model as desktop. Visible PNG/JPEG/WebP images and comic/EPUB covers load in the
 background, with a bounded memory cache. Select a file to see its name, size and
 modified time, plus available comic/EPUB metadata below the entries.
 The storage picker and **Parent folder** are visible directly in the local browser.
@@ -370,7 +398,7 @@ preserves ciphertext copies, closes the private reader and removes its displayed
 content. **Close private reader** releases the reader's in-memory content.
 
 The private reader/editor is separate from Documents and the book library. It
-supports text/Markdown editing, EPUB chapter text, and PNG/JPEG comic pages in
+supports text/Markdown editing, EPUB chapter text, and PNG/JPEG/WebP comic pages in
 CBZ/ZIP archives. For a password-protected archive inside LocalCrypt, enter its
 password in **Inner ZIP password (if needed)** before opening. Both AES and
 traditional ZIP passwords are supported; the password is not saved. Choose a
@@ -384,8 +412,11 @@ changes and close**. **Return to private reader/editor** resumes an open editor.
 Unsaved edits remain in memory and cannot survive an app crash or forced exit.
 
 The private reader creates no document recovery file, reading-position record,
-bookmarks, plaintext export or thumbnail cache. Markdown is edited as source text;
-desktop Markdown formatting, folder mirroring and upload are not available here.
+saved bookmark record, plaintext export or thumbnail cache. Its tools offer
+**Bookmark** and a bookmark selector for comics and EPUBs. These bookmarks remain
+in memory while switching documents and are cleared when the session closes.
+Markdown is edited as source text, with an offline preview. Folder transfers use
+the Files folder actions described below.
 
 For a LocalCrypt comic or EPUB, choose **Edit metadata…** in the private reader,
 change the fields and choose **Save encrypted metadata**. EPUB fields include title,
@@ -461,7 +492,7 @@ continues to save encrypted bytes through the existing verified transaction.
 
 ### Repeatable folder pulls
 
-Select a remote folder and choose **Save repeatable folder pull**. This downloads
+Earlier mobile versions offered **Save repeatable folder pull**. New transfers use **Pull…** and the sync engine below. Legacy copy jobs remain readable through their compatibility route. This downloads
 a complete local copy and adds a job under **Files → Folder pulls**. **Refresh**
 fetches the current remote contents. It never uploads or deletes remote files.
 
@@ -486,8 +517,16 @@ document/library identity rather than importing another duplicate.
 
 Files keeps your current folder, selection, list/tile mode, search, sort and browse
 history when you visit Documents or Settings. Local and remote browsers give most
-of the screen to the listing; **Actions** opens less frequent commands. Local
-mutations and archive-password fields remain available through File actions.
+of the screen to the listing. Tap a local file to open it, or a folder to browse
+it. Search stays visible; **Sort** reveals sorting and list/tile options. The
+**•••** beside an item selects that item and opens its commands without opening
+its contents. Rename, Move, New folder and archive-password entry have focused
+screens. **Details** shows metadata and bounded previews.
+Files opened from this browser stay in the Files navigation stack. Native Back
+returns to the same folder, search, sorting, selection and scroll position.
+Back leaves the reading/editing session open, including unsaved provider text
+drafts; reopen it through **Open documents** to continue. Files opened from
+Books & Comics or Open documents keep their document navigation instead.
 Connection import, reload, remember and forget remain in Settings.
 
 Use **Pin current folder** to add an ordinary local or remote folder to Files.
@@ -505,13 +544,22 @@ keeps all local folders. Remote data is never changed by a folder pull.
 
 Open EPUB and comic sessions now give content the main area, with compact page
 navigation and an Actions menu for contents, bookmarks, appearance and reading
-mode. Reading mode hides those controls and keeps a visible Restore controls
-button. EPUB appearance offers supported font sizes, margins and system/light/dark
+mode. EPUB reading mode hides those controls and keeps a visible Restore controls
+button. Comics open with controls hidden and zero page margins; tap the page to
+show or hide reading controls. Native navigation bars hide with comic controls
+and return when controls are shown or when leaving the reader. EPUB appearance offers supported font sizes, margins and system/light/dark
 colors without changing the current chapter. Progress remains chapter/page based.
+Fit comic pages remain centered after leaving and reopening a reader or repeatedly
+showing and hiding controls; zoomed pages retain bounded pan and zoom behavior.
+Fullscreen reclaims the navigation area on both platforms, including Android's
+title bar. Transfer banners appear with reading controls and stay hidden during
+immersive comic reading; this does not pause transfers in the background.
 
 Comic pages use native pinch zoom and panning on iOS and Android. Fit page resets
-zoom; left/right page swipes operate at fit size, respect manga reading order,
-and leave the outer edge available for system navigation. Private comic pages
+zoom; swipe left for the next page and right for the previous page at fit size.
+Manga reverses those directions. Swipes stop at the first/last page without an
+error. While zoomed, dragging pans the page and does not change pages. Swipes
+leave the outer edge available for system navigation. Private comic pages
 use the same presentation while their content and position remain session-only.
 
 Text actions offer Preview beside editor in wide windows. The preview stays beside
@@ -544,61 +592,171 @@ System scenes are verified on an iPad simulator. Real-device document pickers,
 OS-driven scene eviction, assistive input and physical multitasking still require
 separate evidence.
 
-## Local / LocalCrypt pulls and pushes
+## Folder Hub and Local / LocalCrypt sync
 
-Open a remote in Files and choose **Pull to Local / LocalCrypt**. A selected
-folder is the source; otherwise the currently browsed folder is used. Ordinary
-remotes populate a managed Local folder. Crypt remotes populate the matching
-LocalCrypt tree with original ciphertext, including encrypted stored names.
-Open the completed copy from **Files → Local / LocalCrypt & transfers**.
+**Files** combines ordinary Local folders, downloaded LocalCrypt copies and loaded
+remotes in one name-only selector. A folder such as `Example-Library` appears
+once; its action page reflects the copies available. **Browse folder** opens its
+local copy when present. **Browse online** opens its loaded remote when both exist.
+Existing managed copies remember their storage type and transfer association.
+The first pull chooses storage; later transfers reuse it. **Refresh** updates
+folder discovery without downloading remote contents.
 
-Each copy offers **Open**, **Pull** and **Push…**. Pull refreshes an unchanged
-local copy and retains its previous version. If you edited local files, it keeps
-them and saves the remote version as a separate retained snapshot. Removing a
-mapping keeps its files and snapshots. A missing or changed connection blocks
-transfers rather than redirecting the copy to another account.
+Mobile bundles the existing `Python/configFile.ini`; its `[Folders]` exclusions
+control both the remote picker and Folder Hub. Hidden backing remotes remain
+loaded for crypt connections. Remote-name exclusions apply to remote entries;
+folder suffix exclusions apply to all sources. These names are not hard-coded
+in mobile. List and Tiles reuse the shared browser, with separated row/card
+backgrounds and explicit sort controls.
 
-Push checks the local copy and remote revisions, then presents a review before
-sending files. Changed remote files block that review. Replaced remote files get
-verified backups under the remote's reserved `.logistics-backups` folder; a crypt
-remote stores those backups encrypted. Uploaded bytes are read back and verified.
-Remote-only files are kept: mobile Push does not delete them. Unlike desktop
-sync, mobile transfers do not make the destination an exact destructive mirror.
-Do not run another writer against the same remote folder during Push; a remote
-folder is not an atomic transaction. Cancellation may leave already completed
-uploads and their backups. Review again to resume the remaining work.
+Open a remote and choose **Pull…**. A selected folder is the source; otherwise
+it uses the currently browsed folder, including the remote root. If a matching
+local mapping already exists, Pull reuses that destination. New copies offer
+**Local** (readable files) or **LocalCrypt** (original encrypted names and bytes).
+Transfer confirmations use rclone path notation: `Remote:` for the configured
+remote root and `Remote:folder/subfolder` for a folder within it. “Root” is not
+added as a folder name.
+LocalCrypt requires a crypt remote with encryption keys. Existing ordinary
+folders matching the remote/folder name can be adopted as the Local destination.
+Both storage types belong to the app's private space. Crypt storage choices only
+appear when a corresponding copy exists; loading credentials does not imply the
+folders are downloaded.
 
-Transfers have a progress screen, cancellation and feedback in the remote browser.
-Ordinary writing and comic/EPUB reading continue while a pull runs, and completion
-does not replace the active document. Save or close unsaved provider edits before
-transferring their files. Protected provider views are released during transfer
-setup. This supports doing other work inside Logistics; continuing indefinitely
-while iOS/Android suspends the app is not promised.
+**Pull** makes the local destination match the remote source. **Push…** makes the
+selected remote destination match local, after a review showing replacements
+and destination-only entries to remove. Files missing from the source are removed
+from the destination, within the selected folder. Both operations call the embedded
+rclone library's standard Sync routine, with no backup option or new retained
+snapshots. Transfers use rclone's normal incremental comparison. LocalCrypt syncs
+ciphertext to/from the backing scope; a readable Local copy of a crypt remote uses
+rclone's crypt filesystem for automatic encryption/decryption.
 
-LocalCrypt content stays ciphertext during pull, staging, snapshots and push.
-Unlock the matching connection to browse decrypted names or edit supported files.
-Both mobile targets have native fixture checks for Local/LocalCrypt pull, editing,
-verified push and ordinary document use during a pull. Physical network interruptions
-and provider permissions still need device testing.
+**Files → Transfers** shows the destination and offers
+**Open**, **Pull**, **Push…**, **Delete local folder…**, and **Remove mapping
+(keep files)**. Delete local folder requires confirmation and removes only the
+app-private local folder and everything inside it permanently; the online folder
+remains. Confirmation appears without scanning the folder contents. Deletion
+creates no backup and has no app recovery or undo. Obsolete transfer snapshots
+are discarded during deletion or the next transfer; they cannot be opened or
+restored. Removing a mapping keeps its local files. A missing or changed connection blocks transfers until you load the
+matching credential ZIP.
 
-### Linked LocalCrypt folders and final push checks
+For session-only connections, `preferences.ini` remembers the ZIP filename and
+remote names, without its password or credentials. After restart those remotes
+remain discoverable in the Hub; opening one tells you which ZIP to select and
+unlock. The ZIP itself must be available through the device picker. Forgetting
+credentials also clears these associations. Saved credentials retain the existing
+protected-vault behavior.
 
-Pulled LocalCrypt folders appear as **LocalCrypt: account (pulled)** in file and
-editor destination selectors. They use a separate connection scope, so two accounts
-with the same encryption key do not share a live folder. Existing older encrypted
-locations stay available; a new Pull populates the linked location before Push can
-use it. Retained older snapshots remain readable without moving their bytes.
-Filename privacy follows the chosen crypt settings: disabling filename or directory
-name encryption keeps those stored names visible on disk.
+Transfers show completed and active file counts, discovered entries, checks and
+transferred bytes. Known totals can grow as rclone discovers more files; discovery
+uses a steady activity indicator until a byte total is available. A zero completed
+file count can mean files are still transferring, rather than no work happening.
+New copies use the exact remote name (or selected Local subfolder name), without
+a random suffix. On the next pull, an older generated suffixed Local folder is
+renamed together with its mapping if the destination is free. LocalCrypt keeps its
+private account storage and updates its copy label. Conflicting names, including
+case-only differences, refuse the pull and preserve existing copies.
 
-Push authenticates every LocalCrypt file before uploading anything, supports empty
-subfolders, stages an unchanged source, and shows authentication, backup, sending
-and verification progress. Credential changes close pending reviews and invalidate
-their confirmation buttons. OAuth refresh preserves a connection's original identity;
-importing another account creates a different identity. Edited transfer records stop
-further operations and remain preserved.
+Transfers support cancellation. An interrupted sync can leave
+completed writes/deletions at the destination, just like CLI rclone sync; retry
+uses the same recorded location. Other ordinary documents remain usable while
+sync runs. Save or close provider edits before syncing their local files. Transfers
+do not promise continued execution while iOS/Android suspends the app. Host tests
+verify the UI and embedded rclone tests verify incremental transfers, deletion in
+both directions, plain/crypt destinations and absence of new backups. Physical
+network and device validation of these changes remains pending.
 
 Ordinary reader selection now survives cold workspace restoration and resumes when
 Documents is opened. Closing secondary iPad windows releases their callbacks, widget
 registries and writers. The beta simulator vetoed or terminated the process during destruction of
 its launch scene, so original-window OS close remains unverified on a physical iPad.
+
+### Keeping your place during delayed opens
+
+If you switch documents or open Settings while a private document is loading,
+the completed document stays available in the workspace without replacing your
+current view or draft. Select it when you want to continue. A comic password
+prompt that finishes after you leave the reader does not take keyboard focus.
+Results arriving after their window has been replaced do not update that old view.
+
+## Mobile UI refresh (local development)
+
+Home offers Continue and compact shortcuts to Files, writing and the library.
+Documents lists open sessions with their type and unsaved state; tap a name to
+resume. Its **•••** menu closes that session through the existing unsaved-change
+guard. New, Open, Library and Chat remain available from Documents.
+
+The library is a searchable list of books and comics. Tap a title to open its
+reader. Contents/bookmarks and appearance have separate tools, keeping the reading
+area clear. An editor's **•••** menu contains less frequent document commands.
+Markdown opened from local/provider files offers Preview/Edit without saving the
+draft; leaving the view clears the rendered preview and keeps the draft in memory.
+Closing or locking private content clears the preview as well as its editor text.
+
+Files starts with a native folder selector. Names have no Local/Remote prefix.
+Choosing a folder dismisses the iOS wheel and opens its action page. **Browse
+folder** opens the available copy; alternate copies have explicit Browse actions.
+Managed copies offer **Pull…** and **Push…**. Folders with a loaded remote offer
+Pull to create or associate a copy. Local folders also offer **Delete local
+folder…**, with native confirmation; online files are kept. Deletion waits until
+transfers finish. **Choose another folder** returns to the selector.
+Connections loads credentials; Transfers shows progress and managed-copy options.
+Returning through the bottom Files tab refreshes the same complete selector.
+
+Folder rows use one line with an icon/name and a navigation chevron. Files can
+show their size and **•••** actions. Opening a folder does not flash a selection
+checkmark. Sort and List/Tiles remain in the Sort controls.
+
+Pull always asks for native **OK / Cancel** confirmation before writing local
+files. Push first shows its changes, then asks for the same native confirmation
+before writing online. Cancel keeps the files unchanged. The popup identifies the
+source and destination and warns about replacements/deletions. Changing the
+connection or mapping while the popup is open invalidates that operation.
+A compact transfer strip remains available while writing or reading. The rclone
+Sync behaviour and destructive scope are described in the Folder Hub section above.
+
+Native colours follow the system appearance, and phone lists use vertical scrolling.
+iPhones request the tab-bar presentation; iPads retain the adaptive sidebar. These
+local UI changes need a freshly built app; the previously released main.07 does
+not contain them. Screen-reader and physical touch/keyboard validation remain
+separate from the automated checks.
+
+Local file folders remain browsable during a pull: open Files, choose a readable local folder,
+and enter folders or go Up while the transfer continues. Remote engine operations
+remain serialized. The transfer status strip opens details and can be dismissed
+after completion without closing your current document.
+
+While a pull runs, tapping a local text or Markdown file opens its editor and
+keeps edits in that document session. Tapping a local CBZ/ZIP comic or EPUB opens
+the library reader; paging and returning to an open text draft keep the pull
+running. Opening and browsing use separate local work without replacing the
+transfer cancellation handle. LocalCrypt operations that need the cloud engine
+remain serialized.
+
+Home’s **Browse files** opens the same folder selector each time. Choosing
+**All files → Browse folder** refreshes the local root and clears an old
+search filter. Local browsing does not wait for a credential restore or an
+unrelated cloud request.
+
+### Light and dark appearance
+
+The app follows your device's light/dark appearance. Editor text, document-name
+fields, labels, selectors, hints and input outlines remain readable in either
+mode. Markdown and EPUB pages use matching text/background colours; a reader's
+explicit Light/Dark setting still applies only to its pages. Changing Android's
+appearance keeps the current app activity and document drafts intact.
+
+Android file rows use flat, normal-case titles with the same size/actions layout
+as iOS. Buttons adapt to phone width so row menus and Save/Find/Preview remain
+visible; Back and Sort retain their full captions.
+
+Comic reading controls now share the same layout for Local and LocalCrypt:
+tap to reveal controls, use Previous/Next or swipe at fit size, and use Fit to
+return to the centered page. LocalCrypt bookmarks remain in memory until close;
+ordinary library bookmarks retain their saved behavior.
+
+Contents and appearance screens have their own Back step. A reader opened from
+Files returns first to reading and then to the same folder. Each provider document
+owns its request and cancellation; cancelling that document does not cancel a
+separate pull. Wait for its operation to finish before closing it.

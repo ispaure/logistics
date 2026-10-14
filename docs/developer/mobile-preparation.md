@@ -3,7 +3,7 @@
 ## Native destination routes
 
 The mobile host uses Home, Files, Documents and Settings, with independent screen
-stacks in shared Python navigation state. `routing.py` retains screen views while
+stacks in shared Python navigation state. `commonUtils.ui.native.routes` retains screen views while
 changing destinations. UIKit owns the Apple navigation controllers and reports
 completed pops through a lifecycle-owned delegate. Android uses a small tracked
 `NavigationBack.java` bridge to AndroidX `OnBackPressedDispatcher`, enabled only
@@ -223,12 +223,12 @@ portable preference and preview cases.
 ## Phase 2 reader contracts
 
 `library.py` streams bounded imports into private storage, validates archive member
-paths/counts/sizes and refuses encryption before reusing portable EPUBBook and
+paths/counts/sizes and uses native access for protected archives before reusing portable EPUBBook and
 ComicPages. UUID identities and checksums protect record/path associations.
-`reading.py` renders an allowlist of XHTML tags with source attributes/styles and
-active content removed; small validated PNG/JPEG images use data URLs under an
+`features.books.mobile.content` renders an allowlist of XHTML tags with source attributes/styles and
+active content removed; small validated PNG/JPEG/WebP images use data URLs under an
 offline CSP. Native comic inputs have byte/dimension/pixel limits before decoding.
-`library_ui.py` runs archive operations off the event-loop thread and exposes
+`reader_ui.py` runs archive operations off the event-loop thread and exposes
 reading-order chapter/page selection, bookmarks and optimistic progress updates.
 Progress is chapter/page-granular; precise EPUB scroll restoration is future work.
 
@@ -410,7 +410,7 @@ remotes, downloads original ciphertext as a stream and reads offline copies via
 authenticated ranges and lazy archive members. Local text/Markdown saves stage and verify ciphertext; inner password ZIPs
 are opened lazily through the bundled ZIP library. Comic/EPUB metadata saves replace
 only metadata and preserve inner passwords and untouched archive entries. The native private reader keeps text
-and PNG/JPEG images out of persistent
+and PNG/JPEG/WebP images out of persistent
 document/library records. EPUB uses a generic archive source. See [LocalCrypt](localcrypt.md)
 for API boundaries, limits and host regression coverage. Earlier phase-4 evidence
 predates this extension and does not validate its Android/iOS UI or native binaries.
@@ -930,5 +930,15 @@ after every [release gate](https://github.com/ispaure/logistics/actions/runs/385
 passed. Its signed normal-launcher build matches the validated source fingerprint
 and installed over Wi-Fi without uninstalling or changing identity. All 16 existing
 document files remained listed with matching sizes; file contents were not copied
-or byte-compared. Physical launch initially requires the user to unlock the phone.
+or byte-compared. Physical launch was initially blocked by the locked phone. After the user unlocked
+it, launch succeeded and the installed executable was confirmed running.
 The alpha verification fixes do not alter that exact-commit main release.
+
+## Phase 6 Parts 2–3: local alpha verification
+
+The [three-pass alpha audit](mobile-alpha-verification.md) records the delayed-open,
+superseded-host and hidden password-focus fixes, plus native navigation-intent
+tracking that tolerates UIKit container refreshes. All 72 frozen host tests,
+39 core tests and 25 native cases on each of Android, iPad and iPhone pass.
+Concurrent folder improvements are excluded from this frozen audit. These fixes
+and evidence remain local under the user's commit hold; main.07 stays unchanged.

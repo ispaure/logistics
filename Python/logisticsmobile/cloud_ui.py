@@ -66,7 +66,7 @@ class CloudUI(CopyUI, LocalCryptUI):
             self.cloud_browse = toga.Button('Browse folder', on_press=self.browse_cloud, style=Pack(flex=1, height=44))
             self.cloud_up = toga.Button('Parent folder', on_press=self.parent_cloud, style=Pack(flex=1, height=44))
             self.cloud_entries = toga.Selection(style=Pack(height=44))
-            from commonUtils.ui.native_browser import NativeBrowser
+            from .browser_ui import FileBrowser as NativeBrowser
             self.remote_browser = NativeBrowser(selected=self.browser_cloud_selected, open_folder=self.browser_cloud_folder, navigate=self.browser_cloud_location)
             self.cloud_open = toga.Button('Open folder', on_press=self.open_cloud_folder, style=Pack(height=44))
             self.cloud_download = toga.Button('Download private copy', on_press=self.download_cloud, style=Pack(height=44))
@@ -81,7 +81,7 @@ class CloudUI(CopyUI, LocalCryptUI):
             self.download_selector = toga.Selection(style=Pack(height=44))
             self.download_open = toga.Button('Open private copy', on_press=self.open_download, style=Pack(flex=1, height=44))
             self.download_export = toga.Button('Export private copy…', on_press=self.export_download, style=Pack(flex=1, height=44))
-            self.cloud_connections_view = toga.ScrollContainer(content=toga.Box(children=[
+            self.cloud_connections_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
                 toga.Label('Remote connections', style=Pack(font_size=22)),
                 self.cloud_choose, self.cloud_selected_zip, self.cloud_import_message,
                 toga.Box(children=[self.cloud_password, self.cloud_import], style=Pack(direction=ROW)),
@@ -89,14 +89,14 @@ class CloudUI(CopyUI, LocalCryptUI):
                 self.cloud_package, self.cloud_reload, self.cloud_probe, self.cloud_clear,
                 toga.Button('Browse remote files', on_press=self.show_cloud, style=Pack(height=44))],
                 style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
-            self.cloud_view = toga.ScrollContainer(content=toga.Box(children=[
+            self.cloud_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
                 toga.Label('Remote files', style=Pack(font_size=22)),
                 toga.Button('Manage connections…', on_press=self.show_cloud_connections, style=Pack(height=44)),
                 self.cloud_remote_heading, self.cloud_remote, self.cloud_remote_help,
                 self.cloud_location, toga.Box(children=[self.cloud_browse, self.cloud_up], style=Pack(direction=ROW)),
                 self.cloud_status, self.cloud_cancel, self.remote_browser.widget,
                 self.cloud_open, self.cloud_download_help, self.cloud_download, self.cloud_folder_open,
-                toga.Button('Save repeatable folder pull', on_press=self.create_pull_job, style=Pack(height=44)),
+                toga.Button('Sync folder to device…', on_press=self.pull_remote_copy, style=Pack(height=44)),
                 toga.Label('Downloaded copies', style=Pack(font_size=18, margin_top=12)), self.download_selector,
                 toga.Box(children=[self.download_open, self.download_export], style=Pack(direction=ROW)),
                 *self.build_localcrypt()], style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
@@ -105,10 +105,11 @@ class CloudUI(CopyUI, LocalCryptUI):
             for control in (self.cloud_remote, self.cloud_status, self.remote_browser.widget,
                             self.cloud_open, self.cloud_download, self.cloud_folder_open, self.cloud_cancel, self.cloud_browse):
                 advanced.remove(control)
+            from .presentation import scroll_content
             from .action_menu import FeatureCommands
-            self.cloud_actions_button = toga.Button('Actions', style=Pack(height=44))
+            self.cloud_actions_button = toga.Button('•••', style=Pack(width=44, height=44))
             self.cloud_actions = FeatureCommands(self.cloud_actions_button, self, [
-                ('Browse path…', self.show_cloud_actions), ('Save repeatable folder pull', self.create_pull_job),
+                ('Browse path…', self.show_cloud_actions), ('Sync folder to device…', self.pull_remote_copy),
                 ('Pin current folder', self.pin_remote_folder),
                 ('Downloaded copies…', self.show_cloud_actions), ('Encrypted offline copies…', self.show_cloud_actions),
                 ('Manage connections…', self.show_cloud_connections)], self.show_cloud_actions)
@@ -123,7 +124,8 @@ class CloudUI(CopyUI, LocalCryptUI):
             self.cloud_remote.style.flex = 1
             self.cloud_browse.text = 'Open remote'
             self.cloud_cancel.text = 'Cancel'
-            self.cloud_status.style.height = 60
+            self.cloud_status.style.height = 40
+            self.cloud_status.style.font_size = 12
             self.cloud_transfer_progress = toga.ProgressBar(max=100, value=0, style=Pack(height=12))
             advanced.add(self.cloud_copy_folder)
             self.cloud_view = toga.Box(children=[
@@ -131,12 +133,12 @@ class CloudUI(CopyUI, LocalCryptUI):
                     toga.Button('Connections…', on_press=self.show_cloud_connections, style=Pack(height=44)),
                     self.cloud_actions_button], style=Pack(direction=ROW)),
                 toga.Box(children=[self.cloud_remote, self.cloud_browse], style=Pack(direction=ROW)),
-                toga.Label('Tap folders to browse; select a file to copy.', style=Pack(font_size=14)),
                 self.cloud_status,
                 self.cloud_transfer_progress,
-                toga.ScrollContainer(content=self.remote_browser.widget, style=Pack(flex=1)),
+                toga.ScrollContainer(horizontal=False, content=scroll_content(self.remote_browser.widget), style=Pack(flex=1)),
                 self.cloud_copy_button,
-                toga.Button('Pull to Local / LocalCrypt', on_press=self.pull_remote_copy, style=Pack(height=48)),
+                toga.Box(children=[toga.Button('Pull…', on_press=self.pull_remote_copy, style=Pack(height=48, flex=1)),
+                    toga.Button('Push…', on_press=self.push_remote_copy, style=Pack(height=48, flex=1))], style=Pack(direction=ROW)),
                 self.cloud_cancel],
                 style=Pack(direction=COLUMN, margin=12, flex=1))
             self.refresh_downloads()
@@ -182,6 +184,7 @@ class CloudUI(CopyUI, LocalCryptUI):
         self.crypt_download.enabled = not value and self.cloud_client is not None and self.selected_cloud_remote() in self.cloud_crypt_remotes
         self.cloud_cancel.enabled = value
         self.refresh_cloud_copy_actions()
+        self.refresh_folder_actions()
         self.download_open.enabled = self.download_export.enabled = not value and bool(self.download_labels)
 
     def refresh_cloud_copy_actions(self):
@@ -229,7 +232,8 @@ class CloudUI(CopyUI, LocalCryptUI):
             self.clear_private_catalog()
             names = await asyncio.to_thread(self.cloud_client.restore)
             await self._load_crypt_remote_names()
-            self.cloud_remote.items = names
+            from .folder_hub import visible_remotes
+            self.cloud_remote.items = visible_remotes(names)
             self.cloud_entries.items = []
             self.cloud_rows = {}
             self.cloud_open_remote = None
@@ -300,7 +304,13 @@ class CloudUI(CopyUI, LocalCryptUI):
             self.clear_private_catalog()
             names = await asyncio.to_thread(self.cloud_client.import_package, selected, None, password, remember=self.cloud_remember.value)
             await self._load_crypt_remote_names()
-            self.cloud_remote.items = names
+            from .folder_hub import visible_remotes
+            import json
+            packages = json.loads(self.preferences.values['remote_packages'])
+            packages = [item for item in packages if item['zip'] != selected.name]
+            packages.append(dict(zip=selected.name, remotes=visible_remotes(names), session_only=not self.cloud_remember.value))
+            self.preferences.save(remote_packages=json.dumps(packages[-32:]))
+            self.cloud_remote.items = visible_remotes(names)
             self.cloud_package.text = 'Logistics credential package: ' + getattr(self.cloud_client, 'package_name', 'Imported ZIP')
             self.cloud_location.value = self.cloud_path = ''
             self.cloud_open_remote = None
@@ -329,7 +339,7 @@ class CloudUI(CopyUI, LocalCryptUI):
             self.cloud_location.value = ''
         previous_rows = self.cloud_rows
         previous_selected = self.cloud_entries.value
-        self.cloud_status.value = f'Opening {remote}:/{folder}…'
+        self.cloud_status.value = f'Opening {remote}:{folder}…'
         self.set_cloud_busy(True)
         self.cloud_rows = {}
         self.cloud_entries.items = []
@@ -359,14 +369,14 @@ class CloudUI(CopyUI, LocalCryptUI):
             def thumbnail(row, size, cancelled):
                 if cancelled() or not getattr(client, 'supports_streaming', False):
                     return b''
-                if Path(row['path']).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.zip', '.cbz', '.epub'}:
+                if Path(row['path']).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp', '.zip', '.cbz', '.epub'}:
                     return b''
                 result = client.request('remote_thumbnail', remote=remote, path=row['path'], password=password, width=size[0], height=size[1])
                 return base64.b64decode(result['data'], validate=True) if not cancelled() else b''
             self.remote_browser.closed = False
             self.remote_browser.thumbnail = thumbnail
             self.remote_browser.set_entries(provider, folder, [dict(row, name=Path(row['path']).name, modified='') for row in rows], location=(remote, folder))
-            self.cloud_status.value = (f'{remote}:/{folder} · {len(rows)} items.\nTap folders to open them. Select a file to copy, or use Copy this folder.' if rows else f'{remote}:/{folder} is empty.')
+            self.cloud_status.value = (f'{remote}:{folder} · {len(rows)} items.\nTap folders to open them. Select a file to copy, or use Copy this folder.' if rows else f'{remote}:{folder} is empty.')
             return True
         except Exception as error:
             self.cloud_status.value = 'Browse failed: ' + str(error)[:300]
@@ -499,6 +509,7 @@ class CloudUI(CopyUI, LocalCryptUI):
             self.cloud_selected_zip.text = 'No ZIP selected'
             self.cloud_import_message.text = import_hint('Choose a ZIP, then enter its password and tap Load remotes.')
             self.cloud_package.text = 'Credential package: none'
+            self.preferences.save(remote_packages='[]')
             self.cloud_status.value = 'Saved and session credentials forgotten. Private downloads remain available.'
         except Exception:
             self.cloud_status.value = 'Could not forget the protected credentials. Unlock the device and retry.'
@@ -511,12 +522,16 @@ class CloudUI(CopyUI, LocalCryptUI):
         if selected:
             self.download_selector.value = next(key for key, path in self.download_labels.items() if path == selected)
 
-    async def open_download(self, widget=None, *, path=None, **kwargs):
+    async def open_download(self, widget=None, *, path=None, destination=None, **kwargs):
         from .access import LocalDocuments
         selected = path if path is not None else self.download_labels.get(self.download_selector.value)
-        if self.cloud_busy or selected is None:
+        independent = (self.cloud_busy and getattr(self, 'transfer_busy', False) and path is not None
+                       and selected.resolve().is_relative_to((self.private_root / 'LocalFiles').resolve()))
+        if (self.cloud_busy and not independent) or selected is None:
             return
-        self.set_cloud_busy(True)
+        destination = destination or ('files' if self.native_host.state.destination == 'files' else 'documents')
+        if not independent:
+            self.set_cloud_busy(True)
         try:
             from .resource_imports import ResourceImports
             if not hasattr(self, 'resource_imports'):
@@ -524,29 +539,39 @@ class CloudUI(CopyUI, LocalCryptUI):
             imported = self.resource_imports.find(selected)
             if imported is not None:
                 if imported['provider'] == 'library':
-                    await self.open_book(imported['resource'])
+                    await self.open_book(imported['resource'], destination=destination)
                 elif self.open_document(imported['resource']):
-                    self.show_documents(resume=True)
+                    self.show_documents(resume=True, destination=destination)
                 else:
                     raise ValueError('The imported copy is unavailable; its index and source were preserved.')
                 return
             if selected.suffix.lower() in {'.epub', '.cbz', '.zip'}:
-                self.show_library()
-                record = await asyncio.to_thread(self.library_store.import_book, LocalDocuments(), selected)
+                catalog = self.reader_manager().catalog
+                generation = self.navigation_generation
+                record = await asyncio.to_thread(catalog.library_store.import_book, LocalDocuments(), selected)
                 self.resource_imports.remember(selected, 'library', record['id'])
+                if not self.active_host or (independent and self.navigation_generation != generation):
+                    return
                 self.refresh_library()
-                await self.open_book(record['id'])
+                await self.open_book(record['id'], destination=destination)
             else:
                 doc = await asyncio.to_thread(self.store.import_document, LocalDocuments(), selected)
                 self.resource_imports.remember(selected, 'managed-text', doc.id)
                 self.refresh_documents()
                 self.open_document(doc.id)
-                self.show_documents()
+                self.show_documents(destination=destination)
         except Exception as error:
             self.cloud_status.value = 'Open failed: ' + str(error)[:300]
-            self.show_cloud()
+            if independent:
+                self.file_status.value = self.cloud_status.value
+                readers = getattr(self, 'readers', None)
+                if readers is not None and readers.active is not None:
+                    readers.active.book_status.text = self.cloud_status.value
+            else:
+                self.show_cloud()
         finally:
-            self.set_cloud_busy(False)
+            if not independent:
+                self.set_cloud_busy(False)
 
     async def export_download(self, widget=None, **kwargs):
         from .pickers import export_file

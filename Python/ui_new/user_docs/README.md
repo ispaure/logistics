@@ -7,6 +7,9 @@ with the sidebar by default. **Appearance & shared controls → Menus → Launch
 sidebar** can switch launch-page choices to focused workspaces without it. Disabled features are absent. Use Settings to
 enable them, and their cards appear without restarting the app.
 
+On Windows, the launch terminal minimizes once the chooser is displayed. You can
+restore it from the taskbar to inspect startup output.
+
 The **Read & edit** section always includes Markdown Editor. Enabled features add
 their registered document tools, such as Text Editor, EPUB Reader, Comic Reader and
 Archives. **Open…** picks a file; **New** appears where creation is supported.
@@ -56,6 +59,10 @@ File Browser and Folder Hub use the full page width. Indexing and folder-source
 loading appear in compact bottom notice rows, leaving more room for files and
 folders. Hover over a shortened indexing notice to read its full text; use
 **Index details…** when shown to inspect unfinished folders and scan errors.
+
+The desktop File Browser's size maps default to **Size on disk (allocated space)**.
+Use **Measure** above the chart to switch to **Size (file contents)**. The chart and
+ranked list share that choice, using both measures from the saved index.
 
 ## Browse, search and inspect storage
 

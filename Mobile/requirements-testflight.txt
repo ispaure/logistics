@@ -1,0 +1,2 @@
+# Host-side API authentication only; never bundled into the mobile app.
+cryptography==50.0.2

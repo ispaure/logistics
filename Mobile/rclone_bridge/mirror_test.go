@@ -8,10 +8,13 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rclone/rclone/fs"
+	"github.com/rclone/rclone/fs/accounting"
 	"github.com/rclone/rclone/fs/object"
 )
 
@@ -131,19 +134,14 @@ func TestMirrorAuthenticatedPullVerifiedPushAndRemoteConflict(t *testing.T) {
 			t.Fatal("stale remote revision was overwritten")
 		}
 		source.Close()
-		// The reserved backup is excluded, but the old bytes remain recoverable.
 		backup := path.Join(".logistics-backups", strings.Repeat("a", 32), "mirror-note.txt")
 		if name == "Secret" {
 			backup = cipher.EncryptFileName(backup)
 		}
-		old, err := f.NewObject(ctx, path.Join(rootFor(name, root), backup))
-		if err != nil {
-			t.Fatal(err)
+		if _, err = f.NewObject(ctx, path.Join(rootFor(name, root), backup)); err == nil {
+			t.Fatal("plain sync must not create backups")
 		}
-		hash, err := mirrorDigest(ctx, old)
-		if err != nil || hash != expected {
-			t.Fatal("remote backup differed")
-		}
+
 		if _, err = mirrorList(ctx, name, "", strings.Repeat("f", 64)); err == nil {
 			t.Fatal("different connection accepted")
 		}
@@ -197,4 +195,244 @@ func TestLocalImageDispatchDoesNotWaitForRemoteTransfer(t *testing.T) {
 		t.Fatal("local reading lost the transfer cancellation handle")
 	}
 	serial.Unlock()
+}
+
+func TestMirrorLogicalCryptPullAndPush(t *testing.T) {
+	clearSession()
+	t.Cleanup(clearSession)
+	ctx := context.WithValue(context.Background(), mirrorLogicalKey{}, true)
+	if _, err := importPackage(cryptPackage(t, "Cloud:logical-mirror-fixture"), ""); err != nil {
+		t.Fatal(err)
+	}
+	info, err := mirrorInfo(ctx, "Secret", "")
+	if err != nil || info["crypt"] != false || info["prefix"] != "" {
+		t.Fatalf("logical info: %v %v", info, err)
+	}
+	identity := info["identity"].(string)
+	source, err := os.CreateTemp(t.TempDir(), "plain-source")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	data := []byte("plaintext local edit")
+	source.Write(data)
+	source.Seek(0, 0)
+	checked, err := mirrorValidate(ctx, "Secret", "note.txt", identity, int(source.Fd()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source.Seek(0, 0)
+	actual, err := mirrorWrite(ctx, "Secret", "note.txt", identity, "", strings.Repeat("c", 32), int(source.Fd()))
+	if err != nil || actual != checked {
+		t.Fatalf("logical push: %s %v", actual, err)
+	}
+	rows, err := mirrorList(ctx, "Secret", "", identity)
+	if err != nil || len(rows) != 1 || rows[0].Path != "note.txt" {
+		t.Fatalf("logical list: %v %v", rows, err)
+	}
+	output, err := os.CreateTemp(t.TempDir(), "plain-pull")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer output.Close()
+	if _, err = mirrorRead(ctx, "Secret", "note.txt", identity, int(output.Fd())); err != nil {
+		t.Fatal(err)
+	}
+	output.Seek(0, 0)
+	result, _ := io.ReadAll(output)
+	if !bytes.Equal(data, result) {
+		t.Fatal("logical pull did not return plaintext")
+	}
+	raw := context.Background()
+	rawInfo, err := mirrorInfo(raw, "Secret", "")
+	if err != nil || rawInfo["crypt"] != true {
+		t.Fatal(err)
+	}
+	rawRows, err := mirrorList(raw, "Secret", "", identity)
+	if err != nil || rawRows[0].Path == "note.txt" {
+		t.Fatal("backing names were not encrypted", err)
+	}
+	output2, _ := os.CreateTemp(t.TempDir(), "raw-pull")
+	defer output2.Close()
+	if _, err = mirrorRead(raw, "Secret", rawRows[0].Path, identity, int(output2.Fd())); err != nil {
+		t.Fatal(err)
+	}
+	output2.Seek(0, 0)
+	encrypted, _ := io.ReadAll(output2)
+	if bytes.Equal(data, encrypted) {
+		t.Fatal("backing bytes were not encrypted")
+	}
+}
+
+func TestNativeRcloneSyncDeletesDestinationOnlyFilesWithoutBackups(t *testing.T) {
+	clearSession()
+	t.Cleanup(clearSession)
+	if _, err := importPackage(cryptPackage(t, "Cloud:sync-fixture"), ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []struct {
+		name    string
+		logical bool
+	}{{"Cloud", false}, {"Secret", false}, {"Secret", true}} {
+		ctx := context.Background()
+		if mode.logical {
+			ctx = context.WithValue(ctx, mirrorLogicalKey{}, true)
+		}
+		title := mode.name
+		if mode.logical {
+			title += "-logical"
+		} else {
+			title += "-raw"
+		}
+		info, err := mirrorInfo(ctx, mode.name, title)
+		if err != nil {
+			t.Fatal(err)
+		}
+		prefix := info["prefix"].(string)
+		identity := info["identity"].(string)
+		local := t.TempDir()
+		canonical, err := filepath.EvalSymlinks(local)
+		if err != nil {
+			t.Fatal(err)
+		}
+		filename := "note.txt"
+		if mode.name == "Secret" && !mode.logical {
+			cipher, _, _, _, _ := cryptConnection("Secret")
+			filename = cipher.EncryptFileName(filename)
+			stream, e := cipher.EncryptData(strings.NewReader("initial"))
+			if e != nil {
+				t.Fatal(e)
+			}
+			bytes, e := io.ReadAll(stream)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if e = os.WriteFile(filepath.Join(canonical, filename), bytes, 0600); e != nil {
+				t.Fatal(e)
+			}
+		} else if err = os.WriteFile(filepath.Join(canonical, filename), []byte("initial"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = mirrorSync(ctx, mode.name, prefix, identity, canonical, strings.Repeat("a", 32), true); err != nil {
+			t.Fatal(title, err)
+		}
+		// A second identical push transfers nothing: use the normal incremental rclone path.
+		if count, e := mirrorSync(ctx, mode.name, prefix, identity, canonical, strings.Repeat("b", 32), true); e != nil || count != 0 {
+			t.Fatalf("incremental %s: %d %v", title, count, e)
+		}
+		if err = os.Remove(filepath.Join(canonical, filename)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = mirrorSync(ctx, mode.name, prefix, identity, canonical, strings.Repeat("c", 32), true); err != nil {
+			t.Fatal(err)
+		}
+		rows, err := mirrorList(ctx, mode.name, prefix, identity)
+		if err != nil || len(rows) != 0 {
+			t.Fatalf("push must remove destination-only files: %v %v", rows, err)
+		}
+		// Pull from that empty remote deletes a local-only file and creates no snapshots.
+		if err = os.WriteFile(filepath.Join(canonical, "local-only"), []byte("delete"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = mirrorSync(ctx, mode.name, prefix, identity, canonical, strings.Repeat("d", 32), false); err != nil {
+			t.Fatal(err)
+		}
+		children, _ := os.ReadDir(canonical)
+		if len(children) != 0 {
+			t.Fatal("pull did not remove destination-only local files")
+		}
+	}
+}
+
+// Exercise both a decrypted Local pull and a ciphertext LocalCrypt pull through
+// the embedded sync engine, observing its real accounting while it is running.
+func TestNativeCryptPullReportsLiveProgress(t *testing.T) {
+	clearSession()
+	t.Cleanup(clearSession)
+	if _, err := importPackage(cryptPackage(t, "Cloud:progress-fixture"), ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, logical := range []bool{false, true} {
+		ctx := context.Background()
+		if logical {
+			ctx = context.WithValue(ctx, mirrorLogicalKey{}, true)
+		}
+		info, err := mirrorInfo(ctx, "Secret", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		local, err := filepath.EvalSymlinks(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		data := bytes.Repeat([]byte("fixture"), 128*1024)
+		name := "large.bin"
+		if !logical {
+			cipher, _, _, _, _ := cryptConnection("Secret")
+			name = cipher.EncryptFileName(name)
+			encrypted, err := cipher.EncryptData(bytes.NewReader(data))
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err = io.ReadAll(encrypted)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		file := filepath.Join(local, name)
+		if err := os.WriteFile(file, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		prefix, identity := info["prefix"].(string), info["identity"].(string)
+		if _, err := mirrorSync(ctx, "Secret", prefix, identity, local, strings.Repeat("e", 32), true); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(file); err != nil {
+			t.Fatal(err)
+		}
+		ctx, config := fs.AddConfig(ctx)
+		if err := config.BwLimit.Set("256K"); err != nil {
+			t.Fatal(err)
+		}
+		accounting.TokenBucket.StartTokenBucket(ctx)
+		t.Cleanup(func() { accounting.TokenBucket.SetBwLimit(fs.BwPair{}) })
+		finished := make(chan error, 1)
+		run := strings.Repeat("f", 32)
+		go func() { _, err := mirrorSync(ctx, "Secret", prefix, identity, local, run, false); finished <- err }()
+		deadline := time.After(12 * time.Second)
+		ticker := time.NewTicker(30 * time.Millisecond)
+		sawLive := false
+		waiting := true
+		for waiting {
+			select {
+			case err := <-finished:
+				if err != nil {
+					t.Fatal(err)
+				}
+				waiting = false
+			case <-deadline:
+				t.Fatal("crypt pull did not finish")
+			case <-ticker.C:
+				mirrorProgressState.Lock()
+				if mirrorProgressState.Run == run && mirrorProgressState.Done > 0 && mirrorProgressState.Done < mirrorProgressState.Total && mirrorProgressState.Active > 0 && mirrorProgressState.TotalFiles > 0 {
+					sawLive = true
+				}
+				mirrorProgressState.Unlock()
+			}
+		}
+		ticker.Stop()
+		if !sawLive {
+			t.Fatal("no live bytes, totals or active transfers observed")
+		}
+		mirrorProgressState.Lock()
+		files, done, total := mirrorProgressState.Files, mirrorProgressState.Done, mirrorProgressState.Total
+		mirrorProgressState.Unlock()
+		if files != 1 || done != int64(len(data)) || total != done {
+			t.Fatalf("final stats: files=%d bytes=%d total=%d", files, done, total)
+		}
+		pulled, err := os.ReadFile(file)
+		if err != nil || !bytes.Equal(pulled, data) {
+			t.Fatal("pull contents differ", err)
+		}
+	}
 }

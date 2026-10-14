@@ -292,9 +292,9 @@ class PrivateReader:
                 if self.kind != '.epub':
                     from features.comics.pages import natural_key
                     self.pages = sorted((m.filename for m in members if not m.is_dir()
-                                         and Path(m.filename).suffix.lower() in {'.png', '.jpg', '.jpeg'}), key=natural_key)
+                                         and Path(m.filename).suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}), key=natural_key)
                     if not self.pages:
-                        raise ValueError('The comic contains no PNG/JPEG pages.')
+                        raise ValueError('The comic contains no PNG/JPEG/WebP pages.')
                     self.labels = [f'Page {i + 1}' for i in range(len(self.pages))]
                     try:
                         self.right_to_left = self.comic.info.get_field('Manga') == 'YesAndRightToLeft'
@@ -305,7 +305,7 @@ class PrivateReader:
                 self.book = EPUBBook(Path(name), source=self.source)
                 self.labels = [f'Chapter {i + 1}' for i in range(len(self.book.spine))]
         else:
-            raise ValueError('Private reading supports UTF-8 text/Markdown, EPUB and PNG/JPEG CBZ/ZIP comics.')
+            raise ValueError('Private reading supports UTF-8 text/Markdown, EPUB and PNG/JPEG/WebP CBZ/ZIP comics.')
 
     @property
     def comic(self):
@@ -320,7 +320,7 @@ class PrivateReader:
             raise ValueError('Page does not exist.')
         if self.book is not None:
             from html.parser import HTMLParser
-            from .reading import chapter_html
+            from features.books.mobile.content import chapter_html
             class Text(HTMLParser):
                 def __init__(self):
                     super().__init__()
@@ -341,7 +341,7 @@ class PrivateReader:
             return 'text', ''.join(parser.parts)
         if self.kind in {'.md', '.markdown', '.txt'}:
             return 'text', self.text
-        from .reading import image_dimensions, MAX_IMAGE
+        from features.comics.mobile.validation import image_dimensions, MAX_IMAGE
         with self.source.open_archive(self.name) if self.streaming else ZipFile(BytesIO(self.data)) as archive:
             member = archive.getinfo(self.pages[index])
             if member.file_size > MAX_IMAGE:

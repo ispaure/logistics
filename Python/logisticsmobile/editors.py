@@ -4,6 +4,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from .documents import document_name
 from .action_menu import ActionMenu
+from .editor_search import EditorSearch
 
 FIELDS = ('selector', 'name', 'editor', 'status', 'recovery_notice', 'import_button',
           'save_button', 'export_button', 'document_view')
@@ -16,16 +17,16 @@ class TextEditorView:
         self.preview_pending = None
         self.split_preview = None
         self.selector = toga.Selection(on_change=self.selected, style=Pack(flex=1, height=44))
-        self.name = toga.TextInput(on_change=self.name_changed, style=Pack(flex=1, height=44))
+        self.name = toga.TextInput(placeholder='Document name', on_change=self.name_changed, style=Pack(flex=1, height=44))
         self.editor = toga.MultilineTextInput(on_change=self.text_changed,
-            style=Pack(flex=1, font_size=int(app.preferences.values['font_size'])))
-        self.status = toga.Label('', style=Pack(font_size=12))
+            style=Pack(flex=1, font_size=int(app.preferences.values['font_size']), margin_top=4))
+        self.status = toga.Label('', style=Pack(font_size=12, margin_top=4))
         self.recovery_notice = toga.Label('', style=Pack(font_size=12))
         self.import_button = toga.Button('Import…', on_press=app.import_document, style=Pack(flex=1, height=44))
         self.save_button = toga.Button('Save', on_press=app.save_document, style=Pack(flex=1, height=44))
         self.export_button = toga.Button('Export…', on_press=app.export_document, style=Pack(flex=1, height=44))
         box = self.document_view = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=12))
-        self.actions_button = toga.Button('Actions', style=Pack(height=44))
+        self.actions_button = toga.Button('•••', style=Pack(width=44, height=44))
         self.actions = ActionMenu(self.actions_button, self, [
             ('Open documents', app.show_documents_hub), ('New document', app.new_document),
             ('Import…', lambda: app.import_document(origin=self)), ('Open from Files…', app.show_editor_open),
@@ -38,8 +39,14 @@ class TextEditorView:
         box.add(self.editor_area)
         box.add(self.status)
         box.add(toga.Box(children=[self.save_button,
+            toga.Button('Find', on_press=self.toggle_search, style=Pack(flex=1, height=44)),
             toga.Button('Preview', on_press=app.show_preview, style=Pack(flex=1, height=44))],
             style=Pack(direction=ROW, margin_top=8)))
+        self.search = EditorSearch(self)
+        app.register_transfer_status(box)
+
+    def toggle_search(self, widget=None, **kwargs):
+        self.search.toggle()
 
     def load(self, document, session):
         self.document, self.session = document, session
@@ -70,6 +77,8 @@ class TextEditorView:
             self.session.title = self.document.name
             self.session.kind = 'markdown' if self.document.name.lower().endswith(('.md', '.markdown')) else 'text'
             self.preserve()
+            self.app.routes.update_title(self.document_view, self.document.name)
+            self.app.adaptive.update_title(self.document_view, self.document.name)
         except ValueError:
             pass
 
@@ -78,6 +87,7 @@ class TextEditorView:
                 or (self.app.loading and self.app.editor_view is self)):
             return
         self.document.text = widget.value
+        self.search.changed()
         self.preserve()
         self.schedule_preview()
 

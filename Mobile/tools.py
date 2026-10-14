@@ -7,20 +7,28 @@ from pathlib import Path
 import shutil
 import subprocess
 
-APP_MODULES = ('__init__.py', '__main__.py', 'documents.py', 'access.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'native_navigation.py', 'routing.py', 'workspace.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'native_memory.py', 'window_owners.py', 'window_scenes.py',
-               'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library.py', 'reading.py', 'library_ui.py', 'reader_chrome.py', 'comic_canvas.py',
+APP_MODULES = ('comic_layout_check.py', 'appearance.py', '__init__.py', '__main__.py', 'documents.py', 'access.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'native_memory.py', 'window_owners.py', 'window_scenes.py',
+               'presentation.py', 'editor_search.py', 'hub_ui.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
                'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_fixture.py', 'cloud.py', 'resource_imports.py', 'folder_download.py', 'pull_jobs.py', 'pull_jobs_ui.py', 'mirror_jobs.py', 'mirror_ui.py', 'cloud_ui.py', 'copy_ui.py', 'native_loop.py', 'credential_vault.py', 'localcrypt.py', 'localcrypt_ui.py', 'file_resources.py', 'files_ui.py', 'crypt_stream.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
     'features/__init__.py', 'features/books/__init__.py', 'features/books/epub.py',
     'features/books/metadata.py', 'features/comics/__init__.py',
+    'features/books/mobile/__init__.py', 'features/books/mobile/content.py', 'features/books/mobile/presentation.py',
+    'features/comics/mobile/__init__.py', 'features/comics/mobile/validation.py', 'features/comics/mobile/presentation.py',
     'features/comics/archive_io.py', 'features/comics/comicinfo.py',
     'features/comics/library.py', 'features/comics/pages.py',
-    'services/__init__.py', 'services/zip_passwords.py', 'services/document_metadata.py',
+    'configFile.ini', 'services/folder_policy.py', 'services/__init__.py', 'services/zip_passwords.py', 'services/document_metadata.py',
     'features/lm/__init__.py', 'features/lm/domain.py', 'features/lm/screenshots.py',
 )
 
 
-SHARED_REQUIRED_MODULES = ('runtime/resource_provider.py', 'runtime/local_files.py', 'runtime/resource_mutations.py', 'persistence/publication.py', 'filesystem/local_access.py', 'runtime/resource_selection.py', 'runtime/browsing.py', 'runtime/range_reader.py', 'runtime/archive_source.py', 'runtime/resource_search.py', 'ui/native_browser/__init__.py')
+SHARED_REQUIRED_MODULES = ('runtime/resource_provider.py', 'runtime/local_files.py', 'runtime/resource_mutations.py', 'persistence/publication.py', 'filesystem/local_access.py', 'runtime/resource_selection.py', 'runtime/browsing.py', 'runtime/range_reader.py', 'runtime/archive_source.py', 'runtime/resource_search.py', 'ui/native_browser/__init__.py', 'ui/native/__init__.py', 'ui/native/image_canvas.py')
+
+SHARED_REQUIRED_MODULES += ('ui/native/navigation_state.py', 'ui/native/navigation.py',
+                            'ui/native/routes.py', 'ui/native/chrome.py',
+                            'ui/native/android/io/github/ispaure/commonutils/ImageCanvasView.java',
+                            'ui/native/android/io/github/ispaure/commonutils/NavigationBack.java')
+
 
 def stage(repo, destination, *, testbed=False, allow_dirty=False):
     repo, destination = Path(repo).resolve(), Path(destination).resolve()
@@ -62,6 +70,8 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     copy(shared / 'LICENSE.md', Path('commonUtils/LICENSE.md'))
     for name in DOCUMENT_MODULES:
         copy(repo / 'Python' / name, Path(name))
+    # Briefcase copies package sources, not payload-root configuration files.
+    copy(repo / 'Python/configFile.ini', Path('services/configFile.ini'))
     if testbed:
         for name in ('portable_documents.py', 'books_fixture.py', 'test_mobile_documents.py', 'test_mobile_hub.py',
                      'test_mobile_readers.py', 'test_mobile_chat.py', 'test_mobile_cloud.py', 'test_mobile_vault.py', 'test_mobile_localcrypt.py'):
@@ -77,7 +87,7 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
              (repo / 'Mobile/native_navigation', 'native-navigation/'))
     for root, prefix in roots:
         for path in sorted(root.rglob('*')):
-            if path.is_file() and path.suffix in {'.py', '.go', '.java', '.json', '.mod', '.sum'} and path.name != 'source.json':
+            if path.is_file() and path.suffix in {'.py', '.go', '.java', '.json', '.ini', '.mod', '.sum'} and path.name != 'source.json':
                 digest.update((prefix + path.relative_to(root).as_posix()).encode() + b'\0')
                 digest.update(path.read_bytes())
     manifest['source_sha256'] = digest.hexdigest()

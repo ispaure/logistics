@@ -60,6 +60,13 @@ Desktop.ini
 /Mobile/payload/
 /Mobile/logs/
 /Mobile/.briefcase/
+/Mobile/.device.json
+/Mobile/.testflight-auth.json
+/Mobile/.testflight-keys/
+/Mobile/.tools/
+*.p8
+*.p12
+*.mobileprovision
 
 # Local private feature link (symlink on Unix; junction on Windows)
 /Python/features/emulation

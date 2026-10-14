@@ -1,0 +1,7 @@
+{
+  "provider": "beeware/Python-Apple-support",
+  "source_url": "https://raw.githubusercontent.com/beeware/Python-Apple-support/c012e5d4309b3a6767bcc5787f9cd57cfbcd48e9/patch/Python/OpenSSL.xcprivacy",
+  "sha256": "774aa51b3d403906f598085d4aed865e6baa9532675f3964c3f731e778c0c032",
+  "upstream_fix": "https://github.com/beeware/Python-Apple-support/pull/285",
+  "original_source": "https://github.com/openssl/openssl/blob/openssl-3.0/os-dep/Apple/PrivacyInfo.xcprivacy"
+}

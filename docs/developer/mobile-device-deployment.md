@@ -1,0 +1,71 @@
+# Local iPhone deployment
+
+`Mobile/device_tools.py` owns the local physical-device workflow; the executable
+`Mobile/deploy_ios.command` anchors paths to its own directory and uses the
+ignored `Mobile/.venv` and optional `Mobile/.tools/go` installation. See the
+[operator guide](../../Mobile/README.md#build-and-deploy-to-a-paired-iphone-over-wi-fi)
+for setup and commands. This workflow does not automate TestFlight.
+
+Routine validation uses the iOS simulator and Android emulator on the computer,
+including tablet checks when navigation/layout changes. A paired iPhone can
+receive an installation while locked. Request an unlock only when physical
+hardware behavior or an explicitly requested on-device launch/screenshot check
+requires it; ordinary regression checks should not depend on the user unlocking
+their phone.
+
+Configuration pins the existing `io.github.ispaure.logisticsmobile` identity,
+paired physical iPhone UDID and Apple development team in ignored
+`Mobile/.device.json`. Simulator entries and ambiguous device selections are
+rejected. Debug and Release target configurations receive automatic signing
+with the selected team. An existing different team or bundle ID is rejected;
+the helper does not resolve mismatches by changing identity or uninstalling.
+
+Each build stages the explicit public mobile source allowlist with local dirty
+sources allowed, refreshes the generated Briefcase application and native
+license notices, rebuilds both native bridge variants, restores the plist's
+`MainModule` to `logisticsmobile`, and runs a Debug arm64 device build.
+The toolchain selector requires SDK 27.1 or newer and supplies `DEVELOPER_DIR`
+to child processes without changing the global `xcode-select` setting.
+`cloud_build.ios_compiler` quotes the SDK path in Go's `CC` argument string so
+installations such as `Xcode 27.1.app` compile correctly.
+
+Briefcase 0.4.5 updates sources during `update`, but sets `MainModule` only
+during its `build` operation. Direct `xcodebuild` after a simulator test run
+therefore needs the explicit normal-launcher restoration. A successful native
+compile alone is insufficient: the helper verifies the built plist, device
+membership in the provisioning profile, signing team, application identifier,
+and recursive code signature before installation. Application identifier and
+Keychain groups are recorded in the local configuration and must match on
+subsequent builds, including after clearing generated build directories.
+
+`deploy` verifies CoreDevice transport immediately before installation.
+`localNetwork` (Xcode 27.1) and `wireless` are accepted; a wired deployment
+requires explicit `--allow-wired`. Installation is an in-place CoreDevice app
+update, followed by launch. There is no uninstall/reset/unpair operation or
+fallback to a different signing identity. `launch` retries an already installed
+app without rebuilding, useful after the first on-device profile trust step.
+Errors stop the workflow and retain diagnostic logs. Local configuration,
+profiles, certificates, payloads, environments, screenshots and device logs
+are excluded from Git; no credentials are written by the helper.
+
+Focused unit checks in `Mobile/tests/test_device_tools.py` cover identity
+rejection, normal-launcher restoration, physical-device selection and SDK
+paths containing spaces. Actual build/install/launch evidence lives in ignored
+`Mobile/logs/device-*.log` and `device-deployment.json`; this workflow does not
+claim the full mobile functional test suite passed on the physical device.
+
+## Local verification, 2026-10-13
+
+Xcode 27.1 / SDK 27.1 built and signed version 0.1.5 for an iPhone 15 Pro Max
+running iOS 26.6.2. With USB unplugged, CoreDevice reported `localNetwork`;
+installation and launch succeeded after the initial on-device developer trust
+step. The persistent launcher also completed a subsequent build/install/launch.
+The app process remained running and a device screenshot showed the normal
+Logistics UI. All seven focused deployment/SDK unit checks passed, and the
+bridge's Go tests passed during the workflow.
+
+After the in-place update, all five existing document/preference files remained
+listed by CoreDevice. iOS relocated the data-container path during installation;
+path equality is not used as a data-preservation assertion. This check examined
+file metadata, not document contents, and does not establish byte-for-byte
+data equality. No uninstall, device reset or unpairing was performed.

@@ -5,7 +5,8 @@ normal application shell is migrated in milestone 1; passing this proof alone
 does not change the normal launch screen.
 
 The shared Python `NavigationState` owns destination IDs and independent routes.
-`native_navigation.py` isolates backend access. Toga 0.5.7 and Briefcase 0.4.5
+`commonUtils.ui.native.navigation` now isolates backend access, following the
+local architecture cleanup. Toga 0.5.7 and Briefcase 0.4.5
 remain pinned. Android explicitly depends on Material 1.12.0. Apple builds select
 an installed iOS 27.1 SDK or newer to opt into Duo bar adaptation, retaining the
 declared iOS 15 minimum and guarding newer controller APIs.
@@ -87,3 +88,69 @@ The release publisher optionally uses a tag-specific Markdown file in
 `.github/release-notes/` for the release title and description; otherwise it keeps
 generated notes. Existing releases/assets retain their no-overwrite protection,
 and the validation/build/runtime gates still precede publication.
+
+## Guided remote copies
+
+`logisticsmobile.copy_ui.CopyUI` owns the remote-to-device destination route.
+It snapshots the client, credential generation and selected row before presenting
+an app-managed LocalFiles folder picker. Connection changes refuse the transfer.
+The browser exposes separate selected-item and current-folder copy actions because
+folder taps navigate immediately. Local storage selection and parent navigation
+are primary controls; storage changes open the root. No remote write API is added.
+
+`folder_download.pull_item` stages files, flushes them and publishes with an
+exclusive hard link; staging removal leaves one independent destination file.
+Collisions produce a new copy name. Folder transfers reuse the existing staged
+folder pull. Cancellation, authentication failure and credential changes before
+publication remove staging. The native descriptor is sampled every 200 ms on a
+worker to report bytes without changing the bridge ABI. UI progress is dispatched
+on the event loop; the bar measures the current file, stays animated for unknown
+sizes, and completes only after publication. Folder status also counts completed
+files. `Mobile/tests/test_copy_ui.py` covers destination browsing, collisions,
+source generation changes, retry, cancellation and progress using the dummy host;
+these checks are not physical iOS/Android interaction evidence.
+
+## Native launch panels and per-editor search
+
+`hub_ui.py` builds Home and Documents icon panels over the existing session and
+file-picker commands. `hub_icons.py` embeds small PNG line icons, decoded by Toga
+without a runtime imaging dependency. Home reflows at 700/1100 points; Documents
+keeps one column for the existing native list/detail sidebar. Root refreshes on
+destination selection do not replace retained detail routes or activate another
+session. New from a hub explicitly displays the newly created editor.
+
+`editor_search.py` owns literal Find/Replace widgets per `TextEditorView`. Native
+selection converts Python offsets into UTF-16 offsets on Apple and Android.
+Replacement updates the existing text widget and draft checkpoint path; it does
+not write through a separate persistence path. Queries and replacement strings
+are memory-only and are not added to the workspace manifest. Host tests cover
+Continue ownership/preview, new-document draft retention, wrapped Unicode search,
+literal replacement and independent editor queries. These checks do not certify
+physical keyboard or layout behavior.
+
+
+## Local mobile Folder Hub and embedded sync changes (2026-10-14)
+
+The mobile payload includes `configFile.ini` and portable `services.folder_policy`;
+desktop and mobile share the exclusion parser and dash naming helper. No desktop
+configuration singleton or Qt dependency is admitted to the payload. INI bytes are
+included in the source digest. Folder Hub aggregates actual private folders,
+transfer mappings, loaded remotes and nonsecret ZIP/remote associations from the
+existing mobile preferences INI. Loaded crypt connections alone are not local
+copies; browsing/discovery does not instantiate empty crypt namespaces.
+
+Managed transfers call native `mirror_sync`, which wraps rclone `fs/sync.Sync`
+with an admitted connection, validated private local directory, connection identity,
+selected remote prefix and explicit direction. Crypt-to-Local uses rclone's crypt
+filesystem; LocalCrypt uses its backing ciphertext scope. No backup directory or
+suffix is configured. Push review inventories both sides and shows removals;
+changed local or remote inventory invalidates the review. Cancellation leaves
+completed destination changes and retains the mapping for retry. Normal transfers
+create no snapshots/staging copies; old publication journals and snapshots retain
+compatibility recovery/read support. Rclone filesystem caches are cleared when
+credentials change. A transfer-specific accounting group supplies byte progress.
+
+Local folder deletion reuses shared provider inventory/delete operations and
+removes the mapping after successful deletion. Existing unrelated changes remain
+in the checkout. These changes have host/native-library regression coverage;
+installed iOS/Android visual and network behavior needs a freshly rebuilt app.

@@ -19,7 +19,9 @@ class MemoryPressure:
             subscription = self
             class Listener(dynamic_proxy(ComponentCallbacks2)):
                 def onConfigurationChanged(self, configuration):
-                    pass
+                    owner = subscription.app()
+                    if owner is not None and owner.active_host:
+                        owner.loop.call_soon_threadsafe(owner.refresh_native_theme)
                 def onLowMemory(self):
                     subscription.release()
                 def onTrimMemory(self, level):

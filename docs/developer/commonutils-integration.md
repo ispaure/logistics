@@ -63,6 +63,43 @@ separate from Logistics' feature hooks and persisted settings migration rules.
 Settings callers import shared editors and schemas directly and request typed keys
 explicitly. Feature archive and browser code likewise imports the shared owners.
 
+## Mobile browser boundary
+
+The mobile browser is Python. Logistics' `logisticsmobile.browser_ui.FileBrowser`
+customizes the optional Toga browser in commonUtils; Toga supplies UIKit controls
+on iOS and Android controls on Android. Desktop continues to use the Qt browser.
+The shared hierarchy and resource operations do not require either UI toolkit.
+Logistics owns the storage selector, mirror associations, credentials, private
+document sessions, action approval and routing into readers/editors.
+
+Within mobile, Files, Move and editor Open/Save As now resolve storage through
+`FilesUI.storage_provider`. Existing pulled providers are reused with their
+namespace intact; display labels are not parsed into a new provider. This keeps
+encrypted and ordinary workflow branching at the provider boundary.
+
+A future common browser entry point should accept an explicit host/backend and
+provider/actions, then lazily construct the relevant adapter. It should not choose
+solely from the operating system: macOS can host either the desktop Qt app or a
+Toga test app. A Qt-backed desktop process must not acquire a mandatory Toga
+dependency, and headless data operations must not import either UI package.
+Keep the two presentations while sharing provider/navigation contracts and
+reusable models. Virtual archive members or a hierarchical JSON catalogue need
+an adapter supplying identities, children, access and capabilities; rendering a
+generic hierarchy alone does not implement those user workflows. This entry-point
+proposal is not implemented by the current Logistics-local consolidation.
+
+## Native component ownership
+
+The local mobile architecture cleanup moves image gestures, configurable native
+destination containment, Back routing and chrome restoration into the optional
+`commonUtils.ui.native` package. Its API and Android bridge packaging are documented
+in commonUtils itself. Logistics supplies destination definitions, close/navigation
+guards, document controllers and adaptive workspace composition. Feature-specific
+mobile EPUB/comic presentation is under the Books/Comics owners; catalogue storage,
+private-content policy and transfer workflows remain in Logistics. See the
+[architecture roadmap](mobile-architecture-roadmap.md) for the baseline assessment
+and validation sequence.
+
 ## Grouped shared UI imports
 
 Logistics uses `commonUtils.ui.workspaces`, `tasks`, `readers`, `settings` and

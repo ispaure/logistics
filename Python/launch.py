@@ -1,4 +1,6 @@
 from commonUtils.runtime.diagnostics import Severity, log
+from commonUtils.runtime.platform import OS, get_os
+from commonUtils.integrations.wrappers.cmdShellWrapper import minimize_console_window
 from commonUtils.ui import pyside
 from commonUtils.ui.appearance.theme import apply_theme
 from commonUtils.ui.appearance.styling import apply_styling
@@ -30,6 +32,9 @@ def main() -> int:
         main_window = MainWindow()
         main_window.display_ui()
         main_window.start_updates()
+        if get_os() == OS.WIN:
+            # Let Qt display the landing page before minimizing its console.
+            pyside.QTimer.singleShot(0, main_window.dlg, minimize_console_window)
         exit_code = app.exec()
     finally:
         indexing.stop()

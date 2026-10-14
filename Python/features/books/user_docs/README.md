@@ -187,3 +187,10 @@ Desktop **Open EPUB…**, including the New Document launcher, uses the shared L
 Desktop private-book unlocks keep the password prompt open after a wrong attempt,
 show an inline error and clear and focus the field for retry. Enter submits once;
 Cancel abandons that open or metadata unlock.
+
+On mobile, ordinary EPUB chapter rendering and comic presentation share portable
+format models with desktop while retaining their own native interface. Reader
+contents/appearance screens return to reading through Back; a book opened from
+Files then returns to its originating folder. Provider-backed bookmarks keep
+their existing session-only policy. See the [mobile guide](../../../logisticsmobile/user_docs/README.md)
+for supported reading and storage workflows.

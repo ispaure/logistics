@@ -1,0 +1,459 @@
+{
+  "samples": [
+    {
+      "name": "fullscreen-initial",
+      "fullscreen": true,
+      "window_height": 932.0,
+      "top": 172.0,
+      "height": 612.9175946547883,
+      "center": 478.45879732739417,
+      "expected_center": 478.5,
+      "delta": -0.04120267260583432,
+      "viewport_top": 59.0,
+      "viewport_height": 839.0,
+      "zoom": 1.0,
+      "ancestors": [
+        {
+          "type": "ComicCanvas",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        }
+      ],
+      "container": {
+        "height": 932.0,
+        "layout_height": 932.0,
+        "top": 59.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "name": "controls-1",
+      "fullscreen": false,
+      "window_height": 932.0,
+      "top": 165.0,
+      "height": 521.0,
+      "center": 425.5,
+      "expected_center": 478.5,
+      "delta": -53.0,
+      "viewport_top": 165.0,
+      "viewport_height": 521.0,
+      "zoom": 1.0,
+      "ancestors": [
+        {
+          "type": "ComicCanvas",
+          "flex": 1.0,
+          "width": 414.0,
+          "height": 521.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 414.0,
+          "height": 521.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 587.0,
+          "height": 637.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 603.0,
+          "height": 653.0
+        }
+      ],
+      "container": {
+        "height": 766.0,
+        "layout_height": 766.0,
+        "top": 113.0,
+        "bottom": 0.0
+      }
+    },
+    {
+      "name": "fullscreen-1",
+      "fullscreen": true,
+      "window_height": 932.0,
+      "top": 172.0,
+      "height": 612.9175946547883,
+      "center": 478.45879732739417,
+      "expected_center": 478.5,
+      "delta": -0.04120267260583432,
+      "viewport_top": 59.0,
+      "viewport_height": 839.0,
+      "zoom": 1.0,
+      "ancestors": [
+        {
+          "type": "ComicCanvas",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        }
+      ],
+      "container": {
+        "height": 932.0,
+        "layout_height": 932.0,
+        "top": 59.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "name": "reopened-1",
+      "fullscreen": true,
+      "window_height": 932.0,
+      "top": 172.0,
+      "height": 612.9175946547883,
+      "center": 478.45879732739417,
+      "expected_center": 478.5,
+      "delta": -0.04120267260583432,
+      "viewport_top": 59.0,
+      "viewport_height": 839.0,
+      "zoom": 1.0,
+      "ancestors": [
+        {
+          "type": "ComicCanvas",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        }
+      ],
+      "container": {
+        "height": 932.0,
+        "layout_height": 932.0,
+        "top": 59.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "name": "controls-2",
+      "fullscreen": false,
+      "window_height": 932.0,
+      "top": 165.0,
+      "height": 521.0,
+      "center": 425.5,
+      "expected_center": 478.5,
+      "delta": -53.0,
+      "viewport_top": 165.0,
+      "viewport_height": 521.0,
+      "zoom": 1.0,
+      "ancestors": [
+        {
+          "type": "ComicCanvas",
+          "flex": 1.0,
+          "width": 414.0,
+          "height": 521.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 414.0,
+          "height": 521.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 587.0,
+          "height": 637.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 603.0,
+          "height": 653.0
+        }
+      ],
+      "container": {
+        "height": 766.0,
+        "layout_height": 766.0,
+        "top": 113.0,
+        "bottom": 0.0
+      }
+    },
+    {
+      "name": "fullscreen-2",
+      "fullscreen": true,
+      "window_height": 932.0,
+      "top": 172.0,
+      "height": 612.9175946547883,
+      "center": 478.45879732739417,
+      "expected_center": 478.5,
+      "delta": -0.04120267260583432,
+      "viewport_top": 59.0,
+      "viewport_height": 839.0,
+      "zoom": 1.0,
+      "ancestors": [
+        {
+          "type": "ComicCanvas",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        }
+      ],
+      "container": {
+        "height": 932.0,
+        "layout_height": 932.0,
+        "top": 59.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "name": "reopened-2",
+      "fullscreen": true,
+      "window_height": 932.0,
+      "top": 172.0,
+      "height": 612.9175946547883,
+      "center": 478.45879732739417,
+      "expected_center": 478.5,
+      "delta": -0.04120267260583432,
+      "viewport_top": 59.0,
+      "viewport_height": 839.0,
+      "zoom": 1.0,
+      "ancestors": [
+        {
+          "type": "ComicCanvas",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        }
+      ],
+      "container": {
+        "height": 932.0,
+        "layout_height": 932.0,
+        "top": 59.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "name": "controls-3",
+      "fullscreen": false,
+      "window_height": 932.0,
+      "top": 165.0,
+      "height": 521.0,
+      "center": 425.5,
+      "expected_center": 478.5,
+      "delta": -53.0,
+      "viewport_top": 165.0,
+      "viewport_height": 521.0,
+      "zoom": 1.0,
+      "ancestors": [
+        {
+          "type": "ComicCanvas",
+          "flex": 1.0,
+          "width": 414.0,
+          "height": 521.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 414.0,
+          "height": 521.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 587.0,
+          "height": 637.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 603.0,
+          "height": 653.0
+        }
+      ],
+      "container": {
+        "height": 766.0,
+        "layout_height": 766.0,
+        "top": 113.0,
+        "bottom": 0.0
+      }
+    },
+    {
+      "name": "fullscreen-3",
+      "fullscreen": true,
+      "window_height": 932.0,
+      "top": 172.0,
+      "height": 612.9175946547883,
+      "center": 478.45879732739417,
+      "expected_center": 478.5,
+      "delta": -0.04120267260583432,
+      "viewport_top": 59.0,
+      "viewport_height": 839.0,
+      "zoom": 1.0,
+      "ancestors": [
+        {
+          "type": "ComicCanvas",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        }
+      ],
+      "container": {
+        "height": 932.0,
+        "layout_height": 932.0,
+        "top": 59.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "name": "reopened-3",
+      "fullscreen": true,
+      "window_height": 932.0,
+      "top": 172.0,
+      "height": 612.9175946547883,
+      "center": 478.45879732739417,
+      "expected_center": 478.5,
+      "delta": -0.04120267260583432,
+      "viewport_top": 59.0,
+      "viewport_height": 839.0,
+      "zoom": 1.0,
+      "ancestors": [
+        {
+          "type": "ComicCanvas",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        },
+        {
+          "type": "Box",
+          "flex": 1.0,
+          "width": 430.0,
+          "height": 839.0
+        }
+      ],
+      "container": {
+        "height": 932.0,
+        "layout_height": 932.0,
+        "top": 59.0,
+        "bottom": 34.0
+      }
+    }
+  ],
+  "success": true,
+  "target": "physical-ios",
+  "cycles": 3,
+  "source_sha256": "e739b5e3aa817b17e3f02c985a87c7ebc0b4b3c2bf33865596bee198b1b3aba6",
+  "screenshots_retained_locally": true
+}

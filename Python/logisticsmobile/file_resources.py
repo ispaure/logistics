@@ -247,6 +247,11 @@ class LocalTextCopies:
     def __init__(self, provider):
         self.provider = provider
 
+    @property
+    def offline(self):
+        from commonUtils.runtime.local_files import LocalFiles
+        return isinstance(self.provider, LocalFiles)
+
     def open(self, key, *, password='', cancelled=lambda: False):
         from commonUtils.runtime.resource_selection import ResourceTextSession
         session = ResourceTextSession.open(self.provider, key, cancelled=cancelled)

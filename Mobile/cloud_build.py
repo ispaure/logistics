@@ -23,6 +23,26 @@ def run(*args, env=None, cwd=ROOT / 'rclone_bridge'):
     subprocess.run(args, check=True, env=env, cwd=cwd)
 
 
+def configure_android_appearance(project):
+    """Use DayNight resources and preserve Python sessions across uiMode changes."""
+    import xml.etree.ElementTree as ET
+    project = Path(project)
+    styles = project / 'app/src/main/res/values/styles.xml'
+    text = styles.read_text()
+    text = text.replace('Theme.AppCompat.Light.DarkActionBar', 'Theme.MaterialComponents.DayNight')
+    styles.write_text(text)
+    manifest = project / 'app/src/main/AndroidManifest.xml'
+    namespace = 'http://schemas.android.com/apk/res/android'
+    ET.register_namespace('android', namespace)
+    tree = ET.parse(manifest)
+    for activity in tree.getroot().findall('application/activity'):
+        key = '{' + namespace + '}configChanges'
+        flags = activity.get(key, '').split('|')
+        if 'uiMode' not in flags:
+            activity.set(key, '|'.join([flag for flag in flags if flag] + ['uiMode']))
+    tree.write(manifest, encoding='utf-8', xml_declaration=True)
+
+
 def android():
     sdk = Path(os.environ.get('ANDROID_HOME') or os.environ['ANDROID_SDK_ROOT'])
     ndk = sdk / 'ndk' / '27.2.12479018'
@@ -32,6 +52,7 @@ def android():
     host = 'linux-x86_64' if platform.system() == 'Linux' else 'darwin-x86_64'
     tools = ndk / 'toolchains/llvm/prebuilt' / host / 'bin'
     project = ROOT / 'build/logisticsmobile/android/gradle'
+    configure_android_appearance(project)
     for arch, abi, compiler in [('arm64', 'arm64-v8a', 'aarch64-linux-android24-clang'),
                                  ('amd64', 'x86_64', 'x86_64-linux-android24-clang')]:
         destination = project / 'app/src/main/jniLibs' / abi
@@ -48,10 +69,12 @@ def android():
         (destination / 'liblogisticscloud.h').unlink()
 
 
-def ios():
-    project = ROOT / 'build/logisticsmobile/ios/xcode'
+def ios(project=None):
+    project = Path(project) if project is not None else ROOT / 'build/logisticsmobile/ios/xcode'
     from scene_build import configure
     configure(project)
+    from privacy_build import configure as configure_privacy
+    configure_privacy(project)
     support = project / 'Support'
     support.mkdir(parents=True, exist_ok=True)
     arch = {'arm64': 'arm64', 'aarch64': 'arm64', 'x86_64': 'amd64'}[platform.machine()]
@@ -81,7 +104,7 @@ def ios():
     pbx.write_bytes(plistlib.dumps(data, sort_keys=False))
 
 
-def licenses():
+def licenses(destination=None):
     """Carry notices for the modules actually compiled into the native engine."""
     raw = subprocess.check_output(['go', 'list', '-deps', '-json', '.'], cwd=ROOT / 'rclone_bridge', text=True)
     decoder, modules = json.JSONDecoder(), {}
@@ -91,7 +114,7 @@ def licenses():
         module = value.get('Module', {})
         if module.get('Version'):
             modules[module['Path']] = module
-    destination = ROOT / 'payload/logisticsmobile/native-licenses'
+    destination = Path(destination) if destination is not None else ROOT / 'payload/logisticsmobile/native-licenses'
     destination.mkdir(parents=True, exist_ok=True)
     manifest = []
     for name, module in sorted(modules.items()):

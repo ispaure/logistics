@@ -8,8 +8,9 @@ import (
 
 var mirrorProgressState struct {
 	sync.Mutex
-	Run, Phase  string
-	Done, Total int64
+	Run, Phase                                string
+	Done, Total                               int64
+	Files, TotalFiles, Checks, Listed, Active int64
 }
 
 func mirrorPhase(run, phase string, total int64) {
@@ -17,6 +18,8 @@ func mirrorPhase(run, phase string, total int64) {
 	defer mirrorProgressState.Unlock()
 	mirrorProgressState.Run, mirrorProgressState.Phase = run, phase
 	mirrorProgressState.Done, mirrorProgressState.Total = 0, total
+	mirrorProgressState.Files, mirrorProgressState.TotalFiles = 0, 0
+	mirrorProgressState.Checks, mirrorProgressState.Listed, mirrorProgressState.Active = 0, 0, 0
 }
 
 type mirrorCounter struct {
@@ -43,9 +46,11 @@ func mirrorProgress(input string) string {
 	}
 	mirrorProgressState.Lock()
 	defer mirrorProgressState.Unlock()
-	result := map[string]any{"phase": "", "done": 0, "total": 0}
+	result := map[string]any{"phase": "", "done": 0, "total": 0, "files": 0, "total_files": 0, "checks": 0, "listed": 0, "active": 0}
 	if request.Run != "" && request.Run == mirrorProgressState.Run {
-		result = map[string]any{"phase": mirrorProgressState.Phase, "done": mirrorProgressState.Done, "total": mirrorProgressState.Total}
+		result = map[string]any{"phase": mirrorProgressState.Phase, "done": mirrorProgressState.Done, "total": mirrorProgressState.Total,
+			"files": mirrorProgressState.Files, "total_files": mirrorProgressState.TotalFiles,
+			"checks": mirrorProgressState.Checks, "listed": mirrorProgressState.Listed, "active": mirrorProgressState.Active}
 	}
 	data, _ := json.Marshal(map[string]any{"ok": true, "result": result})
 	return string(data)

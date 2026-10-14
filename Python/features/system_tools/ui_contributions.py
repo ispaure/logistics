@@ -20,7 +20,7 @@ def get_contributions() -> Feature:
             DebugActionContribution(
                 name='Windows System Files Repair',
                 callback=actions.run_repair_windows_script,
-                description='Launch the Windows system-files repair script.',
+                description='Run DISM, SFC and AppX re-registration in an administrator console.',
                 destructive=True,
                 enabled=current_os == OS.WIN,
                 order=10
@@ -28,7 +28,7 @@ def get_contributions() -> Feature:
             DebugActionContribution(
                 name='Repair configured NTFS drive',
                 callback=actions.run_repair_ntfs_on_d,
-                description='Launch the configured Windows NTFS repair script for the drive selected in feature settings.',
+                description='Run CHKDSK /f /r in an administrator console for the drive selected in feature settings.',
                 destructive=True,
                 enabled=current_os == OS.WIN,
                 order=20

@@ -17,6 +17,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+type mirrorLogicalKey struct{}
+
 // Mirror requests remain scoped to an admitted named configuration. Ciphertext
 // paths refer to the configured crypt root, never arbitrary backing locations.
 func mirrorConnection(ctx context.Context, name, identity string) (fs.Fs, string, *crypt.Cipher, string, error) {
@@ -25,7 +27,7 @@ func mirrorConnection(ctx context.Context, name, identity string) (fs.Fs, string
 		return nil, "", nil, "", errors.New("connection changed; reload its original credentials")
 	}
 	kind, _ := store.GetValue(name, "type")
-	if kind != "crypt" {
+	if kind != "crypt" || ctx.Value(mirrorLogicalKey{}) == true {
 		f, err := remote(ctx, name)
 		return f, "", nil, "", err
 	}
@@ -72,11 +74,7 @@ func mirrorPlain(cipher *crypt.Cipher, p string, directory bool) (string, error)
 	if err != nil || !validPath(plain) {
 		return "", errors.New("invalid encrypted mirror name")
 	}
-	for _, component := range strings.Split(plain, "/") {
-		if component == ".logistics-backups" {
-			return "", errors.New("backup paths are excluded from mirrors")
-		}
-	}
+
 	return plain, nil
 }
 
@@ -240,7 +238,7 @@ func mirrorWrite(ctx context.Context, name, p, identity, expected, run string, f
 	if err != nil {
 		return "", err
 	}
-	plain, err := mirrorPlain(cipher, p, false)
+	_, err = mirrorPlain(cipher, p, false)
 	if err != nil || p == "" {
 		return "", errors.New("invalid push file")
 	}
@@ -280,43 +278,15 @@ func mirrorWrite(ctx context.Context, name, p, identity, expected, run string, f
 	if current != expected {
 		return "", errors.New("remote file changed; pull or review the conflict before pushing")
 	}
-	if expected != "" {
-		old, e := f.NewObject(ctx, path.Join(root, p))
-		if e != nil {
-			return "", e
-		}
-		backup := path.Join(".logistics-backups", run, plain)
-		if cipher != nil {
-			backup = cipher.EncryptFileName(backup)
-		}
-		input, e := old.Open(ctx)
-		if e != nil {
-			return "", e
-		}
-		mirrorPhase(run, "Saving remote backup", old.Size())
-		saved, e := f.Put(ctx, mirrorCounter{contextReader{ctx, input}, run}, object.NewStaticObjectInfo(path.Join(root, backup), time.Now(), old.Size(), true, nil, f))
-		input.Close()
-		if e != nil {
-			return "", errors.New("remote backup failed; destination was not replaced")
-		}
-		mirrorPhase(run, "Verifying remote backup", 0)
-		check, e := mirrorDigest(ctx, saved)
-		if e != nil || check != expected {
-			return "", errors.New("remote backup verification failed; destination was not replaced")
-		}
-		current, e = mirrorStat(ctx, name, p, identity)
-		if e != nil || current != expected {
-			return "", errors.New("remote changed during backup; destination was not replaced")
-		}
-	}
+
 	mirrorPhase(run, "Sending file", before.Size())
 	result, err := f.Put(ctx, mirrorCounter{contextReader{ctx, source}, run}, object.NewStaticObjectInfo(path.Join(root, p), time.Now(), before.Size(), true, nil, f))
 	if err != nil {
-		return "", errors.New("push failed or cancelled; inspect the destination and retained remote backup")
+		return "", errors.New("push failed or cancelled; inspect the destination")
 	}
 	after, err := source.Stat()
 	if err != nil || before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime()) {
-		return "", errors.New("push source changed; inspect destination and backup")
+		return "", errors.New("push source changed; inspect destination")
 	}
 	_, err = source.Seek(0, 0)
 	if err != nil {
@@ -330,7 +300,7 @@ func mirrorWrite(ctx context.Context, name, p, identity, expected, run string, f
 	}
 	check, err := mirrorDigest(ctx, result)
 	if err != nil || check != hex.EncodeToString(hash.Sum(nil)) {
-		return "", errors.New("push verification failed; inspect destination and backup")
+		return "", errors.New("push verification failed; inspect destination")
 	}
 	mirrorPhase(run, "File verified", before.Size())
 	mirrorProgressState.Lock()
@@ -365,7 +335,7 @@ func mirrorValidate(ctx context.Context, name, p, identity string, fd int) (stri
 	}
 	kind, _ := store.GetValue(name, "type")
 	var cipher *crypt.Cipher
-	if kind == "crypt" {
+	if kind == "crypt" && ctx.Value(mirrorLogicalKey{}) != true {
 		cipher, _, _, _, err = cryptConnection(name)
 		if err != nil {
 			return "", err

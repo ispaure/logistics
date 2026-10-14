@@ -33,6 +33,7 @@ import (
 	_ "github.com/rclone/rclone/backend/s3"
 	_ "github.com/rclone/rclone/backend/webdav"
 	"github.com/rclone/rclone/fs"
+	"github.com/rclone/rclone/fs/cache"
 	"github.com/rclone/rclone/fs/config"
 	"github.com/rclone/rclone/fs/config/configmap"
 	"github.com/rclone/rclone/fs/fspath"
@@ -84,7 +85,7 @@ func cancel() {
 func operation(action string) (context.Context, func()) {
 	duration := 2 * time.Minute
 	switch action {
-	case "read", "crypt_read", "crypt_fetch", "crypt_raw_write", "crypt_metadata", "crypt_manifest", "mirror_read", "mirror_stat", "mirror_validate", "mirror_write":
+	case "read", "crypt_read", "crypt_fetch", "crypt_raw_write", "crypt_metadata", "crypt_manifest", "mirror_read", "mirror_stat", "mirror_validate", "mirror_write", "mirror_sync":
 		duration = 30 * time.Minute
 	}
 	ctx, stop := context.WithTimeout(context.Background(), duration)
@@ -168,6 +169,7 @@ func parseCredential(text []byte) (string, map[string]string, error) {
 }
 
 func shutdownClients() {
+	cache.Clear()
 	clear(cryptCiphers)
 	ctx, stop := context.WithTimeout(context.Background(), 15*time.Second)
 	defer stop()
@@ -280,12 +282,12 @@ func remote(ctx context.Context, name string) (fs.Fs, error) {
 	if !admitted[name] {
 		return nil, errors.New("import a credential package first")
 	}
+	kind, _ := store.GetValue(name, "type")
+	if kind == "crypt" && ctx.Value(mirrorLogicalKey{}) != true {
+		return nil, errors.New("crypt uses the bounded encrypted-copy interface")
+	}
 	if f := clients[name]; f != nil {
 		return f, nil
-	}
-	kind, _ := store.GetValue(name, "type")
-	if kind == "crypt" {
-		return nil, errors.New("crypt uses the bounded encrypted-copy interface")
 	}
 	info, err := fs.Find(kind)
 	if err != nil {
@@ -458,6 +460,9 @@ func dispatch(action, input string) (output string) {
 		ID             string `json:"id"`
 		Label          string `json:"package_name"`
 		Session        bool   `json:"session_only"`
+		LocalPath      string `json:"local_path"`
+		Push           bool   `json:"push"`
+		Decrypted      bool   `json:"decrypted"`
 		Directory      bool   `json:"directory"`
 		Decode         bool   `json:"decode"`
 		SourceRemote   string `json:"source_remote"`
@@ -480,6 +485,9 @@ func dispatch(action, input string) (output string) {
 		err = json.Unmarshal([]byte(input), &request)
 	}
 	if err == nil {
+		if request.Decrypted {
+			ctx = context.WithValue(ctx, mirrorLogicalKey{}, true)
+		}
 		switch action {
 		case "import":
 			var data []byte
@@ -524,6 +532,12 @@ func dispatch(action, input string) (output string) {
 			result, err = mirrorMkdir(ctx, request.Remote, request.Path, request.Identity)
 		case "mirror_validate":
 			result, err = mirrorValidate(ctx, request.Remote, request.Path, request.Identity, request.FD)
+		case "mirror_sync":
+			if store.failure() {
+				err = errors.New("credentials could not be saved securely; sync was not started")
+			} else {
+				result, err = mirrorSync(ctx, request.Remote, request.Path, request.Identity, request.LocalPath, request.Run, request.Push)
+			}
 		case "mirror_write":
 			if store.failure() {
 				err = errors.New("credentials could not be saved securely; push was not started")
