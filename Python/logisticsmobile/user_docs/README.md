@@ -453,3 +453,27 @@ The four-item and 32 MiB retained-input limits reject a new item without evictin
 existing drafts. Inactive comic images and archive caches are released and
 recreated on activation. Saving local text updates its local file; LocalCrypt
 continues to save encrypted bytes through the existing verified transaction.
+
+
+### Repeatable folder pulls
+
+Select a remote folder and choose **Save repeatable folder pull**. This downloads
+a complete local copy and adds a job under **Files → Folder pulls**. **Refresh**
+fetches the current remote contents. It never uploads or deletes remote files.
+
+If the local folder is unchanged, Refresh keeps its previous version in a
+separate `-previous-…` folder and updates the original local folder. If you edited,
+added or removed local files, Refresh keeps that folder untouched and saves the
+remote version in a separate folder. The status identifies the resulting folder;
+**Open downloaded folder** opens it. Inspect conflicts before moving files yourself.
+Previous versions remain available until you explicitly delete them. **Remove
+job** removes only the job, preserving every local copy. Failed/interrupted
+publication preserves surviving folders and is reconciled before the next retry.
+
+Ordinary jobs can be reopened after launch with the matching connection. Changing
+a connection makes its old jobs unavailable. Crypt jobs stay in this app session
+and are forgotten when credentials are cleared; their downloaded copies are
+explicitly unencrypted. Up to 16 jobs are supported, with 10,000 items per folder.
+
+Reopening a downloaded copy or imported local book now returns to its existing
+document/library identity rather than importing another duplicate.

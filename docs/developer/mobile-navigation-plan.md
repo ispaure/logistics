@@ -25,8 +25,10 @@ Each phase uses numbered Part commits. Phase 1 Part 1 introduces four bounded
 provider-session owners, independent private drafts/metadata, duplicate activation,
 Open documents access, all-owner credential guards and exclusion from recovery.
 Phase 1 Part 2 adds a native mixed/private workspace case; all 19 native cases
-pass on both the iOS 27.1 Duo simulator and Android 15 emulator. Resource-pressure
-hooks and later phase exit gates remain pending.
+pass on both the iOS 27.1 Duo simulator and Android 15 emulator. Phase 1 Part 3 adds native memory-pressure cleanup; both native suites pass
+with private drafts preserved. Phase 2 Part 1 adds repeatable pull jobs, safe local
+conflict snapshots, publication reconciliation and private-copy import identity.
+Files presentation and later phase exit gates remain pending.
 
 ## Phase 0 submission boundary and numbered checkpoints
 

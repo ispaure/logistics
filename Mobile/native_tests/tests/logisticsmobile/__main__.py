@@ -279,6 +279,9 @@ async def exercise(app):
         assert len(app.downloads.items()) == 1, app.cloud_status.value
         await app.open_download()
         assert app.editor.value == 'Native rclone fixture\n', app.cloud_status.value
+        imported_id = app.current.id
+        await app.open_download()
+        assert app.current.id == imported_id
         app.show_cloud()
         await app.clear_cloud()
         assert not list(app.cloud_remote.items)

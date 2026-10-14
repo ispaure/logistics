@@ -701,3 +701,32 @@ schedule cleanup on the owning UI loop. Disposal unregisters each subscription
 when a host is replaced or exits. Cleanup releases decoder/image/thumbnail caches
 while preserving private text and metadata widgets. Native mixed-session checks
 also exercise the cleanup callback without losing either draft.
+
+
+### Phase 2: repeatable one-way folder pulls
+
+`pull_jobs.PullJobs` stores bounded ordinary job metadata, opaque connection
+identities, and SHA-256 file/directory baselines. The native `connection_identity`
+action hashes admitted configuration in memory without disclosing credentials or
+performing network access. A changed/locked connection rejects a job instead of
+retargeting it. Decrypted crypt jobs are transient: their remote names, folder
+paths, baselines and journal are omitted from ordinary persistence and cleared
+with credentials. Their explicitly downloaded local files remain plaintext.
+
+Refresh downloads a complete separate snapshot before publication. If the local
+folder differs from its recorded baseline (including added/deleted files), the
+original folder stays untouched and the new remote snapshot remains beside it.
+For an unchanged target, a durable intent record precedes renaming the old folder
+to a unique previous-version folder and publishing the incoming folder at the
+original location. Rename failure rolls back when possible; every surviving
+version is retained. Retry reconciles the journal against bounded hashes before
+starting another transfer. Metadata-write failure cannot erase either version.
+Previous versions are not automatically deleted. Remove job removes metadata,
+not files. The model admits at most 16 jobs/10,000 entries per tree and a 4 MiB
+manifest; malformed records are preserved and cannot be overwritten.
+
+`resource_imports.ResourceImports` also maps a hashed app-private source identity
+to its imported text/library UUID. Reopening a downloaded/local archive copy
+activates that imported resource instead of duplicating it. The index stores
+no source path, title, draft, password or permission handle; encrypted provider
+readers remain outside this index and the ordinary recovery store.

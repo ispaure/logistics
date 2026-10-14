@@ -496,6 +496,8 @@ func dispatch(action, input string) (output string) {
 			result = vaultInfo()
 		case "list":
 			result, err = list(ctx, request.Remote, request.Path)
+		case "connection_identity":
+			result, err = connectionIdentity(request.Remote)
 		case "read":
 			result, err = readInto(ctx, request.Remote, request.Path, request.FD)
 		case "crypt_read":

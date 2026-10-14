@@ -17,11 +17,12 @@ from .routing import Routes
 from .workspace import Workspace, MAX_SESSIONS
 from .editors import TextEditorView
 from .adaptive_workspace import AdaptiveWorkspace
+from .pull_jobs_ui import PullJobsUI
 
 _active_hosts = weakref.WeakValueDictionary()
 
 
-class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
+class LogisticsMobile(PullJobsUI, ReaderWorkspace, ChatUI, CloudUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def __init__(self, *args, **kwargs):
@@ -140,6 +141,7 @@ class LogisticsMobile(ReaderWorkspace, ChatUI, CloudUI, toga.App):
         box.add(toga.Label('Choose a location', style=Pack(margin_bottom=12)))
         box.add(toga.Button('On this device', on_press=self.show_local_location, style=Pack(height=52)))
         box.add(toga.Button('Remote files & LocalCrypt', on_press=self.show_cloud, style=Pack(height=52, margin_top=8)))
+        box.add(toga.Button('Folder pulls', on_press=self.show_pull_jobs, style=Pack(height=52, margin_top=8)))
         if self.preferences.error:
             box.add(toga.Label(self.preferences.error, style=Pack(margin_top=12)))
         self.show_view(box, destination='files', root=True)
