@@ -58,7 +58,7 @@ an iOS 15 device/runtime remains a separate compatibility check.
 
 ## Native navigation foundation checks
 
-The native test-mode suite additionally exercises a three-destination native
+The native test-mode suite additionally exercises a four-destination native
 container, Apple navigation/split controllers, Android bottom/rail presentation,
 native selection callbacks, draft retention, focus and widget cleanup. This
 fixture supplements the normal app's Home/Files/Documents/Settings navigation shell.

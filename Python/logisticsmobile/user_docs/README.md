@@ -66,6 +66,16 @@ document from the top selector, or tap **New**. Edit its name in the name field 
 its contents in the text area. **Save** publishes the edited file inside the app.
 Text and Markdown use the same plain-text editor.
 
+Each open text/Markdown document owns its editor and draft. **New**, opening a
+stored document, and successful imports add it to **Documents → Open documents**;
+opening the same stored identity again activates it. Documents with the same name
+remain separate. Switch using the stored-document selector or the open list.
+**Close** removes an item from that list after preserving its ordinary draft;
+it does not delete its stored document. Session-only unsaved drafts require a save
+before closing. Ordinary open items and active selection restore at the next
+launch, with a maximum of 32 open items. Private resource restoration remains
+excluded. Native cursor/selection and scroll offsets are recorded for text views.
+
 **Preview** renders basic Markdown offline. Raw HTML is escaped, links are inert,
 and scripts/images/network resources are blocked. It supports headings, list
 items, bold and fenced code, rather than the full desktop Markdown renderer.

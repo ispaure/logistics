@@ -19,6 +19,25 @@ operations. The native suite includes actual native pop/dispatcher checks.
 This uses [Android's recommended Back dispatcher](https://developer.android.com/guide/navigation/custom-back/predictive-back-gesture).
 Custom interactive in-app predictive animations are not yet implemented.
 
+## Shared document workspace
+
+`workspace.py` is a platform-independent identity and lifetime registry. It bounds
+the ordinary versioned manifest to 64 KiB and 32 items, stores managed UUIDs and
+whitelisted view positions/mode, and omits transient resources and all titles.
+Malformed manifests are preserved and cannot be silently overwritten. Existing
+DocumentStore UUIDs, recovery records, encodings and conflict checks remain the
+owners of text bytes; legacy last-document selection migrates when no workspace
+selection exists.
+
+`editors.py` owns a native editor per text session. Change callbacks capture that
+owner rather than the app's current selection. The app retains compatibility
+aliases for existing feature controllers. Asynchronous import/export captures its
+origin and rejects UI completion after that session closes; a background import
+does not switch a different active document. Closed ordinary drafts remain stored.
+Session generations prevent late results from reviving closed or invalidated
+resources. Adaptive workspace panes and mixed reader controllers are subsequent
+integration chunks; this registry alone does not establish OS window support.
+
 Logistics has an independent native text/Markdown prototype in
 `Python/logisticsmobile`, with Briefcase configuration and tooling under
 [`Mobile/`](../../Mobile/README.md). The desktop Qt launcher and its dependency
