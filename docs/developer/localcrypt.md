@@ -422,3 +422,8 @@ to open a configuration file. Storage migration normalizes Windows extended-path
 prefixes before comparing and rebasing link targets. Protected-key records reject
 links explicitly even on systems without `O_NOFOLLOW`, and compare the opened
 file identity with the inspected record before decoding it.
+
+Private archive rewrites use the shared binary subprocess writer’s explicitly
+nonseekable sink. This prevents Windows pipe seek behavior from corrupting ZIP
+member offsets while streaming comic and EPUB metadata to rclone. Verification
+still completes before publication, preserving the original on failure.
