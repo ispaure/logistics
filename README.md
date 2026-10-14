@@ -72,7 +72,8 @@ LocalCrypt offline reading, text and comic/EPUB metadata editing, local file/fol
 management with shared list/tile views, thumbnails and file information, and text
 Save As across Local/LocalCrypt storage. Encrypted transfers and archive metadata
 updates and ordinary comic imports stream large files without a fixed whole-file
-size cap. Shared mobile browsing includes folder taps, Back history and search/sort. See its
+size cap. Standalone AES/legacy password-protected CBZ/ZIP comics open with an
+inline password prompt and can be locked after reading. Shared mobile browsing includes folder taps, Back history and search/sort. See its
 guide for format limits and validation status.
 
 | Tool | Use it to… |

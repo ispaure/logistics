@@ -301,7 +301,7 @@ class CryptResources(LocalFiles):
         cancelled = lambda: scoped() or requested()
         relative = self.relative(path)
         environment, remote, _ = session.launch(self.context, 'view:' + relative, '')
-        arguments = [str(self.binary), '--config', os.devnull, '--log-level', 'ERROR', '--retries', '1',
+        arguments = [str(self.binary), '--config', session.NULL_CONFIG, '--log-level', 'ERROR', '--retries', '1',
                      '--low-level-retries', '1', '--contimeout', '15s', '--timeout', '30s', operation, remote, *extra]
         return run_bytes(arguments, environment=environment, input_data=input_data, input_writer=input_writer, max_output=limit, cancelled=cancelled)
 
@@ -350,7 +350,7 @@ class CryptResources(LocalFiles):
         target = self._encoded_paths.get(relative)
         if target is None:
             environment, remote, _ = session.launch(self.context, 'view:', '')
-            arguments = [str(self.binary), '--config', os.devnull, 'backend', 'encode', remote, relative, '--json']
+            arguments = [str(self.binary), '--config', session.NULL_CONFIG, 'backend', 'encode', remote, relative, '--json']
             result = json.loads(run_bytes(arguments, environment=environment, max_output=16384, cancelled=getattr(self._operation, 'cancelled', lambda: False)))
             if not isinstance(result, list) or len(result) != 1:
                 raise ValueError('Encrypted path could not be resolved.')

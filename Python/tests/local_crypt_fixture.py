@@ -34,7 +34,7 @@ def crypt_fixture(root, binary):
     context = root / 'Accounts.session'
     session.remember(context, session.read_package(package, 'synthetic-package-password'), package_path=package)
     environment, source, destination = session.launch(context, plain, 'Secret:')
-    run_bytes([str(binary), '--config', os.devnull, 'copy', str(source), str(destination)], environment=environment, max_output=0)
+    run_bytes([str(binary), '--config', session.NULL_CONFIG, 'copy', str(source), str(destination)], environment=environment, max_output=0)
     actual_sync = sync.rclone_sync
     def transfer(source, destination, **options):
         return actual_sync(source, destination, **options, wait_for_output=True, executable_path=binary)

@@ -20,13 +20,14 @@ MAX_RECORD = 128 * 1024
 
 
 class LibraryStore:
-    def __init__(self, root):
+    def __init__(self, root, *, archive_client=None):
         root = Path(root)
         if not root.is_absolute():
             raise ValueError('The library requires an absolute private root.')
         self.root = root.resolve()
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.verified = OrderedDict()
+        self.archive_client = archive_client
 
     def path(self, key, suffix):
         if (not isinstance(key, str) or len(key) != 32 or any(c not in '0123456789abcdef' for c in key)
@@ -76,8 +77,15 @@ class LibraryStore:
             if (len(infos) > 5000 or (kind == 'epub' and (sum(i.file_size for i in infos) > MAX_BOOK
                     or any(i.file_size > MAX_MEMBER for i in infos)))):
                 raise ValueError('Book exceeds the mobile archive limits.')
-            if any(i.flag_bits & 1 for i in infos):
-                raise ValueError('Encrypted books/comics are not supported on mobile yet.')
+            protected = any(i.flag_bits & 1 for i in infos)
+            if kind == 'epub' and protected:
+                raise ValueError('Standalone password-protected EPUB imports are not supported.')
+            if kind == 'comic':
+                from features.comics.pages import comic_page_names
+                pages = comic_page_names(archive)
+                if not pages or any(Path(name).suffix.lower() not in {'.png', '.jpg', '.jpeg'} for name in pages):
+                    raise ValueError('Import a comic with PNG/JPEG pages.')
+            return protected
 
     def import_book(self, provider, reference):
         temporary, destination = None, None
@@ -88,7 +96,7 @@ class LibraryStore:
                 name = document_name(name)
                 suffix = Path(name).suffix.lower()
                 if suffix not in {'.epub', '.cbz', '.zip'}:
-                    raise ValueError('Import an EPUB or unencrypted CBZ/ZIP comic.')
+                    raise ValueError('Import an EPUB or CBZ/ZIP comic.')
                 kind = 'epub' if suffix == '.epub' else 'comic'
                 digest, length = sha256(), 0
                 with NamedTemporaryFile(dir=self.root, delete=False) as stream:
@@ -102,12 +110,12 @@ class LibraryStore:
                     stream.flush()
                     os.fsync(stream.fileno())
             prepared = LocalArchiveSource(temporary, max_read=MAX_MEMBER, max_members=5000)
-            self.validate_archive(temporary, kind)
+            protected = self.validate_archive(temporary, kind)
             if kind == 'epub':
                 from features.books.epub import EPUBBook
                 if len(EPUBBook(temporary).spine) > 5000:
                     raise ValueError('Mobile EPUB reading order is limited to 5,000 chapters.')
-            else:
+            elif not protected:
                 pages = self.comic_reader(temporary)
                 if any(Path(name).suffix.lower() not in {'.png', '.jpg', '.jpeg'} for name in pages.pages):
                     raise ValueError('The mobile comic reader currently supports PNG/JPEG pages only.')
@@ -131,7 +139,7 @@ class LibraryStore:
             if destination is not None and not self.path(key, '.json').exists():
                 destination.unlink(missing_ok=True)
 
-    def open(self, key):
+    def open(self, key, *, password=None):
         record, _ = self.read_record(key)
         path = self.path(key, '.epub' if record['kind'] == 'epub' else '.cbz')
         if record['kind'] == 'epub' and path.stat().st_size > MAX_BOOK:
@@ -143,24 +151,35 @@ class LibraryStore:
                 raise ValueError('Stored book changed; import it again to create a new library entry.')
             source.check()
             self.remember_verified(path, record['digest'], expected=source.expected)
-        self.validate_archive(path, record['kind'])
+        protected = self.validate_archive(path, record['kind'])
         if record['kind'] == 'epub':
             from features.books.epub import EPUBBook
             reader = EPUBBook(path)
             if len(reader.spine) > 5000:
                 raise ValueError('Mobile EPUB reading order is limited to 5,000 chapters.')
         else:
-            reader = self.comic_reader(path)
+            reader = self.comic_reader(path, password=password, protected=protected)
             if any(Path(p).suffix.lower() not in {'.png', '.jpg', '.jpeg'} for p in reader.pages):
                 raise ValueError('The mobile comic reader currently supports PNG/JPEG pages only.')
         return record, reader
 
-    @staticmethod
-    def comic_reader(path):
+    def comic_reader(self, path, *, password=None, protected=False):
         from features.comics.library import ComicDocument
         from features.comics.pages import ComicPages
-        source = LocalArchiveSource(path, max_read=MAX_MEMBER, max_members=5000)
-        return ComicPages(path, document=ComicDocument(path, source=source))
+        if protected:
+            from commonUtils.archives.zip_access import ArchivePasswordError
+            if not password:
+                raise ArchivePasswordError('Enter the comic ZIP password.')
+            if not isinstance(password, str) or len(password) > 4096:
+                raise ValueError('Comic password exceeds its length limit.')
+            from .comic_source import LocalComicSource
+            if self.archive_client is None:
+                from .cloud import CloudClient
+                self.archive_client = CloudClient()
+            source = LocalComicSource(path, self.archive_client, password)
+        else:
+            source = LocalArchiveSource(path, max_read=MAX_MEMBER, max_members=5000)
+        return ComicPages(path, document=ComicDocument(path, source=source, password=password))
 
     def remember_verified(self, path, digest, *, expected):
         source = LocalArchiveSource(path, max_read=MAX_MEMBER, max_members=5000)

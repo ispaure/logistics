@@ -7,6 +7,7 @@ from toga.style.pack import COLUMN, ROW
 
 from .library import LibraryStore
 from .reading import chapter_html, image_dimensions
+from commonUtils.archives.zip_access import ArchivePasswordError
 
 
 class LibraryUI:
@@ -20,6 +21,14 @@ class LibraryUI:
             self.book_selector = toga.Selection(on_change=self.select_book, style=Pack(height=44))
             self.book_status = toga.Label('Import an EPUB or PNG/JPEG CBZ comic.', style=Pack(margin_top=8))
             self.book_import = toga.Button('Import book/comic…', on_press=self.import_book, style=Pack(height=44))
+            self.book_pending_key = None
+            self.book_password = toga.PasswordInput(placeholder='Comic ZIP password', on_confirm=self.unlock_book, style=Pack(height=44))
+            self.book_unlock = toga.Button('Unlock comic', on_press=self.unlock_book, style=Pack(flex=1, height=44))
+            self.book_unlock_cancel = toga.Button('Cancel', on_press=self.cancel_book_unlock, style=Pack(flex=1, height=44))
+            self.book_unlock_panel = toga.Box(children=[self.book_password,
+                toga.Box(children=[self.book_unlock, self.book_unlock_cancel], style=Pack(direction=ROW))],
+                style=Pack(direction=COLUMN))
+            self.book_lock = toga.Button('Lock comic', on_press=self.lock_book, style=Pack(height=44))
             self.book_open = toga.Button('Open selected', on_press=self.open_selected_book, style=Pack(height=44))
             self.book_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
             self.chapter_selector = toga.Selection(on_change=self.select_chapter, style=Pack(height=44))
@@ -27,7 +36,7 @@ class LibraryUI:
             self.next_page = toga.Button('Next', on_press=self.next_book_page, style=Pack(flex=1, height=44))
             self.bookmark_button = toga.Button('Bookmark', on_press=self.toggle_bookmark, style=Pack(flex=1, height=44))
             self.bookmark_selector = toga.Selection(on_change=self.select_bookmark, style=Pack(height=44))
-            self.library_view = toga.Box(children=[self.book_selector, self.book_import, self.book_open,
+            self.library_view = toga.Box(children=[self.book_selector, self.book_import, self.book_open, self.book_lock,
                 self.chapter_selector, self.book_content,
                 toga.Box(children=[self.previous_page, self.next_page, self.bookmark_button],
                          style=Pack(direction=ROW)), self.bookmark_selector, self.book_status],
@@ -59,10 +68,12 @@ class LibraryUI:
     def set_book_busy(self, busy):
         self.book_busy = busy
         for control in (self.book_selector, self.book_import, self.book_open, self.chapter_selector,
-                        self.previous_page, self.next_page, self.bookmark_button, self.bookmark_selector):
+                        self.previous_page, self.next_page, self.bookmark_button, self.bookmark_selector,
+                        self.book_password, self.book_unlock, self.book_unlock_cancel, self.book_lock):
             control.enabled = not busy
         if not busy:
             self.book_open.enabled = bool(self.book_labels)
+            self.book_lock.enabled = bool(getattr(getattr(self.book_reader, 'document', None), 'password', None))
             loaded = self.book_record is not None and self.book_reader is not None
             for control in (self.chapter_selector, self.bookmark_button, self.bookmark_selector):
                 control.enabled = loaded
@@ -95,13 +106,62 @@ class LibraryUI:
         finally:
             self.set_book_busy(False)
 
-    async def open_book(self, key):
+    def release_book_reader(self):
+        document = getattr(self.book_reader, 'document', None)
+        source = getattr(document, 'source', None)
+        if hasattr(source, 'close'):
+            source.close()
+        if document is not None:
+            document.password = None
+        self.book_record = self.book_reader = None
+        for child in list(self.book_content.children):
+            self.book_content.remove(child)
+        self.chapter_selector.items = []
+        self.bookmark_selector.items = []
+
+    def hide_book_unlock(self):
+        self.book_pending_key = None
+        self.book_password.value = ''
+        if self.book_unlock_panel in self.library_view.children:
+            self.library_view.remove(self.book_unlock_panel)
+
+    def ask_book_password(self, key, message):
+        self.book_pending_key = key
+        self.book_password.value = ''
+        if self.book_unlock_panel not in self.library_view.children:
+            self.library_view.insert(3, self.book_unlock_panel)
+        self.book_status.text = message
+
+    async def unlock_book(self, widget=None, **kwargs):
+        if not self.book_busy and self.book_pending_key:
+            key, password = self.book_pending_key, self.book_password.value
+            self.book_password.value = ''
+            await self.open_book(key, password=password)
+
+    def cancel_book_unlock(self, widget=None, **kwargs):
+        if not self.book_busy:
+            self.hide_book_unlock()
+            self.book_status.text = 'Comic unlock cancelled. Its encrypted copy was kept.'
+
+    def lock_book(self, widget=None, **kwargs):
+        if not self.book_busy:
+            self.book_loading = True
+            self.release_book_reader()
+            self.hide_book_unlock()
+            self.book_loading = False
+            self.set_book_busy(False)
+            self.book_status.text = 'Comic locked. Open it again to enter its password.'
+
+    async def open_book(self, key, *, password=None):
         if self.book_busy:
             return
         self.set_book_busy(True)
         self.book_status.text = 'Opening…'
+        self.book_loading = True
+        self.release_book_reader()
         try:
-            record, reader = await asyncio.to_thread(self.library_store.open, key)
+            record, reader = await asyncio.to_thread(self.library_store.open, key, password=password)
+            self.hide_book_unlock()
             self.book_record, self.book_reader = record, reader
             count = len(reader.spine if record['kind'] == 'epub' else reader.pages)
             self.book_loading = True
@@ -115,7 +175,11 @@ class LibraryUI:
             self.book_loading = False
             self.refresh_library()
             await self.display_book_page(min(record['position'], count - 1))
+        except ArchivePasswordError:
+            self.ask_book_password(key, 'Enter the comic ZIP password.' if not password else
+                                   'Password incorrect or archive damaged. Try again.')
         except Exception as error:
+            self.hide_book_unlock()
             self.book_record = self.book_reader = None
             for child in list(self.book_content.children):
                 self.book_content.remove(child)
@@ -123,6 +187,8 @@ class LibraryUI:
         finally:
             self.book_loading = False
             self.set_book_busy(False)
+            if self.book_pending_key is not None:
+                self.book_password.focus()
 
     async def display_book_page(self, index):
         if self.book_reader is None:

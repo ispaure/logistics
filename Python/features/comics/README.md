@@ -169,3 +169,8 @@ record and provides a compact thumbnail badge. ComicBrowserMixin seeds page name
 from its existing thumbnail worker for legacy-state resolution and reorder-safe
 labels; painting never opens the archive. Badge state is private and follows the
 existing resolved-path identity and remember_position_bool setting.
+
+The portable `comic_page_names` helper supplies identical header-only page filtering
+and natural order for imports and readers. Native ordinary encrypted comics and
+LocalCrypt share a decoded archive facade and retain the same ComicDocument/ComicPages;
+platform password UI and native decoder policy live in logisticsmobile.

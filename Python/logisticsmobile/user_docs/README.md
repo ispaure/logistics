@@ -86,11 +86,21 @@ on devices before treating this prototype as a supported mobile product. See
 ## Books and comics
 
 From Home, choose **Books & Comics** and **Import book/comic…**. EPUB and
-unencrypted CBZ/ZIP imports create private copies; the selected source is never
+CBZ/ZIP imports create private copies; the selected source is never
 changed. Choose a library item and **Open selected**. Previous/Next and the
 chapter/page selector navigate the book's reading order. EPUB pages scroll in the
 native web view; comic images fit the native image area. The EPUB view follows
 system light/dark appearance and uses the configured font size.
+
+Standalone password-protected CBZ/ZIP comics support AES and legacy ZipCrypto
+on iOS and Android, without rclone or a credential package. Import one through
+Files, then enter its ZIP password and choose **Unlock comic**, or press Enter.
+A wrong password clears the field and keeps the prompt ready for another attempt.
+**Cancel** keeps the imported encrypted copy. The password stays only with the
+active reader; **Lock comic** clears the password, decoded-page cache and displayed
+pages. Opening after locking or restarting asks again. The library keeps the
+original encrypted archive bytes and never writes an extracted/decrypted archive.
+ZIP member names remain visible, as they do in ordinary password-protected ZIPs.
 
 Progress remembers the current EPUB chapter or comic page, rather than an exact
 scroll position inside a chapter. **Bookmark** / **Unbookmark** toggles that
@@ -109,7 +119,7 @@ EPUB chapters and rendered HTML are limited to 2 MiB. Small PNG/JPEG illustratio
 (up to 256 KiB each, 1 MiB total) are embedded; unsupported/large illustrations
 show an omission label. Raw scripts, forms, embedded objects, source styles and
 external resources are removed. Chapter links are inert; use the chapter selector.
-DRM, encrypted archives, CBR/RAR and fixed-layout SVG books are not supported.
+DRM, standalone encrypted EPUBs, CBR/RAR and fixed-layout SVG books are not supported.
 
 Imports hash bytes during their streamed copy. The checksum is verified on
 opening after a restart; reopening an unchanged file in the same session reuses

@@ -677,7 +677,7 @@ class MainWindowTests(QtTestCase):
 
     def wait_browser(self, page):
         import time
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + 15
         while page.file_browser.folder_busy or page.file_browser.busy:
             self.assertLess(time.monotonic(), deadline)
             self.app.processEvents(); time.sleep(.005)

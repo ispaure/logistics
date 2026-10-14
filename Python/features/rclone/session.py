@@ -7,6 +7,9 @@ import re
 import threading
 from uuid import uuid4
 
+# rclone compares Go's Windows null-device spelling case-sensitively.
+NULL_CONFIG = 'NUL' if os.name == 'nt' else os.devnull
+
 _lock = threading.RLock()
 _sets = {}
 _private = set()

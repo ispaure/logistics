@@ -35,15 +35,19 @@ def natural_key(name):
                  for part in re.split(r'(\d+)', name))
 
 
+def comic_page_names(archive):
+    """Find naturally ordered supported pages using headers only."""
+    return sorted((info.filename for info in archive.infolist()
+                                 if not info.is_dir() and Path(info.filename).suffix.lower() in IMAGE_TYPES
+                                 and '__MACOSX' not in Path(info.filename).parts
+                                 and not Path(info.filename).name.startswith('._')), key=natural_key)
+
 class ComicPages:
     def __init__(self, path, document=None, *, password=None):
         self.document = document or ComicDocument(path, password=password)
         self.path = self.document.path
         with self.document.open_archive() as archive:
-            self.pages = sorted((info.filename for info in archive.infolist()
-                                 if not info.is_dir() and Path(info.filename).suffix.lower() in IMAGE_TYPES
-                                 and '__MACOSX' not in Path(info.filename).parts
-                                 and not Path(info.filename).name.startswith('._')), key=natural_key)
+            self.pages = comic_page_names(archive)
         if not self.pages:
             raise ValueError('This archive contains no supported image pages')
         self.double_pages = set()

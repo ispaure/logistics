@@ -1,0 +1,58 @@
+{
+  "backend": "toga_iOS.app",
+  "cases": [
+    "native_hub",
+    "native_preferences",
+    "native_documents",
+    "native_markdown_preview",
+    "native_epub_reader",
+    "native_bookmarks",
+    "native_comic_reader",
+    "native_lm_chat",
+    "native_rclone_files",
+    "native_secure_credentials",
+    "native_localcrypt_reading",
+    "native_localcrypt_text_editing",
+    "native_localcrypt_metadata",
+    "native_localcrypt_failure_and_lock",
+    "native_localcrypt_file_management"
+  ],
+  "error": "",
+  "expected_cases": [
+    "native_hub",
+    "native_preferences",
+    "native_documents",
+    "native_markdown_preview",
+    "native_epub_reader",
+    "native_bookmarks",
+    "native_comic_reader",
+    "native_lm_chat",
+    "native_rclone_files",
+    "native_secure_credentials",
+    "native_localcrypt_reading",
+    "native_localcrypt_text_editing",
+    "native_localcrypt_metadata",
+    "native_localcrypt_failure_and_lock",
+    "native_localcrypt_file_management"
+  ],
+  "native_picker_tested": false,
+  "schema": 1,
+  "source": {
+    "commonUtils_commit": "ee54eb0852c53ae618ec494f39745295e6f13923",
+    "commonUtils_dirty": true,
+    "dirty": true,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm",
+      "rclone"
+    ],
+    "logistics_commit": "f4c8ca13aad7958eb40b95548ec06877fe19f8e3",
+    "source_sha256": "af8377a815c46db9d48164519ea3c383316af904d20b66b633c164656a9935ac"
+  },
+  "success": true,
+  "suite": "logistics-native-ui",
+  "target": "ios"
+}

@@ -116,42 +116,54 @@ func cryptArchive(ctx context.Context, name, encrypted, identity, password, memb
 		return nil, err
 	}
 	defer reader.file.Close()
-	archive, err := zip.NewReader(reader, reader.size)
+	return archiveContents(ctx, reader, reader.size, password, member, 10000, 16*1024*1024)
+}
+
+func archiveContents(ctx context.Context, reader io.ReaderAt, size int64, password, member string, maxMembers, maxRead int) (any, error) {
+	archive, err := zip.NewReader(reader, size)
 	if err != nil {
 		return nil, errors.New("invalid inner archive")
 	}
-	if len(archive.File) > 10000 || len(password) > 4096 {
+	if len(archive.File) > maxMembers || len(password) > 4096 {
 		return nil, errors.New("archive header exceeds limits")
 	}
 	seen := map[string]bool{}
 	entries := []zipEntry{}
+	var selected *zip.File
 	for _, file := range archive.File {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		if !validPath(file.Name) || file.Name == "" || seen[strings.ToLower(file.Name)] || (!file.Mode().IsRegular() && !file.FileInfo().IsDir()) {
 			return nil, errors.New("unsafe archive member")
 		}
 		seen[strings.ToLower(file.Name)] = true
 		entries = append(entries, zipEntry{file.Name, file.UncompressedSize64, file.CRC32, file.Flags, file.FileInfo().IsDir()})
 		if file.Name == member {
-			if file.UncompressedSize64 > 16*1024*1024 {
-				return nil, errors.New("archive member exceeds the 16 MiB read buffer")
-			}
-			if file.IsEncrypted() {
-				if password == "" {
-					return nil, archivePasswordError
-				}
-				file.SetPassword(password)
-			}
-			stream, err := file.Open()
-			if err != nil {
-				return nil, archivePasswordError
-			}
-			data, readErr := readBounded(ctx, stream, 16*1024*1024)
-			closeErr := stream.Close()
-			if readErr != nil || closeErr != nil || uint64(len(data)) != file.UncompressedSize64 {
-				return nil, archivePasswordError
-			}
-			return map[string]string{"data": base64.StdEncoding.EncodeToString(data)}, nil
+			selected = file
 		}
+	}
+	if selected != nil {
+		file := selected
+		if file.UncompressedSize64 > uint64(maxRead) {
+			return nil, errors.New("archive member exceeds the read buffer limit")
+		}
+		if file.IsEncrypted() {
+			if password == "" {
+				return nil, archivePasswordError
+			}
+			file.SetPassword(password)
+		}
+		stream, err := file.Open()
+		if err != nil {
+			return nil, archivePasswordError
+		}
+		data, readErr := readBounded(ctx, stream, maxRead)
+		closeErr := stream.Close()
+		if readErr != nil || closeErr != nil || uint64(len(data)) != file.UncompressedSize64 {
+			return nil, archivePasswordError
+		}
+		return map[string]string{"data": base64.StdEncoding.EncodeToString(data)}, nil
 	}
 	if member != "" {
 		return nil, errors.New("archive member not found")

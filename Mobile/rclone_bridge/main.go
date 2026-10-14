@@ -517,6 +517,8 @@ func dispatch(action, input string) (output string) {
 			result, err = cryptStat(ctx, request.Remote, request.Path, request.Identity, request.FD)
 		case "crypt_range":
 			result, err = cryptRange(ctx, request.Remote, request.Path, request.Identity, request.FD, request.Offset, request.Count)
+		case "file_archive":
+			result, err = fileArchive(ctx, request.FD, request.Password, request.Member)
 		case "crypt_archive":
 			result, err = cryptArchive(ctx, request.Remote, request.Path, request.Identity, request.Password, request.Member, request.FD)
 		case "crypt_manifest":

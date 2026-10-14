@@ -413,3 +413,12 @@ The host compares streamed resource manifests before publication. Transfer/rewri
 operations allow 30 minutes, while network inactivity remains bounded at 15 seconds.
 Whole-file legacy byte-returning helpers still have memory buffer limits and are
 not used by production mobile crypt reads, moves or downloads.
+
+## Windows session and storage portability
+
+Session-only desktop crypt commands use `NUL` on Windows and the platform null
+device elsewhere; rclone requires Go’s exact Windows spelling to avoid attempting
+to open a configuration file. Storage migration normalizes Windows extended-path
+prefixes before comparing and rebasing link targets. Protected-key records reject
+links explicitly even on systems without `O_NOFOLLOW`, and compare the opened
+file identity with the inspected record before decoding it.

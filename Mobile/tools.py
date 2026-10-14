@@ -9,7 +9,7 @@ import subprocess
 
 APP_MODULES = ('__init__.py', '__main__.py', 'documents.py', 'access.py', 'pickers.py', 'app.py', 'smoke.py',
                'preferences.py', 'preview.py', 'library.py', 'reading.py', 'library_ui.py',
-               'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_fixture.py', 'cloud.py', 'cloud_ui.py', 'native_loop.py', 'credential_vault.py', 'localcrypt.py', 'localcrypt_ui.py', 'file_resources.py', 'files_ui.py', 'crypt_stream.py', 'browser_preview.py')
+               'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_fixture.py', 'cloud.py', 'cloud_ui.py', 'native_loop.py', 'credential_vault.py', 'localcrypt.py', 'localcrypt_ui.py', 'file_resources.py', 'files_ui.py', 'crypt_stream.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
     'features/__init__.py', 'features/books/__init__.py', 'features/books/epub.py',
     'features/books/metadata.py', 'features/comics/__init__.py',

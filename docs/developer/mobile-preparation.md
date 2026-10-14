@@ -481,3 +481,31 @@ passed all 15 native UI groups on both simulators, including nested LocalCrypt
 search results and restoring the folder listing on closing search. Reports:
 [iOS](mobile-evidence/2026-10-13-search-final-ios-native-ui-local.json),
 [Android](mobile-evidence/2026-10-13-search-final-android-native-ui-local.json).
+
+## Standalone password-protected comics
+
+Library imports preserve CBZ/ZIP bytes and validate headers, without decrypting
+protected members. `LibraryStore.open(..., password=...)` uses a local archive
+adapter over the native `file_archive` operation for AES and ZipCrypto. That
+operation needs only a caller-owned independent regular-file descriptor, a
+password and an optional member name; no remote credentials or network access
+are involved. It shares header validation and bounded member decoding with
+LocalCrypt. Both Python adapters share `NativeArchiveAccess` for authentication,
+RAM caching and revision checks, then use the existing ComicDocument/ComicPages.
+
+The native operation validates every header before reading a selected member,
+allows 5,000 entries and bounds each decoded member to 8 MiB. It retains no
+whole-file cap or plaintext-file cache. The library keeps password state with the
+active source only, clears it on Lock, and writes only existing reading progress
+and checksums to records. Missing/wrong passwords retain an inline retry prompt;
+Cancel preserves the encrypted library import. Standalone encrypted EPUB import
+remains unsupported. Native comic cases cover both desktop-made AES and Info-ZIP
+legacy fixtures, retry, page navigation, bookmarks, lock and restart behavior.
+
+Standalone comic validation passed all 15 native UI groups on both simulators for
+source snapshot `af8377a815c46db9d48164519ea3c383316af904d20b66b633c164656a9935ac`.
+Reports: [iOS](mobile-evidence/2026-10-13-standalone-comics-ios-native-ui-local.json),
+[Android](mobile-evidence/2026-10-13-standalone-comics-android-native-ui-local.json).
+These are local development snapshots; native file pickers and physical devices
+were not exercised. The host native decoder, Go bridge suite and 15 mobile widget
+checks also passed, including AES and legacy passwords, retry and locking.
