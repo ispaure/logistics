@@ -5,7 +5,7 @@ from pathlib import Path
 from commonUtils.runtime.operations import MutationIncomplete
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN
+from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.local_files import LocalFiles
 from commonUtils.runtime.resource_provider import resource_path
 from commonUtils.runtime.resource_selection import ResourceSelection
@@ -30,6 +30,9 @@ class FilesUI:
     async def show_files(self, widget=None, **kwargs):
         if self.cloud_busy:
             return
+        if hasattr(self, 'files_view') and self.file_provider is not None:
+            self.show_view(self.files_view, destination='files', route='browser', title='Files and folders')
+            return
         if hasattr(self, 'file_browser'):
             await self.file_browser.close()
         self.file_roots = {'Local files': None}
@@ -48,12 +51,12 @@ class FilesUI:
         self.file_status = toga.MultilineTextInput(readonly=True, style=Pack(height=85))
         self.file_rows, self.file_provider = {}, None
         buttons = [toga.Button(label, on_press=handler, style=Pack(height=44)) for label, handler in (
-            ('Browse folder', self.browse_files), ('Open selected folder', self.enter_file_folder),
-            ('Read selected file', self.read_managed_file), ('New folder', self.new_file_folder),
+            ('Browse folder', self.browse_files), ('Open folder', self.enter_file_folder),
+            ('Open file', self.read_managed_file), ('New folder', self.new_file_folder),
             ('Rename selected', self.rename_file), ('Delete selected…', self.delete_file),
             ('Move selected', self.move_file), ('Use selected offline encrypted copy', self.use_downloaded_file),
             ('Cancel operation', self.cancel_cloud), ('Back to remote files', self.files_back))]
-        self.files_view = toga.ScrollContainer(content=toga.Box(children=[
+        self.file_operation_view = toga.ScrollContainer(content=toga.Box(children=[
             toga.Button('Locations', on_press=self.show_locations, style=Pack(height=44)),
             toga.Label('Local files and folders'), self.file_storage, self.file_location, buttons[0],
             toga.Button('Parent folder', on_press=self.parent_file_folder, style=Pack(height=44)),
@@ -62,8 +65,34 @@ class FilesUI:
             toga.Button('Use selected private download', on_press=self.use_local_download, style=Pack(height=44)),
             toga.Label('Moving to Local creates decrypted files.\nCloud originals are unchanged.'), self.file_status],
             style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+        # Keep mutations and destination fields in a separate commands route.
+        # A widget has one native parent; move browser/status into the main view.
+        operation_box = self.file_operation_view.content
+        operation_box.remove(self.file_browser.widget)
+        operation_box.remove(self.file_status)
+        operation_box.remove(buttons[1])
+        operation_box.remove(buttons[2])
+        from .action_menu import FeatureCommands
+        self.file_actions_button = toga.Button('Actions', style=Pack(height=44))
+        self.file_actions = FeatureCommands(self.file_actions_button, self,
+            [('New folder…', self.show_file_actions), ('Rename or move…', self.show_file_actions),
+             ('Pin current folder', self.pin_local_folder),
+             ('Delete selected…', self.delete_file), ('Change location…', self.show_file_actions),
+             ('Archive password…', self.show_file_actions)], self.show_file_actions)
+        self.files_view = toga.Box(children=[
+            toga.Box(children=[toga.Button('Locations', on_press=self.show_locations, style=Pack(height=44, flex=1)),
+                               self.file_actions_button], style=Pack(direction=ROW)),
+            self.file_status,
+            toga.ScrollContainer(content=self.file_browser.widget, style=Pack(flex=1)),
+            toga.Box(children=[buttons[1], buttons[2]], style=Pack(direction=ROW))],
+            style=Pack(direction=COLUMN, margin=12, flex=1))
+        buttons[1].style.flex = buttons[2].style.flex = 1
         self.show_view(self.files_view, destination='files', route='browser', title='Files and folders')
         await self.browse_files()
+
+    def show_file_actions(self, widget=None, **kwargs):
+        if not self.cloud_busy:
+            self.show_view(self.file_operation_view, destination='files', route='file-actions', title='File actions')
 
     async def parent_file_folder(self, widget=None, **kwargs):
         if not self.cloud_busy:
@@ -108,7 +137,7 @@ class FilesUI:
         row = self.file_rows.get(self.file_selection.value)
         self._file_selected = (self.file_provider, row['path'] if row else None)
         controls = (self.file_storage, self.file_location, self.file_selection,
-                    self.file_name, self.file_destination, self.file_target, self.file_password)
+                    self.file_name, self.file_destination, self.file_target, self.file_password, self.file_actions_button)
         for control in controls:
             control.enabled = False
         self.set_cloud_busy(True)

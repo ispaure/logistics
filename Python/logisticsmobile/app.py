@@ -18,11 +18,12 @@ from .workspace import Workspace, MAX_SESSIONS
 from .editors import TextEditorView
 from .adaptive_workspace import AdaptiveWorkspace
 from .pull_jobs_ui import PullJobsUI
+from .locations_ui import LocationsUI
 
 _active_hosts = weakref.WeakValueDictionary()
 
 
-class LogisticsMobile(PullJobsUI, ReaderWorkspace, ChatUI, CloudUI, toga.App):
+class LogisticsMobile(LocationsUI, PullJobsUI, ReaderWorkspace, ChatUI, CloudUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def __init__(self, *args, **kwargs):
@@ -142,9 +143,17 @@ class LogisticsMobile(PullJobsUI, ReaderWorkspace, ChatUI, CloudUI, toga.App):
         box.add(toga.Button('On this device', on_press=self.show_local_location, style=Pack(height=52)))
         box.add(toga.Button('Remote files & LocalCrypt', on_press=self.show_cloud, style=Pack(height=52, margin_top=8)))
         box.add(toga.Button('Folder pulls', on_press=self.show_pull_jobs, style=Pack(height=52, margin_top=8)))
+        box.add(toga.Button('Manage connections…', on_press=self.show_cloud_connections, style=Pack(height=44)))
+        pins = self.pinned_locations()
+        for item in pins.items:
+            title = ('On device: ' if item['kind'] == 'local' else 'Remote: ') + (item['path'] or 'Root')
+            box.add(toga.Box(children=[toga.Button(title[:45], on_press=self.pinned_opener(item), style=Pack(flex=1, height=44)),
+                toga.Button('Remove pin', on_press=self.pinned_remover(item['id']), style=Pack(height=44))], style=Pack(direction=ROW)))
+        if pins.error or getattr(self, 'location_error', ''):
+            box.add(toga.Label(pins.error or self.location_error))
         if self.preferences.error:
             box.add(toga.Label(self.preferences.error, style=Pack(margin_top=12)))
-        self.show_view(box, destination='files', root=True)
+        self.show_view(toga.ScrollContainer(content=box, style=Pack(flex=1)), destination='files', root=True)
 
     async def show_local_location(self, widget=None, **kwargs):
         self.show_cloud(present=False)

@@ -477,3 +477,22 @@ explicitly unencrypted. Up to 16 jobs are supported, with 10,000 items per folde
 
 Reopening a downloaded copy or imported local book now returns to its existing
 document/library identity rather than importing another duplicate.
+
+## Files locations and actions
+
+Files keeps your current folder, selection, list/tile mode, search, sort and browse
+history when you visit Documents or Settings. Local and remote browsers give most
+of the screen to the listing; **Actions** opens less frequent commands. Local
+mutations and archive-password fields remain available through File actions.
+Connection import, reload, remember and forget remain in Settings.
+
+Use **Pin current folder** to add an ordinary local or remote folder to Files.
+Remote pins identify the connection, not just its display name; a missing or
+changed connection reports unavailable instead of opening another provider.
+Encrypted folder paths cannot be pinned for restoration. Remove pin removes only
+the shortcut. Malformed or concurrently changed pin records are preserved.
+
+Folder pulls can refresh a local folder repeatedly. Local changes produce a
+separate incoming snapshot; they are never overwritten by a refresh. Unchanged
+folders can update while their previous copies remain available. Removing a job
+keeps all local folders. Remote data is never changed by a folder pull.

@@ -16,15 +16,12 @@ visible remote action feedback and one-time folder pulls to local storage.
 Full private-session integration, unified Files refinement, repeatable sync,
 reader visual refinement and independent windows remain unfinished.
 
-## Current runtime experiment
+## Selected runtime
 
-The user requested a separate PySide6 iOS proof before choosing further mobile
-runtime work. The Toga implementation and its numbered checkpoints are retained.
-The [Qt reuse proof](mobile-qt-proof.md) exercises the actual commonUtils browser
-with tabs, highlighted editor, Markdown reader and native rclone bridge. All four
-programmatic checks pass on phone/tablet simulators, with column navigation
-explicitly omitted and an iOS 18 proof target. This is not a runtime migration or
-completion of the remaining phase exit gates.
+The user selected Toga for mobile after the separate Qt experiment. Retain native
+UIKit/Material presentation and the shared Python core; preserve the Qt proof as
+feasibility evidence without migrating the mobile entry point. Continue every
+remaining milestone with numbered Part commits and native checks.
 
 ## Remaining phase numbering
 
@@ -38,7 +35,7 @@ Phase 1 Part 2 adds a native mixed/private workspace case; all 19 native cases
 pass on both the iOS 27.1 Duo simulator and Android 15 emulator. Phase 1 Part 3 adds native memory-pressure cleanup; both native suites pass
 with private drafts preserved. Phase 2 Part 1 adds repeatable pull jobs, safe local
 conflict snapshots, publication reconciliation and private-copy import identity.
-Files presentation and later phase exit gates remain pending.
+Phase 2 Part 3 completes retained Files presentation, native command menus and safe ordinary folder pins. Both native suites pass all 20 cases, including repeatable pull conflicts and pins. Reader refinements and independent windows remain pending.
 
 ## Phase 0 submission boundary and numbered checkpoints
 

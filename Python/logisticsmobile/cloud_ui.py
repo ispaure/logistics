@@ -67,7 +67,7 @@ class CloudUI(LocalCryptUI):
             self.cloud_entries = toga.Selection(style=Pack(height=44))
             from commonUtils.ui.native_browser import NativeBrowser
             self.remote_browser = NativeBrowser(selected=self.browser_cloud_selected, open_folder=self.browser_cloud_folder, navigate=self.browser_cloud_location)
-            self.cloud_open = toga.Button('Open selected folder', on_press=self.open_cloud_folder, style=Pack(height=44))
+            self.cloud_open = toga.Button('Open folder', on_press=self.open_cloud_folder, style=Pack(height=44))
             self.cloud_download = toga.Button('Download private copy', on_press=self.download_cloud, style=Pack(height=44))
             self.cloud_download_help = toga.Label('', style=Pack(font_size=14))
             self.cloud_downloaded_folder = None
@@ -99,6 +99,28 @@ class CloudUI(LocalCryptUI):
                 toga.Label('Downloaded copies', style=Pack(font_size=18, margin_top=12)), self.download_selector,
                 toga.Box(children=[self.download_open, self.download_export], style=Pack(direction=ROW)),
                 *self.build_localcrypt()], style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+            self.cloud_advanced_view = self.cloud_view
+            advanced = self.cloud_advanced_view.content
+            for control in (self.cloud_remote, self.cloud_status, self.remote_browser.widget,
+                            self.cloud_open, self.cloud_download, self.cloud_folder_open, self.cloud_cancel, self.cloud_browse):
+                advanced.remove(control)
+            from .action_menu import FeatureCommands
+            self.cloud_actions_button = toga.Button('Actions', style=Pack(height=44))
+            self.cloud_actions = FeatureCommands(self.cloud_actions_button, self, [
+                ('Browse path…', self.show_cloud_actions), ('Save repeatable folder pull', self.create_pull_job),
+                ('Pin current folder', self.pin_remote_folder),
+                ('Downloaded copies…', self.show_cloud_actions), ('Encrypted offline copies…', self.show_cloud_actions),
+                ('Manage connections…', self.show_cloud_connections)], self.show_cloud_actions)
+            self.cloud_download.style.flex = self.cloud_open.style.flex = 1
+            self.cloud_remote.style.flex = 1
+            self.cloud_cancel.text = 'Cancel'
+            self.cloud_view = toga.Box(children=[
+                toga.Box(children=[self.cloud_remote, self.cloud_browse, self.cloud_actions_button], style=Pack(direction=ROW)),
+                self.cloud_status,
+                toga.ScrollContainer(content=self.remote_browser.widget, style=Pack(flex=1)),
+                toga.Box(children=[self.cloud_open, self.cloud_download], style=Pack(direction=ROW)),
+                toga.Box(children=[self.cloud_folder_open, self.cloud_cancel], style=Pack(direction=ROW))],
+                style=Pack(direction=COLUMN, margin=12, flex=1))
             self.refresh_downloads()
             self.set_cloud_busy(False)
             if self.cloud_client is not None and getattr(self.cloud_client, 'vault', None) is not None:
@@ -106,6 +128,10 @@ class CloudUI(LocalCryptUI):
                 self.cloud_restore_task = self.loop.create_task(self.restore_cloud(initial=True))
         if present:
             self.show_view(self.cloud_view, destination='files', route='remote-browser', title='Remote files')
+
+    def show_cloud_actions(self, widget=None, **kwargs):
+        if not self.cloud_busy:
+            self.show_view(self.cloud_advanced_view, destination='files', route='remote-actions', title='Remote actions')
 
     def show_cloud_connections(self, widget=None, **kwargs):
         self.show_cloud(present=False)
@@ -128,7 +154,7 @@ class CloudUI(LocalCryptUI):
         self.cloud_import.enabled = not value and self.cloud_client is not None and self.cloud_pending_zip is not None
         is_crypt = self.selected_cloud_remote() in self.cloud_crypt_remotes
         self.cloud_download.enabled = not value and self.cloud_client is not None
-        self.cloud_download.text = 'Download decrypted copy' if is_crypt else 'Download selected item'
+        self.cloud_download.text = 'Download decrypted' if is_crypt else 'Download'
         self.cloud_folder_open.enabled = not value and self.cloud_downloaded_folder is not None
         self.cloud_download_help.text = import_hint('Decrypted copy: saved unencrypted in Private downloads.\nEncrypted copy: kept encrypted in LocalCrypt.') if is_crypt else ''
         self.crypt_download.enabled = not value and self.cloud_client is not None and self.selected_cloud_remote() in self.cloud_crypt_remotes
