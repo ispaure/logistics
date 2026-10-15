@@ -128,3 +128,6 @@ name validation, text export limits and MIME policy; Logistics owns import stora
 Native menu construction and presentation helpers now use shared `ui.native`
 components. Logistics' action adapters retain editor rebinding, session checks,
 transfer guards and coroutine scheduling. Editor disposal retires its native menu.
+
+Mobile editors bind shared native Find/Replace to explicit editor/container widgets.
+TextEditorView still owns text-change notification, draft retention and session saves.

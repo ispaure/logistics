@@ -4,7 +4,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from .documents import document_name
 from .action_menu import ActionMenu
-from .editor_search import EditorSearch
+from commonUtils.ui.native.editor_search import EditorSearch
 
 FIELDS = ('selector', 'name', 'editor', 'status', 'recovery_notice', 'import_button',
           'save_button', 'export_button', 'document_view')
@@ -42,7 +42,7 @@ class TextEditorView:
             toga.Button('Find', on_press=self.toggle_search, style=Pack(flex=1, height=44)),
             toga.Button('Preview', on_press=app.show_preview, style=Pack(flex=1, height=44))],
             style=Pack(direction=ROW, margin_top=8)))
-        self.search = EditorSearch(self)
+        self.search = EditorSearch(self.editor, self.document_view)
         app.register_transfer_status(box)
 
     def toggle_search(self, widget=None, **kwargs):
