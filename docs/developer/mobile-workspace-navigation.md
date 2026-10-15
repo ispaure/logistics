@@ -201,3 +201,15 @@ commonUtils adapter unchanged.
 The targeted iOS probe signals the native item before changing selectedIndex,
 then verifies the first Documents frame, toolbar target and drawer action.
 This covers event ordering that programmatic `current_tab` tests missed.
+
+
+## LocalCrypt picker identity on iOS
+
+The pinned Toga backend did not reload UIPickerView's row count before selecting
+an item in a replaced source. Its text field could display LocalCrypt while
+`Selection.value` still returned the first row, Local files. The app-owned
+appearance adapter now reloads the picker immediately before native select_item,
+keeping the displayed label and provider identity aligned. Private-open failures
+are also copied to the visible browser status. Native LocalCrypt coverage opens a
+synthetic encrypted CBZ through a fresh scoped browser and verifies its first page;
+it does not import plaintext into the ordinary library or document store.

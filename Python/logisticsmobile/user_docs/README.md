@@ -984,3 +984,9 @@ Long file-browser names are shortened visually in the middle when needed, keepin
 the beginning and filename ending (including its extension) visible. The complete
 name remains available to accessibility, file information and all file actions;
 this display setting does not rename or change the file path.
+
+
+On iPhone, changing file-browser locations now refreshes the native picker before
+selecting the new location. Opening a LocalCrypt comic uses that encrypted folder
+instead of accidentally falling back to Local files. If a private file cannot be
+opened, the reason appears in the file browser instead of only in Connections.

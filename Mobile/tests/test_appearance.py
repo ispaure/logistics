@@ -7,6 +7,23 @@ from logisticsmobile.chat_presentation import transcript_document
 
 
 class AppearanceTests(unittest.TestCase):
+    def test_apple_picker_reloads_native_rows_before_selecting_replaced_items(self):
+        from types import SimpleNamespace
+        from logisticsmobile.appearance import select_apple_item
+        calls = []
+        class Picker:
+            count = 1
+            def reloadAllComponents(self):
+                self.count = 2
+                calls.append('reload')
+        impl = SimpleNamespace(native_picker=Picker())
+        def native_select(impl, index, item):
+            self.assertLess(index, impl.native_picker.count)
+            calls.append(item)
+            return index
+        self.assertEqual(select_apple_item(impl, 1, 'LocalCrypt', select=native_select), 1)
+        self.assertEqual(calls, ['reload', 'LocalCrypt'])
+
     def test_text_and_secondary_labels_remain_readable_on_all_surfaces(self):
         for palette in (LIGHT, DARK):
             for surface in ('window', 'surface', 'alternate'):

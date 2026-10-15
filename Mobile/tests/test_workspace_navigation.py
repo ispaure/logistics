@@ -25,6 +25,23 @@ class WorkspaceNavigationTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_private_open_failure_is_visible_in_the_browser(self):
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+        app = self.app
+        app.show_cloud(present=False)
+        drawer = self.navigation.browser('documents')
+        drawer.provider = SimpleNamespace(private=True)
+        drawer.provider_client = app.cloud_client
+        drawer.provider_generation = getattr(app.cloud_client, 'generation', None)
+        app.cloud_status.value = 'Private reading failed: fixture archive is damaged'
+        with patch.object(app, 'cloud_client', SimpleNamespace(generation=1)):
+            drawer.provider_client = app.cloud_client
+            drawer.provider_generation = 1
+            with patch('logisticsmobile.file_resources.ManagedCopies', return_value=object()),                     patch.object(app, 'open_crypt', new_callable=AsyncMock, return_value=False):
+                self.assertFalse(app.loop.run_until_complete(drawer.open_file({'path': 'comic.cbz'})))
+        self.assertIn('archive is damaged', drawer.status.text)
+
     def test_home_uses_visible_logistics_navigation_title_without_renaming_tab(self):
         from types import SimpleNamespace
         from unittest.mock import Mock

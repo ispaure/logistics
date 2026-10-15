@@ -72,6 +72,12 @@ def readable_accent(accent, foreground, background):
     return foreground
 
 
+def select_apple_item(impl, index, item, *, select):
+    """Refresh UIPickerView's row count before choosing from a replaced source."""
+    impl.native_picker.reloadAllComponents()
+    return select(impl, index, item)
+
+
 def install_appearance(app):
     backend = type(app._impl).__module__
     if backend in _installed:
@@ -139,6 +145,10 @@ def install_appearance(app):
         from toga_iOS.widgets.textinput import TextInput
         from toga_iOS.widgets.multilinetextinput import MultilineTextInput
         from toga_iOS.widgets.selection import Selection
+        original_select_item = Selection.select_item
+        def select_item(impl, index, item):
+            return select_apple_item(impl, index, item, select=original_select_item)
+        Selection.select_item = select_item
         for cls in (Label, TextInput, MultilineTextInput, Selection):
             original = cls.set_color
             def set_color(impl, value, previous=original):

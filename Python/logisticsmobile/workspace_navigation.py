@@ -617,6 +617,7 @@ class FileDrawer:
                 opened = await self.app.open_crypt(copies=ManagedCopies(provider) if provider.private else LocalTextCopies(provider),
                                                   key=path, destination=self.destination)
                 if not opened:
+                    self.status.text = str(self.app.cloud_status.value or 'Could not open this private file. Unlock its connection and try again.')[:300]
                     return False
             if self.app.native_host.state.destination == self.destination:
                 if not self.navigation.wide:
