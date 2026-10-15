@@ -64,12 +64,12 @@ class ChatUI:
             self.chat_sidebar = toga.Box(children=[toga.Label('Conversations', style=Pack(font_size=20, margin_bottom=12)),
                 self.chat_new,
                 toga.ScrollContainer(horizontal=False, content=self.chat_conversation_list, style=Pack(flex=1)),
-                self.chat_export], style=Pack(direction=COLUMN, flex=1, margin_right=12))
+                self.chat_export], style=Pack(direction=COLUMN, flex=1))
             self.chat_messages = toga.Box(children=[self.chat_transcript, self.chat_status, self.chat_prompt,
                 toga.Box(children=[self.chat_send, self.chat_cancel], style=Pack(direction=ROW))],
                 style=Pack(direction=COLUMN, flex=1))
             self.chat_workspace = toga.Box(style=Pack(direction=ROW, flex=1))
-            self.chat_drawer_open = self.adaptive.width() >= 840
+            self.chat_drawer_open = self.adaptive.width() >= 640
             self.chat_view = toga.Box(children=[toga.Box(children=[self.chat_menu_button, self.chat_title,
                 toga.Button('Settings', on_press=self.show_chat_configuration, style=Pack(height=44))],
                 style=Pack(direction=ROW, margin_bottom=8)), self.chat_workspace],
@@ -91,14 +91,14 @@ class ChatUI:
         children = []
         if self.chat_drawer_open:
             children.append(self.chat_sidebar)
-        if not self.chat_drawer_open or self.adaptive.width() >= 840:
+        if not self.chat_drawer_open or self.adaptive.width() >= 640:
             children.append(self.chat_messages)
         if list(self.chat_workspace.children) != children:
             for child in list(self.chat_workspace.children):
                 self.chat_workspace.remove(child)
             self.chat_workspace.add(*children)
         if len(children) == 2:
-            available = self.chat_workspace.layout.content_width or max(0, self.adaptive.width() - 24)
+            available = self.adaptive.content_width('chat')
             half = max(1, int(available / 2))
             self.chat_sidebar.style.width, self.chat_sidebar.style.flex = half, 0
             self.chat_messages.style.width, self.chat_messages.style.flex = max(1, int(available) - half), 0
@@ -106,10 +106,10 @@ class ChatUI:
             for child in children:
                 del child.style.width
                 child.style.flex = 1
-        self.chat_title.text = 'Conversations' if self.chat_drawer_open and self.adaptive.width() < 840 else 'LM Chat'
+        self.chat_title.text = 'Conversations' if self.chat_drawer_open and self.adaptive.width() < 640 else 'LM Chat'
 
     def show_chat_messages(self):
-        if self.adaptive.width() < 840:
+        if self.adaptive.width() < 640:
             self.chat_drawer_open = False
         self.render_chat_workspace()
 

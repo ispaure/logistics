@@ -11,7 +11,7 @@ route in Chat.
 existing children move into a retained content Box, with a top-left hamburger
 and a horizontal content area. Transfer banners retain their original registered
 parent. Compact drawers replace only visible content, not session or folder
-state. At 840 points/dp, the file browser and document each receive half the
+state. At 640 points/dp, the file browser and document each receive half the
 actual content width. The same measured-window rule drives Chat's conversation
 list and message area; it does not infer device type from a name.
 

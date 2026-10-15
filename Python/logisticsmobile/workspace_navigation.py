@@ -56,6 +56,21 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         window = getattr(self.app, '_main_window', None)
         return window.size.width if window is not None else 0
 
+    def content_width(self, destination):
+        """Measure the native allocation, never a child-driven minimum width."""
+        available = self.width()
+        adapter = self.app.native_host.adapter
+        if adapter is not None and hasattr(adapter, 'navigation'):
+            index = self.app.native_host.destinations.index(destination)
+            native = adapter.navigation[index].view
+            bounds, insets = native.bounds.size, native.safeAreaInsets
+            if bounds.width > 0:
+                available = float(bounds.width - insets.left - insets.right)
+        elif adapter is not None and getattr(adapter, 'mode', None) == 'rail':
+            density = self.app._impl.native.getResources().getDisplayMetrics().density
+            available -= float(adapter.impl.native_navigationview.getWidth()) / density
+        return max(1, int(available) - 24)
+
     def prepare(self, view, destination, route=None, root=False):
         if destination not in self.menu_open:
             return view
@@ -139,7 +154,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         box.add(toga.Label('Open beside this document', style=Pack(font_size=20, margin_bottom=12)))
         for key, session in self.app.workspace.sessions.items():
-            if key == current or self.session_view(key) is None:
+            if key == current or (session.provider != 'managed-text' and self.session_view(key) is None):
                 continue
             title = self.app.session_summary(session)[0]
             def choose(widget=None, selected=key, **kw):
@@ -149,6 +164,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             box.add(list_button(toga.Button(title, on_press=choose, style=Pack(height=48))))
         if len(box.children) == 1:
             box.add(toga.Label('Open another text or Markdown file first.'))
+        def browse(widget=None, **kwargs):
+            self.pinned = current
+            self.show_browser('documents')
+        box.add(toga.Button('Browse for another file…', on_press=browse, style=Pack(height=48)))
         box.add(toga.Button('Use one document', on_press=self.unpin, style=Pack(height=44)))
         self.app.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)),
                            destination='documents', route='pair-document', title='Two documents')
@@ -164,7 +183,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         self.rendering = True
         try:
             self.layout_width = self.width()
-            self.wide = self.layout_width >= 840
+            self.wide = self.layout_width >= 640
             if self.pinned is not None and self.session_view(self.pinned) is None:
                 self.pinned = None
             body = self.app.routes.body()
@@ -240,7 +259,7 @@ class WorkspaceFrame:
             self.row.remove(self.main)
             self.row.add(left)
         else:
-            available = self.row.layout.content_width or max(0, navigation.width() - 24)
+            available = navigation.content_width(destination)
             half = max(1, int(available / 2))
             left.style.width, left.style.flex = half, 0
             self.main.style.width, self.main.style.flex = max(1, int(available) - half), 0
@@ -266,7 +285,7 @@ class FileDrawer:
             toga.Button('Up', on_press=self.up, style=Pack(height=44)), self.status,
             toga.ScrollContainer(horizontal=False, content=scroll_content(self.browser.widget), style=Pack(flex=1)),
             toga.Button('Connections & folders', on_press=self.app.show_locations, style=Pack(height=44))],
-            style=Pack(direction=COLUMN, flex=1, margin_right=8))
+            style=Pack(direction=COLUMN, flex=1))
         self.storage.on_change = self.change_storage
 
     def schedule_refresh(self):

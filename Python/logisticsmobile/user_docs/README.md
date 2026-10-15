@@ -81,7 +81,7 @@ LocalCrypt copies. **Connections & folders** opens the complete folder hub for
 online connections and managed copies. Selecting a file opens it in the current
 destination through the existing editor/reader workflow.
 
-At window widths of 840 points/dp or more, including a sufficiently wide Duo
+At window widths of 640 points/dp or more, including a sufficiently wide Duo
 window, an open browser occupies the left half and the current document stays on
 the right. In Documents, **Split** lets you choose a second open text or Markdown
 document, including editable provider files. The first stays on the left and the
@@ -150,7 +150,7 @@ If a restored item is unavailable, **Try again** retries it and **Remove from
 open documents** removes only its open entry. Stored files are preserved.
 
 On regular-width Apple layouts, native split navigation keeps the document list
-beside its detail view. Android shows both at 840 dp or wider and uses the
+beside its detail view. Android shows both at 640 dp or wider and uses the
 compact route stack below that threshold. Layout changes retain the same editor
 and session. The editor keeps its name, text, status, Save and Preview visible;
 **Actions** opens a native Apple button menu or Android popup for New, Import,

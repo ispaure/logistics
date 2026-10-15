@@ -1,10 +1,18 @@
 """Actual retained-editor and conversation drawer checks, using window bounds."""
 import asyncio
+from commonUtils.runtime.platform import get_os, OS
 from .fixtures import capture_window
 
 
 async def exercise_workspace(app):
     screenshots = []
+
+    def width(widget):
+        native = widget._impl.native
+        if get_os() is OS.IOS:
+            return float(native.bounds.size.width)
+        density = app._impl.native.getResources().getDisplayMetrics().density
+        return float(native.getWidth()) / density
 
     async def capture(name):
         await asyncio.sleep(.4)
@@ -27,7 +35,8 @@ async def exercise_workspace(app):
     await capture('documents')
     if navigation.wide:
         assert list(frame.row.children) == [first.document_view._workspace_frame.main, frame.main]
-        assert abs(first.document_view._workspace_frame.main.layout.width - frame.main.layout.width) <= 2
+        pair = width(first.document_view._workspace_frame.main), width(frame.main)
+        assert abs(pair[0] - pair[1]) <= 2, ('Unequal native document panes', pair)
     else:
         assert list(frame.row.children) == [frame.main]
     frame.menu.on_press()
@@ -48,7 +57,9 @@ async def exercise_workspace(app):
     await capture('conversations')
     assert list(app.chat_workspace.children) == ([app.chat_sidebar, app.chat_messages] if navigation.wide else [app.chat_sidebar])
     if navigation.wide:
-        assert abs(app.chat_sidebar.layout.width - app.chat_messages.layout.width) <= 2
+        pair = width(app.chat_sidebar), width(app.chat_messages)
+        assert abs(pair[0] - pair[1]) <= 2, ('Unequal native chat panes', pair)
+        assert max(pair) <= app.adaptive.content_width('chat') / 2 + 2, ('Chat exceeded its native allocation', pair)
     app.open_chat(key)
     assert app.chat_prompt.value == 'Unsent conversation draft'
     app.chat_drawer_open = False

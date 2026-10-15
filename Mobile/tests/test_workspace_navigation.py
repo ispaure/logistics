@@ -68,6 +68,11 @@ class WorkspaceNavigationTests(unittest.TestCase):
             first.editor.value = 'Edited on left'
             self.assertEqual(second.document.text, 'B draft')
             self.assertEqual(app.store.open(first.document.id).text, 'Edited on left')
+        # The wider Duo portrait display is narrower than a regular iPad.
+        with patch.object(self.navigation, 'width', return_value=669):
+            self.navigation.render()
+            self.assertEqual(self.navigation.diagnostics()['layout'], 'two-documents')
+            self.assertEqual(list(frame.row.children), [first.document_view._workspace_frame.main, frame.main])
         with patch.object(self.navigation, 'width', return_value=390):
             self.navigation.render()
             self.assertEqual(list(frame.row.children), [frame.main])
@@ -103,6 +108,22 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.assertEqual(list(owner.document_view._workspace_frame.row.children),
                              [self.navigation.browser('documents').widget, owner.document_view._workspace_frame.main])
             self.assertEqual(owner.editor.value, 'Draft before opening the overview')
+
+    def test_split_picker_can_open_a_retained_session_without_an_existing_editor(self):
+        app = self.app
+        first = app.editor_view
+        stored = app.store.create('Retained second.txt')
+        second = app.workspace.open('managed-text', stored.id, 'text', stored.name)
+        app.workspace.activate(first.session.id)
+        self.assertNotIn(second.id, app.text_views)
+        with patch.object(self.navigation, 'width', return_value=669):
+            first.document_view._workspace_frame.pair.on_press()
+            content = app.body.children[0].content
+            next(button for button in content.children if getattr(button, 'text', '') == stored.name).on_press()
+            self.assertEqual(app.workspace.active, second.id)
+            self.assertEqual(self.navigation.pinned, first.session.id)
+            self.assertIn(second.id, app.text_views)
+            self.assertEqual(self.navigation.diagnostics()['layout'], 'two-documents')
 
     def test_chat_conversation_drawer_is_full_height_on_phone_and_half_on_duo(self):
         app = self.app
