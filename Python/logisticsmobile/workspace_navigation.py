@@ -479,6 +479,14 @@ class FileDrawer:
             self.menu_content.add(button)
         if not self.library_buttons:
             self.menu_content.add(toga.Label('No configured libraries found.'))
+        self.menu_content.add(heading('Shortcuts'))
+        for title, extension in (('New text document', 'txt'), ('New Markdown document', 'md')):
+            def create(widget=None, selected=extension, **kwargs):
+                self.navigation.menu_open['documents'] = False
+                self.app.create_chosen_document(selected)
+            self.menu_content.add(toga.Button(title, on_press=create, style=Pack(height=48)))
+        self.menu_content.add(toga.Button('Folder Hub', on_press=self.app.show_locations, style=Pack(height=48)))
+
 
     def schedule_refresh(self):
         self.generation += 1
