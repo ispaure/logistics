@@ -247,10 +247,8 @@ class SceneManager:
     def disconnect(self, host):
         if not host.active_host or (host is self.app and self.primary_disconnected):
             return
-        from .pickers import _ios_pickers
-        picker = _ios_pickers.get(host.main_window.id)
-        if picker is not None:
-            picker[0].cancel()
+        from commonUtils.ui.native.documents import cancel_document_picker
+        cancel_document_picker(host.main_window)
         if host is self.app:
             host.checkpoint()
             self.primary_disconnected = True
