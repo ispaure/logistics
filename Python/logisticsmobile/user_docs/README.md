@@ -978,3 +978,9 @@ shows completion and opens the existing transfer details screen.
 Home has a Logistics navigation title above the spaced Welcome to Logistics
 greeting. The former “Read. Write. Organize.” tagline has been removed; the bottom
 navigation tab remains named Home.
+
+
+Long file-browser names are shortened visually in the middle when needed, keeping
+the beginning and filename ending (including its extension) visible. The complete
+name remains available to accessibility, file information and all file actions;
+this display setting does not rename or change the file path.
