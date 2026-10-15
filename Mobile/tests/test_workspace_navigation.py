@@ -47,7 +47,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         self.assertEqual(app.routes.screens['documents'][-1][0], 'workspace-browser')
         self.assertEqual([row.label for row in drawer.browser.entries], ['note.md'])
         self.assertFalse(self.navigation.menu_open['documents'])
-        self.assertIs(drawer.browser_widget.parent, app.body.children[0])
+        self.assertIs(drawer.browser_widget.parent, app.body.children[0]._workspace_frame.main)
         self.assertEqual(app.editor.value, '# Keep this draft')
 
     def test_folder_actions_pair_tree_at_center_and_collapse_on_phone(self):

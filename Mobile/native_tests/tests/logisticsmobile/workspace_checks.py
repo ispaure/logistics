@@ -20,6 +20,15 @@ async def exercise_workspace(app):
         await capture_window(app, path)
         screenshots.append(str(path))
 
+    app.show_locations()
+    app.choose_folder('All files')
+    folder_frame = app.body.children[0]._workspace_frame
+    await capture('folder-actions')
+    assert folder_frame.header not in folder_frame.view().children
+    if app.adaptive.wide:
+        pair = width(folder_frame.folder_master), width(folder_frame.main)
+        assert abs(pair[0] - pair[1]) <= 2, ('Unequal native Folder Hub panes', pair)
+        assert max(pair) <= app.adaptive.content_width('files') / 2 + 2
     app.create_chosen_document('md')
     app.name.value = 'Left draft.md'
     first = app.editor_view
@@ -81,6 +90,14 @@ async def exercise_workspace(app):
     app.chat_drawer_open = False
     app.render_chat_workspace()
     await capture('chat')
+    if get_os() is OS.IOS:
+        window = app.main_window._impl.native
+        prompt = app.chat_prompt._impl.native
+        rect = prompt.convertRect(prompt.bounds, toView=window)
+        tab = app.native_host.adapter.controller.tabBar
+        bar = tab.convertRect(tab.bounds, toView=window)
+        if not tab.isHidden() and bar.origin.y >= rect.origin.y:
+            assert rect.origin.y + rect.size.height <= bar.origin.y - 10, 'Tab bar covers composer'
     app.show_settings()
     await capture('settings')
     assert app.native_host.state.destination == 'settings'

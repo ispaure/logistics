@@ -78,6 +78,15 @@ class LocalCryptUI(FilesUI):
         self.hub_crypt_locations = []
         if hasattr(self, 'readers'):
             self.readers.catalog.clear_private_libraries()
+        for drawer in getattr(self.adaptive, 'browsers', {}).values():
+            drawer.generation += 1
+            drawer.scoped_provider = None
+            if drawer.provider is not None and drawer.provider.private:
+                drawer.provider = None
+                drawer.browser.stop()
+                drawer.status.text = 'Private folders locked. Choose an available location.'
+            if drawer.destination == 'documents':
+                drawer.refresh_menu()
         self.invalidate_mirror_review()
         self.editor_linked_roots = {}
         if hasattr(self, 'pull_jobs'):

@@ -106,6 +106,15 @@ class FolderHubUI:
         return box
 
     def update_folder_list(self, choices):
+        credentials = {'All': None, **{item['zip']: set(item['remotes'])
+                       for item in json.loads(self.preferences.values['remote_packages'])}}
+        if credentials != self.folder_credentials:
+            self.folder_credentials = credentials
+            selected = self.folder_credential.value
+            self.folder_credential.on_change = None
+            self.folder_credential.items = list(credentials)
+            self.folder_credential.value = selected if selected in credentials else 'All'
+            self.folder_credential.on_change = self.change_folder_credential
         self.folder_picker_choices = choices
         for child in list(self.folder_list.children):
             self.folder_list.remove(child)
@@ -200,7 +209,7 @@ class FolderHubUI:
             button = toga.Button('Pull…', on_press=pull, style=Pack(height=44, margin_top=8))
             self.folder_action_controls.append((button, True))
             box.add(button)
-            box.add(toga.Label('The first pull links a local copy. Later pulls and pushes use that copy automatically.', style=Pack(font_size=12)))
+            box.add(toga.Label(fill('The first pull links a local copy. Later pulls and pushes use that copy automatically.', width=32), style=Pack(font_size=12)))
         if entry['source'] != 'Remote' and entry['value']:
             async def delete(widget=None, **kwargs):
                 await self.delete_picker_folder(entry)
@@ -271,7 +280,9 @@ class FolderHubUI:
         if (not busy and hasattr(self, 'folder_list') and host is not None
                 and host.state.destination == 'files' and not self.routes.screens['files']):
             choices = self.folder_choices()
-            if choices != self.folder_picker_choices:
+            packages = json.loads(self.preferences.values['remote_packages'])
+            credentials = {'All': None, **{item['zip']: set(item['remotes']) for item in packages}}
+            if choices != self.folder_picker_choices or credentials != self.folder_credentials:
                 self.update_folder_list(choices)
         status = getattr(self, 'folder_picker_status', None)
         if status is not None:
