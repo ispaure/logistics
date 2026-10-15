@@ -1065,3 +1065,7 @@ controls and route exit restored them. The probe also exercised Android volume
 enumeration, external app-specific file copying, the Legacy switch and dispatch
 of developer settings. This does not establish physical removable-card behavior.
 See [retained proof](mobile-evidence/2026-10-15-storage-android-fullscreen.json).
+
+The portable document runtime harness declares 45 tests, including credential
+replacement, session privacy and retired mirror-operation checks. Its declared
+method list must match the cases loaded by `logisticsmobile.smoke` exactly.

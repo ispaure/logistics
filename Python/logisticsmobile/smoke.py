@@ -49,7 +49,11 @@ EXPECTED_TESTS = (
     'test_text_and_comic_reads_are_memory_only',
     'test_ini_reader_is_editable_memory_only_and_preserves_line_endings',
     'test_epub_source_reads_without_plaintext_files',
-    'test_ciphertext_storage_locked_listing_and_failed_download_cleanup',
+    'test_existing_ciphertext_storage_and_locked_listing',
+    'test_lock_unloads_credentials_without_forgetting_saved_vault',
+    'test_privacy_gate_tracks_only_successful_session_loads_across_clients',
+    'test_native_credential_replacement_invalidates_every_client',
+    'test_retired_mirror_operations_never_reach_native_bridge',
     'test_import_boundary', 'test_runtime_identity',
 )
 
