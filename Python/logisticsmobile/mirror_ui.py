@@ -180,6 +180,8 @@ class MirrorUI:
             job = self.mirror_store().jobs.get(key)
             if job is None:
                 return
+            if not self.require_remote_credentials(job['remote'], identity=job['identity'], resume=lambda: self.start_mirror_pull(key)):
+                return
             signature = self.mirror_job_signature(job)
             storage = 'LocalCrypt' if job['crypt'] else 'Local'
             self.transfer_task = self.loop.create_task(self.confirmed_mirror_work(
@@ -216,6 +218,8 @@ class MirrorUI:
         if not getattr(self, 'transfer_busy', False) and not getattr(self, '_transfer_confirmation_pending', False):
             job = self.mirror_store().jobs.get(key)
             if job is None:
+                return
+            if not self.require_remote_credentials(job['remote'], identity=job['identity'], resume=lambda: self.start_mirror_review(key)):
                 return
             signature = self.mirror_job_signature(job)
             storage = 'LocalCrypt' if job['crypt'] else 'Local'

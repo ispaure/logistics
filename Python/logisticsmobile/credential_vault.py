@@ -25,17 +25,19 @@ class ProtectedVault:
         self.ciphertext = self.root / 'credentials.bin'
 
     @classmethod
-    def for_app(cls, app):
+    def for_app(cls, app, *, packages=False):
         from commonUtils.runtime.platform import get_os, OS
         current = get_os()
+        folder = 'CredentialPackages' if packages else 'Credentials'
+        service = 'io.github.ispaure.logisticsmobile.' + ('packages' if packages else 'credentials')
         if current is OS.ANDROID:
             # noBackupFilesDir is explicitly excluded from Android backup/restore.
-            root = Path(str(app._impl.native.getNoBackupFilesDir().getAbsolutePath())) / 'LogisticsCredentials'
+            root = Path(str(app._impl.native.getNoBackupFilesDir().getAbsolutePath())) / ('LogisticsCredentialPackages' if packages else 'LogisticsCredentials')
             if app.storage_root is not None:  # Native test fixtures get separate keys/data.
-                root = app.private_root / 'Credentials'
-            return cls(root, AndroidKeys(alias_prefix='Logistics.credentials.', aad_prefix='Logistics credentials v1:'), 'android')
+                root = app.private_root / folder
+            return cls(root, AndroidKeys(alias_prefix='Logistics.packages.' if packages else 'Logistics.credentials.', aad_prefix='Logistics packages v1:' if packages else 'Logistics credentials v1:'), 'android')
         if current is OS.IOS:
-            vault = cls(app.private_root / 'Credentials', IOSKeys(service='io.github.ispaure.logisticsmobile.credentials',
+            vault = cls(app.private_root / folder, IOSKeys(service=service,
                 label='Logistics — encrypted remote credentials', label_prefix='Logistics — '), 'ios')
             from rubicon.objc import ObjCClass
             url = ObjCClass('NSURL').fileURLWithPath(str(vault.root))

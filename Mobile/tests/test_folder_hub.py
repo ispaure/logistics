@@ -62,8 +62,8 @@ class FolderHubTests(unittest.TestCase):
                 app.preferences.save(remote_packages=json.dumps([dict(zip='Loaded.zip',
                     remotes=['Loaded drive'], session_only=True)]))
                 app.set_cloud_busy(False)
-                self.assertIn('Loaded.zip', app.folder_credentials)
-                app.folder_credential.value = 'Loaded.zip'
+                self.assertIn('Loaded', app.folder_credentials)
+                app.folder_credential.value = 'Loaded'
                 self.assertEqual(set(app.folder_buttons), {'Loaded drive'})
                 app.folder_credential.value = 'All'
                 app.folder_buttons['Comics'].on_press()
