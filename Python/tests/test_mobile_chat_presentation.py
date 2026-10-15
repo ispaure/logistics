@@ -52,5 +52,14 @@ class MobileChatPresentationTests(unittest.TestCase):
         self.assertTrue(entries[0]['html'].endswith('</code></pre>'))
 
 
+class NavigationClearanceTests(unittest.TestCase):
+    def test_floating_bar_and_keyboard_use_actual_overlap(self):
+        from logisticsmobile.chat_presentation import navigation_clearance
+        self.assertEqual(navigation_clearance(116, 840, 790, 64), 62)
+        self.assertEqual(navigation_clearance(116, 546, 496, 64), 62)
+        self.assertEqual(navigation_clearance(116, 546, 790, 64), 12)
+        self.assertEqual(navigation_clearance(116, 546, 0, 64), 12)
+
+
 if __name__ == '__main__':
     unittest.main()

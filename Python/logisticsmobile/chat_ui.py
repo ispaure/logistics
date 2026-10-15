@@ -135,8 +135,31 @@ class ChatUI:
             for child in children:
                 del child.style.width
                 child.style.flex = 1
+        self.reserve_chat_navigation()
         self.update_chat_header()
         self.resize_chat_composer()
+
+    def reserve_chat_navigation(self):
+        """The floating UIKit tab bar can extend above its reported safe inset."""
+        adapter = self.native_host.adapter
+        if adapter is None or not hasattr(adapter, 'navigation'):
+            return
+        container = self.chat_view._impl.container
+        if container is None or container.native.bounds.size.height <= 0:
+            return
+        tab = adapter.controller.tabBar
+        if tab.isHidden():
+            margin = 12
+        else:
+            window = self.main_window._impl.native
+            viewport = container.native.convertRect(container.native.bounds, toView=window)
+            bar = tab.convertRect(tab.bounds, toView=window)
+            bottom = float(viewport.origin.y + viewport.size.height - container.bottom_inset)
+            top = float(viewport.origin.y + container.top_inset)
+            from .chat_presentation import navigation_clearance
+            margin = navigation_clearance(top, bottom, float(bar.origin.y), float(bar.size.height))
+        if self.chat_view.style.margin_bottom != margin:
+            self.chat_view.style.margin_bottom = margin
 
     def update_chat_header(self):
         sidebar = self.chat_drawer_open and self.adaptive.width() < 640
