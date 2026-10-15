@@ -129,7 +129,9 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         self.app.mark_navigation()
         self.menu_open[destination] = not self.menu_open[destination]
         if self.menu_open[destination]:
-            self.browser(destination).schedule_refresh()
+            drawer = self.browser(destination)
+            drawer.extensions = None
+            drawer.schedule_refresh()
         self.render()
 
     def show_browser(self, destination):
@@ -402,29 +404,87 @@ class FileDrawer:
             toga.ScrollContainer(horizontal=False, content=scroll_content(self.browser.widget), style=Pack(flex=1)),
             toga.Button('Folder Hub', on_press=self.app.show_locations, style=Pack(height=44))],
             style=Pack(direction=COLUMN, flex=1))
+        self.browser_widget = self.widget
+        if destination == 'documents':
+            self.menu_content = toga.Box(style=Pack(direction=COLUMN, margin=12))
+            self.widget = toga.ScrollContainer(horizontal=False, content=self.menu_content, style=Pack(flex=1))
         self.storage.on_change = self.change_storage
 
-    async def show_main_browser(self, storage, *, folder='', extensions=None, title='Browse files'):
+    async def show_main_browser(self, storage, *, folder='', extensions=None, title='Browse files', provider=None):
         if not self.app.checkpoint():
             return False
         self.extensions = extensions
+        client = getattr(self.app, 'cloud_client', None)
+        self.scoped_provider = (storage, provider, client, getattr(client, 'generation', None)) if provider else None
         self.folder = folder
         self.changing_storage = True
         try:
-            if storage not in self.storage.items:
-                self.storage.items = [*self.roots, storage]
+            self.storage.items = list(dict.fromkeys([*self.roots, storage]))
             self.storage.value = storage
         finally:
             self.changing_storage = False
         self.navigation.menu_open[self.destination] = False
-        detach(self.widget)
-        page = toga.Box(children=[self.widget], style=Pack(direction=COLUMN, flex=1, margin=12))
+        detach(self.browser_widget)
+        page = toga.Box(children=[self.browser_widget], style=Pack(direction=COLUMN, flex=1, margin=12))
         self.app.show_view(page, destination=self.destination, route='workspace-browser', title=title)
         return await self.refresh()
+
+    def refresh_menu(self):
+        from .hub_ui import heading
+        for child in list(self.menu_content.children):
+            self.menu_content.remove(child)
+        roots = {'Local files': None}
+        if not getattr(self.app, 'cloud_busy', False):
+            roots.update(self.app.existing_crypt_locations())
+            roots.update(self.app.linked_crypt_locations())
+        for storage in roots:
+            async def browse(widget=None, selected=storage, **kwargs):
+                await self.show_main_browser(selected)
+            title = 'Browse Local Files' if storage == 'Local files' else 'Browse ' + storage
+            self.menu_content.add(list_button(toga.Button(title, on_press=browse, style=Pack(height=48))))
+        self.menu_content.add(heading('Recent'))
+        self.recent_buttons = []
+        for session in self.app.recent_documents.sessions():
+            title, kind, details = self.app.session_summary(session)
+            if 'Unavailable; retry to reopen' in details:
+                continue
+            async def reopen(widget=None, selected=session, **kwargs):
+                if not self.app.checkpoint():
+                    return
+                self.navigation.menu_open['documents'] = False
+                if selected.provider == 'library':
+                    await self.app.open_book(selected.resource)
+                elif self.app.open_document(selected.resource):
+                    self.app.show_documents(resume=True)
+            button = list_button(toga.Button(title, on_press=reopen, style=Pack(height=48)))
+            self.recent_buttons.append(button)
+            self.menu_content.add(button)
+        if not self.recent_buttons:
+            self.menu_content.add(toga.Label('No recent documents yet.'))
+        self.menu_content.add(heading('Comics Library'))
+        catalog = self.app.reader_manager().catalog
+        self.library_buttons = []
+        for record in getattr(catalog, 'library_records', ()):
+            async def browse_library(widget=None, library=record, **kwargs):
+                provider = library['provider']
+                if provider.private and (self.app.cloud_client is not library['client']
+                        or self.app.cloud_client.generation != library['generation']):
+                    self.status.text = 'Unlock the library connection again.'
+                    self.schedule_refresh()
+                    return
+                storage = library['source'] if provider.private else 'Local files'
+                await self.show_main_browser(storage, folder=library['folder'], provider=provider)
+            button = list_button(toga.Button(record['name'], on_press=browse_library, style=Pack(height=48)))
+            self.library_buttons.append(button)
+            self.menu_content.add(button)
+        if not self.library_buttons:
+            self.menu_content.add(toga.Label('No configured libraries found.'))
 
     def schedule_refresh(self):
         self.generation += 1
         self.refresh_requested = True
+        if self.destination == 'documents':
+            self.refresh_menu()
         if self.task is None or self.task.done():
             self.task = self.app.loop.create_task(self.refresh_pending())
 
@@ -437,6 +497,7 @@ class FileDrawer:
         if getattr(self, 'changing_storage', False):
             return
         self.folder = ''
+        self.scoped_provider = None
         self.schedule_refresh()
 
     async def refresh(self):
@@ -446,6 +507,9 @@ class FileDrawer:
         if not getattr(self.app, 'cloud_busy', False):
             roots.update(self.app.existing_crypt_locations())
             roots.update(self.app.linked_crypt_locations())
+        scope = getattr(self, 'scoped_provider', None)
+        if scope is not None:
+            roots.setdefault(scope[0], None)
         selected = self.storage.value if self.storage.value in roots else 'Local files'
         self.changing_storage = True
         try:
@@ -457,16 +521,30 @@ class FileDrawer:
         try:
             if selected != 'Local files' and self.app.cloud_busy:
                 raise ValueError('This connection is busy. Local files remain available.')
-            provider = self.app.storage_provider(selected, roots)
-            model = ResourceSelection(provider, extensions=self.extensions)
+            if scope is not None and scope[0] == selected:
+                provider = scope[1]
+                if provider.private and (self.app.cloud_client is not scope[2]
+                        or self.app.cloud_client.generation != scope[3]):
+                    raise ValueError('Unlock the library connection again.')
+            else:
+                provider = self.app.storage_provider(selected, roots)
+            model = ResourceSelection(provider, extensions=self.extensions or ())
             folder = self.folder
             rows = await asyncio.to_thread(model.list, folder)
             if (not self.app.active_host or generation != self.generation
                     or (selected, folder) != (self.storage.value, self.folder)):
                 return False
             self.provider = provider
+            self.provider_client = getattr(self.app, 'cloud_client', None)
+            self.provider_generation = getattr(self.provider_client, 'generation', None)
             self.browser.set_entries(model, folder, rows, location=(selected, folder))
             self.status.text = folder or selected
+            if self.destination == 'documents':
+                self.refresh_menu()
+                catalog = self.app.reader_manager().catalog
+                await catalog.refresh_library_folders()
+                if generation == self.generation and self.app.active_host:
+                    self.refresh_menu()
             return True
         except (OSError, ValueError) as error:
             self.provider = None
@@ -501,6 +579,9 @@ class FileDrawer:
             return
         path = row['path']
         try:
+            if provider.private and (self.app.cloud_client is not self.provider_client
+                    or self.app.cloud_client.generation != self.provider_generation or self.app.cloud_busy):
+                raise ValueError('Unlock the connection again before opening private files.')
             if not provider.private and Path(path).suffix.lower() not in {'.txt', '.md', '.markdown'}:
                 await self.app.open_download(path=provider._locate(path), destination=self.destination)
             else:

@@ -25,6 +25,31 @@ class WorkspaceNavigationTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_documents_menu_recent_reopens_closed_file_and_browse_uses_main_area(self):
+        app = self.app
+        app.name.value = 'Recent.md'
+        app.editor.value = '# Keep this draft'
+        key = app.editor_view.session.id
+        resource = app.current.id
+        app.save_workspace()
+        app.close_session(key, choice='keep')
+        drawer = self.navigation.browser('documents')
+        drawer.refresh_menu()
+        recent = next(button for button in drawer.recent_buttons if button.text == 'Recent.md')
+        app.loop.run_until_complete(recent.on_press())
+        self.assertEqual(app.current.id, resource)
+        self.assertEqual(app.editor.value, '# Keep this draft')
+        local = app.private_root / 'LocalFiles'
+        local.mkdir(exist_ok=True)
+        (local / 'note.md').write_text('# Note')
+        (local / 'other.txt').write_text('Other')
+        app.loop.run_until_complete(app.open_document_category('Markdown Editor'))
+        self.assertEqual(app.routes.screens['documents'][-1][0], 'workspace-browser')
+        self.assertEqual([row.label for row in drawer.browser.entries], ['note.md'])
+        self.assertFalse(self.navigation.menu_open['documents'])
+        self.assertIs(drawer.browser_widget.parent, app.body.children[0])
+        self.assertEqual(app.editor.value, '# Keep this draft')
+
     def test_folder_actions_pair_tree_at_center_and_collapse_on_phone(self):
         app = self.app
         app.show_locations()

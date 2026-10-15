@@ -67,6 +67,8 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         workspace_root = getattr(self, 'workspace_root', root)
         self.preferences = Preferences(workspace_root)
         self.store = DocumentStore(root / 'Documents')
+        from .recent_documents import RecentDocuments
+        self.recent_documents = RecentDocuments(workspace_root)
         self.workspace = Workspace(workspace_root)
         if self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
             self.clear_restored_documents()
@@ -388,6 +390,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             view.session.transient = bool(getattr(view.document, 'private', False))
         try:
             self.workspace.save()
+            self.recent_documents.remember(self.workspace.sessions.get(self.workspace.active))
             self.scene_manager.save_destination(self)
         except (OSError, ValueError) as error:
             self.recovery_notice.text = str(error)
