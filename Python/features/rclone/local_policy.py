@@ -49,7 +49,7 @@ def remove_generated(root, name, version):
     path.unlink()
 
 
-def transfer_inventory(root, cancelled=lambda: False, *, copy_links=False, max_entries=10000):
+def transfer_inventory(root, cancelled=lambda: False, *, copy_links=False):
     """Validate entries and capture versions without reading file contents."""
     root = Path(root)
     if root.is_symlink() or not root.is_dir():
@@ -71,6 +71,4 @@ def transfer_inventory(root, cancelled=lambda: False, *, copy_links=False, max_e
                 if not stat.S_ISREG(before[2]) or (not copy_links and path.stat().st_nlink != 1):
                     raise ValueError('Choose regular transfer files.')
                 result[key] = before, link_before
-            if len(result) > max_entries:
-                raise ValueError(f'Sync exceeds {max_entries} entries.')
     return result

@@ -69,13 +69,16 @@ async def exercise_mirrors(app, comic_key):
             local_editor = app.private_sessions.active
             assert local_editor.crypt_text.value == 'Unrelated local file'
             local_editor.crypt_text.value = 'Unsaved local draft while pulling'
-            await tap('Local comic.cbz')
-            assert app.reader_manager().active.book_reader.pages == ['page2.webp', 'page10.webp']
-            view = app.reader_manager().active.book_content.children[0]
-            canvas = view.canvases[0] if hasattr(view, 'canvases') else view
-            assert (canvas.image.width, canvas.image.height) == (2, 3)
-            await app.next_book_page()
-            assert app.reader_manager().active.book_record['position'] == 1
+            # This case checks file access during a transfer. Keep page-sized
+            # bitmap assertions independent of automatic wide-screen spreads.
+            with patch.dict(app.preferences.values, comic_layout='single'):
+                await tap('Local comic.cbz')
+                assert app.reader_manager().active.book_reader.pages == ['page2.webp', 'page10.webp']
+                view = app.reader_manager().active.book_content.children[0]
+                canvas = view.canvases[0] if hasattr(view, 'canvases') else view
+                assert (canvas.image.width, canvas.image.height) == (2, 3)
+                await app.next_book_page()
+                assert app.reader_manager().active.book_record['position'] == 1
             await tap('Local note.txt')
             assert app.private_sessions.active is local_editor
             assert local_editor.crypt_text.value == 'Unsaved local draft while pulling'

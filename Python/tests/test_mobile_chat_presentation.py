@@ -59,6 +59,8 @@ class NavigationClearanceTests(unittest.TestCase):
         self.assertEqual(navigation_clearance(116, 546, 496, 64), 62)
         self.assertEqual(navigation_clearance(116, 546, 790, 64), 12)
         self.assertEqual(navigation_clearance(116, 546, 0, 64), 12)
+        self.assertEqual(navigation_clearance(82, 778, 204, 574, bar_width=52), 12)
+        self.assertEqual(navigation_clearance(116, 840, 790, 64, bar_width=350), 62)
 
 
 if __name__ == '__main__':

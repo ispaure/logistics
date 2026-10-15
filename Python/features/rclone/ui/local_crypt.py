@@ -435,9 +435,20 @@ class CryptBrowserView(qt.QMainWindow):
         protect_private_view(window, self.provider)
         _windows.append(window)
         window.destroyed.connect(lambda: _windows.remove(window) if window in _windows else None)
+        window.saved.connect(self._comic_metadata_saved)
         window.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         window.show()
         return window
+
+    def _comic_metadata_saved(self, path):
+        browser = self.file_browser
+        if self.closing or browser is None or browser.preview is None:
+            return
+        relative = self.provider.relative(path)
+        if any(row['path'] == relative for row in browser.selected_rows()):
+            # Re-read metadata through the existing cancellable preview worker.
+            # It coalesces batch notifications and rejects older in-flight reads.
+            browser.preview.request()
 
     def open_document(self, path, fragment='', *, password=None):
         if self.closing or self.open_operation.busy:

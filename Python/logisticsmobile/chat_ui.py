@@ -205,7 +205,8 @@ class ChatUI:
             bottom = float(viewport.origin.y + viewport.size.height - container.bottom_inset)
             top = float(viewport.origin.y + container.top_inset)
             from .chat_presentation import navigation_clearance
-            margin = navigation_clearance(top, bottom, float(bar.origin.y), float(bar.size.height))
+            margin = navigation_clearance(top, bottom, float(bar.origin.y), float(bar.size.height),
+                                          bar_width=float(bar.size.width))
         if self.chat_view.style.margin_bottom != margin:
             self.chat_view.style.margin_bottom = margin
 

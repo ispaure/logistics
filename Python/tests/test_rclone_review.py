@@ -11,6 +11,22 @@ from features.rclone.session import NULL_CONFIG
 
 
 class ReviewTests(unittest.TestCase):
+    def test_large_reviews_complete_for_emitted_and_replaced_snapshots(self):
+        rows = [('add', f'folder/{index}.txt') for index in range(10001)]
+        rows += [('cleanup', f'generated/{index}/.DS_Store') for index in range(10001)]
+        for replace in (False, True):
+            with self.subTest(replace=replace):
+                def scanner(emit, cancelled):
+                    if replace:
+                        emit.replace(rows)
+                    else:
+                        for kind, path in rows:
+                            emit(kind, path)
+                    return 'large-review-revision'
+                result = self.finish(ReviewScan(scanner))
+                self.assertTrue(result.complete)
+                self.assertEqual(set(result.changes), set(rows))
+
     def test_cli_retry_discards_failed_attempt_and_retains_cleanup(self):
         import json
         from unittest.mock import patch

@@ -11,8 +11,8 @@ class AppearanceTests(unittest.TestCase):
         from types import SimpleNamespace as NS
         from toga.style import Pack
         from logisticsmobile.appearance import reserve_navigation
-        def rect(y, height):
-            return NS(origin=NS(y=y), size=NS(height=height))
+        def rect(y, height, width=400):
+            return NS(origin=NS(y=y), size=NS(height=height, width=width))
         native = NS(bounds=rect(0, 800), convertRect=lambda *a, **kw: rect(0, 800))
         view = NS(_reading_frame=True, _reading_frame_owner=NS(margin=16),
                   style=Pack(margin=16), _impl=NS(container=NS(
@@ -21,6 +21,14 @@ class AppearanceTests(unittest.TestCase):
                  convertRect=lambda *a, **kw: rect(720, 80))
         app = NS(native_host=NS(adapter=NS(navigation=[], controller=NS(tabBar=bar))),
                  routes=NS(body=lambda: NS(children=[view])), main_window=NS(_impl=NS(native=object())))
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 96)
+        # A Duo rail must release the previous bottom-bar reservation, and a
+        # subsequent rotation back to a bottom bar must restore it once.
+        bar.convertRect = lambda *a, **kw: rect(204, 574, 52)
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 16)
+        bar.convertRect = lambda *a, **kw: rect(720, 80)
         reserve_navigation(app)
         self.assertEqual(view.style.margin_bottom, 96)
         reserve_navigation(app)

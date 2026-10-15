@@ -36,19 +36,29 @@ class ReaderSessionTests(unittest.TestCase):
                     view = owner.book_content.children[0]
                     from toga.style.pack import NONE
                     self.assertEqual(view.style.width, NONE)
+                    self.assertTrue(view.magnifier_enabled)
                     view.toggle_controls()
+                    self.assertFalse(view.magnifier_enabled)
                     self.assertFalse(owner.reader_immersive)
                     self.assertEqual(view.style.width, NONE)
                     self.assertTrue(page_policy.call_args.args[0])
                     self.assertTrue(view.page_swipes_at_edges)
                     view.toggle_controls()
                     self.assertTrue(owner.reader_immersive)
+                    self.assertTrue(view.magnifier_enabled)
                     view.page(-1)
                     await asyncio.sleep(.02)
                     self.assertEqual(owner.book_record['position'], 0)
                     view.page(1)
                     await owner._comic_swipe_task
                     self.assertEqual(owner.book_record['position'], 1)
+                    self.assertFalse(view.magnifier_enabled)  # retired canvas
+                    self.assertTrue(owner.book_content.children[0].magnifier_enabled)
+                    owner.set_reading_mode(False)
+                    await owner.move_book_page(0)
+                    self.assertFalse(owner.book_content.children[0].magnifier_enabled)
+                    owner.set_reading_mode(True)
+                    await owner.move_book_page(1)
                     owner.book_reader.right_to_left = True
                     owner.book_content.children[0].page(1)
                     await owner._comic_swipe_task

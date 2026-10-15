@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 
-async def fixture_reader(app, output):
+async def fixture_reader(app, output, *, pages=1, right_to_left=False):
     """A cache-only comic and transient session; never an ordinary library import."""
     import struct
     import zlib
@@ -21,7 +21,10 @@ async def fixture_reader(app, output):
            + chunk(b'IDAT', zlib.compress(pixels)) + chunk(b'IEND', b''))
     archive = output / 'layout-fixture.cbz'
     with ZipFile(archive, 'w') as stream:
-        stream.writestr('page.png', png)
+        for index in range(pages):
+            stream.writestr(f'page{index:03}.png', png)
+        if right_to_left:
+            stream.writestr('ComicInfo.xml', '<ComicInfo><Manga>YesAndRightToLeft</Manga></ComicInfo>')
     store = LibraryStore(output / 'fixture-library')
     record = store.import_book(LocalDocuments(), archive)
     session = app.workspace.open('library', record['id'], 'comic', 'Layout check', transient=True)

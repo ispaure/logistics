@@ -20,8 +20,6 @@ type comparison struct {
 	run       string
 	changes   map[string]string
 	revisions map[string]string
-	stop      context.CancelFunc
-	overflow  bool
 	cleanup   map[string]bool
 }
 
@@ -99,13 +97,6 @@ func (c *comparison) logger(cipher *crypt.Cipher) operations.LoggerFn {
 		encoded, _ := json.Marshal(row)
 		c.Lock()
 		defer c.Unlock()
-		if len(c.changes) >= 10000 {
-			if _, exists := c.changes[name]; !exists {
-				c.overflow = true
-				c.stop()
-				return
-			}
-		}
 		c.changes[name], c.revisions[name] = kind, string(encoded)
 	}
 }
@@ -129,16 +120,14 @@ func (c *comparison) snapshot() map[string]any {
 }
 
 func mirrorReview(ctx context.Context, name, p, identity, localPath, run string, push bool) (any, error) {
-	ctx, stop := context.WithCancel(ctx)
-	defer stop()
-	c := &comparison{run: run, changes: map[string]string{}, revisions: map[string]string{}, stop: stop}
+	c := &comparison{run: run, changes: map[string]string{}, revisions: map[string]string{}}
 	opts, _ := ctx.Value(transferOptionsKey{}).(transferOptions)
 	c.cleanup = map[string]bool{}
 	if !push && len(opts.CleanupPaths) != 0 {
 		return nil, errors.New("cleanup is push-only")
 	}
 	for _, name := range opts.CleanupPaths {
-		if !validPath(name) || name == "" || len(c.cleanup) >= 10000 {
+		if !validPath(name) || name == "" {
 			return nil, errors.New("invalid cleanup plan")
 		}
 		c.cleanup[name] = true
@@ -147,9 +136,6 @@ func mirrorReview(ctx context.Context, name, p, identity, localPath, run string,
 	comparisonState.current = c
 	comparisonState.Unlock()
 	_, err := mirrorRun(ctx, name, p, identity, localPath, run, push, 0, c)
-	if c.overflow {
-		return nil, errors.New("review exceeds 10,000 entries; narrow the scope or proceed without a full review")
-	}
 	if err != nil {
 		return nil, err
 	}

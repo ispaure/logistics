@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,8 +11,28 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rclone/rclone/fs"
+	"github.com/rclone/rclone/fs/operations"
 	"github.com/rclone/rclone/fs/object"
 )
+
+func TestLargeComparisonKeepsEveryRowAndRevision(t *testing.T) {
+	c := &comparison{changes: map[string]string{}, revisions: map[string]string{}, cleanup: map[string]bool{}}
+	logger := c.logger(nil)
+	ctx := context.Background()
+	for i := 0; i < 10001; i++ {
+		name := fmt.Sprintf("folder/%05d", i)
+		item := fs.NewDir(name, time.Unix(0, 0))
+		logger(ctx, operations.MissingOnDst, item, nil, nil)
+	}
+	rows := c.snapshot()["changes"].([][]string)
+	if len(rows) != 10001 || len(c.revisions) != 10001 {
+		t.Fatalf("large comparison lost rows or revisions: %d / %d", len(rows), len(c.revisions))
+	}
+	if rows[10000][1] != "folder/10000/" {
+		t.Fatal("last comparison row missing", rows[10000])
+	}
+}
 
 func TestMirrorReviewUsesSyncComparisonWithoutWriting(t *testing.T) {
 	clearSession()

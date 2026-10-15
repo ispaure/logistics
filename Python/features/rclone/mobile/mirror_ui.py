@@ -119,7 +119,11 @@ class MirrorUI(TransferReviewUI):
         store = self.mirror_store()
         box = toga.Box(style=Pack(direction=COLUMN, margin=12))
         box.add(toga.Label('Transfer details', style=Pack(font_size=22)))
-        box.add(toga.Label('Pull: remote → device · Push: device → remote', style=Pack(font_size=12, margin_bottom=8)))
+        endpoints = getattr(self, 'transfer_endpoints', None)
+        if endpoints:
+            source, destination = endpoints
+            box.add(toga.Label(import_hint(f'From: {source}\nTo: {destination}'),
+                               style=Pack(font_size=12, margin_bottom=8)))
         self.transfer_progress = toga.ProgressBar(max=100, value=100 if getattr(self, 'transfer_complete', False) else 0, style=Pack(height=12))
         self.transfer_notice = toga.Label(import_hint(store.error or getattr(self, 'transfer_message', 'Writing and ordinary reading can continue during a transfer.')))
         box.add(self.transfer_progress)
@@ -260,13 +264,14 @@ class MirrorUI(TransferReviewUI):
         else:
             self.cloud_status.value = 'No local copy exists. Choose a folder in Files and Pull first.'
 
-    async def run_mirror_work(self, work, operation):
+    async def run_mirror_work(self, work, operation, *, source=None, destination=None):
         if getattr(self, 'transfer_busy', False):
             return False
         if not await self.mirror_connection_ready():
             self.show_transfers(present=self.native_host.state.destination == 'files')
             return False
         client, generation = self.cloud_client, self.cloud_client.generation
+        self.transfer_endpoints = (source, destination) if source is not None and destination is not None else None
         self.transfer_busy = True
         self.transfer_notification = True
         self.transfer_complete = False

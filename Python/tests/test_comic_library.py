@@ -425,6 +425,47 @@ class WindowTests(ComicFixture, QtTestCase):
         self.assertFalse(editor.editors['Writer'].property('mixedValue'))
         editor.reject()
 
+    def test_bulk_apply_persists_every_editable_field_from_user_input(self):
+        from commonUtils.ui import pyside as qt
+        from PySide6.QtTest import QTest
+        from features.comics.ui.metadata_editor import MetadataEditor
+        self.archive()
+        second = self.path.with_name('second.cbz')
+        second.write_bytes(self.path.read_bytes())
+        ComicDocument(second).save({
+            field: '3' if field in ComicInfoXML.INTEGER_FIELDS else
+            ComicInfoXML.ENUMS[field][0] if field in ComicInfoXML.ENUMS else 'Existing ' + field
+            for field in ComicInfoXML.FIELDS if field != 'PageCount'})
+        editor = MetadataEditor([self.path, second])
+        editor.show()
+        self.wait_for(editor)
+        self.assertTrue(all(entry.mixed for entry in editor.tabs.state.fields.values()))
+        expected = {}
+        for field, control in editor.editors.items():
+            with self.subTest(field=field):
+                if field in ComicInfoXML.ENUMS or field == 'LanguageISO':
+                    value = 'fr' if field == 'LanguageISO' else ComicInfoXML.ENUMS[field][-1]
+                    control.setCurrentIndex(control.findData(value))
+                else:
+                    value = '7' if field in ComicInfoXML.INTEGER_FIELDS else (
+                        '1A' if field in ('Number', 'AlternateNumber') else 'New ' + field)
+                    widget = control.lineEdit() if isinstance(control, (qt.QAbstractSpinBox, qt.QComboBox)) else control
+                    widget.setFocus()
+                    widget.selectAll()
+                    QTest.keyClicks(widget, value)
+                self.assertEqual(editor._changes(), {field: value})
+                QTest.mouseClick(editor.apply_button, qt.Qt.MouseButton.LeftButton)
+                self.wait_for(editor)
+                self.assertIsNone(editor.last_save_error)
+                self.assertEqual(editor._changes(), {})
+                expected[field] = value
+                for path in (self.path, second):
+                    document = ComicDocument(path)
+                    self.assertEqual({name: document.info.get_field(name) for name in expected}, expected)
+                    with zipfile.ZipFile(path) as archive:
+                        self.assertEqual(archive.read('01.png'), b'original image bytes')
+        editor.reject()
+
 
     def test_explicit_clear_mixed_field_and_cancel_discard_pending_changes(self):
         from commonUtils.ui import pyside as qt

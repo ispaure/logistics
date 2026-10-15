@@ -276,4 +276,4 @@ class TransferReviewUI:
         work = lambda client, cancel, progress: store.execute_review(job, client, push=push, new=key is None, options=options,
             cancelled=cancel, progress=progress)
         operation = 'push' if push else 'pull'
-        return await self.run_mirror_work(work, operation)
+        return await self.run_mirror_work(work, operation, source=request.source, destination=request.destination)

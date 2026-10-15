@@ -99,13 +99,8 @@ def scanner(binary, source, destination, config_path, options=TransferOptions(),
         trees = []
         for target in (src, dst):
             chunks = []
-            size = 0
             def inventory(line):
-                nonlocal size
                 chunks.append(line)
-                size += len(line)
-                if size > 32 * 1024 * 1024:
-                    raise ValueError('Comparison inventory exceeds its memory limit.')
             # lsjson of a nonexistent new Local destination is an empty tree.
             if Path(target).is_absolute() and not Path(target).exists():
                 rows = []

@@ -151,6 +151,14 @@ migration and general app-data backup/reset behavior remain separate work.
 
 ## Home and document search
 
+On iPhone Duo, pages retain their full available height when the system moves
+the destination bar into a vertical rail. The rail uses the native side safe
+area; bottom-bar clearance applies only to a horizontal destination bar.
+When the Duo is partially open with a vertical fold, Home aligns its action and
+Recent/Your spaces columns with the physical center seam, including when the
+navigation rail makes the available content area asymmetric. Fully opening the
+device restores the ordinary responsive layout.
+
 Home shows **Your workspace**, with a **Continue** card for the selected document,
 **New document** and **Open file…**. Recent lists up to three other ordinary
 files; Folder Hub and Books & Comics remain available below. Wider windows put
@@ -353,6 +361,10 @@ scroll position inside a chapter. **Bookmark** / **Unbookmark** toggles that
 chapter/page; the bookmark selector returns to saved positions. Comic pages use
 natural filename order. Right-to-left manga metadata is identified; single-page
 Previous/Next controls still refer to reading-order positions.
+Comic layout defaults to **auto**: two portrait pages when the reading area is
+wider than tall, otherwise one. Right-to-left metadata places the earlier page on
+the right and reverses swipe direction. Existing Single/Double choices can be
+changed under **Appearance → Comic page layout**.
 In the comic reader, horizontal swipes turn pages in both normal and fullscreen
 views, including swipes from the screen edge. They do not navigate Back. Zoomed
 pages use dragging to pan; fit the page to resume swipe paging. Use the visible
@@ -749,6 +761,8 @@ The file browser keeps your current folder, selection, list/tile mode, search, s
 history when you visit Documents or Settings. Local and remote browsers give most
 of the screen to the listing. Tap a local file to open it, or a folder to browse
 it. Search stays visible; **Sort** reveals sorting and list/tile options. The
+**↑ Parent folder** control beside the folder status goes up one level in local
+and remote browsing on iOS and Android, stopping at the current storage root.
 **•••** beside an item selects that item and opens its commands without opening
 its contents. Rename, Move, New folder and archive-password entry have focused
 screens. **Details** shows metadata and bounded previews.
@@ -786,6 +800,13 @@ showing and hiding controls; zoomed pages retain bounded pan and zoom behavior.
 Fullscreen reclaims the navigation area on both platforms, including Android's
 title bar. Transfer banners appear with reading controls and stay hidden during
 immersive comic reading; this does not pause transfers in the background.
+
+In fullscreen comics on iOS and Android, hold a thumb on the page for about
+400 ms to show a 2.5× magnifying bubble. Keep holding and drag to inspect another
+area; release to dismiss. The page stays still while the bubble is open. A second
+finger cancels the bubble so pinch zoom remains available. The bubble is disabled
+when reading controls are visible and is cleared on page changes or leaving the
+reader. It works on single pages and spreads, including Local/LocalCrypt comics.
 
 Comic pages use native pinch zoom and panning on iOS and Android. Fit page resets
 zoom; swipe left for the next page and right for the previous page at fit size.
@@ -874,7 +895,8 @@ snapshots. Transfers use rclone's normal incremental comparison. LocalCrypt sync
 ciphertext to/from the backing scope; a readable Local copy of a crypt remote uses
 rclone's crypt filesystem for automatic encryption/decryption.
 
-**Folder Hub → Transfers** opens **Transfer details**: live progress, completed/known
+**Folder Hub → Transfers** opens **Transfer details**: **From** and **To** folders
+for the current or most recent transfer, live progress, completed/known
 file counts and transferred/known megabytes (MB), cancellation, active review, and completion or error
 messages, wrapped to fit the phone screen. It does not list remotes or offer folder selection. The transfer banner
 also opens these details; the remote browser reflects the same progress. If a
@@ -1306,7 +1328,10 @@ close/action controls for accessibility.
 
 ### Compact mobile control icons
 
-Reader Previous/Next page controls use left/right chevrons. File-browser history
+Reader Previous/Next page controls use left/right chevrons. Manga reverses their
+positions and directions: Next points left and Previous points right. Comic
+controls include a page slider between the arrows; drag and release to jump to a
+page. The slider follows the comic's reading direction. File-browser history
 uses a back chevron; **Parent folder** uses an up arrow, so moving up a directory
 remains distinct from leaving a screen. Browser result paging and editor Find
 Previous/Next match controls also use chevrons. Reading Contents uses a list icon,

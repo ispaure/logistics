@@ -144,6 +144,7 @@ class HubUI:
             style=Pack(direction=ROW))
         if active is None:
             action_button(self.home_actions.children[1])
+        self.home_content = box
         box.add(self.home_actions)
         recent = self.recent_items(excluding=[active.identity] if active else [])[:3]
         recent_box = toga.Box(style=Pack(direction=COLUMN))
@@ -168,7 +169,32 @@ class HubUI:
         self.home_panels = PanelGrid([recent_box, spaces], self.main_window.size.width, maximum_columns=2)
         box.add(self.home_panels)
         self.register_transfer_status(box)
+        self.reflow_home()
         return toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
+
+    def reflow_home(self):
+        from .fold_layout import seam_fraction
+        seam = seam_fraction(self, self.home_content)
+        paired = seam is not None
+        self.home_panels.minimum_columns = 2 if paired else 1
+        self.home_panels.reflow(self.main_window.size.width)
+        # Both rows use the same physical seam; half the gutter lies on each side.
+        width = self.home_content.layout.content_width
+        for row, gap in ((self.home_actions, 8), (self.home_panels.children[0], 10)):
+            sizes = [None] * len(row.children)
+            if paired and width and len(row.children) == 2:
+                left = max(1, width * seam - gap / 2)
+                sizes = [left, max(1, width - left - gap)]
+            for child, size in zip(row.children, sizes):
+                flex = 1 if size is None else 0
+                if child.style.flex != flex:
+                    child.style.flex = flex
+                if size is None:
+                    from toga.style.pack import NONE
+                    if child.style.width != NONE:
+                        del child.style.width
+                elif child.style.width != size:
+                    child.style.width = size
 
     def build_documents_hub(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
@@ -204,7 +230,7 @@ class HubUI:
                     section.add(self.session_panel(session, close=True, summary=summary, show_kind=False))
             box.add(section)
         if not sessions:
-            box.add(toga.Label('No open documents. Open a file or create a document to get started.',
+            box.add(toga.Label('No open documents.\nOpen a file or create a document\nto get started.',
                                style=Pack(margin_top=8, margin_bottom=16)))
         recent = self.recent_items(excluding=identities)
         if recent:
