@@ -53,7 +53,7 @@ async def exercise_navigation(app):
             host.activate(destination)
             await asyncio.sleep(.1)
             assert host.state.destination == destination
-            assert host.root.current_tab.text.lower() == destination
+            assert host.root.current_tab.text == host.labels[host.destinations.index(destination)]
         assert editor.value == 'Native navigation draft'
         if get_os() is OS.ANDROID:
             assert_navigation_contrast(host.adapter.impl.native_navigationview)
