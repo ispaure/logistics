@@ -296,3 +296,17 @@ Device logs: `Mobile/logs/device-*.log`. Release logs:
 `Mobile/build/testflight/<number>/logs/`. Xcode: Report navigator. Source checks
 and host tests are described in [Mobile/README.md](../../Mobile/README.md#host-validation);
 passing them does not replace simulator and physical-device testing.
+
+
+## Android deploy launcher
+
+For a normal Android app, `Mobile/deploy_android.command` stages current Logistics
+and commonUtils sources and refreshes Briefcase before each build. It rebuilds
+both bridge ABIs, resolves the SDK and cached JDK, then installs the debug APK with
+`adb install -r` and launches the normal activity. The normal Briefcase build
+restores its app entry point even if the generated project last ran native tests.
+An unauthorized/missing device or failed upgrade stops the workflow; it never
+uninstalls or clears app data. Multiple ready devices require a selection or
+`--device SERIAL`. Use `--build-only` to stop after creating the APK. See
+[the launcher instructions](../../Mobile/README.md#double-click-android-deployment)
+for prerequisites and log locations.

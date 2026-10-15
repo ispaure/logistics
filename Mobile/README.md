@@ -18,6 +18,25 @@ Qt application or install its dependency list.
 See the [user guide](../Python/logisticsmobile/user_docs/README.md) and
 [architecture and validation guide](../docs/developer/mobile-preparation.md).
 
+## Double-click Android deployment
+
+Connect and authorize an Android device with USB debugging, or start an emulator,
+then double-click `deploy_android.command`. It stages the current local Logistics
+and tracked commonUtils sources (including uncommitted edits), updates the normal
+Briefcase project, rebuilds the native bridge and APK, installs in place and opens
+the app. If several devices are connected it asks which one to update.
+
+Briefcase provisions its Android SDK/JDK during setup; the helper also recognizes
+`ANDROID_HOME` / `ANDROID_SDK_ROOT` and `BRIEFCASE_HOME`. Go and the mobile Python
+environment are required as for iOS. The first Android build may download large
+SDK/NDK dependencies. This is a local debug build, not Play Store distribution.
+Signature or version mismatches stop installation; it never uninstalls the app.
+
+Optional Terminal usage: `Mobile/deploy_android.command --device SERIAL` or
+`Mobile/deploy_android.command --build-only`. Build/install logs are under
+`Mobile/logs/android-*.log`. It builds local sources; it does not pull from GitHub.
+New Logistics modules still need registration in the mobile source manifest.
+
 ## Double-click TestFlight deployment
 
 On the configured Mac, double-click `deploy_ios_testflight.command` beside

@@ -52,7 +52,10 @@ def android():
     sdk = Path(os.environ.get('ANDROID_HOME') or os.environ['ANDROID_SDK_ROOT'])
     ndk = sdk / 'ndk' / '27.2.12479018'
     if not ndk.is_dir():
-        manager = sdk / 'cmdline-tools/latest/bin/sdkmanager'
+        managers = [sdk / 'cmdline-tools/latest/bin/sdkmanager', *sorted(sdk.glob('cmdline-tools/*/bin/sdkmanager'), reverse=True)]
+        manager = next((path for path in managers if path.is_file()), None)
+        if manager is None:
+            raise ValueError('Android SDK command-line tools are required to install the NDK.')
         run(str(manager), 'ndk;27.2.12479018')
     host = 'linux-x86_64' if platform.system() == 'Linux' else 'darwin-x86_64'
     tools = ndk / 'toolchains/llvm/prebuilt' / host / 'bin'
