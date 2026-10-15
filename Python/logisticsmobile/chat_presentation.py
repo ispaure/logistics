@@ -117,3 +117,10 @@ if (follow) bottom();
 latest.hidden = nearBottom();
 return true;
 })()'''
+
+
+def navigation_clearance(viewport_top, viewport_bottom, bar_top, bar_height):
+    """Keep the composer twelve points above a visible bar in its viewport."""
+    if bar_height <= 0 or bar_top >= viewport_bottom or bar_top + bar_height <= viewport_top:
+        return 12
+    return max(12, int(viewport_bottom - max(viewport_top, bar_top)) + 12)
