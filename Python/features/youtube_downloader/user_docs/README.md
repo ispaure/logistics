@@ -60,3 +60,9 @@ inside the selected local folder; paths that escape it are rejected. Download
 history lists prevent repeated completed downloads. They are state files, not
 copies of the media. Remote season/config transfers use sync and can remove
 extra destination files; review the selected credential and destination first.
+
+GUI Push and Pull actions show a detailed rclone review before transferring,
+including additions, replacements and deletions. You can explicitly proceed
+without the full review while a comparison is still running. Confirmation does
+not bypass required credential or encrypted-file checks. Season-folder Pushes
+review each destination separately.

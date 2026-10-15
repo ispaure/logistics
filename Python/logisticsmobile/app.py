@@ -11,23 +11,23 @@ from .preferences import Preferences
 from .preview import markdown_preview
 from .reader_sessions import ReaderWorkspace
 from .chat_ui import ChatUI
-from .cloud_ui import CloudUI
+from features.rclone.mobile.cloud_ui import CloudUI
 from commonUtils.ui.native.navigation import NativeNavigationHost
 from commonUtils.ui.native.routes import Routes
 from .navigation import DESTINATION_ITEMS
 from .workspace import Workspace, MAX_SESSIONS
-from .mirror_ui import MirrorUI
+from features.rclone.mobile.mirror_ui import MirrorUI
 from .editors import TextEditorView
 from .workspace_navigation import WorkspaceNavigation as AdaptiveWorkspace
-from .pull_jobs_ui import PullJobsUI
 from .locations_ui import LocationsUI
 from .folder_hub_ui import FolderHubUI
 from .hub_ui import HubUI, text_document_kind
+from .storage_ui import StorageUI
 
 _active_hosts = weakref.WeakValueDictionary()
 
 
-class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, ReaderWorkspace, ChatUI, CloudUI, toga.App):
+class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, ReaderWorkspace, ChatUI, CloudUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def __init__(self, *args, **kwargs):
@@ -52,6 +52,9 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             memory = getattr(previous_host, 'memory_pressure', None)
             if memory is not None:
                 memory.dispose()
+            privacy = getattr(previous_host, 'screen_privacy', None)
+            if privacy is not None:
+                privacy.dispose()
             previous_host.active_host = False
             for session in previous_host.workspace.sessions.values():
                 previous_host.workspace.invalidate(session.id)
@@ -66,6 +69,8 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         _active_hosts[host_identity] = self
         workspace_root = getattr(self, 'workspace_root', root)
         self.preferences = Preferences(workspace_root)
+        from .appearance import configure_android_eink
+        configure_android_eink(self)
         self.store = DocumentStore(root / 'Documents')
         from .recent_documents import RecentDocuments
         self.recent_documents = RecentDocuments(workspace_root)
@@ -117,6 +122,8 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         self.show_home()
         self.save_workspace(capture=False)
         self.main_window.show()
+        from .screen_privacy import ScreenPrivacy
+        self.screen_privacy = ScreenPrivacy(self)
         self.native_host.install(self.main_window)
         from .navigation import install_folder_hub_icon, install_apple_selection
         install_folder_hub_icon(self.native_host)
@@ -144,6 +151,8 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
     def select_destination(self, destination):
         if not self.checkpoint():
             return False
+        if destination != 'files':
+            self.retire_private_comic_batch()
         if destination != self.native_host.state.destination:
             self.mark_navigation()
         self.save_workspace()
@@ -178,6 +187,9 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
 
     def route_changed(self, body):
         self.body = body
+        batch = getattr(self, 'private_comic_batch', None)
+        if batch is not None and batch.view is not None and batch.view not in body.children:
+            self.retire_private_comic_batch()
         # UIKit Back/swipe callbacks also need to restore the retained toolbar.
         self.loop.call_soon(self.adaptive.render)
         private = getattr(self, 'private_sessions', None)
@@ -207,6 +219,10 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         refresh_appearance(self)
 
     def show_view(self, view, *, checkpoint=True, destination=None, route=None, title='', root=False):
+        self.retire_private_comic_batch(view=view)
+        privacy = getattr(self, 'screen_privacy', None)
+        if privacy is not None:
+            privacy.refresh()
         if checkpoint and not self.checkpoint():
             return False
         self.mark_navigation()
@@ -222,10 +238,14 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             self.adaptive.present(view, route=route, title=title)
             from .reader_chrome import sync_comic_chrome
             sync_comic_chrome(self, self.body)
+            if privacy is not None:
+                privacy.refresh()
             return True
         self.routes.show(view, destination=destination, route=route, title=title, root=root)
         if root and target == 'documents':
             self.adaptive.show_list()
+        if privacy is not None:
+            privacy.refresh()
         return True
 
     def show_home(self, widget=None, **kwargs):
@@ -285,9 +305,9 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         box = toga.Box(style=Pack(direction=COLUMN, margin=16, flex=1))
         box.add(toga.Label('Document unavailable', style=Pack(font_size=18)))
         box.add(toga.Label('Its stored data could not be opened.\nExisting files have been preserved.'))
-        box.add(toga.Button('Try again', on_press=self.session_opener(key), style=Pack(height=44)))
-        box.add(toga.Button('Remove from open documents', on_press=self.session_closer(key), style=Pack(height=44)))
-        box.add(toga.Button('All documents', on_press=self.show_documents_hub, style=Pack(height=44)))
+        box.add(toga.Button('Try again', on_press=self.session_opener(key), style=Pack(height=48)))
+        box.add(toga.Button('Remove from open documents', on_press=self.session_closer(key), style=Pack(height=48)))
+        box.add(toga.Button('All documents', on_press=self.show_documents_hub, style=Pack(height=48)))
         self.show_view(box, destination='documents', route='unavailable:' + key, title='Unavailable document')
 
     def session_closer(self, key):
@@ -303,18 +323,18 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         if owner is None or not owner.document.modified:
             return self.close_session(key)
         box = toga.Box(style=Pack(direction=COLUMN, margin=16, flex=1))
-        from .cloud_ui import import_hint
+        from features.rclone.mobile.messages import import_hint
         box.add(toga.Label(import_hint('Close ' + owner.document.name), style=Pack(font_size=18)))
         box.add(toga.Label('Choose what to do with\nyour unsaved changes.', style=Pack(margin_bottom=12)))
         def choose(choice):
             def action(widget=None, **kwargs):
                 self.close_session(key, choice=choice)
             return action
-        box.add(toga.Button('Save and close', on_press=choose('save'), style=Pack(height=44)))
+        box.add(toga.Button('Save and close', on_press=choose('save'), style=Pack(height=48)))
         if not getattr(owner.document, 'private', False):
-            box.add(toga.Button('Keep draft and close', on_press=choose('keep'), style=Pack(height=44)))
-        box.add(toga.Button('Discard changes and close', on_press=choose('discard'), style=Pack(height=44)))
-        box.add(toga.Button('Cancel', on_press=lambda widget, **kw: self.cancel_close_session(key), style=Pack(height=44)))
+            box.add(toga.Button('Keep draft and close', on_press=choose('keep'), style=Pack(height=48)))
+        box.add(toga.Button('Discard changes and close', on_press=choose('discard'), style=Pack(height=48)))
+        box.add(toga.Button('Cancel', on_press=lambda widget, **kw: self.cancel_close_session(key), style=Pack(height=48)))
         self.close_notice = toga.Label('', style=Pack(margin_top=8))
         box.add(self.close_notice)
         return self.show_view(box, checkpoint=False, route='close:' + key, destination='documents', title='Close document')
@@ -414,55 +434,71 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         for title, action in owner.actions.actions:
             def command(widget=None, target=action, **kwargs):
                 owner.actions.invoke(target)
-            box.add(toga.Button(title, on_press=command, style=Pack(height=44)))
+            box.add(toga.Button(title, on_press=command, style=Pack(height=48)))
         self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), route='actions', title='Document actions')
 
     def show_settings(self, widget=None, **kwargs):
         from .hub_ui import heading
+        from .settings_ui import switch_row, build_information
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         box.add(heading('App'))
         self.document_cards_choice = toga.Switch('Document card overview',
-            value=self.preferences.values['document_card_overview'] == 'true', style=Pack(height=44))
-        box.add(self.document_cards_choice)
-        box.add(toga.Label('Show open documents as preview cards.\nTurn off to use the grouped list.', style=Pack(font_size=12)))
-        self.font_choice = toga.Selection(items=['12', '14', '16', '18', '20', '24', '28', '32'],
-            value=self.preferences.values['font_size'], style=Pack(height=44))
+            value=self.preferences.values['document_card_overview'] == 'true', style=Pack(height=48))
+        box.add(switch_row(self, 'Document card overview', self.document_cards_choice,
+            'Show open documents as preview cards. Turn off to use the grouped list.'))
+        self.font_choice = toga.Selection(items=[str(size) for size in range(12, 33)],
+            value=self.preferences.values['font_size'], style=Pack(height=48))
         self.restore_choice = toga.Switch('Restore last document',
-            value=self.preferences.values['restore_last_document'] == 'true', style=Pack(height=44))
-        self.clear_documents_choice = toga.Switch('Clear documents with no pending changes on restart',
+            value=self.preferences.values['restore_last_document'] == 'true', style=Pack(height=48))
+        self.clear_documents_choice = toga.Switch('Clear on restart',
             value=self.preferences.values['clear_unmodified_documents_on_restart'] == 'true',
-            style=Pack(height=44))
+            style=Pack(height=48))
         self.settings_status = toga.Label(self.preferences.error, style=Pack(margin_top=12))
-        box.add(self.restore_choice)
-        # A wrapping label keeps the full preference readable on narrow phones.
-        self.clear_documents_choice.text = 'Clear on restart'
-        box.add(toga.Label('Clear documents with no pending\nchanges on restart'))
-        box.add(self.clear_documents_choice)
-        box.add(toga.Label('Closes saved items in Open documents.\nStored documents and unsaved drafts are kept.',
-                           style=Pack(font_size=12)))
+        box.add(switch_row(self, 'Restore last document', self.restore_choice,
+            'Resume the last active document when the app starts, including ordinary EPUB and comic readers. '
+            'Private documents are never restored.'))
+        box.add(switch_row(self, 'Close saved documents on restart', self.clear_documents_choice,
+            'Closes documents with no pending changes in Open documents when the app restarts. '
+            'Stored documents, reading progress and unsaved drafts are kept.'))
+        if type(self._impl).__module__.startswith('toga_android.'):
+            self.android_eink_choice = toga.Switch('High contrast / E Ink',
+                value=self.preferences.values['android_eink'] == 'true', style=Pack(height=48))
+            box.add(switch_row(self, 'High contrast / E Ink', self.android_eink_choice,
+                'Use black text on white, strong borders and simpler controls. Overrides dark mode and reader colors '
+                'without changing images or files. Saved immediately. No BOOX hardware refresh control.'))
+            self.android_eink_choice.on_change = self.change_android_eink
         box.add(heading('Text & Markdown'))
         box.add(toga.Label('Editor and preview font size'))
         box.add(self.font_choice)
         box.add(heading('Books & Comics'))
         box.add(toga.Label('Use Appearance in an open reader\nto adjust its pages.', style=Pack(font_size=12)))
         box.add(heading('LM Chat'))
-        box.add(toga.Button('Server & generation settings…', on_press=self.show_chat_configuration, style=Pack(height=44)))
+        box.add(toga.Button('Server & generation settings…', on_press=self.show_chat_configuration, style=Pack(height=48)))
         box.add(heading('Folder Hub'))
+        if type(self._impl).__module__.startswith('toga_android.'):
+            box.add(toga.Button('Local / LocalCrypt location…', on_press=self.show_collection_storage, style=Pack(height=48)))
         self.show_legacy_choice = toga.Switch('Show Legacy',
             value=getattr(self, 'show_legacy_session', self.preferences.values['show_legacy'] == 'true'),
-            on_change=self.change_show_legacy, style=Pack(height=44))
-        if type(self._impl).__module__.startswith('toga_iOS.'):
-            box.add(self.show_legacy_choice)
-        box.add(toga.Button('Remote connections…', on_press=self.show_cloud_connections, style=Pack(height=44)))
+            on_change=self.change_show_legacy, style=Pack(height=48))
+        box.add(switch_row(self, 'Show Legacy', self.show_legacy_choice,
+            'Show Legacy- folders in Folder Hub, file browsers and library shortcuts, '
+            'and credential choices whose names start with Legacy. Save preferences to keep this choice after restarting.'))
+        box.add(toga.Button('rclone / Remote connections…', on_press=self.show_cloud_connections, style=Pack(height=48)))
         box.add(heading('Apply preferences'))
-        box.add(toga.Button('Save preferences', on_press=self.save_preferences, style=Pack(height=44)))
-        box.add(toga.Button('Reload preferences', on_press=self.reload_preferences, style=Pack(height=44)))
+        box.add(toga.Button('Save preferences', on_press=self.save_preferences, style=Pack(height=48)))
+        box.add(toga.Button('Reload preferences', on_press=self.reload_preferences, style=Pack(height=48)))
         box.add(self.settings_status)
         if self.scene_manager.supported:
-            box.add(toga.Button('New window', on_press=self.scene_manager.new_window, style=Pack(height=44)))
+            box.add(toga.Button('New window', on_press=self.scene_manager.new_window, style=Pack(height=48)))
             if self.window_id != 'primary':
                 box.add(toga.Button('Close window', on_press=lambda widget, **kw:
-                    self.scene_manager.close_window(self), style=Pack(height=44)))
+                    self.scene_manager.close_window(self), style=Pack(height=48)))
+        if type(self._impl).__module__.startswith('toga_android.'):
+            box.add(toga.Button('Developer settings…', on_press=self.open_android_developer_settings, style=Pack(height=48)))
+        box.add(heading('About'))
+        self.build_version_label = toga.Label(build_information(self.version),
+            style=Pack(font_size=12, color='#808080'))
+        box.add(self.build_version_label)
         self.document_cards_choice.on_change = self.change_document_overview
         self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), destination='settings', root=True)
 
@@ -490,6 +526,20 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         self.refresh_document_overview()
         self.settings_status.text = 'Document view saved on this device.'
 
+    def change_android_eink(self, widget, **kwargs):
+        try:
+            self.preferences.save(android_eink='true' if widget.value else 'false')
+        except (OSError, ValueError) as error:
+            widget.on_change = None
+            widget.value = self.preferences.values['android_eink'] == 'true'
+            widget.on_change = self.change_android_eink
+            self.settings_status.text = str(error)
+            return
+        from .appearance import configure_android_eink
+        configure_android_eink(self)
+        self.refresh_native_theme()
+        self.settings_status.text = 'High contrast / E Ink saved on this device.'
+
     def save_preferences(self, widget=None, **kwargs):
         try:
             self.preferences.save(font_size=self.font_choice.value,
@@ -505,6 +555,10 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
 
     def reload_preferences(self, widget=None, **kwargs):
         self.preferences.reload()
+        from .appearance import configure_android_eink
+        configure_android_eink(self)
+        if type(self._impl).__module__.startswith('toga_android.'):
+            self.refresh_native_theme()
         self.show_legacy_session = self.preferences.values['show_legacy'] == 'true'
         self.refresh_folder_visibility()
         self.editor.style.font_size = int(self.preferences.values['font_size'])
@@ -540,7 +594,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
                 self.workspace.activate(owner.session.id)
                 self.show_documents()
         self.preview_box = toga.Box(children=[
-            toga.Button('Back to editor', on_press=back_to_editor, style=Pack(height=44)),
+            toga.Button('Back to editor', on_press=back_to_editor, style=Pack(height=48)),
             self.preview], style=Pack(direction=COLUMN, flex=1))
         self.show_view(self.preview_box, route='preview', title='Markdown preview')
         self.save_workspace()
@@ -660,7 +714,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             return
         self.current.text = widget.value
         if self.checkpoint():
-            self.status.text = 'Draft preserved' if self.current.modified else 'Saved'
+            self.editor_view.refresh_status()
 
     def checkpoint(self, *args, **kwargs):
         if not self.active_host:
@@ -685,8 +739,9 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             self.current.name = document_name(self.name.value)
             self.store.save(self.current)
             self.refresh_documents()
-            self.status.text = 'Saved'
+            self.editor_view.refresh_status()
         except (OSError, ValueError) as error:
+            self.editor_view.refresh_status()
             self.status.text = str(error)
 
     def save_copy(self, widget=None, **kwargs):
@@ -757,6 +812,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             origin.export_button.enabled = True
 
     def exit_app(self, app, **kwargs):
+        self.retire_private_comic_batch()
         if getattr(self, 'cloud_busy', False):
             self.cancel_cloud()
             return False
@@ -772,6 +828,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         saved = self.checkpoint()
         if saved:
             self.memory_pressure.dispose()
+            self.screen_privacy.dispose()
         return saved
 
     def native_configuration_changed(self):
@@ -781,6 +838,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
     def release_disposable_resources(self):
         if not self.active_host:
             return
+        self.retire_private_comic_batch()
         private = getattr(self, 'private_sessions', None)
         if private is not None:
             private.suspend()
@@ -799,12 +857,12 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             self.private_sessions = PrivateSessions(self)
         return self.private_sessions
 
-    async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, destination='documents', **kwargs):
+    async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, destination='documents', privacy_gate=None, **kwargs):
         copies = copies or self.crypt_copies
         key = key if key is not None else self.crypt_labels.get(self.crypt_selector.value)
         if key is None:
             return False
-        return await self.provider_sessions().open(copies, key, prepared=prepared, destination=destination)
+        return await self.provider_sessions().open(copies, key, prepared=prepared, destination=destination, privacy_gate=privacy_gate)
 
     def private_dirty(self):
         return self.provider_sessions().dirty()
@@ -861,9 +919,9 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
                 await owner.save_crypt()
             if self.provider_sessions().close(owner.session.id):
                 self.show_documents_hub()
-        box.add(toga.Button('Save and close', on_press=save, style=Pack(height=44)))
-        box.add(toga.Button('Discard and close', on_press=owner.discard_crypt, style=Pack(height=44)))
-        box.add(toga.Button('Cancel', on_press=owner.resume_crypt, style=Pack(height=44)))
+        box.add(toga.Button('Save and close', on_press=save, style=Pack(height=48)))
+        box.add(toga.Button('Discard and close', on_press=owner.discard_crypt, style=Pack(height=48)))
+        box.add(toga.Button('Cancel', on_press=owner.resume_crypt, style=Pack(height=48)))
         self.show_view(box, destination='documents', route='private-close:' + owner.session.id, title='Close private document')
 
 

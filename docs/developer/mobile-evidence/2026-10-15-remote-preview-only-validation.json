@@ -1,0 +1,63 @@
+{
+  "success": true,
+  "source": {
+    "commonUtils_commit": "fd1df652774c6da76e6676c4a51f9e0e941022a3",
+    "commonUtils_dirty": true,
+    "logistics_commit": "2253c4ee058ef54f5c2507269a94cf65317cc65f",
+    "dirty": true,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm",
+      "rclone"
+    ],
+    "logistics_committed_at": "2026-10-15T03:37:15-04:00",
+    "source_sha256": "a569e7d39ca690ec52fa90bd20d53789a84ca3e92207f68e694a8f5a935c0a63"
+  },
+  "bridge_sources_sha256": "09d24123698553bc85d419bc884576f9f4105331baa89ccdc0f0e3b928cbe49f",
+  "targets": {
+    "desktop": "macOS native Qt",
+    "iphone": "iOS 26.5 simulator",
+    "ipad": "iOS 27.0 simulator",
+    "android": "Android 15 arm64 emulator"
+  },
+  "native_cases_per_mobile_target": 31,
+  "desktop_tests": 8,
+  "mobile_host_tests": 252,
+  "additional_validation": [
+    "Go test ./...",
+    "Go test -race ./...",
+    "Python/native remote reader integration",
+    "Existing native LocalCrypt text/metadata round trip and large-archive move/preview compatibility",
+    "Affected legacy catalog/UI tests after removing writer helpers",
+    "Ruff and git diff --check"
+  ],
+  "scope": "Synthetic local, memory and crypt backends. Native macOS Qt; Android 15 emulator and iPhone/iPad simulators. No user accounts, live cloud services, physical devices or physical BOOX tested.",
+  "review": "Final code/UI audit removed disabled Save and Save As/Metadata menu labels from remote mobile readers. Native checks now inspect main reader, overflow tools and menu labels for mutation/download controls. Legacy offline catalogs and managed transfers are intentionally retained.",
+  "second_review": {
+    "desktop_reader_ux_tests": 7,
+    "result": "Passed. Hide metadata actions/buttons for remote EPUB/comic readers; restore local controls. Re-audited standalone-download references and credential-retirement browser cleanup. Mobile code and the native payload are unchanged from the final native runs."
+  },
+  "desktop_reader_ux_tests": 7,
+  "end_to_end_review": {
+    "result": "Passed on final source",
+    "fixes": [
+      "Restore unselected mobile listings after failure without losing the placeholder; clear stale listings after in-flight credential replacement",
+      "Add manual-copy explanation to desktop direct-read failures",
+      "Limit mobile remote menus to available file-type commands",
+      "Use Text instead of Edit when returning from a remote Markdown preview"
+    ],
+    "coverage": [
+      "Reader-tools/Appearance command invocation and Back navigation",
+      "Read-only Markdown preview/text switching",
+      "Unsupported and oversized files",
+      "Corrupt PNG/CBZ/EPUB and missing files",
+      "Failed navigation retains previous listing",
+      "Credential lock and replacement retire readers",
+      "No standalone download APIs, actions or persisted preview plaintext"
+    ],
+    "dialog_scope": "Error dialog requests/messages are asserted with intercepted dialog presentation; native reader/navigation widgets and document decoding execute normally."
+  }
+}

@@ -227,13 +227,7 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         )
 
         if confirmed:
-            from features.rclone.executable import ensure_rclone
-            executable_path = ensure_rclone()
-            if executable_path is None:
-                return
-            self._start(lambda report, cancelled: downloader.push_seasons(
-                self.folder, self.rclone_config_path, cancelled=cancelled,
-                executable_path=executable_path), 'Syncing seasons…')
+            downloader.push_seasons(self.folder, self.rclone_config_path, review=True)
 
     def _push_config(self):
         confirmed = ui.display_msg_box_ok_cancel(
@@ -243,7 +237,7 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         )
 
         if confirmed:
-            downloader.push_config(self.folder, self.rclone_config_path)
+            downloader.push_config(self.folder, self.rclone_config_path, review=True)
 
     def _pull_config(self):
         confirmed = ui.display_msg_box_ok_cancel(
@@ -253,4 +247,4 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         )
 
         if confirmed:
-            downloader.pull_config(self.folder, self.rclone_config_path)
+            downloader.pull_config(self.folder, self.rclone_config_path, review=True)

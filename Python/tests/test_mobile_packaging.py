@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
+import os
 from tempfile import TemporaryDirectory
 import unittest
 
@@ -14,6 +16,31 @@ spec.loader.exec_module(mobile_tools)
 
 
 class MobilePackagingTests(unittest.TestCase):
+    def test_qt_proof_packages_the_feature_owned_bridge_without_the_app(self):
+        spec = importlib.util.spec_from_file_location('qt_proof_prepare', REPO / 'Mobile/qt_proof/prepare.py')
+        prepare = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(prepare)
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = prepare.stage(root / 'payload')
+            self.assertFalse((payload / 'logisticsmobile').exists())
+            self.assertFalse((payload / 'features/rclone/api.py').exists())
+            code = '''
+import sys
+from features.rclone.mobile.cloud import CloudClient
+assert CloudClient.__module__ == 'features.rclone.mobile.cloud'
+assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile', 'config')) for name in sys.modules)
+'''
+            result = subprocess.run([sys.executable, '-c', code], cwd=root,
+                env=dict(os.environ, PYTHONPATH=str(payload)), capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_feature_adapter_dependencies_are_checked_before_building(self):
+        feature_modules = tuple(name for name in mobile_tools.DOCUMENT_MODULES
+                                if name.startswith('features/rclone/') and not name.endswith('/credential_vault.py'))
+        with self.assertRaisesRegex(ValueError, 'imports unstaged features.rclone.mobile.credential_vault'):
+            mobile_tools.validate_app_modules(REPO / 'Python/logisticsmobile', feature_modules=feature_modules)
+
     def test_app_imports_are_all_in_the_packaged_payload(self):
         mobile_tools.validate_app_modules(REPO / 'Python/logisticsmobile')
         # This omission caused a black launch screen in signed iPhone builds.
@@ -54,6 +81,10 @@ class MobilePackagingTests(unittest.TestCase):
             payload = base / 'payload'
             manifest = mobile_tools.stage(repo, payload)
             self.assertFalse(manifest['dirty'])
+            self.assertEqual(manifest['logistics_committed_at'],
+                git(repo, 'show', '-s', '--format=%cI', 'HEAD').stdout.decode().strip())
+            self.assertTrue((payload / 'services/build_version.py').is_file())
+            self.assertTrue((payload / 'logisticsmobile/settings_ui.py').is_file())
             self.assertEqual(manifest['features'], ['text', 'markdown', 'epub', 'comics', 'lm', 'rclone'])
             self.assertTrue((payload / 'logisticsmobile/app.py').is_file())
             self.assertTrue((payload / 'logisticsmobile/recent_documents.py').is_file())

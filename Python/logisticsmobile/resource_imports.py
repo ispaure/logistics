@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from commonUtils.persistence import atomic_write_json
 from .workspace import uuid
-from .pull_jobs import digest
+from services.identifiers import digest
 
 
 class ResourceImports:

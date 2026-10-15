@@ -1,21 +1,10 @@
 """Convert chapter XHTML into readable, inert Qt rich text."""
 from xml.etree import ElementTree as ET
-from html.entities import html5
-import re
-from .epub import parse_xml
+from .xhtml import chapter_document
 
 
 def chapter_html(book, path, *, foreground, spacing):
-    data = book.read(path)
-    # XHTML 1 books often refer to named entities declared in their external
-    # DTD. Resolve standard HTML names without fetching a DTD or any network URL.
-    def entity(match):
-        name = match.group(1).decode('ascii')
-        if name in ('amp', 'lt', 'gt', 'quot', 'apos') or name + ';' not in html5:
-            return match.group(0)
-        return ''.join(f'&#{ord(char)};' for char in html5[name + ';']).encode('ascii')
-    data = re.sub(rb'&([A-Za-z][A-Za-z0-9]+);', entity, data)
-    document = parse_xml(data)
+    document = chapter_document(book.read(path))
     for parent in list(document.iter()):
         for child in list(parent):
             tag = child.tag.rsplit('}', 1)[-1] if isinstance(child.tag, str) else ''

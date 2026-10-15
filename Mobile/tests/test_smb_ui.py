@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from logisticsmobile.app import LogisticsMobile
-from logisticsmobile.cloud import CloudClient
+from features.rclone.mobile.cloud import CloudClient
 
 
 class SMBConnectionTests(unittest.TestCase):

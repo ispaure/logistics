@@ -13,6 +13,7 @@ from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.resource_selection import ResourceSelection
 from commonUtils.ui.native.presentation import list_button, scroll_content
 from .adaptive_workspace import AdaptiveWorkspace
+from .files_ui import local_read_available
 from .navigation import DESTINATION_ITEMS
 
 DESTINATION_LABELS = {key: label for key, label, *_ in DESTINATION_ITEMS}
@@ -46,6 +47,24 @@ def menu_button(callback, label='Browse files'):
 def detach(widget):
     if widget.parent is not None:
         widget.parent.remove(widget)
+
+
+def mount_native_menu(app, menu, destination):
+    """All workspace menus occupy the Documents navigation-bar slot."""
+    from rubicon.objc import ObjCClass, SEL
+    adapter = app.native_host.adapter
+    controller = adapter.navigation[app.native_host.destinations.index(destination)].topViewController
+    detach(menu)
+    menu.app, menu.window = app, app.main_window
+    if not hasattr(menu, '_native_workspace_item'):
+        menu._native_workspace_item = ObjCClass('UIBarButtonItem').alloc().initWithImage(
+            ObjCClass('UIImage').systemImageNamed('line.3.horizontal'), style=0,
+            target=menu._impl.native, action=SEL('onPress:'))
+        menu._native_workspace_item.accessibilityLabel = 'Browse files'
+    item = controller.navigationItem
+    item.leftItemsSupplementBackButton = True
+    item.leftBarButtonItem = menu._native_workspace_item
+    return menu._native_workspace_item
 
 
 class WorkspaceNavigation(AdaptiveWorkspace):
@@ -111,8 +130,13 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             view._workspace_frame.folder_options = route == 'folder-options'
             self.frames.add(view._workspace_frame)
         if route == 'preview' and isinstance(view, toga.Box) and not getattr(view, '_workspace_menu', False):
-            view.insert(0, menu_button(lambda widget, **kw: self.show_browser(destination)))
+            menu = menu_button(lambda widget, **kw: self.show_browser(destination))
+            view.insert(0, menu)
+            view._workspace_menu_button = menu
             view._workspace_menu = True
+        menu = getattr(view, '_workspace_menu_button', None)
+        if menu is not None and self.app.routes.apple:
+            detach(menu)
         # Returning to a previously borrowed editor restores its single parent
         # before Routes attaches its native screen.
         for frame in list(self.frames):
@@ -147,7 +171,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         drawer = self.browser(destination)
         detach(drawer.widget)
         box = toga.Box(children=[toga.Button('Close file browser', on_press=lambda widget, **kw:
-            self.app.routes.back(), style=Pack(height=44)), drawer.widget],
+            self.app.routes.back(), style=Pack(height=48)), drawer.widget],
             style=Pack(direction=COLUMN, flex=1, margin=12))
         self.app.show_view(box, destination=destination, route='workspace-browser', title='Browse files')
         drawer.schedule_refresh()
@@ -191,7 +215,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             self.app.session_opener(current)()
             self.show_browser('documents')
         box.add(toga.Button('Browse for another file…', on_press=browse, style=Pack(height=48)))
-        box.add(toga.Button('Use one document', on_press=self.unpin, style=Pack(height=44)))
+        box.add(toga.Button('Use one document', on_press=self.unpin, style=Pack(height=48)))
         self.app.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)),
                            destination='documents', route='pair-document', title='Two documents')
 
@@ -205,6 +229,19 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             return
         self.rendering = True
         try:
+            adapter = self.app.native_host.adapter
+            if (adapter is not None and type(self.app._impl).__module__.startswith('toga_android.')
+                    and adapter.impl.native.getWidth() > 0):
+                # Retained Android roots can keep an old content minimum after
+                # changing tabs. Use the actual allocation, including rail space.
+                pixels = adapter.impl.native.getWidth()
+                if adapter.mode == 'rail':
+                    pixels -= adapter.impl.native_navigationview.getWidth()
+                width = adapter.impl.scale_out(pixels)
+                key = destination or self.app.native_host.state.destination
+                for panel in (self.app.native_host.bodies[key], self.app.routes.body(key)):
+                    if panel.style.width != width:
+                        panel.style.width = width
             self.layout_width = self.width()
             self.wide = self.layout_width >= 640
             if self.pinned is not None and self.session_view(self.pinned) is None:
@@ -224,8 +261,14 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 self.last_layout = layout
             if frame is not None:
                 frame.sync_native_header()
+            elif view is not None and self.app.routes.apple:
+                menu = getattr(view, '_workspace_menu_button', None)
+                if menu is not None:
+                    mount_native_menu(self.app, menu, destination or self.app.native_host.state.destination)
             if hasattr(self.app, 'render_chat_workspace'):
                 self.app.render_chat_workspace()
+            from .appearance import reserve_navigation
+            reserve_navigation(self.app)
         finally:
             self.rendering = False
 
@@ -251,7 +294,7 @@ class WorkspaceFrame:
         self.caption = toga.Label(destination.title(), style=Pack(flex=1, margin_top=10))
         self.header = toga.Box(children=[self.menu, self.caption], style=Pack(direction=ROW, margin_bottom=4))
         if destination == 'documents':
-            self.pair = toga.Button('Split', on_press=navigation.show_pair_picker, style=Pack(height=44))
+            self.pair = toga.Button('Split', on_press=navigation.show_pair_picker, style=Pack(height=48))
             self.header.add(self.pair)
         self.row = toga.Box(children=[self.main], style=Pack(direction=ROW, flex=1))
         if destination != 'files':
@@ -284,17 +327,12 @@ class WorkspaceFrame:
         if self.header in self.view().children:
             self.view().remove(self.header)
             self.header.remove(self.menu)
-            if hasattr(self, 'pair'):
+            if hasattr(self, 'pair') and self.pair in self.header.children:
                 self.header.remove(self.pair)
         self.menu.app, self.menu.window = app, app.main_window
         item = controller.navigationItem
         item.leftItemsSupplementBackButton = True
-        if not hasattr(self, 'native_menu'):
-            # UIKit owns geometry and hit testing. A custom Toga view retains
-            # Pack constraints that can position its touch area outside the bar.
-            self.native_menu = ObjCClass('UIBarButtonItem').alloc().initWithImage(
-                ObjCClass('UIImage').systemImageNamed('line.3.horizontal'), style=0,
-                target=self.menu._impl.native, action=SEL('onPress:'))
+        self.native_menu = mount_native_menu(app, self.menu, self.destination)
         # Folder Hub enters browsers through its folder actions. Keep the drawer
         # implementation available without mounting a menu in this destination.
         item.leftBarButtonItem = self.native_menu if self.destination != 'files' else None
@@ -304,7 +342,7 @@ class WorkspaceFrame:
                 self.native_pair = ObjCClass('UIBarButtonItem').alloc().initWithTitle(
                     'Split', style=0, target=self.pair._impl.native, action=SEL('onPress:'))
             self.native_pair.enabled = self.pair.enabled
-            item.rightBarButtonItem = self.native_pair
+            item.rightBarButtonItem = self.native_pair if self.pair.enabled else None
         self.native_menu.accessibilityLabel = (
             'Close file browser' if self.navigation.menu_open[self.destination] else 'Browse files')
 
@@ -353,12 +391,18 @@ class WorkspaceFrame:
         self.caption.text = 'Browse files' if opened else DESTINATION_LABELS[destination]
         if hasattr(self, 'pair'):
             self.pair.enabled = navigation.wide and navigation.session_view(navigation.app.workspace.active) is not None
+            if self.pair.enabled and self.pair not in self.header.children:
+                if not navigation.app.routes.apple:
+                    self.header.add(self.pair)
+            elif not self.pair.enabled and self.pair in self.header.children:
+                self.header.remove(self.pair)
         left = None
         if opened:
             left = navigation.browser(destination).widget
         elif navigation.wide and destination == 'files' and getattr(self, 'folder_options', False):
             if not hasattr(self, 'folder_master'):
-                self.folder_master = navigation.app.build_folder_picker()
+                self.folder_master = navigation.app.build_folder_picker(
+                    choices=navigation.app.folder_picker_choices)
                 # The action page already supplies the outer twelve-point inset.
                 self.folder_master.style.margin = 0
             left = self.folder_master
@@ -401,14 +445,17 @@ class FileDrawer:
         self.generation = 0
         self.task = None
         self.refresh_requested = False
-        self.storage = toga.Selection(items=['Local files'], style=Pack(height=44))
+        self.storage = toga.Selection(items=['Local files'], style=Pack(height=48))
         self.status = toga.Label('', style=Pack(font_size=12, margin_bottom=4))
         self.browser = FileBrowser(folder_visible=self.app.folder_path_visible, selected=lambda row: None, open_folder=self.open_folder,
                                    navigate=self.navigate, open_file=self.open_file, preview=False)
+        self.browser.navigation_controls.remove(self.browser.back_button)
+        self.parent_button = toga.Button('Parent folder', on_press=self.up, enabled=False, style=Pack(height=48))
+        self.breadcrumb = toga.Label('Local', style=Pack(font_size=13, flex=1))
         self.widget = toga.Box(children=[self.storage,
-            toga.Button('Up', on_press=self.up, style=Pack(height=44)), self.status,
+            toga.Box(children=[self.parent_button, self.breadcrumb], style=Pack(direction=ROW)), self.status,
             toga.ScrollContainer(horizontal=False, content=scroll_content(self.browser.widget), style=Pack(flex=1)),
-            toga.Button('Folder Hub', on_press=self.app.show_locations, style=Pack(height=44))],
+            toga.Button('Folder Hub', on_press=self.app.show_locations, style=Pack(height=48))],
             style=Pack(direction=COLUMN, flex=1))
         self.browser_widget = self.widget
         if destination == 'documents':
@@ -448,7 +495,8 @@ class FileDrawer:
                 continue
             async def browse(widget=None, selected=storage, **kwargs):
                 await self.show_main_browser(selected)
-            title = 'Browse Local Files' if storage == 'Local files' else 'Browse ' + storage
+            label = 'LocalCrypt: ' + roots[storage].remote if getattr(roots[storage], 'remote', '') else storage
+            title = 'Browse Local Files' if storage == 'Local files' else 'Browse ' + label
             self.menu_content.add(list_button(toga.Button(title, on_press=browse, style=Pack(height=48))))
         self.menu_content.add(heading('Recent'))
         self.recent_buttons = []
@@ -521,7 +569,7 @@ class FileDrawer:
 
     def available_roots(self):
         roots = {'Local files': None}
-        if not getattr(self.app, 'cloud_busy', False):
+        if local_read_available(self.app):
             roots.update(self.app.existing_crypt_locations())
             roots.update(self.app.linked_crypt_locations())
         return roots
@@ -552,7 +600,7 @@ class FileDrawer:
         finally:
             self.changing_storage = False
         try:
-            if selected != 'Local files' and self.app.cloud_busy:
+            if selected != 'Local files' and not local_read_available(self.app):
                 raise ValueError('This connection is busy. Local files remain available.')
             if scope is not None and scope[0] == selected:
                 provider = scope[1]
@@ -561,17 +609,25 @@ class FileDrawer:
                     raise ValueError('Unlock the library connection again.')
             else:
                 provider = self.app.storage_provider(selected, roots)
+            client = getattr(self.app, 'cloud_client', None)
+            credential_generation = getattr(client, 'generation', None)
             model = ResourceSelection(provider, extensions=self.extensions or ())
             folder = self.folder
             rows = await asyncio.to_thread(model.list, folder)
             if (not self.app.active_host or generation != self.generation
                     or (selected, folder) != (self.storage.value, self.folder)):
                 return False
+            if provider.private and (client is not self.app.cloud_client
+                    or credential_generation != getattr(client, 'generation', None)):
+                raise ValueError('Unlock the library connection again.')
             self.provider = provider
             self.provider_client = getattr(self.app, 'cloud_client', None)
             self.provider_generation = getattr(self.provider_client, 'generation', None)
             self.browser.set_entries(model, folder, rows, location=(selected, folder))
-            self.status.text = folder or selected
+            from textwrap import fill
+            self.breadcrumb.text = fill(folder.replace('/', ' / ') or 'Root', width=28)
+            self.parent_button.enabled = bool(folder)
+            self.status.text = ''
             if self.destination == 'documents':
                 self.refresh_menu()
                 catalog = self.app.reader_manager().catalog
@@ -606,21 +662,25 @@ class FileDrawer:
         return await self.refresh()
 
     async def open_file(self, row):
-        from .file_resources import LocalTextCopies, ManagedCopies
+        from logisticsmobile.text_resources import LocalTextCopies
+        from features.rclone.mobile.file_resources import encrypted_document
         provider = self.provider
         if provider is None or not self.app.checkpoint():
             return
         path = row['path']
         try:
             if provider.private and (self.app.cloud_client is not self.provider_client
-                    or self.app.cloud_client.generation != self.provider_generation or self.app.cloud_busy):
+                    or self.app.cloud_client.generation != self.provider_generation):
                 raise ValueError('Unlock the connection again before opening private files.')
+            if not local_read_available(self.app, private=provider.private):
+                raise ValueError('This connection is busy. Local files remain available.')
             if not provider.private and Path(path).suffix.lower() not in {'.txt', '.md', '.markdown'}:
                 await self.app.open_download(path=provider._locate(path), destination=self.destination)
             else:
                 self.app.show_cloud(present=False)
-                opened = await self.app.open_crypt(copies=ManagedCopies(provider) if provider.private else LocalTextCopies(provider),
-                                                  key=path, destination=self.destination)
+                source = encrypted_document(provider, path)
+                copies, key = source if source is not None else (LocalTextCopies(provider), path)
+                opened = await self.app.open_crypt(copies=copies, key=key, destination=self.destination)
                 if not opened:
                     self.status.text = str(self.app.cloud_status.value or 'Could not open this private file. Unlock its connection and try again.')[:300]
                     return False

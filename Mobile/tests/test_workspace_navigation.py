@@ -8,6 +8,24 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class WorkspaceNavigationTests(unittest.TestCase):
+    def test_readers_use_the_same_native_menu_slot_as_documents(self):
+        from unittest.mock import PropertyMock
+        from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
+        from commonUtils.runtime.document_access import LocalDocuments
+        folder = Path(self.directory.name) / 'fixtures'
+        folder.mkdir()
+        epub, _ = make_books(folder)
+        record = self.app.reader_manager().catalog.library_store.import_book(LocalDocuments(), epub)
+        self.app.loop.run_until_complete(self.app.open_book(record['id']))
+        owner = self.app.readers.active
+        menu = owner.library_view._workspace_menu_button
+        with patch.object(type(self.app.routes), 'apple', new_callable=PropertyMock, return_value=True):
+            self.navigation.prepare(owner.library_view, 'documents', route='reader:test')
+            self.assertNotIn(menu, owner.reader_header.children)
+            with patch('logisticsmobile.workspace_navigation.mount_native_menu') as mount:
+                self.navigation.render()
+                mount.assert_called_once_with(self.app, menu, 'documents')
+
     def setUp(self):
         self.directory = TemporaryDirectory()
         LogisticsMobile.storage_root = Path(self.directory.name)
@@ -46,6 +64,22 @@ class WorkspaceNavigationTests(unittest.TestCase):
         app.show_legacy_session = False
         self.assertTrue(app.folder_path_visible('Legacy-old'))
 
+    def test_android_legacy_toggle_filters_folders_and_credentials(self):
+        from types import SimpleNamespace
+        app = self.app
+        app.show_settings()
+        self.assertIsNotNone(app.show_legacy_choice.parent)
+        for backend in ('toga_android.app', 'toga_iOS.app'):
+            with self.subTest(backend=backend), patch.object(type(app._impl), '__module__', backend):
+                app.change_show_legacy(SimpleNamespace(value=False))
+                self.assertFalse(app.folder_path_visible('Books/Legacy-old'))
+                self.assertFalse(app.legacy_name_visible('LegacyArchive.zip', prefix='legacy'))
+                self.assertTrue(app.legacy_name_visible('MyLegacy.zip', prefix='legacy'))
+                self.assertTrue(app.folder_path_visible('Books/Legacy-file.cbz', directory=False))
+                app.change_show_legacy(SimpleNamespace(value=True))
+                self.assertTrue(app.folder_path_visible('Books/Legacy-old'))
+                self.assertTrue(app.legacy_name_visible('LegacyArchive.zip', prefix='legacy'))
+
     def test_legacy_credentials_use_prefix_without_dash_and_toggle_in_place(self):
         import json
         from types import SimpleNamespace
@@ -54,6 +88,8 @@ class WorkspaceNavigationTests(unittest.TestCase):
                     [('Personal.zip', 'Main'), ('LegacyArchive.zip', 'Old'),
                      ('legacy.zip', 'Old2'), ('MyLegacy.zip', 'Other')]]
         app.preferences.save(remote_packages=json.dumps(packages))
+        app.show_cloud(present=False)
+        app.set_loaded_remote_names(['Main', 'Old', 'Old2', 'Other'])
         app.show_locations()
         with patch.object(type(app._impl), '__module__', 'toga_iOS.app'):
             app.change_show_legacy(SimpleNamespace(value=False))
@@ -121,7 +157,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         with patch.object(app, 'cloud_client', SimpleNamespace(generation=1)):
             drawer.provider_client = app.cloud_client
             drawer.provider_generation = 1
-            with patch('logisticsmobile.file_resources.ManagedCopies', return_value=object()),                     patch.object(app, 'open_crypt', new_callable=AsyncMock, return_value=False):
+            with patch('features.rclone.mobile.file_resources.ManagedCopies', return_value=object()),                     patch.object(app, 'open_crypt', new_callable=AsyncMock, return_value=False):
                 self.assertFalse(app.loop.run_until_complete(drawer.open_file({'path': 'comic.cbz'})))
         self.assertIn('archive is damaged', drawer.status.text)
 
@@ -216,6 +252,60 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.assertFalse(self.app.loop.run_until_complete(drawer.refresh()))
         self.assertEqual(drawer.status.text, 'Connection locked')
         self.assertTrue(self.app.loop.run_until_complete(drawer.refresh()))
+
+    def test_documents_and_library_paths_read_private_files_during_transfer(self):
+        from threading import Event
+        from unittest.mock import AsyncMock
+        from test_library_catalog import CryptClient
+        from features.rclone.mobile.file_resources import CryptFiles
+        app = self.app
+        app.show_cloud(present=False)
+        client = app.cloud_client = CryptClient()
+        client.cancel = lambda: None
+        app.cloud_crypt_remotes = {'Remote'}
+        provider = CryptFiles(app.private_root / 'LocalCryptFolders', client, 'Remote')
+        folder = provider._physical('Collection', directory=True)
+        (folder / client.request('crypt_path', path='Comics', directory=True)['path']).mkdir(parents=True)
+        (folder / client.request('crypt_path', path='remoteConfig.ini')['path']).write_bytes(
+            b'[LogisticsComics]\nlibraries=Comics\n'[::-1])
+        logical = 'Collection/Comics/note.md'
+        provider._physical(logical).write_bytes(b'# Offline note'[::-1])
+        cancel = app._crypt_cancel = Event()
+        app.cloud_busy = app.transfer_busy = True
+        drawer = self.navigation.browser('documents')
+        async def exercise():
+            self.assertIn('LocalCrypt: Remote', drawer.available_roots())
+            self.assertTrue(await drawer.show_main_browser('LocalCrypt: Remote', folder='Collection/Comics'))
+            self.assertEqual([row.label for row in drawer.browser.entries], ['note.md'])
+            with patch.object(app, 'open_crypt', new=AsyncMock(return_value=True)) as opened:
+                self.assertTrue(await drawer.open_file({'path': logical}))
+                self.assertTrue(opened.call_args.kwargs['copies'].offline)
+                self.assertEqual(opened.call_args.kwargs['key'], logical)
+            catalog = app.reader_manager().catalog
+            await catalog.refresh_library_folders()
+            button = next(button for button in catalog.library_row_buttons if button.text == 'Comics')
+            await button.on_press()
+            self.assertEqual(app.file_path, 'Collection/Comics')
+            self.assertTrue(app.file_provider.private)
+            drawer.refresh_menu()
+            await next(button for button in drawer.library_buttons if button.text == 'Comics').on_press()
+            self.assertEqual(drawer.folder, 'Collection/Comics')
+            self.assertTrue(drawer.provider.private)
+            self.assertTrue(app.cloud_busy and app.transfer_busy)
+            self.assertIs(app._crypt_cancel, cancel)
+            self.assertFalse(cancel.is_set())
+            client.generation += 1
+            with patch.object(app, 'open_crypt', new=AsyncMock()) as opened:
+                self.assertFalse(await drawer.open_file({'path': logical}))
+                opened.assert_not_awaited()
+            self.assertIn('Unlock', drawer.status.text)
+            app.transfer_busy = False
+            self.assertNotIn('LocalCrypt: Remote', drawer.available_roots())
+        try:
+            app.loop.run_until_complete(exercise())
+        finally:
+            app.cloud_busy = app.transfer_busy = False
+            app._crypt_cancel = None
 
     def test_documents_menu_recent_reopens_closed_file_and_browse_uses_main_area(self):
         app = self.app

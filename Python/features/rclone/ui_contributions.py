@@ -58,6 +58,12 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
         )
 
     if entry.remote_name is not None:
+        from .ui.remote_browser import open_remote
+        association = getattr(entry.remote_context, 'item', None)
+        ui_actions.append(UIAction(name='Browse',
+            description='Browse this remote in a read-only File Browser tab.',
+            callback=lambda: open_remote(config_path, entry.remote_name,
+                package=association.package if association else None)))
         from . import session
         from .local_crypt import LocalCryptFolder
         values = session.credentials(config_path)
@@ -66,16 +72,16 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
         if encrypted:
             item = entry.local.connection
             ui_actions.append(UIAction(name='Pull',
-                callback=lambda: actions.pull_encrypted_copy(entry.remote_name, config_path, item=item),
+                callback=lambda: actions.pull_encrypted_copy(entry.remote_name, config_path, item=item, review=True),
                 description='Refresh this LocalCrypt copy with ciphertext from its backing remote.', destructive=True))
         else:
             association = getattr(entry.remote_context, 'item', None)
             ui_actions.append(UIAction(name='Pull to Local' if entry.local is None and is_crypt else 'Pull',
-                callback=lambda: actions.pull_remote(entry.remote_name, config_path, **({'package': association.package} if association else {})),
+                callback=lambda: actions.pull_remote(entry.remote_name, config_path, review=True, **({'package': association.package} if association else {})),
                 description='Sync decrypted files into the Local folder.', destructive=True))
             if is_crypt and entry.local is None:
                 ui_actions.append(UIAction(name='Pull to LocalCrypt',
-                    callback=lambda: actions.pull_encrypted_copy(entry.remote_name, config_path),
+                    callback=lambda: actions.pull_encrypted_copy(entry.remote_name, config_path, review=True),
                     description='Create or replace the separate ciphertext copy. Destination-only files can be deleted.', destructive=True))
     return ui_actions
 

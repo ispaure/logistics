@@ -54,7 +54,8 @@ File Browser starts at your home folder. Use it for arbitrary paths;
 **Folder Hub** brings configured local folders and remote integrations together.
 The **Documents** menu lists open editors/readers. Switching destinations keeps
 those documents alive. Feature-specific actions appear only for eligible selections.
-The compact left sidebar keeps full-size destination icons with narrow side margins.
+The compact left sidebar keeps full-size destination icons with narrow side margins
+and 40-pixel vertical steps, fitting more destinations in the available height.
 File Browser and Folder Hub use the full page width. Indexing and folder-source
 loading appear in compact bottom notice rows, leaving more room for files and
 folders. Hover over a shortened indexing notice to read its full text; use
@@ -96,6 +97,16 @@ The Logistics indexing settings apply on the next index request after **Save**:
 | Update after filesystem notifications | Reconciles watched locations after changes; does not continuously scan the entire tree |
 | Run index jobs at background priority | Gives other work priority without changing scan scope |
 
+
+## Remote tabs
+
+Choose **File → Open Remote…** to browse a loaded rclone account, or choose
+**Browse** on a Folder Hub remote. These tabs have their own read-only actions,
+current-folder search and memory-only previews. Supported files open directly;
+other files show a dialog asking you to manually make a local copy. There are no standalone file or folder download actions. Use managed Pull
+workflows for offline Local or LocalCrypt folders.
+See the [rclone guide](../../features/rclone/user_docs/README.md#browse-remote-files-directly)
+for limits, destinations and credential handling.
 
 ## Indexing across application instances
 

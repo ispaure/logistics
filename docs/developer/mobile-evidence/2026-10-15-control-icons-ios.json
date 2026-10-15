@@ -1,0 +1,28 @@
+{
+  "success": true,
+  "probe_revision": "appearance-v3",
+  "backend": "toga_iOS.app",
+  "icons": [
+    "back",
+    "forward",
+    "up",
+    "find",
+    "contents",
+    "appearance",
+    "more",
+    "close"
+  ],
+  "checks": [
+    "native_images",
+    "accessibility_names",
+    "48_point_targets",
+    "dark_and_disabled_capture"
+  ],
+  "scope": "Isolated native control probe using Logistics scene/appearance handling; workflow coverage is from host tests.",
+  "source_sha256": "e48464650a12e89e149fbf245c0f398df547a8fd3e49275bb2d8c88ee5ad28b0",
+  "probe_source_sha256": "66545624afa6115ae59be541d51e4d2a9c8d95b6a4348fde20d673d603b74a70",
+  "screenshots": [
+    "2026-10-15-control-icons-ios-light.png",
+    "2026-10-15-control-icons-ios-dark-disabled.png"
+  ]
+}

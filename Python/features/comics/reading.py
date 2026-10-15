@@ -1,13 +1,13 @@
 """Page-spread decisions and naturally ordered neighbouring comic files."""
 
 from pathlib import Path
-from commonUtils.filesystem.directories import Directory
 from .pages import natural_key
 
 SPREAD_GAP = 8
 
 
 def comic_siblings(path):
+    from commonUtils.filesystem.directories import Directory
     path = Path(path)
     return sorted((item.path for item in Directory(path.parent).list_files(recursive=False, filter_extension='cbz')
                    if item.path.is_file() and not item.path.is_symlink()), key=lambda item: natural_key(item.name))

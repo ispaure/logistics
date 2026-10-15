@@ -1,0 +1,82 @@
+{
+  "success": true,
+  "target": "ipad",
+  "cases": [
+    "recursive_private_plain_and_inner_encrypted_verified_publication",
+    "private_batch_cancel_after_current_and_retry_baselines",
+    "private_batch_all_file_preflight_rejects_conflicts",
+    "private_batch_suspend_erases_metadata_forms_and_callbacks",
+    "concealed_private_batch_worker_cannot_publish",
+    "private_batch_credentials_revoke_immediately",
+    "native_260_import_metadata_search_and_50_row_paging",
+    "persistent_incremental_index_reopens_without_archive_reads",
+    "private_batch_metadata_absent_from_persisted_index_and_recovery",
+    "process_restart_reuses_persisted_index_without_archive_reads"
+  ],
+  "scope": "Targeted native collection probe in a separate app with synthetic data; not release or physical-device certification.",
+  "source": {
+    "commonUtils_commit": "fd1df652774c6da76e6676c4a51f9e0e941022a3",
+    "commonUtils_dirty": true,
+    "logistics_commit": "2253c4ee058ef54f5c2507269a94cf65317cc65f",
+    "dirty": true,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm",
+      "rclone"
+    ],
+    "logistics_committed_at": "2026-10-15T03:37:15-04:00",
+    "source_sha256": "07acfdaf5fe8b4a03ef8248cc62ced337ad8de83c349c63a6d65a8f68321e132"
+  },
+  "imports": 260,
+  "page_size": 50,
+  "validation_date": "2026-10-15",
+  "app_id": "io.github.ispaure.logisticscollectionprobe",
+  "environment": "iPad Pro 11-inch (M5), iOS 27 simulator; existing native executable with current staged Python",
+  "artifact_sha256": "00fa48ba9bcf1f65d3ea4baaad680c4d2d91f09de92f13e62bf986f5f51607d5",
+  "probe_sha256": "2e6d12c9caebc22b2a598aba2b6f1b265fa06bf7dfc7cad5da6958e2bbb47ded",
+  "module_sha256": {
+    "features/comics/mobile/index.py": "9f94f8a55590be709e4681b9bed23a653bc58b970ec1e7273af1dbcd3c7207c1",
+    "features/comics/mobile/private_batch.py": "b3cb0138f74ffe7470b8579742c929ef308850e464fc8ef6fb5fb606532f3c5c",
+    "features/comics/mobile/metadata.py": "e2aca959e01db35d79e4634b76ea9dffb60ae15cfd25cd3414b90cd842effc1c",
+    "features/comics/mobile/collection.py": "a5499990b6b0094d7d35af7b0c83679dfa3a7b95e56e5bbdafa002eb4fc32a1f",
+    "logisticsmobile/app.py": "669a8b309dfc22afc56d26385d65795dab8658f1ea51e9b403a197f37acb031a",
+    "logisticsmobile/files_ui.py": "abb8ad62d0d99442a7c3023769b5008f5b9a81f93fa77af83852f588e2afcf9f",
+    "logisticsmobile/library_ui.py": "444705ef36fa52e9da06bae0eafca2e42e06c710e0acecbfb4d1a0fd800f7c8c",
+    "logisticsmobile/reader_ui.py": "62116e333efd9fdf14e38e1f805cb6f83bee9f80531f1758380750f1cd06ea8c",
+    "logisticsmobile/screen_privacy.py": "8b9f1c47457f6b7b782dacb1971b91497cedd106d35ebc7a6dd2165dc0bea669",
+    "logisticsmobile/window_owners.py": "1b3089088b4117339d8c4c76682cf3b536be794d8a0b3eef018375c5853389c5"
+  },
+  "automated_checks": {
+    "mobile_regression": {
+      "tests": 251,
+      "passed": true
+    },
+    "portable_collection_reader_contracts": {
+      "tests": 29,
+      "passed": true,
+      "largest_index_entries": 5001
+    }
+  },
+  "limits": {
+    "batch_comics": 200,
+    "scan_entries": 10000,
+    "scan_depth": 16,
+    "private_metadata_bytes": 8388608,
+    "field_characters": 4096,
+    "result_page_size": 50
+  },
+  "scope_notes": [
+    "Synthetic credentials and archives only, separate app ID; original app untouched.",
+    "Native checks use 260 actual imports. The 5,001-entry test is portable and is not a device performance claim.",
+    "Existing native encryption/archive binaries reused; no Go bridge rebuild or release certification.",
+    "Concealment/resource-release callbacks are invoked by the probe; physical device backgrounding/accessibility remains to validate.",
+    "Standalone encrypted imported rewrites, native processing/organization, live-remote recursive edits and provider-wide indexing remain open."
+  ],
+  "screenshots": {
+    "private-batch": "2026-10-15-private-batch-large-library-ipad-private-batch.png",
+    "large-library": "2026-10-15-private-batch-large-library-ipad-large-library.png"
+  }
+}

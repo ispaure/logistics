@@ -1,0 +1,62 @@
+{
+  "success": true,
+  "target": "ios",
+  "sys_platform": "ios",
+  "backend": "toga_iOS.app",
+  "cases": [
+    "native_epub_bridge",
+    "nested_contents_exact_anchor",
+    "screen_turn_persists_location",
+    "unicode_search_highlight",
+    "appearance_preserves_anchor",
+    "epub_rotation_preserves_passage",
+    "internal_link_and_external_rejection",
+    "bookmark_reopen",
+    "provider_search_bookmark_and_memory_cleanup",
+    "manga_spreads_doublepage_landscape_failed_read",
+    "comic_controls_fit_and_immersive_reentry",
+    "comic_auto_rotation",
+    "provider_comic_auto_rotation",
+    "process_restart_precise_resume"
+  ],
+  "scope": "Targeted native reader probe, synthetic files and separate app ID; not full release evidence.",
+  "source": {
+    "commonUtils_commit": "fd1df652774c6da76e6676c4a51f9e0e941022a3",
+    "commonUtils_dirty": true,
+    "logistics_commit": "2253c4ee058ef54f5c2507269a94cf65317cc65f",
+    "dirty": true,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm",
+      "rclone"
+    ],
+    "source_sha256": "a6c5ef73b2d1daf0011ec702b92313741ab1f41a113a76d0c97c508cd05c134a"
+  },
+  "validation_date": "2026-10-15",
+  "app_id": "io.github.ispaure.logisticsreaderprobe",
+  "probe_source": "Mobile/native_tests/tests/logisticsmobile/reader_parity_probe.py",
+  "probe_sha256": "91647d75072ab77ebccfd9bace22cb3c198e7c3a056a92116cfe50610ca95f28",
+  "environment": {
+    "device": "iPad Pro 11-inch (M5) simulator",
+    "ios": "27.0",
+    "native_build": "Existing simulator executable; current staged Python; ad-hoc codesign"
+  },
+  "private_reader_checks": [
+    "native private settings/datastore",
+    "highlighted Unicode search",
+    "screen turns",
+    "appearance preserves offset",
+    "suspend disposes and reentry restores passage",
+    "session bookmark and close cleanup",
+    "random plaintext sentinel absent from app cache/data container files after close"
+  ],
+  "rendering_checks": [
+    "EPUB width fits portrait window after rotation",
+    "both comic pages have equal content widths and fit inside window",
+    "synthetic screenshot inspected"
+  ],
+  "artifact_sha256": "e0fcd30a8457ec467fdd1542b283058ee97cc700e79dd3b01fdf4cedde527a82"
+}

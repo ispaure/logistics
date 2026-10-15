@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from logisticsmobile.mirror_jobs import MirrorJobs
+from features.rclone.mobile.mirror_jobs import MirrorJobs
 
 
 class MirrorClient:
@@ -27,18 +27,26 @@ class MirrorClient:
         if action == 'mirror_progress':
             return dict(phase='Transferring', done=5, total=10, files=1, total_files=2,
                         listed=3, checks=1, active=1)
+        if action in ('mirror_review_progress', 'mirror_review_clear'):
+            return dict(changes=[])
+        if action == 'mirror_review':
+            target = Path(values['local_path'])
+            local = {p.relative_to(target).as_posix(): p.read_bytes().hex()
+                     for p in target.rglob('*') if p.is_file()} if target.exists() else {}
+            prefix = path + '/' if path else ''
+            online = {key[len(prefix):]: value.hex() for key, value in self.data.items() if key.startswith(prefix)}
+            source, destination = (local, online) if values['push'] else (online, local)
+            changes = [[('add' if name not in destination else 'match' if source[name] == destination[name]
+                        else 'replace'), name] for name in source]
+            changes += [['delete', name] for name in destination if name not in source]
+            fingerprint = sha256(json.dumps([source, destination], sort_keys=True).encode()).hexdigest()
+            return dict(changes=changes, fingerprint=fingerprint)
+        if action == 'crypt_path':
+            return dict(path=path, identity='b' * 64)
         if action == 'mirror_info':
             crypt = values['remote'] == 'Secret' and not values.get('decrypted')
             return dict(identity=self.identity, crypt=crypt, cipher_identity='b' * 64 if crypt else '',
                         prefix='encoded' if crypt else path)
-        if action == 'mirror_list':
-            folders = set(self.directories)
-            for key in self.data:
-                parts = key.split('/')
-                folders.update('/'.join(parts[:i]) for i in range(1, len(parts)))
-            return ([dict(path=key, directory=False, size=len(data)) for key, data in self.data.items()
-                     if key.rpartition('/')[0] == path] +
-                    [dict(path=key, directory=True, size=0) for key in sorted(folders) if key.rpartition('/')[0] == path])
         if action == 'mirror_sync':
             import shutil
             target = Path(values['local_path'])
@@ -58,68 +66,142 @@ class MirrorClient:
                     destination = target / key[len(prefix):]
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     with destination.open('wb') as stream:
-                        self.request('mirror_read', path=key, fd=stream.fileno())
+                        self.copy_remote_file(key, stream)
             for key in self.directories:
                 if key.startswith(prefix):
                     (target / key[len(prefix):]).mkdir(parents=True, exist_ok=True)
             return 1
-        if action == 'mirror_read':
-            os.write(values['fd'], self.data[path])
-            return len(self.data[path])
-        if action == 'mirror_stat':
-            return sha256(self.data[path]).hexdigest() if path in self.data else ''
-        if action == 'mirror_mkdir':
-            self.directories.add(path)
-            return True
         if action == 'mirror_validate':
             hash = sha256()
             while block := os.read(values['fd'], 65536):
                 hash.update(block)
             return hash.hexdigest()
-        if action == 'mirror_write':
-            current = self.request('mirror_stat', path=path)
-            if current != values['expected']:
-                raise ValueError('Remote changed')
-            if path in self.data:
-                self.backups.append(self.data[path])
-            data = b''
-            while block := os.read(values['fd'], 65536):
-                data += block
-            self.data[path] = data
-            return sha256(data).hexdigest()
         raise ValueError(action)
+
+    def copy_remote_file(self, path, stream):
+        stream.write(self.data[path])
 
 
 class MirrorJobTests(unittest.TestCase):
-    def test_legacy_crypto_tree_is_preserved_and_requires_a_new_scoped_pull(self):
+    def test_inferred_push_uses_folder_name_and_specific_push_uses_remote_subfolder(self):
+        with TemporaryDirectory() as directory:
+            store, client = MirrorJobs(directory), MirrorClient()
+            local = store.root / 'LocalFiles' / 'Books'
+            local.mkdir(parents=True)
+            (local / 'note.txt').write_bytes(b'new book')
+            whole = store.prepare_push(client, 'Books')
+            self.assertEqual((whole['remote'], whole['prefix'], whole['target']), ('Books', '', 'Books'))
+            specific = store.prepare_push(client, 'Books', remote='Library', specific=True)
+            self.assertEqual((specific['remote'], specific['prefix'], specific['target']), ('Library', 'Books', 'Books'))
+            self.assertFalse(store.path.exists())
+            store.execute_review(specific, client, new=True, push=True)
+            self.assertEqual(client.data['Books/note.txt'], b'new book')
+            with self.assertRaisesRegex(ValueError, 'belongs to another copy'):
+                store.prepare_push(client, 'Books')
+
+    def test_ordinary_file_link_is_followed_but_crypt_link_is_rejected(self):
+        with TemporaryDirectory() as directory:
+            store, client = MirrorJobs(directory), MirrorClient()
+            job, _ = store.create(client, 'Remote', 'folder')
+            source = store.root / 'outside.txt'
+            source.write_bytes(b'linked file contents')
+            (store.target(job) / 'link.txt').symlink_to(source)
+            store.execute_push(job['id'], client)
+            self.assertEqual(client.data['folder/link.txt'], source.read_bytes())
+            with self.assertRaisesRegex(ValueError, 'links cannot be transferred'):
+                store.inspect(store.target(job), copy_links=False)
+
+    def test_push_cleans_only_allowlisted_junk_and_authenticates_encrypted_junk_first(self):
+        with TemporaryDirectory() as directory:
+            store, client = MirrorJobs(directory), MirrorClient()
+            job, _ = store.create(client, 'Secret', 'private')
+            root = store.target(job)
+            junk = root / 'opaque-junk'
+            junk.write_bytes(b'RCLONE\x00\x00' + b'synthetic ciphertext')
+            plain = root / '.DS_Store'
+            plain.write_bytes(b'generated plaintext')
+            request = client.request
+            def native(action, **values):
+                if action == 'crypt_path':
+                    return dict(path=values['path'].replace('opaque-junk', 'Thumbs.db'))
+                if action == 'mirror_validate' and values['path'].endswith('opaque-junk'):
+                    raise ValueError('ciphertext authentication failed')
+                return request(action, **values)
+            with patch.object(client, 'request', side_effect=native):
+                with self.assertRaisesRegex(ValueError, 'authentication failed'):
+                    store.execute_push(job['id'], client)
+                junk.write_bytes(b'corrupted ciphertext header')
+                with self.assertRaisesRegex(ValueError, 'authentication failed'):
+                    store.execute_push(job['id'], client)
+            self.assertTrue(junk.exists(), 'encrypted junk must authenticate before deletion')
+            self.assertFalse(plain.exists())
+            def valid(action, **values):
+                if action == 'crypt_path':
+                    return dict(path=values['path'].replace('opaque-junk', 'Thumbs.db'))
+                return request(action, **values)
+            keep = root / 'keep.skip'
+            keep.write_bytes(b'keep local bytes')
+            with patch.object(client, 'request', side_effect=valid):
+                store.execute_push(job['id'], client)
+            self.assertFalse(junk.exists())
+            self.assertTrue(keep.exists(), 'custom exclusions never authorize local deletion')
+
+    def test_current_mappings_drop_unused_baselines_without_moving_files(self):
         with TemporaryDirectory() as directory:
             store, client = MirrorJobs(directory), MirrorClient()
             job, _ = store.create(client, 'Secret', 'private folder title')
-            legacy = store.root / 'LocalCryptFolders' / job['cipher_identity'] / job['prefix']
-            legacy.parent.mkdir(parents=True)
-            store.target(job).rename(legacy)
-            (legacy / 'opaque-name').write_bytes(b'legacy local edits')
-            value = json.loads(store.path.read_bytes())
-            value['schema'] = 1
-            value['pending'] = None
-            value['jobs'][0]['snapshots'] = []
-            store.path.write_text(json.dumps(value))
+            target = store.target(job)
+            (target / 'opaque-name').write_bytes(b'local edits')
+            records = json.loads(store.path.read_bytes())
+            records['schema'] = 3
+            records['jobs'][0]['baseline'] = {'opaque-name': 'd' * 64}
+            store.path.write_text(json.dumps(records))
+            before = store.path.read_bytes()
             restored = MirrorJobs(directory)
-            with self.assertRaisesRegex(ValueError, 'Pull this folder'):
-                restored.push_plan(job['id'], client)
-            self.assertEqual(restored.pull(job['id'], client), ('updated', None))
-            self.assertEqual((legacy / 'opaque-name').read_bytes(), b'legacy local edits')
-            self.assertEqual((restored.target(job) / 'opaque-name').read_bytes(), b'ciphertext')
+            self.assertFalse(restored.error)
+            self.assertNotIn('baseline', restored.jobs[job['id']])
+            self.assertEqual(store.path.read_bytes(), before, 'Loading must not rewrite records')
+            restored.save()
+            self.assertEqual(json.loads(store.path.read_bytes())['schema'], 4)
+            self.assertEqual(restored.target(job), target)
+            self.assertEqual((target / 'opaque-name').read_bytes(), b'local edits')
 
     def test_empty_subfolder_push_and_stable_source_snapshot(self):
         with TemporaryDirectory() as directory:
             store, client = MirrorJobs(directory), MirrorClient()
             job, _ = store.create(client, 'Remote', 'folder')
             (store.target(job) / 'empty').mkdir()
-            plan = store.push_plan(job['id'], client)
-            self.assertEqual(plan['directories'], ['empty'])
-            self.assertEqual(store.push(plan, client), 0)
-            self.assertIsNone(store.jobs[job['id']]['baseline']['empty'])
+            self.assertEqual(store.execute_push(job['id'], client), 0)
+            self.assertIn('folder/empty', client.directories)
+            self.assertNotIn('baseline', store.jobs[job['id']])
+            self.assertNotIn('baseline', json.loads(store.path.read_text())['jobs'][0])
+
+    def test_metadata_inspection_reads_no_contents_and_rejects_crypt_hardlinks(self):
+        with TemporaryDirectory() as directory:
+            store, client = MirrorJobs(directory), MirrorClient()
+            job, _ = store.create(client, 'Remote', 'folder')
+            with patch.object(Path, 'open', side_effect=AssertionError('No content reads')):
+                self.assertIn('note.txt', store.inspect(store.target(job), copy_links=True))
+            secret, _ = store.create(client, 'Secret', 'private')
+            os.link(store.target(secret) / 'opaque-name', store.target(secret) / 'hard-linked')
+            with self.assertRaisesRegex(ValueError, 'unsupported entry'):
+                store.execute_push(secret['id'], client)
+
+    def test_crypt_mutation_during_native_authentication_blocks_sync(self):
+        with TemporaryDirectory() as directory:
+            store, client = MirrorJobs(directory), MirrorClient()
+            job, _ = store.create(client, 'Secret', 'private')
+            original = client.request
+            def changed(action, **values):
+                result = original(action, **values)
+                if action == 'mirror_validate':
+                    (store.target(job) / 'opaque-name').write_bytes(b'changed during authentication')
+                if action == 'mirror_sync':
+                    raise AssertionError('Changed ciphertext was uploaded')
+                return result
+            with patch.object(client, 'request', side_effect=changed):
+                with self.assertRaisesRegex(ValueError, 'changed during validation'):
+                    store.execute_push(job['id'], client)
 
     def test_crypto_accounts_cannot_claim_the_same_local_remote_name(self):
         with TemporaryDirectory() as directory:
@@ -140,10 +222,6 @@ class MirrorJobTests(unittest.TestCase):
             job, _ = store.create(client, 'Example-LIb-Books', storage='Local')
             self.assertEqual(job['target'], 'Example-LIb-Books')
             self.assertEqual(store.target(job).name, 'Example-LIb-Books')
-            old = store.target(job)
-            job['target'] += '-' + job['id'][:8]
-            old.rename(store.target(job))
-            store.save()
             restored = MirrorJobs(directory)
             same, _ = restored.create(client, 'Example-LIb-Books', storage='Local')
             self.assertEqual(same['id'], job['id'])
@@ -160,27 +238,24 @@ class MirrorJobTests(unittest.TestCase):
                 store.create(client, 'Remote', storage='Local')
             self.assertEqual((target / 'keep.txt').read_text(), 'local edit')
 
-    def test_legacy_name_migration_rolls_back_failed_save_and_refuses_collision(self):
+    def test_review_execution_uses_exact_proposed_destination(self):
         with TemporaryDirectory() as directory:
             store, client = MirrorJobs(directory), MirrorClient()
-            job, _ = store.create(client, 'Remote', 'folder', storage='Local')
-            original = store.target(job)
-            job['target'] += '-' + job['id'][:8]
-            legacy = store.target(job)
-            original.rename(legacy)
+            proposal = store.prepare_review(client, 'Remote', 'folder', storage='Local')
+            reviewed = store.target(proposal)
+            self.assertEqual(proposal['target'], 'folder')
+            self.assertFalse(reviewed.exists())
+            store.execute_review(proposal, client, new=True)
+            self.assertEqual(store.target(store.jobs[proposal['id']]), reviewed)
+            self.assertEqual((reviewed / 'note.txt').read_bytes(), b'first')
+            changed = dict(proposal, target='other')
+            with self.assertRaisesRegex(ValueError, 'destination changed'):
+                store.execute_review(changed, client)
+            self.assertFalse((store.root / 'LocalFiles' / 'other').exists())
+            store.jobs.pop(proposal['id'])
             store.save()
-            with patch.object(store, 'save', side_effect=OSError('write failed')):
-                with self.assertRaisesRegex(OSError, 'write failed'):
-                    store.update_legacy_name(job, 'folder')
-            self.assertEqual(store.target(job), legacy)
-            self.assertEqual((legacy / 'note.txt').read_bytes(), b'first')
-            self.assertFalse(original.exists())
-            original.mkdir()
-            (original / 'keep.txt').write_text('keep')
-            with self.assertRaisesRegex(ValueError, 'already exists'):
-                store.pull(job['id'], client)
-            self.assertEqual((original / 'keep.txt').read_text(), 'keep')
-            self.assertEqual((legacy / 'note.txt').read_bytes(), b'first')
+            with self.assertRaisesRegex(ValueError, 'mapping changed'):
+                store.execute_review(proposal, client)
 
     def test_sync_forwards_real_counters_and_final_snapshot(self):
         from threading import Event
@@ -211,15 +286,15 @@ class MirrorJobTests(unittest.TestCase):
             store, client = MirrorJobs(directory), MirrorClient()
             job, _ = store.create(client, 'Remote', 'folder')
             (store.target(job) / 'note.txt').write_bytes(b'local edit')
-            plan = store.push_plan(job['id'], client)
+            proposal = dict(job)
             external = store.path.read_bytes() + b'\n'
             store.path.write_bytes(external)
             with self.assertRaisesRegex(OSError, 'records changed'):
-                store.push(plan, client)
+                store.execute_review(proposal, client, push=True)
             self.assertEqual(store.path.read_bytes(), external)
             self.assertEqual(client.data['folder/note.txt'], b'first')
 
-    def test_plain_sync_removes_destination_only_files_and_requires_fresh_review(self):
+    def test_plain_sync_removes_destination_only_files_within_selected_scope(self):
         with TemporaryDirectory() as directory:
             store, client = MirrorJobs(directory), MirrorClient()
             job, _ = store.create(client, 'Remote', 'folder')
@@ -234,18 +309,10 @@ class MirrorJobTests(unittest.TestCase):
             (target / 'added.txt').write_bytes(b'added')
             client.data['folder/nested/removed.txt'] = b'remove me'
             client.data['elsewhere/keep.txt'] = b'outside selected folder'
-            plan = store.push_plan(job['id'], client)
-            self.assertIn('nested/removed.txt', plan['deletes'])
-            self.assertIn('note.txt', plan['deletes'])
-            self.assertEqual(store.push(plan, client), 1)
+            self.assertEqual(store.execute_push(job['id'], client), 1)
             self.assertEqual({key for key in client.data if key.startswith('folder/')}, {'folder/added.txt'})
             self.assertEqual(client.data['elsewhere/keep.txt'], b'outside selected folder')
             self.assertEqual(client.backups, [])
-            plan = store.push_plan(job['id'], client)
-            client.data['folder/new-after-review.txt'] = b'new'
-            with self.assertRaisesRegex(ValueError, 'Remote files changed since review'):
-                store.push(plan, client)
-            self.assertIn('folder/new-after-review.txt', client.data)
 
     def test_crypt_records_contain_only_raw_names_and_ciphertext(self):
         with TemporaryDirectory() as directory:
@@ -266,11 +333,10 @@ class MirrorJobTests(unittest.TestCase):
             job, _ = store.create(client, 'Remote', 'folder')
             target = store.target(job) / 'note.txt'
             target.write_bytes(b'local edit')
-            plan = store.push_plan(job['id'], client)
             target.write_bytes(b'changed after review')
-            with self.assertRaisesRegex(ValueError, 'changed since review'):
-                store.push(plan, client)
             client.identity = 'c' * 64
+            with self.assertRaisesRegex(ValueError, 'connection changed'):
+                store.execute_review(dict(job), client, push=True)
             with self.assertRaisesRegex(ValueError, 'connection changed'):
                 store.pull(job['id'], client)
             self.assertEqual(client.data['folder/note.txt'], b'first')
@@ -295,7 +361,7 @@ class MirrorJobTests(unittest.TestCase):
             self.assertNotIn('snapshots', job)
             (store.target(job) / 'linked').symlink_to('/private/tmp')
             with self.assertRaisesRegex(ValueError, 'Linked'):
-                store.push_plan(job['id'], client)
+                store.execute_push(job['id'], client)
 
     def test_confirmed_wipe_removes_both_storage_types_without_inventory_or_following_links(self):
         for remote in ('Remote', 'Secret'):
@@ -309,7 +375,7 @@ class MirrorJobTests(unittest.TestCase):
                 (target / 'added-after-confirmation').write_text('also delete')
                 sibling = target.parent / 'sibling'
                 sibling.mkdir()
-                with (patch.object(store, 'state', side_effect=AssertionError('No content scan')),
+                with (patch.object(store, 'inspect', side_effect=AssertionError('No content scan')),
                       patch('commonUtils.runtime.resource_mutations.inventory', side_effect=AssertionError('No inventory'))):
                     store.delete_copy(job['id'])
                 self.assertFalse(target.exists())
@@ -318,32 +384,25 @@ class MirrorJobTests(unittest.TestCase):
                 self.assertNotIn(job['id'], MirrorJobs(directory).jobs)
                 self.assertEqual(client.data['folder/note.txt'], b'first')
 
-    def test_legacy_snapshots_and_pending_restore_are_discarded_when_wiping(self):
-        with TemporaryDirectory() as directory:
-            store, client = MirrorJobs(directory), MirrorClient()
-            job, _ = store.create(client, 'Remote', 'folder')
-            backup, incoming = 'c' * 32, 'd' * 32
-            for key in (backup, incoming):
-                tree = store.root / 'TransferSnapshots' / key / 'tree'
-                tree.mkdir(parents=True)
-                (tree / 'note.txt').write_bytes(b'old recovery copy')
-            records = json.loads(store.path.read_bytes())
-            records['schema'] = 2
-            records['jobs'][0]['snapshots'] = [backup]
-            records['pending'] = dict(job=job['id'], backup=backup, incoming=incoming, baseline=job['baseline'])
-            store.path.write_text(json.dumps(records))
-            restored = MirrorJobs(directory)
-            self.assertFalse(restored.error)
-            self.assertNotIn('snapshots', restored.jobs[job['id']])
-            with patch.object(restored, 'state', side_effect=AssertionError('No restore or inventory')):
-                restored.delete_copy(job['id'])
-            self.assertFalse((store.root / 'TransferSnapshots').exists())
-            restarted = MirrorJobs(directory)
-            restarted.reconcile()
-            self.assertFalse(store.target(job).exists())
-            self.assertEqual(restarted.jobs, {})
-            self.assertEqual(json.loads(store.path.read_bytes())['schema'], 3)
-            self.assertNotIn('pending', json.loads(store.path.read_bytes()))
+    def test_obsolete_recovery_records_are_preserved_without_running_a_migration(self):
+        for schema in (1, 2):
+            with self.subTest(schema=schema), TemporaryDirectory() as directory:
+                store, client = MirrorJobs(directory), MirrorClient()
+                job, _ = store.create(client, 'Remote', 'folder')
+                backup = store.root / 'TransferSnapshots' / 'old-copy'
+                backup.mkdir(parents=True)
+                (backup / 'note.txt').write_bytes(b'preserve old data')
+                records = json.loads(store.path.read_bytes())
+                records.update(schema=schema, pending=None)
+                store.path.write_text(json.dumps(records))
+                original = store.path.read_bytes()
+                restored = MirrorJobs(directory)
+                self.assertTrue(restored.error)
+                with self.assertRaises(ValueError):
+                    restored.create(client, 'Remote', 'folder')
+                self.assertEqual(store.path.read_bytes(), original)
+                self.assertTrue(store.target(job).exists())
+                self.assertEqual((backup / 'note.txt').read_bytes(), b'preserve old data')
 
     def test_wipe_rejects_roots_parent_traversal_and_linked_targets(self):
         with TemporaryDirectory() as directory:
@@ -373,7 +432,7 @@ class MirrorProgressDisplayTests(unittest.TestCase):
     def test_discovery_does_not_restart_animation_and_transfer_shows_real_work(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
-        from logisticsmobile.mirror_ui import MirrorUI
+        from features.rclone.mobile.mirror_ui import MirrorUI
         bar = SimpleNamespace(max=None, value=0, start=Mock(), stop=Mock())
         origin = SimpleNamespace(max=None, value=0, start=Mock(), stop=Mock())
         app = SimpleNamespace(active_host=True, transfer_epoch=1, transfer_busy=True,

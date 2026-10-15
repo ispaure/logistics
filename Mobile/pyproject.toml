@@ -1,7 +1,7 @@
 [tool.briefcase]
 project_name = "Logistics Mobile"
 bundle = "io.github.ispaure"
-version = "0.1.5"
+version = "0.1.6"
 url = "https://github.com/ispaure/logistics"
 license = "MIT"
 author = "Marc-Andre Voyer"
@@ -29,6 +29,7 @@ build_gradle_dependencies = [
 build_gradle_extra_content = """
 chaquopy.defaultConfig.staticProxy("toga_android.widgets.internal.webview")
 android.sourceSets.main.java.srcDir(new File(rootProject.projectDir, "../../../../payload/commonUtils/ui/native/android"))
+android.sourceSets.main.java.srcDir(new File(rootProject.projectDir, "../../../../payload/features/books/mobile/android"))
 """
 
 [tool.briefcase.app.logisticsmobile.iOS]

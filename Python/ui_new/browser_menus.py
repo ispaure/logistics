@@ -14,6 +14,8 @@ class BrowserMenus(qt.QObject):
         self.add('File', 'Open Folder…', self.open_folder)
         self.add('File', 'New Browser Tab', self.new_tab)
         self.add('File', 'Close Browser Tab', self.close_tab)
+        from features.rclone.ui.remote_browser import choose_remote
+        self.add('File', 'Open Remote…', lambda: choose_remote(self.view))
         self.menus['File'].addSeparator()
         self.selection = self.menus['File'].addMenu('Selected Items')
         self.selection.aboutToShow.connect(self.selection_menu)

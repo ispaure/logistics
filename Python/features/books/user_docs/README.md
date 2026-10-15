@@ -194,3 +194,51 @@ contents/appearance screens return to reading through Back; a book opened from
 Files then returns to its originating folder. Provider-backed bookmarks keep
 their existing session-only policy. See the [mobile guide](../../../logisticsmobile/user_docs/README.md)
 for supported reading and storage workflows.
+
+## Native mobile reading
+
+Imported EPUBs support nested contents, archive-local chapter/section links and
+**Find in chapter…** in the reader menu. Search ignores case and wraps within the
+current chapter. Previous/Next move by a visible screen and continue into adjacent
+chapters at the ends. External links and book scripts remain blocked.
+
+Imported resume and bookmarks now store a chapter path and text offset. Reopening
+or changing appearance restores that passage. Existing chapter-only bookmarks
+remain available at chapter starts. Position saves are debounced while scrolling;
+a sudden process kill can lose the most recent unsaved scroll movement.
+
+On Android and iPad/iPhone, provider-backed EPUBs, including LocalCrypt, use the
+same safe rich rendering, nested contents, internal links, screen-sized turns and
+highlighted chapter search as imported books. **Appearance…** offers the same fonts,
+spacing, width, margins and themes described below. Changing appearance or leaving and
+returning to the reader keeps the passage. Provider positions/bookmarks stay in
+the session and clear on close; they are not saved as ordinary imported records.
+
+Private EPUB rendering uses a nonpersistent iOS browser store or an Android view
+with disk caching and browser storage disabled. Closing or suspending disposes the
+view; HTML over 2 MiB is refused before the toolkit can create a disk-backed page.
+Other backends use bounded native text passages.
+
+Choose **Read aloud…** from an EPUB reader menu. Select an installed offline voice
+(the label includes its language), choose speed, and press **Play**. Selected text
+is read on its own; with no selection, reading starts at the current passage and
+continues through this chapter. The current sentence or bounded passage is
+highlighted and brought into view. **Pause** stops at the current utterance;
+**Resume** repeats that sentence/passage. **Stop** ends reading. Closing the speech
+panel, changing chapters, leaving a private reader or closing its session stops
+the engine and clears queued text. The app does not download voices or send text
+to a speech service. If no offline voice is available, use the operating system's
+speech settings to install one. Physical-device audio and accessibility ergonomics
+still need a device pass.
+
+**Appearance…** now includes installed local font families, every whole font size
+from 12–32, line spacing from 100–220%, maximum reading width from 480–1400 pixels
+(or 0 for automatic), margins, and System/Light/Dark/Sepia/Slate themes. The explicit
+theme colours are shared with desktop. On a narrow screen, reading width stays
+inside the available pane. These settings are global mobile preferences, do not
+rewrite books, and retain the current logical text anchor when layout changes.
+
+**Edit metadata…** also works on an ordinary imported EPUB copy. Saves preserve
+other archive resources and leave the external import source unchanged. Failed
+saves retain the form edits. The library recovers an interrupted checksum-record
+publication when reopening the edited copy.

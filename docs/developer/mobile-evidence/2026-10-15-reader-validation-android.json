@@ -1,0 +1,64 @@
+{
+  "success": true,
+  "target": "android",
+  "sys_platform": "linux",
+  "backend": "toga_android.app",
+  "cases": [
+    "native_epub_bridge",
+    "nested_contents_exact_anchor",
+    "screen_turn_persists_location",
+    "unicode_search_highlight",
+    "appearance_preserves_anchor",
+    "epub_rotation_preserves_passage",
+    "internal_link_and_external_rejection",
+    "bookmark_reopen",
+    "provider_search_bookmark_and_memory_cleanup",
+    "manga_spreads_doublepage_landscape_failed_read",
+    "comic_controls_fit_and_immersive_reentry",
+    "comic_auto_rotation",
+    "provider_comic_auto_rotation",
+    "process_restart_precise_resume"
+  ],
+  "scope": "Targeted native reader probe, synthetic files and separate app ID; not full release evidence.",
+  "source": {
+    "commonUtils_commit": "fd1df652774c6da76e6676c4a51f9e0e941022a3",
+    "commonUtils_dirty": true,
+    "logistics_commit": "2253c4ee058ef54f5c2507269a94cf65317cc65f",
+    "dirty": true,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm",
+      "rclone"
+    ],
+    "source_sha256": "a6c5ef73b2d1daf0011ec702b92313741ab1f41a113a76d0c97c508cd05c134a"
+  },
+  "validation_date": "2026-10-15",
+  "app_id": "io.github.ispaure.logisticsreaderprobe",
+  "probe_source": "Mobile/native_tests/tests/logisticsmobile/reader_parity_probe.py",
+  "probe_sha256": "91647d75072ab77ebccfd9bace22cb3c198e7c3a056a92116cfe50610ca95f28",
+  "environment": {
+    "device": "Android emulator LogisticsLocalCrypt",
+    "android": "15",
+    "api": 35,
+    "webview": "com.google.android.webview 124.0.6367.219",
+    "native_build": "Rebuilt isolated Gradle app with existing JNI bridge"
+  },
+  "private_reader_checks": [
+    "native private settings/datastore",
+    "highlighted Unicode search",
+    "screen turns",
+    "appearance preserves offset",
+    "suspend disposes and reentry restores passage",
+    "session bookmark and close cleanup",
+    "random plaintext sentinel absent from app cache/data container files after close"
+  ],
+  "rendering_checks": [
+    "EPUB width fits portrait window after rotation",
+    "both comic pages have equal content widths and fit inside window",
+    "synthetic screenshot inspected"
+  ],
+  "artifact_sha256": "d89d5241f2d6cf72c85737f49de6cb12ef510a3106cf3f882d51c3adac4b9e87"
+}

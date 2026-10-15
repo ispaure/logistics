@@ -91,7 +91,7 @@ and the validation/build/runtime gates still precede publication.
 
 ## Guided remote copies
 
-`logisticsmobile.copy_ui.CopyUI` owns the remote-to-device destination route.
+`features.rclone.mobile.copy_ui.CopyUI` owns the remote-to-device destination route.
 It snapshots the client, credential generation and selected row before presenting
 an app-managed LocalFiles folder picker. Connection changes refuse the transfer.
 The browser exposes separate selected-item and current-folder copy actions because

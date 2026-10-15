@@ -28,4 +28,3 @@ class ReaderHost:
     refresh_transfer_status = HostService('refresh_transfer_status')
     show_documents_hub = HostService('show_documents_hub')
     show_cloud = HostService('show_cloud')
-    invalidate_mirror_review = HostService('invalidate_mirror_review')

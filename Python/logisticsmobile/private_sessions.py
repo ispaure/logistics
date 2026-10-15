@@ -1,14 +1,14 @@
 """Bounded, memory-only provider sessions; private bytes never enter recovery."""
 from hashlib import sha256
 from pathlib import Path
-from .localcrypt_ui import LocalCryptUI
+from logisticsmobile.provider_ui import ProviderUI
 from .reader_host import ReaderHost
 
 MAX_PRIVATE_SESSIONS = 4
 MAX_PRIVATE_BYTES = 32 * 1024 * 1024
 
 
-class PrivateController(ReaderHost, LocalCryptUI):
+class PrivateController(ReaderHost, ProviderUI):
     def __init__(self, manager, session):
         self.manager, self.app, self.session = manager, manager.app, session
         self.crypt_reader = None
@@ -18,6 +18,7 @@ class PrivateController(ReaderHost, LocalCryptUI):
         self._crypt_cancel = None
         self.operation_busy = False
         self.presentation_destination = 'documents'
+        self.privacy_gate = None
 
     @property
     def cloud_busy(self):
@@ -26,13 +27,15 @@ class PrivateController(ReaderHost, LocalCryptUI):
     def set_cloud_busy(self, busy):
         self.operation_busy = busy
         self.manager.update_session(self)
+        if not busy:
+            self.manager.revoke_stale()
 
     def cancel_cloud(self, widget=None, **kwargs):
         if self._crypt_cancel is not None:
             self._crypt_cancel.set()
 
     def _show_crypt_content(self, kind, content, *, view=None):
-        return self.app._show_crypt_content(kind, content, view=view or self)
+        return self.app._show_crypt_content(kind, content, view=view or self, owner=self)
 
     def show_view(self, view, **kwargs):
         origin = getattr(self, '_opening_origin', None)
@@ -54,7 +57,7 @@ class PrivateController(ReaderHost, LocalCryptUI):
         return presented
 
     def resume_crypt(self, widget=None, **kwargs):
-        if self.session.id in self.app.workspace.sessions and self.crypt_reader is not None:
+        if self.manager.available(self.session.id) and self.crypt_reader is not None:
             self.show_view(self.crypt_view)
             if getattr(self, 'page_suspended', False):
                 self.page_suspended = False
@@ -86,6 +89,40 @@ class PrivateSessions:
         self.controllers = {}
         self.active = None
 
+    def revoke_stale(self):
+        """A credential replacement in any scene also retires displayed bytes."""
+        import toga
+        for key, owner in list(self.controllers.items()):
+            if (getattr(owner, 'credential_client', None) is self.app.cloud_client
+                    and getattr(owner, 'credential_generation', None) == getattr(self.app.cloud_client, 'generation', None)):
+                continue
+            if not getattr(getattr(owner, '_crypt_reader_store', None), 'encrypted', True):
+                continue
+            self.app.workspace.invalidate(key)
+            pending = owner._crypt_cancel
+            if pending is not None:
+                pending.set()
+            if pending is None and not owner.operation_busy:
+                self.close(key, discard=True, force=True)
+            else:
+                # Cancellation may still be retiring a worker. Clear the UI now;
+                # its completion cannot present content with the invalid token.
+                reader = owner.crypt_reader
+                owner._crypt_cancel = None
+                try:
+                    ProviderUI.clear_private_reader(owner, discard=True)
+                finally:
+                    owner._crypt_cancel = pending
+                source = getattr(reader, 'source', None)
+                if hasattr(source, 'close'):
+                    source.close()
+            owner.session.title = ''
+            view = getattr(owner, 'crypt_view', None)
+            if view is not None:
+                for child in list(view.children):
+                    view.remove(child)
+                view.add(toga.Label('Private session locked. Reopen after unlocking.'))
+
     @staticmethod
     def identity(copies, key):
         provider = getattr(copies, 'provider', None)
@@ -104,7 +141,7 @@ class PrivateSessions:
             return True
         return (getattr(owner, 'credential_client', None) is self.app.cloud_client
                 and self.app.cloud_client is not None
-                and getattr(owner, 'credential_generation', None) == self.app.cloud_client.generation)
+                and getattr(owner, 'credential_generation', None) == getattr(self.app.cloud_client, 'generation', None))
 
     def bind(self, owner):
         self.suspend(except_owner=owner)
@@ -122,7 +159,20 @@ class PrivateSessions:
         for owner in self.controllers.values():
             if owner is except_owner:
                 continue
+            for name in ('_provider_layout_task', '_provider_width_task'):
+                task = getattr(owner, name, None)
+                if task is not None:
+                    task.cancel()
+                    setattr(owner, name, None)
             owner.clear_private_preview()
+            for name in ('provider_spread', 'provider_epub_view'):
+                view = getattr(owner, name, None)
+                if view is not None:
+                    view.dispose()
+                    if view in owner.crypt_content.children:
+                        owner.crypt_content.remove(view)
+                    delattr(owner, name)
+                    owner.page_suspended = True
             image = getattr(owner, 'crypt_image', None)
             if image is not None and image.image is not None:
                 image.image = None
@@ -132,8 +182,9 @@ class PrivateSessions:
                 source.cache.clear()
                 source.cache_bytes = 0
 
-    async def open(self, copies, key, *, prepared=None, destination='documents'):
-        independent = self.app.cloud_busy and getattr(self.app, 'transfer_busy', False) and getattr(copies, 'offline', False)
+    async def open(self, copies, key, *, prepared=None, destination='documents', privacy_gate=None):
+        from .files_ui import local_read_available
+        independent = self.app.cloud_busy and local_read_available(self.app, private=True) and getattr(copies, 'offline', False)
         if self.app.cloud_busy and not independent:
             return False
         identity = self.identity(copies, key)
@@ -159,6 +210,10 @@ class PrivateSessions:
         session = self.app.workspace.open('provider-session', identity, 'text', transient=True)
         self.app.workspace.active = selection
         owner = PrivateController(self, session)
+        if getattr(copies, 'encrypted', True) or getattr(copies, 'remote_storage', False):
+            owner.privacy_gate = getattr(self.app.cloud_client, 'session_privacy', None)
+        if privacy_gate is not None:
+            owner.privacy_gate = privacy_gate
         owner.credential_client = self.app.cloud_client
         owner.credential_generation = getattr(self.app.cloud_client, 'generation', None)
         owner.presentation_destination = destination
@@ -171,8 +226,12 @@ class PrivateSessions:
             self.close(session.id, discard=True, force=True)
             if bound and self.app.active_host and previous is not None and previous.session.id in self.controllers:
                 previous.resume_crypt()
+        remote_open = getattr(copies, 'remote_storage', False)
+        if remote_open:
+            self.app.remote_read_busy = True
+            self.app.set_cloud_busy(True)
         try:
-            opened = await LocalCryptUI.open_crypt(owner, copies=copies, key=key, prepared=prepared, independent=independent)
+            opened = await ProviderUI.open_crypt(owner, copies=copies, key=key, prepared=prepared, independent=independent)
             if not opened or not self.app.active_host or not self.app.workspace.accepts(token):
                 retire_open()
                 return False
@@ -198,10 +257,19 @@ class PrivateSessions:
         finally:
             owner._opening_origin = owner._opening_token = None
             owner._independent_operation = False
+            if remote_open:
+                self.app.set_cloud_busy(False)
+                self.app.remote_read_busy = False
+
+    @staticmethod
+    def offline_owner(owner):
+        source = getattr(getattr(owner, 'crypt_reader', None), 'source', None)
+        return (getattr(getattr(owner, '_crypt_reader_store', None), 'offline', False)
+                or (getattr(source, 'cache_token', None) is not None and not source.closed))
 
     def activate(self, key, *, destination='documents'):
         owner = self.controllers.get(key)
-        if not self.available(key) or (self.app.cloud_busy and not (getattr(self.app, 'transfer_busy', False) and getattr(getattr(owner, '_crypt_reader_store', None), 'offline', False))):
+        if not self.available(key) or (self.app.cloud_busy and not ((getattr(self.app, 'transfer_busy', False) or getattr(self.app, 'remote_read_busy', False)) and self.offline_owner(owner))):
             return False
         owner.presentation_destination = destination
         self.bind(owner)
@@ -215,7 +283,7 @@ class PrivateSessions:
         owner = self.controllers.get(key)
         if owner is None:
             return False
-        local = getattr(self.app, 'transfer_busy', False) and getattr(getattr(owner, '_crypt_reader_store', None), 'offline', False)
+        local = (getattr(self.app, 'transfer_busy', False) or getattr(self.app, 'remote_read_busy', False)) and self.offline_owner(owner)
         if not force and ((self.app.cloud_busy and not local) or owner._crypt_cancel is not None or owner.operation_busy):
             return False
         if not force and owner.private_dirty() and not discard:
@@ -223,7 +291,7 @@ class PrivateSessions:
             owner.crypt_title.text = 'Unsaved changes: save,\nor discard and close.'
             return False
         reader = owner.crypt_reader
-        if not LocalCryptUI.clear_private_reader(owner, discard=True):
+        if not ProviderUI.clear_private_reader(owner, discard=True):
             return False
         source = getattr(reader, 'source', None)
         if hasattr(source, 'close'):
@@ -239,6 +307,9 @@ class PrivateSessions:
             self.update_session(owner)
             self.active = None
         self.app.save_workspace()
+        privacy = getattr(self.app, 'screen_privacy', None)
+        if privacy is not None:
+            privacy.refresh()
         return True
 
     def clear(self, *, discard=False):

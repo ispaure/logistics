@@ -1,13 +1,23 @@
 """One native editor and callback owner per open text/Markdown session."""
 import toga
+from .control_icons import icon_button, apply_icon
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from .documents import document_name
 from .action_menu import ActionMenu
+from .appearance import action_button
 from commonUtils.ui.native.editor_search import EditorSearch
 
 FIELDS = ('selector', 'name', 'editor', 'status', 'recovery_notice', 'import_button',
           'save_button', 'export_button', 'document_view')
+
+
+def document_status(document):
+    if getattr(document, 'private', False):
+        return 'Unsaved changes · session only. Save before closing.' if document.modified else 'Session only'
+    if document.conflict:
+        return 'File changed outside the editor. Save a copy to keep your edits.'
+    return 'Unsaved changes · recovery copy kept' if document.modified else 'Saved on this device'
 
 
 class TextEditorView:
@@ -16,17 +26,20 @@ class TextEditorView:
         self.loading = True
         self.preview_pending = None
         self.split_preview = None
-        self.selector = toga.Selection(on_change=self.selected, style=Pack(flex=1, height=44))
-        self.name = toga.TextInput(placeholder='Document name', on_change=self.name_changed, style=Pack(flex=1, height=44))
+        self.selector = toga.Selection(on_change=self.selected, style=Pack(flex=1, height=48))
+        self.name = toga.TextInput(placeholder='Document name', on_change=self.name_changed, style=Pack(flex=1, height=48))
         self.editor = toga.MultilineTextInput(on_change=self.text_changed,
             style=Pack(flex=1, font_size=int(app.preferences.values['font_size']), margin_top=4))
         self.status = toga.Label('', style=Pack(font_size=12, margin_top=4))
         self.recovery_notice = toga.Label('', style=Pack(font_size=12))
-        self.import_button = toga.Button('Import…', on_press=app.import_document, style=Pack(flex=1, height=44))
-        self.save_button = toga.Button('Save', on_press=app.save_document, style=Pack(flex=1, height=44))
-        self.export_button = toga.Button('Export…', on_press=app.export_document, style=Pack(flex=1, height=44))
+        self.import_button = toga.Button('Import…', on_press=app.import_document, style=Pack(flex=1, height=48))
+        self.save_button = action_button(toga.Button('Save', on_press=app.save_document, style=Pack(flex=1, height=48)))
+        self.export_button = toga.Button('Export…', on_press=app.export_document, style=Pack(flex=1, height=48))
         box = self.document_view = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=12))
-        self.actions_button = toga.Button('•••', style=Pack(width=44, height=44))
+        self.actions_button = icon_button('more', 'Document actions')
+        self.conflict_actions = toga.Box(style=Pack(direction=COLUMN))
+        self.conflict_copy = toga.Button('Save a copy…',
+            on_press=lambda widget, **kw: self.actions.invoke(app.save_copy), style=Pack(height=48))
         self.actions = ActionMenu(self.actions_button, self, [
             ('Open documents', app.show_documents_hub), ('New document', app.choose_document_type),
             ('Open beside another document', lambda: app.adaptive.show_pair_picker()),
@@ -41,11 +54,16 @@ class TextEditorView:
         self.editor_area = toga.Box(children=[self.editor], style=Pack(direction=ROW, flex=1))
         box.add(self.editor_area)
         box.add(self.status)
+        box.add(self.conflict_actions)
         box.add(toga.Box(children=[self.save_button,
-            toga.Button('Find', on_press=self.toggle_search, style=Pack(flex=1, height=44)),
-            toga.Button('Preview', on_press=lambda widget, **kw: self.actions.invoke(app.show_preview), style=Pack(flex=1, height=44))],
+            icon_button('find', 'Find and replace', on_press=self.toggle_search),
+            toga.Button('Preview', on_press=lambda widget, **kw: self.actions.invoke(app.show_preview), style=Pack(flex=1, height=48))],
             style=Pack(direction=ROW, margin_top=8)))
         self.search = EditorSearch(self.editor, self.document_view)
+        previous, next_match = self.search.box.children[1].children
+        previous.style.flex = next_match.style.flex = 0
+        apply_icon(previous, 'back', 'Previous match')
+        apply_icon(next_match, 'forward', 'Next match')
         app.register_transfer_status(box)
 
     def toggle_search(self, widget=None, **kwargs):
@@ -55,9 +73,16 @@ class TextEditorView:
         self.document, self.session = document, session
         self.loading = True
         self.name.value, self.editor.value = document.name, document.text
-        self.status.text = ('Stored file changed. Save a copy to keep recovered edits.' if document.conflict
-                            else 'Recovered unsaved edits.' if document.modified else 'Saved')
+        self.refresh_status()
         self.loading = False
+
+    def refresh_status(self):
+        self.status.text = document_status(self.document)
+        conflict = not getattr(self.document, 'private', False) and self.document.conflict
+        if conflict and self.conflict_copy not in self.conflict_actions.children:
+            self.conflict_actions.add(self.conflict_copy)
+        elif not conflict and self.conflict_copy in self.conflict_actions.children:
+            self.conflict_actions.remove(self.conflict_copy)
 
     def bind(self):
         self.app.editor_view = self
@@ -143,11 +168,11 @@ class TextEditorView:
             return
         self.session.dirty = self.document.modified
         if getattr(self.document, 'private', False):
-            self.status.text = 'Session-only draft. Save it before closing.'
+            self.refresh_status()
             return
         try:
             self.app.store.checkpoint(self.document)
-            self.status.text = 'Draft preserved' if self.document.modified else 'Saved'
+            self.refresh_status()
         except (OSError, ValueError) as error:
             self.status.text = 'Could not preserve edits: ' + str(error)
 

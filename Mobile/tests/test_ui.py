@@ -10,6 +10,17 @@ from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
 from logisticsmobile.chat_fixture import fixture_server
 
 
+def seed_download(store, name, data):
+    """Represent a completed private copy created by an older app version."""
+    from uuid import uuid4
+    folder = store.root / uuid4().hex
+    folder.mkdir()
+    target = folder / name
+    target.write_bytes(data)
+    (folder / '.complete').write_text(name)
+    return target
+
+
 class MobileUITests(unittest.TestCase):
     def test_create_edit_recover_switch_import_save_and_conflict_copy(self):
         with TemporaryDirectory() as directory:
@@ -18,7 +29,7 @@ class MobileUITests(unittest.TestCase):
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
             self.assertEqual(app.native_host.state.destination, 'home')
-            self.assertEqual(app.body.children[0].content.children[0].text, 'Welcome to Logistics')
+            self.assertEqual(app.body.children[0].content.children[0].text, 'Your workspace')
             app.show_settings()
             app.font_choice.value = '20'
             app.restore_choice.value = False
@@ -91,7 +102,8 @@ class MobileUITests(unittest.TestCase):
             self.assertEqual(app.reader_manager().active.book_record['position'], 1)
             self.assertFalse(app.reader_manager().active.next_page.enabled)
             app.loop.run_until_complete(app.toggle_bookmark())
-            self.assertEqual(app.reader_manager().active.book_record['bookmarks'], [1])
+            self.assertEqual(app.reader_manager().active.book_record['epub_bookmarks'], [
+                dict(path=app.reader_manager().active.book_reader.spine[1], offset=0)])
             record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), comic)
             app.refresh_library()
             app.loop.run_until_complete(app.open_book(record['id']))
@@ -120,9 +132,6 @@ class MobileUITests(unittest.TestCase):
                 def entries(self, remote, path=''):
                     assert remote == 'Fixture'
                     return [dict(path='fixture.txt', size=22, directory=False)]
-                def download_into(self, remote, path, descriptor):
-                    import os
-                    os.write(descriptor, b'Private cloud fixture\n')
                 def clear(self):
                     self.forgotten = True
                 def cancel(self):
@@ -139,7 +148,7 @@ class MobileUITests(unittest.TestCase):
             self.assertEqual(app.cloud_password.value, '')
             app.loop.run_until_complete(app.browse_cloud())
             app.cloud_entries.value = next(iter(app.cloud_rows))
-            app.loop.run_until_complete(app.download_cloud())
+            app.refresh_downloads(seed_download(app.downloads, 'fixture.txt', b'Private cloud fixture\n'))
             self.assertEqual(len(app.downloads.items()), 1)
             app.loop.run_until_complete(app.open_download())
             self.assertEqual(app.editor.value, 'Private cloud fixture\n')

@@ -68,3 +68,26 @@ class AndroidDeployTests(unittest.TestCase):
             self.assertTrue((root / 'payload/current-source').exists())
             self.assertIn('update', run.call_args.args[0])
             self.assertNotIn('--test', run.call_args.args[0])
+
+    def test_wireless_discovery_uses_connect_services_and_never_pairs(self):
+        calls = []
+        def run(command, env):
+            calls.append(command)
+            return ('List of discovered mdns services\n'
+                    'paired\t_adb-tls-connect._tcp\t192.168.2.10:35001\n'
+                    'pairing\t_adb-tls-pairing._tcp\t192.168.2.10:35002\n')
+        with patch.object(deploy, 'run', side_effect=run):
+            deploy.discover_wireless('/sdk/adb', {})
+        self.assertEqual(calls, [['/sdk/adb', 'mdns', 'services'],
+                                 ['/sdk/adb', 'connect', '192.168.2.10:35001']])
+
+    def test_local_sdk_settings_fill_missing_environment_without_overriding_it(self):
+        import json
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / '.tools').mkdir()
+            (root / '.tools/android-sdk.json').write_text(json.dumps(dict(ANDROID_HOME=directory)))
+            with patch.object(deploy, 'ROOT', root), patch.dict(deploy.os.environ, {}, clear=True):
+                self.assertEqual(deploy.deployment_environment()['ANDROID_HOME'], directory)
+            with patch.object(deploy, 'ROOT', root), patch.dict(deploy.os.environ, {'ANDROID_HOME': '/explicit'}, clear=True):
+                self.assertEqual(deploy.deployment_environment()['ANDROID_HOME'], '/explicit')

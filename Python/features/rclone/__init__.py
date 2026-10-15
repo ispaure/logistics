@@ -4,9 +4,6 @@ rclone feature integration for Logistics.
 
 FEATURE_DESCRIPTION = 'Browse cloud storage and transfer files with rclone.'
 
-from . import api
-
-
 FEATURE_NAME = 'rclone'
 FEATURE_LABEL = 'rclone'
 
@@ -14,6 +11,7 @@ FEATURE_LABEL = 'rclone'
 def initialize() -> None:
     """Initialize the rclone feature."""
 
+    from . import api
     api.initialize()
 
 

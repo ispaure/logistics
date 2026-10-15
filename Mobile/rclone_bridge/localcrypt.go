@@ -13,6 +13,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/rclone/rclone/backend/crypt"
 	"github.com/rclone/rclone/fs"
@@ -65,6 +66,7 @@ func validateCryptRemotes(remotes map[string]map[string]string) error {
 }
 
 var cryptCiphers = map[string]*crypt.Cipher{}
+var cryptCipherMu sync.Mutex
 
 func cryptConnection(name string) (*crypt.Cipher, string, string, string, error) {
 	if !admitted[name] {
@@ -83,6 +85,8 @@ func cryptConnection(name string) (*crypt.Cipher, string, string, string, error)
 	encoded, _ := json.Marshal(values)
 	digest := sha256.Sum256(encoded)
 	identity := hex.EncodeToString(digest[:])
+	cryptCipherMu.Lock()
+	defer cryptCipherMu.Unlock()
 	cipher := cryptCiphers[identity]
 	if cipher == nil {
 		cipher, err = cryptCipher(values)
@@ -138,71 +142,6 @@ func cryptList(ctx context.Context, name, dir string) ([]entry, error) {
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	return result, nil
-}
-
-func cryptFetch(ctx context.Context, name, p string, fd int) (map[string]string, error) {
-	if p == "" || !validPath(p) {
-		return nil, errors.New("invalid encrypted file path")
-	}
-	cipher, backing, root, identity, err := cryptConnection(name)
-	if err != nil {
-		return nil, err
-	}
-	encrypted := cipher.EncryptFileName(p)
-	if _, err = readInto(ctx, backing, path.Join(root, encrypted), fd); err != nil {
-		return nil, err
-	}
-	return map[string]string{"remote": name, "encrypted_path": encrypted, "identity": identity}, nil
-}
-
-// Explicit decrypted download. Ordinary read/crypt_fetch keep their existing
-// storage contracts; the caller publishes plaintext only after authentication.
-func cryptReadInto(ctx context.Context, name, p string, fd int) (int64, error) {
-	if p == "" || !validPath(p) {
-		return 0, errors.New("invalid decrypted download path")
-	}
-	cipher, backing, root, _, err := cryptConnection(name)
-	if err != nil {
-		return 0, err
-	}
-	f, err := remote(ctx, backing)
-	if err != nil {
-		return 0, err
-	}
-	obj, err := f.NewObject(ctx, path.Join(root, cipher.EncryptFileName(p)))
-	if err != nil {
-		return 0, errors.New("encrypted remote file could not be opened")
-	}
-	expected, err := cipher.DecryptedSize(obj.Size())
-	if err != nil || expected < 0 {
-		return 0, errors.New("decrypted download size is unavailable")
-	}
-	target, err := privateOutput(fd)
-	if err != nil {
-		return 0, err
-	}
-	defer target.Close()
-	stream, err := obj.Open(ctx)
-	if err != nil {
-		return 0, errors.New("encrypted remote file could not be opened")
-	}
-	reader, err := cipher.DecryptData(stream)
-	if err != nil {
-		_ = stream.Close()
-		return 0, errors.New("encrypted download authentication failed")
-	}
-	count, copyErr := io.Copy(target, contextReader{ctx, reader})
-	closeErr := reader.Close()
-	if copyErr != nil || closeErr != nil || ctx.Err() != nil {
-		return 0, errors.New("decrypted download authentication failed or cancelled")
-	}
-	if count != expected {
-		return 0, errors.New("decrypted download size changed")
-	}
-	if target.Sync() != nil {
-		return 0, errors.New("decrypted download could not be flushed")
-	}
-	return count, nil
 }
 
 func cryptDescribe(name, encrypted, identity string) (string, *crypt.Cipher, error) {

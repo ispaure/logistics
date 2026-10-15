@@ -6,10 +6,12 @@ from pathlib import Path
 from commonUtils.formats.iniType import INIFile
 from commonUtils.persistence import atomic_write_bytes
 
-DEFAULTS = {'font_size': '16', 'restore_last_document': 'true', 'last_document': '',
+from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_SIZES, validate as validate_reading
+
+DEFAULTS = {'android_eink': 'false', 'font_size': '16', 'restore_last_document': 'true', 'last_document': '',
             'document_card_overview': 'true', 'show_legacy': 'false',
             'clear_unmodified_documents_on_restart': 'true',
-            'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]'}
+            'comic_layout': 'single', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS}
 
 
 class Preferences:
@@ -40,6 +42,12 @@ class Preferences:
                     if parser.has_option('Mobile', key):
                         self.values[key] = parser['Mobile'][key]
                 self.validate(self.values)
+                # Older session-only imports persisted package/remote labels.
+                # Remove those associations as part of the privacy migration.
+                packages = json.loads(self.values['remote_packages'])
+                retained = [item for item in packages if not item['session_only']]
+                if retained != packages:
+                    self.save(remote_packages=json.dumps(retained))
         except (OSError, ValueError, UnicodeError, Error) as error:
             self.error = 'Preferences were preserved; using defaults. ' + str(error)
             self.values = dict(DEFAULTS)
@@ -49,7 +57,9 @@ class Preferences:
     def validate(values):
         if values.keys() != DEFAULTS.keys():
             raise ValueError('Unknown mobile preference.')
-        if values['font_size'] not in {'12', '14', '16', '18', '20', '24', '28', '32'}:
+        if values['android_eink'] not in {'true', 'false'}:
+            raise ValueError('Invalid Android E Ink preference.')
+        if values['font_size'] not in FONT_SIZES:
             raise ValueError('Choose a supported font size.')
         if values['restore_last_document'] not in {'true', 'false'}:
             raise ValueError('Invalid document restore preference.')
@@ -59,8 +69,11 @@ class Preferences:
             raise ValueError('Invalid document overview preference.')
         if values['clear_unmodified_documents_on_restart'] not in {'true', 'false'}:
             raise ValueError('Invalid document clearing preference.')
-        if values['reading_margin'] not in {'8', '16', '24', '32'} or values['reading_theme'] not in {'system', 'light', 'dark'}:
+        if values['reading_margin'] not in {'8', '16', '24', '32'} or values['reading_theme'] not in {'system', 'light', 'dark', 'sepia', 'slate'}:
             raise ValueError('Invalid reader appearance preference.')
+        validate_reading(values)
+        if values['comic_layout'] not in {'single', 'auto', 'double'}:
+            raise ValueError('Invalid comic page layout.')
         packages = json.loads(values['remote_packages'])
         if (not isinstance(packages, list) or len(packages) > 32 or any(
                 not isinstance(item, dict) or set(item) != {'zip', 'remotes', 'session_only'}

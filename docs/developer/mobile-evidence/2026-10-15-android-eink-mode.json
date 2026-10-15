@@ -1,0 +1,36 @@
+{
+  "cases": [
+    "default_unchanged",
+    "toggle_saves_immediately",
+    "native_black_text_on_white",
+    "open_draft_preserved",
+    "private_webview_live_toggle_and_restore",
+    "private_html_bound_no_disk_fallback",
+    "enabled_restores_on_process_restart",
+    "disable_restores_original_palette",
+    "disabled_restores_on_process_restart"
+  ],
+  "phase": 3,
+  "success": true,
+  "source": {
+    "commonUtils_commit": "fd1df652774c6da76e6676c4a51f9e0e941022a3",
+    "commonUtils_dirty": true,
+    "logistics_commit": "2253c4ee058ef54f5c2507269a94cf65317cc65f",
+    "dirty": true,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm",
+      "rclone"
+    ],
+    "logistics_committed_at": "2026-10-15T03:37:15-04:00",
+    "source_sha256": "81e17e4bf11bcdbf6927eaf4267bb2f38e612ca224c2a4bfb02929abc3e81f57"
+  },
+  "original_ink": -1117705,
+  "target": "Android 15 arm64 emulator",
+  "native_launches": 3,
+  "mobile_host_tests": 258,
+  "scope": "Separate synthetic validation app; physical BOOX hardware and vendor refresh/waveform controls are not tested or implemented."
+}

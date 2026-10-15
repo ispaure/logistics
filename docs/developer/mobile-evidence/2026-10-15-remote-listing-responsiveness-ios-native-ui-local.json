@@ -1,0 +1,77 @@
+{
+  "success": true,
+  "target": "ios",
+  "sys_platform": "ios",
+  "backend": "toga_iOS.app",
+  "cases": [
+    "cloud_200_folders_timer_menu_and_bounded_publication",
+    "secret_200_folders_timer_menu_and_bounded_publication",
+    "cloud_navigation_and_current_folder_search",
+    "cloud_direct_note_txt",
+    "cloud_direct_note_md",
+    "cloud_comic_return_hub_menu_has_no_native_ui_requests",
+    "cloud_direct_comic_cbz",
+    "cloud_direct_page_png",
+    "cloud_direct_book_epub",
+    "cloud_manual_copy_dialog",
+    "cloud_error_large_txt",
+    "cloud_error_broken_png",
+    "cloud_error_broken_cbz",
+    "cloud_error_broken_epub",
+    "cloud_error_missing_txt",
+    "cloud_failed_navigation_keeps_listing",
+    "cloud_preview_only_without_persisted_plaintext",
+    "secret_navigation_and_current_folder_search",
+    "secret_direct_note_txt",
+    "secret_direct_note_md",
+    "secret_comic_return_hub_menu_has_no_native_ui_requests",
+    "secret_direct_comic_cbz",
+    "secret_direct_page_png",
+    "secret_direct_book_epub",
+    "secret_manual_copy_dialog",
+    "secret_error_large_txt",
+    "secret_error_broken_png",
+    "secret_error_broken_cbz",
+    "secret_error_broken_epub",
+    "secret_error_missing_txt",
+    "secret_failed_navigation_keeps_listing",
+    "secret_preview_only_without_persisted_plaintext",
+    "previews_preserve_remote_originals",
+    "credential_lock_retires_remote_reader",
+    "credential_replacement_retires_remote_reader"
+  ],
+  "probe_sha256": "d2f865fbaedc069f06013f60e056fcfe6c1f8fb6683275d58ba7b447d6ba6247",
+  "scope": "Synthetic memory remotes in a separate app; simulator/emulator evidence, not physical-device or live-cloud validation.",
+  "source": {
+    "commonUtils_commit": "fd1df652774c6da76e6676c4a51f9e0e941022a3",
+    "commonUtils_dirty": true,
+    "logistics_commit": "2253c4ee058ef54f5c2507269a94cf65317cc65f",
+    "dirty": true,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm",
+      "rclone"
+    ],
+    "logistics_committed_at": "2026-10-15T03:37:15-04:00",
+    "source_sha256": "f16aa122c2b5efa096a141badd7c5b2d01f7893b570981190325dfdc7ecfa82b"
+  },
+  "large_listing": {
+    "Cloud": {
+      "max_ui_gap_seconds": 0.1451430320739746,
+      "listing_calls": 1,
+      "folders": 200,
+      "timer_advanced": true,
+      "hub_menu_opened": true
+    },
+    "Secret": {
+      "max_ui_gap_seconds": 0.23628699779510498,
+      "listing_calls": 1,
+      "folders": 200,
+      "timer_advanced": true,
+      "hub_menu_opened": true
+    }
+  }
+}

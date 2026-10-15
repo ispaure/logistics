@@ -80,6 +80,9 @@ def _browser_view(path=None, *, root_path=None, filesystem_scope=False):
     from services.local_storage import install_local_storage_policy
     install_local_storage_policy()
     initial = path or root_path or Path.home()
+    from features.rclone.ui.remote_browser import RemoteLocation, RemoteBrowserView
+    if isinstance(initial, RemoteLocation):
+        return RemoteBrowserView(initial)
     if isinstance(initial, _PrivateBrowserLocation):
         from features.rclone.ui.local_crypt import CryptBrowserView, ensure_session
         if not ensure_session(initial.item.context, package=initial.item.package, parent=qt.QApplication.activeWindow()):
@@ -97,6 +100,10 @@ def _browser_view(path=None, *, root_path=None, filesystem_scope=False):
 def _new_browser_tab(workspace):
     active = workspace.active_view
     browser = getattr(active, 'file_browser', None)
+    from features.rclone.ui.remote_browser import RemoteLocation
+    if isinstance(getattr(active, 'location', None), RemoteLocation):
+        return workspace.add_view(replace(active.location,
+            directory=active.provider.relative(browser.navigation.directory)))
     if getattr(active, 'item', None) is not None:
         return workspace.add_view(_PrivateBrowserLocation(active.item,
             browser.navigation.directory if browser else active.item.data))
@@ -342,7 +349,7 @@ class FileBrowserWindow(_WorkspaceHost, qt.QMainWindow):
         super().__init__(parent)
         self.setWindowFlag(qt.Qt.WindowType.Window, True)
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
-        self.setWindowTitle(f'File Browser: {Path(root_path).name}')
+        self.setWindowTitle('File Browser')
         self.resize(1200, 800)
         self.workspace_publish_menus = True
         self.workspace = Workspace(lambda path: _browser_view(root_path=path or root_path), self,

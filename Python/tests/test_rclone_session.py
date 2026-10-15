@@ -75,6 +75,7 @@ class RcloneSessionTests(unittest.TestCase):
 
 class RcloneCredentialScreenTests(unittest.TestCase):
     def test_session_choice_labels_and_forgets_the_package_without_files(self):
+        from types import SimpleNamespace
         from commonUtils.ui import pyside as qt
         from commonUtils.filesystem.files import File
         from features.rclone.ui.page import RclonePage
@@ -85,6 +86,7 @@ class RcloneCredentialScreenTests(unittest.TestCase):
             with open_archive(package, 'w', password='synthetic-password') as archive:
                 archive.writestr('Fixture.txt', '[Fixture]\ntype=local\n')
             with patch.object(credentials, 'get_logistics_remote_credentials_zip_lst', return_value=[File(package)]), \
+                 patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(temp_path=root / 'work')), \
                  patch.object(configuration, 'get_rclone_config_dir', return_value=root):
                 page = RclonePage()
                 try:

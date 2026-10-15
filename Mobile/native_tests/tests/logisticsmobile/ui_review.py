@@ -12,7 +12,7 @@ async def exercise_ui_review(app):
         base64.b64decode('UklGRjwAAABXRUJQVlA4IDAAAADQAQCdASoCAAMAAUAmJaACdLoB+AADsAD+8ut//NgVzXPv9//S4P0uD9Lg/9KQAAA='),
         base64.b64decode('UklGRl4AAABXRUJQVlA4WAoAAAAQAAAAAQAAAgAAQUxQSAcAAAAAgICAgICAAFZQOCAwAAAA0AEAnQEqAgADAAFAJiWgAnS6AfgAA7AA/vLrf/zYFc1z7/f/0uD9Lg/S4P/SkAAA')]
     from features.comics.mobile.validation import image_dimensions
-    from logisticsmobile.localcrypt import PrivateReader
+    from logisticsmobile.provider_readers import PrivateReader
     from commonUtils.runtime.document_access import LocalDocuments
     from zipfile import ZipFile
     comic = app.storage_root / 'WebP review.cbz'
@@ -52,20 +52,22 @@ async def exercise_ui_review(app):
     from logisticsmobile.preferences import DEFAULTS
     app.preferences.save(font_size=DEFAULTS['font_size'])
     await app.open_book(record['id'])
-    canvas = app.reader_manager().active.book_content.children[0]
+    def current_canvas():
+        displayed = app.reader_manager().active.book_content.children[0]
+        return displayed.canvases[0] if hasattr(displayed, 'canvases') else displayed
     await capture('comic-page')
     def canvas_height():
-        native = canvas._impl.native
+        native = current_canvas()._impl.native
         return native.bounds.size.height if get_os() is OS.IOS else native.getHeight()
     full_height = canvas_height()
     if get_os() is OS.IOS:
         assert app.native_host.adapter.controller.isTabBarHidden(), f'Fullscreen lost: {app._comic_chrome_hidden}, detail={app.adaptive.in_detail}, owner={app.readers.active.reader_immersive}'
-    canvas.toggle_controls()
+    current_canvas().toggle_controls()
     await capture('comic-controls')
     if get_os() is OS.IOS:
         assert not app.native_host.adapter.controller.isTabBarHidden()
     assert canvas_height() < full_height, 'Comic mode did not reclaim reading space'
-    canvas.toggle_controls()
+    current_canvas().toggle_controls()
     app.show_home()
     assert not app._comic_chrome_hidden, 'Navigation stayed hidden outside the reader'
     app.readers.close(app.readers.active.session.id)
@@ -159,11 +161,10 @@ async def exercise_ui_review(app):
         else:
             assert app.folder_refresh_button._impl.native.getCompoundDrawables()[0] is not None
             assert folder._impl.native.performClick()
-        assert app.folder_browse_button.text == 'Browse Local'
-        assert [button.text for button, _ in app.folder_action_controls if button.text.startswith('Browse ')] == ['Browse Local']
-        if leave == app.show_settings:
-            await capture('folder-options')
-        await app.folder_browse_button.on_press()
+        for _ in range(100):
+            if getattr(app, 'files_view', None) in app.body.children:
+                break
+            await asyncio.sleep(.05)
         assert app.files_view in app.body.children
         assert app.file_storage.value == 'Local files' and app.file_path == ''
         assert app.file_browser.search.value == ''

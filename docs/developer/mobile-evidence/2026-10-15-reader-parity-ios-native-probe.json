@@ -1,0 +1,36 @@
+{
+  "success": true,
+  "cases": [
+    "native_epub_bridge",
+    "native_screen_turn_persists_utf16_anchor",
+    "native_unicode_search_highlight",
+    "native_precise_bookmark_and_reopen",
+    "native_import_metadata_transaction",
+    "native_provider_search_bookmark_cleanup",
+    "native_manga_spread_forward_backward",
+    "native_explicit_field_batch_metadata"
+  ],
+  "source": {
+    "commonUtils_commit": "fd1df652774c6da76e6676c4a51f9e0e941022a3",
+    "commonUtils_dirty": true,
+    "logistics_commit": "2253c4ee058ef54f5c2507269a94cf65317cc65f",
+    "dirty": true,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm",
+      "rclone"
+    ],
+    "source_sha256": "11577279269ce9a2794439ba3cd8992a2dd2ecdabd19d908d1ea497d0270cc00"
+  },
+  "scope": "Targeted iOS simulator probe using existing native executable and current staged Python sources; separate bundle and synthetic storage.",
+  "evidence_kind": "targeted-ios-simulator-probe",
+  "simulator": "Logistics UI Review Phone / iPhone 18 Pro / iOS 27.0",
+  "probe_sha256": "b11585c65151cf55c5e3bd1b4fe1a17d8c4514f40cff04762e1378a0548ae972",
+  "executable_sha256": "691ac5a0df457adfddce56fa15cc6f679d6edda8458c1d65de4e9fc5ed4de00d",
+  "native_bridge_rebuilt": false,
+  "physical_device": false,
+  "android_tested": false
+}

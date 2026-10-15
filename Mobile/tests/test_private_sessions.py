@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 from commonUtils.runtime.local_files import LocalFiles
 from logisticsmobile.app import LogisticsMobile
-from logisticsmobile.file_resources import LocalTextCopies
+from logisticsmobile.text_resources import LocalTextCopies
 
 
 class PrivateSessionTests(unittest.TestCase):
@@ -30,6 +30,24 @@ class PrivateSessionTests(unittest.TestCase):
         (self.local / name).write_bytes(data)
         self.assertTrue(self.run_async(self.app.open_crypt(copies=self.copies, key=name)))
         return self.app.private_sessions.active
+
+    def test_save_as_retains_source_privacy_until_exported_draft_closes(self):
+        from features.rclone.mobile.session_privacy import ResumePassword
+        gate = ResumePassword('session-password')
+        source = self.open('private-source.md')
+        source.privacy_gate = gate
+        source.crypt_text.value = 'Retained private draft'
+        self.run_async(self.app.show_crypt_save_as(owner=source))
+        self.assertIs(self.app.save_as_privacy_gate, gate)
+        self.app.save_as_name.value = 'exported-private.md'
+        self.run_async(self.app.save_text_destination())
+        exported = self.app.private_sessions.active
+        self.assertIsNot(exported, source)
+        self.assertIs(exported.privacy_gate, gate)
+        self.assertTrue(self.app.private_sessions.close(source.session.id, discard=True))
+        self.assertTrue(self.app.screen_privacy.sensitive())
+        self.assertTrue(self.app.private_sessions.close(exported.session.id, discard=True))
+        self.assertFalse(self.app.screen_privacy.sensitive())
 
     def test_delayed_provider_open_keeps_the_newly_selected_view_and_draft(self):
         import asyncio
@@ -137,7 +155,7 @@ class PrivateSessionTests(unittest.TestCase):
         self.app.show_documents_hub()
         def texts(widget):
             return [getattr(widget, 'text', '')] + [text for child in getattr(widget, 'children', ()) for text in texts(child)]
-        self.assertFalse(any('Sensitive-title' in text for text in texts(self.app.document_categories['markdown'])))
+        self.assertFalse(any('Sensitive-title' in text for text in texts(self.app.build_documents_hub().content)))
         self.assertEqual(self.app.recent_documents.sessions(), [])
         # Even an incorrectly cleared transient flag cannot persist a private provider.
         owner.session.transient = False

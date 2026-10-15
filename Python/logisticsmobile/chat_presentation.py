@@ -45,15 +45,15 @@ def transcript_document():
 ''' + css_variables() + '''
 :root { --ink:var(--text); --user:var(--hover); --line:var(--border) }
 * { box-sizing:border-box } body { margin:0; padding:12px 8px 20px; background:var(--surface); color:var(--ink); font:16px/1.5 system-ui; overflow-wrap:anywhere }
-main { max-width:780px; margin:auto } article { margin:0 0 16px; padding:12px 16px; border:1px solid var(--line); border-radius:16px } article.user { margin-left:28px; background:var(--user) }
+main { max-width:780px; margin:auto } article { margin:0 0 16px; padding:12px 16px; border:0; border-radius:16px } article.user { margin-left:28px; background:var(--user) }
 .role { color:var(--muted); font-size:.75em; margin-bottom:6px } .user .role { color:var(--ink) }
 p { margin:0 0 12px } p:last-child { margin-bottom:0 } .plain { white-space:pre-wrap }
 ul,ol { padding-left:24px; margin:8px 0 16px } li { margin-bottom:6px }
 pre { padding:12px; background:var(--user); border-radius:8px; white-space:pre-wrap; overflow-wrap:anywhere } code { font-family:monospace }
 h1,h2,h3,h4,h5,h6 { font-size:1.15em; margin:16px 0 8px } .muted { color:var(--muted) }
-.copy { min-height:44px; min-width:44px; padding:8px 0; border:0; background:transparent; color:var(--muted); font:inherit; font-size:.75em }
+.copy { min-height:48px; min-width:48px; padding:8px 0; border:0; background:transparent; color:var(--muted); font:inherit; font-size:.75em }
 button { touch-action:manipulation } button:focus-visible { outline:2px solid var(--accent) }
-#latest { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); padding:10px 16px; min-height:44px; border:1px solid var(--line); border-radius:24px; background:var(--surface); color:var(--ink); font:inherit; font-size:.8em }
+#latest { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); padding:10px 16px; min-height:48px; border:1px solid var(--line); border-radius:24px; background:var(--surface); color:var(--ink); font:inherit; font-size:.8em }
 #empty { padding:36px 12px } #empty h1 { font-size:1.25em; margin:0 0 8px } #copy-status { position:fixed; bottom:0; background:var(--surface); color:var(--ink); font-size:.8em }
 </style></head><body><main id="messages" aria-label="Conversation"></main>
 <section id="empty"><h1>Start a conversation</h1><p class="muted" id="hint">Write a message below.</p></section>
@@ -83,7 +83,7 @@ const follow = changed || data.force_latest || nearBottom();
 if (changed) { root.replaceChildren(); state.entries = []; window.scrollTo(0,0); }
 document.body.style.fontSize = data.font_size + 'px';
 document.getElementById('empty').hidden = data.count !== 0;
-document.getElementById('hint').textContent = data.configured ? 'Write a message below.' : 'Choose Server & model settings from the conversation menu (•••) to get started.';
+document.getElementById('hint').textContent = data.configured ? 'Write a message below.' : 'Use Set up chat above to choose a server and model.';
 data.entries.forEach((entry, offset) => {
  const index = data.start + offset;
  const previous = state.entries[index];

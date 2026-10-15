@@ -42,6 +42,25 @@ def comic_page_names(archive):
                                  and '__MACOSX' not in Path(info.filename).parts
                                  and not Path(info.filename).name.startswith('._')), key=natural_key)
 
+def double_page_indices(info, count):
+    result = set()
+    root = info.xml_root
+    for container in root.childNodes:
+        if container.localName != 'Pages' or container.namespaceURI != root.namespaceURI:
+            continue
+        for page in container.childNodes:
+            if page.localName != 'Page' or page.namespaceURI != root.namespaceURI:
+                continue
+            if page.getAttribute('DoublePage').lower() in ('true', '1', 'yes'):
+                try:
+                    index = int(page.getAttribute('Image'))
+                    if 0 <= index < count:
+                        result.add(index)
+                except ValueError:
+                    pass
+    return result
+
+
 class ComicPages:
     def __init__(self, path, document=None, *, password=None):
         self.document = document or ComicDocument(path, password=password)
@@ -50,21 +69,7 @@ class ComicPages:
             self.pages = comic_page_names(archive)
         if not self.pages:
             raise ValueError('This archive contains no supported image pages')
-        self.double_pages = set()
-        root = self.document.info.xml_root
-        for container in root.childNodes:
-            if container.localName != 'Pages' or container.namespaceURI != root.namespaceURI:
-                continue
-            for page in container.childNodes:
-                if page.localName != 'Page' or page.namespaceURI != root.namespaceURI:
-                    continue
-                if page.getAttribute('DoublePage').lower() in ('true', '1', 'yes'):
-                    try:
-                        index = int(page.getAttribute('Image'))
-                        if 0 <= index < len(self.pages):
-                            self.double_pages.add(index)
-                    except ValueError:
-                        pass
+        self.double_pages = double_page_indices(self.document.info, len(self.pages))
         try:
             self.right_to_left = self.document.info.get_field('Manga') == 'YesAndRightToLeft'
         except ValueError:

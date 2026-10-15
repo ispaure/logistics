@@ -14,6 +14,16 @@ from models.local_folder import LocalFolder
 
 
 class DownloaderWorkerTests(QtTestCase):
+    def test_remote_buttons_use_review_on_the_gui_thread(self):
+        from features.youtube_downloader.ui import dialog
+        for method, operation in (('_push_seasons', 'push_seasons'), ('_push_config', 'push_config'),
+                                  ('_pull_config', 'pull_config')):
+            with self.subTest(operation=operation), patch.object(dialog.ui, 'display_msg_box_ok_cancel', return_value=True), patch.object(
+                    downloader, operation, return_value=True) as transfer:
+                getattr(self.dialog, method)()
+                transfer.assert_called_once_with(self.dialog.folder, self.dialog.rclone_config_path, review=True)
+                self.assertFalse(self.dialog.progress.busy)
+
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         temp = TemporaryDirectory()

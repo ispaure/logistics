@@ -16,6 +16,64 @@ from local_crypt_fixture import crypt_fixture
 
 
 class LocalCryptTests(QtTestCase):
+    def test_open_stream_cached_bytes_reject_revocation_and_replacement(self):
+        with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
+            f.provider.list()
+            with f.provider.open('note.md') as stream:
+                self.assertEqual(stream.read(), f.original)
+                stream.seek(0)
+                session.forget(f.context)
+                self.assertTrue(f.provider.closed)
+                self.assertFalse(f.provider._blocks)
+                with self.assertRaisesRegex(ValueError, 'locked'):
+                    stream.read(1)
+                session.remember(f.context, {'Secret': {'type': 'crypt'}}, package_path=f.package)
+                with self.assertRaisesRegex(ValueError, 'locked'):
+                    stream.seek(0)
+
+    def test_revocation_retires_private_window_and_blocks_reshow(self):
+        from services.private_views import protect_private_view
+        with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
+            window = qt.QMainWindow()
+            window.setWindowTitle('Secret document sentinel')
+            protect_private_view(window, f.provider)
+            window.show()
+            self.app.processEvents()
+            session.forget(f.context)
+            self.app.processEvents()
+            self.assertFalse(window.isVisible())
+            self.assertFalse(window.isEnabled())
+            self.assertNotIn('sentinel', window.windowTitle())
+            window.show()
+            self.app.processEvents()
+            self.assertFalse(window.isVisible())
+            window.close()
+
+    def test_private_view_guard_follows_save_as_provider(self):
+        from types import SimpleNamespace
+        from services.private_views import protect_private_view
+        with TemporaryDirectory() as directory:
+            first = SimpleNamespace(private=True, context=Path(directory) / 'first.session')
+            second = SimpleNamespace(private=True, context=Path(directory) / 'second.session')
+            for provider in (first, second):
+                session.remember(provider.context, {'view': {'type': 'local'}})
+                self.addCleanup(session.forget, provider.context)
+            window = qt.QMainWindow()
+            window.choice = SimpleNamespace(provider=first)
+            protect_private_view(window, first)
+            window.show()
+            # ResourceTextWindow releases the old choice before publishing the
+            # new choice. Its pending Save As destination owns the displayed draft.
+            window.pending_choice = SimpleNamespace(provider=second)
+            session.forget(first.context)
+            self.app.processEvents()
+            self.assertTrue(window.isVisible())
+            window.choice, window.pending_choice = window.pending_choice, None
+            session.forget(second.context)
+            self.app.processEvents()
+            self.assertFalse(window.isVisible())
+            window.close()
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -78,10 +136,10 @@ class LocalCryptTests(QtTestCase):
                 entry, = get_folder_entries(source.get_remote_names(), remote_source='rclone',
                                             remote_context=source.context, local_folders=source.get_local_folders(),
                                             include_local_only=False)
-                self.assertEqual([action.name for action in ui_contributions._get_actions(entry)], ['Push...', 'Pull'])
+                self.assertEqual([action.name for action in ui_contributions._get_actions(entry)], ['Push...', 'Browse', 'Pull'])
                 with patch.object(actions, 'pull_remote', return_value=True) as pull:
-                    ui_contributions._get_actions(entry)[1].callback()
-                    pull.assert_called_once_with('Secret', item.context, package=f.package)
+                    next(action for action in ui_contributions._get_actions(entry) if action.name == 'Pull').callback()
+                pull.assert_called_once_with('Secret', item.context, package=f.package, review=True)
                 with patch('features.rclone.ui.local_crypt.ensure_session', return_value=False) as unlock:
                     self.assertFalse(actions.push_to_cloud(LocalFolder(item.data), f.context))
                     unlock.assert_called_once_with(item.context, package=f.package)
@@ -644,21 +702,21 @@ class LocalCryptTests(QtTestCase):
         from types import SimpleNamespace
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             entry = FolderEntry('Secret', remote_name='Secret', remote_source='rclone', remote_context=f.context)
-            self.assertEqual([a.name for a in _get_actions(entry)], ['Pull to Local', 'Pull to LocalCrypt'])
+            self.assertEqual([a.name for a in _get_actions(entry)], ['Browse', 'Pull to Local', 'Pull to LocalCrypt'])
             entry.local = SimpleNamespace(name='Secret')
             names = [a.name for a in _get_actions(entry)]
             self.assertIn('Pull', names)
-            self.assertEqual(names, ['Push...', 'Pull'])
+            self.assertEqual(names, ['Push...', 'Browse', 'Pull'])
             with patch.object(actions, 'pull_remote') as plain:
                 next(action for action in _get_actions(entry) if action.name == 'Pull').callback()
-                plain.assert_called_once_with('Secret', f.context)
+                plain.assert_called_once_with('Secret', f.context, review=True)
             entry.local = local_crypt.LocalCryptFolder(f.item)
             with patch.object(actions, 'pull_encrypted_copy') as encrypted, patch.object(actions, 'pull_remote') as plain:
                 choices = {a.name: a for a in _get_actions(entry)}
                 choices['Pull'].callback()
-                encrypted.assert_called_once_with('Secret', f.context, item=f.item)
+                encrypted.assert_called_once_with('Secret', f.context, item=f.item, review=True)
                 plain.assert_not_called()
-                self.assertEqual(set(choices), {'Push...', 'Pull'})
+                self.assertEqual(set(choices), {'Push...', 'Browse', 'Pull'})
             with patch('models.folder_discovery.get_local_folders', return_value=[]):
                 self.assertIsInstance(_matching_local_folders(f.context)[0], local_crypt.LocalCryptFolder)
             ordinary = SimpleNamespace(name='Secret')
@@ -906,16 +964,23 @@ class LocalCryptNamingTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'without this credential mapping'):
                     first.publish()
 
-    def test_legacy_mapping_and_invalid_names(self):
+    def test_unsupported_mapping_is_preserved_and_invalid_names_are_refused(self):
         with TemporaryDirectory() as directory:
             root = Path(directory) / 'LocalCrypt'
-            old = local_crypt.Connection(Path(directory) / 'one.zip', 'Secret', root, legacy=True)
+            current = local_crypt.Connection(Path(directory) / 'one.zip', 'Secret', root)
+            current.record.parent.mkdir(parents=True)
+            original = json.dumps({'schema': 1, 'package': str(current.package), 'remote': current.remote}).encode()
+            current.record.write_bytes(original)
+            old_data = root / 'old-package-hash' / 'Secret-oldhash'
+            old_data.mkdir(parents=True)
+            (old_data / 'sentinel').write_bytes(b'preserve old ciphertext')
             with patch('services.local_storage.install_local_storage_policy'):
-                old.publish()
-                self.assertEqual(local_crypt.connections(root), [old])
-                with patch.object(local_crypt.session, 'package_path', return_value=old.package), \
-                     patch.object(local_crypt.session, 'credentials', return_value={'Secret': {'type': 'crypt', 'remote': 'Cloud:x'}, 'Cloud': {'type': 'local'}}):
-                    self.assertEqual(local_crypt.connection('session', 'Secret', root=root), old)
+                self.assertEqual(local_crypt.connections(root), [])
+                with self.assertRaisesRegex(ValueError, 'existing LocalCrypt credential mapping is invalid'):
+                    current.publish()
+                self.assertFalse(current.data.exists())
+                self.assertEqual(current.record.read_bytes(), original)
+                self.assertEqual((old_data / 'sentinel').read_bytes(), b'preserve old ciphertext')
                 for name in ('../escape', '.connections', 'a/b', 'a\\b', 'CON', 'trailing.', 'trailing '):
                     with self.assertRaises(ValueError):
-                        local_crypt.Connection(old.package, name, root).publish()
+                        local_crypt.Connection(current.package, name, root).publish()

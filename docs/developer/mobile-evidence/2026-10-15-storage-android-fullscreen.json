@@ -1,0 +1,34 @@
+{
+  "success": true,
+  "cases": [
+    "android_legacy_toggle",
+    "native_storage_volume_settings",
+    "native_external_copy_verified",
+    "native_comic_fills_window_and_hides_system_bars",
+    "native_bars_restore_on_controls_and_route_exit",
+    "developer_settings_intent_dispatched"
+  ],
+  "drives": {
+    "App internal storage": "None",
+    "Internal shared storage \u00b7 /storage/emulated/0": "/storage/emulated/0"
+  },
+  "fullscreen_size": [
+    1079,
+    1919
+  ],
+  "window_size": [
+    1080,
+    1920
+  ],
+  "backend": "toga_android.app",
+  "source_files_sha256": {
+    "logisticsmobile/storage_ui.py": "12c48369b4e79edb9614807818bcade8122e1c827916d8943f6626b7f835af19",
+    "logisticsmobile/app.py": "92e3a18a0f1ed98e57d4e1ba9c2d5ab5bcabee4e5fbeb09708e708369856d9b8",
+    "logisticsmobile/folder_hub_ui.py": "d6e42a130769d1da6bbc53879d42bfcd9bc4d087c852faaef948792da81702ea",
+    "features/rclone/mobile/storage_location.py": "03b5c26a918ad8a145e30b2c8cfc6cc6829d73ae2837246840119b1d1d55f1a9",
+    "features/rclone/mobile/mirror_jobs.py": "32ddda3295a644f07842dfadd5d4072758653d18f1c097dadea283c6c4898b32",
+    "features/rclone/mobile/file_resources.py": "b4924a18c0f88f722ebbc35c1cc8e7b03833e93c0d07e074881c09d9a4593b8a",
+    "commonUtils/ui/native/chrome.py": "7820c817f90b893133c71fc1c8530be1a82222a0186059535868908879ecbb34"
+  },
+  "validation_scope": "Android emulator; external app-specific fixture, not removable SD card or physical BOOX. Probe uses a disposable cache workspace."
+}

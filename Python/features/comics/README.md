@@ -173,4 +173,65 @@ existing resolved-path identity and remember_position_bool setting.
 The portable `comic_page_names` helper supplies identical header-only page filtering
 and natural order for imports and readers. Native ordinary encrypted comics and
 LocalCrypt share a decoded archive facade and retain the same ComicDocument/ComicPages;
-platform password UI and native decoder policy live in logisticsmobile.
+platform password UI stays in logisticsmobile; native decoder policy lives under
+`features/comics/mobile`.
+
+`mobile/pages.py` applies the native PNG/JPEG/WebP policy to `comic_page_names`.
+Imports, provider readers and ordinary browser covers use that policy, including
+macOS resource-fork exclusions. Unsupported image pages fail explicitly rather
+than being silently omitted by provider readers. See the
+[desktop/mobile parity assessment](../../../docs/developer/books-comics-parity.md)
+for remaining spreads, reader controls and collection-tool gaps.
+
+Mobile spread loading/navigation and rendering live under `mobile/navigation.py`
+and `mobile/presentation.py`, reusing `reading.visible_pages` and
+`pages.double_page_indices`. Native single/batch metadata semantics live in
+`mobile/metadata.py` with shared `edit_state.py`; UUID/checksum publication remains
+in the mobile host. Imported metadata writes have a recoverable archive/record
+journal described in the parity guide.
+
+
+Native two-page spreads now compose an owned bitmap in `mobile/composite.py` and
+use one native ImageCanvas in `mobile/presentation.py`. Geometry preserves page
+proportions at a common height, manga visual order and a shared gutter. Fitted
+gutter spacing follows the desktop's eight-point gap across source resolutions. Combined
+output is capped at 16 million pixels and 8192 pixels per side before native
+allocation. UIKit rendering explicitly uses scale 1 so Retina density does not
+multiply that budget. Android and iOS compose directly in RAM; no temporary page
+files or runtime Pillow dependency are added. Toga's dummy backend uses its
+existing Pillow image implementation for regression checks.
+
+Zoom, pan, fit and gesture paging have one owner for the entire spread. Viewport
+reloads defer while zoomed and resume after fitting. The host constructs a new
+provider spread before disposing the previous one, so decoder/allocation failures
+retain the old pixels and logical position. Private session disposal clears the
+single composite image and its callbacks.
+
+
+Native collection search and recursive metadata plans live in `mobile/collection.py`.
+The host owns provider identities, imported-record signatures, async work and
+publication callbacks. The feature owns metadata extraction, token matching,
+suggestion generation, natural recursive selection bounds and all-file preflight.
+`catalog_values.py` shares field sets, list splitting and Unicode normalization
+with the desktop catalogue. Private-provider metadata never enters the imported
+index. Ordinary local folder batches reuse ComicDocument's verified atomic save.
+
+Native batch forms disable editing and reentry while applying, retain unchecked
+mixed fields, and provide explicit suggestion pickers without changing form values
+on construction. Imported reader saves invalidate the catalogue view/index so
+search and suggestions follow the new archive revision.
+
+`mobile/private_batch.py` owns recursive private preflight, metadata-only snapshots
+(8 MiB total), per-file results, retry baselines and cancellation. The host injects
+the credential-generation guard, scoped readers and existing verified encrypted
+publication transaction. Navigation, concealment, memory release and credential
+revocation retire its plan and wipe the feature-owned form. No private batch state
+is serialized. The host prevents concurrent private batches and additional scenes.
+
+`mobile/index.py` owns a disposable SQLite index for ordinary imports, incremental
+digest/stat signatures, bounded field extraction, Unicode token matching,
+suggestions and 50-row paging. It scans every import, commits chunks of 25, resumes
+partial scans and retries errors. Protected archives retain filename search only;
+the host rejects them before any password lookup or metadata parsing. Private
+providers are never fed to this index. Corrupt cache files can be recreated from
+imports; archive files and recovery journals are never used as cache storage.

@@ -1,6 +1,5 @@
 """Push-only nuisance filters and fail-closed LocalCrypt preflight."""
 import json
-import os
 from pathlib import Path
 import stat
 from commonUtils.persistence import atomic_write_json
@@ -9,27 +8,11 @@ from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.resource_mutations import delete_resource, inventory
 from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
 from . import configuration, session
-
-# Exact generated file names only. User exclusion patterns never authorize deletion.
-CLEANUP_NAMES = frozenset({'.ds_store', 'thumbs.db', 'ehthumbs.db', 'ehthumbs_vista.db'})
-DEFAULT_EXCLUDES = ('.DS_Store', '[Tt]humbs.db', '[Ee]hthumbs.db', '[Ee]hthumbs_vista.db', '[Dd]esktop.ini', '._*')
-
+from .local_policy import inventory as _inventory
+from .transfer_options import CLEANUP_NAMES, DEFAULT_EXCLUDES, validate_excludes
 
 def settings_path():
     return configuration.get_rclone_config_dir() / 'push-rules.json'
-
-
-def validate_excludes(values):
-    if not isinstance(values, (list, tuple)) or len(values) > 200:
-        raise ValueError('Use at most 200 exclusion patterns.')
-    result = []
-    for value in values:
-        if not isinstance(value, str) or len(value) > 1024 or any(ord(c) < 32 for c in value):
-            raise ValueError('Each exclusion must be a single pattern, at most 1024 characters.')
-        value = value.strip()
-        if value and value not in result:
-            result.append(value)
-    return tuple(result)
 
 
 def load_excludes():
@@ -48,23 +31,6 @@ def save_excludes(values):
     values = validate_excludes(values)
     settings_path().parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(settings_path(), {'schema': 1, 'excludes': list(values)}, durable_directory=True)
-
-
-def _inventory(root, cancelled):
-    records = {}
-    def failed(error):
-        raise error
-    for folder, directories, files in os.walk(root, followlinks=False, onerror=failed):
-        check_cancelled(cancelled)
-        for name in (*directories, *files):
-            path = Path(folder) / name
-            info = path.lstat()
-            if path.is_symlink() or (hasattr(path, 'is_junction') and path.is_junction()):
-                raise ValueError('LocalCrypt push refused: linked entry ' + str(path.relative_to(root)))
-            if not stat.S_ISDIR(info.st_mode) and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
-                raise ValueError('LocalCrypt push refused: unsupported entry ' + str(path.relative_to(root)))
-            records[path.relative_to(root).as_posix()] = (info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-    return records
 
 
 def validate_localcrypt_push(item, binary, *, cancelled=lambda: False, report=lambda *args: None, cleanup=True):

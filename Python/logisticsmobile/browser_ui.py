@@ -1,6 +1,7 @@
 """Compact Logistics presentation over the shared, bounded native browser."""
 import inspect
 import toga
+from .control_icons import apply_icon, icon_button
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from commonUtils.ui.native_browser import NativeBrowser
@@ -23,7 +24,16 @@ def middle_filename(button):
 
 
 class FileBrowser(NativeBrowser):
-    def __init__(self, *, open_file=None, item_actions=None, folder_visible=None, **kwargs):
+    @property
+    def page_size(self):
+        if self.bounded_pages:
+            return super().page_size
+        # Ordinary folders scroll continuously; bound native widget creation
+        # only for very large directories, in either presentation mode.
+        return 500
+
+    def __init__(self, *, open_file=None, item_actions=None, folder_visible=None, bounded_pages=False, **kwargs):
+        self.bounded_pages = bounded_pages
         self.folder_visible = folder_visible
         self.on_open_file, self.on_item_actions = open_file, item_actions
         super().__init__(**kwargs)
@@ -31,7 +41,12 @@ class FileBrowser(NativeBrowser):
         for child in list(self.widget.children):
             self.widget.remove(child)
         self.search.placeholder = 'Search files and folders'
-        self.options_button = toga.Button('Sort', on_press=self.toggle_options, style=Pack(height=44))
+        for control in (self.search, self.sort, self.list_button, self.tile_button, self.previous, self.next):
+            control.style.height = 48
+        apply_icon(self.back_button, 'back', 'Go back')
+        apply_icon(self.previous, 'back', 'Previous results')
+        apply_icon(self.next, 'forward', 'Next results')
+        self.options_button = toga.Button('Sort', on_press=self.toggle_options, style=Pack(height=48))
         self.options = toga.Box(children=[self.sort, self.list_button, self.tile_button],
                                 style=Pack(direction=ROW, margin_bottom=8))
         self.paging = toga.Box(children=[self.previous, self.next], style=Pack(direction=ROW))
@@ -39,6 +54,7 @@ class FileBrowser(NativeBrowser):
         self.widget.add(self.search_panel)
         self.widget.add(toga.Box(children=[self.back_button, self.page_label, self.options_button],
                                  style=Pack(direction=ROW, margin_top=4, margin_bottom=8)))
+        self.navigation_controls = self.widget.children[-1]
         self.page_label.style.flex = 1
         self.page_label.style.font_size = 12
         self.widget.add(self.items)
@@ -68,6 +84,22 @@ class FileBrowser(NativeBrowser):
             self.widget.insert(2, self.options)
 
     def render(self):
+        if not self.bounded_pages or self.closed:
+            return self._render()
+        # Build a bounded page offscreen. Mutating a live UIKit stack for every
+        # button, menu and size label repeatedly relays out the entire screen.
+        previous = self.items
+        self.items = toga.Box(style=Pack(direction=COLUMN))
+        try:
+            self._render()
+        except Exception:
+            self.items = previous
+            raise
+        index = self.widget.children.index(previous)
+        self.widget.remove(previous)
+        self.widget.insert(index, self.items)
+
+    def _render(self):
         super().render()
         if self.closed:
             return
@@ -75,6 +107,8 @@ class FileBrowser(NativeBrowser):
             button.text = button.text.removeprefix('✓ ')
             list_button(button)
             middle_filename(button)
+        entries = self.entries[self.page * self.page_size:(self.page + 1) * self.page_size]
+        entries_by_button = {self.buttons[entry.identity]: entry for entry in entries}
         for row in self.items.children:
             if not isinstance(row, toga.Box):
                 continue
@@ -86,7 +120,7 @@ class FileBrowser(NativeBrowser):
                     elif isinstance(child, toga.Button):
                         child.style.height = 52
                 if self.on_item_actions and row.children:
-                    entry = next((item for item in self.entries if self.buttons.get(item.identity) in row.children), None)
+                    entry = next((entries_by_button[child] for child in row.children if child in entries_by_button), None)
                     if entry is not None:
                         async def commands(widget=None, selected=entry, **kw):
                             if not self.closed and not self.navigation_busy:
@@ -94,10 +128,9 @@ class FileBrowser(NativeBrowser):
                                 result = self.on_item_actions()
                                 if inspect.isawaitable(result):
                                     await result
-                        row.add(toga.Button('•••', on_press=commands, style=Pack(width=44, height=52)))
+                        row.add(icon_button('more', 'Actions for ' + entry.label, on_press=commands))
 
         if self.mode == 'List':
-            entries = self.entries[self.page * 24:(self.page + 1) * 24]
             for row, entry in zip(self.items.children, entries):
                 if not isinstance(row, toga.Box):
                     continue
@@ -128,11 +161,12 @@ class FileBrowser(NativeBrowser):
 
         if self.previous.enabled or self.next.enabled:
             if self.paging not in self.widget.children:
-                self.widget.add(self.paging)
+                self.widget.insert(self.widget.children.index(self.navigation_controls) + 1, self.paging)
         elif self.paging in self.widget.children:
             self.widget.remove(self.paging)
-        if len(self.entries) <= 24:
-            self.page_label.text = f'{len(self.entries)} items'
+        if not self.previous.enabled and not self.next.enabled:
+            count = len(self.entries)
+            self.page_label.text = f'{count} item' + ('' if count == 1 else 's')
 
     async def _select_pressed(self, entry, widget, **kwargs):
         if self.closed or self.navigation_busy or not self.tree or entry.identity not in self.tree.entries or entry not in self.entries:

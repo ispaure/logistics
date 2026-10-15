@@ -6,8 +6,8 @@ resources never enter the ordinary workspace manifest, including their names.
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
-import re
 from uuid import uuid4
+from services.identifiers import uuid
 from commonUtils.persistence import atomic_write_json
 
 MAX_SESSIONS = 32
@@ -16,9 +16,6 @@ KINDS = {'text', 'markdown', 'epub', 'comic'}
 PROVIDERS = {'managed-text', 'library'}
 VIEW_NUMBERS = {'cursor', 'selection_length', 'scroll_x', 'scroll_y', 'position'}
 
-
-def uuid(value):
-    return isinstance(value, str) and re.fullmatch(r'[0-9a-f]{32}', value) is not None
 
 
 def view_state(value):

@@ -1,0 +1,87 @@
+{
+  "success": true,
+  "target": "ios",
+  "sys_platform": "ios",
+  "backend": "toga_iOS.app",
+  "cases": [
+    "native_epub_bridge",
+    "nested_contents_exact_anchor",
+    "screen_turn_persists_location",
+    "unicode_search_highlight",
+    "appearance_preserves_anchor",
+    "epub_rotation_preserves_passage",
+    "internal_link_and_external_rejection",
+    "bookmark_reopen",
+    "provider_search_bookmark_and_memory_cleanup",
+    "manga_spreads_doublepage_landscape_failed_read",
+    "composite_zoom_pan_and_paging_guard",
+    "zoomed_rotation_defers_layout_until_fit",
+    "comic_controls_fit_and_immersive_reentry",
+    "comic_auto_rotation",
+    "provider_comic_auto_rotation",
+    "provider_failed_decode_retains_zoomed_spread",
+    "provider_composite_zoom_suspend_and_close",
+    "process_restart_precise_resume"
+  ],
+  "scope": "Targeted native reader probe, synthetic files and separate app ID; not full release evidence.",
+  "source": {
+    "commonUtils_commit": "fd1df652774c6da76e6676c4a51f9e0e941022a3",
+    "commonUtils_dirty": true,
+    "logistics_commit": "2253c4ee058ef54f5c2507269a94cf65317cc65f",
+    "dirty": true,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm",
+      "rclone"
+    ],
+    "source_sha256": "2d57151be113b842933eeae8a800295e3ed4e5971d3476d64a02dd422277cc5a"
+  },
+  "validation_date": "2026-10-15",
+  "app_id": "io.github.ispaure.logisticsreaderprobe",
+  "probe_source": "Mobile/native_tests/tests/logisticsmobile/reader_parity_probe.py",
+  "probe_sha256": "afd6e327dea67ec07a0337971a92e8bcf61c8f233cbfa7b793149c97dc7a2f08",
+  "environment": {
+    "device": "iPad Pro 11-inch (M5) simulator",
+    "ios": "27.0",
+    "native_build": "Existing simulator executable with current staged Python; ad-hoc codesign"
+  },
+  "composite_checks": {
+    "surfaces_per_spread": 1,
+    "native_bitmap_size": [
+      834,
+      826
+    ],
+    "left_rgba": [
+      0,
+      0,
+      255,
+      255
+    ],
+    "right_rgba": [
+      255,
+      0,
+      0,
+      255
+    ],
+    "gutter_rgba": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gutter_pixels": 8,
+    "pixel_samples_verified": true,
+    "zoom": 2,
+    "pan": "Android MotionEvent delivery; iPad native UIScrollView content offsets",
+    "paging_while_zoomed": "blocked",
+    "rotation_while_zoomed": "retains spread until fit",
+    "provider_decode_failure": "old zoomed spread and logical position retained",
+    "private_suspend_close": "composite image and callbacks disposed",
+    "screenshots_inspected": true,
+    "physical_multitouch": false
+  },
+  "artifact_sha256": "7a7b70ce5add914939f05cb26f4de3ca37974080ae80d64311c61ceb84864be0"
+}

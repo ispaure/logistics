@@ -4,11 +4,12 @@ from copy import deepcopy
 import inspect
 import time
 import toga
+from .control_icons import icon_button
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, END
 
 from features.lm.domain import build_request, message, validate_settings
-from .appearance import surface
+from .appearance import surface, action_button
 from .chat import ChatStore, DEFAULT_SETTINGS, export_chat
 from .chat_transport import ChatClient, ChatCancelled
 from .chat_presentation import composer_height, transcript_document, transcript_entries, transcript_update
@@ -30,13 +31,13 @@ class ChatUI:
                 self.chat_profile_original = None
                 error = str(problem)
             self.chat_url = toga.TextInput(value=self.chat_profile['base_url'],
-                placeholder='Server API URL, e.g. https://host/v1', style=Pack(height=44))
-            self.chat_key = toga.PasswordInput(placeholder='API key (session only)', style=Pack(height=44))
-            self.chat_model = toga.TextInput(value=self.chat_profile['model'], placeholder='Model ID', style=Pack(height=44))
-            self.chat_models = toga.Selection(on_change=self.select_chat_model, style=Pack(height=44))
-            self.chat_refresh = toga.Button('Refresh models', on_press=self.refresh_chat_models, style=Pack(height=44))
-            self.chat_selector = toga.Selection(on_change=self.select_chat, style=Pack(height=44))
-            self.chat_new = toga.Button('New conversation', on_press=self.new_chat, style=Pack(height=44))
+                placeholder='Server API URL, e.g. https://host/v1', style=Pack(height=48))
+            self.chat_key = toga.PasswordInput(placeholder='API key (session only)', style=Pack(height=48))
+            self.chat_model = toga.TextInput(value=self.chat_profile['model'], placeholder='Model ID', style=Pack(height=48))
+            self.chat_models = toga.Selection(on_change=self.select_chat_model, style=Pack(height=48))
+            self.chat_refresh = toga.Button('Refresh models', on_press=self.refresh_chat_models, style=Pack(height=48))
+            self.chat_selector = toga.Selection(on_change=self.select_chat, style=Pack(height=48))
+            self.chat_new = toga.Button('New conversation', on_press=self.new_chat, style=Pack(height=48))
             self.chat_render_ready = False
             self.chat_render_revision = 0
             self.chat_render_generation = 0
@@ -49,29 +50,29 @@ class ChatUI:
             self.chat_prompt = toga.MultilineTextInput(on_change=self.chat_draft_changed,
                 placeholder='Message…', style=Pack(flex=1, height=52, font_size=int(self.preferences.values['font_size'])))
             self.chat_send = toga.Button('Send', on_press=self.chat_primary_action, style=Pack(width=64, height=52))
-            self.chat_export = toga.Button('Export conversation…', on_press=self.export_chat, style=Pack(height=44))
+            self.chat_export = toga.Button('Export conversation…', on_press=self.export_chat, style=Pack(height=48))
             contexts = sorted({'2048', '4096', '8192', '16384', '32768', str(self.chat_profile['settings']['context_tokens'])}, key=int)
             replies = sorted({'256', '512', '1024', '2048', '4096', str(self.chat_profile['settings']['max_tokens'])}, key=int)
             self.chat_context = toga.Selection(items=contexts,
-                value=str(self.chat_profile['settings']['context_tokens']), style=Pack(flex=1, height=44))
+                value=str(self.chat_profile['settings']['context_tokens']), style=Pack(flex=1, height=48))
             self.chat_max_tokens = toga.Selection(items=replies,
-                value=str(self.chat_profile['settings']['max_tokens']), style=Pack(flex=1, height=44))
-            self.chat_status = toga.MultilineTextInput(readonly=True, style=Pack(height=44, font_size=12))
-            self.chat_config_status = toga.MultilineTextInput(readonly=True, style=Pack(height=44, font_size=12))
+                value=str(self.chat_profile['settings']['max_tokens']), style=Pack(flex=1, height=48))
+            self.chat_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
+            self.chat_config_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
             self.chat_config_status_box = toga.Box(style=Pack(direction=COLUMN))
             self.chat_config_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
-                toga.Button('Back to conversation', on_press=self.show_chat, style=Pack(height=44)),
+                toga.Button('Back to conversation', on_press=self.show_chat, style=Pack(height=48)),
                 toga.Label('Server & generation settings'), self.chat_url, self.chat_key, self.chat_model,
                 toga.Label('Context tokens / maximum\nreply tokens'),
                 toga.Box(children=[self.chat_context, self.chat_max_tokens], style=Pack(direction=ROW)),
                 self.chat_refresh, self.chat_models, self.chat_config_status_box,
-                toga.Button('Save configuration', on_press=self.save_chat_configuration, style=Pack(height=44))],
+                toga.Button('Save configuration', on_press=self.save_chat_configuration, style=Pack(height=48))],
                 style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
             from .workspace_navigation import menu_button
             self.chat_title = toga.Label('New conversation', style=Pack(font_weight='bold', font_size=16))
             self.chat_model_label = toga.Label('', style=Pack(font_size=12))
             self.chat_menu_button = menu_button(self.toggle_chat_conversations, 'Conversations')
-            self.chat_actions_button = toga.Button('•••', style=Pack(width=44, height=44))
+            self.chat_actions_button = icon_button('more', 'Conversation actions')
             from commonUtils.ui.native.menus import NativeMenu
             self.chat_actions = NativeMenu(self.chat_actions_button, [
                 ('New conversation', self.new_chat), ('Export conversation…', self.export_chat),
@@ -91,8 +92,10 @@ class ChatUI:
             self.chat_status_box = toga.Box(style=Pack(direction=COLUMN))
             self.chat_composer = toga.Box(children=[self.chat_prompt, self.chat_send],
                 style=Pack(direction=ROW, align_items=END, margin_top=8))
-            self.chat_transcript_card = surface(toga.Box(children=[toga.Box(children=[self.chat_transcript],
-                style=Pack(direction=COLUMN, flex=1, margin=10))], style=Pack(direction=COLUMN, flex=1)), radius=16)
+            self.chat_setup = action_button(toga.Button('Set up chat', on_press=self.show_chat_configuration,
+                                                        style=Pack(height=48, margin_bottom=8)))
+            self.chat_setup_box = toga.Box(style=Pack(direction=COLUMN))
+            self.chat_transcript_card = toga.Box(children=[self.chat_transcript], style=Pack(direction=COLUMN, flex=1))
             surface(self.chat_prompt, radius=12)
             self.chat_messages = toga.Box(children=[self.chat_transcript_card, self.chat_status_box, self.chat_composer],
                 style=Pack(direction=COLUMN, flex=1))
@@ -102,7 +105,7 @@ class ChatUI:
                 toga.Box(children=[self.chat_title, self.chat_model_label], style=Pack(direction=COLUMN, flex=1, margin_left=4)),
                 self.chat_actions_button],
                 style=Pack(direction=ROW, margin_bottom=8))
-            self.chat_view = toga.Box(children=[self.chat_header, self.chat_workspace],
+            self.chat_view = toga.Box(children=[self.chat_header, self.chat_setup_box, self.chat_workspace],
                 style=Pack(direction=COLUMN, margin=12, flex=1))
             self.refresh_chats()
             if self.chat_labels:
@@ -154,7 +157,18 @@ class ChatUI:
         self.sync_chat_navigation()
         self.reserve_chat_navigation()
         self.update_chat_header()
+        self.update_chat_readiness()
         self.resize_chat_composer()
+
+    def update_chat_readiness(self):
+        configured = bool(self.chat_profile.get('base_url') and self.chat_profile.get('model'))
+        if configured and self.chat_setup in self.chat_setup_box.children:
+            self.chat_setup_box.remove(self.chat_setup)
+        elif not configured and self.chat_setup not in self.chat_setup_box.children:
+            self.chat_setup_box.add(self.chat_setup)
+        generating = getattr(self, 'chat_generating', False)
+        self.chat_send.enabled = generating or (configured and not self.chat_busy)
+        self.chat_setup.enabled = not self.chat_busy
 
     def sync_chat_navigation(self):
         """Place the iPhone drawer in the same native bar as Documents' menu."""
@@ -223,10 +237,10 @@ class ChatUI:
 
     def show_chat_actions(self, widget=None, **kwargs):
         box = toga.Box(children=[
-            toga.Button('Back to conversation', on_press=self.show_chat, style=Pack(height=44)),
-            toga.Button('New conversation', on_press=self.new_chat_from_actions, style=Pack(height=44)),
-            toga.Button('Export conversation…', on_press=self.export_chat, style=Pack(height=44)),
-            toga.Button('Server & model settings', on_press=self.show_chat_configuration, style=Pack(height=44))],
+            toga.Button('Back to conversation', on_press=self.show_chat, style=Pack(height=48)),
+            toga.Button('New conversation', on_press=self.new_chat_from_actions, style=Pack(height=48)),
+            toga.Button('Export conversation…', on_press=self.export_chat, style=Pack(height=48)),
+            toga.Button('Server & model settings', on_press=self.show_chat_configuration, style=Pack(height=48))],
             style=Pack(direction=COLUMN, margin=12))
         self.show_view(box, destination='chat', route='chat-actions', title='Conversation')
 
@@ -404,7 +418,7 @@ class ChatUI:
                         self.chat_context, self.chat_max_tokens):
             control.enabled = not busy
         self.chat_send.text = 'Stop' if self.chat_generating else 'Send'
-        self.chat_send.enabled = not busy or self.chat_generating
+        self.update_chat_readiness()
         for control in self.chat_conversation_buttons:
             control.enabled = not busy
 

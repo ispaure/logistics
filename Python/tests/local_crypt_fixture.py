@@ -12,7 +12,7 @@ from features.rclone import session, local_crypt, actions, sync, storage
 
 
 @contextmanager
-def crypt_fixture(root, binary):
+def crypt_fixture(root, binary, *, crypt_settings=None):
     root = Path(root).resolve()
     plain, cloud = root / 'plain', root / 'cloud'
     plain.mkdir()
@@ -30,7 +30,8 @@ def crypt_fixture(root, binary):
     package = root / 'Accounts.zip'
     with open_archive(package, 'w', password='synthetic-package-password') as archive:
         archive.writestr('Cloud.txt', '[Cloud]\ntype=local\n')
-        archive.writestr('Secret.txt', f'[Secret]\ntype=crypt\nremote=Cloud:{cloud}\npassword={obscured}\n')
+        extra = ''.join(f'{key}={value}\n' for key, value in (crypt_settings or {}).items())
+        archive.writestr('Secret.txt', f'[Secret]\ntype=crypt\nremote=Cloud:{cloud}\npassword={obscured}\n' + extra)
     context = root / 'Accounts.session'
     session.remember(context, session.read_package(package, 'synthetic-package-password'), package_path=package)
     environment, source, destination = session.launch(context, plain, 'Secret:')

@@ -6,6 +6,10 @@ import json
 from .window_owners import WindowOwners
 
 
+def is_workspace_scene(role):
+    return str(role) == 'UIWindowSceneSessionRoleApplication'
+
+
 class SceneManager:
     def __init__(self, app, *, prepare_only=False):
         self.app = app
@@ -141,6 +145,17 @@ class SceneManager:
 
             @objc_method
             def scene_willConnectToSession_options_(self, scene, session, options) -> None:
+                if not is_workspace_scene(session.role):
+                    # AirPlay/external displays must never get an independent
+                    # workspace (or a frozen copy of Home) with shared secrets.
+                    self.window = ObjCClass('UIWindow').alloc().initWithWindowScene(scene)
+                    controller = ObjCClass('UIViewController').alloc().init()
+                    from .screen_privacy import native_value
+                    controller.view.backgroundColor = native_value(ObjCClass('UIColor'), 'blackColor')
+                    controller.view.accessibilityLabel = 'Private content hidden'
+                    self.window.rootViewController = controller
+                    self.window.hidden = False
+                    return
                 identifier = sha256(str(session.persistentIdentifier).encode()).hexdigest()[:32]
                 from .workspace import uuid
                 requested_workspace = False
@@ -181,12 +196,14 @@ class SceneManager:
             def sceneDidBecomeActive_(self, scene) -> None:
                 if hasattr(self, 'host'):
                     self.host.scene_active = True
+                    self.host.screen_privacy.reveal()
                     self.host.main_window.on_gain_focus()
 
             @objc_method
             def sceneWillResignActive_(self, scene) -> None:
                 if hasattr(self, 'host'):
                     self.host.scene_active = False
+                    self.host.screen_privacy.conceal()
                     self.host.checkpoint()
 
             @objc_method
@@ -260,6 +277,7 @@ class SceneManager:
         for view in host.text_views.values():
             view.dispose()
         host.memory_pressure.dispose()
+        host.screen_privacy.dispose()
         host.adaptive.uninstall()
         host.routes.uninstall()
         host.native_host.dispose()
@@ -294,8 +312,6 @@ def workspace_class():
         def show_cloud_connections(self, widget=None, **kwargs):
             self.show_window_boundary()
         def show_chat(self, widget=None, **kwargs):
-            self.show_window_boundary()
-        def show_pull_jobs(self, widget=None, **kwargs):
             self.show_window_boundary()
         def show_transfers(self, widget=None, **kwargs):
             self.show_window_boundary()

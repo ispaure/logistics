@@ -6,7 +6,6 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path, PurePosixPath
-import re
 import stat
 import threading
 from uuid import uuid4
@@ -23,11 +22,6 @@ from . import configuration, executable, session
 def storage_root():
     from .storage import crypt_root
     return crypt_root()
-
-
-def _component(value):
-    readable = re.sub(r'[^\w.-]', '_', value, flags=re.UNICODE).strip('.')[:48] or 'remote'
-    return readable + '-' + sha256(value.encode()).hexdigest()[:12]
 
 
 def _linked(path):
@@ -63,7 +57,6 @@ class Connection:
     package: Path
     remote: str
     root: Path
-    legacy: bool = False
 
     @property
     def context(self):
@@ -71,8 +64,6 @@ class Connection:
 
     @property
     def data(self):
-        if self.legacy:
-            return self.root / _component(str(self.package)) / _component(self.remote)
         # Keep the actual remote spelling; never silently map two names together.
         name = self.remote
         if (not name or name.startswith('.') or name.endswith((' ', '.'))
@@ -114,7 +105,7 @@ class Connection:
         self.record.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         from commonUtils.filesystem.local_access import provider_record_access
         with provider_record_access(self.record):
-            atomic_write_json(self.record, {'schema': 1 if self.legacy else 2, 'package': str(self.package), 'remote': self.remote})
+            atomic_write_json(self.record, {'schema': 2, 'package': str(self.package), 'remote': self.remote})
 
 
 def connection(config_path, remote, *, root=None):
@@ -142,13 +133,13 @@ def connections(root=None, *, _include_missing=False):
             if record.is_symlink() or record.stat().st_size > 8192:
                 continue
             data = json.loads(record.read_text(encoding='utf-8'))
-            if not isinstance(data, dict) or data.get('schema') not in (1, 2) or set(data) != {'schema', 'package', 'remote'}:
+            if not isinstance(data, dict) or data.get('schema') != 2 or set(data) != {'schema', 'package', 'remote'}:
                 continue
             package = Path(data['package'])
             remote = data['remote']
             if not package.is_absolute() or not isinstance(remote, str) or not remote or any(c in remote for c in '\0\r\n/\\:'):
                 continue
-            item = Connection(package, remote, root, legacy=data['schema'] == 1)
+            item = Connection(package, remote, root)
             item.data  # Validate the folder name even for a missing copy.
             if item.record != record or (not _include_missing and not item.data.is_dir()):
                 continue
@@ -198,7 +189,9 @@ def push_target(path, config_path, remote_name=None, *, root=None, specific=Fals
         candidate = Path(path).absolute()
         if candidate == boundary or boundary in candidate.parents:
             raise ValueError(f'Encrypted copy has no valid credential mapping: {candidate}')
-        return (remote_name or Path(path).name) + ':' + (Path(path).name if specific else '')
+        from .scope import push_scope
+        remote, prefix = push_scope(Path(path).name, remote_name, specific=specific)
+        return remote + ':' + prefix
     validate_ciphertext_tree(item)
     if Path(config_path) != item.context:
         raise ValueError('This encrypted copy belongs to a different credential package.')
@@ -253,6 +246,7 @@ class CryptResources(LocalFiles):
         self._operation = threading.local()
         self._owners = 0
         self._owner_lock = threading.RLock()
+        self._unsubscribe = session.on_forget(self.context, self.close)
 
     def acquire(self):
         """Return an idempotent release callback for a browser/document owner."""
@@ -459,7 +453,12 @@ class CryptResources(LocalFiles):
                     _, evicted = self._blocks.popitem(last=False)
                     self._cache_bytes -= len(evicted)
             return data
-        with RangeReader(self.size(path), read, block_size=4 * 1024 * 1024, cache_blocks=2) as stream:
+        def validate():
+            # RangeReader can satisfy a read entirely from its own RAM cache.
+            # Validate before those hits too, including cancellation/revocation.
+            if self.version(path) != expected:
+                raise ValueError('The encrypted document changed; reopen it.')
+        with RangeReader(self.size(path), read, block_size=4 * 1024 * 1024, cache_blocks=2, validate=validate) as stream:
             stream.name = Path(self.relative(path)).name
             yield stream
 
@@ -535,6 +534,8 @@ class CryptResources(LocalFiles):
         return None
 
     def close(self):
+        if self.closed:
+            return
         self.closed = True
         session.forget(self.context)
         with self._cache_lock:

@@ -72,6 +72,8 @@ def delete_config_file(config_path: str | Path) -> bool:
         return False
 
     fileUtils.File(config_path).delete_file()
+    from .remote_resources import invalidate_config
+    invalidate_config(config_path)
     return True
 
 

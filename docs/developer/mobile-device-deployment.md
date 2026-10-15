@@ -1,4 +1,4 @@
-# Local iPhone deployment
+# Local iPhone and iPad deployment
 
 `Mobile/device_tools.py` owns the local physical-device workflow; the executable
 `Mobile/deploy_ios.command` anchors paths to its own directory and uses the
@@ -14,11 +14,31 @@ requires it; ordinary regression checks should not depend on the user unlocking
 their phone.
 
 Configuration pins the existing `io.github.ispaure.logisticsmobile` identity,
-paired physical iPhone UDID and Apple development team in ignored
+default paired physical iPhone/iPad UDID and Apple development team in ignored
 `Mobile/.device.json`. Simulator entries and ambiguous device selections are
 rejected. Debug and Release target configurations receive automatic signing
 with the selected team. An existing different team or bundle ID is rejected;
 the helper does not resolve mismatches by changing identity or uninstalling.
+
+`status`, `build`, `deploy` and `launch` accept `--device` to select another
+paired physical iPhone or iPad by exact name, CoreDevice identifier or UDID.
+The selection is resolved to its UDID for that command; the saved default device
+and shared signing identity remain pinned. `xcodebuild` uses the selected device
+as its destination so automatic provisioning can register/include that device.
+The profile's device membership and existing signing/Keychain checks still apply.
+Pairing, Developer Mode and initial device preparation are completed in Xcode
+and on the iPad before invoking the helper. A physical iPad installation and
+launch succeeded over USB on 2026-10-15.
+
+The no-argument launcher runs `deploy-all --allow-wired`. `deploy-all` reads an
+optional `device_ids` array from the ignored configuration (falling back to
+`device_id`) and invokes the normal verified deployment sequentially for each
+unique UDID. Personal device identifiers remain local. Each target refreshes
+sources and builds for its own provisioning destination. Failure on one device
+does not prevent attempts on the others; any failure makes the batch exit
+unsuccessfully. Existing single-target commands keep their saved default.
+Successful installation/launch reports also persist under
+`Mobile/logs/device-deployment-<UDID>.json`, alongside the latest report.
 
 Each build validates app-owned imports against `APP_MODULES`, then stages the
 explicit public mobile source allowlist with local dirty sources allowed, refreshes the generated Briefcase application and native

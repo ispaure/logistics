@@ -7,6 +7,49 @@ from logisticsmobile.chat_presentation import transcript_document
 
 
 class AppearanceTests(unittest.TestCase):
+    def test_reader_footer_reserves_floating_tab_bar_without_accumulating_padding(self):
+        from types import SimpleNamespace as NS
+        from toga.style import Pack
+        from logisticsmobile.appearance import reserve_navigation
+        def rect(y, height):
+            return NS(origin=NS(y=y), size=NS(height=height))
+        native = NS(bounds=rect(0, 800), convertRect=lambda *a, **kw: rect(0, 800))
+        view = NS(_reading_frame=True, _reading_frame_owner=NS(margin=16),
+                  style=Pack(margin=16), _impl=NS(container=NS(
+                      native=native, top_inset=0, bottom_inset=0)))
+        bar = NS(isHidden=lambda: False, bounds=rect(720, 80),
+                 convertRect=lambda *a, **kw: rect(720, 80))
+        app = NS(native_host=NS(adapter=NS(navigation=[], controller=NS(tabBar=bar))),
+                 routes=NS(body=lambda: NS(children=[view])), main_window=NS(_impl=NS(native=object())))
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 96)
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 96)
+        view._comic_fullscreen = True
+        view.style.margin = 0
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 0)
+
+    def test_user_picker_selection_closes_field_before_dispatching_change(self):
+        from types import SimpleNamespace
+        from logisticsmobile.appearance import commit_apple_selection
+        calls = []
+        native = SimpleNamespace(text='Old choice',
+                                 resignFirstResponder=lambda: calls.append('dismiss'))
+        item = SimpleNamespace(title='New choice')
+        def changed():
+            self.assertEqual(native.text, 'New choice')
+            self.assertEqual(calls, ['dismiss'])
+            calls.append('change')
+        picker = SimpleNamespace(native=native, interface=SimpleNamespace(
+            items=[item], _title_for_item=lambda value: value.title, on_change=changed))
+        commit_apple_selection(picker, 0)
+        self.assertEqual(calls, ['dismiss', 'change'])
+        # Selecting the current row again also dismisses the picker.
+        calls.clear()
+        commit_apple_selection(picker, 0)
+        self.assertEqual(calls, ['dismiss', 'change'])
+
     def test_apple_picker_reloads_native_rows_before_selecting_replaced_items(self):
         from types import SimpleNamespace
         from logisticsmobile.appearance import select_apple_item

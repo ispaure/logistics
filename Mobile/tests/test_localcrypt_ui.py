@@ -8,15 +8,25 @@ import unittest
 from logisticsmobile.app import LogisticsMobile
 
 
+def seed_offline_copy(copies, data=b'opaque-original'):
+    """Seed a pre-existing offline record without a remote download API."""
+    import json
+    from uuid import uuid4
+    key = uuid4().hex
+    folder = copies.root / key
+    folder.mkdir()
+    (folder / 'data').write_bytes(data)
+    (folder / 'record.json').write_text(json.dumps(dict(
+        remote='Secret', encrypted_path='encoded', identity='a' * 64)))
+    return key
+
+
 class LocalCryptUITests(unittest.TestCase):
     def test_ini_opens_edits_and_saves_without_plaintext_history(self):
         class Client:
             generation = 0
             data = b'[Settings]\r\nvalue=private-ini-sentinel\r\n'
             def request(self, action, **values):
-                if action == 'crypt_fetch':
-                    os.write(values['fd'], b'opaque ini ciphertext')
-                    return dict(remote='Secret', encrypted_path='encoded-name', identity='a' * 64)
                 if action == 'crypt_decode':
                     return dict(name='settings.ini', data=base64.b64encode(self.data).decode())
                 if action == 'crypt_encode':
@@ -35,7 +45,7 @@ class LocalCryptUITests(unittest.TestCase):
             self.addCleanup(app.main_window.close)
             app.cloud_client = Client()
             app.show_cloud(present=False)
-            key = app.crypt_copies.fetch('Secret', 'settings.ini')
+            key = seed_offline_copy(app.crypt_copies)
             self.assertTrue(app.loop.run_until_complete(app.open_crypt(copies=app.crypt_copies, key=key)), app.cloud_status.value)
             owner = app.private_sessions.active
             self.assertIn('value=private-ini-sentinel', owner.crypt_text.value)
@@ -43,17 +53,23 @@ class LocalCryptUITests(unittest.TestCase):
             app.loop.run_until_complete(owner.save_crypt())
             self.assertFalse(owner.private_dirty(), owner.crypt_title.text)
             self.assertEqual(app.cloud_client.data, b'[Settings]\r\nvalue=edited-private-ini-sentinel\r\n')
+            # Another native client/scene replacing credentials must also retire
+            # already displayed plaintext, not merely reject future range reads.
+            app.cloud_client.generation += 1
+            app.screen_privacy.retire_stale()
+            self.assertEqual(owner.crypt_text.value, '')
+            self.assertIsNone(owner.crypt_reader)
+            self.assertFalse(app.private_sessions.controllers)
             app.close_crypt()
             for path in root.rglob('*'):
                 if path.is_file():
                     self.assertNotIn(b'private-ini-sentinel', path.read_bytes())
 
-    def test_download_read_close_and_forget_without_plaintext_documents(self):
+    def test_existing_offline_copy_read_close_and_forget_without_plaintext_documents(self):
         class Client:
             def request(self, action, **values):
-                if action == 'crypt_fetch':
-                    os.write(values['fd'], b'opaque ciphertext fixture')
-                    return dict(remote='Secret', encrypted_path='encoded-name', identity='a' * 64)
+                if action == 'crypt_path':
+                    return dict(identity='b' * 64, path=values.get('path', ''))
                 if action == 'crypt_describe':
                     return 'note.md'
                 if action == 'crypt_encode':
@@ -79,13 +95,12 @@ class LocalCryptUITests(unittest.TestCase):
                 app.show_cloud()
                 app.loop.run_until_complete(app._load_crypt_remote_names())
                 app.cloud_remote.items = ['Secret']
-                self.assertTrue(app.cloud_download.enabled)
-                self.assertEqual(app.cloud_download.text, 'Download decrypted')
-                self.assertTrue(app.crypt_download.enabled)
                 app.cloud_open_remote = 'Secret'
                 app.cloud_rows = {'note.md': dict(path='note.md', directory=False)}
                 app.cloud_entries.items = ['note.md']
-                app.loop.run_until_complete(app.download_crypt())
+                key = seed_offline_copy(app.crypt_copies)
+                app.loop.run_until_complete(app.refresh_crypt())
+                app.crypt_selector.value = next(label for label, value in app.crypt_labels.items() if value == key)
                 self.assertEqual(len(app.crypt_labels), 1)
                 app.loop.run_until_complete(app.open_crypt())
                 owner = app.provider_sessions().active
@@ -124,7 +139,7 @@ class LocalCryptUITests(unittest.TestCase):
         from io import BytesIO
         from zipfile import ZipFile
         from unittest.mock import patch
-        from logisticsmobile.localcrypt import PrivateReader
+        from logisticsmobile.provider_readers import PrivateReader
         png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=')
         def reader(title):
             data = BytesIO()

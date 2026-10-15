@@ -2,13 +2,12 @@
 import base64
 from pathlib import Path
 from commonUtils.runtime.operations import check_cancelled
-from .crypt_stream import NativeSource
+from features.rclone.mobile.previews import preview_source, encrypted_thumbnail
 
 
 def callbacks(provider, client, password=''):
     def source(row, cancelled):
-        path = provider._guard(provider._locate(row['path']))
-        return NativeSource(client, provider.record(row['path']), path, password=password, cancelled=cancelled)
+        return preview_source(provider, client, row, password=password, cancelled=cancelled)
 
     def thumbnail(row, size, cancelled):
         check_cancelled(cancelled)
@@ -16,17 +15,7 @@ def callbacks(provider, client, password=''):
             return b''
         suffix = Path(row['path']).suffix.lower()
         if getattr(provider, 'private', False):
-            item = source(row, cancelled)
-            member = ''
-            if suffix in {'.zip', '.cbz', '.epub'}:
-                from .localcrypt import PrivateReader
-                reader = PrivateReader(item.name, source=item)
-                member = reader.book.cover_path() if reader.book else reader.pages[0]
-                if not member:
-                    return b''
-            elif suffix not in {'.png', '.jpg', '.jpeg', '.webp'}:
-                return b''
-            data = item.request('crypt_thumbnail', member=member, width=size[0], height=size[1])
+            return encrypted_thumbnail(provider, client, row, size, password=password, cancelled=cancelled)
         elif suffix in {'.png', '.jpg', '.jpeg', '.webp'}:
             with provider.open(row['path']) as stream:
                 data = client.request('file_thumbnail', fd=stream.fileno(), width=size[0], height=size[1])
@@ -36,10 +25,10 @@ def callbacks(provider, client, password=''):
             from features.comics.mobile.validation import image_dimensions
             member_data = None
             if suffix in {'.zip', '.cbz'}:
-                from features.comics.pages import natural_key
+                from features.comics.mobile.pages import page_names
                 with provider.open(row['path']) as stream, ZipFile(stream) as archive:
-                    pages = sorted((info for info in archive.infolist() if Path(info.filename).suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}), key=lambda info: natural_key(info.filename))
-                    if pages and pages[0].file_size <= 8 * 1024 * 1024:
+                    pages = page_names(archive)
+                    if archive.getinfo(pages[0]).file_size <= 8 * 1024 * 1024:
                         member_data = archive.read(pages[0])
             elif suffix == '.epub':
                 from features.books.epub import EPUBBook
@@ -61,7 +50,7 @@ def callbacks(provider, client, password=''):
         fields = []
         if suffix in {'.zip', '.cbz', '.epub'}:
             if getattr(provider, 'private', False):
-                from .localcrypt import PrivateReader
+                from logisticsmobile.provider_readers import PrivateReader
                 reader = PrivateReader(Path(row['path']).name, source=source(row, cancelled))
                 if reader.book:
                     fields = [('Title', reader.book.title), ('Author', ', '.join(reader.book.values('creator')))]

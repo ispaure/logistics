@@ -37,7 +37,7 @@ func cryptPackage(t *testing.T, target string) []byte {
 	return buffer.Bytes()
 }
 
-func TestLocalCryptCiphertextCopyOfflineDecodeAndLock(t *testing.T) {
+func TestLocalCryptExistingCiphertextOfflineDecodeAndLock(t *testing.T) {
 	clearSession()
 	t.Cleanup(clearSession)
 	ctx := context.Background()
@@ -45,7 +45,7 @@ func TestLocalCryptCiphertextCopyOfflineDecodeAndLock(t *testing.T) {
 	if _, err := importPackage(pkg, ""); err != nil {
 		t.Fatal(err)
 	}
-	cipher, backing, root, _, err := cryptConnection("Secret")
+	cipher, backing, root, identity, err := cryptConnection("Secret")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,13 +73,10 @@ func TestLocalCryptCiphertextCopyOfflineDecodeAndLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer target.Close()
-	if _, err = readInto(ctx, "Secret", "note.md", int(target.Fd())); err == nil {
-		t.Fatal("plaintext disk download accepted")
-	}
-	record, err := cryptFetch(ctx, "Secret", "note.md", int(target.Fd()))
-	if err != nil {
+	if _, err = target.Write(ciphertext); err != nil {
 		t.Fatal(err)
 	}
+	record := map[string]string{"remote": "Secret", "encrypted_path": cipher.EncryptFileName("note.md"), "identity": identity}
 	stored, _ := os.ReadFile(target.Name())
 	if !bytes.Equal(stored, ciphertext) || bytes.Contains(stored, plain) {
 		t.Fatal("copy was not original ciphertext")

@@ -13,13 +13,14 @@ from zipfile import ZipFile
 from commonUtils.archives.zip_access import validate_members
 from commonUtils.persistence import atomic_write_bytes, atomic_write_json
 from .documents import document_name
+from .library_edits import LibraryEdits
 
 MAX_BOOK = 256 * 1024 * 1024
 MAX_MEMBER = 8 * 1024 * 1024
 MAX_RECORD = 128 * 1024
 
 
-class LibraryStore:
+class LibraryStore(LibraryEdits):
     def __init__(self, root, *, archive_client=None):
         root = Path(root)
         if not root.is_absolute():
@@ -39,10 +40,18 @@ class LibraryStore:
         return path
 
     def read_record(self, key):
+        self.recover_edit(key)
+        return self._read_record(key)
+
+    def _read_record(self, key):
         with self.path(key, '.json').open('rb') as stream:
             data = stream.read(MAX_RECORD + 1)
         if len(data) > MAX_RECORD:
             raise ValueError('Library record is too large; it was preserved.')
+        return self.decode_record(key, data), data
+
+    @staticmethod
+    def decode_record(key, data):
         record = json.loads(data)
         if (not isinstance(record, dict) or record.get('schema') != 1 or record.get('id') != key
                 or record.get('kind') not in {'epub', 'comic'} or type(record.get('revision')) is not int
@@ -58,7 +67,15 @@ class LibraryStore:
                 or any(type(i) is not int or not 0 <= i < 5000 for i in bookmarks)
                 or len(set(bookmarks)) != len(bookmarks)):
             raise ValueError('Invalid library bookmarks; record was preserved.')
-        return record, data
+        from features.books.locations import valid_location
+        if 'location' in record and not valid_location(record['location']):
+            raise ValueError('Invalid EPUB reading location; record was preserved.')
+        locations = record.get('epub_bookmarks', [])
+        if (not isinstance(locations, list) or len(locations) > 200
+                or any(not valid_location(value) for value in locations)
+                or len(locations) + len(bookmarks) > 200):
+            raise ValueError('Invalid EPUB bookmarks; record was preserved.')
+        return record
 
     def items(self):
         records, failures = [], []
@@ -81,10 +98,8 @@ class LibraryStore:
             if kind == 'epub' and protected:
                 raise ValueError('Standalone password-protected EPUB imports are not supported.')
             if kind == 'comic':
-                from features.comics.pages import comic_page_names
-                pages = comic_page_names(archive)
-                if not pages or any(Path(name).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'} for name in pages):
-                    raise ValueError('Import a comic with PNG/JPEG/WebP pages.')
+                from features.comics.mobile.pages import page_names
+                page_names(archive)
             return protected
 
     def import_book(self, provider, reference):
@@ -117,8 +132,8 @@ class LibraryStore:
                     raise ValueError('Mobile EPUB reading order is limited to 5,000 chapters.')
             elif not protected:
                 pages = self.comic_reader(temporary)
-                if any(Path(name).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'} for name in pages.pages):
-                    raise ValueError('The mobile comic reader currently supports PNG/JPEG/WebP pages only.')
+                from features.comics.mobile.pages import validate_page_names
+                validate_page_names(pages.pages)
             destination = self.path(key, '.epub' if kind == 'epub' else '.cbz')
             if destination.exists():
                 raise FileExistsError(destination)
@@ -159,8 +174,8 @@ class LibraryStore:
                 raise ValueError('Mobile EPUB reading order is limited to 5,000 chapters.')
         else:
             reader = self.comic_reader(path, password=password, protected=protected)
-            if any(Path(p).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'} for p in reader.pages):
-                raise ValueError('The mobile comic reader currently supports PNG/JPEG/WebP pages only.')
+            from features.comics.mobile.pages import validate_page_names
+            validate_page_names(reader.pages)
         return record, reader
 
     def comic_reader(self, path, *, password=None, protected=False):
@@ -174,7 +189,7 @@ class LibraryStore:
                 raise ValueError('Comic password exceeds its length limit.')
             from .comic_source import LocalComicSource
             if self.archive_client is None:
-                from .cloud import CloudClient
+                from features.rclone.mobile.cloud import CloudClient
                 self.archive_client = CloudClient()
             source = LocalComicSource(path, self.archive_client, password)
         else:
@@ -189,7 +204,7 @@ class LibraryStore:
         while len(self.verified) > 32:
             self.verified.popitem(last=False)
 
-    def progress(self, record, position, *, bookmark=False):
+    def progress(self, record, position, *, bookmark=False, location=None):
         current, original = self.read_record(record['id'])
         if current != record:
             raise OSError('Reading progress changed; reopen the book before saving.')
@@ -197,7 +212,23 @@ class LibraryStore:
             raise ValueError('Invalid reading position.')
         updated = dict(record, position=position, revision=record['revision'] + 1,
                        bookmarks=list(record['bookmarks']))
-        if bookmark:
+        if location is not None:
+            from features.books.locations import valid_location
+            if record['kind'] != 'epub' or not valid_location(location):
+                raise ValueError('Invalid EPUB reading location.')
+            updated['location'] = dict(location)
+            if bookmark:
+                locations = [dict(value) for value in record.get('epub_bookmarks', [])]
+                if position in updated['bookmarks'] and location['offset'] == 0:
+                    updated['bookmarks'].remove(position)
+                elif location in locations:
+                    locations.remove(location)
+                elif len(locations) + len(updated['bookmarks']) < 200:
+                    locations.append(dict(location))
+                else:
+                    raise ValueError('This book already has 200 bookmarks.')
+                updated['epub_bookmarks'] = locations
+        elif bookmark:
             if position in updated['bookmarks']:
                 updated['bookmarks'].remove(position)
             elif len(updated['bookmarks']) < 200:

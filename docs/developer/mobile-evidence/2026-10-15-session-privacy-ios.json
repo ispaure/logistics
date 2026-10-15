@@ -1,0 +1,28 @@
+{
+  "success": true,
+  "cases": [
+    "session_load_activates_privacy_before_view",
+    "native_root_lock_wrong_password_and_draft_resume",
+    "os_background_return_requires_password",
+    "protection_released_after_credentials_and_views_clear"
+  ],
+  "phase": "complete",
+  "device": "405A32BF-2DAB-4BC6-AF70-E90CA5047DEF",
+  "platform": "ios",
+  "source": {
+    "commonUtils_commit": "fd1df652774c6da76e6676c4a51f9e0e941022a3",
+    "commonUtils_dirty": true,
+    "logistics_commit": "2253c4ee058ef54f5c2507269a94cf65317cc65f",
+    "dirty": true,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm",
+      "rclone"
+    ],
+    "logistics_committed_at": "2026-10-15T03:37:15-04:00",
+    "source_sha256": "151a1610feae8b1cf0b0f9f50502d3b9dbd978d921466b5f8af65cc7c12d9059"
+  }
+}

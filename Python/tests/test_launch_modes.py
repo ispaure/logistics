@@ -19,6 +19,16 @@ class Settings(qt.QWidget):
 
 
 class LaunchModeTests(QtTestCase):
+    def test_feature_browser_location_opens_in_the_existing_browser_destination(self):
+        from types import SimpleNamespace
+        window = self.window
+        browser = next(page for _, _, page in window._core_pages if isinstance(page, Browser))
+        view, location = object(), object()
+        browser.workspace = SimpleNamespace(add_view=Mock(return_value=view), active_view=None)
+        self.assertIs(window.dlg.open_browser_location(location), view)
+        browser.workspace.add_view.assert_called_once_with(location)
+        self.assertIs(window.tabs.currentWidget(), browser)
+
     def test_launch_cards_are_stable_from_their_first_paint(self):
         window = self.window
         from ui_new.landing import LandingPage

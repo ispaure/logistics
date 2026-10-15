@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from commonUtils.archives.zip_access import ArchivePasswordError
 from commonUtils.runtime.document_access import LocalDocuments
-from logisticsmobile.cloud import CloudClient
+from features.rclone.mobile.cloud import CloudClient
 from logisticsmobile.library import LibraryStore
 
 

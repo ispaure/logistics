@@ -1,9 +1,10 @@
 """Compact reading controls, native action menus and explicit appearance routes."""
 import toga
+from .control_icons import icon_button
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from .action_menu import FeatureCommands
-from .reader_controls import ReadingFrame, schedule_swipe
+from .reader_controls import ReadingFrame
 
 
 def sync_comic_chrome(app, view):
@@ -14,6 +15,9 @@ def sync_comic_chrome(app, view):
     app._comic_chrome_hidden = hidden
     navigation = app.adaptive.secondary if app.adaptive.split is not None and app.native_host.state.destination == 'documents' else None
     app.native_host.chrome.set_hidden(hidden, navigation=navigation)
+    def page_swipes(widget):
+        return getattr(widget, 'page_swipes_at_edges', False) or any(page_swipes(child) for child in widget.children)
+    app.native_host.chrome.set_page_swipes(page_swipes(view), navigation=navigation)
 
 
 class ReaderChrome:
@@ -21,29 +25,32 @@ class ReaderChrome:
         old = self.library_view
         for child in list(old.children):
             old.remove(child)
-        self.reader_actions_button = toga.Button('•••', style=Pack(width=44, height=44))
+        self.reader_actions_button = icon_button('more', 'Reader actions')
         self.reader_actions = FeatureCommands(self.reader_actions_button, self, [
-            ('Contents and bookmarks…', self.show_reader_tools), ('Appearance…', self.show_reader_appearance),
+            ('Read aloud…', self.show_read_aloud), ('Edit metadata…', self.show_book_metadata), ('Find in chapter…', self.show_epub_search), ('Contents and bookmarks…', self.show_reader_tools), ('Appearance…', self.show_reader_appearance),
             ('Reading mode', self.toggle_reading_mode), ('Fit comic page', self.fit_comic_page),
+            ('First comic page', self.first_comic_page), ('Last comic page', self.last_comic_page),
+            ('Previous comic', self.previous_comic_file), ('Next comic', self.next_comic_file),
             ('Lock protected comic', self.lock_book), ('All documents', self.show_documents_hub)], self.show_reader_tools)
         from .workspace_navigation import menu_button
         self.reader_header = toga.Box(children=[
             menu_button(lambda widget, **kw: self.app.adaptive.show_browser(self.presentation_destination)),
-            toga.Button('Contents', on_press=self.show_reader_tools, style=Pack(height=44, flex=1)),
-            toga.Button('Appearance', on_press=self.show_reader_appearance, style=Pack(height=44, flex=1)),
+            icon_button('contents', 'Contents and bookmarks', on_press=self.show_reader_tools),
+            icon_button('appearance', 'Reading appearance', on_press=self.show_reader_appearance),
             self.reader_actions_button], style=Pack(direction=ROW))
         self.chapter_selector.style.flex = 1
-        self.reader_footer = toga.Box(children=[self.previous_page, self.next_page], style=Pack(direction=ROW))
-        self.reader_restore = toga.Button('Show reading controls', on_press=self.toggle_reading_mode, style=Pack(height=44))
+        self.reader_footer = toga.Box(children=[self.previous_page, toga.Box(style=Pack(flex=1)), self.next_page], style=Pack(direction=ROW))
+        self.reader_restore = toga.Button('Show reading controls', on_press=self.toggle_reading_mode, style=Pack(height=48))
         self.book_status.style.font_size = 12
         self.reader_immersive = False
         self.reading_frame = ReadingFrame(self.book_content, [self.reader_header, self.reader_footer, self.book_status])
         self.library_view = self.reading_frame.widget
+        self.library_view._workspace_menu_button = self.reader_header.children[0]
         self.reader_tools_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
             toga.Label('Contents and bookmarks', style=Pack(font_size=20, margin_bottom=8)),
             self.chapter_selector, self.bookmark_button, self.bookmark_selector,
             self.book_lock,
-            toga.Button('Return to reading', on_press=self.show_library, style=Pack(height=44))],
+            toga.Button('Return to reading', on_press=self.show_library, style=Pack(height=48))],
             style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
 
     def show_reader_tools(self, widget=None, **kwargs):
@@ -71,20 +78,18 @@ class ReaderChrome:
             sync_comic_chrome(self.app, self.app.body)
 
     def show_reader_appearance(self, widget=None, **kwargs):
-        self.reader_font = toga.Selection(items=['12', '14', '16', '18', '20', '24', '28', '32'], value=self.preferences.values['font_size'], style=Pack(height=44))
-        self.reader_margin = toga.Selection(items=['8', '16', '24', '32'], value=self.preferences.values['reading_margin'], style=Pack(height=44))
-        self.reader_theme = toga.Selection(items=['system', 'light', 'dark'], value=self.preferences.values['reading_theme'], style=Pack(height=44))
-        self.reader_appearance_status = toga.Label('Appearance changes keep your current chapter.')
-        box = toga.Box(children=[toga.Label('Reading font size'), self.reader_font,
-            toga.Label('Page margins'), self.reader_margin, toga.Label('Theme'), self.reader_theme,
-            toga.Button('Apply and return', on_press=self.apply_reader_appearance, style=Pack(height=44)),
-            self.reader_appearance_status], style=Pack(direction=COLUMN, margin=12))
+        from features.books.mobile.appearance import ReaderAppearance
+        box = ReaderAppearance(self.preferences.values, self.apply_reader_appearance)
+        self.reader_appearance = box
+        self.reader_font, self.reader_margin = box.font_choice, box.margin_choice
+        self.reader_theme, self.reader_layout = box.theme_choice, box.layout_choice
+        self.reader_appearance_status = box.status
         self.show_view(box, reader_route='appearance', title='Reading appearance')
 
     async def apply_reader_appearance(self, widget=None, **kwargs):
         try:
             self.preferences.save(font_size=self.reader_font.value, reading_margin=self.reader_margin.value,
-                                  reading_theme=self.reader_theme.value)
+                                  reading_theme=self.reader_theme.value, comic_layout=self.reader_layout.value, **self.reader_appearance.typography())
             if self.book_reader is not None:
                 await self.move_book_page(self.book_record['position'])
             self.show_library()
@@ -100,6 +105,33 @@ class ReaderChrome:
     def swipe_book_page(self, direction):
         if self.book_reader is None:
             return
-        schedule_swipe(self, direction, position=self.book_record['position'],
-                       count=len(self.book_reader.pages), right_to_left=getattr(self.book_reader, 'right_to_left', False),
-                       busy=self.book_busy, move=self.move_book_page)
+        if self.book_busy or not self.active_host:
+            return
+        task = getattr(self, '_comic_swipe_task', None)
+        if task is None or task.done():
+            amount = -direction if self.book_reader.right_to_left else direction
+            self._comic_swipe_task = self.loop.create_task(self.move_comic(amount))
+
+
+    def show_read_aloud(self, widget=None, **kwargs):
+        if self.book_reader is None or self.book_record['kind'] != 'epub' or self.book_busy:
+            return
+        self.close_read_aloud()
+        from features.books.mobile.speech_view import ReadAloudPanel
+        from features.books.mobile.presentation import speech_source
+        async def source():
+            return await speech_source(self.epub_view, self.epub_text, self.epub_offset)
+        def follow(start, end):
+            self.epub_offset = start
+            self.epub_view._chapter_bridge.seek(start, end)
+            self.epub_event(self.book_reader, self.book_epoch, self.book_record['position'], 'position', start)
+        self.speech_panel = ReadAloudPanel(loop=self.loop, source=source, on_range=follow, close=self.close_read_aloud)
+        self.book_content.insert(0, self.speech_panel)
+
+    def close_read_aloud(self, widget=None, **kwargs):
+        panel = getattr(self, 'speech_panel', None)
+        if panel is not None:
+            panel.dispose()
+            if panel in self.book_content.children:
+                self.book_content.remove(panel)
+            del self.speech_panel

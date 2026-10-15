@@ -61,6 +61,8 @@ def make_private_editor(choice, session, *, markdown=False):
     else:
         from commonUtils.ui.resource_editor import ResourceTextWindow
         window = ResourceTextWindow(choice, session, choose_editor_resource, open_editor_choice)
+    from services.private_views import protect_private_view
+    protect_private_view(window, choice.provider)
     return retain(window)
 
 

@@ -1,0 +1,133 @@
+{
+  "success": true,
+  "target": "android",
+  "sys_platform": "linux",
+  "backend": "toga_android.app",
+  "cases": [
+    "native_epub_bridge",
+    "nested_contents_exact_anchor",
+    "screen_turn_persists_location",
+    "unicode_search_highlight",
+    "appearance_preserves_anchor",
+    "native_typography_and_precise_anchor",
+    "native_speech_selection_pause_resume_completion_cleanup",
+    "epub_rotation_preserves_passage",
+    "internal_link_and_external_rejection",
+    "bookmark_reopen",
+    "private_speech_suspend_cleanup",
+    "provider_search_bookmark_and_memory_cleanup",
+    "manga_spreads_doublepage_landscape_failed_read",
+    "composite_zoom_pan_and_paging_guard",
+    "zoomed_rotation_defers_layout_until_fit",
+    "comic_controls_fit_and_immersive_reentry",
+    "comic_auto_rotation",
+    "provider_comic_auto_rotation",
+    "provider_failed_decode_retains_zoomed_spread",
+    "provider_composite_zoom_suspend_and_close",
+    "imported_metadata_search_and_suggestions",
+    "local_recursive_metadata_batch_native_publication",
+    "process_restart_precise_resume"
+  ],
+  "scope": "Targeted native reader probe, synthetic files and separate app ID; not full release evidence.",
+  "source": {
+    "commonUtils_commit": "fd1df652774c6da76e6676c4a51f9e0e941022a3",
+    "commonUtils_dirty": true,
+    "logistics_commit": "2253c4ee058ef54f5c2507269a94cf65317cc65f",
+    "dirty": true,
+    "features": [
+      "text",
+      "markdown",
+      "epub",
+      "comics",
+      "lm",
+      "rclone"
+    ],
+    "logistics_committed_at": "2026-10-15T03:37:15-04:00",
+    "source_sha256": "d6167e940b0ad9a614f8b2ace56f43f3297fbb3804ab408bd68c43a550e8c475"
+  },
+  "speech_engine": {
+    "ready": true,
+    "voices": 9,
+    "error": ""
+  },
+  "speech_selection": {
+    "speed": 1.25,
+    "count": 1,
+    "start": 0,
+    "end": 9
+  },
+  "typography_metrics": [
+    "serif",
+    "40px",
+    "480px",
+    "rgb(244, 236, 216)"
+  ],
+  "reader_layout": {
+    "frame": 403,
+    "content": 395,
+    "body": 411,
+    "host": {
+      "platform": "android",
+      "native_tabs": "com.google.android.material.bottomnavigation.BottomNavigationView",
+      "mode": "bottom",
+      "width": 411,
+      "height": 627,
+      "content_height": 547,
+      "keyboard_inset": 0,
+      "layout_events": 15,
+      "main_thread": true
+    }
+  },
+  "batch_layout": {
+    "view": 411,
+    "content": 411,
+    "switch": 387,
+    "host": {
+      "platform": "android",
+      "native_tabs": "com.google.android.material.bottomnavigation.BottomNavigationView",
+      "mode": "bottom",
+      "width": 411,
+      "height": 683,
+      "content_height": 603,
+      "keyboard_inset": 0,
+      "layout_events": 102,
+      "main_thread": true
+    }
+  },
+  "validation_date": "2026-10-15",
+  "environment": "Android 15 API 35 emulator, LogisticsLocalCrypt, WebView 124.0.6367.219",
+  "artifact_sha256": "230a2adecea75c1c38a4e6fe6ad8a7f132b6f0da4e769992d64f594c130e7f81",
+  "probe_sha256": "4fdd7b003d03687fe05a817d3b162c06075b558fbabbb6f3882354d7bdee4029",
+  "build_scope": "Rebuilt Java/Python APK with existing JNI bridge; separate probe app ID.",
+  "limitations": [
+    "Synthetic targeted probe on emulator/simulator; not physical-device or release validation.",
+    "Native speech completion observed; physical audio quality and accessibility were not auditioned.",
+    "Pause/resume repeats current utterance.",
+    "Private recursive batches, encrypted standalone writers, native processing and larger collection indexing remain open."
+  ],
+  "automated_checks": {
+    "reader_ui": {
+      "tests": 20,
+      "success": true
+    },
+    "portable_reader_collection_catalog": {
+      "tests": 59,
+      "success": true
+    },
+    "desktop_books": {
+      "tests": 47,
+      "success": true
+    },
+    "aggregate_mobile": {
+      "tests": 240,
+      "success": false,
+      "errors": 8,
+      "scope": "Concurrent unrelated rclone mirror/folder-hub state/baseline errors; left separate."
+    }
+  },
+  "screenshots": {
+    "typography": "2026-10-15-speech-typography-library-android-typography.png",
+    "speech-controls": "2026-10-15-speech-typography-library-android-speech-controls.png",
+    "library-batch": "2026-10-15-speech-typography-library-android-library-batch.png"
+  }
+}

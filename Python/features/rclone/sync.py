@@ -9,11 +9,12 @@ from commonUtils.integrations.wrappers import cmdShellWrapper
 from commonUtils.runtime.diagnostics import Severity, log
 
 from . import executable, session
+from .transfer_options import TransferOptions
 
 
 def rclone_sync(source_path, destination_path, *, config_path, query=False, wait_for_output=False,
                 dry_run=False, track_renames=False, bw_limit=None, integrated=True, copy_links=True,
-                cancelled=lambda: False, executable_path=None):
+                cancelled=lambda: False, executable_path=None, excludes=None):
     """Preflight every local-to-remote push before starting a transfer."""
     options = dict(source_path=source_path, destination_path=destination_path, config_path=config_path,
                    query=query, wait_for_output=wait_for_output, dry_run=dry_run, track_renames=track_renames,
@@ -24,7 +25,7 @@ def rclone_sync(source_path, destination_path, *, config_path, query=False, wait
     if is_push:
         from .push_policy import load_excludes, validate_localcrypt_push
         from .local_crypt import for_path, storage_root
-        options['excludes'] = load_excludes()
+        options['excludes'] = load_excludes() if excludes is None else excludes
         item = for_path(source_path)
         boundary = storage_root().absolute()
         source = Path(source_path).absolute()
@@ -157,27 +158,17 @@ def _run_sync(
 def build_sync_arguments(rclone_path, source_path, destination_path, *, config_path,
                          track_renames=False, bw_limit=None, dry_run=False, integrated=True, copy_links=True, excludes=()):
     """Argument vector shared by UI and legacy callers; no shell interpretation."""
-    arguments = [str(rclone_path), '--config', str(config_path), 'sync']
-    if copy_links:
-        arguments += ['--copy-links']
+    options = TransferOptions(track_renames=track_renames, bw_limit=bw_limit, copy_links=copy_links, excludes=excludes)
+    arguments = [str(rclone_path), '--config', str(config_path), 'sync', '--create-empty-src-dirs']
     if integrated:
         # Leave rclone's retry policy untouched; observe its own retry messages.
         arguments += ['--use-json-log', '--stats', '1s', '--stats-log-level', 'NOTICE']
     else:
         arguments += ['--progress']
-    if track_renames:
-        arguments += ['--track-renames']
     arguments += ['--transfers=1' if '-VM' in str(source_path) else '--transfers=10']
-    if bw_limit is not None:
-        value = int(bw_limit)
-        if value <= 0:
-            raise ValueError('Bandwidth limit must be a positive number of MB/s')
-        arguments += ['--bwlimit', f'{value}M']
     if dry_run:
         arguments += ['--dry-run']
-    from .push_policy import validate_excludes
-    for pattern in validate_excludes(excludes):
-        arguments += ['--exclude', pattern]
+    arguments += options.cli_arguments()
     arguments += ['--', str(source_path), str(destination_path)]
     return arguments
 

@@ -7,11 +7,30 @@ import unittest
 from unittest.mock import patch
 from commonUtils.archives.zip_access import ArchivePasswordError
 from commonUtils.runtime.local_files import LocalFiles
-from logisticsmobile.file_resources import CryptFiles, ManagedCopies
-from logisticsmobile.localcrypt import LocalCryptCopies
+from features.rclone.mobile.file_resources import CryptFiles, ManagedCopies
+from features.rclone.mobile.localcrypt import LocalCryptCopies
 
 
 class LocalCryptConfigurationTests(unittest.TestCase):
+    def test_listing_hides_rclone_partial_files_and_tolerates_removed_entries(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'finished.md').write_bytes(b'ciphertext fixture')
+            partial = root / 'encoded-name.a1b2c3d4.partial'
+            partial.write_bytes(b'incomplete ciphertext')
+            vanished = root / 'removed.md'
+            vanished.write_bytes(b'old ciphertext')
+            provider = object.__new__(CryptFiles)
+            LocalFiles.__init__(provider, root)
+            def mapping(path, directory=False, decode=False):
+                self.assertNotEqual(path, partial.name)
+                if path == vanished.name and decode:
+                    vanished.unlink(missing_ok=True)
+                return path
+            provider.mapping = mapping
+            self.assertEqual([row['name'] for row in provider.list()], ['finished.md'])
+            self.assertTrue(partial.exists())
+
     def provider(self, root, configs):
         provider = object.__new__(CryptFiles)
         LocalFiles.__init__(provider, root)

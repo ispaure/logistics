@@ -9,7 +9,7 @@ line endings, and checkpoints drafts for recovery. Its hub also opens a private 
 with chapter/page navigation, standalone AES/ZipCrypto CBZ password prompts,
 bookmarks and saved progress, plus text LM chat
 with private history and explicit server connections, and embedded rclone
-browsing/downloads using credential ZIPs, plus directly configured SMB/Mac servers
+browsing/direct previews using credential ZIPs, plus directly configured SMB/Mac servers
 with device-protected saved credentials. Managed Local/LocalCrypt folders support
 repeatable Pull and reviewed Push with progress while ordinary documents remain
 usable. Ordinary iPad windows have independent workspaces and exclusive writers. It does not launch the desktop
@@ -35,6 +35,12 @@ Signature or version mismatches stop installation; it never uninstalls the app.
 Optional Terminal usage: `Mobile/deploy_android.command --device SERIAL` or
 `Mobile/deploy_android.command --build-only`. Build/install logs are under
 `Mobile/logs/android-*.log`. It builds local sources; it does not pull from GitHub.
+The launcher remembers the configured local SDK/cache paths and attempts to
+reconnect advertised wireless ADB devices using existing pairing keys. Pair once
+through Android Wireless debugging. Wake the tablet and enable that setting if
+the firmware switches it off; the app's **Settings → Developer settings…** opens
+the native developer screen. Discovery cannot enable debugging on the tablet.
+Several connected devices still require a selection.
 New Logistics modules still need registration in the mobile source manifest.
 
 ## Double-click TestFlight deployment
@@ -144,10 +150,38 @@ and build afterward. Generated Xcode settings are local build artifacts.
 
 ## Build and deploy to a paired iPhone over Wi-Fi
 
+The helper also supports paired iPads. To add one alongside your existing iPhone:
+
+1. Connect the iPad to the Mac by USB, unlock it and accept **Trust This Computer**.
+2. In Xcode, open **Device Hub** (or **Window → Devices and Simulators** on older
+   versions), select the iPad and complete pairing.
+3. On the iPad, enable **Settings → Privacy & Security → Developer Mode**, restart
+   and confirm when prompted. Wait for Xcode's device preparation to finish.
+4. Copy the iPad's Identifier/UDID from Xcode. For an initial USB deployment, run
+   `Mobile/deploy_ios.command deploy --device YOUR_IPAD_UDID --allow-wired`.
+5. For subsequent wireless deployments, put both devices on the same Wi-Fi,
+   unplug USB and run `Mobile/deploy_ios.command deploy --device YOUR_IPAD_UDID`.
+
+`--device` also works with `status`, `build` and `launch`, and accepts an exact
+device name when unambiguous. It selects a target for that command without
+replacing the saved iPhone default or signing team. Omitting it continues to use
+the saved device. Builds provision and verify the selected iPhone or iPad before
+installation. If configuring a Mac for the first time with several devices
+connected, pass `--device` to `configure` explicitly.
+
 On a configured Mac, double-click `Mobile/deploy_ios.command` in Finder, or run
-it from any directory. Its default action builds, installs and launches over
-Wi-Fi. It also accepts `build`, `status` and `launch` (launch without rebuilding).
-Keep the iPhone unlocked on the same Wi-Fi as the Mac.
+it from any directory. With no arguments it runs `deploy-all --allow-wired`:
+build, verify, install and launch on every UDID listed in the ignored
+`Mobile/.device.json` `device_ids` array, using USB or Wi-Fi. Without that optional
+array, it deploys only to the original `device_id`. Keep personal UDIDs in that
+local configuration, not in the launcher. Each target runs the normal deployment;
+a failed target is reported while the remaining targets are still attempted.
+The batch exits unsuccessfully if any device fails. Successful per-device reports
+are retained as `Mobile/logs/device-deployment-<UDID>.json`.
+
+Explicit `deploy --device YOUR_UDID` selects one device; `deploy-all` uses the
+saved list. Add `--allow-wired` to explicit commands to permit USB. The launcher
+also accepts `build`, `status` and `launch` (launch without rebuilding).
 
 The launcher uses `Mobile/.venv` and an optional local Go installation at
 `Mobile/.tools/go`. To prepare another Mac:
@@ -177,7 +211,7 @@ iPhone is discoverable. Team and device choices are stored in ignored
 `Mobile/.device.json`; no account credentials are stored. To deploy wirelessly,
 pair the iPhone in Xcode, enable Developer Mode, put both devices on the same
 Wi-Fi, unlock the iPhone, and unplug USB. Check `status` for `localNetwork` or
-`wireless` transport. Deployment refuses a wired connection by default;
+`wireless` transport. Explicit `deploy` refuses a wired connection by default;
 `deploy --allow-wired` permits an initial USB deployment if desired.
 See Apple's [device pairing guide](https://help.apple.com/xcode/mac/current/en.lproj/devbc48d1bad.html).
 
@@ -241,10 +275,11 @@ PYTHONPATH=Python:Python/tests python -m logisticsmobile.smoke --target host
 PYTHONPATH=Python python -m unittest discover -s Python/tests -p 'test_mobile_*.py' -v
 ```
 
-For the widget contract check, install `toga-dummy==0.5.7` in the separate
-environment, then run:
+For the widget contract check, install the dummy backend and pinned host-only
+authentication dependency in the separate environment, then run:
 
 ```sh
+python -m pip install toga-dummy==0.5.7 -r Mobile/requirements-testflight.txt
 PYTHONPATH=Python TOGA_BACKEND=toga_dummy python -m unittest discover -s Mobile/tests -v
 ```
 

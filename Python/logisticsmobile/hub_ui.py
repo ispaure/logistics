@@ -1,10 +1,12 @@
 """Native launch panels and live document summaries over existing commands."""
 import toga
+from .control_icons import icon_button
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from .hub_icons import icon
-from commonUtils.ui.native.presentation import list_button, template_icon
-from .appearance import surface
+from commonUtils.ui.native.presentation import list_button
+from .appearance import template_icon
+from .appearance import surface, action_button
 
 DOCUMENT_TYPES = {'text': 'Text', 'markdown': 'Markdown', 'epub': 'EPUB books', 'comic': 'Comics'}
 
@@ -39,7 +41,7 @@ def panel(title, detail, glyph, actions):
         box.add(toga.Label(detail, style=Pack(font_size=12, margin_bottom=4)))
     buttons = toga.Box(style=Pack(direction=ROW))
     for label, action in actions:
-        buttons.add(toga.Button(label, on_press=action, style=Pack(height=44, flex=1)))
+        buttons.add(toga.Button(label, on_press=action, style=Pack(height=48, flex=1)))
     box.add(buttons)
     return surface(toga.Box(children=[box], style=Pack(direction=COLUMN, margin_bottom=12)))
 
@@ -71,7 +73,7 @@ class PanelGrid(toga.Box):
                 card.style.margin_right = 10 if index < columns - 1 else 0
                 row.add(card)
             # Keep the final card the same width as all preceding cards.
-            for _ in range(columns - len(row.children) if self.minimum_columns > 1 else 0):
+            for _ in range(columns - len(row.children)):
                 row.add(toga.Box(style=Pack(flex=1)))
             self.add(row)
 
@@ -83,95 +85,132 @@ class HubUI:
             return manager is not None and manager.available(session.id)
         return True
 
+    def recent_items(self, *, excluding=()):
+        """Use ordinary history identities only; never persist private names."""
+        excluded = set(excluding)
+        items = []
+        for session in self.recent_documents.sessions():
+            if session.identity in excluded:
+                continue
+            summary = self.session_summary(session)
+            if 'Unavailable; retry to reopen' not in summary[2]:
+                items.append((session, summary))
+        return items
+
+    def recent_opener(self, session):
+        async def reopen(widget=None, **kwargs):
+            if not self.checkpoint():
+                return
+            self.adaptive.menu_open['documents'] = False
+            if session.provider == 'library':
+                await self.open_book(session.resource)
+            elif self.open_document(session.resource):
+                self.show_documents(resume=True)
+        return reopen
+
+    def recent_row(self, session, summary):
+        title, kind, _ = summary
+        row = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
+        row.add(list_button(toga.Button(title, on_press=self.recent_opener(session), style=Pack(height=48))))
+        row.add(toga.Label(DOCUMENT_TYPES.get(kind, 'Document'), style=Pack(font_size=12, margin_left=8)))
+        return row
+
     def build_home(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Welcome to Logistics', style=Pack(font_size=28, font_weight='bold', margin_top=24, margin_bottom=20)))
+        box.add(toga.Label('Your workspace', style=Pack(font_size=22, font_weight='bold', margin_top=8, margin_bottom=16)))
         active = self.workspace.sessions.get(self.workspace.active)
-        if active is not None and self.session_visible(active):
+        active = active if active is not None and self.session_visible(active) else None
+        self.home_continue = None
+        if active is not None:
             title, kind, details = self.session_summary(active)
             hero = toga.Box(style=Pack(direction=COLUMN, margin_bottom=12))
-            hero_content = toga.Box(style=Pack(direction=COLUMN, margin=18))
+            hero_content = toga.Box(style=Pack(direction=COLUMN, margin=16))
             hero.add(hero_content)
-            hero_content.add(toga.Label('PICK UP WHERE YOU LEFT OFF', style=Pack(font_size=11, margin_bottom=12)))
+            hero_content.add(toga.Label('Continue', style=Pack(font_size=13, margin_bottom=8)))
             from textwrap import fill
             hero_content.add(toga.Label(fill(title, width=26), style=Pack(font_size=22, font_weight='bold', margin_bottom=8)))
             hero_content.add(toga.Label(' · '.join([DOCUMENT_TYPES.get(kind, 'Document'), *details]),
                                 style=Pack(font_size=12, margin_bottom=12)))
-            self.home_continue_button = toga.Button('Continue →', on_press=self.session_opener(active.id),
-                                style=Pack(height=48))
+            self.home_continue_button = action_button(toga.Button('Continue', on_press=self.session_opener(active.id),
+                                style=Pack(height=48)))
             hero_content.add(self.home_continue_button)
             box.add(home_surface(hero, hero=True))
             self.home_continue = hero
-        box.add(toga.Box(children=[
-            toga.Button('+ New document', on_press=self.new_hub_document, style=Pack(height=48, flex=1, margin_right=8)),
+        else:
+            box.add(toga.Label('Open a file or start a new document.', style=Pack(margin_bottom=12)))
+        self.home_actions = toga.Box(children=[
+            toga.Button('New document', on_press=self.new_hub_document, style=Pack(height=48, flex=1, margin_right=8)),
             toga.Button('Open file…', on_press=self.open_hub_file, style=Pack(height=48, flex=1))],
-            style=Pack(direction=ROW)))
-        box.add(heading('Your spaces'))
+            style=Pack(direction=ROW))
+        if active is None:
+            action_button(self.home_actions.children[1])
+        box.add(self.home_actions)
+        recent = self.recent_items(excluding=[active.identity] if active else [])[:3]
+        recent_box = toga.Box(style=Pack(direction=COLUMN))
+        recent_box.add(heading('Recent'))
+        for session, summary in recent:
+            recent_box.add(self.recent_row(session, summary))
+        if not recent:
+            recent_box.add(toga.Label('Recently opened files\nwill appear here.', style=Pack(font_size=13)))
         spaces = toga.Box(style=Pack(direction=COLUMN))
+        spaces.add(heading('Your spaces'))
         for title, subtitle, glyph, action in (
-            ('Folder Hub', 'Your folders · browse, pull & push', 'folder_hub', self.show_home_files),
-            ('Books & Comics', 'Your library, ready to read', 'books', self.show_library),
+            ('Folder Hub', 'Local · LocalCrypt · Remote', 'folder_hub', self.show_home_files),
+            ('Books & Comics', 'Browse your library', 'books', self.show_library),
         ):
             text = toga.Box(children=[
-                list_button(toga.Button(title, on_press=action, style=Pack(height=44))),
+                list_button(toga.Button(title, on_press=action, style=Pack(height=48))),
                 toga.Label(subtitle, style=Pack(font_size=12, margin_left=8, margin_right=8))],
                 style=Pack(direction=COLUMN, flex=1))
-            item = toga.Box(children=[
-                template_icon(toga.ImageView(icon(glyph), style=Pack(width=28, height=28, margin_right=12))),
-                text], style=Pack(direction=ROW, align_items=CENTER, margin=16, margin_bottom=12))
-            card = toga.Box(children=[item], style=Pack(direction=COLUMN, margin_bottom=12))
-            spaces.add(home_surface(card))
-        box.add(spaces)
-        box.add(toga.Box(children=[
-            toga.Button('Open documents', on_press=self.show_documents_hub, style=Pack(height=44, flex=1)),
-            toga.Button('LM Chat →', on_press=self.show_chat, style=Pack(height=44, flex=1))],
-            style=Pack(direction=ROW, margin_top=8)))
+            spaces.add(toga.Box(children=[
+                template_icon(toga.ImageView(icon(glyph), style=Pack(width=24, height=24, margin_right=8))),
+                text], style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12)))
+        self.home_panels = PanelGrid([recent_box, spaces], self.main_window.size.width, maximum_columns=2)
+        box.add(self.home_panels)
         self.register_transfer_status(box)
         return toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
 
     def build_documents_hub(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        launchers = []
+        box.add(toga.Box(children=[
+            action_button(toga.Button('New document', on_press=self.new_hub_document,
+                                      style=Pack(height=48, flex=1, margin_right=8))),
+            toga.Button('Open file…', on_press=self.open_hub_file, style=Pack(height=48, flex=1))],
+            style=Pack(direction=ROW)))
+        box.add(heading('Open documents'))
         self.document_grids = []
         self.document_categories = {}
+        # Kept as a resize hook for older workspace owners; no tool-card grid.
+        self.document_launchers = PanelGrid([], self.main_window.size.width)
         sessions = []
+        identities = []
         for session in self.workspace.sessions.values():
             if self.session_visible(session):
                 summary = self.session_summary(session)
                 sessions.append((summary[1], session, summary))
-        for title, detail, glyph, extension in (
-            ('Text Editor', 'Edit plain text and code files.', 'text', 'txt'),
-            ('Markdown Editor', 'Write and preview formatted notes.', 'markdown', 'md'),
-            ('EPUB Reader', 'Read books and resume your progress.', 'epub', None),
-            ('Comic Reader', 'Read comics and image archives.', 'comic', None),
-            ('Archives', 'Browse archive files.', 'archives', None),
-        ):
-            actions = []
-            if extension:
-                def create(widget=None, selected=extension, **kwargs):
-                    self.create_chosen_document(selected)
-                actions.append(('New', create))
-            async def open_category(widget=None, selected=title, **kwargs):
-                await self.open_document_category(selected)
-            actions.append(('Open…', open_category))
-            card = panel(title, detail, glyph, actions)
-            kind = {'Text Editor': 'text', 'Markdown Editor': 'markdown', 'EPUB Reader': 'epub',
-                    'Comic Reader': 'comic', 'Archives': 'archive'}[title]
-            self.document_categories[kind] = card
-            group = [(session, summary) for session_kind, session, summary in sessions if session_kind == kind]
-            content = card.children[0]
-            if group:
-                if self.preferences.values['document_card_overview'] == 'true':
-                    grid = PanelGrid([self.session_card(session, summary) for session, summary in group],
-                                     self.main_window.size.width, maximum_columns=1)
-                    self.document_grids.append(grid)
-                    content.add(grid)
-                else:
-                    for session, summary in group:
-                        content.add(self.session_panel(session, close=True, summary=summary, show_kind=False))
-            launchers.append(card)
-        self.document_launchers = PanelGrid(launchers, self.main_window.size.width)
-        box.add(self.document_launchers)
+                identities.append(session.identity)
+        for title, group in document_groups(sessions):
+            section = toga.Box(style=Pack(direction=COLUMN, margin_bottom=12))
+            section.add(toga.Label(title, style=Pack(font_size=15, font_weight='bold', margin_bottom=8)))
+            kind = group[0][0]
+            self.document_categories[kind] = section
+            if self.preferences.values['document_card_overview'] == 'true':
+                grid = PanelGrid([self.session_card(session, summary) for _, session, summary in group],
+                                 self.main_window.size.width, maximum_columns=3)
+                self.document_grids.append(grid)
+                section.add(grid)
+            else:
+                for _, session, summary in group:
+                    section.add(self.session_panel(session, close=True, summary=summary, show_kind=False))
+            box.add(section)
+        if not sessions:
+            box.add(toga.Label('No open documents. Open a file or create a document to get started.',
+                               style=Pack(margin_top=8, margin_bottom=16)))
+        recent = self.recent_items(excluding=identities)
+        if recent:
+            box.add(heading('Recent'))
+            for session, summary in recent:
+                box.add(self.recent_row(session, summary))
         if self.workspace.error:
             box.add(toga.Label(self.workspace.error, style=Pack(margin_top=8)))
         self.register_transfer_status(box)
@@ -191,13 +230,15 @@ class HubUI:
     def session_card(self, session, summary):
         """A lightweight overview; never mount live editors or private readers."""
         title, kind, details = summary
-        box = toga.Box(style=Pack(direction=COLUMN, padding=8, margin_bottom=10))
+        box = toga.Box(style=Pack(direction=COLUMN, margin_bottom=12))
         box.session_id = session.id
+        from .browser_ui import middle_filename
+        name = list_button(toga.Button(title, on_press=self.session_opener(session.id), style=Pack(flex=1, height=48)))
+        middle_filename(name)
         box.add(toga.Box(children=[
-            toga.Button(title, on_press=self.session_opener(session.id),
-                        style=Pack(flex=1, height=44)),
-            toga.Button('×', on_press=self.session_closer(session.id), style=Pack(width=44, height=44))],
-            style=Pack(direction=ROW)))
+            name,
+            icon_button('close', 'Close ' + title, on_press=self.session_closer(session.id))],
+            style=Pack(direction=ROW, margin=12)))
         preview = ''
         owner = self.text_views.get(session.id)
         if owner is not None and session.provider == 'managed-text':
@@ -208,11 +249,12 @@ class HubUI:
             except (OSError, ValueError, KeyError, TypeError):
                 pass
         # A bounded excerpt keeps card height and native layout work predictable.
-        excerpt = '\n'.join(line[:24] for line in preview[:600].splitlines()[:6])
+        from textwrap import wrap
+        excerpt = '\n'.join(wrap(' '.join(preview[:600].split()), width=32)[:4])
         box.add(toga.Label(excerpt or DOCUMENT_TYPES.get(kind, 'Document'),
-                           style=Pack(height=120, font_size=12, margin_top=8, margin_bottom=8)))
+                           style=Pack(height=80, font_size=12, margin_left=12, margin_right=12, margin_bottom=8)))
         if details:
-            box.add(toga.Label('\n'.join(details), style=Pack(font_size=12)))
+            box.add(toga.Label('\n'.join(details), style=Pack(font_size=12, margin_left=12, margin_right=12, margin_bottom=12)))
         return surface(box)
 
     def session_summary(self, session):
@@ -255,9 +297,11 @@ class HubUI:
         if details:
             box.add(toga.Label(' · '.join(details), style=Pack(font_size=12)))
         box.session_id = session.id
-        button = toga.Button(title, on_press=self.session_opener(session.id), style=Pack(height=48, flex=1))
+        button = list_button(toga.Button(title, on_press=self.session_opener(session.id), style=Pack(height=48, flex=1)))
+        from .browser_ui import middle_filename
+        middle_filename(button)
         if close:
-            close_button = toga.Button('×', on_press=self.session_closer(session.id), style=Pack(width=44, height=48))
+            close_button = icon_button('close', 'Close ' + title, on_press=self.session_closer(session.id))
             box.add(toga.Box(children=[button, close_button], style=Pack(direction=ROW)))
         else:
             box.add(button)
@@ -277,12 +321,12 @@ class HubUI:
     def refresh_hub(self, destination):
         if destination == 'files' and self.window_id == 'primary':
             self.show_cloud(present=False)
-            self.routes.trim('files', 0)
+            view = self.folder_picker_or_error()
+            view = self.adaptive.prepare(view, 'files', root=True)
             root = self.routes.roots['files']
+            self.routes.trim('files', 0)
             for child in list(root.children):
                 root.remove(child)
-            view = self.build_folder_picker()
-            view = self.adaptive.prepare(view, 'files', root=True)
             root.add(view)
             self.routes.render('files')
             return

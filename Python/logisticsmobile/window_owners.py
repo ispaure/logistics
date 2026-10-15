@@ -30,5 +30,6 @@ class WindowOwners:
     def can_add(self):
         return len(self.hosts) < 4 and all(
             not any(session.transient for session in host.workspace.sessions.values())
+            and not getattr(host, 'private_comic_batch', None)
             and not getattr(host, 'cloud_busy', False)
             for host in self.hosts.values())

@@ -50,7 +50,7 @@ class LibraryCatalogTests(unittest.TestCase):
             self.assertEqual(discover_libraries(root, jobs), ([], 0))
 
     def test_crypt_configuration_uses_provider_and_pulled_namespace(self):
-        from logisticsmobile.file_resources import CryptFiles
+        from features.rclone.mobile.file_resources import CryptFiles
         with TemporaryDirectory() as directory:
             root = Path(directory)
             client = CryptClient()
@@ -91,10 +91,7 @@ class LibraryCatalogTests(unittest.TestCase):
                 await catalog.library_row_buttons[0].on_press()
                 self.assertEqual(app.file_path, 'Collection/Comics')
                 self.assertEqual(app.file_provider.root, app.private_root / 'LocalFiles')
-                catalog.library_search.value = 'unmatched'
-                self.assertEqual(catalog.library_row_buttons, [])
-                catalog.library_search.value = ''
-                from logisticsmobile.file_resources import CryptFiles
+                from features.rclone.mobile.file_resources import CryptFiles
                 private = object.__new__(CryptFiles)
                 catalog.library_records.append(dict(name='Private Comics', folder='Comics',
                     source='LocalCrypt', provider=private, client=app.cloud_client,

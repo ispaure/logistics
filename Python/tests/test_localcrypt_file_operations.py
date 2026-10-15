@@ -112,9 +112,9 @@ class DesktopFileOperationsTests(unittest.TestCase):
 @unittest.skipUnless(os.environ.get('LOGISTICS_MOBILE_BRIDGE'), 'Host native bridge required')
 class MobileFileOperationsTests(unittest.TestCase):
     def test_existing_copy_managed_tree_and_plain_round_trip(self):
-        from logisticsmobile.cloud import CloudClient
-        from logisticsmobile.localcrypt import LocalCryptCopies
-        from logisticsmobile.file_resources import CryptFiles, DownloadedCryptFile, ManagedCopies
+        from features.rclone.mobile.cloud import CloudClient
+        from features.rclone.mobile.localcrypt import LocalCryptCopies
+        from features.rclone.mobile.file_resources import CryptFiles, DownloadedCryptFile, ManagedCopies
         fixture = json.loads(Path('Mobile/native_tests/tests/logisticsmobile/localcrypt_fixture.json').read_text())
         client = CloudClient(library=os.environ['LOGISTICS_MOBILE_BRIDGE'])
         client.request('import', package=fixture['package'], password='', package_name='Synthetic.zip', session_only=True)

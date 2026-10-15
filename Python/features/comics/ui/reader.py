@@ -137,7 +137,9 @@ class ComicReaderWindow(qt.QMainWindow):
             action.setEnabled(button.isEnabled())
             label = 'Previous file' if direction < 0 else 'Next file'
             button.setToolTip(f'{label}: {path.name}' if path else label)
-        self.edit_metadata_action.setEnabled(not self.file_loading)
+        remote = getattr(self.pages.document.source, 'remote_storage', False)
+        self.edit_metadata_action.setVisible(not remote)
+        self.edit_metadata_action.setEnabled(not self.file_loading and not remote)
         self.menus.previous_page_action.setEnabled(self.previous_button.isEnabled())
         self.menus.next_page_action.setEnabled(self.next_button.isEnabled())
         self.menus.go_page_action.setEnabled(not self.file_loading)
@@ -366,6 +368,8 @@ class ComicReaderWindow(qt.QMainWindow):
             self.canvas.setFocus()
 
     def edit_metadata(self):
+        if getattr(self.pages.document.source, 'remote_storage', False):
+            return
         from .metadata_editor import MetadataEditor
         from commonUtils.ui.document_host import document_is_open
         existing = next((window for window in self.metadata_windows

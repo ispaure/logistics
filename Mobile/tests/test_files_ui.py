@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -7,8 +6,8 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class FileUITests(unittest.TestCase):
-    def test_encrypted_provider_cannot_take_local_transfer_bypass(self):
-        from logisticsmobile.file_resources import CryptFiles
+    def test_encrypted_provider_reads_during_transfer_without_allowing_mutations(self):
+        from features.rclone.mobile.file_resources import CryptFiles
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory).resolve()
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
@@ -17,13 +16,21 @@ class FileUITests(unittest.TestCase):
                 app.show_cloud(present=False)
                 app.loop.run_until_complete(app.show_files())
                 provider = object.__new__(CryptFiles)
+                provider.root, provider.client = Path(directory), object()
                 app.file_provider = provider
                 app.file_rows = {'note': {'path': 'note.md', 'name': 'note.md', 'directory': False}}
                 app.file_selection.items = ['note']
                 app.file_selection.value = 'note'
                 app.cloud_busy = app.transfer_busy = True
-                with patch.object(CryptFiles, 'entry', side_effect=AssertionError('Encrypted engine used during Pull')):
+                with patch.object(CryptFiles, 'entry', return_value={'directory': False}), patch.object(
+                        app, 'open_crypt', new_callable=AsyncMock) as opened:
                     app.loop.run_until_complete(app.read_managed_file())
+                    opened.assert_awaited_once()
+                    self.assertTrue(opened.call_args.kwargs['copies'].offline)
+                mutation = unittest.mock.Mock()
+                self.assertFalse(app.loop.run_until_complete(app.file_work(mutation)))
+                mutation.assert_not_called()
+                self.assertTrue(app.cloud_busy and app.transfer_busy)
                 # Pulled providers carry their own namespace. Browsing and
                 # editor picking must return that same object, not reconstruct
                 # one from its display label and lose the association.
@@ -124,7 +131,7 @@ class FileUITests(unittest.TestCase):
                 previous = (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None)
                 app.loop.run_until_complete(app.show_crypt_save_as())
                 app.save_as_name.value = 'published-but-not-reopened.md'
-                with patch('logisticsmobile.file_resources.LocalTextCopies.open', side_effect=OSError('injected reopen failure')):
+                with patch('logisticsmobile.text_resources.LocalTextCopies.open', side_effect=OSError('injected reopen failure')):
                     app.loop.run_until_complete(app.save_text_destination())
                 self.assertEqual((root / 'published-but-not-reopened.md').read_text(), 'keep this draft when reopening fails')
                 self.assertIs((app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None), previous)
@@ -132,7 +139,7 @@ class FileUITests(unittest.TestCase):
                 self.assertIsNotNone(app.save_as_data)
                 self.assertIn('was saved', app.save_as_status.value)
                 app.save_as_name.value = 'changed-before-reopen.md'
-                from logisticsmobile.file_resources import LocalTextCopies
+                from logisticsmobile.text_resources import LocalTextCopies
                 original_open = LocalTextCopies.open
                 def changed_open(copies, key, **kwargs):
                     (copies.provider.root / key).write_text('external replacement')
