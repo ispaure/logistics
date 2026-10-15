@@ -912,3 +912,8 @@ large heading. Settings starts directly with its grouped controls. Both Home and
 the bottom navigation use the desktop Folder Hub stack-of-three glyph.
 On iOS, Chat measures floating-tab overlap to keep the composer and Send control
 above the navigation bar, including while the keyboard is open and drafts grow.
+
+
+On iPhone, all five bottom-tab labels use their complete names immediately after
+launch. Opening each tab is not needed to make its name fit; the startup layout
+preserves the selected destination and does not open other workspaces.

@@ -23,6 +23,31 @@ def assert_navigation_contrast(view):
         assert (high + .05) / (low + .05) >= 3, 'Inactive navigation items need visible contrast'
 
 
+def assert_cold_iphone_tab_labels(app):
+    """Inspect rendered labels before selection can repair their cached geometry."""
+    from rubicon.objc import ObjCClass
+    if ObjCClass('UIDevice').currentDevice.userInterfaceIdiom != 0:
+        return
+    tab = app.native_host.adapter.controller.tabBar
+    tab.layoutIfNeeded()
+    expected, seen = set(app.native_host.labels), set()
+    def value(obj, name):
+        result = getattr(obj, name)
+        return result() if callable(result) else result
+    def inspect(view):
+        if view.isKindOfClass(ObjCClass('UILabel')):
+            text = str(value(view, 'text'))
+            if text in expected:
+                seen.add(text)
+                natural = value(view, 'intrinsicContentSize')
+                assert view.bounds.size.width >= natural.width - 1, ('Truncated tab', text, str(view.bounds), str(natural))
+                assert view.bounds.size.height >= value(value(view, 'font'), 'pointSize'), ('Clipped tab', text)
+        for child in value(view, 'subviews'):
+            inspect(child)
+    inspect(tab)
+    assert seen == expected, ('Missing cold-start tab labels', seen)
+
+
 async def exercise_navigation(app):
     original = app.main_window.content
     original_widgets = set(app.widgets.keys())

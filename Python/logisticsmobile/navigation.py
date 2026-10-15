@@ -31,6 +31,7 @@ def install_folder_hub_icon(host):
         image = ObjCClass('UIImage').imageWithData(data)
         image = ObjCClass('UIImage').imageWithCGImage(image.CGImage, scale=3, orientation=0)
         adapter.navigation[index].tabBarItem.image = image.imageWithRenderingMode(2)
+        refresh_apple_tab_items(host)
     elif hasattr(adapter, 'bottom'):
         from android.util import Base64
         from android.graphics import BitmapFactory
@@ -41,3 +42,21 @@ def install_folder_hub_icon(host):
         for bar in (adapter.bottom, adapter.rail):
             if bar is not None:
                 bar.getMenu().getItem(index).setIcon(drawable)
+
+
+def refresh_apple_tab_items(host):
+    """Give the wrapped controllers fresh items after final titles/icons exist.
+
+    iOS 26 can retain the original OptionContainer label's compressed geometry
+    when its item is reused by a navigation controller. Selection remeasures it,
+    but rebuilding these five app-owned items avoids requiring any selection.
+    """
+    from rubicon.objc import ObjCClass
+    adapter = host.adapter
+    for index, (navigation, title) in enumerate(zip(adapter.navigation, host.labels)):
+        image = navigation.tabBarItem.image
+        navigation.title = title
+        navigation.tabBarItem = ObjCClass('UITabBarItem').alloc().initWithTitle(
+            title, image=image, tag=index)
+        navigation.tabBarItem.accessibilityLabel = title
+    adapter.impl.refresh_tabs()
