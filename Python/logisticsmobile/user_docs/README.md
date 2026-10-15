@@ -1010,3 +1010,9 @@ LocalCrypt folders. Settings → Folder Hub → **Show Legacy** changes visibili
 for the current session. Press **Save preferences** to keep the choice after
 restarting; **Reload preferences** restores the saved choice. Files with that
 prefix remain visible when their parent folders are visible.
+
+The same iOS **Show Legacy** switch also hides credential/ZIP choices whose
+names start with `Legacy` (case-insensitive, no dash required), including retained
+ZIP unlock choices. Turning it on reveals these choices immediately. Hiding a
+selected credential returns the Folder Hub selector to **All**; stored credentials
+and their ZIPs are retained.

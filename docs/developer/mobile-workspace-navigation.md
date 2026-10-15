@@ -246,3 +246,8 @@ library shortcuts immediately without writing preferences. Explicit save
 persists it; reload discards the override. FileBrowser filters logical directory
 components before pagination, including search results and provider remote roots,
 so LocalCrypt uses decoded names. The filter changes presentation only.
+
+Credential group and retained-ZIP chooser labels share the iOS session visibility
+policy, matching the `Legacy` prefix without requiring a dash. Filter presentation
+without modifying package associations or retained credential data. When a selected
+credential becomes hidden, both the selection and its retained name reset to All.
