@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from commonUtils.archives.zip_access import ArchivePasswordError
-from logisticsmobile.access import LocalDocuments
+from commonUtils.runtime.document_access import LocalDocuments
 from logisticsmobile.cloud import CloudClient
 from logisticsmobile.library import LibraryStore
 

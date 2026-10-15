@@ -13,7 +13,7 @@ async def exercise_ui_review(app):
         base64.b64decode('UklGRl4AAABXRUJQVlA4WAoAAAAQAAAAAQAAAgAAQUxQSAcAAAAAgICAgICAAFZQOCAwAAAA0AEAnQEqAgADAAFAJiWgAnS6AfgAA7AA/vLrf/zYFc1z7/f/0uD9Lg/S4P/SkAAA')]
     from features.comics.mobile.validation import image_dimensions
     from logisticsmobile.localcrypt import PrivateReader
-    from logisticsmobile.access import LocalDocuments
+    from commonUtils.runtime.document_access import LocalDocuments
     from zipfile import ZipFile
     comic = app.storage_root / 'WebP review.cbz'
     with ZipFile(comic, 'w') as archive:
