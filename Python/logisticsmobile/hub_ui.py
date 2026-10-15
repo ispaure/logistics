@@ -129,6 +129,25 @@ class HubUI:
             toga.Button('New', on_press=self.new_hub_document, style=Pack(height=44, flex=1)),
             toga.Button('Open…', on_press=self.open_hub_file, style=Pack(height=44, flex=1))],
             style=Pack(direction=ROW, margin_bottom=8)))
+        launchers = []
+        for title, detail, glyph, extension in (
+            ('Text Editor', 'Edit plain text and code files.', 'documents', 'txt'),
+            ('Markdown Editor', 'Write and preview formatted notes.', 'markdown', 'md'),
+            ('EPUB Reader', 'Read books and resume your progress.', 'books', None),
+            ('Comic Reader', 'Read comics and image archives.', 'books', None),
+            ('Archives', 'Browse archive files.', 'files', None),
+        ):
+            actions = []
+            if extension:
+                def create(widget=None, selected=extension, **kwargs):
+                    self.create_chosen_document(selected)
+                actions.append(('New', create))
+            async def open_category(widget=None, selected=title, **kwargs):
+                await self.open_document_category(selected)
+            actions.append(('Open…', open_category))
+            launchers.append(panel(title, detail, glyph, actions))
+        self.document_launchers = PanelGrid(launchers, self.main_window.size.width)
+        box.add(self.document_launchers)
         box.add(heading(f'Open documents · {len(self.workspace.sessions)}'))
         sessions = []
         self.document_grids = []
@@ -160,6 +179,17 @@ class HubUI:
             box.add(toga.Label(self.workspace.error, style=Pack(margin_top=8)))
         self.register_transfer_status(box)
         return toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
+
+    async def open_document_category(self, category):
+        extensions = {
+            'Text Editor': ('.txt', '.py', '.json', '.csv', '.log', '.ini', '.yaml', '.xml'),
+            'Markdown Editor': ('.md', '.markdown'),
+            'EPUB Reader': ('.epub',),
+            'Comic Reader': ('.cbz', '.zip'),
+            'Archives': ('.zip', '.cbz', '.epub'),
+        }
+        await self.adaptive.browser('documents').show_main_browser(
+            'Local files', extensions=extensions[category], title=category)
 
     def session_card(self, session, summary):
         """A lightweight overview; never mount live editors or private readers."""

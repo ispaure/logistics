@@ -192,6 +192,8 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         self.adaptive.render()
         if hasattr(self, 'home_panels') and self.main_window.content is self.native_host.root:
             self.home_panels.reflow(self.main_window.size.width)
+        if hasattr(self, 'document_launchers'):
+            self.document_launchers.reflow(self.main_window.size.width)
         for grid in getattr(self, 'document_grids', []):
             grid.reflow(self.main_window.size.width)
         for owner in self.text_views.values():

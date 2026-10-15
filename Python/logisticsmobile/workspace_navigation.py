@@ -388,6 +388,7 @@ class FileDrawer:
         self.navigation, self.app, self.destination = navigation, navigation.app, destination
         self.roots = {'Local files': None}
         self.provider = None
+        self.extensions = None
         self.folder = ''
         self.generation = 0
         self.task = None
@@ -402,6 +403,24 @@ class FileDrawer:
             toga.Button('Folder Hub', on_press=self.app.show_locations, style=Pack(height=44))],
             style=Pack(direction=COLUMN, flex=1))
         self.storage.on_change = self.change_storage
+
+    async def show_main_browser(self, storage, *, folder='', extensions=None, title='Browse files'):
+        if not self.app.checkpoint():
+            return False
+        self.extensions = extensions
+        self.folder = folder
+        self.changing_storage = True
+        try:
+            if storage not in self.storage.items:
+                self.storage.items = [*self.roots, storage]
+            self.storage.value = storage
+        finally:
+            self.changing_storage = False
+        self.navigation.menu_open[self.destination] = False
+        detach(self.widget)
+        page = toga.Box(children=[self.widget], style=Pack(direction=COLUMN, flex=1, margin=12))
+        self.app.show_view(page, destination=self.destination, route='workspace-browser', title=title)
+        return await self.refresh()
 
     def schedule_refresh(self):
         self.generation += 1
@@ -439,7 +458,7 @@ class FileDrawer:
             if selected != 'Local files' and self.app.cloud_busy:
                 raise ValueError('This connection is busy. Local files remain available.')
             provider = self.app.storage_provider(selected, roots)
-            model = ResourceSelection(provider)
+            model = ResourceSelection(provider, extensions=self.extensions)
             folder = self.folder
             rows = await asyncio.to_thread(model.list, folder)
             if (not self.app.active_host or generation != self.generation
