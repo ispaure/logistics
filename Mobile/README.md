@@ -18,6 +18,16 @@ Qt application or install its dependency list.
 See the [user guide](../Python/logisticsmobile/user_docs/README.md) and
 [architecture and validation guide](../docs/developer/mobile-preparation.md).
 
+## Double-click TestFlight deployment
+
+On the configured Mac, double-click `deploy_ios_testflight.command` beside
+`deploy_ios.command`. It chooses a new build number, archives the committed
+sources and exports/verifies the signed IPA. When prompted, type `y` and Return
+to upload it and start the configured Friends distribution workflow. Press Return
+to keep the prepared build without uploading. Apple processing and beta review
+can delay tester availability. The launcher preserves the existing signing identity
+and does not install anything on your iPhone. Commit source changes before running.
+
 ## Prepare a native build
 
 Launcher artwork is bundled under `resources/icons`: iOS light, dark and tinted
