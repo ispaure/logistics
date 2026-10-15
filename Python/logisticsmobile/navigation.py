@@ -6,7 +6,7 @@ DESTINATIONS = ('home', 'files', 'documents', 'chat', 'settings')
 
 DESTINATION_ITEMS = (
     ('home', 'Home', 'house', 'home'),
-    ('files', 'Files', 'folder', 'ic_menu_agenda'),
+    ('files', 'Folder Hub', 'square.grid.2x2', 'ic_menu_mapmode'),
     ('documents', 'Documents', 'doc.on.doc', 'ic_menu_edit'),
     ('chat', 'Chat', 'bubble.left.and.bubble.right', 'ic_menu_send'),
     ('settings', 'Settings', 'gearshape', 'ic_menu_preferences'),

@@ -14,7 +14,7 @@ class LocationsUI:
             if self.file_storage.value != 'Local files':
                 raise ValueError('Encrypted folder paths stay private and cannot be pinned for restoration.')
             self.pinned_locations().pin('local', self.file_path)
-            self.file_status.value = 'Folder pinned in Files.'
+            self.file_status.value = 'Folder pinned in Folder Hub.'
         except (OSError, ValueError) as error:
             self.file_status.value = str(error)
 
@@ -30,7 +30,7 @@ class LocationsUI:
             if not self.active_host or client is not self.cloud_client or client.generation != generation:
                 return
             self.pinned_locations().pin('remote', path, identity)
-            self.cloud_status.value = 'Folder pinned in Files. It requires the same connection.'
+            self.cloud_status.value = 'Folder pinned in Folder Hub. It requires the same connection.'
         except (OSError, ValueError) as error:
             self.cloud_status.value = str(error)
 

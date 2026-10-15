@@ -8,6 +8,7 @@ from toga.style.pack import COLUMN, ROW
 from .library import LibraryStore
 from features.books.mobile.content import chapter_html
 from features.books.mobile.presentation import chapter_view
+from .palette import themed_chapter
 from features.comics.mobile.presentation import page_view
 from commonUtils.archives.zip_access import ArchivePasswordError
 from .reader_chrome import ReaderChrome
@@ -236,6 +237,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                 theme=self.preferences.values['reading_theme'])
             if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
                 return
+            content = themed_chapter(content, self.preferences.values['reading_theme'])
             self.epub_view = chapter_view(content, getattr(self, 'epub_view', None))
             view = self.epub_view
         else:

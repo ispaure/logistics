@@ -84,11 +84,11 @@ class FolderHubUI:
         self.folder_list = toga.Box(style=Pack(direction=COLUMN))
         self.folder_refresh_button = refresh_button(self.refresh_folder_hub)
         self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=44, flex=1))
-        box = toga.Box(children=[toga.Label('Files', style=Pack(font_size=24, margin_bottom=12)),
+        box = toga.Box(children=[toga.Label('Folder Hub', style=Pack(font_size=24, margin_bottom=12)),
             toga.Box(children=[self.folder_transfers_button, self.folder_refresh_button],
                 style=Pack(direction=ROW, margin_bottom=12)),
             toga.Button('Add SMB / Mac share…', on_press=self.show_smb_connection, style=Pack(height=44, margin_bottom=8)),
-            toga.Label(import_hint('Choose a folder. Available actions follow its copies.'), style=Pack(font_size=12, margin_bottom=8)),
+            toga.Label(import_hint('Choose a folder to browse, pull or push its available copies.'), style=Pack(font_size=12, margin_bottom=8)),
             toga.ScrollContainer(horizontal=False, content=self.folder_list, style=Pack(flex=1))],
             style=Pack(direction=COLUMN, margin=12, flex=1))
         self.update_folder_list(self.folder_choices())
@@ -229,7 +229,7 @@ class FolderHubUI:
         busy = getattr(self, 'cloud_busy', False) or getattr(self, 'transfer_busy', False)
         for button, needs_idle in getattr(self, 'folder_action_controls', []):
             button.enabled = not busy or not needs_idle
-        # Credential restore can finish while Files is already showing its root.
+        # Credential restore can finish while Folder Hub is already showing its root.
         # Refresh the list in place instead of leaving a local-only snapshot.
         host = getattr(self, 'native_host', None)
         if (not busy and hasattr(self, 'folder_list') and host is not None

@@ -123,7 +123,7 @@ class CloudUI(CopyUI, LocalCryptUI):
                 toga.Button('Browse folder', on_press=self.browse_cloud_path, style=Pack(height=44)))
             self.cloud_copy_button = toga.Button('Copy to device…', on_press=self.choose_cloud_copy, style=Pack(height=48))
             self.cloud_copy_folder = toga.Button('Copy this folder…', on_press=self.copy_current_folder, style=Pack(height=48))
-            self.cloud_locations = toga.Button('Locations', on_press=self.show_locations, style=Pack(height=44, flex=1))
+            self.cloud_locations = toga.Button('Folder Hub', on_press=self.show_locations, style=Pack(height=44, flex=1))
             self.cloud_remote.style.flex = 1
             self.cloud_browse.text = 'Open remote'
             self.cloud_cancel.text = 'Cancel'
@@ -145,7 +145,7 @@ class CloudUI(CopyUI, LocalCryptUI):
                 self.set_cloud_busy(True)
                 self.cloud_restore_task = self.loop.create_task(self.restore_cloud(initial=True))
         if present:
-            self.show_view(self.cloud_view, destination='files', route='remote-browser', title='Remote files')
+            self.show_view(self.cloud_view, destination='files', route='remote-browser', title='Remote file browser')
 
     async def browse_cloud_path(self, widget=None, **kwargs):
         if await self.browse_cloud(preserve_path=True):

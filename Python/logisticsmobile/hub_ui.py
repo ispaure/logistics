@@ -3,7 +3,8 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from .hub_icons import icon
-from commonUtils.ui.native.presentation import surface, list_button, template_icon
+from commonUtils.ui.native.presentation import list_button, template_icon
+from .appearance import surface
 
 DOCUMENT_TYPES = {'text': 'Text', 'markdown': 'Markdown', 'epub': 'EPUB books', 'comic': 'Comics'}
 
@@ -25,16 +26,7 @@ def heading(text):
 
 
 def home_surface(widget, *, hero=False):
-    backend = type(widget._impl).__module__
-    if backend.startswith('toga_iOS.'):
-        from rubicon.objc import ObjCClass
-        colour = (ObjCClass('UIColor').colorWithRed(25 / 255, green=59 / 255, blue=99 / 255, alpha=1)
-                  if hero else ObjCClass('UIColor').secondarySystemBackgroundColor())
-        widget._impl._default_background_color = colour
-        widget._impl.native.backgroundColor = colour
-        widget._impl.native.layer.cornerRadius = 20 if hero else 16
-        widget._impl.native.layer.masksToBounds = True
-    return widget
+    return surface(widget, radius=20 if hero else 16)
 
 
 def panel(title, detail, glyph, actions):
@@ -89,16 +81,16 @@ class HubUI:
         active = self.workspace.sessions.get(self.workspace.active)
         if active is not None:
             title, kind, details = self.session_summary(active)
-            hero = toga.Box(style=Pack(direction=COLUMN, margin_bottom=12, background_color='#193b63'))
+            hero = toga.Box(style=Pack(direction=COLUMN, margin_bottom=12))
             hero_content = toga.Box(style=Pack(direction=COLUMN, margin=18))
             hero.add(hero_content)
-            hero_content.add(toga.Label('PICK UP WHERE YOU LEFT OFF', style=Pack(font_size=11, color='#d2e1f4', margin_bottom=12)))
+            hero_content.add(toga.Label('PICK UP WHERE YOU LEFT OFF', style=Pack(font_size=11, margin_bottom=12)))
             from textwrap import fill
-            hero_content.add(toga.Label(fill(title, width=26), style=Pack(font_size=22, font_weight='bold', color='white', margin_bottom=8)))
+            hero_content.add(toga.Label(fill(title, width=26), style=Pack(font_size=22, font_weight='bold', margin_bottom=8)))
             hero_content.add(toga.Label(' · '.join([DOCUMENT_TYPES.get(kind, 'Document'), *details]),
-                                style=Pack(font_size=12, color='#d2e1f4', margin_bottom=12)))
+                                style=Pack(font_size=12, margin_bottom=12)))
             self.home_continue_button = toga.Button('Continue →', on_press=self.session_opener(active.id),
-                                style=Pack(height=48, color='white', background_color='#244c78'))
+                                style=Pack(height=48))
             hero_content.add(self.home_continue_button)
             box.add(home_surface(hero, hero=True))
             self.home_continue = hero
@@ -111,7 +103,7 @@ class HubUI:
         box.add(heading('Your spaces'))
         spaces = toga.Box(style=Pack(direction=COLUMN))
         for title, subtitle, glyph, action in (
-            ('Browse files', 'On your device & connected storage', 'files', self.show_home_files),
+            ('Folder Hub', 'Your folders · browse, pull & push', 'folder_hub', self.show_home_files),
             ('Books & Comics', 'Your library, ready to read', 'books', self.show_library),
         ):
             row = toga.Box(children=[
@@ -262,7 +254,7 @@ class HubUI:
             for child in list(root.children):
                 root.remove(child)
             view = self.build_folder_picker()
-            self.adaptive.prepare(view, 'files', root=True)
+            view = self.adaptive.prepare(view, 'files', root=True)
             root.add(view)
             self.routes.render('files')
             return
@@ -275,7 +267,7 @@ class HubUI:
             self.refresh_documents()
         root = self.routes.roots[destination]
         view = self.build_home() if destination == 'home' else self.build_documents_hub()
-        self.adaptive.prepare(view, destination, root=True)
+        view = self.adaptive.prepare(view, destination, root=True)
         for child in list(root.children):
             root.remove(child)
         root.add(view)

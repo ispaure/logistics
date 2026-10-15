@@ -88,7 +88,7 @@ class PullJobsUI:
                 return False
             if create:
                 self.cloud_downloaded_folder = result['target']
-                self.pull_message = 'Pull job saved. Refresh it from Files → Folder pulls.'
+                self.pull_message = 'Pull job saved. Refresh it from Folder Hub → Transfers.'
             else:
                 status, target = result
                 self.cloud_downloaded_folder = target.name

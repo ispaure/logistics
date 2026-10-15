@@ -8,7 +8,7 @@ the native app; real-device interaction testing is still required.
 | Logistics capability | Mobile status |
 | --- | --- |
 | Plain-text editing | Implemented: create, select, rename, edit and save private documents |
-| Hub and navigation | Native Home, Files, Documents, Chat and Settings destinations; retained screen per destination |
+| Hub and navigation | Native Home, Folder Hub, Documents, Chat and Settings destinations; retained screen per destination |
 | Markdown | Text editing and offline basic preview: headings, list items, bold and code blocks |
 | Document import | Native picker adapters implemented; actual provider permissions still need device testing |
 | Draft recovery | Implemented: checkpoints, restored drafts and conflict-safe save-a-copy |
@@ -52,7 +52,7 @@ migration and general app-data backup/reset behavior remain separate work.
 ## Home and document search
 
 Home puts the selected document in a prominent **Continue** card, followed by
-**New document** and **Open file…**. Compact Files and Books & Comics rows lead
+**New document** and **Open file…**. Compact Folder Hub and Books & Comics rows lead
 to those workspaces; Open documents and LM Chat remain one tap away.
 **Continue** restores the document's Edit/Preview mode.
 **New document** creates and displays a separate editor; **Open file…**
@@ -73,15 +73,19 @@ them. Search does not include other files or the separate private reader editor.
 
 ## File and conversation drawers
 
-On iPhone, the top-left hamburger in Files and Documents opens a full-height file
-browser. Tap it again to return to the current folder or editor. The browser keeps
+On iPhone, Folder Hub and Documents have a larger hamburger bubble in the top
+navigation bar, directly below the status area. It uses Apple's Liquid Glass
+style on supported iOS versions. It works on the first visit without Refresh.
+Opening it slides the current page to the right, revealing the file browser and
+leaving a strip of the current page visible. Tap it again to slide back to the
+current folder, document overview or editor. Reduce Motion skips the animation. The browser keeps
 its own storage selection, folder, search and history; using it does not change
-the Files tab's existing folder selection. It browses local files and available
-LocalCrypt copies. **Connections & folders** opens the complete folder hub for
+the Folder Hub tab's existing folder selection. It browses local files and available
+LocalCrypt copies. **Folder Hub** opens the complete folder hub for
 online connections and managed copies. Selecting a file opens it in the current
 destination through the existing editor/reader workflow.
 
-At window widths of 840 points/dp or more, including a sufficiently wide Duo
+At window widths of 640 points/dp or more, including a sufficiently wide Duo
 window, an open browser occupies the left half and the current document stays on
 the right. In Documents, **Split** lets you choose a second open text or Markdown
 document, including editable provider files. The first stays on the left and the
@@ -102,14 +106,15 @@ bottom sheets. Opening these screens does not send a model request.
 
 The app opens on **Home**, a landing page with quick access to files, editors,
 books/comics and chat. The house icon is the first native destination, before
-**Files**, **Documents**, **Chat** and **Settings**. **Files** is a location hub for **On this device** and
-**Remote files & LocalCrypt**. Local browsing uses app-managed files rather than
+**Folder Hub**, **Documents**, **Chat** and **Settings**. **Folder Hub** lists folders and their available local, encrypted and remote copies.
+Select a folder to see its Browse, Pull and Push actions. Browse opens the file
+browser for the chosen copy. Local browsing uses app-managed files rather than
 the entire device filesystem. Choose **Documents → New** for **Plain text (.txt)** or **Markdown (.md)**.
-Books and comics are available through Files or Home’s Books & Comics panel;
+Books and comics are available through Folder Hub or Home’s Books & Comics panel;
 Chat has its own bottom navigation button between Documents and Settings. Native tab
 controls adapt to the Apple layout; Android uses bottom navigation in compact
 windows and a rail at 600 dp or wider. Switching destinations retains each
-screen. **Locations** returns to the Files hub and **All documents** returns
+screen. **Folder Hub** returns to the folder list and **All documents** returns
 from the editor to the Documents hub.
 
 Back returns through screens within the current destination. It does not switch
@@ -150,7 +155,7 @@ If a restored item is unavailable, **Try again** retries it and **Remove from
 open documents** removes only its open entry. Stored files are preserved.
 
 On regular-width Apple layouts, native split navigation keeps the document list
-beside its detail view. Android shows both at 840 dp or wider and uses the
+beside its detail view. Android shows both at 640 dp or wider and uses the
 compact route stack below that threshold. Layout changes retain the same editor
 and session. The editor keeps its name, text, status, Save and Preview visible;
 **Actions** opens a native Apple button menu or Android popup for New, Import,
@@ -211,7 +216,7 @@ system light/dark appearance and uses the configured font size.
 
 Standalone password-protected CBZ/ZIP comics support AES and legacy ZipCrypto
 on iOS and Android, without rclone or a credential package. Import one through
-Files, then enter its ZIP password and choose **Unlock comic**, or press Enter.
+Folder Hub, then enter its ZIP password and choose **Unlock comic**, or press Enter.
 A wrong password clears the field and keeps the prompt ready for another attempt.
 **Cancel** keeps the imported encrypted copy. The password stays only with the
 active reader; **Lock comic** clears the password, decoded-page cache and displayed
@@ -249,7 +254,7 @@ records rather than overwriting another change.
 
 ## LM chat
 
-Choose **Chat** in the bottom navigation. Open **Server & generation settings…**, enter your
+Choose **Chat** in the bottom navigation. Open **••• → Server & model settings**, enter your
 existing server's API URL (for example `http://192.168.1.10:1234/v1`), optional
 session API key, and model ID. **Refresh models** contacts that server explicitly
 and fills the model selector. Use the computer's LAN address/hostname when the
@@ -265,12 +270,27 @@ Re-enter a required key after restarting. Opening chat alone makes no request.
 
 **New conversation** starts a private thread. Drafts are checkpointed while typing.
 **Send** streams a text reply and preserves partial progress during generation.
-**Cancel** stops the connection and retains received text with cancelled status.
+The same button becomes **Stop** during generation; it stops the connection and
+retains received text with cancelled status.
 Reopening an interrupted streaming record identifies it as interrupted. Failures
-retain the user message/partial reply; no automatic retry occurs. The selector
-reopens saved conversations. Malformed, oversized or concurrently changed files
+retain the user message/partial reply; no automatic retry occurs. The top-left
+conversation menu reopens saved conversations. Malformed, oversized or concurrently changed files
 are preserved, and saving reports the problem. Export can preserve a current
 valid in-memory copy before reopening a conflicting file.
+
+The header shows the conversation title and configured model. Your messages use
+compact bubbles; assistant replies use the full reading width with offline basic
+Markdown formatting (headings, bulleted/numbered lists, bold and code). Raw HTML is
+escaped and links/images do not load external resources. **Copy** copies a reply's
+displayed text; if the platform declines copying, select the text and use its
+system Copy command. Streaming follows the latest reply only while you are near
+the bottom. **Latest message ↓** returns there after reading older messages.
+
+The native message field grows as you type, up to a bounded height; longer drafts
+scroll inside it. Send/Stop sits beside the field. Status appears only for ongoing
+work, feedback or problems. Server/model settings and **Export conversation…**
+are in the **•••** menu. Configuration is scrollable when the keyboard reduces
+the available space. Draft storage and text-only request limits are unchanged.
 
 Requests reuse the desktop whole-turn context budget: older completed turns may
 be omitted, with their count shown during generation. Server token limits remain
@@ -287,7 +307,8 @@ are rejected rather than executed.
 
 ## Remote files and credential ZIPs
 
-Choose **Remote files & LocalCrypt** from Files. Credential setup is under
+Select a folder in **Folder Hub**, then choose **Browse Remote** to open its
+online file browser. Credential setup is under
 **Settings → Remote connections** (also reached through **Manage connections…**
 in the remote browser). The native app embeds rclone 1.74.1; no desktop
 executable, shell, mount, or separate RC server is required. **Check rclone engine**
@@ -318,7 +339,7 @@ one supported backing remote is available for [LocalCrypt reading](#localcrypt-e
 
 Choose a connection and tap **Open remote**. **Connections…** opens credential
 setup. Tap folders to open them; **Back** in the browser returns through successful
-folder visits. **Locations** returns to local and remote locations. Choose a file
+folder visits. **Folder Hub** returns to the folder list. Choose a file
 and tap **Copy to device…**, or open a folder and tap **Copy this folder…**.
 The copy screen shows the source and a browsable **On this device** destination.
 Open a destination folder and tap **Copy here**; no path typing is required.
@@ -461,7 +482,7 @@ saved bookmark record, plaintext export or thumbnail cache. Its tools offer
 **Bookmark** and a bookmark selector for comics and EPUBs. These bookmarks remain
 in memory while switching documents and are cleared when the session closes.
 Markdown is edited as source text, with an offline preview. Folder transfers use
-the Files folder actions described below.
+the Folder Hub actions described below.
 
 For a LocalCrypt comic or EPUB, choose **Edit metadata…** in the private reader,
 change the fields and choose **Save encrypted metadata**. EPUB fields include title,
@@ -537,7 +558,7 @@ continues to save encrypted bytes through the existing verified transaction.
 
 ### SMB and Mac shared folders
 
-In **Files**, tap **Add SMB / Mac share…** (also available in Remote connections).
+In **Folder Hub**, tap **Add SMB / Mac share…** (also available in Remote connections).
 Give each server a unique connection name, enter its IP address or hostname,
 username and password, and choose **Add connection and browse**. Enter only the
 server in the Server field, without `smb://` or a shared-folder path. The default
@@ -547,7 +568,7 @@ port is 445; change Domain when your server requires one. For guest access, ente
 You can add multiple servers. Adding one preserves existing connections and rejects
 names already in use. **Save credentials on this device** defaults to on: usernames
 and passwords are stored in the existing encrypted credential vault, protected by
-Android Keystore or iOS Keychain, and restored when Files initializes. Turn it off
+Android Keystore or iOS Keychain, and restored when Folder Hub initializes. Turn it off
 for a session-only connection; this leaves previously saved credentials unchanged.
 Reload saved credentials before adding a saved server if you previously chose
 session-only connections: reloading replaces those temporary connections. Importing
@@ -573,7 +594,7 @@ Physical-device SMB transfers still require validation with an actual server.
 ### Repeatable folder pulls
 
 Earlier mobile versions offered **Save repeatable folder pull**. New transfers use **Pull…** and the sync engine below. Legacy copy jobs remain readable through their compatibility route. This downloads
-a complete local copy and adds a job under **Files → Folder pulls**. **Refresh**
+a complete local copy and adds a job under **Folder Hub → Folder pulls**. **Refresh**
 fetches the current remote contents. It never uploads or deletes remote files.
 
 If the local folder is unchanged, Refresh keeps its previous version in a
@@ -593,23 +614,23 @@ explicitly unencrypted. Up to 16 jobs are supported, with 10,000 items per folde
 Reopening a downloaded copy or imported local book now returns to its existing
 document/library identity rather than importing another duplicate.
 
-## Files locations and actions
+## File browser locations and actions
 
-Files keeps your current folder, selection, list/tile mode, search, sort and browse
+The file browser keeps your current folder, selection, list/tile mode, search, sort and browse
 history when you visit Documents or Settings. Local and remote browsers give most
 of the screen to the listing. Tap a local file to open it, or a folder to browse
 it. Search stays visible; **Sort** reveals sorting and list/tile options. The
 **•••** beside an item selects that item and opens its commands without opening
 its contents. Rename, Move, New folder and archive-password entry have focused
 screens. **Details** shows metadata and bounded previews.
-Files opened from this browser stay in the Files navigation stack. Native Back
+Files opened from this browser stay in the Folder Hub navigation stack. Native Back
 returns to the same folder, search, sorting, selection and scroll position.
 Back leaves the reading/editing session open, including unsaved provider text
 drafts; reopen it through **Open documents** to continue. Files opened from
 Books & Comics or Open documents keep their document navigation instead.
 Connection import, reload, remember and forget remain in Settings.
 
-Use **Pin current folder** to add an ordinary local or remote folder to Files.
+Use **Pin current folder** to add an ordinary local or remote folder to Folder Hub.
 Remote pins identify the connection, not just its display name; a missing or
 changed connection reports unavailable instead of opening another provider.
 Encrypted folder paths cannot be pinned for restoration. Remove pin removes only
@@ -663,7 +684,7 @@ recoverable and the original window is activated again.
 
 Up to four windows may coexist. Protected content requires one window, and an
 open protected session prevents creating another window. Secondary windows offer
-ordinary text/Markdown and library reading; Files, transfers, connections and chat
+ordinary text/Markdown and library reading; Folder Hub, transfers, connections and chat
 remain in the original window. This keeps private views and connection workers
 under one owner. Phone/Duo and Android independent-window controls remain disabled;
 Android resizing and split-screen presentation remain available.
@@ -674,13 +695,13 @@ separate evidence.
 
 ## Folder Hub and Local / LocalCrypt sync
 
-**Files** combines ordinary Local folders, downloaded LocalCrypt copies and loaded
+**Folder Hub** combines ordinary Local folders, downloaded LocalCrypt copies and loaded
 remotes in one scrollable folder list. A folder such as `Example-Library` appears
 once; its action page reflects the copies available. **Browse Local** opens readable files on this device, **Browse LocalCrypt** opens
 the encrypted device copy, and **Browse Remote** opens the online folder. Only
 available copies receive a browse button; each copy is offered once. Remote
 browsing opens the online file browser, with copy-to-device and secondary download
-actions. Choose folders and start Push/Pull from their Files action pages.
+actions. Choose folders and start Push/Pull from their Folder Hub action pages.
 Existing managed copies remember their storage type and transfer association.
 The first pull chooses storage; later transfers reuse it. **Refresh** updates
 folder discovery without downloading remote contents.
@@ -714,7 +735,7 @@ snapshots. Transfers use rclone's normal incremental comparison. LocalCrypt sync
 ciphertext to/from the backing scope; a readable Local copy of a crypt remote uses
 rclone's crypt filesystem for automatic encryption/decryption.
 
-**Files → Transfers** opens **Transfer details**: live progress, completed/known
+**Folder Hub → Transfers** opens **Transfer details**: live progress, completed/known
 file and byte counts, cancellation, pending push review, and completion or error
 messages, wrapped to fit the phone screen. It does not list remotes or offer folder selection. The transfer banner
 also opens these details; the remote browser reflects the same progress. If a
@@ -771,7 +792,7 @@ Results arriving after their window has been replaced do not update that old vie
 
 ## Mobile UI refresh (local development)
 
-Home offers Continue and compact shortcuts to Files, writing and the library.
+Home offers Continue and compact shortcuts to Folder Hub, writing and the library.
 Documents groups open sessions by type and shows preview cards by default. Tap
 a title or Resume document to continue; the current session is labelled Current
 document. Cards show a short text excerpt for ordinary text/Markdown documents
@@ -781,7 +802,7 @@ In **Settings → App**, turn off **Document card overview** to use the grouped 
 with its **•••** close menu. This switch saves immediately and updates the document
 overview, including when an editor is open. Stored documents remain a list.
 Settings groups feature options under Text & Markdown, Books & Comics, LM Chat
-and Files; reader appearance stays in each open reader. Documents offers New and Open. New asks for TXT or Markdown; Chat has
+and Folder Hub; reader appearance stays in each open reader. Documents offers New and Open. New asks for TXT or Markdown; Chat has
 its own bottom navigation destination. The Library shortcut has been removed
 from Documents.
 
@@ -792,9 +813,8 @@ Markdown opened from local/provider files offers Preview/Edit without saving the
 draft; leaving the view clears the rendered preview and keeps the draft in memory.
 Closing or locking private content clears the preview as well as its editor text.
 
-Files starts with a scrollable list of folders. Names have no Local/Remote prefix.
-Tap a folder row to open its action page. **Browse
-folder** opens the available copy; alternate copies have explicit Browse actions.
+Folder Hub starts with a scrollable list of folders. Names have no Local/Remote prefix.
+Tap a folder row to open its action page. **Browse Local**, **Browse LocalCrypt** or **Browse Remote** opens the file browser for that copy.
 Managed copies offer **Pull…** and **Push…**. Folders with a loaded remote offer
 Pull to create or associate a copy. Local folders also offer **Delete local
 folder…**, with native confirmation; online files are kept. Deletion waits until
@@ -802,7 +822,7 @@ transfers finish. **Choose another folder** returns to the list.
 **Settings → Remote connections…** loads credentials. **Transfers** and
 **Refresh** stay above the scrolling list. Transfers opens progress and managed-copy
 options; Refresh has its own circular-arrow icon and updates folder discovery.
-Returning through the bottom Files tab refreshes the same complete list.
+Returning through the bottom Folder Hub tab refreshes the same complete list.
 
 Folder rows use one line with an icon/name and a navigation chevron. Files can
 show their size and **•••** actions. Opening a folder does not flash a selection
@@ -823,7 +843,7 @@ local UI changes need a freshly built app; the previously released main.07 does
 not contain them. Screen-reader and physical touch/keyboard validation remain
 separate from the automated checks.
 
-Local file folders remain browsable during a pull: open Files, choose a readable local folder,
+Local file folders remain browsable during a pull: open Folder Hub, choose a readable local folder,
 and enter folders or go Up while the transfer continues. Remote engine operations
 remain serialized. The transfer status strip opens details and can be dismissed
 after completion without closing your current document.
@@ -835,14 +855,17 @@ running. Opening and browsing use separate local work without replacing the
 transfer cancellation handle. LocalCrypt operations that need the cloud engine
 remain serialized.
 
-Home’s **Browse files** opens the same folder list each time. Choosing
+Home’s **Folder Hub** opens the same folder list each time. Choosing
 **All files → Browse Local** refreshes the local root and clears an old
 search filter. Local browsing does not wait for a credential restore or an
 unrelated cloud request.
 
 ### Light and dark appearance
 
-The app follows your device's light/dark appearance. Editor text, document-name
+The app follows your device's light/dark appearance. Mobile uses the Logistics Slate
+palette throughout its workspaces: soft off-white/off-black backgrounds, slightly
+raised card surfaces, subtle grey outlines and blue accents. Home, document
+cards, file tiles, editors, Markdown previews and chat share those colours. Editor text, document-name
 fields, labels, selectors, hints and input outlines remain readable in either
 mode. Markdown and EPUB pages use matching text/background colours; a reader's
 explicit Light/Dark setting still applies only to its pages. Changing Android's
@@ -858,6 +881,11 @@ return to the centered page. LocalCrypt bookmarks remain in memory until close;
 ordinary library bookmarks retain their saved behavior.
 
 Contents and appearance screens have their own Back step. A reader opened from
-Files returns first to reading and then to the same folder. Each provider document
+Folder Hub returns first to reading and then to the same folder. Each provider document
 owns its request and cancellation; cancelling that document does not cancel a
 separate pull. Wait for its operation to finish before closing it.
+
+
+On iOS, hamburger controls open after you release inside the button, allowing a
+scroll that starts on the control to be cancelled by dragging away. Workspace
+menus use the native navigation bar's own touch target.

@@ -1,10 +1,18 @@
 """Actual retained-editor and conversation drawer checks, using window bounds."""
 import asyncio
+from commonUtils.runtime.platform import get_os, OS
 from .fixtures import capture_window
 
 
 async def exercise_workspace(app):
     screenshots = []
+
+    def width(widget):
+        native = widget._impl.native
+        if get_os() is OS.IOS:
+            return float(native.bounds.size.width)
+        density = app._impl.native.getResources().getDisplayMetrics().density
+        return float(native.getWidth()) / density
 
     async def capture(name):
         await asyncio.sleep(.4)
@@ -27,14 +35,25 @@ async def exercise_workspace(app):
     await capture('documents')
     if navigation.wide:
         assert list(frame.row.children) == [first.document_view._workspace_frame.main, frame.main]
-        assert abs(first.document_view._workspace_frame.main.layout.width - frame.main.layout.width) <= 2
+        pair = width(first.document_view._workspace_frame.main), width(frame.main)
+        assert abs(pair[0] - pair[1]) <= 2, ('Unequal native document panes', pair)
     else:
         assert list(frame.row.children) == [frame.main]
     frame.menu.on_press()
     drawer = navigation.browser('documents')
     await drawer.task
     await capture('document-browser')
-    assert list(frame.row.children) == ([drawer.widget, frame.main] if navigation.wide else [drawer.widget])
+    assert list(frame.row.children) == [drawer.widget, frame.main]
+    if not navigation.wide:
+        assert width(drawer.widget) < width(frame.row), 'Drawer must leave the page visible'
+        assert width(frame.row) <= navigation.width(), 'Drawer must not widen its viewport'
+    if get_os() is OS.IOS:
+        assert frame.header not in frame.view().children, 'Menu belongs in the native bar'
+        assert frame.native_menu.customView is None, 'UIKit must own menu hit testing'
+        parent = frame.menu._impl.native.superview
+        parent = parent() if callable(parent) else parent
+        assert parent is None, 'Detached Toga target must not intercept touches'
+        assert frame.native_menu.target == frame.menu._impl.native
     frame.menu.on_press()
     assert first.editor.value == '# Left\n\nAn independent draft.'
     assert second.editor.value == '# Right\n\nAnother independent draft.'
@@ -43,12 +62,20 @@ async def exercise_workspace(app):
     app.show_chat()
     app.chat_prompt.value = 'Unsent conversation draft'
     key = app.chat_current['id']
+    if get_os() is OS.IOS:
+        before = app.chat_drawer_open
+        app.chat_menu_button._impl.native.sendActionsForControlEvents(1)
+        assert app.chat_drawer_open == before, 'Touch-down must not open a drawer'
+        app.chat_menu_button._impl.native.sendActionsForControlEvents(1 << 6)
+        assert app.chat_drawer_open != before, 'Release inside must toggle the drawer'
     app.chat_drawer_open = True
     app.render_chat_workspace()
     await capture('conversations')
     assert list(app.chat_workspace.children) == ([app.chat_sidebar, app.chat_messages] if navigation.wide else [app.chat_sidebar])
     if navigation.wide:
-        assert abs(app.chat_sidebar.layout.width - app.chat_messages.layout.width) <= 2
+        pair = width(app.chat_sidebar), width(app.chat_messages)
+        assert abs(pair[0] - pair[1]) <= 2, ('Unequal native chat panes', pair)
+        assert max(pair) <= app.adaptive.content_width('chat') / 2 + 2, ('Chat exceeded its native allocation', pair)
     app.open_chat(key)
     assert app.chat_prompt.value == 'Unsent conversation draft'
     app.chat_drawer_open = False

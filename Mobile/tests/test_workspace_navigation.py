@@ -36,7 +36,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
             (app.private_root / 'LocalFiles' / 'Notes' / 'Another.md').write_text('# Other file')
             app.loop.run_until_complete(drawer.task)
             frame = first.document_view._workspace_frame
-            self.assertEqual(list(frame.row.children), [drawer.widget])
+            self.assertEqual(list(frame.row.children), [drawer.widget, frame.main])
             app.loop.run_until_complete(drawer.open_folder({'path': 'Notes'}))
             entry = next(item for item in drawer.browser.entries if item.label == 'Another.md')
             app.loop.run_until_complete(drawer.browser._select_pressed(entry, drawer.browser.buttons[entry.identity]))
@@ -68,6 +68,11 @@ class WorkspaceNavigationTests(unittest.TestCase):
             first.editor.value = 'Edited on left'
             self.assertEqual(second.document.text, 'B draft')
             self.assertEqual(app.store.open(first.document.id).text, 'Edited on left')
+        # The wider Duo portrait display is narrower than a regular iPad.
+        with patch.object(self.navigation, 'width', return_value=669):
+            self.navigation.render()
+            self.assertEqual(self.navigation.diagnostics()['layout'], 'two-documents')
+            self.assertEqual(list(frame.row.children), [first.document_view._workspace_frame.main, frame.main])
         with patch.object(self.navigation, 'width', return_value=390):
             self.navigation.render()
             self.assertEqual(list(frame.row.children), [frame.main])
@@ -84,25 +89,65 @@ class WorkspaceNavigationTests(unittest.TestCase):
             frame = app.files_view._workspace_frame
             original = app.file_browser
             frame.menu.on_press()
-            self.assertEqual(list(frame.row.children), [self.navigation.browser('files').widget])
+            self.assertEqual(list(frame.row.children), [self.navigation.browser('files').widget, frame.main])
             frame.menu.on_press()
             self.assertEqual(list(frame.row.children), [frame.main])
             self.assertIs(app.file_browser, original)
             self.assertTrue(app.routes.back())
             self.assertEqual(app.native_host.state.destination, 'files')
 
-    def test_overview_hamburger_keeps_current_editor_beside_wide_browser(self):
+    def test_overview_drawer_keeps_overview_and_editor_draft(self):
         app = self.app
         owner = app.editor_view
         owner.editor.value = 'Draft before opening the overview'
         app.show_documents_hub()
-        with patch.object(self.navigation, 'width', return_value=1100):
-            menu = app.body.children[0].content.children[0]
-            menu.on_press()
-            self.assertIs(app.body.children[0], owner.document_view)
-            self.assertEqual(list(owner.document_view._workspace_frame.row.children),
-                             [self.navigation.browser('documents').widget, owner.document_view._workspace_frame.main])
+        overview = app.body.children[0]
+        frame = overview._workspace_frame
+        with patch.object(self.navigation, 'width', return_value=390):
+            frame.menu.on_press()
+            self.assertIs(app.body.children[0], overview)
+            self.assertEqual(list(frame.row.children),
+                             [self.navigation.browser('documents').widget, frame.main])
+            self.assertLess(self.navigation.browser('documents').widget.style.width, 390)
+            self.assertTrue(frame.compact_open)
+            frame.menu.on_press()
+            self.assertEqual(list(frame.row.children), [frame.main])
             self.assertEqual(owner.editor.value, 'Draft before opening the overview')
+
+    def test_files_hamburger_works_on_first_tab_selection_without_refresh(self):
+        app = self.app
+        app.show_home()
+        with patch.object(self.navigation, 'width', return_value=390):
+            # Match native selection ordering: the callback precedes state.select.
+            self.assertTrue(app.select_destination('files'))
+            app.native_host.state.select('files')
+            frame = app.routes.body('files').children[0]._workspace_frame
+            self.assertEqual(self.navigation.last_layout[0], id(frame))
+            frame.menu.on_press()
+            drawer = self.navigation.browser('files')
+            app.loop.run_until_complete(drawer.task)
+            self.assertTrue(self.navigation.menu_open['files'])
+            self.assertIsNotNone(drawer.provider)
+            self.assertEqual(list(frame.row.children), [drawer.widget, frame.main])
+            self.assertEqual(len(app.routes.screens['files']), 0)
+            frame.menu.on_press()
+            self.assertEqual(list(frame.row.children), [frame.main])
+
+    def test_split_picker_can_open_a_retained_session_without_an_existing_editor(self):
+        app = self.app
+        first = app.editor_view
+        stored = app.store.create('Retained second.txt')
+        second = app.workspace.open('managed-text', stored.id, 'text', stored.name)
+        app.workspace.activate(first.session.id)
+        self.assertNotIn(second.id, app.text_views)
+        with patch.object(self.navigation, 'width', return_value=669):
+            first.document_view._workspace_frame.pair.on_press()
+            content = app.body.children[0].content
+            next(button for button in content.children if getattr(button, 'text', '') == stored.name).on_press()
+            self.assertEqual(app.workspace.active, second.id)
+            self.assertEqual(self.navigation.pinned, first.session.id)
+            self.assertIn(second.id, app.text_views)
+            self.assertEqual(self.navigation.diagnostics()['layout'], 'two-documents')
 
     def test_chat_conversation_drawer_is_full_height_on_phone_and_half_on_duo(self):
         app = self.app

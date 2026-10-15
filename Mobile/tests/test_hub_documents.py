@@ -36,7 +36,7 @@ class HubDocumentTests(unittest.TestCase):
         import toga
         app = self.app
         def button(widget):
-            if isinstance(widget, toga.Button) and widget.text == 'Browse files':
+            if isinstance(widget, toga.Button) and widget.text == 'Folder Hub':
                 return widget
             children = list(widget.children)
             if isinstance(widget, toga.ScrollContainer) and widget.content is not None:
@@ -201,7 +201,7 @@ class HubDocumentTests(unittest.TestCase):
         app.show_settings()
         content = app.body.children[0].content
         labels = [child.text for child in content.children if isinstance(child, toga.Label)]
-        sections = ['App', 'Text & Markdown', 'Books & Comics', 'LM Chat', 'Files']
+        sections = ['App', 'Text & Markdown', 'Books & Comics', 'LM Chat', 'Folder Hub']
         self.assertEqual([label for label in labels if label in sections], sections)
         app.document_cards_choice.value = False
         app.save_preferences()

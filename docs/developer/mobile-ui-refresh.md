@@ -672,3 +672,78 @@ The format prompt and five-button bottom bar were also visually checked. These
 focused checks do not constitute the full native release gate or physical-device
 verification. The native UI review now checks the inset/edge contract and captures
 an additional editor-typing screen.
+
+
+Local validation for the explicit storage and transfer-details changes: 159 mobile
+host tests passed, followed by all 26 native cases on iPhone, iPad and Android.
+The transfer-result screenshot confirms complete wrapped text. The same source
+snapshot was signed, installed in place and launched on the paired iPhone over
+Wi-Fi. Local reports are retained under `Mobile/logs/explicit-storage-*-native-ui-local.json`
+and `Mobile/logs/device-deployment.json`; these are local dirty-source checks,
+not release or TestFlight evidence.
+
+### Conversation-first Chat presentation
+
+The approved mobile Chat design replaces the read-only text transcript with an
+app-owned offline WebView. User turns are bubbles; assistant turns are full-width
+basic Markdown with visible role/recovery status and a Copy action. The native
+header contains the conversation title, model and native overflow commands.
+The existing destination-owned conversation drawer and its pane allocation are
+preserved. The native composer estimates wrapped lines and grows from 52 to 120
+points. Its single Send button becomes Stop only during reply generation, and is
+disabled during model refresh. Empty status containers occupy no message space.
+Configuration uses a scrolling route and its own feedback widget.
+
+`chat_presentation.py` owns pure formatting and layout estimates. It reuses the
+inert `preview.markdown_body` parser (now including semantic numbered/bulleted
+lists). Content is escaped, links remain inert, and the document CSP denies
+external resources and page scripts. Python evaluates only app-owned rendering
+code; message data enters that code through JSON. The transcript patches the
+changed tail rather than reloading the page or reformatting every previous turn.
+Unchanged message nodes retain selection. Streaming follows only near the bottom;
+a Latest message button allows returning after scrolling up. A conversation
+change or explicit Send follows the latest turn. Load generations and a single
+coalescing render task prevent stale pending updates from owning a new document.
+The native navigation host continues to own keyboard/safe-area sizing.
+
+Validation for this chat change: seven focused dummy-backend UI checks plus seven
+existing workspace checks passed; five pure presentation checks, three preference/
+preview checks, two packaging checks and four existing chat persistence/transport
+checks passed. A headless browser checked 320/390/768-pixel transcript widths,
+light/dark appearance, inert hostile markup, zero resource requests, preserved
+scroll position and Latest message behavior. These are host checks, not native
+keyboard/device evidence. The native LM case now also waits for the rendered
+reply and asserts message separation, viewport fit and the restored Send state;
+that updated native case still needs a simulator/emulator run.
+
+
+## Slate palette and menu touch targets (local follow-up)
+
+`logisticsmobile.palette` owns Qt-free mobile roles based on desktop Slate's
+current default colours, including the 6% blue tint on dark neutral surfaces.
+Light cards use near-white `#fafbfc`; the window uses `#f0f2f6`. Mobile does not
+import Qt or synchronize desktop custom theme preferences. `appearance` adapts
+native colours and card strokes in Logistics without changing commonUtils.
+UIKit text/background colours use dynamic providers; card CGColor strokes update
+on trait changes. Android refreshes live widgets and card drawables on uiMode
+changes without replacing the activity. Markdown, chat and sanitized EPUB pages
+use the same roles; explicit reader Light/Dark still overrides device appearance.
+
+Workspace bar menus use image/title UIBarButtonItems with the retained Toga
+button as their action target, rather than mounting a Pack-constrained custom
+view in UIKit's bar. UIKit owns their visible bounds and hit testing. Inline
+hamburgers use TouchUpInside instead of TouchDown so a drag away cancels opening.
+Native checks require no custom menu view and test palette colours separately
+from platform labelColor defaults. Physical random-touch reports still need
+confirmation on the user's device after rebuilding.
+
+
+Validation for this follow-up: 172 mobile host tests passed; the portable mobile
+suite passed 51 tests with its 3 platform-dependent skips. A dedicated iOS 27.0
+simulator probe passed light/dark card, editor and retained-stroke checks, sampled
+content hit testing, native bar geometry and inline TouchDown/TouchUpInside
+cancellation. It used the existing simulator executable with current Python UI
+sources; this is targeted evidence, not a new full native-suite/device-build
+claim. Screenshots, the probe and source hashes are retained locally in
+`Mobile/logs/palette-review/`. Android native rendering and physical touch
+confirmation remain pending. No device installation, commit or release was made.
