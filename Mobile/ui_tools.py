@@ -8,6 +8,7 @@ from pathlib import Path
 import signal
 import shutil
 import subprocess
+import time
 
 PREFIX = 'LOGISTICS_NATIVE_UI_RESULT='
 REPO = Path(__file__).resolve().parents[1]
@@ -32,7 +33,10 @@ def verify(path, target, output, *, local_manifest=None):
         reports.append(json.loads(base64.b64decode(''.join(item['data'] for item in chunks), validate=True)))
     if len(reports) != 1:
         raise ValueError('Expected one native app UI report.')
-    report = reports[0]
+    return verify_report(reports[0], target, output, local_manifest=local_manifest)
+
+
+def verify_report(report, target, output, *, local_manifest=None):
     source = report.get('source', {})
     if not isinstance(source, dict):
         raise ValueError('Invalid native app source manifest.')
@@ -54,6 +58,20 @@ def verify(path, target, output, *, local_manifest=None):
     return report
 
 
+
+def simulator_report(device, started_ns):
+    """Read only a result written during this run, never a previous success."""
+    result = subprocess.run(['xcrun', 'simctl', 'get_app_container', device,
+        'io.github.ispaure.logisticsmobile', 'data'], capture_output=True, text=True,
+        timeout=30, check=False)
+    if result.returncode:
+        return None
+    path = Path(result.stdout.strip()) / 'Library/Caches/logistics-native-ui-result.json'
+    if not path.is_file() or path.stat().st_mtime_ns < started_ns:
+        return None
+    return json.loads(path.read_text())
+
+
 def run(target, device, *, local=False, require_independent_windows=False):
     command = ['briefcase', 'run', 'android' if target == 'android' else 'iOS',
                '--test', '--no-input', '--device', device]
@@ -63,6 +81,7 @@ def run(target, device, *, local=False, require_independent_windows=False):
     logs = Path('logs')
     logs.mkdir(exist_ok=True)
     path = logs / (target + '-native-ui.log')
+    started_ns = time.time_ns()
     with path.open('w') as stream:
         process = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
         try:
@@ -75,11 +94,21 @@ def run(target, device, *, local=False, require_independent_windows=False):
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
             raise RuntimeError('Native app UI run exceeded 15 minutes; see retained logs.') from None
-    if code:
-        print(path.read_text(errors='replace')[-10000:])
-        raise RuntimeError(f'Native app UI run failed ({code}); see retained logs.')
-    report = verify(path, target, logs / (target + ('-native-ui-local.json' if local else '-native-ui.json')),
-                    local_manifest=Path('payload/source.json') if local else None)
+    # Briefcase returns 200 when Apple's log stream closes before its exit
+    # marker, even after every native test passed. The cache result is written
+    # atomically before exit and must pass the same complete source contract.
+    cached = simulator_report(device, started_ns) if target == 'ios' and code in (0, 200) else None
+    output = logs / (target + ('-native-ui-local.json' if local else '-native-ui.json'))
+    manifest = Path('payload/source.json') if local else None
+    if cached is not None:
+        report = verify_report(cached, target, output, local_manifest=manifest)
+        (logs / 'ios-report-transport.json').write_text(json.dumps(dict(
+            transport='simulator-file', device=device, briefcase_exit_code=code)) + '\n')
+    else:
+        if code:
+            print(path.read_text(errors='replace')[-10000:])
+            raise RuntimeError(f'Native app UI run failed ({code}); see retained logs.')
+        report = verify(path, target, output, local_manifest=manifest)
     if require_independent_windows and report.get('independent_windows_tested') is not True:
         raise ValueError('This run did not verify independent system windows.')
     return report

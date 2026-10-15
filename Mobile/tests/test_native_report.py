@@ -61,3 +61,69 @@ class NativeReportTests(unittest.TestCase):
             manifest.write_text(json.dumps(source | {'source_sha256': 'b' * 64}))
             with self.assertRaises(ValueError):
                 ui_tools.verify(log, 'ios', output, local_manifest=manifest)
+
+    def report(self):
+        return dict(schema=1, suite='logistics-native-ui', target='ios', backend='toga_iOS.app',
+            cases=list(ui_tools.contract.CASES), expected_cases=list(ui_tools.contract.CASES),
+            success=True, error='', source=dict(dirty=False,
+                logistics_commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip(),
+                commonUtils_commit=subprocess.check_output(['git', '-C', 'Python/commonUtils', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip()))
+
+    def test_simulator_file_rejects_missing_and_previous_results(self):
+        import os
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        report = self.report()
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'Library/Caches/logistics-native-ui-result.json'
+            path.parent.mkdir(parents=True)
+            result = SimpleNamespace(returncode=0, stdout=directory)
+            with patch.object(ui_tools.subprocess, 'run', return_value=result):
+                self.assertIsNone(ui_tools.simulator_report('device', 2_000_000_000))
+                path.write_text(json.dumps(report))
+                os.utime(path, ns=(1_000_000_000, 1_000_000_000))
+                self.assertIsNone(ui_tools.simulator_report('device', 2_000_000_000))
+                os.utime(path, ns=(3_000_000_000, 3_000_000_000))
+                self.assertEqual(ui_tools.simulator_report('device', 2_000_000_000), report)
+
+    def test_lost_log_exit_marker_uses_only_complete_verified_file(self):
+        import os
+        from unittest.mock import patch
+        report = self.report()
+        def revision(args, **kwargs):
+            key = 'commonUtils_commit' if 'commonUtils' in args[2] else 'logistics_commit'
+            return report['source'][key]
+        with TemporaryDirectory() as directory, patch.object(ui_tools.subprocess, 'Popen') as process, \
+                patch.object(ui_tools.subprocess, 'check_output', side_effect=revision):
+            process.return_value.wait.return_value = 200
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                with patch.object(ui_tools, 'simulator_report', return_value=report):
+                    self.assertEqual(ui_tools.run('ios', 'device'), report)
+                    transport = json.loads(Path('logs/ios-report-transport.json').read_text())
+                    self.assertEqual(transport['briefcase_exit_code'], 200)
+                    with self.assertRaisesRegex(ValueError, 'independent system windows'):
+                        ui_tools.run('ios', 'device', require_independent_windows=True)
+                for invalid in (dict(report, success=False), dict(report, cases=[]),
+                                dict(report, source=dict(report['source'], logistics_commit='0' * 40))):
+                    with patch.object(ui_tools, 'simulator_report', return_value=invalid):
+                        with self.assertRaises(ValueError):
+                            ui_tools.run('ios', 'device')
+            finally:
+                os.chdir(previous)
+
+    def test_process_failures_without_verified_result_still_fail(self):
+        import os
+        from unittest.mock import patch
+        with TemporaryDirectory() as directory, patch.object(ui_tools.subprocess, 'Popen') as process:
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                for code in (1, 200, -15):
+                    process.return_value.wait.return_value = code
+                    with patch.object(ui_tools, 'simulator_report', return_value=None):
+                        with self.assertRaises(RuntimeError):
+                            ui_tools.run('ios', 'device')
+            finally:
+                os.chdir(previous)
