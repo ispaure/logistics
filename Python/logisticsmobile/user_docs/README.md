@@ -56,9 +56,14 @@ Home puts the selected document in a prominent **Continue** card, followed by
 to those workspaces; Open documents and LM Chat remain one tap away.
 **Continue** restores the document's Edit/Preview mode.
 **New document** creates and displays a separate editor; **Open file…**
-opens the existing Local/LocalCrypt file picker. Documents offers **New** and
-**Open…**, followed by open and stored documents grouped under Text, Markdown,
-EPUB books or Comics. Empty type groups are hidden. Each row shows the filename;
+opens the existing Local/LocalCrypt file picker. Home starts with **Welcome to
+Logistics** and vertically centered icons in its padded Your spaces cards.
+Documents offers Text Editor, Markdown Editor, EPUB Reader, Comic Reader and
+Archives cards. Text and Markdown have **New** and **Open…**; readers and Archives
+have **Open…**. Each Open action browses matching formats in the main area.
+Archives currently filters ZIP/CBZ/EPUB files for the existing readers; the desktop
+archive manager is not ported. Only opened documents appear below the cards,
+grouped under Text, Markdown, EPUB books or Comics. Empty type groups are hidden. Each row shows the filename;
 restored sessions reload names from their stored document or library record.
 Open rows show unsaved changes, session-only status and known conflicts. Closing an open row
 uses the existing save/discard workflow and keeps its stored file.
@@ -73,24 +78,28 @@ them. Search does not include other files or the separate private reader editor.
 
 ## File and conversation drawers
 
-On iPhone, Folder Hub and Documents have a larger hamburger bubble in the top
-navigation bar, directly below the status area. It uses Apple's Liquid Glass
-style on supported iOS versions. It works on the first visit without Refresh.
-Opening it slides the current page to the right, revealing the file browser and
-leaving a strip of the current page visible. Tap it again to slide back to the
-current folder, document overview or editor. Reduce Motion skips the animation. The browser keeps
-its own storage selection, folder, search and history; using it does not change
-the Folder Hub tab's existing folder selection. It browses local files and available
-LocalCrypt copies. **Folder Hub** opens the complete folder hub for
-online connections and managed copies. Selecting a file opens it in the current
-destination through the existing editor/reader workflow.
+Documents has a hamburger in its navigation bar. Opening it reveals a menu
+with **Browse Local Files**, on-disk unlocked LocalCrypt locations, **Recent**
+(up to six ordinary documents), **Comics Library**, and **Shortcuts** for new text,
+new Markdown and Folder Hub. Browse and library shortcuts open the existing file
+browser in the main area. Recent can reopen a closed document. Private provider
+sessions and password-protected reader sessions are excluded from durable recent
+history. The menu's comics folders come from the same discovery as Home's
+**Books & Comics**; both show folder names without full paths. Books & Comics
+uses folder icons and opens each folder through the existing file browser.
+
+The menu leaves a strip of the current page visible on compact screens. Tap the
+hamburger again to return. Reduce Motion skips the animation. Browsing retains
+independent storage, folder, search and history, without changing Folder Hub's
+selection. Folder Hub has no hamburger; use its Browse Local/LocalCrypt/Remote
+actions instead.
 
 At window widths of 640 points/dp or more, including a sufficiently wide Duo
-window, an open browser occupies the left half and the current document stays on
+window, the open Documents menu occupies the left half and the current document stays on
 the right. In Documents, **Split** lets you choose a second open text or Markdown
 document, including editable provider files. The first stays on the left and the
 chosen document opens on the right. Opening the hamburger replaces the left
-editor with the browser; closing it restores the pair. **Use one document** in the
+editor with the menu; closing it restores the pair. **Use one document** in the
 Split picker clears the pair. Narrowing the window shows the current document
 without closing either session or losing its draft. Books and comics keep their
 own reader controls and immersive mode.
@@ -123,7 +132,7 @@ Android uses the lifecycle-owned AndroidX Back dispatcher. At a destination root
 Android yields Back to the system. Existing save/checkpoint failures block a
 Back action that would leave the screen.
 
-Choose a document from **Open documents** or **Stored documents** in Documents,
+Choose a document from **Open documents** in Documents or **Recent** in its menu,
 or use **Actions → New document**. Edit its name in the name field and
 its contents in the text area. **Save** publishes the edited file inside the app.
 Text and Markdown use the same plain-text editor.
@@ -131,12 +140,11 @@ Text and Markdown use the same plain-text editor.
 Each open text/Markdown document owns its editor and draft. **New**, opening a
 stored document, and successful imports add it to **Documents → Open documents**;
 opening the same stored identity again activates it. Documents with the same name
-remain separate. Switch using the open or stored lists. Closing a document keeps
-it available in Stored documents.
+remain separate. Switch using Open documents or Recent. Closing a document keeps
+its stored data; the six most recent ordinary documents can be reopened from Recent.
 **Close** removes an item from that list without deleting its stored document.
 For an ordinary unsaved document, choose **Save and close**, **Keep draft and
-close**, **Discard changes and close**, or **Cancel**. Retained drafts remain in
-Stored documents. Discard resets recovery to the current saved file without
+close**, **Discard changes and close**, or **Cancel**. Retained drafts remain on disk and recent entries can reopen them. Discard resets recovery to the current saved file without
 overwriting changes made outside the editor or recreating a deleted file. A
 failed save or conflict keeps the document open; use **Save a copy** to preserve
 both versions. Session-only drafts offer Save, Discard, and Cancel without durable
@@ -696,8 +704,10 @@ separate evidence.
 ## Folder Hub and Local / LocalCrypt sync
 
 **Folder Hub** combines ordinary Local folders, downloaded LocalCrypt copies and loaded
-remotes in one scrollable folder list. A folder such as `Example-Library` appears
-once; its action page reflects the copies available. **Browse Local** opens readable files on this device, **Browse LocalCrypt** opens
+remotes in one scrollable folder tree. **Credential** defaults to **All**, combining
+all local and loaded remote copies. Choose a credential ZIP to filter its folders.
+Dash-separated names form expanded levels (for example Server → Lib → ComicRack);
+triangles collapse or expand parent levels. Its action page reflects the copies available. **Browse Local** opens readable files on this device, **Browse LocalCrypt** opens
 the encrypted device copy, and **Browse Remote** opens the online folder. Only
 available copies receive a browse button; each copy is offered once. Remote
 browsing opens the online file browser, with copy-to-device and secondary download
@@ -800,9 +810,9 @@ and a type placeholder for books, comics and private provider sessions. The **×
 button closes a session through the existing unsaved-change guard.
 In **Settings → App**, turn off **Document card overview** to use the grouped list
 with its **•••** close menu. This switch saves immediately and updates the document
-overview, including when an editor is open. Stored documents remain a list.
+overview, including when an editor is open. Stored documents are not listed in the overview.
 Settings groups feature options under Text & Markdown, Books & Comics, LM Chat
-and Folder Hub; reader appearance stays in each open reader. Documents offers New and Open. New asks for TXT or Markdown; Chat has
+and Folder Hub; reader appearance stays in each open reader. Documents offers New and Open within its category cards; Chat has
 its own bottom navigation destination. The Library shortcut has been removed
 from Documents.
 
@@ -818,7 +828,10 @@ Tap a folder row to open its action page. **Browse Local**, **Browse LocalCrypt*
 Managed copies offer **Pull…** and **Push…**. Folders with a loaded remote offer
 Pull to create or associate a copy. Local folders also offer **Delete local
 folder…**, with native confirmation; online files are kept. Deletion waits until
-transfers finish. **Choose another folder** returns to the list.
+transfers finish. **Choose another folder** returns to the list. At widths of at
+least 640 points/dp, the tree remains on the left and actions appear on the right,
+in equal panes centered in the available content. Narrow windows use a separate
+action screen. Mapping removal is not offered on this page.
 **Settings → Remote connections…** loads credentials. **Transfers** and
 **Refresh** stay above the scrolling list. Transfers opens progress and managed-copy
 options; Refresh has its own circular-arrow icon and updates folder discovery.
@@ -889,3 +902,13 @@ separate pull. Wait for its operation to finish before closing it.
 On iOS, hamburger controls open after you release inside the button, allowing a
 scroll that starts on the control to be cancelled by dragging away. Workspace
 menus use the native navigation bar's own touch target.
+
+
+## Mobile spacing follow-up
+
+Home hides its redundant top navigation title while retaining its bottom tab.
+Documents and Folder Hub use their existing navigation titles without a second
+large heading. Settings starts directly with its grouped controls. Both Home and
+the bottom navigation use the desktop Folder Hub stack-of-three glyph.
+On iOS, Chat measures floating-tab overlap to keep the composer and Send control
+above the navigation bar, including while the keyboard is open and drafts grow.

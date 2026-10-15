@@ -62,9 +62,55 @@ not establish native Duo fold-gesture support.
 ## Folder Hub and file browser naming
 
 The `files` destination key remains stable for routing and session origins; its
-visible name is **Folder Hub**, with a collection/grid navigation icon and a
-grouped-folder Home icon. Its root lists logical folders. Selecting a row opens
+visible name is **Folder Hub**, with the desktop three-row hub glyph in navigation
+and on Home. Its root lists logical folders. Selecting a row opens
 `folder-options`; Browse Local/LocalCrypt/Remote then opens the corresponding file
 browser. Pull/Push remain on the folder action page. Browser return links and the
-drawer’s folder-management shortcut are labelled Folder Hub. The drawer itself
-remains a file browser with independent browsing state.
+drawer’s folder-management shortcut are labelled Folder Hub. The Documents drawer offers browse roots, recent identities, discovered libraries
+and creation shortcuts. Browse roots and libraries mount the independent file browser
+in the main route. The Folder Hub drawer implementation remains available, but its
+hamburger is not mounted.
+
+
+## Mobile feedback follow-up (2026-10-15)
+
+Home suppresses only its own Apple navigation bar; its bottom tab stays visible.
+`hub_ui` owns padded format-launcher cards, category filters and the open-session
+overview. The stored-document listing is removed. The Archives launcher selects
+ZIP/CBZ/EPUB files for current readers; no general archive manager is claimed.
+Bundled Qt-free glyphs are rendered from the existing desktop `DestinationIcon`
+geometry. `install_folder_hub_icon` applies the hub image to Apple tabs and both
+Android navigation presentations without changing commonUtils.
+
+`folder_tree` builds every dash-separated parent level while leaves keep original
+folder-choice keys. Collapsing is presentation only. The Credential selector starts
+at All and uses existing ZIP-to-remote associations; filtering retains every
+available copy of each matching folder. Credential changes refresh in place.
+Folder options remain a destination-local route. At 640 points/dp they pair a
+retained folder picker and scrollable actions, with the row split equally and no
+second outer inset on the picker. Narrowing restores actions alone. Mapping-removal
+commands are absent from this page; transfer and deletion contracts are unchanged.
+
+Documents keeps the menu and main browser as separate widgets to avoid borrowing
+a widget twice. Library shortcuts retain the discovery provider (including pulled
+crypt namespaces) and reject changed credentials. Clearing private catalog state
+invalidates drawer enumeration, clears private browser rows and rebuilds the menu.
+`RecentDocuments` stores at most six provider/resource/kind triples in each
+window's private workspace. It omits titles and transient/provider-session entries,
+preserves malformed history, and can reopen a closed ordinary document or book.
+
+Chat reserves the actual overlap between the native tab bar and the content
+viewport. This handles floating bars extending above UIKit's reported bottom safe
+inset, both before and after keyboard layout. It does not add a second keyboard
+inset. The native workspace checks cover Folder Hub pane widths and composer
+clearance in addition to retained editor ownership.
+
+Validation: 183 mobile host tests and 52 portable mobile tests (three expected
+platform skips), plus lint and whitespace checks. Targeted native probes used the
+existing simulator executable with the current Python UI sources: iPhone category
+cards, folder nesting/collapse/credential filtering, matching library shortcuts,
+and composer bounds/hit testing with keyboard and six-line drafts; wide iPad
+Folder Hub panes measured 405/405 points and met at x=417 in an 834-point window.
+These are targeted local checks, not full native-suite, Android-rendering,
+physical-device or Duo fold-transition evidence. Probe sources, screenshots,
+results and source hashes are retained under `Mobile/logs/feedback-review/`.
