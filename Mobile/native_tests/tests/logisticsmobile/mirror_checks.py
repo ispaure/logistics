@@ -163,7 +163,11 @@ async def exercise_crypt_mirror(app, fixture):
     payload = 'mobile-mirror-fixture/download-probe.bin'
     local_probe = app.private_root / 'LocalFiles' / 'download-probe.bin'
     with local_probe.open('wb') as output:
-        for _ in range(32):
+        # At the real bridge's minimum 1 MiB/s limit, the old 32 MiB
+        # fixture could finish while a cold hosted emulator built the reader
+        # widgets. Keep native I/O active across all browsing assertions; the
+        # test cancels it rather than waiting for this payload to finish.
+        for _ in range(256):
             output.write(b'x' * (1024 * 1024))
     with local_probe.open('rb') as source:
         await asyncio.to_thread(provider.create_file, payload, source)

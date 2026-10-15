@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 REPO = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('mobile_ui_tools', REPO / 'Mobile/ui_tools.py')
@@ -14,6 +16,24 @@ spec.loader.exec_module(ui_tools)
 
 
 class NativeReportTests(unittest.TestCase):
+    def test_repeated_running_callback_keeps_one_exercise_per_app(self):
+        coroutine, task = object(), Mock()
+        exercise = Mock(return_value=coroutine)
+        loop = Mock()
+        loop.create_task.return_value = task
+        app = SimpleNamespace(loop=loop)
+        self.assertIs(ui_tools.contract.start_native_check(app, exercise), task)
+        self.assertIs(ui_tools.contract.start_native_check(app, exercise), task)
+        exercise.assert_called_once_with(app)
+        loop.create_task.assert_called_once_with(coroutine)
+        # A report being flushed must not trigger a second run either.
+        task.done.return_value = True
+        self.assertIs(ui_tools.contract.start_native_check(app, exercise), task)
+        self.assertEqual(loop.create_task.call_count, 1)
+        other = SimpleNamespace(loop=loop)
+        ui_tools.contract.start_native_check(other, exercise)
+        self.assertEqual(loop.create_task.call_count, 2)
+
     def test_native_report_requires_every_case_and_exact_source(self):
         source = dict(dirty=False,
             logistics_commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip(),
