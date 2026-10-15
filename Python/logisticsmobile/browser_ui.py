@@ -9,6 +9,19 @@ from commonUtils.ui.native.presentation import list_button
 from .appearance import surface
 
 
+def middle_filename(button):
+    """Let the native label fit the middle ellipsis without changing identity."""
+    backend = type(button._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        button._impl.native.titleLabel.lineBreakMode = 5  # NSLineBreakByTruncatingMiddle
+        button._impl.native.accessibilityLabel = button.text
+    elif backend.startswith('toga_android.'):
+        from android.text import TextUtils
+        button._impl.native.setSingleLine(True)
+        button._impl.native.setEllipsize(TextUtils.TruncateAt.MIDDLE)
+        button._impl.native.setContentDescription(button.text)
+
+
 class FileBrowser(NativeBrowser):
     def __init__(self, *, open_file=None, item_actions=None, **kwargs):
         self.on_open_file, self.on_item_actions = open_file, item_actions
@@ -47,6 +60,8 @@ class FileBrowser(NativeBrowser):
             return
         for button in self.buttons.values():
             button.text = button.text.removeprefix('✓ ')
+            list_button(button)
+            middle_filename(button)
         for row in self.items.children:
             if not isinstance(row, toga.Box):
                 continue
@@ -57,7 +72,6 @@ class FileBrowser(NativeBrowser):
                         row.remove(child)
                     elif isinstance(child, toga.Button):
                         child.style.height = 52
-                        list_button(child)
                 if self.on_item_actions and row.children:
                     entry = next((item for item in self.entries if self.buttons.get(item.identity) in row.children), None)
                     if entry is not None:
