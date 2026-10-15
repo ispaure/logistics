@@ -164,7 +164,8 @@ class Workspace:
             raise ValueError('Workspace storage cannot be a symbolic link.')
         entries = [dict(id=session.id, provider=session.provider, resource=session.resource,
                         kind=session.kind, view=view_state(session.view))
-                   for session in self.sessions.values() if not session.transient]
+                   for session in self.sessions.values()
+                   if not session.transient and session.provider in PROVIDERS and uuid(session.resource)]
         ordinary = {entry['id'] for entry in entries}
         active = self.active if self.active in ordinary else (entries[-1]['id'] if entries else None)
         self.path.parent.mkdir(parents=True, exist_ok=True)

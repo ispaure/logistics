@@ -95,6 +95,17 @@ class PrivateSessions:
         namespace = str(Path(root).resolve())
         return sha256((namespace + '\0' + str(key)).encode()).hexdigest()
 
+    def available(self, key):
+        owner = self.controllers.get(key)
+        if owner is None or owner.crypt_reader is None:
+            return False
+        store = getattr(owner, '_crypt_reader_store', None)
+        if not getattr(store, 'encrypted', True):
+            return True
+        return (getattr(owner, 'credential_client', None) is self.app.cloud_client
+                and self.app.cloud_client is not None
+                and getattr(owner, 'credential_generation', None) == self.app.cloud_client.generation)
+
     def bind(self, owner):
         self.suspend(except_owner=owner)
         readers = getattr(self.app, 'readers', None)
@@ -128,6 +139,9 @@ class PrivateSessions:
         identity = self.identity(copies, key)
         existing = next((owner for owner in self.controllers.values()
                          if owner.session.resource == identity), None)
+        if existing is not None and prepared is None and not self.available(existing.session.id):
+            self.app.cloud_status.value = 'Unlock the connection again before reopening this private document.'
+            return False
         if existing is not None and prepared is None:
             existing.presentation_destination = destination
             self.app.crypt_password.value = ''
@@ -145,6 +159,8 @@ class PrivateSessions:
         session = self.app.workspace.open('provider-session', identity, 'text', transient=True)
         self.app.workspace.active = selection
         owner = PrivateController(self, session)
+        owner.credential_client = self.app.cloud_client
+        owner.credential_generation = getattr(self.app.cloud_client, 'generation', None)
         owner.presentation_destination = destination
         owner._independent_operation = independent
         self.controllers[session.id] = owner
@@ -185,7 +201,7 @@ class PrivateSessions:
 
     def activate(self, key, *, destination='documents'):
         owner = self.controllers.get(key)
-        if owner is None or (self.app.cloud_busy and not (getattr(self.app, 'transfer_busy', False) and getattr(getattr(owner, '_crypt_reader_store', None), 'offline', False))):
+        if not self.available(key) or (self.app.cloud_busy and not (getattr(self.app, 'transfer_busy', False) and getattr(getattr(owner, '_crypt_reader_store', None), 'offline', False))):
             return False
         owner.presentation_destination = destination
         self.bind(owner)
