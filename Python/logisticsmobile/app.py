@@ -147,7 +147,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         if destination != self.native_host.state.destination:
             self.mark_navigation()
         self.save_workspace()
-        if destination == 'chat' and not hasattr(self, 'chat_view'):
+        if destination == 'chat' and not self.routes.screens['chat']:
             self.show_chat(present=False)
         self.refresh_hub(destination)
         adaptive = getattr(self, 'adaptive', None)
