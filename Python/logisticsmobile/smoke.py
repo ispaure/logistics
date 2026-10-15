@@ -47,6 +47,7 @@ EXPECTED_TESTS = (
     'test_malformed_comic_metadata_does_not_prevent_reading',
     'test_verified_save_conflict_cancellation_and_encoding',
     'test_text_and_comic_reads_are_memory_only',
+    'test_ini_reader_is_editable_memory_only_and_preserves_line_endings',
     'test_epub_source_reads_without_plaintext_files',
     'test_ciphertext_storage_locked_listing_and_failed_download_cleanup',
     'test_import_boundary', 'test_runtime_identity',

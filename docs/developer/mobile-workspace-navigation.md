@@ -213,3 +213,19 @@ keeping the displayed label and provider identity aligned. Private-open failures
 are also copied to the visible browser status. Native LocalCrypt coverage opens a
 synthetic encrypted CBZ through a fresh scoped browser and verifies its first page;
 it does not import plaintext into the ordinary library or document store.
+
+
+INI support is separately enabled in the private memory reader, stream-to-text
+path, text chooser and native encrypted-write extension check. The 1 MiB text
+limit and lossless TextSession encoding/line-ending behavior are unchanged.
+The portable smoke fixture allowlist includes the new INI regression.
+
+Validation: 213 mobile host tests; 54 portable tests with three expected platform
+skips; native bridge Go tests including encrypted INI round-trip; lint/whitespace
+checks. The targeted iOS 26.5 probe opened a real encrypted fixture CBZ through
+CryptFiles/ManagedCopies, verified its decoded first image and correct storage
+selection, then opened an INI in the private text view. Native INI saving is
+covered by the Go round-trip and host UI save tests; the targeted simulator used
+its existing executable for the open/display checks. Source/results/screenshots
+are retained in ignored `Mobile/logs/localcrypt-open-review/`. Android rendering
+and a full native suite were not exercised in this follow-up.
