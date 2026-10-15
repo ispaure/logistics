@@ -6,6 +6,7 @@ user guide for the workflow you are changing, then follow this map.
 
 | Task | Guide |
 | --- | --- |
+| Set up mobile development without prior iOS/Android experience | [Build and release handbook](mobile-handbook.md) |
 | Develop the project IDE | [IDE architecture](ide.md) |
 | Develop the LM chat client | [LM integration](lm.md) |
 | Review tab, docking and compact layout changes | [UI refinement validation](ui-refinement.md) |

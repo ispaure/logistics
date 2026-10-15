@@ -1,5 +1,35 @@
 # Mobile document host and validation
 
+## Launcher artwork
+
+`Mobile/resources/icons` contains pre-sized PNGs derived from the supplied light,
+dark and monochrome artwork. iOS uses 20–180 pixel legacy slots and 1024 pixel
+light/dark/tinted slots. Android uses 48–192 pixel legacy icons and 108–432 pixel
+adaptive layers, with night-qualified artwork and API 33 monochrome resources.
+Adaptive foregrounds include padding to retain the complete supplied tile within
+the launcher mask. Android launchers control whether night/themed icons refresh.
+
+`Mobile/icon_build.py` installs these resources from `cloud_build.py` after
+Briefcase create/update, including device deployments and isolated TestFlight
+archives. It also replaces the template launch artwork. Build-time installation
+uses only the standard library; Pillow is needed only for asset regeneration:
+
+```sh
+Mobile/.venv/bin/python Mobile/icon_build.py /path/to/light.png /path/to/dark.png /path/to/monochrome.png
+```
+
+Regeneration downsamples the complete square images with Lanczos filtering,
+without cropping or retouching. iOS copies flatten transparency over matching
+white/navy backing because app icons must be opaque. Android's separate themed
+mask converts inverse grayscale luminance, multiplied by source alpha, to opacity;
+this retains the original shading when the launcher supplies its tint. Original
+downloads are not changed. Native launchers apply their own final icon masks.
+
+Verify catalog and resource installation with `Mobile/tests/test_icon_build.py`.
+Compile the generated iOS catalog with Xcode's asset compiler when changing its
+appearance slots. Home-screen appearance and launcher cache refresh still need
+device validation; host tests do not establish those behaviors.
+
 ## Native destination routes
 
 The mobile host uses Home, Files, Documents and Settings, with independent screen

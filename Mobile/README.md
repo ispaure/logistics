@@ -1,5 +1,8 @@
 # Logistics mobile prototype
 
+New to mobile development? Start with the [build and release handbook](../docs/developer/mobile-handbook.md)
+for Mac setup, Xcode, simulator/phone runs, TestFlight, Android and private backups.
+
 This independent Toga application targets Android and iOS. It opens imported text
 and Markdown as app-private copies, edits them, saves their original encoding and
 line endings, and checkpoints drafts for recovery. Its hub also opens a private EPUB/CBZ library
@@ -16,6 +19,12 @@ See the [user guide](../Python/logisticsmobile/user_docs/README.md) and
 [architecture and validation guide](../docs/developer/mobile-preparation.md).
 
 ## Prepare a native build
+
+Launcher artwork is bundled under `resources/icons`: iOS light, dark and tinted
+variants, plus Android light/night icons and an Android 13+ themed mask.
+The existing `cloud_build.py ios` / `android` steps install these resources after
+Briefcase creates or updates its project; local device and TestFlight builds use
+the same step. See [icon maintenance](../docs/developer/mobile-preparation.md#launcher-artwork).
 
 Use a separate Python 3.12 environment with `briefcase==0.4.5`. Toga backends are
 pinned to 0.5.7 in `pyproject.toml`. Install Go 1.26.9 for the native rclone
@@ -178,9 +187,12 @@ The [TestFlight guide](../docs/developer/mobile-testflight.md) covers local
 archive/export/upload commands and the manual GitHub workflow. Release packaging
 uses a separate workspace and preserves `io.github.ispaure.logisticsmobile` plus
 the existing application signing identifier and effective Keychain groups.
-Uploads default to off. Enrollment was confirmed approved on 2026-10-14; App Store
-Connect configuration, distribution signing assets, clean committed sources and
-encryption compliance answers are still needed before the first TestFlight upload.
+Uploads default to off. Enrollment was confirmed approved on 2026-10-14. A retained
+local record confirms build `202610145` uploaded and was assigned to Friends with
+beta review submitted. This is historical evidence, not a live Apple review status;
+check App Store Connect before releasing again. A new Mac still needs account,
+signing and API setup, and each release needs committed sources and any required
+encryption compliance answers.
 The guide includes prepared beta description, testing instructions and review notes.
 Future explicit uploads are configured to assign their processed build to the
 external **Friends** group, submit beta review when needed and enable tester

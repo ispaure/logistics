@@ -25,6 +25,11 @@ the native app; real-device interaction testing is still required.
 
 ## Preferences and storage
 
+The launcher icon includes light and dark artwork. On supported iOS versions it
+also includes a monochrome variant for tinted icons; Android 13+ launchers can use
+the monochrome artwork for themed icons. The system or launcher controls this
+appearance, independently of the app's own theme setting.
+
 Developers can update Logistics on a paired iPhone over Wi-Fi using the
 [local deployment workflow](../../../Mobile/README.md#build-and-deploy-to-a-paired-iphone-over-wi-fi).
 Its launcher builds, installs in place and opens the app while retaining its
@@ -943,3 +948,11 @@ session is no longer current, and cannot reopen until unlocked. Recent contains
 up to six ordinary local/imported document identities. Explicitly downloading an
 unencrypted local copy makes that copy an ordinary local file, which can appear
 in local document history independently of the original remote's lock state.
+
+
+Opened documents use their filename as the blue resume link, with a direct ×
+close control beside it. There is no separate opened-count heading. Turning off
+card previews in Preferences keeps the same name/close row without the excerpt.
+On iPhone, tab selection waits for UIKit to finish changing its selected screen
+before laying out Documents or Chat, so their content and menus appear on the
+first tap.

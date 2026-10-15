@@ -1,5 +1,8 @@
 # Logistics TestFlight workflow
 
+For first-time setup and step-by-step operating instructions, start with the
+[mobile handbook](mobile-handbook.md). This page is the detailed release reference.
+
 The release entry point is `Mobile/testflight_tools.py`. A manual GitHub workflow
 in `.github/workflows/testflight.yml` invokes the same commands after the existing
 iOS native UI and CPython runtime workflows pass. Upload is disabled by default.
@@ -181,8 +184,10 @@ for testing until packaging is corrected and a new build is uploaded. Group
 assignment and beta-review submission remain unverified against a valid live build.
 Replacement build `202610145` includes the provider manifests, passed archive and
 IPA signature/manifest verification, and uploaded successfully using the configured
-API key on 2026-10-14. Apple processing and automatic Friends assignment are pending.
-The retained `external-distribution.json` records progress and any required action.
+API key on 2026-10-14. During the 2026-10-15 repository audit, its retained
+`external-distribution.json` recorded `status=assigned` and `review_submitted=true`.
+This confirms the recorded group assignment and review submission, not Apple's
+current approval status. Check App Store Connect for live processing/review state.
 
 An unsigned packaging check is available while enrollment is pending:
 
@@ -325,6 +330,7 @@ that uploading cannot run without a reviewed export, explicit opt-in and unchang
 archive/IPA fingerprints. Profile identity checks run before signing assets are
 installed. A local keychain check found two Apple Development identities and no
 Apple Distribution identity. Enrollment approval is confirmed, but distribution
-signing/export, App Store Connect validation and actual TestFlight upload remain
-unverified. The current mobile changes must be committed before signed release
-staging; this preparation did not commit, push, install or upload anything.
+signing/export and upload were unverified at that earlier preparation checkpoint.
+The later build `202610145` records above supersede that historical limit. New
+mobile changes must still be committed before signed release staging. This
+documentation audit did not install or upload an app.

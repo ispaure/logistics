@@ -85,6 +85,8 @@ offline copies and explicit decrypted downloads. A Mac can build, install and la
 the iPhone app over Wi-Fi using the [paired-device workflow](Mobile/README.md#build-and-deploy-to-a-paired-iphone-over-wi-fi).
 An [opt-in TestFlight workflow](docs/developer/mobile-testflight.md) prepares
 archives and uploads with the same app identity after developer enrollment approval.
+For first-time Xcode setup, local builds, TestFlight and Android instructions, start
+with the [mobile build and release handbook](docs/developer/mobile-handbook.md).
 
 | Tool | Use it to… |
 | --- | --- |
