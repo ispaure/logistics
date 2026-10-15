@@ -29,6 +29,12 @@ SHARED_REQUIRED_MODULES += ('ui/native/navigation_state.py', 'ui/native/navigati
                             'ui/native/android/io/github/ispaure/commonutils/ImageCanvasView.java',
                             'ui/native/android/io/github/ispaure/commonutils/NavigationBack.java')
 
+SHARED_REQUIRED_MODULES += ('runtime/document_access.py', 'runtime/protected_keys.py',
+                            'filesystem/snapshots.py', 'archives/rebuilding.py',
+                            'ui/native/event_loop.py', 'ui/native/memory.py',
+                            'ui/native/documents.py', 'ui/native/menus.py',
+                            'ui/native/presentation.py', 'ui/native/editor_search.py')
+
 
 def stage(repo, destination, *, testbed=False, allow_dirty=False):
     repo, destination = Path(repo).resolve(), Path(destination).resolve()
