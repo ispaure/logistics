@@ -11,6 +11,7 @@ class WorkspaceUITests(unittest.TestCase):
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            app.show_documents()
             owner = app.editor_view
             missing = app.workspace.open('managed-text', 'f' * 32, 'text')
             app.session_opener(missing.id)()
@@ -124,6 +125,7 @@ class WorkspaceUITests(unittest.TestCase):
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
             try:
+                app.show_documents()
                 owner = app.editor_view
                 owner.session.view['markdown_split'] = True
                 owner.apply_split(1200)

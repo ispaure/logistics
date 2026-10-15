@@ -39,11 +39,11 @@ async def exercise_mirrors(app, comic_key):
             app.show_locations()
             assert 'Browse during pull' in app.folder_picker_choices
             assert 'Fixture' in app.folder_picker_choices
-            app.folder_choice.value = 'Fixture'
+            app.folder_buttons['Fixture'].on_press()
             assert not app.folder_browse_button.enabled
             assert not await app.open_picker_folder(app.folder_picker_selected)
             app.show_locations()
-            app.folder_choice.value = 'Browse during pull'
+            app.folder_buttons['Browse during pull'].on_press()
             assert app.folder_browse_button.enabled
             await app.folder_browse_button.on_press()
             assert app.file_path == 'Browse during pull'

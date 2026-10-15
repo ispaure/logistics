@@ -8,7 +8,7 @@ the native app; real-device interaction testing is still required.
 | Logistics capability | Mobile status |
 | --- | --- |
 | Plain-text editing | Implemented: create, select, rename, edit and save private documents |
-| Hub and navigation | Native Home, Files, Documents and Settings destinations; retained screen per destination |
+| Hub and navigation | Native Home, Files, Documents, Chat and Settings destinations; retained screen per destination |
 | Markdown | Text editing and offline basic preview: headings, list items, bold and code blocks |
 | Document import | Native picker adapters implemented; actual provider permissions still need device testing |
 | Draft recovery | Implemented: checkpoints, restored drafts and conflict-safe save-a-copy |
@@ -55,9 +55,11 @@ Home uses icon panels for Files, Documents, Text & Markdown, Books & Comics and
 LM Chat. Panels stack on phones and use two or three columns in wider windows.
 **Continue** returns to the selected open document, including its Edit/Preview
 mode. **New document** creates and displays a separate editor; **Open file…**
-opens the existing Local/LocalCrypt file picker. Documents has the same launch
-panels plus open and stored document cards. Open cards show document type,
-unsaved changes, session-only status and known conflicts. Closing an open card
+opens the existing Local/LocalCrypt file picker. Documents offers **New** and
+**Open…**, followed by open and stored documents grouped under Text, Markdown,
+EPUB books or Comics. Empty type groups are hidden. Each row shows the filename;
+restored sessions reload names from their stored document or library record.
+Open rows show unsaved changes, session-only status and known conflicts. Closing an open row
 uses the existing save/discard workflow and keeps its stored file.
 
 The ordinary text/Markdown editor offers **Find** beside Save and Preview.
@@ -72,10 +74,11 @@ them. Search does not include other files or the separate private reader editor.
 
 The app opens on **Home**, a landing page with quick access to files, editors,
 books/comics and chat. The house icon is the first native destination, before
-**Files**, **Documents** and **Settings**. **Files** is a location hub for **On this device** and
+**Files**, **Documents**, **Chat** and **Settings**. **Files** is a location hub for **On this device** and
 **Remote files & LocalCrypt**. Local browsing uses app-managed files rather than
-the entire device filesystem. Choose **Documents**, then **Text & Markdown**.
-The Documents hub also contains **Books & Comics** and **LM Chat**. Native tab
+the entire device filesystem. Choose **Documents → New** for **Plain text (.txt)** or **Markdown (.md)**.
+Books and comics are available through Files or Home’s Books & Comics panel;
+Chat has its own bottom navigation button between Documents and Settings. Native tab
 controls adapt to the Apple layout; Android uses bottom navigation in compact
 windows and a rail at 600 dp or wider. Switching destinations retains each
 screen. **Locations** returns to the Files hub and **All documents** returns
@@ -104,8 +107,12 @@ Stored documents. Discard resets recovery to the current saved file without
 overwriting changes made outside the editor or recreating a deleted file. A
 failed save or conflict keeps the document open; use **Save a copy** to preserve
 both versions. Session-only drafts offer Save, Discard, and Cancel without durable
-draft retention. Ordinary open items remain available at the next launch, with a
-maximum of 32 open items. Their active selection resumes when **Restore last
+draft retention. **Clear documents with no pending changes on restart** is enabled
+by default in Settings. On restart, saved text and reader sessions leave Open
+documents; stored files and reading progress remain available. Unsaved text,
+conflicts and unreadable recovery entries stay in the open list. Turn this setting
+off to retain all ordinary open items at the next launch. There is a maximum of
+32 open items. An empty workspace stays empty until you create or open a file. Their active selection resumes when **Restore last
 document** is enabled; turning it off also prevents automatic EPUB/comic reopening.
 You can still explicitly reopen those readers from Open documents with their saved
 progress. Private resource restoration remains excluded. Native cursor/selection and scroll offsets are recorded for text views.
@@ -157,7 +164,7 @@ on devices before treating this prototype as a supported mobile product. See
 
 ## Books and comics
 
-From Documents, choose **Books & Comics** and **Import book/comic…**. EPUB and
+From Home, choose **Books & Comics → Open library → Import book/comic…**. EPUB and
 CBZ/ZIP imports create private copies; the selected source is never
 changed. Choose a library item and **Open selected**. Previous/Next and the
 chapter/page selector navigate the book's reading order. EPUB pages scroll in the
@@ -204,7 +211,7 @@ records rather than overwriting another change.
 
 ## LM chat
 
-Choose **LM Chat** from Documents. Open **Server & generation settings…**, enter your
+Choose **Chat** in the bottom navigation. Open **Server & generation settings…**, enter your
 existing server's API URL (for example `http://192.168.1.10:1234/v1`), optional
 session API key, and model ID. **Refresh models** contacts that server explicitly
 and fills the model selector. Use the computer's LAN address/hostname when the
@@ -490,6 +497,41 @@ recreated on activation. Saving local text updates its local file; LocalCrypt
 continues to save encrypted bytes through the existing verified transaction.
 
 
+### SMB and Mac shared folders
+
+In **Files**, tap **Add SMB / Mac share…** (also available in Remote connections).
+Give each server a unique connection name, enter its IP address or hostname,
+username and password, and choose **Add connection and browse**. Enter only the
+server in the Server field, without `smb://` or a shared-folder path. The default
+port is 445; change Domain when your server requires one. For guest access, enter
+`guest` and leave the password empty.
+
+You can add multiple servers. Adding one preserves existing connections and rejects
+names already in use. **Save credentials on this device** defaults to on: usernames
+and passwords are stored in the existing encrypted credential vault, protected by
+Android Keystore or iOS Keychain, and restored when Files initializes. Turn it off
+for a session-only connection; this leaves previously saved credentials unchanged.
+Reload saved credentials before adding a saved server if you previously chose
+session-only connections: reloading replaces those temporary connections. Importing
+a credential ZIP also replaces the loaded connection set.
+
+On a Mac, enable **File Sharing**, enable sharing using **SMB**, and allow the
+account used here to access the desired shared folders. Connect from the same
+network or a VPN that reaches the server. If a hostname cannot be resolved, use
+the server's IP address. Legacy AFP shares are not supported.
+
+The browser first lists the server's shares. Open a share, then the folder you
+want, and use **Pull…** in its folder actions to create a managed offline copy.
+Existing Pull progress, cancellation and refresh rules apply. **Copy this folder…**
+also provides a one-time copy. A network/login failure keeps the added connection;
+retry browsing after fixing network access. **Forget saved credentials** removes
+the saved connection set for all servers, as it does for credential ZIPs.
+
+SMB remotes can also be loaded from existing credential ZIPs. Use rclone's `smb`
+configuration with `host`, `user`, `pass`, `domain`, and `port`; `pass` in a ZIP
+must already be rclone-obscured. The direct form accepts your ordinary password.
+Physical-device SMB transfers still require validation with an actual server.
+
 ### Repeatable folder pulls
 
 Earlier mobile versions offered **Save repeatable folder pull**. New transfers use **Pull…** and the sync engine below. Legacy copy jobs remain readable through their compatibility route. This downloads
@@ -595,9 +637,12 @@ separate evidence.
 ## Folder Hub and Local / LocalCrypt sync
 
 **Files** combines ordinary Local folders, downloaded LocalCrypt copies and loaded
-remotes in one name-only selector. A folder such as `Example-Library` appears
-once; its action page reflects the copies available. **Browse folder** opens its
-local copy when present. **Browse online** opens its loaded remote when both exist.
+remotes in one scrollable folder list. A folder such as `Example-Library` appears
+once; its action page reflects the copies available. **Browse Local** opens readable files on this device, **Browse LocalCrypt** opens
+the encrypted device copy, and **Browse Remote** opens the online folder. Only
+available copies receive a browse button; each copy is offered once. Remote
+browsing opens the online file browser, with copy-to-device and secondary download
+actions. Choose folders and start Push/Pull from their Files action pages.
 Existing managed copies remember their storage type and transfer association.
 The first pull chooses storage; later transfers reuse it. **Refresh** updates
 folder discovery without downloading remote contents.
@@ -631,15 +676,21 @@ snapshots. Transfers use rclone's normal incremental comparison. LocalCrypt sync
 ciphertext to/from the backing scope; a readable Local copy of a crypt remote uses
 rclone's crypt filesystem for automatic encryption/decryption.
 
-**Files → Transfers** shows the destination and offers
-**Open**, **Pull**, **Push…**, **Delete local folder…**, and **Remove mapping
-(keep files)**. Delete local folder requires confirmation and removes only the
-app-private local folder and everything inside it permanently; the online folder
-remains. Confirmation appears without scanning the folder contents. Deletion
-creates no backup and has no app recovery or undo. Obsolete transfer snapshots
-are discarded during deletion or the next transfer; they cannot be opened or
-restored. Removing a mapping keeps its local files. A missing or changed connection blocks transfers until you load the
-matching credential ZIP.
+**Files → Transfers** opens **Transfer details**: live progress, completed/known
+file and byte counts, cancellation, pending push review, and completion or error
+messages. It does not list remotes or offer folder selection. The transfer banner
+also opens these details; the remote browser reflects the same progress. If a
+remote folder matches several local mappings, Pull opens a focused destination
+chooser for those matches.
+
+Folder action pages offer **Delete local folder…** and, for managed copies,
+**Remove mapping (keep files)**. Delete local folder requires confirmation and
+removes only the app-private local folder and everything inside it permanently;
+the online folder remains. Confirmation appears without scanning folder contents.
+Deletion creates no backup and has no app recovery or undo. Obsolete transfer
+snapshots are discarded during deletion or the next transfer; they cannot be
+opened or restored. Removing a mapping keeps its local files. A missing or changed
+connection blocks transfers until you load the matching credential ZIP.
 
 For session-only connections, `preferences.ini` remembers the ZIP filename and
 remote names, without its password or credentials. After restart those remotes
@@ -683,9 +734,17 @@ Results arriving after their window has been replaced do not update that old vie
 ## Mobile UI refresh (local development)
 
 Home offers Continue and compact shortcuts to Files, writing and the library.
-Documents lists open sessions with their type and unsaved state; tap a name to
-resume. Its **•••** menu closes that session through the existing unsaved-change
-guard. New, Open, Library and Chat remain available from Documents.
+Documents groups open sessions by type and shows preview cards by default. Tap
+a title or Resume document to continue; the current session is labelled Current
+document. Cards show a short text excerpt for ordinary text/Markdown documents
+and a type placeholder for books, comics and private provider sessions. The **×**
+button closes a session through the existing unsaved-change guard.
+In **Settings → App**, turn off **Document card overview** and Save preferences
+to use the grouped list with its **•••** close menu. Stored documents remain a list.
+Settings groups feature options under Text & Markdown, Books & Comics, LM Chat
+and Files; reader appearance stays in each open reader. Documents offers New and Open. New asks for TXT or Markdown; Chat has
+its own bottom navigation destination. The Library shortcut has been removed
+from Documents.
 
 The library is a searchable list of books and comics. Tap a title to open its
 reader. Contents/bookmarks and appearance have separate tools, keeping the reading
@@ -694,15 +753,17 @@ Markdown opened from local/provider files offers Preview/Edit without saving the
 draft; leaving the view clears the rendered preview and keeps the draft in memory.
 Closing or locking private content clears the preview as well as its editor text.
 
-Files starts with a native folder selector. Names have no Local/Remote prefix.
-Choosing a folder dismisses the iOS wheel and opens its action page. **Browse
+Files starts with a scrollable list of folders. Names have no Local/Remote prefix.
+Tap a folder row to open its action page. **Browse
 folder** opens the available copy; alternate copies have explicit Browse actions.
 Managed copies offer **Pull…** and **Push…**. Folders with a loaded remote offer
 Pull to create or associate a copy. Local folders also offer **Delete local
 folder…**, with native confirmation; online files are kept. Deletion waits until
-transfers finish. **Choose another folder** returns to the selector.
-Connections loads credentials; Transfers shows progress and managed-copy options.
-Returning through the bottom Files tab refreshes the same complete selector.
+transfers finish. **Choose another folder** returns to the list.
+**Settings → Remote connections…** loads credentials. **Transfers** and
+**Refresh** stay above the scrolling list. Transfers opens progress and managed-copy
+options; Refresh has its own circular-arrow icon and updates folder discovery.
+Returning through the bottom Files tab refreshes the same complete list.
 
 Folder rows use one line with an icon/name and a navigation chevron. Files can
 show their size and **•••** actions. Opening a folder does not flash a selection
@@ -734,8 +795,8 @@ running. Opening and browsing use separate local work without replacing the
 transfer cancellation handle. LocalCrypt operations that need the cloud engine
 remain serialized.
 
-Home’s **Browse files** opens the same folder selector each time. Choosing
-**All files → Browse folder** refreshes the local root and clears an old
+Home’s **Browse files** opens the same folder list each time. Choosing
+**All files → Browse Local** refreshes the local root and clears an old
 search filter. Local browsing does not wait for a credential restore or an
 unrelated cloud request.
 

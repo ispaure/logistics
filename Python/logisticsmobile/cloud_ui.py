@@ -50,6 +50,7 @@ class CloudUI(CopyUI, LocalCryptUI):
                 except Exception:
                     error = 'The native remote engine or device credential protection is unavailable.'
             self.cloud_pending_zip = None
+            self.cloud_add_smb = toga.Button('Add SMB / Mac share…', on_press=self.show_smb_connection, style=Pack(height=44))
             self.cloud_choose = toga.Button('Choose credential ZIP…', on_press=self.choose_cloud_package, style=Pack(height=44))
             self.cloud_selected_zip = toga.Label('No ZIP selected', style=Pack(font_size=14))
             self.cloud_import_message = toga.Label(import_hint('Choose a ZIP, then enter its password and tap Load remotes.'), style=Pack(font_size=14))
@@ -83,6 +84,7 @@ class CloudUI(CopyUI, LocalCryptUI):
             self.download_export = toga.Button('Export private copy…', on_press=self.export_download, style=Pack(flex=1, height=44))
             self.cloud_connections_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
                 toga.Label('Remote connections', style=Pack(font_size=22)),
+                self.cloud_add_smb,
                 self.cloud_choose, self.cloud_selected_zip, self.cloud_import_message,
                 toga.Box(children=[self.cloud_password, self.cloud_import], style=Pack(direction=ROW)),
                 self.cloud_remember, toga.Label('Off: use credentials only for this app session.'),
@@ -96,7 +98,6 @@ class CloudUI(CopyUI, LocalCryptUI):
                 self.cloud_location, toga.Box(children=[self.cloud_browse, self.cloud_up], style=Pack(direction=ROW)),
                 self.cloud_status, self.cloud_cancel, self.remote_browser.widget,
                 self.cloud_open, self.cloud_download_help, self.cloud_download, self.cloud_folder_open,
-                toga.Button('Sync folder to device…', on_press=self.pull_remote_copy, style=Pack(height=44)),
                 toga.Label('Downloaded copies', style=Pack(font_size=18, margin_top=12)), self.download_selector,
                 toga.Box(children=[self.download_open, self.download_export], style=Pack(direction=ROW)),
                 *self.build_localcrypt()], style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
@@ -109,11 +110,13 @@ class CloudUI(CopyUI, LocalCryptUI):
             from .action_menu import FeatureCommands
             self.cloud_actions_button = toga.Button('•••', style=Pack(width=44, height=44))
             self.cloud_actions = FeatureCommands(self.cloud_actions_button, self, [
-                ('Browse path…', self.show_cloud_actions), ('Sync folder to device…', self.pull_remote_copy),
+                ('Browse path…', self.show_cloud_actions),
                 ('Pin current folder', self.pin_remote_folder),
                 ('Downloaded copies…', self.show_cloud_actions), ('Encrypted offline copies…', self.show_cloud_actions),
                 ('Manage connections…', self.show_cloud_connections)], self.show_cloud_actions)
             self.cloud_download.style.flex = self.cloud_open.style.flex = 1
+            advanced.add(self.cloud_remote)
+            advanced.add(self.cloud_browse)
             advanced.add(self.cloud_download)
             advanced.add(self.cloud_folder_open)
             advanced.insert(advanced.children.index(self.cloud_location) + 1,
@@ -129,16 +132,11 @@ class CloudUI(CopyUI, LocalCryptUI):
             self.cloud_transfer_progress = toga.ProgressBar(max=100, value=0, style=Pack(height=12))
             advanced.add(self.cloud_copy_folder)
             self.cloud_view = toga.Box(children=[
-                toga.Box(children=[self.cloud_locations,
-                    toga.Button('Connections…', on_press=self.show_cloud_connections, style=Pack(height=44)),
-                    self.cloud_actions_button], style=Pack(direction=ROW)),
-                toga.Box(children=[self.cloud_remote, self.cloud_browse], style=Pack(direction=ROW)),
+                toga.Box(children=[self.cloud_locations, self.cloud_actions_button], style=Pack(direction=ROW)),
                 self.cloud_status,
                 self.cloud_transfer_progress,
                 toga.ScrollContainer(horizontal=False, content=scroll_content(self.remote_browser.widget), style=Pack(flex=1)),
                 self.cloud_copy_button,
-                toga.Box(children=[toga.Button('Pull…', on_press=self.pull_remote_copy, style=Pack(height=48, flex=1)),
-                    toga.Button('Push…', on_press=self.push_remote_copy, style=Pack(height=48, flex=1))], style=Pack(direction=ROW)),
                 self.cloud_cancel],
                 style=Pack(direction=COLUMN, margin=12, flex=1))
             self.refresh_downloads()
@@ -161,6 +159,66 @@ class CloudUI(CopyUI, LocalCryptUI):
         self.show_cloud(present=False)
         self.show_view(self.cloud_connections_view, destination='settings', route='connections', title='Remote connections')
 
+    def show_smb_connection(self, widget=None, **kwargs):
+        self.show_cloud(present=False)
+        if self.cloud_busy:
+            return
+        if not hasattr(self, 'smb_view'):
+            self.smb_name = toga.TextInput(placeholder='Connection name (e.g. Home Mac)', style=Pack(height=44))
+            self.smb_host = toga.TextInput(placeholder='Server IP or hostname (e.g. 192.168.1.10)', style=Pack(height=44))
+            self.smb_user = toga.TextInput(placeholder='Username (or guest)', style=Pack(height=44))
+            self.smb_password = toga.PasswordInput(placeholder='Share password', style=Pack(height=44))
+            self.smb_domain = toga.TextInput(value='WORKGROUP', style=Pack(height=44))
+            self.smb_port = toga.TextInput(value='445', style=Pack(height=44))
+            self.smb_remember = toga.Switch('Save credentials on this device', value=True, style=Pack(height=44))
+            self.smb_status = toga.Label('', style=Pack(font_size=12))
+            self.smb_connect = toga.Button('Add connection and browse', on_press=self.connect_smb, style=Pack(height=44))
+            self.smb_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
+                toga.Label('SMB / Mac share', style=Pack(font_size=22)),
+                toga.Label(import_hint('On your Mac, enable File Sharing with SMB and allow your account. Use the server address without smb:// or a share path. Connect on the same network or VPN.')),
+                toga.Label('Connection name'), self.smb_name, toga.Label('Server'), self.smb_host,
+                toga.Label('Username'), self.smb_user, toga.Label('Password'), self.smb_password,
+                toga.Label('Domain'), self.smb_domain, toga.Label('Port'), self.smb_port,
+                self.smb_remember, toga.Label(import_hint('Off keeps connections only for this app session. Reloading saved credentials replaces session connections.')),
+                self.smb_connect, self.smb_status], style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+        self.smb_connect.enabled = self.cloud_client is not None
+        self.show_view(self.smb_view, destination='files', route='smb-connection', title='SMB / Mac share')
+
+    async def connect_smb(self, widget=None, **kwargs):
+        if self.cloud_busy or self.cloud_client is None:
+            return
+        name, host, user, domain, port = (control.value.strip() for control in
+            (self.smb_name, self.smb_host, self.smb_user, self.smb_domain, self.smb_port))
+        password = self.smb_password.value
+        self.smb_password.value = ''
+        remember = self.smb_remember.value
+        self.set_cloud_busy(True)
+        self.smb_connect.enabled = False
+        self.smb_status.text = 'Adding connection…'
+        try:
+            names = await asyncio.to_thread(self.cloud_client.add_smb, name, host, user, password,
+                                           domain, port or '445', remember=remember)
+            if not self.active_host:
+                return
+            from .folder_hub import visible_remotes
+            self.cloud_remote.items = visible_remotes(names)
+            await self._load_crypt_remote_names()
+            self.cloud_remote.value = name
+            self.cloud_location.value = self.cloud_path = ''
+            self.cloud_open_remote = None
+            self.cloud_rows = {}
+            self.cloud_entries.items = []
+            self.cloud_package.text = 'Connections: ' + self.cloud_client.package_name
+            self.smb_status.text = 'Connection added. Browse a share and choose Pull… for an offline folder.'
+        except Exception as error:
+            self.smb_status.text = import_hint('Could not add connection: ' + str(error)[:180])
+            return
+        finally:
+            self.set_cloud_busy(False)
+            self.smb_connect.enabled = True
+        self.show_cloud()
+        await self.browse_cloud()
+
     def selected_cloud_remote(self):
         try:
             return self.cloud_remote.value
@@ -170,7 +228,7 @@ class CloudUI(CopyUI, LocalCryptUI):
 
     def set_cloud_busy(self, value):
         self.cloud_busy = value
-        for item in (self.cloud_choose, self.cloud_password, self.cloud_import, self.cloud_probe, self.cloud_remote,
+        for item in (self.cloud_add_smb, self.cloud_choose, self.cloud_password, self.cloud_import, self.cloud_probe, self.cloud_remote,
                      self.cloud_location, self.cloud_browse, self.cloud_up, self.cloud_entries,
                      self.cloud_open, self.cloud_download, self.cloud_clear, self.cloud_reload, self.cloud_remember,
                      self.crypt_download, self.crypt_open, self.crypt_refresh, self.crypt_selector, self.crypt_password):

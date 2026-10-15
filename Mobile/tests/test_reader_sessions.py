@@ -130,7 +130,7 @@ class ReaderSessionTests(unittest.TestCase):
                 app.loop.run_until_complete(app.open_book(record['id']))
                 app.loop.run_until_complete(app.next_book_page())
                 reader_session = app.workspace.active
-                app.preferences.save(restore_last_document='false')
+                app.preferences.save(restore_last_document='false', clear_unmodified_documents_on_restart='false')
                 app.checkpoint()
                 restored = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
                 self.assertIsNone(restored.pending_reader_restore)
@@ -164,6 +164,7 @@ class ReaderSessionTests(unittest.TestCase):
             LogisticsMobile.storage_root = root
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            app.preferences.save(clear_unmodified_documents_on_restart='false')
             app.show_library()
             fixtures = root / 'fixtures'
             fixtures.mkdir()

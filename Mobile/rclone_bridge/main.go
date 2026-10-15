@@ -31,6 +31,7 @@ import (
 	_ "github.com/rclone/rclone/backend/memory"
 	_ "github.com/rclone/rclone/backend/onedrive"
 	_ "github.com/rclone/rclone/backend/s3"
+	_ "github.com/rclone/rclone/backend/smb"
 	_ "github.com/rclone/rclone/backend/webdav"
 	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/fs/cache"
@@ -56,6 +57,7 @@ var allowed = map[string]string{
 	"onedrive": "token client_id client_secret drive_id drive_type root_folder_id region",
 	"s3":       "provider access_key_id secret_access_key session_token region endpoint location_constraint force_path_style",
 	"webdav":   "url vendor user pass bearer_token",
+	"smb":      "host user pass domain port",
 	"memory":   "",
 }
 
@@ -164,6 +166,11 @@ func parseCredential(text []byte) (string, map[string]string, error) {
 	}
 	if kind == "webdav" && values["url"] == "" {
 		return "", nil, errors.New("WebDAV URL is required")
+	}
+	if kind == "smb" {
+		if err := validateSMB(values); err != nil {
+			return "", nil, err
+		}
 	}
 	return name, values, nil
 }
@@ -445,6 +452,10 @@ func dispatch(action, input string) (output string) {
 	}
 	defer done()
 	var request struct {
+		Host           string `json:"host"`
+		User           string `json:"user"`
+		Domain         string `json:"domain"`
+		Port           string `json:"port"`
 		Package        string `json:"package"`
 		Password       string `json:"password"`
 		Remote         string `json:"remote"`
@@ -489,6 +500,8 @@ func dispatch(action, input string) (output string) {
 			ctx = context.WithValue(ctx, mirrorLogicalKey{}, true)
 		}
 		switch action {
+		case "add_smb":
+			result, err = addSMB(request.Remote, request.Host, request.User, request.Password, request.Domain, request.Port, request.Session)
 		case "import":
 			var data []byte
 			data, err = base64.StdEncoding.DecodeString(request.Package)

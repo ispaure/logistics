@@ -14,9 +14,11 @@ class WindowOwnerTests(unittest.TestCase):
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            app.show_documents()
             manager = app.scene_manager
             manager.window_class = toga.Window
             child = manager.make_host('b' * 32)
+            child.show_documents()
             self.assertNotEqual(app.current.id, child.current.id)
             self.assertIsNot(app.routes, child.routes)
             child.editor.value = 'Child draft'

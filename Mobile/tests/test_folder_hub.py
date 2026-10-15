@@ -11,7 +11,8 @@ from test_mirror_jobs import MirrorClient
 
 
 class FolderHubTests(unittest.TestCase):
-    def test_picker_uses_loaded_remote_values_and_opens_selected_local_folder(self):
+    def test_list_uses_loaded_remote_values_and_opens_tapped_local_folder(self):
+        import toga
         from logisticsmobile.app import LogisticsMobile
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)
@@ -23,13 +24,26 @@ class FolderHubTests(unittest.TestCase):
                 root.mkdir(parents=True)
                 app.cloud_remote.items = ['Loaded drive']
                 app.show_locations()
+                view = app.body.children[0]
+                self.assertEqual(view.children[1].children,
+                                 [app.folder_transfers_button, app.folder_refresh_button])
+                self.assertIsInstance(view.children[-1], toga.ScrollContainer)
+                self.assertIs(view.children[-1].content, app.folder_list)
+                self.assertEqual(list(app.folder_buttons), list(app.folder_picker_choices))
+                self.assertFalse(any(isinstance(child, toga.Selection) for child in view.children))
+                self.assertIn('↻', app.folder_refresh_button.text)
                 self.assertIn('Loaded drive', app.folder_picker_choices)
                 app.cloud_remote.items = ['Loaded drive', 'Restored later']
                 app.set_cloud_busy(False)
                 self.assertIn('Restored later', app.folder_picker_choices)
+                self.assertIn('Restored later', app.folder_buttons)
+                # Refresh discovers new local folders in the visible list.
+                (root.parent / 'Added later').mkdir()
+                app.loop.run_until_complete(app.folder_refresh_button.on_press())
+                self.assertIn('Added later', app.folder_buttons)
                 self.assertFalse(app.routes.screens['files'])
                 self.assertIn('Comics', app.folder_picker_choices)
-                app.folder_choice.value = 'Comics'
+                app.folder_buttons['Comics'].on_press()
                 self.assertEqual(app.routes.screens['files'][-1][0], 'folder-options')
                 app.loop.run_until_complete(app.folder_browse_button.on_press())
                 self.assertEqual(app.file_path, 'Comics')
@@ -66,14 +80,14 @@ class FolderHubTests(unittest.TestCase):
                 app.set_cloud_busy(True)
                 app.show_locations()
                 self.assertEqual(set(before), set(app.folder_picker_choices))
-                app.folder_choice.value = 'Remote'
+                app.folder_buttons['Remote'].on_press()
                 self.assertTrue(app.folder_browse_button.enabled)
                 self.assertTrue(all(not button.enabled for button, idle in app.folder_action_controls if idle))
                 app.loop.run_until_complete(app.folder_browse_button.on_press())
                 self.assertEqual(app.file_path, local['target'])
                 cancel = app._crypt_cancel
                 app.show_locations()
-                app.folder_choice.value = 'Secret'
+                app.folder_buttons['Secret'].on_press()
                 self.assertFalse(app.folder_browse_button.enabled)
                 self.assertFalse(app.loop.run_until_complete(app.open_picker_folder(app.folder_picker_selected)))
                 self.assertIs(app._crypt_cancel, cancel)
@@ -85,6 +99,100 @@ class FolderHubTests(unittest.TestCase):
                 self.assertFalse(app.routes.screens['files'])
                 self.assertEqual(set(before), set(app.folder_picker_choices))
                 self.assertTrue(app.mirror_store().target(crypt).exists())
+            finally:
+                app.main_window.close()
+                app.loop.close()
+
+    def test_explicit_browse_actions_follow_existing_copies_and_mapped_scope(self):
+        from logisticsmobile.app import LogisticsMobile
+        class Client(MirrorClient):
+            def crypt_remotes(self): return []
+            def cancel(self): pass
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                app.cloud_client = Client()
+                app.show_cloud(present=False)
+                app.cloud_remote.items = ['Remote', 'Only online']
+                store = app.mirror_store()
+                job, _ = store.create(app.cloud_client, 'Remote', 'folder')
+                app.show_locations()
+                entry = app.folder_picker_choices[job['target']]
+                app.show_picker_folder(entry)
+                labels = [button.text for button, _ in app.folder_action_controls]
+                self.assertEqual([text for text in labels if text.startswith('Browse ')],
+                                 ['Browse Local', 'Browse Remote'])
+                online = next(copy for copy in entry['copies'] if copy['source'] == 'Remote')
+                with patch.object(app, 'browse_cloud', new=AsyncMock()) as browse:
+                    app.loop.run_until_complete(app.open_picker_folder(online))
+                    self.assertEqual(app.cloud_location.value, 'folder')
+                    browse.assert_awaited_once()
+                app.show_picker_folder(app.folder_picker_choices['Only online'])
+                self.assertEqual([button.text for button, _ in app.folder_action_controls
+                                  if button.text.startswith('Browse ')], ['Browse Remote'])
+                store.target(job).rename(store.target(job).with_name('Unmapped local'))
+                app.show_locations()
+                self.assertNotIn(job['target'], app.folder_picker_choices)
+                app.show_picker_folder(app.folder_picker_choices['Unmapped local'])
+                self.assertEqual([button.text for button, _ in app.folder_action_controls
+                                  if button.text.startswith('Browse ')], ['Browse Local'])
+                app.show_transfers()
+                self.assertEqual(app.transfer_view.content.children[0].text, 'Transfer details')
+                self.assertFalse(any(getattr(child, 'text', '') in ('Remote', 'Choose a remote to pull')
+                                     for child in app.transfer_view.content.children))
+                self.assertNotIn(app.cloud_remote, app.cloud_view.children)
+            finally:
+                app.main_window.close()
+                app.loop.close()
+
+    def test_all_three_storage_buttons_and_missing_crypt_copy(self):
+        from logisticsmobile.app import LogisticsMobile
+        class Client(MirrorClient):
+            def crypt_remotes(self): return []
+            def cancel(self): pass
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                app.cloud_client = Client()
+                app.show_cloud(present=False)
+                app.cloud_remote.items = ['Secret']
+                store = app.mirror_store()
+                store.create(app.cloud_client, 'Secret', '', storage='Local')
+                crypt, _ = store.create(app.cloud_client, 'Secret', '', storage='LocalCrypt')
+                def buttons():
+                    app.show_locations()
+                    app.show_picker_folder(app.folder_picker_choices['Secret'])
+                    return [button.text for button, _ in app.folder_action_controls if button.text.startswith('Browse ')]
+                self.assertCountEqual(buttons(), ['Browse Local', 'Browse LocalCrypt', 'Browse Remote'])
+                store.target(crypt).rename(store.target(crypt).with_name('not-the-mapped-copy'))
+                self.assertCountEqual(buttons(), ['Browse Local', 'Browse Remote'])
+                app.cloud_remote.items = []
+                self.assertEqual(buttons(), ['Browse Local'])
+            finally:
+                app.main_window.close()
+                app.loop.close()
+
+    def test_ambiguous_transfer_chooser_routes_to_selected_copy(self):
+        from logisticsmobile.app import LogisticsMobile
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                jobs = [dict(id='plain', crypt=False, target='Books'),
+                        dict(id='encrypted', crypt=True, target='Books')]
+                for push in (False, True):
+                    with patch.object(app, 'start_mirror_pull') as pull, patch.object(app, 'start_mirror_review') as review:
+                        with patch.object(app, 'show_view') as show:
+                            app.choose_transfer_copy(jobs, push=push)
+                        view = show.call_args.args[0]
+                        view.children[2].on_press()
+                        (review if push else pull).assert_called_once_with('encrypted')
+                        (pull if push else review).assert_not_called()
             finally:
                 app.main_window.close()
                 app.loop.close()

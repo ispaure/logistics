@@ -48,8 +48,8 @@ async def exercise_navigation(app):
     try:
         host.install(app.main_window)
         await asyncio.sleep(.5)
-        assert len(host.root.content) == 4
-        for destination in ('documents', 'settings', 'files', 'documents'):
+        assert len(host.root.content) == len(DESTINATION_ITEMS)
+        for destination in ('documents', 'chat', 'settings', 'files', 'documents'):
             host.activate(destination)
             await asyncio.sleep(.1)
             assert host.state.destination == destination
@@ -57,15 +57,15 @@ async def exercise_navigation(app):
         assert editor.value == 'Native navigation draft'
         if get_os() is OS.ANDROID:
             assert_navigation_contrast(host.adapter.impl.native_navigationview)
-            host.adapter.impl.native_navigationview.setSelectedItemId(4)
+            host.adapter.impl.native_navigationview.setSelectedItemId(5)
             assert host.state.destination == 'settings'
             assert host.root.current_tab.text == 'Settings'
             host.adapter.impl.native_navigationview.setSelectedItemId(3)
             assert host.state.destination == 'documents'
         else:
             native = host.adapter.controller
-            native.selectedViewController = host.adapter.navigation[3]
-            native.tabBar_didSelectItem_(native.tabBar, host.adapter.navigation[3].tabBarItem)
+            native.selectedViewController = host.adapter.navigation[4]
+            native.tabBar_didSelectItem_(native.tabBar, host.adapter.navigation[4].tabBarItem)
             assert host.state.destination == 'settings'
             host.activate('documents')
         editor.value = 'Draft survives native containers'

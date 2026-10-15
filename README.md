@@ -75,7 +75,8 @@ updates and ordinary comic imports stream large files without a fixed whole-file
 size cap. Standalone AES/legacy password-protected CBZ/ZIP comics open with an
 inline password prompt and can be locked after reading. Shared mobile browsing includes folder taps, Back history and search/sort. See its
 guide for format limits and validation status. Mobile Pull and reviewed Push show
-progress while ordinary documents remain usable. Independent ordinary iPad windows
+progress while ordinary documents remain usable. Mobile can save multiple SMB/Mac server
+connections and pull shared folders into device storage. Independent ordinary iPad windows
 have separate workspaces and prevent duplicate writers. Crypt files offer both encrypted
 offline copies and explicit decrypted downloads. A Mac can build, install and launch
 the iPhone app over Wi-Fi using the [paired-device workflow](Mobile/README.md#build-and-deploy-to-a-paired-iphone-over-wi-fi).

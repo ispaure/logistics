@@ -46,9 +46,12 @@ async def exercise(app):
         assert get_os() in {OS.ANDROID, OS.IOS}
         backend = type(app._impl).__module__
         assert backend.startswith('toga_android.' if get_os() is OS.ANDROID else 'toga_iOS.')
+        # Scene activation may restore a destination after startup. Exercise
+        # Home explicitly once the native app is running.
+        app.show_home()
         assert app.body.children[0].content.children[0].text == 'Logistics'
         assert app.native_host.state.destination == 'home'
-        assert [tab.text for tab in app.navigation.content] == ['Home', 'Files', 'Documents', 'Settings']
+        assert [tab.text for tab in app.navigation.content] == ['Home', 'Files', 'Documents', 'Chat', 'Settings']
         passed.append('native_hub')
         from .navigation_checks import exercise_navigation
         navigation_proof = await exercise_navigation(app)
@@ -415,6 +418,8 @@ class NativeCheckApp(LogisticsMobile):
         self.storage_root = Path(self.paths.cache) / ('workspace-navigation-probe' if self.workspace_hold else 'navigation-foundation-probe' if self.navigation_hold
                                                      else 'native-check-' + uuid4().hex)
         super().startup()
+        self.show_documents()
+        self.show_home()
 
     def on_running(self):
         if self.workspace_hold:

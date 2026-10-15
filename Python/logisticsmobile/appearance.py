@@ -56,6 +56,16 @@ def install_appearance(app):
                 impl.native.backgroundColor = colour.secondarySystemBackgroundColor()
                 if not isinstance(impl, Selection):
                     impl.native.tintColor = colour.systemBlueColor()
+                if isinstance(impl, MultilineTextInput):
+                    # The navigation host already reserves keyboard/safe areas.
+                    # UIKit's automatic text-view insets can exceed a compact
+                    # editor's height; iOS 26's scroll-edge veil then covers its
+                    # text while typing. Keep scrolling inside the measured box.
+                    impl.native.contentInsetAdjustmentBehavior = 2  # never
+                    from rubicon.objc import SEL
+                    for edge in ('topEdgeEffect', 'bottomEdgeEffect'):
+                        if impl.native.respondsToSelector(SEL(edge)):
+                            getattr(impl.native, edge).hidden = True
             cls.create = create
     elif backend.startswith('toga_android.'):
         from android import R

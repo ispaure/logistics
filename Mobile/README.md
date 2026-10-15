@@ -6,7 +6,8 @@ line endings, and checkpoints drafts for recovery. Its hub also opens a private 
 with chapter/page navigation, standalone AES/ZipCrypto CBZ password prompts,
 bookmarks and saved progress, plus text LM chat
 with private history and explicit server connections, and embedded rclone
-browsing/downloads using credential ZIPs. Managed Local/LocalCrypt folders support
+browsing/downloads using credential ZIPs, plus directly configured SMB/Mac servers
+with device-protected saved credentials. Managed Local/LocalCrypt folders support
 repeatable Pull and reviewed Push with progress while ordinary documents remain
 usable. Ordinary iPad windows have independent workspaces and exclusive writers. It does not launch the desktop
 Qt application or install its dependency list.

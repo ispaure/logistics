@@ -69,10 +69,10 @@ async def exercise_ui_review(app):
     app.show_home()
     assert not app._comic_chrome_hidden, 'Navigation stayed hidden outside the reader'
     app.readers.close(app.readers.active.session.id)
-    app.new_hub_document()
+    app.create_chosen_document('md')
     app.name.value = 'Weekend notes.md'
     app.editor.value = '# Weekend\n\nA draft to continue later.\n'
-    app.new_hub_document()
+    app.create_chosen_document('md')
     app.name.value = 'Reading list.md'
     app.editor.value = '# Reading list\n\n- Finish chapter three\n- Start the next comic\n'
     app.show_home()
@@ -86,6 +86,16 @@ async def exercise_ui_review(app):
     await capture('editor')
     app.editor.focus()
     await capture('editor-focus')
+    if get_os() is OS.IOS:
+        from rubicon.objc import SEL
+        native = app.editor._impl.native
+        assert native.contentInsetAdjustmentBehavior == 2, 'Editor applied automatic insets twice'
+        for edge in ('topEdgeEffect', 'bottomEdgeEffect'):
+            if native.respondsToSelector(SEL(edge)):
+                assert getattr(native, edge).isHidden(), 'Scroll-edge effect can cover typed text'
+        native.insertText('\nKeyboard visibility check')
+        await capture('editor-typing')
+        assert app.store.open(app.current.id).text == app.editor.value
     app.show_preview()
     await capture('markdown')
     app.show_library()
@@ -135,21 +145,22 @@ async def exercise_ui_review(app):
             assert native.isShown() and native.isEnabled()
             assert native.performClick()
         for _ in range(80):
-            if app.native_host.state.destination == 'files' and hasattr(app, 'folder_choice'):
+            if app.native_host.state.destination == 'files' and hasattr(app, 'folder_buttons'):
                 break
             await asyncio.sleep(.05)
         assert app.native_host.state.destination == 'files'
         assert 'All files' in app.folder_picker_choices
         if leave == app.show_settings:
             await capture('folder-picker')
-        picker = app.folder_choice
+        folder = app.folder_buttons['All files']
         if get_os() is OS.IOS:
-            picker._impl.native.becomeFirstResponder()
-            await asyncio.sleep(.1)
-            assert picker._impl.native.isFirstResponder
-        picker.value = 'All files'
-        if get_os() is OS.IOS:
-            assert not picker._impl.native.isFirstResponder, 'Folder wheel stayed open'
+            assert app.folder_refresh_button._impl.native.imageForState(0) is not None
+            folder._impl.native.sendActionsForControlEvents(UIControlEventTouchDown)
+        else:
+            assert app.folder_refresh_button._impl.native.getCompoundDrawables()[0] is not None
+            assert folder._impl.native.performClick()
+        assert app.folder_browse_button.text == 'Browse Local'
+        assert [button.text for button, _ in app.folder_action_controls if button.text.startswith('Browse ')] == ['Browse Local']
         if leave == app.show_settings:
             await capture('folder-options')
         await app.folder_browse_button.on_press()
@@ -228,6 +239,9 @@ async def exercise_ui_review(app):
     assert app.provider_sessions().active.crypt_text.value == '# Meeting notes\n\nEdited while testing.\n'
     app.private_sessions.close(owner.session.id, discard=True)
     app.show_transfers()
+    assert app.transfer_view.content.children[0].text == 'Transfer details'
+    assert not any(getattr(child, 'text', '') == 'Choose a remote to pull' for child in app.transfer_view.content.children)
+    assert app.cloud_remote not in app.cloud_view.children
     await capture('transfers')
     async def appearance_mode(dark):
         if get_os() is OS.IOS:

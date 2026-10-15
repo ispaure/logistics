@@ -5,6 +5,20 @@ from toga.style.pack import COLUMN, ROW
 from .hub_icons import icon
 from commonUtils.ui.native.presentation import surface, list_button, template_icon
 
+DOCUMENT_TYPES = {'text': 'Text', 'markdown': 'Markdown', 'epub': 'EPUB books', 'comic': 'Comics'}
+
+
+def text_document_kind(name):
+    return 'markdown' if name.lower().endswith(('.md', '.markdown')) else 'text'
+
+
+def document_groups(items):
+    """Keep type order stable and omit empty sections."""
+    for kind, title in DOCUMENT_TYPES.items():
+        group = [item for item in items if item[0] == kind]
+        if group:
+            yield title, group
+
 
 def heading(text):
     return toga.Label(text, style=Pack(font_size=19, font_weight='bold', margin_top=16, margin_bottom=8))
@@ -26,14 +40,15 @@ def panel(title, detail, glyph, actions):
 
 
 class PanelGrid(toga.Box):
-    def __init__(self, cards, width):
+    def __init__(self, cards, width, *, minimum_columns=1):
         super().__init__(style=Pack(direction=COLUMN))
         self.cards = cards
         self.columns = 0
+        self.minimum_columns = minimum_columns
         self.reflow(width)
 
     def reflow(self, width):
-        columns = 3 if width >= 1100 else 2 if width >= 700 else 1
+        columns = max(self.minimum_columns, 3 if width >= 1100 else 2 if width >= 700 else 1)
         if columns == self.columns:
             return
         for row in list(self.children):
@@ -47,6 +62,9 @@ class PanelGrid(toga.Box):
                 card.style.flex = 1
                 card.style.margin_right = 10 if index < columns - 1 else 0
                 row.add(card)
+            # Keep the final card the same width as all preceding cards.
+            for _ in range(columns - len(row.children) if self.minimum_columns > 1 else 0):
+                row.add(toga.Box(style=Pack(flex=1)))
             self.add(row)
 
 
@@ -81,19 +99,33 @@ class HubUI:
         box.add(toga.Label('Read, write and continue your work.', style=Pack(margin_bottom=12)))
         box.add(toga.Box(children=[
             toga.Button('New', on_press=self.new_hub_document, style=Pack(height=44, flex=1)),
-            toga.Button('Open…', on_press=self.open_hub_file, style=Pack(height=44, flex=1)),
-            toga.Button('Library', on_press=self.show_library, style=Pack(height=44, flex=1)),
-            toga.Button('Chat', on_press=self.show_chat, style=Pack(height=44, flex=1))],
+            toga.Button('Open…', on_press=self.open_hub_file, style=Pack(height=44, flex=1))],
             style=Pack(direction=ROW, margin_bottom=8)))
         box.add(heading(f'Open documents · {len(self.workspace.sessions)}'))
-        for session in list(self.workspace.sessions.values()):
-            box.add(self.session_panel(session, close=True))
+        sessions = []
+        self.document_grids = []
+        for session in self.workspace.sessions.values():
+            summary = self.session_summary(session)
+            sessions.append((summary[1], session, summary))
+        for title, group in document_groups(sessions):
+            box.add(heading(f'{title} · {len(group)}'))
+            if self.preferences.values['document_card_overview'] == 'true':
+                grid = PanelGrid([self.session_card(session, summary) for _, session, summary in group],
+                                 self.main_window.size.width, minimum_columns=2)
+                self.document_grids.append(grid)
+                box.add(grid)
+            else:
+                for kind, session, summary in group:
+                    box.add(self.session_panel(session, close=True, summary=summary, show_kind=False))
         if not self.workspace.sessions:
             box.add(toga.Label('Create or open a document to begin.'))
         box.add(heading(f'Stored documents · {len(self.labels)}'))
-        for title, resource in self.labels.items():
-            box.add(list_button(toga.Button(title, on_press=self.stored_document_opener(resource),
-                                            style=Pack(height=48, margin_bottom=4))))
+        stored = [(self.stored_document_kinds[resource], title, resource) for title, resource in self.labels.items()]
+        for title, group in document_groups(stored):
+            box.add(heading(f'{title} · {len(group)}'))
+            for kind, name, resource in group:
+                box.add(list_button(toga.Button(name, on_press=self.stored_document_opener(resource),
+                                                style=Pack(height=48, margin_bottom=4))))
         if not self.labels:
             box.add(toga.Label('Your saved writing will appear here.'))
         if self.workspace.error:
@@ -101,27 +133,74 @@ class HubUI:
         self.register_transfer_status(box)
         return toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
 
-    def session_panel(self, session, *, close=False):
+    def session_card(self, session, summary):
+        """A lightweight overview; never mount live editors or private readers."""
+        title, kind, details = summary
+        box = toga.Box(style=Pack(direction=COLUMN, padding=8, margin_bottom=10))
+        box.session_id = session.id
+        box.add(toga.Box(children=[
+            list_button(toga.Button(title, on_press=self.session_opener(session.id),
+                                    style=Pack(flex=1, height=44))),
+            toga.Button('×', on_press=self.session_closer(session.id), style=Pack(width=44, height=44))],
+            style=Pack(direction=ROW)))
+        preview = ''
+        owner = self.text_views.get(session.id)
+        if owner is not None and session.provider == 'managed-text':
+            preview = owner.document.text
+        elif session.provider == 'managed-text':
+            try:
+                preview = self.store.open(session.resource).text
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+        # A bounded excerpt keeps card height and native layout work predictable.
+        excerpt = '\n'.join(line[:24] for line in preview[:600].splitlines()[:6])
+        box.add(toga.Label(excerpt or DOCUMENT_TYPES.get(kind, 'Document'),
+                           style=Pack(height=120, font_size=12, margin_top=8, margin_bottom=8)))
+        if details:
+            box.add(toga.Label('\n'.join(details), style=Pack(font_size=12)))
+        caption = 'Current document' if self.workspace.active == session.id else 'Resume document'
+        box.add(toga.Button(caption, on_press=self.session_opener(session.id), style=Pack(height=44)))
+        return surface(box)
+
+    def session_summary(self, session):
+        """Resolve display metadata from its owner; workspace manifests omit names."""
         title = session.title or 'Untitled document'
-        kind = {'text': 'Text', 'markdown': 'Markdown', 'epub': 'EPUB book', 'comic': 'Comic'}.get(session.kind, 'Document')
+        kind = session.kind
         owner = self.text_views.get(session.id)
         dirty = owner.document.modified if owner is not None else session.dirty
-        detail = kind + (' · Unsaved changes' if dirty else '')
+        details = ['Unsaved changes'] if dirty else []
+        if owner is not None:
+            title = owner.document.name
+            kind = text_document_kind(title)
         if session.provider == 'provider-session':
-            detail += ' · Session only'
+            details.append('Session only')
         if owner is not None and owner.document.conflict:
-            detail += ' · File changed outside editor'
+            details.append('File changed outside editor')
         if session.provider == 'managed-text' and owner is None:
             try:
                 document = self.store.open(session.resource)
-                title = session.title or document.name
+                title = document.name
+                kind = text_document_kind(title)
                 if document.modified:
-                    detail += ' · Recovered draft'
+                    details.append('Recovered draft')
             except (OSError, ValueError, KeyError, TypeError):
-                detail += ' · Unavailable; retry to reopen'
+                details.append('Unavailable; retry to reopen')
+        elif session.provider == 'library':
+            try:
+                record = self.reader_manager().catalog.library_store.read_record(session.resource)[0]
+                title, kind = record['name'], record['kind']
+            except (OSError, ValueError, KeyError, TypeError):
+                details.append('Unavailable; retry to reopen')
+        return title, kind, details
+
+    def session_panel(self, session, *, close=False, summary=None, show_kind=True):
+        title, kind, details = summary if summary is not None else self.session_summary(session)
+        if show_kind:
+            details = [DOCUMENT_TYPES.get(kind, 'Document'), *details]
         # One compact row per item; names are the primary navigation target.
         box = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
-        box.add(toga.Label(detail, style=Pack(font_size=12)))
+        if details:
+            box.add(toga.Label(' · '.join(details), style=Pack(font_size=12)))
         button = list_button(toga.Button(title, on_press=self.session_opener(session.id), style=Pack(height=48, flex=1)))
         if close:
             from .action_menu import FeatureCommands
@@ -134,10 +213,7 @@ class HubUI:
         return box
 
     def new_hub_document(self, widget=None, **kwargs):
-        previous = self.current
-        self.new_document()
-        if self.current is not previous:
-            self.show_documents()
+        self.choose_document_type()
 
     async def open_hub_file(self, widget=None, **kwargs):
         await self.show_editor_open()
