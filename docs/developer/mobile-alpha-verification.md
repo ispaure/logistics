@@ -78,8 +78,12 @@ activity recreation repeats `on_running` before the queued task begins. Repeated
 callbacks reuse the same task, including while its result is being flushed.
 
 The LocalCrypt native concurrency probe pulls a real 256 MiB encrypted fixture
-with the production 1 MiB/s bandwidth option. It requires live progress before
-opening readers, verifies the transfer remains pending during Files, Documents
-and library browsing, and cancels it after those checks. This leaves headroom for
-slow hosted native layout without allowing a completed download to satisfy the
-concurrency assertion. It does not raise the native gate's 15-minute deadline.
+with the production 1 MiB/s bandwidth option. Files, Documents, the catalog
+library shortcut and the Documents library shortcut each receive a fresh
+transfer. Every route requires live progress before opening readers, verifies
+the transfer remains pending with its original cancellation handle, then cancels
+and retires it before the next route. Route timings are retained in native logs.
+Only the probe's abandoned bytes are removed between routes; a reviewed native
+push removes the synthetic remote object before later remote observations.
+This avoids assuming one transfer outlasts all four cold layout sequences and
+does not raise the native gate's 15-minute deadline.

@@ -176,6 +176,41 @@ async def exercise_crypt_mirror(app, fixture):
     await approve_transfer(app)
     provider._locate(payload).unlink()
     assert app.clear_private_reader(discard=True)
+    async def files_route():
+        app.show_locations()
+        entry = next(entry for entry in app.folder_picker_choices.values()
+                     if entry['source'] == 'LocalCrypt' and entry.get('remote') == remote)
+        app.show_picker_folder(entry)
+        assert app.folder_browse_button.enabled
+        assert await app.open_picker_folder(entry), app.folder_picker_status.text
+        row = next(row for row in app.file_rows.values() if Path(row['path']).name == 'note.md')
+        assert not any('.partial' in row['name'] for row in app.file_rows.values())
+        app.browser_file_selected(row)
+        await app.read_managed_file()
+
+    async def documents_route():
+        app.show_documents()
+        drawer = app.adaptive.browser('documents')
+        label = 'LocalCrypt: ' + remote + ' (pulled)'
+        assert await drawer.show_main_browser(label, folder='mobile-mirror-fixture'), drawer.status.text
+        assert await drawer.open_file({'path': 'mobile-mirror-fixture/note.md'}), drawer.status.text
+
+    async def library_route():
+        catalog = app.reader_manager().catalog
+        await catalog.refresh_library_folders()
+        await next(button for button in catalog.library_row_buttons if button.text == 'Concurrent library').on_press()
+        assert app.file_path == library_folder and app.file_provider.private
+        row = next(row for row in app.file_rows.values() if row['name'] == 'library-note.md')
+        app.browser_file_selected(row)
+        await app.read_managed_file()
+
+    async def documents_library_route():
+        drawer = app.adaptive.browser('documents')
+        drawer.refresh_menu()
+        await next(button for button in drawer.library_buttons if button.text == 'Concurrent library').on_press()
+        assert drawer.folder == library_folder and drawer.provider.private, drawer.status.text
+        assert await drawer.open_file({'path': library_folder + '/library-note.md'}), drawer.status.text
+
     request = client.request
     active_run = []
     def throttled(action, **values):
@@ -183,67 +218,54 @@ async def exercise_crypt_mirror(app, fixture):
             values['bw_limit'] = 1
             active_run[:] = [values['run']]
         return request(action, **values)
-    with patch.object(client, 'request', side_effect=throttled):
-        task = asyncio.create_task(app.run_mirror_work(lambda client, cancel, progress:
-            store.pull(job['id'], client, cancelled=cancel, progress=progress), 'pull'))
-        try:
-            for _ in range(300):
-                await asyncio.sleep(.05)
-                if task.done():
-                    raise AssertionError('Download ended before concurrent reading could be tested: ' + app.transfer_message)
-                state = request('mirror_progress', run=active_run[0]) if active_run else dict(done=0, total=0)
-                if state['done'] > 0 and state['total'] > state['done']:
-                    break
-            else:
-                raise AssertionError('Throttled native download did not report live progress')
-            cancel = app._crypt_cancel
-            app.show_locations()
-            entry = next(entry for entry in app.folder_picker_choices.values()
-                         if entry['source'] == 'LocalCrypt' and entry.get('remote') == remote)
-            app.show_picker_folder(entry)
-            assert app.folder_browse_button.enabled
-            assert await app.open_picker_folder(entry), app.folder_picker_status.text
-            row = next(row for row in app.file_rows.values() if Path(row['path']).name == 'note.md')
-            assert not any('.partial' in row['name'] for row in app.file_rows.values())
-            app.browser_file_selected(row)
-            await app.read_managed_file()
-            assert app.private_sessions.active.crypt_reader.text == '# Edited in LocalCrypt\n'
-            assert not task.done(), 'LocalCrypt reading waited for the download to finish'
-            assert app.cloud_busy and app.transfer_busy and app._crypt_cancel is cancel
-            assert not cancel.is_set()
-            # Exercise Documents' own browser, not the Files/Folder Hub path.
-            app.show_documents()
-            drawer = app.adaptive.browser('documents')
-            label = 'LocalCrypt: ' + remote + ' (pulled)'
-            assert await drawer.show_main_browser(label, folder='mobile-mirror-fixture'), drawer.status.text
-            assert await drawer.open_file({'path': 'mobile-mirror-fixture/note.md'}), drawer.status.text
-            assert app.private_sessions.active.crypt_reader.text == '# Edited in LocalCrypt\n'
-            assert not task.done(), 'Documents waited for the download'
-            assert app._crypt_cancel is cancel and not cancel.is_set()
-            # The main library shortcut and Documents library shortcut must both
-            # retain their encrypted provider/namespace during the same transfer.
-            catalog = app.reader_manager().catalog
-            await catalog.refresh_library_folders()
-            await next(button for button in catalog.library_row_buttons if button.text == 'Concurrent library').on_press()
-            assert app.file_path == library_folder and app.file_provider.private
-            row = next(row for row in app.file_rows.values() if row['name'] == 'library-note.md')
-            app.browser_file_selected(row)
-            await app.read_managed_file()
-            assert app.private_sessions.active.crypt_reader.text == '# Library during download\n'
-            drawer.refresh_menu()
-            await next(button for button in drawer.library_buttons if button.text == 'Concurrent library').on_press()
-            assert drawer.folder == library_folder and drawer.provider.private, drawer.status.text
-            assert await drawer.open_file({'path': library_folder + '/library-note.md'}), drawer.status.text
-            assert app.private_sessions.active.crypt_reader.text == '# Library during download\n'
-            assert not task.done(), 'Library browsing waited for the download'
-            assert app.cloud_busy and app.transfer_busy and app._crypt_cancel is cancel
-            assert not cancel.is_set()
-            assert not await app.run_mirror_work(lambda *args: (_ for _ in ()).throw(
-                AssertionError('A second transfer was started')), 'pull')
-            app.cancel_mirror_transfer()
-            assert not await task, app.transfer_message
-            assert app.private_sessions.active.crypt_reader.text == '# Library during download\n'
-        finally:
-            if not task.done():
+
+    # Each real route gets its own transfer lifetime. A single download must
+    # not be expected to outlast four unrelated cold native layout sequences.
+    routes = ((files_route, '# Edited in LocalCrypt\n'),
+              (documents_route, '# Edited in LocalCrypt\n'),
+              (library_route, '# Library during download\n'),
+              (documents_library_route, '# Library during download\n'))
+    from time import monotonic
+    probe = provider._physical(payload)
+    for route, expected in routes:
+        active_run.clear()
+        with patch.object(client, 'request', side_effect=throttled):
+            task = asyncio.create_task(app.run_mirror_work(lambda client, cancel, progress:
+                store.pull(job['id'], client, cancelled=cancel, progress=progress), 'pull'))
+            try:
+                for _ in range(300):
+                    await asyncio.sleep(.05)
+                    if task.done():
+                        raise AssertionError('Download ended before concurrent reading could be tested: ' + app.transfer_message)
+                    state = request('mirror_progress', run=active_run[0]) if active_run else dict(done=0, total=0)
+                    if state['done'] > 0 and state['total'] > state['done']:
+                        break
+                else:
+                    raise AssertionError('Throttled native download did not report live progress')
+                cancel = app._crypt_cancel
+                started_at = monotonic()
+                print('LOGISTICS_NATIVE_TRANSFER_ROUTE=' + route.__name__, flush=True)
+                await route()
+                print('LOGISTICS_NATIVE_TRANSFER_ROUTE_SECONDS=' + str(round(monotonic() - started_at, 3)), flush=True)
+                assert app.private_sessions.active.crypt_reader.text == expected
+                assert not task.done(), route.__name__ + ' waited for the download'
+                assert app.cloud_busy and app.transfer_busy and app._crypt_cancel is cancel
+                assert not cancel.is_set()
+                assert not await app.run_mirror_work(lambda *args: (_ for _ in ()).throw(
+                    AssertionError('A second transfer was started')), 'pull')
                 app.cancel_mirror_transfer()
-                await task
+                assert not await task, app.transfer_message
+                assert app.private_sessions.active.crypt_reader.text == expected
+            finally:
+                if not task.done():
+                    app.cancel_mirror_transfer()
+                    await task
+                # The native writer has retired; remove only this test probe's
+                # abandoned bytes so the next route starts a fresh download.
+                probe.unlink(missing_ok=True)
+                for partial in probe.parent.glob(probe.name + '.*.partial'):
+                    partial.unlink()
+    # Retire the synthetic remote object through a real reviewed native push.
+    # Later remote observations must not repeatedly copy this large probe.
+    app.start_mirror_review(job['id'])
+    await approve_transfer(app)
