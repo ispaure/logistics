@@ -25,6 +25,22 @@ class WorkspaceNavigationTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_folder_actions_pair_tree_at_center_and_collapse_on_phone(self):
+        app = self.app
+        app.show_locations()
+        with patch.object(self.navigation, 'width', return_value=669):
+            app.choose_folder('All files')
+            frame = app.body.children[0]._workspace_frame
+            self.assertEqual(list(frame.row.children), [frame.folder_master, frame.main])
+            self.assertLessEqual(abs(frame.folder_master.style.width - frame.main.style.width), 1)
+            self.assertFalse(any(button.text == 'Remove mapping (keep files)'
+                                 for button, _ in app.folder_action_controls))
+            with patch.object(self.navigation, 'width', return_value=390):
+                self.navigation.render()
+                self.assertEqual(list(frame.row.children), [frame.main])
+            self.navigation.render()
+            self.assertEqual(list(frame.row.children), [frame.folder_master, frame.main])
+
     def test_phone_file_drawer_opens_a_nested_file_without_losing_editor_draft(self):
         app = self.app
         app.editor.value = 'Keep the original draft'
