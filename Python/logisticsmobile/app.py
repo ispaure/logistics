@@ -116,6 +116,8 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         self.save_workspace(capture=False)
         self.main_window.show()
         self.native_host.install(self.main_window)
+        from .navigation import install_folder_hub_icon
+        install_folder_hub_icon(self.native_host)
         self.routes.install()
         self.refresh_native_theme()
         self.adaptive.install()
