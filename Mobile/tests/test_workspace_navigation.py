@@ -44,6 +44,13 @@ class WorkspaceNavigationTests(unittest.TestCase):
         frame.menu.on_press()
         self.assertFalse(self.navigation.menu_open['documents'])
 
+    def test_connection_query_failure_does_not_break_future_menu_refreshes(self):
+        drawer = self.navigation.browser('documents')
+        with patch.object(self.app, 'existing_crypt_locations', side_effect=ValueError('Connection locked')):
+            self.assertFalse(self.app.loop.run_until_complete(drawer.refresh()))
+        self.assertEqual(drawer.status.text, 'Connection locked')
+        self.assertTrue(self.app.loop.run_until_complete(drawer.refresh()))
+
     def test_documents_menu_recent_reopens_closed_file_and_browse_uses_main_area(self):
         app = self.app
         app.name.value = 'Recent.md'

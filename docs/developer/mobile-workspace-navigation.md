@@ -143,3 +143,46 @@ The signed update was installed in place on the paired iPhone; a physical-device
 capture showed all five complete labels. That capture was on Documents, so the
 before-selection assertion specifically comes from the cold-launch simulator
 probes, not the physical screenshot. Lint and whitespace checks passed.
+
+
+## Credential retention and compact interaction follow-up
+
+Credential group labels come from the persisted ZIP-to-remote associations and
+are seeded from the protected vault label when restoring older saved credentials.
+Known but locked remotes stay available in Folder Hub. Action entry points check
+that a remote is loaded and, for mapped folders, matches its connection identity.
+Session imports retain the original ZIP via CredentialPackages: AES-256-GCM in
+the native bridge, a separate device-protected key, identity-bound authenticated
+data and bounded ciphertext/index files. ZIP passwords and decoded configuration
+are not stored in this cache. Unlocking imports the retained ZIP as session-only,
+checks the connection identity, then resumes the requested action. Existing
+session imports without a retained archive need one fresh selection. Forgetting
+credentials destroys the cache key before removing the retained files.
+
+Documents mounts sessions under each matching format card. Private provider
+sessions remain transient and recent history admits only ordinary provider UUIDs.
+Workspace saving also checks that provider allowlist independently of the transient
+flag. PrivateSessions records the opening client/generation; Home, document cards
+and activation reject locked or superseded private sessions without consulting the
+bridge during rendering. Private previews remain memory-only. Explicit ordinary
+local downloads/imports retain their existing local-file semantics.
+
+Drawer taps render cached menu contents immediately, defer credential/provider
+queries to a worker, and do not checkpoint an editor just to reveal its menu.
+Preparing a retained view invalidates the layout cache; every render rebinds its
+native header. Connection-query failures are reported without stranding the next
+refresh. The initial Chat selection mounts its lazy root without calling
+Routes.show/host.activate from inside the native selection callback.
+
+The app-owned UIButton subclass limits plain text buttons horizontally to their
+public title/image rectangles and preserves vertical touch clearance. Visible
+list rows, bounded glass buttons and compact icon controls keep their native
+bounds. Actions fire on release inside, allowing ordinary scroll cancellation.
+
+Validation: 191 mobile host tests; 53 portable mobile tests with three expected
+platform skips; native bridge Go tests; lint and whitespace checks. Targeted iOS
+26.5 simulator probes verified first Chat selection, 20 drawer toggles, a 402-point
+plain button rejecting blank-edge hits and accepting its text center, Credential
+label spacing and an opened Markdown document nested beneath its launcher actions.
+Sources/screenshots/results are in the ignored Mobile/logs/credential-followup/
+folder. These targeted checks do not constitute a full Android or native-suite run.

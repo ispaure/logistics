@@ -94,7 +94,7 @@ class FolderHubUI:
         self.folder_credential.on_change = self.change_folder_credential
         self.folder_refresh_button = refresh_button(self.refresh_folder_hub)
         self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=44, flex=1))
-        box = toga.Box(children=[toga.Box(children=[toga.Label('Credential', style=Pack(font_size=13, width=76, margin_right=12)),
+        box = toga.Box(children=[toga.Box(children=[toga.Label('Credential', style=Pack(font_size=13, width=100, margin_right=12)),
                 self.folder_credential], style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12)), toga.Box(children=[self.folder_transfers_button, self.folder_refresh_button],
                 style=Pack(direction=ROW, margin_bottom=12)),
             toga.Button('Add SMB / Mac share…', on_press=self.show_smb_connection, style=Pack(height=44, margin_bottom=8)),
