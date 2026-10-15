@@ -10,6 +10,11 @@ import shlex
 import shutil
 import subprocess
 
+try:
+    from .icon_build import configure_android as configure_android_icons, configure_ios as configure_ios_icons
+except ImportError:
+    from icon_build import configure_android as configure_android_icons, configure_ios as configure_ios_icons
+
 ROOT = Path(__file__).resolve().parent
 FLAGS = '-s -w -X github.com/rclone/rclone/fs.Version=v1.74.1'
 
@@ -53,6 +58,7 @@ def android():
     tools = ndk / 'toolchains/llvm/prebuilt' / host / 'bin'
     project = ROOT / 'build/logisticsmobile/android/gradle'
     configure_android_appearance(project)
+    configure_android_icons(project)
     for arch, abi, compiler in [('arm64', 'arm64-v8a', 'aarch64-linux-android24-clang'),
                                  ('amd64', 'x86_64', 'x86_64-linux-android24-clang')]:
         destination = project / 'app/src/main/jniLibs' / abi
@@ -71,6 +77,7 @@ def android():
 
 def ios(project=None):
     project = Path(project) if project is not None else ROOT / 'build/logisticsmobile/ios/xcode'
+    configure_ios_icons(project)
     from scene_build import configure
     configure(project)
     from privacy_build import configure as configure_privacy
