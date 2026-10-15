@@ -160,15 +160,6 @@ class HubUI:
                     box.add(self.session_panel(session, close=True, summary=summary, show_kind=False))
         if not self.workspace.sessions:
             box.add(toga.Label('Create or open a document to begin.'))
-        box.add(heading(f'Stored documents · {len(self.labels)}'))
-        stored = [(self.stored_document_kinds[resource], title, resource) for title, resource in self.labels.items()]
-        for title, group in document_groups(stored):
-            box.add(heading(f'{title} · {len(group)}'))
-            for kind, name, resource in group:
-                box.add(list_button(toga.Button(name, on_press=self.stored_document_opener(resource),
-                                                style=Pack(height=48, margin_bottom=4))))
-        if not self.labels:
-            box.add(toga.Label('Your saved writing will appear here.'))
         if self.workspace.error:
             box.add(toga.Label(self.workspace.error, style=Pack(margin_top=8)))
         self.register_transfer_status(box)
