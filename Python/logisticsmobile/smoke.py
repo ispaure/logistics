@@ -40,6 +40,7 @@ EXPECTED_TESTS = (
     'test_mobile_cloud_bridge_frees_success_and_invalid_responses',
     'test_mobile_cloud_downloads_recover_only_complete_private_copies',
     'test_mobile_cloud_package_uses_scoped_read_without_saving_credentials',
+    'test_native_adapter_namespaces_remain_compatible_with_existing_keys',
     'test_mobile_vault_key_is_device_owned_and_restored_without_password',
     'test_mobile_vault_missing_corrupt_linked_metadata_never_replaces_keys',
     'test_metadata_plan_and_verified_transaction_preserve_comic_pages',
