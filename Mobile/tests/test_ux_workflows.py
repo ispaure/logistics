@@ -123,19 +123,18 @@ class UXWorkflowTests(unittest.TestCase):
         self.assertEqual(app.chat_prompt.value, 'Keep my draft')
         self.assertIsNone(app.chat_client)
 
-    def test_library_empty_state_and_search_have_actionable_exits(self):
+    def test_library_empty_state_has_import_and_folder_exits(self):
         app = self.app
         app.show_library()
         catalog = app.reader_manager().catalog
         labels = [getattr(w, 'text', '') for w in widgets(catalog.library_rows)]
-        self.assertIn('Your library is empty', labels)
+        self.assertIn('No configured library folders.', labels)
         self.assertIn('Import a book or comic…', labels)
         self.assertIn('Open Folder Hub', labels)
-        catalog.library_search.value = 'No such title'
-        labels = [getattr(w, 'text', '') for w in widgets(catalog.library_rows)]
-        self.assertIn('Clear search', labels)
-        catalog.clear_library_search()
-        self.assertEqual(catalog.library_search.value, '')
+        folder_hub = next(w for w in widgets(catalog.library_rows)
+                          if getattr(w, 'text', '') == 'Open Folder Hub')
+        folder_hub.on_press()
+        self.assertEqual(app.native_host.state.destination, 'files')
 
 
 if __name__ == '__main__':

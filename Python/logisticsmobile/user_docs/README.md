@@ -576,7 +576,7 @@ or move the selected item. For a move, select the destination storage and enter 
 relative path including the final file/folder name; its parent folder must exist.
 Moving into LocalCrypt encrypts the content and names according to the remote's
 settings; moving out creates decrypted Local files. Inner ZIP passwords remain
-unchanged. These actions affect app-private local storage, not cloud originals or
+unchanged. These actions affect the selected local collection storage, not cloud originals or
 arbitrary folders owned by another app.
 
 To organize an older offline encrypted copy, select it on the Remote files screen,
