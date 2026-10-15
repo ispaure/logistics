@@ -186,3 +186,18 @@ plain button rejecting blank-edge hits and accepting its text center, Credential
 label spacing and an opened Markdown document nested beneath its launcher actions.
 Sources/screenshots/results are in the ignored Mobile/logs/credential-followup/
 folder. These targeted checks do not constitute a full Android or native-suite run.
+
+## Native first-selection ordering
+
+`install_apple_selection` replaces the iOS OptionContainer selection handler with
+an app-owned queued handler. Toga 0.5.7's `tabBar:didSelectItem:` may run before
+UIKit updates `selectedViewController`; reading current_tab inside that signal
+can therefore rebuild the previous destination. The queued handler reads the
+settled selection, lets the host commit state, lays out the native controller,
+and reflows the workspace/header. Programmatic selections remain synchronous;
+their guarded signals cancel stale queued user events. This keeps the shared
+commonUtils adapter unchanged.
+
+The targeted iOS probe signals the native item before changing selectedIndex,
+then verifies the first Documents frame, toolbar target and drawer action.
+This covers event ordering that programmatic `current_tab` tests missed.
