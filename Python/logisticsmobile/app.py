@@ -116,8 +116,9 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         self.routes.install()
         self.refresh_native_theme()
         self.adaptive.install()
-        from .native_memory import MemoryPressure
-        self.memory_pressure = MemoryPressure(self)
+        from commonUtils.ui.native.memory import MemoryPressure
+        self.memory_pressure = MemoryPressure(self, on_pressure=self.release_disposable_resources,
+                                              on_configuration=self.native_configuration_changed)
         if restored_reader is not None and restored_reader.provider == 'library':
             if self.preferences.values['restore_last_document'] == 'true':
                 self.pending_reader_restore = restored_reader.id
@@ -664,6 +665,10 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         if saved:
             self.memory_pressure.dispose()
         return saved
+
+    def native_configuration_changed(self):
+        if self.active_host:
+            self.refresh_native_theme()
 
     def release_disposable_resources(self):
         if not self.active_host:
