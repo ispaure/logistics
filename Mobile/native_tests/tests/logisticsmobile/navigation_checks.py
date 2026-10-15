@@ -7,6 +7,7 @@ from toga.style.pack import COLUMN
 from commonUtils.runtime.platform import get_os, OS
 from commonUtils.ui.native.navigation import NativeNavigationHost
 from logisticsmobile.navigation import DESTINATION_ITEMS
+from .fixtures import capture_window
 
 
 def assert_navigation_contrast(view):
@@ -72,25 +73,13 @@ async def exercise_navigation(app):
         assert diagnostics['main_thread']
         screenshots = []
 
-        def capture(name):
+        async def capture(name):
             path = app.storage_root / ('navigation-' + name + '.png')
-            if get_os() is OS.IOS:
-                # Toga's cropped content image omits presented controllers and
-                # assumes the main screen's scale. Capture the complete window.
-                from rubicon.objc import Block, objc_id
-                from toga_iOS.libs import UIGraphicsImageRenderer
-                from toga_iOS.images import nsdata_to_bytes
-                native = app.main_window._impl.native
-                renderer = UIGraphicsImageRenderer.alloc().initWithSize(native.bounds.size)
-                def render(context):
-                    native.drawViewHierarchyInRect(native.bounds, afterScreenUpdates=True)
-                path.write_bytes(nsdata_to_bytes(renderer.PNGDataWithActions(Block(render, None, objc_id))))
-            else:
-                app.main_window.as_image().save(path)
+            await capture_window(app, path)
             screenshots.append(str(path))
 
         await asyncio.sleep(.4)
-        capture('tabs')
+        await capture('tabs')
         if get_os() is OS.IOS:
             adapter = host.adapter
             assert diagnostics['contained']
@@ -100,7 +89,7 @@ async def exercise_navigation(app):
             host.activate('files')
             await asyncio.sleep(.3)
             assert len(adapter.navigation[1].viewControllers) == 2
-            capture('stack')
+            await capture('stack')
             adapter.pop('files')
             assert len(adapter.navigation[1].viewControllers) == 1
             leading = toga.Box(children=[toga.Label('Open documents')],
@@ -117,7 +106,7 @@ async def exercise_navigation(app):
             diagnostics['horizontal_size_class'] = int(adapter.split.traitCollection.horizontalSizeClass)
             diagnostics['split_detail_width'] = float(panes[1].native.bounds.size.width)
             diagnostics['split_usable_detail_width'] = float(panes[1].width)
-            capture('split')
+            await capture('split')
             adapter.split.dismissViewControllerAnimated(False, completion=None)
             await asyncio.sleep(.2)
             host.activate('documents')
@@ -125,7 +114,7 @@ async def exercise_navigation(app):
             await asyncio.sleep(.5)
             diagnostics['editor_focused'] = bool(editor._impl.native.isFirstResponder)
             assert diagnostics['editor_focused']
-            capture('keyboard')
+            await capture('keyboard')
             editor._impl.native.resignFirstResponder()
             fallback = NativeNavigationHost(DESTINATION_ITEMS, prefer_sidebar=False)
             app.main_window.content = fallback.root
@@ -146,7 +135,7 @@ async def exercise_navigation(app):
             assert 'NavigationRailView' in adapter.diagnostics()['native_tabs']
             host.activate('settings')
             assert host.state.destination == 'settings'
-            capture('rail')
+            await capture('rail')
             adapter.set_mode('bottom')
             assert 'BottomNavigationView' in adapter.diagnostics()['native_tabs']
             host.activate('documents')
@@ -162,7 +151,7 @@ async def exercise_navigation(app):
             await asyncio.sleep(.5)
             diagnostics['editor_focused'] = bool(editor._impl.native.hasFocus())
             assert diagnostics['editor_focused']
-            capture('keyboard')
+            await capture('keyboard')
             manager.hideSoftInputFromWindow(editor._impl.native.getWindowToken(), 0)
             diagnostics['resize_events'] = adapter.layout_events
             assert adapter.layout_events > 0

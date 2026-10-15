@@ -43,23 +43,8 @@ async def exercise_ui_review(app):
     async def capture(name):
         await asyncio.sleep(.4)
         path = app.storage_root / ('ui-review-' + name + '.png')
-        if get_os() is OS.IOS:
-            from rubicon.objc import Block, objc_id
-            from toga_iOS.libs import UIGraphicsImageRenderer
-            from toga_iOS.images import nsdata_to_bytes
-            native = app.main_window._impl.native
-            renderer = UIGraphicsImageRenderer.alloc().initWithSize(native.bounds.size)
-            def render(context):
-                native.drawViewHierarchyInRect(native.bounds, afterScreenUpdates=True)
-            path.write_bytes(nsdata_to_bytes(renderer.PNGDataWithActions(Block(render, None, objc_id))))
-        else:
-            data = app.main_window.as_image().data
-            assert data.startswith(b'\x89PNG') and len(data) > 64, 'Android screenshot was empty'
-            import os
-            with path.open('wb') as stream:
-                stream.write(data)
-                stream.flush()
-                os.fsync(stream.fileno())
+        from .fixtures import capture_window
+        await capture_window(app, path)
         screenshots.append(str(path))
 
     # Earlier preference regressions deliberately use very large fonts.
