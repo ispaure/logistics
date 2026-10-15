@@ -48,6 +48,27 @@ class MobileVaultTests(unittest.TestCase):
             vault.forget()
             self.assertIsNone(vault.unlock())
 
+    def test_native_adapter_namespaces_remain_compatible_with_existing_keys(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from commonUtils.runtime.platform import OS
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            native = SimpleNamespace(getNoBackupFilesDir=lambda: SimpleNamespace(getAbsolutePath=lambda: str(root)))
+            app = SimpleNamespace(_impl=SimpleNamespace(native=native), storage_root=None, private_root=root)
+            with patch('commonUtils.runtime.platform.get_os', return_value=OS.ANDROID), \
+                    patch('logisticsmobile.credential_vault.AndroidKeys', return_value=FixtureKeys()) as android:
+                ProtectedVault.for_app(app)
+            android.assert_called_once_with(alias_prefix='Logistics.credentials.', aad_prefix='Logistics credentials v1:')
+            url = SimpleNamespace(setResourceValue=lambda *args, **kwargs: True)
+            objc = SimpleNamespace(ObjCClass=lambda name: SimpleNamespace(fileURLWithPath=lambda path: url))
+            with patch('commonUtils.runtime.platform.get_os', return_value=OS.IOS), \
+                    patch.dict('sys.modules', {'rubicon.objc': objc}), \
+                    patch('logisticsmobile.credential_vault.IOSKeys', return_value=FixtureKeys()) as ios:
+                ProtectedVault.for_app(app)
+            ios.assert_called_once_with(service='io.github.ispaure.logisticsmobile.credentials',
+                label='Logistics — encrypted remote credentials', label_prefix='Logistics — ')
+
     def test_mobile_vault_missing_corrupt_linked_metadata_never_replaces_keys(self):
         with TemporaryDirectory() as directory:
             keys = FixtureKeys()
