@@ -3,7 +3,7 @@ import asyncio
 import json
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW
+from toga.style.pack import COLUMN, ROW, CENTER
 from .folder_hub import hub_entries, folder_tree, credential_choices
 from .cloud_ui import import_hint
 from textwrap import fill
@@ -95,8 +95,8 @@ class FolderHubUI:
         self.folder_credential.on_change = self.change_folder_credential
         self.folder_refresh_button = refresh_button(self.refresh_folder_hub)
         self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=44, flex=1))
-        box = toga.Box(children=[toga.Box(children=[toga.Label('Credential', style=Pack(margin_right=8)),
-                self.folder_credential], style=Pack(direction=ROW, margin_bottom=8)), toga.Box(children=[self.folder_transfers_button, self.folder_refresh_button],
+        box = toga.Box(children=[toga.Box(children=[toga.Label('Credential', style=Pack(font_size=13, width=76, margin_right=12)),
+                self.folder_credential], style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12)), toga.Box(children=[self.folder_transfers_button, self.folder_refresh_button],
                 style=Pack(direction=ROW, margin_bottom=12)),
             toga.Button('Add SMB / Mac share…', on_press=self.show_smb_connection, style=Pack(height=44, margin_bottom=8)),
             toga.Label(import_hint('Choose a folder to browse, pull or push its available copies.'), style=Pack(font_size=12, margin_bottom=8)),
