@@ -146,3 +146,8 @@ ordering/storage rules. Native archive shortcuts still avoid decoding whole file
 Legacy rclone migration delegates directory relocation/link rebasing to shared
 filesystem relocation. Application Support locations and migration triggers remain
 in `features.rclone.storage`. Neither repository changes existing stored paths.
+
+Device-key mechanics use shared `runtime.protected_keys`. Logistics supplies its
+existing Android alias/AAD prefixes and iOS Keychain service/labels unchanged;
+protected-key records, backup exclusions, ciphertext paths and forget/recovery
+policy remain local. No key or credential migration is performed.
