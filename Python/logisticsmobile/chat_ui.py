@@ -14,7 +14,7 @@ from .chat_presentation import composer_height, transcript_document, transcript_
 
 
 class ChatUI:
-    def show_chat(self, widget=None, **kwargs):
+    def show_chat(self, widget=None, *, present=True, **kwargs):
         if not hasattr(self, 'chat_store'):
             self.chat_store = ChatStore(self.private_root / 'LM')
             self.chat_current = None
@@ -108,7 +108,16 @@ class ChatUI:
             self.chat_transcript.set_content('https://logistics.invalid/chat/', transcript_document())
         self.chat_prompt.style.font_size = int(self.preferences.values['font_size'])
         self.update_chat_transcript()
-        self.show_view(self.chat_view, destination='chat', root=True, title='Chat')
+        if present:
+            self.show_view(self.chat_view, destination='chat', root=True, title='Chat')
+        else:
+            # The native tab callback is already selecting Chat. Mount its lazy
+            # content without starting a second native selection mid-transition.
+            root = self.routes.roots['chat']
+            for child in list(root.children):
+                root.remove(child)
+            root.add(self.chat_view)
+            self.render_chat_workspace()
 
     def toggle_chat_conversations(self, widget=None, **kwargs):
         self.chat_drawer_open = not self.chat_drawer_open
