@@ -165,6 +165,12 @@ async def exercise(app):
         assert app.reader_manager().active.book_reader is not None, app.reader_manager().active.book_status.text
         await wait_for_text(app.reader_manager().active.book_content.children[0], 'Native EPUB first')
         original_reader = app.reader_manager().active.book_content.children[0]
+        from .reader_checks import wait_for_reader
+        deadline = asyncio.get_running_loop().time() + 15
+        while not await original_reader.evaluate_javascript('Boolean(window.reader)'):
+            assert asyncio.get_running_loop().time() < deadline, 'EPUB navigation bridge did not initialize'
+            await asyncio.sleep(.05)
+        await wait_for_reader(app.reader_manager().active)
         await app.next_book_page()
         assert app.reader_manager().active.book_content.children[0] is original_reader
         await wait_for_text(app.reader_manager().active.book_content.children[0], 'Native EPUB second')

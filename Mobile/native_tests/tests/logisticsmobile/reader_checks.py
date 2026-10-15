@@ -67,6 +67,21 @@ async def assert_comic_centered(view, *, fullscreen=False):
                 raise AssertionError('Comic geometry did not settle before the deadline')
 
 
+async def wait_for_reader(owner, *, position=None):
+    """Wait for real reader operations, including queued position saves."""
+    deadline = asyncio.get_running_loop().time() + 15
+    settled = 0
+    while True:
+        pending = getattr(owner, '_epub_location_task', None)
+        ready = (not owner.book_busy and (pending is None or pending.done())
+                 and (position is None or owner.book_record['position'] == position))
+        settled = settled + 1 if ready else 0
+        if settled >= 3:
+            return
+        assert asyncio.get_running_loop().time() < deadline, 'Reader operation did not settle'
+        await asyncio.sleep(.05)
+
+
 async def exercise_reader(app, passed):
     owner = app.reader_manager().active
     def current_view():
@@ -107,6 +122,7 @@ async def exercise_reader(app, passed):
         await toggle_controls()
         await assert_comic_centered(current_view, fullscreen=True)
         assert abs(viewport_height() - full_height) < 1, ('Fullscreen viewport shrank', full_height, viewport_height())
+    await wait_for_reader(owner)
     previous = app.reader_manager().active.book_record['position']
     # Exercise native gesture target dispatch, rather than only the controller.
     if hasattr(current_view()._impl, 'swipes'):
@@ -125,10 +141,10 @@ async def exercise_reader(app, passed):
         native.onTouchEvent(up)
         down.recycle()
         up.recycle()
-    await asyncio.sleep(.4)
+    await wait_for_reader(owner, position=previous - 1)
     assert app.reader_manager().active.book_record['position'] == previous - 1
     app.reader_manager().active.book_content.children[0].page(1)
-    await asyncio.sleep(.4)
+    await wait_for_reader(owner, position=previous)
     assert app.reader_manager().active.book_record['position'] == previous
     owner.show_reader_appearance()
     owner.reader_margin.value, owner.reader_theme.value = '24', 'dark'
