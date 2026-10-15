@@ -136,7 +136,16 @@ async def exercise_ui_review(app):
         await asyncio.sleep(.2)
         native = action._impl.native
         if get_os() is OS.IOS:
-            from rubicon.objc import CGPoint
+            from rubicon.objc import CGPoint, ObjCClass
+            # Earlier cases populate Recent. On compact iPhones the Folder
+            # Hub action can be below the Home scroll viewport.
+            ancestor = native.superview
+            while ancestor is not None:
+                if ancestor.isKindOfClass(ObjCClass('UIScrollView')):
+                    ancestor.scrollRectToVisible(native.convertRect(native.bounds, toView=ancestor), animated=False)
+                    break
+                ancestor = ancestor.superview
+            await asyncio.sleep(.2)
             window = app.main_window._impl.native
             point = native.convertPoint(CGPoint(native.bounds.size.width / 2, native.bounds.size.height / 2), toView=window)
             hit = window.hitTest(point, withEvent=None)

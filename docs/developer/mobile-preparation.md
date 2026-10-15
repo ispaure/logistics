@@ -1069,3 +1069,8 @@ See [retained proof](mobile-evidence/2026-10-15-storage-android-fullscreen.json)
 The portable document runtime harness declares 45 tests, including credential
 replacement, session privacy and retired mirror-operation checks. Its declared
 method list must match the cases loaded by `logisticsmobile.smoke` exactly.
+
+The Android privacy lifecycle proxy explicitly handles the activity configuration
+callback during uiMode changes. Native reader checks wait for layout-triggered
+reloads before toggling controls; compact iOS Home checks scroll the selected
+action into view before testing native hit dispatch.

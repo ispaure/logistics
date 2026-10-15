@@ -63,6 +63,12 @@ class ScreenPrivacy:
                 if activity == privacy.app._impl.native:
                     privacy.reveal()
 
+            def onActivityConfigurationChanged(self, activity):
+                # Chaquopy proxies dispatch this Android default method to
+                # Python too, including uiMode changes without recreation.
+                if activity == privacy.app._impl.native:
+                    privacy.refresh()
+
             def onActivityCreated(self, activity, state):
                 pass
 
