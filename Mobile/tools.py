@@ -8,7 +8,7 @@ import shutil
 import subprocess
 
 APP_MODULES = ('comic_layout_check.py', 'appearance.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
-               'presentation.py', 'editor_search.py', 'hub_ui.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
+               'editor_search.py', 'hub_ui.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
                'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_fixture.py', 'cloud.py', 'resource_imports.py', 'folder_download.py', 'pull_jobs.py', 'pull_jobs_ui.py', 'mirror_jobs.py', 'mirror_ui.py', 'cloud_ui.py', 'copy_ui.py', 'credential_vault.py', 'localcrypt.py', 'localcrypt_ui.py', 'file_resources.py', 'files_ui.py', 'crypt_stream.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
     'features/__init__.py', 'features/books/__init__.py', 'features/books/epub.py',

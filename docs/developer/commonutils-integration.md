@@ -124,3 +124,7 @@ suppress queued callbacks after disposal.
 System document selection and scoped byte access live in shared native documents
 and runtime document-access adapters. `logisticsmobile.pickers` retains document
 name validation, text export limits and MIME policy; Logistics owns import storage.
+
+Native menu construction and presentation helpers now use shared `ui.native`
+components. Logistics' action adapters retain editor rebinding, session checks,
+transfer guards and coroutine scheduling. Editor disposal retires its native menu.

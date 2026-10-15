@@ -1,27 +1,21 @@
 """Native Apple button menus and Android anchored popup commands."""
 import inspect
 import weakref
+from commonUtils.ui.native.menus import NativeMenu
 
 
 class ActionMenu:
     def __init__(self, button, owner, actions):
         self.button, self.owner, self.actions = button, weakref.ref(owner), actions
-        self.blocks = []
-        backend = type(button._impl).__module__
-        if backend.startswith('toga_iOS.'):
-            from rubicon.objc import ObjCClass, Block, objc_id
-            native_actions = []
-            for title, callback in actions:
-                def dispatch(action, target=callback):
-                    self.invoke(target)
-                block = Block(dispatch, None, objc_id)
-                self.blocks.append(block)
-                native_actions.append(ObjCClass('UIAction').actionWithTitle(title,
-                    image=None, identifier=None, handler=block))
-            button._impl.native.menu = ObjCClass('UIMenu').menuWithTitle('', children=native_actions)
-            button._impl.native.showsMenuAsPrimaryAction = True
-        else:
-            button.on_press = self.show
+        self.menu = NativeMenu(button, actions, invoke=self.invoke,
+                               context=self.native_context, fallback=self.show_fallback)
+
+    def native_context(self):
+        owner = self.owner()
+        return owner.app._impl.native if owner is not None else None
+
+    def dispose(self):
+        self.menu.dispose()
 
     def invoke(self, callback):
         owner = self.owner()
@@ -38,26 +32,10 @@ class ActionMenu:
         if inspect.isawaitable(result):
             owner.app.loop.create_task(result)
 
-    def show(self, widget=None, **kwargs):
+    def show_fallback(self):
         owner = self.owner()
-        if owner is None:
-            return
-        if type(self.button._impl).__module__.startswith('toga_android.'):
-            from android.widget import PopupMenu
-            from java import dynamic_proxy
-            self.popup = PopupMenu(owner.app._impl.native, self.button._impl.native)
-            menu = self
-            class Listener(dynamic_proxy(PopupMenu.OnMenuItemClickListener)):
-                def onMenuItemClick(self, item):
-                    menu.invoke(menu.actions[item.getItemId()][1])
-                    return True
-            self.listener = Listener()
-            for index, (title, callback) in enumerate(self.actions):
-                self.popup.getMenu().add(0, index, index, title)
-            self.popup.setOnMenuItemClickListener(self.listener)
-            self.popup.show()
-        else:
-            owner.app.show_editor_actions(owner)
+        if owner is not None:
+            return owner.app.show_editor_actions(owner)
 
 
 class FeatureOwner:
@@ -83,7 +61,5 @@ class FeatureCommands(ActionMenu):
         if inspect.isawaitable(result):
             app.loop.create_task(result)
 
-    def show(self, widget=None, **kwargs):
-        if type(self.button._impl).__module__.startswith('toga_android.'):
-            return super().show(widget, **kwargs)
+    def show_fallback(self):
         return self.fallback()

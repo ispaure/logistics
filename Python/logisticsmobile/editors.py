@@ -128,6 +128,7 @@ class TextEditorView:
         self.preview_pending = self.app.loop.call_later(.25, render)
 
     def dispose(self):
+        self.actions.dispose()
         if self.preview_pending is not None:
             self.preview_pending.cancel()
             self.preview_pending = None
