@@ -45,15 +45,18 @@ def panel(title, detail, glyph, actions):
 
 
 class PanelGrid(toga.Box):
-    def __init__(self, cards, width, *, minimum_columns=1):
+    def __init__(self, cards, width, *, minimum_columns=1, maximum_columns=None):
         super().__init__(style=Pack(direction=COLUMN))
         self.cards = cards
         self.columns = 0
         self.minimum_columns = minimum_columns
+        self.maximum_columns = maximum_columns
         self.reflow(width)
 
     def reflow(self, width):
         columns = max(self.minimum_columns, 3 if width >= 1100 else 2 if width >= 700 else 1)
+        if self.maximum_columns is not None:
+            columns = min(columns, self.maximum_columns)
         if columns == self.columns:
             return
         for row in list(self.children):
@@ -125,6 +128,10 @@ class HubUI:
     def build_documents_hub(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         launchers = []
+        self.document_grids = []
+        self.document_categories = {}
+        sessions = [(self.session_summary(session)[1], session, self.session_summary(session))
+                    for session in self.workspace.sessions.values()]
         for title, detail, glyph, extension in (
             ('Text Editor', 'Edit plain text and code files.', 'text', 'txt'),
             ('Markdown Editor', 'Write and preview formatted notes.', 'markdown', 'md'),
@@ -140,27 +147,25 @@ class HubUI:
             async def open_category(widget=None, selected=title, **kwargs):
                 await self.open_document_category(selected)
             actions.append(('Open…', open_category))
-            launchers.append(panel(title, detail, glyph, actions))
+            card = panel(title, detail, glyph, actions)
+            kind = {'Text Editor': 'text', 'Markdown Editor': 'markdown', 'EPUB Reader': 'epub',
+                    'Comic Reader': 'comic', 'Archives': 'archive'}[title]
+            self.document_categories[kind] = card
+            group = [(session, summary) for session_kind, session, summary in sessions if session_kind == kind]
+            content = card.children[0]
+            if group:
+                content.add(heading(f'Opened · {len(group)}'))
+                if self.preferences.values['document_card_overview'] == 'true':
+                    grid = PanelGrid([self.session_card(session, summary) for session, summary in group],
+                                     self.main_window.size.width, maximum_columns=1)
+                    self.document_grids.append(grid)
+                    content.add(grid)
+                else:
+                    for session, summary in group:
+                        content.add(self.session_panel(session, close=True, summary=summary, show_kind=False))
+            launchers.append(card)
         self.document_launchers = PanelGrid(launchers, self.main_window.size.width)
         box.add(self.document_launchers)
-        box.add(heading(f'Open documents · {len(self.workspace.sessions)}'))
-        sessions = []
-        self.document_grids = []
-        for session in self.workspace.sessions.values():
-            summary = self.session_summary(session)
-            sessions.append((summary[1], session, summary))
-        for title, group in document_groups(sessions):
-            box.add(heading(f'{title} · {len(group)}'))
-            if self.preferences.values['document_card_overview'] == 'true':
-                grid = PanelGrid([self.session_card(session, summary) for _, session, summary in group],
-                                 self.main_window.size.width, minimum_columns=2)
-                self.document_grids.append(grid)
-                box.add(grid)
-            else:
-                for kind, session, summary in group:
-                    box.add(self.session_panel(session, close=True, summary=summary, show_kind=False))
-        if not self.workspace.sessions:
-            box.add(toga.Label('Create or open a document to begin.'))
         if self.workspace.error:
             box.add(toga.Label(self.workspace.error, style=Pack(margin_top=8)))
         self.register_transfer_status(box)
