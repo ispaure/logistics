@@ -60,3 +60,39 @@ def refresh_apple_tab_items(host):
             title, image=image, tag=index)
         navigation.tabBarItem.accessibilityLabel = title
     adapter.impl.refresh_tabs()
+
+
+def install_apple_selection(app):
+    """Read UIKit selection after its tab-bar callback has finished switching.
+
+    Toga 0.5.7 reports tabBar:didSelectItem: before selectedViewController is
+    necessarily updated. Programmatic activate() already owns its selection.
+    """
+    host = app.native_host
+    if host.adapter is None or not hasattr(host.adapter, 'navigation'):
+        return
+    pending = None
+
+    def selected(widget, **kwargs):
+        nonlocal pending
+        if pending is not None:
+            pending.cancel()
+            pending = None
+        if host.changing:
+            return
+
+        def complete():
+            nonlocal pending
+            pending = None
+            if not app.active_host:
+                return
+            host._selected(widget)
+            # Pack and toolbar ownership must use the newly visible controller,
+            # after the host has also committed its destination state.
+            if host.adapter is not None:
+                host.adapter.controller.view.setNeedsLayout()
+                host.adapter.controller.view.layoutIfNeeded()
+            app.resize_workspace()
+        pending = app.loop.call_soon(complete)
+
+    host.root.on_select = selected

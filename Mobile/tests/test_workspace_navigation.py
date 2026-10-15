@@ -25,6 +25,30 @@ class WorkspaceNavigationTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_apple_tab_signal_reads_selection_after_native_switch(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from logisticsmobile.navigation import install_apple_selection
+        app = self.app
+        app.show_home()
+        original = app.native_host.adapter
+        app.native_host.adapter = SimpleNamespace(navigation=[], controller=SimpleNamespace(view=Mock()))
+        try:
+            install_apple_selection(app)
+            with patch.object(app, 'select_destination', wraps=app.select_destination) as callback:
+                app.native_host.on_select = callback
+                # UIKit signals the tab item while current_tab still says Home.
+                app.native_host.root.on_select()
+                self.assertEqual(app.native_host.state.destination, 'home')
+                # Its selected controller changes before the queued callback.
+                app.native_host.root._impl._set_value('current_tab_index', 2)
+                app.native_host.adapter = original
+                app.loop.run_until_complete(__import__('asyncio').sleep(0))
+                self.assertEqual(app.native_host.state.destination, 'documents')
+                self.assertEqual(callback.call_args.args, ('documents',))
+        finally:
+            app.native_host.adapter = original
+
     def test_menu_opens_without_credential_queries_or_leaving_a_draft(self):
         app = self.app
         app.editor.value = 'Retained while the menu opens'
