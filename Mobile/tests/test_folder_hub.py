@@ -41,7 +41,7 @@ class FolderHubTests(unittest.TestCase):
                 self.assertEqual(app.folder_credential.value, 'All')
                 self.assertEqual(app.native_host.labels[app.native_host.destinations.index('files')], 'Folder Hub')
                 self.assertEqual(view.children[1].children,
-                                 [app.folder_transfers_button, app.folder_refresh_button])
+                                 [app.folder_transfers_button, app.folder_refresh_button, app.folder_add_share_button])
                 self.assertIsInstance(view.children[-1], toga.ScrollContainer)
                 self.assertIs(view.children[-1].content, app.folder_list)
                 self.assertEqual(set(app.folder_buttons), set(app.folder_picker_choices))
