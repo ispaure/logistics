@@ -163,7 +163,8 @@ class LocalCryptCopies:
         return self._save_staged(reader, stage, verify, cancelled)
 
     def save_metadata(self, reader, changes, *, cancelled=lambda: False):
-        from services.document_metadata import comic_metadata, epub_metadata, patched_manifest, content_manifest
+        from services.document_metadata import comic_metadata, epub_metadata
+        from commonUtils.archives.rebuilding import patched_manifest, content_manifest
         if reader.kind == '.epub':
             member, data = epub_metadata(reader.book, changes)
         elif reader.kind in {'.cbz', '.zip'}:
@@ -173,7 +174,7 @@ class LocalCryptCopies:
         if len(data) > 1024 * 1024:
             raise ValueError('Metadata exceeds 1 MiB.')
         with reader.source.open_archive(reader.name) if reader.streaming else ZipFile(BytesIO(reader.data)) as archive:
-            expected = patched_manifest(archive, member, data, cancelled=cancelled)
+            expected = patched_manifest(archive, {member: data}, cancelled=cancelled)
         def stage(record, temporary):
             with temporary.open('r+b') as output:
                 self._request('crypt_metadata', record, self._data(reader.key),
