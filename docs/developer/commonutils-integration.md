@@ -113,3 +113,6 @@ for ownership and canonical paths.
 Feature preference and Obsidian registry writers use shared atomic byte publication.
 Logistics still owns their serialization, schemas, paths, recovery and error messages.
 Registry writes preserve compact UTF-8 JSON and the trailing newline.
+
+Mobile startup binds its cooperative loop through `commonUtils.ui.native.event_loop`.
+The shared helper owns dispatch context restoration; Logistics owns loop lifetime.

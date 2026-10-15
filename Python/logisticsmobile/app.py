@@ -38,7 +38,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             self.scene_manager = SceneManager(self, prepare_only=True)
         # Install before Android starts cooperative dispatch or registers Java
         # wake-up callbacks. Desktop/iOS loops lack this method and are unchanged.
-        from .native_loop import bind_cooperative_loop
+        from commonUtils.ui.native.event_loop import bind_cooperative_loop
         bind_cooperative_loop(self.loop)
 
     def startup(self):
