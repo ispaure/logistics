@@ -11,7 +11,7 @@ from commonUtils.runtime.platform import get_os, OS
 from commonUtils.runtime.document_access import LocalDocuments
 from logisticsmobile.app import LogisticsMobile
 from logisticsmobile.preferences import Preferences
-from . import CASES
+from . import CASES, start_native_check
 from .fixtures import make_books
 
 
@@ -464,12 +464,12 @@ class NativeCheckApp(LogisticsMobile):
     def on_running(self):
         if self.workspace_hold:
             from .workspace_hold import hold_workspace
-            self.loop.create_task(hold_workspace(self))
+            start_native_check(self, hold_workspace)
         elif self.navigation_hold:
             from .navigation_hold import hold_navigation
-            self.loop.create_task(hold_navigation(self))
+            start_native_check(self, hold_navigation)
         else:
-            self.loop.create_task(exercise(self))
+            start_native_check(self, exercise)
 
 
 
