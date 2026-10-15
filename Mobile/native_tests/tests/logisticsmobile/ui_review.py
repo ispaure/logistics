@@ -325,5 +325,7 @@ async def exercise_ui_review(app):
         from android.app import UiModeManager
         from android.content import Context
         app._impl.native.getSystemService(Context.UI_MODE_SERVICE).setApplicationNightMode(UiModeManager.MODE_NIGHT_AUTO)
-    return {'screenshots': screenshots, 'tap_to_open_tested': True,
+    from .workspace_checks import exercise_workspace
+    workspace = await exercise_workspace(app)
+    return {**workspace, 'screenshots': screenshots, 'tap_to_open_tested': True,
             'provider_preview_cleanup_tested': True, 'light_dark_contrast_tested': True, 'theme_change_retains_drafts': True, 'synthetic_workspace': True}

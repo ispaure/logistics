@@ -24,6 +24,19 @@ def heading(text):
     return toga.Label(text, style=Pack(font_size=19, font_weight='bold', margin_top=16, margin_bottom=8))
 
 
+def home_surface(widget, *, hero=False):
+    backend = type(widget._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass
+        colour = (ObjCClass('UIColor').colorWithRed(25 / 255, green=59 / 255, blue=99 / 255, alpha=1)
+                  if hero else ObjCClass('UIColor').secondarySystemBackgroundColor())
+        widget._impl._default_background_color = colour
+        widget._impl.native.backgroundColor = colour
+        widget._impl.native.layer.cornerRadius = 20 if hero else 16
+        widget._impl.native.layer.masksToBounds = True
+    return widget
+
+
 def panel(title, detail, glyph, actions):
     box = toga.Box(style=Pack(direction=COLUMN, padding=8, margin_bottom=8))
     box.add(toga.Box(children=[
@@ -71,25 +84,48 @@ class PanelGrid(toga.Box):
 class HubUI:
     def build_home(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Logistics', style=Pack(font_size=24, font_weight='bold', margin_bottom=8)))
-        box.add(toga.Label('Read. Write. Organize.', style=Pack(margin_bottom=8)))
+        box.add(toga.Label('Logistics', style=Pack(font_size=14, margin_bottom=4)))
+        box.add(toga.Label('Welcome back.', style=Pack(font_size=28, font_weight='bold', margin_bottom=20)))
         active = self.workspace.sessions.get(self.workspace.active)
         if active is not None:
-            box.add(heading('Continue'))
-            box.add(self.session_panel(active))
-        box.add(heading('Your workspaces'))
-        cards = []
-        for title, detail, glyph, actions in (
-            ('Files', '', 'files', [('Browse files', self.show_home_files)]),
-            ('Text & Markdown', '', 'markdown', [('New document', self.new_hub_document), ('Open file…', self.open_hub_file)]),
-            ('Books & Comics', '', 'books', [('Open library', self.show_library)]),
+            title, kind, details = self.session_summary(active)
+            hero = toga.Box(style=Pack(direction=COLUMN, margin_bottom=12, background_color='#193b63'))
+            hero_content = toga.Box(style=Pack(direction=COLUMN, margin=18))
+            hero.add(hero_content)
+            hero_content.add(toga.Label('PICK UP WHERE YOU LEFT OFF', style=Pack(font_size=11, color='#d2e1f4', margin_bottom=12)))
+            from textwrap import fill
+            hero_content.add(toga.Label(fill(title, width=26), style=Pack(font_size=22, font_weight='bold', color='white', margin_bottom=8)))
+            hero_content.add(toga.Label(' · '.join([DOCUMENT_TYPES.get(kind, 'Document'), *details]),
+                                style=Pack(font_size=12, color='#d2e1f4', margin_bottom=12)))
+            self.home_continue_button = toga.Button('Continue →', on_press=self.session_opener(active.id),
+                                style=Pack(height=48, color='white', background_color='#244c78'))
+            hero_content.add(self.home_continue_button)
+            box.add(home_surface(hero, hero=True))
+            self.home_continue = hero
+        else:
+            box.add(toga.Label('Read. Write. Organize.', style=Pack(margin_bottom=12)))
+        box.add(toga.Box(children=[
+            toga.Button('+ New document', on_press=self.new_hub_document, style=Pack(height=48, flex=1, margin_right=8)),
+            toga.Button('Open file…', on_press=self.open_hub_file, style=Pack(height=48, flex=1))],
+            style=Pack(direction=ROW)))
+        box.add(heading('Your spaces'))
+        spaces = toga.Box(style=Pack(direction=COLUMN))
+        for title, subtitle, glyph, action in (
+            ('Browse files', 'On your device & connected storage', 'files', self.show_home_files),
+            ('Books & Comics', 'Your library, ready to read', 'books', self.show_library),
         ):
-            cards.append(panel(title, detail, glyph, actions))
-        self.home_panels = PanelGrid(cards, self.main_window.size.width)
-        box.add(self.home_panels)
+            row = toga.Box(children=[
+                template_icon(toga.ImageView(icon(glyph), style=Pack(width=24, height=24, margin_right=12))),
+                list_button(toga.Button(title, on_press=action, style=Pack(height=48, flex=1)))],
+                style=Pack(direction=ROW))
+            item = toga.Box(children=[row, toga.Label(subtitle, style=Pack(font_size=12, margin_left=36))],
+                            style=Pack(direction=COLUMN, padding=10, margin_bottom=6))
+            spaces.add(home_surface(item))
+        box.add(spaces)
         box.add(toga.Box(children=[
             toga.Button('Open documents', on_press=self.show_documents_hub, style=Pack(height=44, flex=1)),
-            toga.Button('LM Chat', on_press=self.show_chat, style=Pack(height=44, flex=1))], style=Pack(direction=ROW)))
+            toga.Button('LM Chat →', on_press=self.show_chat, style=Pack(height=44, flex=1))],
+            style=Pack(direction=ROW, margin_top=8)))
         self.register_transfer_status(box)
         return toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
 
@@ -225,7 +261,9 @@ class HubUI:
             root = self.routes.roots['files']
             for child in list(root.children):
                 root.remove(child)
-            root.add(self.build_folder_picker())
+            view = self.build_folder_picker()
+            self.adaptive.prepare(view, 'files', root=True)
+            root.add(view)
             self.routes.render('files')
             return
         # Refresh only the visible root; retained detail routes remain untouched.
@@ -237,6 +275,7 @@ class HubUI:
             self.refresh_documents()
         root = self.routes.roots[destination]
         view = self.build_home() if destination == 'home' else self.build_documents_hub()
+        self.adaptive.prepare(view, destination, root=True)
         for child in list(root.children):
             root.remove(child)
         root.add(view)

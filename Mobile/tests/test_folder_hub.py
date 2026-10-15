@@ -24,7 +24,7 @@ class FolderHubTests(unittest.TestCase):
                 root.mkdir(parents=True)
                 app.cloud_remote.items = ['Loaded drive']
                 app.show_locations()
-                view = app.body.children[0]
+                view = app.body.children[0]._workspace_frame.main
                 self.assertEqual(view.children[1].children,
                                  [app.folder_transfers_button, app.folder_refresh_button])
                 self.assertIsInstance(view.children[-1], toga.ScrollContainer)

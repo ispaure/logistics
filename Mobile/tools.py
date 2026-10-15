@@ -7,7 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
-APP_MODULES = ('document_choices.py', 'comic_layout_check.py', 'appearance.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
+APP_MODULES = ('workspace_navigation.py', 'document_choices.py', 'comic_layout_check.py', 'appearance.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
                'hub_ui.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
                'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_fixture.py', 'cloud.py', 'resource_imports.py', 'folder_download.py', 'pull_jobs.py', 'pull_jobs_ui.py', 'mirror_jobs.py', 'mirror_ui.py', 'cloud_ui.py', 'copy_ui.py', 'credential_vault.py', 'localcrypt.py', 'localcrypt_ui.py', 'file_resources.py', 'files_ui.py', 'crypt_stream.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
@@ -16,7 +16,7 @@ DOCUMENT_MODULES = (
     'features/books/mobile/__init__.py', 'features/books/mobile/content.py', 'features/books/mobile/presentation.py',
     'features/comics/mobile/__init__.py', 'features/comics/mobile/validation.py', 'features/comics/mobile/presentation.py',
     'features/comics/archive_io.py', 'features/comics/comicinfo.py',
-    'features/comics/library.py', 'features/comics/pages.py',
+    'features/comics/library.py', 'features/comics/pages.py', 'features/comics/library_config.py',
     'configFile.ini', 'services/folder_policy.py', 'services/__init__.py', 'services/zip_passwords.py', 'services/document_metadata.py',
     'features/lm/__init__.py', 'features/lm/domain.py', 'features/lm/screenshots.py',
 )

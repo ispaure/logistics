@@ -35,11 +35,14 @@ aliases for existing feature controllers. Asynchronous import/export captures it
 origin and rejects UI completion after that session closes; a background import
 does not switch a different active document. Closed ordinary drafts remain stored.
 Session generations prevent late results from reviving closed or invalidated
-resources. `adaptive_workspace.py` embeds a managed UISplitViewController directly
-as the Documents tab on Apple, with native primary/detail navigation. Android
-uses measured width to place its retained list and current route beside each
-other at 840 dp; a Material rail starts separately at 600 dp. Resizing never
-closes a session. `action_menu.py` isolates native editor command presentation.
+resources. `workspace_navigation.py` supplies the active adaptive presentation
+inside the existing native destination/Back stacks on both Apple and Android.
+It replaces the earlier Documents-only native split installation from
+`adaptive_workspace.py`. At 840 points/dp it can place a browser or retained text
+editor beside the current document, in equal halves. Compact windows show a
+full-height drawer or the current document. A Material rail starts separately at
+600 dp. Resizing never closes a session. `action_menu.py` isolates native editor
+command presentation and rebinds commands to their editor owner.
 
 A replacement host for the same app-private root retires its predecessor,
 invalidates old session generations and cancels pending private file work. This
@@ -861,6 +864,14 @@ full configuration hash while non-token scope settings remain unchanged. Importi
 another package replaces pins, and older vaults migrate at first use. Tests cover
 refresh, vault restoration, account replacement and separate trees using one cipher.
 
+The mobile Books & Comics catalog discovers configured folders at local copy
+roots and immediate collection folders, including mapped subfolder copies. It
+shares `features.comics.library_config.library_names` with desktop and reads
+LocalCrypt INIs through `CryptFiles`, in a worker, without persisting decoded
+names or scanning book archives. Only existing configured library directories
+become rows; imports keep their reader/session workflow. Refresh rejects stale
+credential generations, and credential clearing removes private catalog rows.
+
 Push preflight authenticates all local ciphertext, verifies source hashes, checks
 remote revisions, and handles directories before writeback. Stable source staging
 is cancellable. A bounded native progress channel, independent of the credential
@@ -869,7 +880,10 @@ or credentials. Repeated unchanged progress samples do not update native text,
 progress widgets or transfer banners, avoiding redundant layout work during local
 document use. Transfer metadata uses optimistic byte checks before atomic writes;
 external record edits stop writes and are preserved. Stale review callbacks cannot
-confirm after credential reload/forget. Native selector assignment guards prevent
+confirm after credential reload/forget. Every mobile Push entry point confirms
+before preparing a review through `start_mirror_review`; the review's write action
+requires a separate confirmation. Both prompts validate the connection generation
+and mapping again after acceptance. Native selector assignment guards prevent
 re-entrant iOS browse requests from racing explicit linked-location routing.
 
 The UIKit delegate is registered before UIApplicationMain through scene_build.py,

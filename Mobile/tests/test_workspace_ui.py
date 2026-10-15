@@ -33,7 +33,8 @@ class WorkspaceUITests(unittest.TestCase):
             a.editor.value = '# A'
             app.show_preview()
             self.assertEqual(a.session.view['markdown_mode'], 'preview')
-            back = app.preview_box.children[0].on_press
+            back = next(child.on_press for child in app.preview_box.children
+                        if getattr(child, 'text', '') == 'Back to editor')
             app.new_document()
             b = app.editor_view
             b.editor.value = '# B'

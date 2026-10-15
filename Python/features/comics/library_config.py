@@ -10,6 +10,11 @@ def _library_names(root):
     if config_path.exists():
         with config_path.open(encoding='utf-8-sig') as stream:
             config.read_file(stream)
+    return library_names(config)
+
+
+def library_names(config):
+    """Read ordered child names from a parsed local or provider-backed INI."""
     if not config.has_option('LogisticsComics', 'libraries'):
         return None
     names = list(dict.fromkeys(name.strip() for name in config.get('LogisticsComics', 'libraries').split(',')

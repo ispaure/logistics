@@ -596,7 +596,8 @@ pending review and results, without a mirror-job catalog. Ambiguous remote pulls
 use a separate `transfer-copy` route limited to matching destinations. The legacy
 remote push handler similarly resolves local copies before review. Remove mapping
 (keep files) now belongs to the managed folder's action page. Transfer banners
-continue to open details, and the remote browser receives the same progress.
+continue to open details, and the remote browser receives the same progress. Long progress and result notices use the mobile
+line-wrapping helper so their full text remains visible on narrow phones.
 
 
 ### Documents and Chat navigation cleanup
@@ -642,8 +643,10 @@ and its existing draft guard. Disabling the preference restores grouped rows.
 Settings is vertically scrollable, with workspace preferences under App followed
 by feature sections for Text & Markdown, Books & Comics, LM Chat and Files. Chat
 configuration initializes lazily when entered from Settings; reader appearance
-remains with its reader owner. The setting persists through Save preferences and
-is read when the Documents hub is rebuilt. Host tests cover defaults, persistence,
+remains with its reader owner. The overview switch saves immediately and replaces
+the retained Documents root even when detail routes are present; it preserves
+navigation and draft owners. A failed save restores the switch and reports the
+error. Save/reload preferences also refreshes the retained root. Host tests cover defaults, persistence,
 list fallback, resizing, live draft previews, resume ownership and guarded close.
 
 ### Files folder list

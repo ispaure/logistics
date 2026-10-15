@@ -9,6 +9,47 @@ from test_mirror_jobs import MirrorClient
 
 
 class MirrorUITests(unittest.TestCase):
+    def test_every_push_review_requires_confirmation_before_scanning(self):
+        class Client(MirrorClient):
+            def restore(self, **kwargs): return []
+            def crypt_remotes(self): return []
+            def cancel(self): pass
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            client = app.cloud_client = Client()
+            app.show_cloud(present=False)
+            store = app.mirror_store()
+            job, _ = store.create(client, 'Remote', 'folder')
+            (store.target(job) / 'note.txt').write_bytes(b'local edits')
+
+            async def exercise():
+                with patch.object(store, 'push_plan', wraps=store.push_plan) as scan:
+                    for accepted in (False, True, False, True):
+                        before = scan.call_count
+                        with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=accepted)) as dialog:
+                            app.start_mirror_review(job['id'])
+                            self.assertEqual(await app.transfer_task, accepted)
+                            self.assertEqual(dialog.await_count, 1)
+                        self.assertEqual(scan.call_count, before + int(accepted))
+                        self.assertEqual(client.data['folder/note.txt'], b'first')
+                    for change in ('connection', 'mapping'):
+                        async def changed(dialog):
+                            if change == 'connection':
+                                client.generation += 1
+                            else:
+                                job['prefix'] = 'different-folder'
+                            return True
+                        scan.reset_mock()
+                        with patch.object(app.main_window, 'dialog', new=AsyncMock(side_effect=changed)):
+                            app.start_mirror_review(job['id'])
+                            self.assertFalse(await app.transfer_task)
+                        scan.assert_not_called()
+            app.loop.run_until_complete(exercise())
+
     def test_unchanged_progress_does_not_repeat_native_layout_updates(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
@@ -27,7 +68,8 @@ class MirrorUITests(unittest.TestCase):
         MirrorUI.publish_mirror_progress(app, 1, dict(values, done=50))
         self.assertEqual(bar.value, 50)
         self.assertEqual(app.refresh_transfer_status.call_count, 2)
-        self.assertEqual(app.cloud_status.value, app.transfer_notice.text)
+        self.assertEqual(app.cloud_status.value, ' '.join(app.transfer_notice.text.splitlines()))
+        self.assertIn('\n', app.transfer_notice.text)
         app.transfer_progress = replacement = SimpleNamespace(max=100, value=0)
         MirrorUI.publish_mirror_progress(app, 1, dict(values, done=50))
         self.assertEqual(replacement.value, 50)

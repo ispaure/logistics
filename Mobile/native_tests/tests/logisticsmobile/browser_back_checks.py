@@ -21,7 +21,7 @@ async def exercise_browser_back(app):
     browser.page = 0
     browser.render()
     tree = browser.tree
-    scroll = app.files_view.children[-1]
+    scroll = app.files_view._workspace_frame.main.children[-1]
     for filename in ('Comic.cbz', 'A Notes.md', 'Comic.cbz'):
         browser.search.value = ''
         await asyncio.sleep(.3)
