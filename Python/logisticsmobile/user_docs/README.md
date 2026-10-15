@@ -961,3 +961,9 @@ first tap.
 Chat uses the same rounded, outlined surfaces as the other tabs for its transcript,
 conversation list and message input. On iPhone its conversations menu lives in the
 native top-left navigation bar, matching the Documents menu position.
+
+
+Home's Open file action browses all file formats in Local/available LocalCrypt
+folders. Comic ZIP/CBZ archives and EPUBs remain visible alongside text files;
+opening them uses their reader, while text and Markdown use the editor. The
+format-specific Open actions inside Documents retain their category filters.

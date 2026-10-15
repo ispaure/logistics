@@ -31,6 +31,25 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIn(app.document_view, app.body.children)
         self.assertEqual(app.store.open(first).text, 'Retain my draft')
 
+    def test_home_open_file_lists_all_formats_and_dispatches_archives_to_reader(self):
+        from unittest.mock import AsyncMock, patch
+        app = self.app
+        folder = app.private_root / 'LocalFiles' / 'Library'
+        folder.mkdir(parents=True, exist_ok=True)
+        names = ('comic.cbz', 'comic.zip', 'book.epub', 'notes.md', 'log.txt')
+        for name in names:
+            (folder / name).write_bytes(b'Fixture; dispatch is mocked below')
+        app.show_home()
+        self.assertTrue(app.loop.run_until_complete(app.open_hub_file()))
+        drawer = app.adaptive.browser('documents')
+        self.assertIsNone(drawer.extensions)
+        self.assertTrue(app.loop.run_until_complete(drawer.open_folder({'path': 'Library'})))
+        self.assertEqual({entry.label for entry in drawer.browser.entries}, set(names))
+        with patch.object(app, 'open_download', new_callable=AsyncMock) as reader:
+            for name in names[:3]:
+                self.assertTrue(app.loop.run_until_complete(drawer.open_file({'path': 'Library/' + name})))
+                reader.assert_awaited_with(path=folder / name, destination='documents')
+
     def test_home_browse_refreshes_local_root_after_other_views_and_search(self):
         import asyncio
         import toga
