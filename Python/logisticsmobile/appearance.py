@@ -89,6 +89,38 @@ def install_appearance(app):
                 if impl in _surfaces:
                     paint_surface(impl, _surfaces[impl])
         box_module.TogaView = LogisticsSurfaceView
+        from ctypes import c_bool
+        from rubicon.objc.types import CGPoint
+        import toga_iOS.widgets.button as button_module
+
+        class LogisticsActionButton(button_module.TogaButton):
+            @objc_method
+            def pointInside_withEvent_(self, point: CGPoint, event: objc_id) -> bool:
+                inside = send_super(__class__, self, 'pointInside:withEvent:', point, event,
+                                    restype=c_bool, argtypes=[CGPoint, objc_id])
+                if not inside or self.impl is None:
+                    return bool(inside)
+                # Filled rows, small icon controls and glass buttons show their
+                # full target. A plain text action shows only its title/image.
+                if (getattr(self.impl, '_row_hint', False) or self.bounds.size.width <= 52
+                        or self.configuration is not None):
+                    return True
+                title = self.titleRectForContentRect(self.bounds)
+                left, right = title.origin.x, title.origin.x + title.size.width
+                if self.imageForState(0) is not None:
+                    image = self.imageRectForContentRect(self.bounds)
+                    left = min(left, image.origin.x)
+                    right = max(right, image.origin.x + image.size.width)
+                return left - 2 <= point.x <= right + 2
+
+        button_module.TogaButton = LogisticsActionButton
+        original_create_button = button_module.Button.create
+        def create_action_button(impl):
+            original_create_button(impl)
+            from rubicon.objc import SEL
+            impl.native.removeTarget(impl.native, action=SEL('onPress:'), forControlEvents=1)
+            impl.native.addTarget(impl.native, action=SEL('onPress:'), forControlEvents=1 << 6)
+        button_module.Button.create = create_action_button
         from toga_iOS.widgets.base import Widget
         from toga_iOS.widgets.button import Button
         original_background = Widget.set_background_color
