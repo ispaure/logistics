@@ -139,8 +139,8 @@ async def exercise_ui_review(app):
             point = native.convertPoint(CGPoint(native.bounds.size.width / 2, native.bounds.size.height / 2), toView=window)
             hit = window.hitTest(point, withEvent=None)
             assert hit is not None and (hit == native or hit.isDescendantOfView(native)), f'Home Browse tap blocked at {point}: {hit}'
-            from toga_iOS.libs import UIControlEventTouchDown
-            native.sendActionsForControlEvents(UIControlEventTouchDown)
+            from toga_iOS.libs import UIControlEventTouchUpInside
+            native.sendActionsForControlEvents(UIControlEventTouchUpInside)
         else:
             assert native.isShown() and native.isEnabled()
             assert native.performClick()
@@ -155,7 +155,7 @@ async def exercise_ui_review(app):
         folder = app.folder_buttons['All files']
         if get_os() is OS.IOS:
             assert app.folder_refresh_button._impl.native.imageForState(0) is not None
-            folder._impl.native.sendActionsForControlEvents(UIControlEventTouchDown)
+            folder._impl.native.sendActionsForControlEvents(UIControlEventTouchUpInside)
         else:
             assert app.folder_refresh_button._impl.native.getCompoundDrawables()[0] is not None
             assert folder._impl.native.performClick()

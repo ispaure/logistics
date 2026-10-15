@@ -31,9 +31,12 @@ def run(command, env, *, log=None):
 
 
 def tools_environment(env):
-    from platformdirs import PlatformDirs
-    cache = Path(env['BRIEFCASE_HOME']) if env.get('BRIEFCASE_HOME') else PlatformDirs(
-        'org.beeware.briefcase' if platform.system() == 'Darwin' else 'briefcase', 'BeeWare').user_cache_path
+    if env.get('BRIEFCASE_HOME'):
+        cache = Path(env['BRIEFCASE_HOME'])
+    else:
+        from platformdirs import PlatformDirs
+        cache = PlatformDirs(
+            'org.beeware.briefcase' if platform.system() == 'Darwin' else 'briefcase', 'BeeWare').user_cache_path
     sdk = Path(env.get('ANDROID_HOME') or env.get('ANDROID_SDK_ROOT') or cache / 'tools/android_sdk')
     adb = sdk / 'platform-tools/adb'
     if not adb.is_file():
