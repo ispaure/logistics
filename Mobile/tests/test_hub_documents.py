@@ -137,10 +137,10 @@ class HubDocumentTests(unittest.TestCase):
         app.editor.value = '# A retained draft'
         app.show_home()
         content = app.body.children[0].content
-        self.assertEqual(content.children[1].text, 'Welcome back.')
+        self.assertEqual(content.children[0].text, 'Welcome to Logistics')
         self.assertIn(app.home_continue, content.children)
         self.assertEqual(app.home_continue.children[0].children[1].text, 'Focus.md')
-        actions = content.children[3]
+        actions = content.children[2]
         self.assertTrue(all(isinstance(button, toga.Button) for button in actions.children))
         self.assertEqual([button.text for button in actions.children], ['+ New document', 'Open file…'])
         app.home_continue_button.on_press()

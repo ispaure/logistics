@@ -76,8 +76,7 @@ class PanelGrid(toga.Box):
 class HubUI:
     def build_home(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Logistics', style=Pack(font_size=14, margin_bottom=4)))
-        box.add(toga.Label('Welcome back.', style=Pack(font_size=28, font_weight='bold', margin_bottom=20)))
+        box.add(toga.Label('Welcome to Logistics', style=Pack(font_size=28, font_weight='bold', margin_bottom=20)))
         active = self.workspace.sessions.get(self.workspace.active)
         if active is not None:
             title, kind, details = self.session_summary(active)
