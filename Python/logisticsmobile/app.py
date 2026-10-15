@@ -22,7 +22,7 @@ from .adaptive_workspace import AdaptiveWorkspace
 from .pull_jobs_ui import PullJobsUI
 from .locations_ui import LocationsUI
 from .folder_hub_ui import FolderHubUI
-from .hub_ui import HubUI
+from .hub_ui import HubUI, text_document_kind
 
 _active_hosts = weakref.WeakValueDictionary()
 
@@ -68,6 +68,8 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         self.preferences = Preferences(workspace_root)
         self.store = DocumentStore(root / 'Documents')
         self.workspace = Workspace(workspace_root)
+        if self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
+            self.clear_restored_documents()
         restored_reader = self.workspace.sessions.get(self.workspace.active)
         self.pending_reader_restore = None
         if hasattr(self, 'scene_manager'):
@@ -95,8 +97,10 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         self.on_exit = self.exit_app
         self.refresh_documents()
         self.loading = False
-        if self.window_id != 'primary' and self.workspace.active is None:
-            self.new_document()
+        if self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
+            active = self.workspace.sessions.get(self.workspace.active)
+            if active is not None and active.provider == 'managed-text':
+                self.open_document(active.resource)
         elif self.labels:
             key = self.preferences.values['last_document']
             active = self.workspace.sessions.get(self.workspace.active)
@@ -105,12 +109,11 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             if self.preferences.values['restore_last_document'] != 'true' or key not in self.labels.values():
                 key = next(iter(self.labels.values()))
             self.open_document(key)
-        else:
-            self.new_document()
         self.show_documents_hub()
         self.show_settings()
         self.show_folder_picker(initialize=False)
         self.show_home()
+        self.save_workspace(capture=False)
         self.main_window.show()
         self.native_host.install(self.main_window)
         self.routes.install()
@@ -139,6 +142,8 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         if destination != self.native_host.state.destination:
             self.mark_navigation()
         self.save_workspace()
+        if destination == 'chat' and not hasattr(self, 'chat_view'):
+            self.show_chat()
         self.refresh_hub(destination)
         adaptive = getattr(self, 'adaptive', None)
         if (destination == 'documents' and adaptive is not None and adaptive.split is not None
@@ -179,6 +184,8 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         self.adaptive.render()
         if hasattr(self, 'home_panels') and self.main_window.content is self.native_host.root:
             self.home_panels.reflow(self.main_window.size.width)
+        for grid in getattr(self, 'document_grids', []):
+            grid.reflow(self.main_window.size.width)
         for owner in self.text_views.values():
             owner.apply_split(self.main_window.size.width)
 
@@ -395,16 +402,39 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), route='actions', title='Document actions')
 
     def show_settings(self, widget=None, **kwargs):
+        from .hub_ui import heading
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         box.add(toga.Label('Preferences', style=Pack(font_size=22, margin_bottom=12)))
+        box.add(heading('App'))
+        self.document_cards_choice = toga.Switch('Document card overview',
+            value=self.preferences.values['document_card_overview'] == 'true', style=Pack(height=44))
+        box.add(self.document_cards_choice)
+        box.add(toga.Label('Show open documents as preview cards.\nTurn off to use the grouped list.', style=Pack(font_size=12)))
         self.font_choice = toga.Selection(items=['12', '14', '16', '18', '20', '24', '28', '32'],
             value=self.preferences.values['font_size'], style=Pack(height=44))
         self.restore_choice = toga.Switch('Restore last document',
             value=self.preferences.values['restore_last_document'] == 'true', style=Pack(height=44))
+        self.clear_documents_choice = toga.Switch('Clear documents with no pending changes on restart',
+            value=self.preferences.values['clear_unmodified_documents_on_restart'] == 'true',
+            style=Pack(height=44))
         self.settings_status = toga.Label(self.preferences.error, style=Pack(margin_top=12))
+        box.add(self.restore_choice)
+        # A wrapping label keeps the full preference readable on narrow phones.
+        self.clear_documents_choice.text = 'Clear on restart'
+        box.add(toga.Label('Clear documents with no pending\nchanges on restart'))
+        box.add(self.clear_documents_choice)
+        box.add(toga.Label('Closes saved items in Open documents.\nStored documents and unsaved drafts are kept.',
+                           style=Pack(font_size=12)))
+        box.add(heading('Text & Markdown'))
         box.add(toga.Label('Editor and preview font size'))
         box.add(self.font_choice)
-        box.add(self.restore_choice)
+        box.add(heading('Books & Comics'))
+        box.add(toga.Label('Use Appearance in an open reader\nto adjust its pages.', style=Pack(font_size=12)))
+        box.add(heading('LM Chat'))
+        box.add(toga.Button('Server & generation settings…', on_press=self.show_chat_configuration, style=Pack(height=44)))
+        box.add(heading('Files'))
+        box.add(toga.Button('Remote connections…', on_press=self.show_cloud_connections, style=Pack(height=44)))
+        box.add(heading('Apply preferences'))
         box.add(toga.Button('Save preferences', on_press=self.save_preferences, style=Pack(height=44)))
         box.add(toga.Button('Reload preferences', on_press=self.reload_preferences, style=Pack(height=44)))
         box.add(self.settings_status)
@@ -413,12 +443,13 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             if self.window_id != 'primary':
                 box.add(toga.Button('Close window', on_press=lambda widget, **kw:
                     self.scene_manager.close_window(self), style=Pack(height=44)))
-        box.add(toga.Button('Remote connections…', on_press=self.show_cloud_connections, style=Pack(height=44, margin_top=12)))
-        self.show_view(box, destination='settings', root=True)
+        self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), destination='settings', root=True)
 
     def save_preferences(self, widget=None, **kwargs):
         try:
             self.preferences.save(font_size=self.font_choice.value,
+                document_card_overview='true' if self.document_cards_choice.value else 'false',
+                clear_unmodified_documents_on_restart='true' if self.clear_documents_choice.value else 'false',
                 restore_last_document='true' if self.restore_choice.value else 'false')
             self.editor.style.font_size = int(self.preferences.values['font_size'])
             self.settings_status.text = 'Preferences saved on this device.'
@@ -468,6 +499,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         previous = self.loading
         self.loading = True
         documents, failures = self.store.documents()
+        self.stored_document_kinds = {doc.id: text_document_kind(doc.name) for doc in documents}
         counts, self.labels = {}, {}
         for doc in documents:
             counts[doc.name] = counts.get(doc.name, 0) + 1
@@ -526,13 +558,39 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             if self.checkpoint():
                 self.open_document(self.labels[widget.value])
 
-    def new_document(self, widget=None, **kwargs):
+    def clear_restored_documents(self):
+        """Prune only proven clean sessions; preserve unreadable recovery records."""
+        for session in list(self.workspace.sessions.values()):
+            if session.provider == 'managed-text':
+                try:
+                    document = self.store.open(session.resource)
+                except (OSError, ValueError, KeyError, TypeError):
+                    continue
+                if document.modified or document.conflict:
+                    continue
+            self.workspace.close(session.id, guard=lambda value: True)
+
+    def choose_document_type(self, widget=None, **kwargs):
+        if not self.checkpoint():
+            return
+        from .document_choices import choose_document_type
+        choose_document_type(self)
+
+    def create_chosen_document(self, extension):
+        previous = self.current
+        self.new_document(extension=extension)
+        if self.current is not previous:
+            self.show_documents()
+
+    def new_document(self, widget=None, *, extension='txt', **kwargs):
         if not self.checkpoint():
             return
         try:
             if len(self.workspace.sessions) >= MAX_SESSIONS:
                 raise ValueError('Close an open document before creating another (limit: 32).')
-            created = self.store.create()
+            if extension not in ('txt', 'md'):
+                raise ValueError('Choose TXT or Markdown.')
+            created = self.store.create('Untitled.' + extension)
             self.refresh_documents()
             self.open_document(created.id)
         except (OSError, ValueError) as error:

@@ -319,7 +319,7 @@ native Python payload before Briefcase creates the app.
 
 The bridge exposes import, list, bounded read, offline probe, cancel and clear;
 it does not expose generic RC, commands or remote mutation. No RC listener starts.
-Only drive/dropbox/onedrive/s3/webdav/memory backends are linked. Parsed credentials
+Drive/dropbox/onedrive/s3/webdav/smb/memory backends are linked (plus crypt). Parsed credentials
 are checked against explicit per-backend option allowlists before publication.
 Config uses the synchronized Storage in `Mobile/rclone_bridge/vault.go`;
 configfile.Install is never called. A nonempty logical config path allows rclone to
@@ -333,6 +333,20 @@ config maps bind getters/setters to their storage generation; late callbacks fro
 retired connections cannot update a replacement package or recreate forgotten files. Plaintext serialization
 is disabled. Import validates all members before publishing the replacement. A
 session-only import detaches persistence and preserves the saved ciphertext.
+
+The `add_smb` bridge action appends an explicitly named SMB server to the loaded
+snapshot, rejects duplicates, and preserves existing connection settings and OAuth
+identity pins. `smb.go` validates the host, explicit username and port, obscures the
+form password for rclone, and publishes through the same encrypted vault. Session
+mode copies the loaded snapshot into detached memory while leaving saved ciphertext
+unchanged. Cached backend handles are shut down before storage generations change.
+The SMB option allowlist excludes Kerberos config/cache filesystem access. Package
+imports also accept this restricted SMB configuration, with an already obscured
+password. The Files/Remote connections form accepts multiple servers, defaults to
+saving credentials and immediately opens the share browser; existing folder Pull
+and copy workflows own transfers. iOS declares SMB in its local-network permission
+explanation. SMB share paths start with the share name. Local bridge/configuration
+and dummy UI tests do not establish physical Android/iOS SMB server connectivity.
 
 `credential_vault.py` owns a random 32-byte data key: AndroidKeyStore AES-GCM wraps
 it into bounded metadata under noBackupFilesDir; iOS Security.framework uses a

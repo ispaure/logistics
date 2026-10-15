@@ -33,7 +33,7 @@ class CloudClient:
         self.free.restype = None
 
     def request(self, action, **values):
-        if action not in {'import', 'list', 'connection_identity', 'mirror_info', 'mirror_list', 'mirror_read', 'mirror_stat', 'mirror_mkdir', 'mirror_validate', 'mirror_progress', 'mirror_write', 'mirror_sync', 'read', 'crypt_read', 'probe', 'clear', 'cancel', 'vault_open', 'vault_info', 'crypt_remotes', 'crypt_fetch', 'crypt_describe', 'crypt_decode', 'crypt_encode', 'crypt_metadata', 'crypt_path', 'crypt_raw_read', 'crypt_raw_write', 'crypt_stat', 'crypt_range', 'crypt_archive', 'crypt_manifest', 'crypt_thumbnail', 'file_thumbnail', 'image_thumbnail', 'remote_thumbnail', 'file_archive'}:
+        if action not in {'add_smb', 'import', 'list', 'connection_identity', 'mirror_info', 'mirror_list', 'mirror_read', 'mirror_stat', 'mirror_mkdir', 'mirror_validate', 'mirror_progress', 'mirror_write', 'mirror_sync', 'read', 'crypt_read', 'probe', 'clear', 'cancel', 'vault_open', 'vault_info', 'crypt_remotes', 'crypt_fetch', 'crypt_describe', 'crypt_decode', 'crypt_encode', 'crypt_metadata', 'crypt_path', 'crypt_raw_read', 'crypt_raw_write', 'crypt_stat', 'crypt_range', 'crypt_archive', 'crypt_manifest', 'crypt_thumbnail', 'file_thumbnail', 'image_thumbnail', 'remote_thumbnail', 'file_archive'}:
             raise ValueError('Unsupported remote operation.')
         data = json.dumps(values, ensure_ascii=False).encode('utf-8')
         if len(data) > PACKAGE_LIMIT * (24 if action == 'image_thumbnail' else 2):
@@ -69,6 +69,20 @@ class CloudClient:
             self.vault.set_label(name)
         if not remember:
             self.vault_attached = False
+        return names
+
+    def add_smb(self, name, host, user, password, domain='', port='445', *, remember=True):
+        if remember and self.vault is not None and not self.vault_attached:
+            self.restore(create=True)
+        names = self.request('add_smb', remote=name, host=host, user=user,
+                             password=password, domain=domain, port=port,
+                             session_only=not remember)
+        if not remember:
+            self.vault_attached = False
+        info = self.request('vault_info')
+        self.package_name = info['package_name']
+        if remember and self.vault is not None:
+            self.vault.set_label(self.package_name)
         return names
 
     def restore(self, *, create=False):

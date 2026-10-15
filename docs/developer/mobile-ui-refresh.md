@@ -574,3 +574,98 @@ Native evidence captures the complete UIKit window or Android activity decor vie
 including navigation containers. Toga's content-only screenshot can have zero bounds
 while native navigation reparents content. Android capture waits for positive native
 window bounds and still fails on empty/invalid PNG data; it does not skip screenshots.
+
+
+## Explicit storage browsing and focused transfer details
+
+The Files folder selector offers Transfers and Refresh. Connection management
+is available through Settings → Remote connections…, without a Connections
+shortcut on the selector.
+
+Folder actions use the desktop storage names: Browse Local (on this device),
+Browse LocalCrypt (encrypted on this device), and Browse Remote (online).
+Discovery only contributes existing local directories and loaded remotes; the
+folder page deduplicates copy references. Managed subfolder remote browsing uses
+the mapping's prefix, decoding ciphertext paths with the matching connection
+before browsing. Push/Pull remain folder actions. The online browser keeps
+copy-to-device and secondary path/download/connection commands; its main view
+no longer repeats the remote selector, Connections, or Push/Pull controls.
+
+The `transfers` route is titled Transfer details and owns progress, cancellation,
+pending review and results, without a mirror-job catalog. Ambiguous remote pulls
+use a separate `transfer-copy` route limited to matching destinations. The legacy
+remote push handler similarly resolves local copies before review. Remove mapping
+(keep files) now belongs to the managed folder's action page. Transfer banners
+continue to open details, and the remote browser receives the same progress.
+
+
+### Documents and Chat navigation cleanup
+
+The mobile shell now has Home, Files, Documents, Chat and Settings destinations.
+Chat owns its conversation root and settings route, independent of Documents’
+adaptive list/detail presentation. Documents exposes New and Open, without
+Library or Chat shortcuts. The book catalog remains available from Home and Files.
+New presents a native format prompt for TXT or Markdown (both use the existing
+text editor, with Markdown preview). Programmatic `new_document()` remains an
+immediate creation command for imports, tests and internal callers.
+
+`clear_unmodified_documents_on_restart` defaults to true. Before binding scene
+owners, startup removes clean managed text sessions and reader sessions from the
+restored workspace manifest. It preserves modified text, conflicts and entries
+whose recovery records cannot be read. This only changes open session membership;
+DocumentStore bytes, recovery records and book progress are retained. Startup
+does not create an empty document or reopen an arbitrary stored file while the
+setting is enabled. Disabling it retains the previous restore behavior.
+
+The Documents hub groups both open sessions and stored text documents by type
+(Text, Markdown, EPUB books, Comics), omitting empty groups. Open rows show the
+filename and any recovery/conflict/session status; the type appears once in the
+group heading. Stored grouping uses document metadata, preserving duplicate-name
+labels and resource identities. Open summaries prefer live editor names, resolve
+inactive text names/types from DocumentStore and reader names/types from library
+records. Workspace manifests continue to omit names. Reading library metadata
+does not open a decoder; unavailable records retain a selectable row and close
+menu. Host regressions cover mixed groups, duplicate Markdown names, restored
+text/book/comic names, recovery status and missing records.
+
+### Optional document card overview
+
+The mobile-owned `document_card_overview` preference defaults to true. Documents
+uses two card columns on phones and three at widths of at least 1100; resize
+reflows existing cards. Type grouping and stored-document lists remain intact.
+Cards use bounded, plain-text excerpts from managed text only, including live
+drafts. They do not capture screenshots, mount readers, decode books, or preview
+private provider content. Reader/provider sessions use type placeholders. Titles
+and resume actions retain session identities; close uses `request_close_session`
+and its existing draft guard. Disabling the preference restores grouped rows.
+
+Settings is vertically scrollable, with workspace preferences under App followed
+by feature sections for Text & Markdown, Books & Comics, LM Chat and Files. Chat
+configuration initializes lazily when entered from Settings; reader appearance
+remains with its reader owner. The setting persists through Save preferences and
+is read when the Documents hub is rebuilt. Host tests cover defaults, persistence,
+list fallback, resizing, live draft previews, resume ownership and guarded close.
+
+### Files folder list
+
+The Files root now renders folder choices as direct, name-only list buttons in a
+vertical scroll container. Transfers and Refresh remain above the scroll area.
+Refresh uses the native circular-arrow image on iOS, the system sync drawable on
+Android and a circular-arrow glyph on host backends. Folder taps open the existing
+copy/action page; copy grouping, mapped scopes and busy-operation rules are retained.
+Credential restore updates the visible list in place when Files is at its root.
+Host checks cover top controls, scrolling structure, newly discovered folders,
+late remote restoration and local browsing during a transfer. Native fixtures
+now tap folder rows and check the refresh image; these updated native checks
+have not yet been run on devices.
+
+The iOS multiline-input appearance hook disables automatic scroll insets because
+the navigation host already reserves keyboard and safe areas. On supported UIKit
+versions it also hides top/bottom scroll-edge effects. A local iPhone simulator
+probe reproduced obscured text with a 115-point adjusted bottom inset inside a
+100-point editor, then verified zero adjusted inset and readable scrolling text
+after the change, including dark appearance and repeated native `insertText`.
+The format prompt and five-button bottom bar were also visually checked. These
+focused checks do not constitute the full native release gate or physical-device
+verification. The native UI review now checks the inset/edge contract and captures
+an additional editor-typing screen.

@@ -24,11 +24,19 @@ async def hold_workspace(app):
             if action == 'edit':
                 app.show_documents()
                 app.editor.value = command['text']
+            elif action == 'type':
+                if get_os() is not OS.IOS:
+                    raise ValueError('Native insertText probe is an Apple operation.')
+                app.editor._impl.native.insertText(command['text'])
             elif action == 'create':
                 app.new_document()
                 app.name.value = command['name']
                 app.editor.value = command['text']
                 app.show_documents()
+            elif action == 'new_prompt':
+                app.choose_document_type()
+            elif action == 'chat':
+                app.show_chat()
             elif action == 'activate':
                 app.open_document(command['resource'])
                 app.show_documents()

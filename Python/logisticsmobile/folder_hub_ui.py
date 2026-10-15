@@ -1,4 +1,4 @@
-"""A compact folder picker and focused, source-owned folder actions."""
+"""A folder list and focused, source-owned folder actions."""
 import asyncio
 import toga
 from toga.style import Pack
@@ -6,6 +6,22 @@ from toga.style.pack import COLUMN, ROW
 from .folder_hub import hub_entries
 from .cloud_ui import import_hint
 from textwrap import fill
+from commonUtils.ui.native.presentation import list_button
+
+
+def refresh_button(action):
+    button = toga.Button('↻ Refresh', on_press=action, style=Pack(height=44, flex=1))
+    backend = type(button._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass
+        button.text = 'Refresh'
+        button._impl.native.setImage(ObjCClass('UIImage').systemImageNamed('arrow.clockwise'), forState=0)
+    elif backend.startswith('toga_android.'):
+        from android import R
+        native = button._impl.native
+        button.text = 'Refresh'
+        native.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_popup_sync, 0, 0, 0)
+    return button
 
 
 class FolderHubUI:
@@ -46,6 +62,14 @@ class FolderHubUI:
             if group['copies']:
                 primary = min(group['copies'], key=lambda copy: (copy['kind'] != 'job', copy['source'] == 'Remote'))
                 group.update(primary)
+                # Browse the mapped scope, rather than accidentally opening the
+                # remote root for a pulled subfolder. Decode crypt paths on open.
+                if primary['kind'] == 'job':
+                    job = jobs[primary['value']]
+                    if job['remote'] in remotes:
+                        group['copies'] = [copy for copy in group['copies'] if copy['source'] != 'Remote']
+                        group['copies'].append(dict(source='Remote', kind='job-remote',
+                                                    value=job['id'], name=primary['name']))
         return choices
 
     def show_folder_picker(self, *, initialize=True):
@@ -57,27 +81,34 @@ class FolderHubUI:
         self.show_view(box, destination='files', root=True)
 
     def build_folder_picker(self):
-        self.folder_picker_choices = self.folder_choices()
-        self.folder_choice = toga.Selection(items=['Choose a folder…', *self.folder_picker_choices], style=Pack(height=44))
-        self.folder_choice.value = 'Choose a folder…'
+        self.folder_list = toga.Box(style=Pack(direction=COLUMN))
+        self.folder_refresh_button = refresh_button(self.refresh_folder_hub)
+        self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=44, flex=1))
         box = toga.Box(children=[toga.Label('Files', style=Pack(font_size=24, margin_bottom=12)),
-            self.folder_choice,
-            toga.Label(import_hint('Choose a folder. Available actions follow its copies.'), style=Pack(font_size=12, margin_top=8)),
-            toga.Box(children=[toga.Button('Connections', on_press=self.show_cloud_connections, style=Pack(height=44, flex=1)),
-                toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=44, flex=1)),
-                toga.Button('Refresh', on_press=self.refresh_folder_hub, style=Pack(height=44, flex=1))],
-                style=Pack(direction=ROW, margin_top=12))], style=Pack(direction=COLUMN, margin=12, flex=1))
-        self.folder_choice.on_change = self.choose_picker_folder
+            toga.Box(children=[self.folder_transfers_button, self.folder_refresh_button],
+                style=Pack(direction=ROW, margin_bottom=12)),
+            toga.Button('Add SMB / Mac share…', on_press=self.show_smb_connection, style=Pack(height=44, margin_bottom=8)),
+            toga.Label(import_hint('Choose a folder. Available actions follow its copies.'), style=Pack(font_size=12, margin_bottom=8)),
+            toga.ScrollContainer(horizontal=False, content=self.folder_list, style=Pack(flex=1))],
+            style=Pack(direction=COLUMN, margin=12, flex=1))
+        self.update_folder_list(self.folder_choices())
         return box
 
-    def choose_picker_folder(self, widget, **kwargs):
-        entry = self.folder_picker_choices.get(widget.value)
+    def update_folder_list(self, choices):
+        self.folder_picker_choices = choices
+        for child in list(self.folder_list.children):
+            self.folder_list.remove(child)
+        self.folder_buttons = {}
+        for name in choices:
+            def select(widget=None, selected=name, **kwargs):
+                self.choose_folder(selected)
+            button = list_button(toga.Button(name, on_press=select, style=Pack(height=48, margin_bottom=4)))
+            self.folder_buttons[name] = button
+            self.folder_list.add(button)
+
+    def choose_folder(self, name):
+        entry = self.folder_picker_choices.get(name)
         if entry is not None:
-            # UIKit Selection uses a text field with a wheel input view.
-            # Dismiss that input before moving to another navigation page.
-            native = getattr(getattr(widget, '_impl', None), 'native', None)
-            if native is not None and hasattr(native, 'resignFirstResponder'):
-                native.resignFirstResponder()
             self.show_picker_folder(entry)
 
     def show_picker_folder(self, entry):
@@ -87,20 +118,23 @@ class FolderHubUI:
         async def browse(widget=None, **kwargs):
             await self.open_picker_folder(entry)
         self.folder_action_controls = []
-        self.folder_browse_button = toga.Button('Browse folder', on_press=browse,
+        descriptions = {'Local': 'On this device', 'LocalCrypt': 'Encrypted on this device', 'Remote': 'Online'}
+        self.folder_browse_button = toga.Button('Browse ' + entry['source'], on_press=browse,
             enabled=not self.cloud_busy or entry['source'] == 'Local', style=Pack(height=48))
         box = toga.Box(children=[toga.Button('Choose another folder', on_press=self.show_locations, style=Pack(height=44)),
             toga.Label(fill(entry['name'], width=24), style=Pack(font_size=22, margin_top=12)),
-            toga.Label(entry['source'], style=Pack(font_size=12, margin_bottom=12)), self.folder_browse_button],
+            toga.Label(descriptions[entry['source']], style=Pack(font_size=12, margin_bottom=12)), self.folder_browse_button],
             style=Pack(direction=COLUMN, margin=12, flex=1))
         self.folder_action_controls.append((self.folder_browse_button, entry['source'] != 'Local'))
+        seen = {(entry['source'], entry['kind'], str(entry['value']))}
         for copy in entry.get('copies', []):
-            if copy == {key: entry[key] for key in ('source', 'kind', 'value', 'name')}:
+            identity = (copy['source'], copy['kind'], str(copy['value']))
+            if identity in seen:
                 continue
+            seen.add(identity)
             async def alternate(widget=None, selected=copy, **kwargs):
                 await self.open_picker_folder(selected)
-            button = toga.Button('Browse online' if copy['source'] == 'Remote' else 'Browse ' + copy['source'] + ' copy',
-                on_press=alternate, style=Pack(height=44))
+            button = toga.Button('Browse ' + copy['source'], on_press=alternate, style=Pack(height=44))
             self.folder_action_controls.append((button, copy['source'] != 'Local'))
             box.add(button)
         if entry['kind'] == 'job':
@@ -124,6 +158,20 @@ class FolderHubUI:
             async def delete(widget=None, **kwargs):
                 await self.delete_picker_folder(entry)
             button = toga.Button('Delete local folder…', on_press=delete, style=Pack(height=44, margin_top=12))
+            self.folder_action_controls.append((button, True))
+            box.add(button)
+        if entry['kind'] == 'job':
+            def remove_mapping(widget=None, **kwargs):
+                if self.cloud_busy or getattr(self, 'transfer_busy', False):
+                    return
+                try:
+                    self.mirror_store().remove(entry['value'])
+                    if getattr(self, 'mirror_push_plan', None) is not None and self.mirror_push_plan['job'] == entry['value']:
+                        self.invalidate_mirror_review()
+                    self.show_locations()
+                except (OSError, ValueError) as error:
+                    self.folder_picker_status.text = str(error)
+            button = toga.Button('Remove mapping (keep files)', on_press=remove_mapping, style=Pack(height=44))
             self.folder_action_controls.append((button, True))
             box.add(button)
         box.add(self.folder_picker_status)
@@ -151,7 +199,23 @@ class FolderHubUI:
         if kind == 'crypt':
             await self.show_files()
             return await self.browser_file_location((value, ''))
-        remote, path = value
+        if kind == 'job-remote':
+            job = self.mirror_store().jobs.get(value)
+            if job is None:
+                self.folder_picker_status.text = 'This folder mapping is no longer available. Choose another folder.'
+                return False
+            remote, path = job['remote'], job['prefix']
+            try:
+                if self.cloud_client.connection_identity(remote) != job['identity']:
+                    raise ValueError('Load the matching connection first.')
+                if job['crypt']:
+                    path = self.cloud_client.request('crypt_path', remote=remote, identity=job['cipher_identity'],
+                                                     path=path, directory=True, decode=True)['path']
+            except (OSError, ValueError) as error:
+                self.folder_picker_status.text = str(error)
+                return False
+        else:
+            remote, path = value
         if remote not in [row.value for row in self.cloud_remote.items]:
             self.folder_picker_status.text = 'Load the matching connection first.'
             return False
@@ -166,22 +230,13 @@ class FolderHubUI:
         for button, needs_idle in getattr(self, 'folder_action_controls', []):
             button.enabled = not busy or not needs_idle
         # Credential restore can finish while Files is already showing its root.
-        # Refresh that selector in place instead of leaving a local-only snapshot.
+        # Refresh the list in place instead of leaving a local-only snapshot.
         host = getattr(self, 'native_host', None)
-        if (not busy and hasattr(self, 'folder_choice') and host is not None
+        if (not busy and hasattr(self, 'folder_list') and host is not None
                 and host.state.destination == 'files' and not self.routes.screens['files']):
             choices = self.folder_choices()
             if choices != self.folder_picker_choices:
-                self.folder_picker_choices = choices
-                self.folder_choice.on_change = None
-                try:
-                    self.folder_choice.items = ['Choose a folder…', *choices]
-                    self.folder_choice.value = 'Choose a folder…'
-                    picker = getattr(self.folder_choice._impl, 'native_picker', None)
-                    if picker is not None:
-                        picker.reloadAllComponents()
-                finally:
-                    self.folder_choice.on_change = self.choose_picker_folder
+                self.update_folder_list(choices)
         status = getattr(self, 'folder_picker_status', None)
         if status is not None:
             status.text = import_hint('A connection is busy. Local files remain available; online and encrypted operations wait until it finishes.') if busy else ''

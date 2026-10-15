@@ -10,6 +10,7 @@ class HubDocumentTests(unittest.TestCase):
         self.directory = TemporaryDirectory()
         LogisticsMobile.storage_root = Path(self.directory.name)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        self.app.show_documents()
 
     def tearDown(self):
         self.app.main_window.close()
@@ -23,6 +24,8 @@ class HubDocumentTests(unittest.TestCase):
         app.editor.value = 'Retain my draft'
         app.show_home()
         app.new_hub_document()
+        self.assertEqual(app.body.children[0].children[0].text, 'Choose a file type')
+        app.body.children[0].children[1].on_press()
         self.assertNotEqual(app.current.id, first)
         self.assertEqual(app.native_host.state.destination, 'documents')
         self.assertIn(app.document_view, app.body.children)
@@ -48,7 +51,7 @@ class HubDocumentTests(unittest.TestCase):
                 await result
             self.assertEqual(app.native_host.state.destination, 'files')
             self.assertIn('All files', app.folder_picker_choices)
-            app.folder_choice.value = 'All files'
+            app.folder_buttons['All files'].on_press()
             await app.folder_browse_button.on_press()
             self.assertIn(app.files_view, app.body.children)
             self.assertEqual(app.file_storage.value, 'Local files')
@@ -117,6 +120,7 @@ class HubDocumentTests(unittest.TestCase):
         first = app.editor_view
         first.search.query.value = 'first'
         app.new_hub_document()
+        app.body.children[0].children[1].on_press()
         app.editor.value = 'second'
         second = app.editor_view
         second.search.query.value = 'second'
@@ -134,6 +138,184 @@ class HubDocumentTests(unittest.TestCase):
             self.assertEqual(grid.columns, columns)
             self.assertEqual([card for row in grid.children for card in row.children], cards)
             self.assertTrue(all(len(row.children) <= columns for row in grid.children))
+
+    def test_documents_group_open_and_stored_files_by_type(self):
+        import toga
+        app = self.app
+        app.preferences.save(document_card_overview='false')
+        text = app.store.create('Notes.txt')
+        markdown = app.store.create('Plan.MD')
+        duplicate = app.store.create('Plan.MD')
+        # Interleaved sessions must become contiguous type groups.
+        for doc in (markdown, text, duplicate):
+            app.workspace.open('managed-text', doc.id, 'text', doc.name)
+        app.refresh_documents()
+        content = app.build_documents_hub().content
+        labels = [child.text for child in content.children if isinstance(child, toga.Label)]
+        self.assertEqual([label for label in labels if label.startswith('Markdown ·')],
+                         ['Markdown · 2', 'Markdown · 2'])
+        self.assertFalse(any(label.startswith(('EPUB books ·', 'Comics ·')) for label in labels))
+        open_rows = [child for child in content.children if hasattr(child, 'commands')]
+        names = [row.children[-1].children[0].text for row in open_rows]
+        self.assertLess(names.index('Notes.txt'), names.index('Plan.MD'))
+        # Clean grouped rows consist only of the filename and close menu.
+        self.assertTrue(all(len(row.children) == 1 for row in open_rows))
+        stored_names = [child.text for child in content.children if isinstance(child, toga.Button)]
+        self.assertIn('Plan.MD', stored_names)
+        self.assertIn('Plan.MD (2)', stored_names)
+
+    def test_card_overview_defaults_on_reflows_and_resumes_live_draft(self):
+        app = self.app
+        app.name.value = 'Draft.md'
+        app.editor.value = '# Current draft\nStill unsaved'
+        session_id = app.editor_view.session.id
+        app.show_documents_hub()
+        self.assertEqual(app.preferences.values['document_card_overview'], 'true')
+        grid = next(grid for grid in app.document_grids
+                    if any(card.session_id == session_id for card in grid.cards))
+        card = next(card for card in grid.cards if card.session_id == session_id)
+        self.assertIn('Current draft', card.children[1].text)
+        self.assertIn('Unsaved changes', card.children[2].text)
+        for width, columns in ((390, 2), (1200, 3), (390, 2)):
+            grid.reflow(width)
+            self.assertEqual(grid.columns, columns)
+            self.assertEqual(len(grid.children[0].children), columns)
+        card.children[-1].on_press()
+        self.assertEqual(app.workspace.active, session_id)
+        self.assertEqual(app.editor.value, '# Current draft\nStill unsaved')
+        card.children[0].children[1].on_press()
+        self.assertIn(session_id, app.workspace.sessions)  # Unsaved close guard.
+
+    def test_overview_setting_persists_and_feature_settings_are_grouped(self):
+        import toga
+        from logisticsmobile.preferences import Preferences
+        app = self.app
+        app.show_settings()
+        content = app.body.children[0].content
+        labels = [child.text for child in content.children if isinstance(child, toga.Label)]
+        sections = ['App', 'Text & Markdown', 'Books & Comics', 'LM Chat', 'Files']
+        self.assertEqual([label for label in labels if label in sections], sections)
+        app.document_cards_choice.value = False
+        app.save_preferences()
+        self.assertEqual(Preferences(app.private_root).values['document_card_overview'], 'false')
+        app.show_documents_hub()
+        self.assertEqual(app.document_grids, [])
+        self.assertTrue(any(hasattr(child, 'commands') for child in app.body.children[0].content.children))
+
+    def test_cards_do_not_preview_provider_text_or_open_missing_records(self):
+        app = self.app
+        app.editor.value = 'Private provider text'
+        session = app.editor_view.session
+        original = session.provider
+        try:
+            session.provider = 'provider-session'
+            card = app.session_card(session, app.session_summary(session))
+            self.assertEqual(card.children[1].text, 'Text')
+        finally:
+            session.provider = original
+        missing = app.workspace.open('managed-text', 'd' * 32, 'text')
+        card = app.session_card(missing, app.session_summary(missing))
+        self.assertEqual(card.children[1].text, 'Text')
+        self.assertIn('Unavailable', card.children[2].text)
+
+    def test_restored_sessions_resolve_filenames_without_opening_readers(self):
+        from commonUtils.runtime.document_access import LocalDocuments
+        from logisticsmobile.workspace import Workspace
+        from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
+        app = self.app
+        fixtures = app.private_root / 'fixtures'
+        fixtures.mkdir()
+        book, comic = make_books(fixtures)
+        store = app.reader_manager().catalog.library_store
+        records = [store.import_book(LocalDocuments(), path) for path in (book, comic)]
+        text = app.store.create('Restored.md')
+        app.workspace.open('managed-text', text.id, 'text', 'Old name')
+        for record in records:
+            app.workspace.open('library', record['id'], record['kind'], record['name'])
+        app.workspace.save()
+        app.workspace = Workspace(app.private_root)
+        app.text_views.clear()
+        self.assertTrue(all(not session.title for session in app.workspace.sessions.values()))
+        summaries = {session.resource: app.session_summary(session)
+                     for session in app.workspace.sessions.values()}
+        self.assertEqual(summaries[text.id][:2], ('Restored.md', 'markdown'))
+        for record in records:
+            self.assertEqual(summaries[record['id']][:2], (record['name'], record['kind']))
+            self.assertEqual(summaries[record['id']][2], [])
+        self.assertFalse(app.readers.controllers)
+        # Names stay out of the workspace manifest.
+        self.assertNotIn('Restored.md', app.workspace.path.read_text())
+        store.path(records[0]['id'], '.json').unlink()
+        missing = next(session for session in app.workspace.sessions.values()
+                       if session.resource == records[0]['id'])
+        self.assertIn('Unavailable; retry to reopen', app.session_summary(missing)[2])
+
+    def test_grouped_rows_retain_recovery_and_unavailable_status(self):
+        app = self.app
+        app.name.value = 'Current name.md'
+        app.editor_view.session.title = 'Stale name.txt'
+        self.assertEqual(app.session_summary(app.editor_view.session)[:2], ('Current name.md', 'markdown'))
+        doc = app.store.create('Recovered.md')
+        doc.text = 'Unsaved draft'
+        app.store.checkpoint(doc)
+        session = app.workspace.open('managed-text', doc.id, 'text')
+        self.assertEqual(app.session_summary(session), ('Recovered.md', 'markdown', ['Recovered draft']))
+        app.store.path(doc.id, '.json').unlink()
+        row = app.session_panel(session, close=True, show_kind=False)
+        self.assertIn('Unavailable', row.children[0].text)
+        self.assertTrue(hasattr(row, 'commands'))
+
+    def test_restart_clears_clean_sessions_keeps_drafts_conflicts_and_stored_bytes(self):
+        app = self.app
+        clean = app.current.id
+        app.editor.value = 'Saved writing'
+        app.save_document()
+        app.new_document()
+        app.editor.value = 'Pending draft'
+        draft = app.current.id
+        app.new_document()
+        conflict = app.current.id
+        app.current.snapshot.path.write_bytes(b'Changed elsewhere')
+        app.workspace.open('managed-text', 'f' * 32, 'text')
+        app.workspace.open('library', 'e' * 32, 'epub')
+        app.save_workspace()
+        restored = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        try:
+            resources = {session.resource for session in restored.workspace.sessions.values()}
+            self.assertEqual(resources, {draft, conflict, 'f' * 32})
+            self.assertEqual(restored.store.open(clean).text, 'Saved writing')
+            self.assertEqual(restored.store.open(draft).text, 'Pending draft')
+        finally:
+            restored.main_window.close()
+
+    def test_disabled_clear_setting_restores_saved_documents(self):
+        app = self.app
+        app.show_settings()
+        app.clear_documents_choice.value = False
+        app.save_preferences()
+        key = app.current.id
+        app.save_workspace()
+        restored = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        try:
+            self.assertEqual(restored.current.id, key)
+            self.assertEqual(restored.preferences.values['clear_unmodified_documents_on_restart'], 'false')
+        finally:
+            restored.main_window.close()
+
+    def test_markdown_choice_and_independent_chat_destination(self):
+        app = self.app
+        app.new_hub_document()
+        app.body.children[0].children[2].on_press()
+        self.assertEqual(app.current.name, 'Untitled.md')
+        self.assertEqual(app.editor_view.session.kind, 'markdown')
+        document_routes = list(app.routes.screens['documents'])
+        app.native_host.root.current_tab = 'Chat'
+        app.native_host._selected(app.native_host.root)
+        self.assertEqual(app.native_host.state.destination, 'chat')
+        self.assertIn(app.chat_view, app.body.children)
+        app.show_chat_configuration()
+        self.assertEqual(app.native_host.state.destination, 'chat')
+        self.assertEqual(app.routes.screens['documents'], document_routes)
 
 
 if __name__ == '__main__':

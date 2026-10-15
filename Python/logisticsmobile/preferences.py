@@ -7,6 +7,8 @@ from commonUtils.formats.iniType import INIFile
 from commonUtils.persistence import atomic_write_bytes
 
 DEFAULTS = {'font_size': '16', 'restore_last_document': 'true', 'last_document': '',
+            'document_card_overview': 'true',
+            'clear_unmodified_documents_on_restart': 'true',
             'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]'}
 
 
@@ -51,6 +53,10 @@ class Preferences:
             raise ValueError('Choose a supported font size.')
         if values['restore_last_document'] not in {'true', 'false'}:
             raise ValueError('Invalid document restore preference.')
+        if values['document_card_overview'] not in {'true', 'false'}:
+            raise ValueError('Invalid document overview preference.')
+        if values['clear_unmodified_documents_on_restart'] not in {'true', 'false'}:
+            raise ValueError('Invalid document clearing preference.')
         if values['reading_margin'] not in {'8', '16', '24', '32'} or values['reading_theme'] not in {'system', 'light', 'dark'}:
             raise ValueError('Invalid reader appearance preference.')
         packages = json.loads(values['remote_packages'])

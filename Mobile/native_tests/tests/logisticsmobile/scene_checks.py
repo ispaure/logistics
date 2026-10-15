@@ -22,6 +22,7 @@ async def exercise_scenes(app):
         await asyncio.sleep(.1)
     assert len(manager.owners.hosts) == 2, manager.error
     child = next(host for host in manager.owners.hosts.values() if host is not app)
+    child.show_documents()
     assert child.main_window._impl.native.windowScene != app.main_window._impl.native.windowScene
     assert child.main_window._impl.native.windowScene is not None
     assert child.routes is not app.routes and child.editor is not app.editor

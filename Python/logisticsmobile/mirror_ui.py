@@ -105,7 +105,7 @@ class MirrorUI:
     def show_transfers(self, widget=None, *, present=True, **kwargs):
         store = self.mirror_store()
         box = toga.Box(style=Pack(direction=COLUMN, margin=12))
-        box.add(toga.Label('Local copies & transfers', style=Pack(font_size=22)))
+        box.add(toga.Label('Transfer details', style=Pack(font_size=22)))
         box.add(toga.Label('Pull: remote → device · Push: device → remote', style=Pack(font_size=12, margin_bottom=8)))
         self.transfer_progress = toga.ProgressBar(max=100, value=100 if getattr(self, 'transfer_complete', False) else 0, style=Pack(height=12))
         self.transfer_notice = toga.Label(store.error or getattr(self, 'transfer_message', 'Writing and ordinary reading can continue during a transfer.'))
@@ -115,53 +115,24 @@ class MirrorUI:
             box.add(toga.Button('Open pending push review', on_press=lambda widget, **kw: self.show_mirror_push_review(), style=Pack(height=44)))
         if getattr(self, 'transfer_busy', False):
             box.add(toga.Button('Cancel transfer', on_press=self.cancel_mirror_transfer, style=Pack(height=44)))
-        for job in list(store.jobs.values()):
-            key = job['id']
-            card = toga.Box(style=Pack(direction=COLUMN, margin_top=12, margin_bottom=8))
-            box.add(card)
-            card.add(toga.Label(job['remote'], style=Pack(font_size=18, font_weight='bold')))
-            card.add(toga.Label(('Encrypted app-private copy' if job['crypt'] else 'On this device/Local/' + job['target'])
-                               + (' · downloaded' if store.target(job).exists() else ' · not downloaded')))
-            def open_copy(widget=None, selected=key, **kw):
-                self.loop.create_task(self.open_mirror_copy(selected))
-            def pull(widget=None, selected=key, **kw):
-                self.start_mirror_pull(selected)
-            def review(widget=None, selected=key, **kw):
-                self.start_mirror_review(selected)
-            card.add(toga.Box(children=[toga.Button('Open', on_press=open_copy, style=Pack(height=44, flex=1)),
-                toga.Button('Pull', on_press=pull, style=Pack(height=44, flex=1)),
-                toga.Button('Push…', on_press=review, style=Pack(height=44, flex=1))], style=Pack(direction=ROW)))
-            def remove(widget=None, selected=key, **kw):
-                if self.cloud_busy or getattr(self, 'transfer_busy', False):
-                    return
-                try:
-                    store.remove(selected)
-                    if getattr(self, 'mirror_push_plan', None) is not None and self.mirror_push_plan['job'] == selected:
-                        self.invalidate_mirror_review()
-                    self.show_transfers()
-                except (OSError, ValueError) as error:
-                    self.transfer_notice.text = str(error)
-            async def delete_copy(widget=None, selected=key, **kw):
-                await self.delete_mirror_copy(selected)
-            from .action_menu import FeatureCommands
-            more = toga.Button('Folder options', style=Pack(height=44))
-            card.commands = FeatureCommands(more, self, [('Remove mapping (keep files)', remove),
-                ('Delete local folder…', delete_copy)], lambda selected=key: self.show_transfer_folder_options(selected))
-            card.add(more)
-        box.add(toga.Button('Choose a remote to pull', on_press=self.show_cloud, style=Pack(height=44, margin_top=12)))
         self.transfer_view = toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
         if present:
-            self.show_view(self.transfer_view, destination='files', route='transfers', title='Local copies & transfers')
+            self.show_view(self.transfer_view, destination='files', route='transfers', title='Transfer details')
         if getattr(self, 'transfer_busy', False):
             self.transfer_progress.max = None
             self.transfer_progress.start()
 
-    def show_transfer_folder_options(self, key):
-        box = toga.Box(children=[toga.Button('Delete local folder…',
-            on_press=lambda widget, **kw: self.loop.create_task(self.delete_mirror_copy(key)), style=Pack(height=48)),
-            toga.Button('Return to transfers', on_press=self.show_transfers, style=Pack(height=44))],
-            style=Pack(direction=COLUMN, margin=16))
-        self.show_view(box, destination='files', route='transfer-folder-options', title='Folder options')
+    def choose_transfer_copy(self, jobs, *, push=False):
+        """Resolve an ambiguous transfer without turning details into a folder list."""
+        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
+        box.add(toga.Label('Choose local copy', style=Pack(font_size=22)))
+        for job in jobs:
+            storage = 'LocalCrypt' if job['crypt'] else 'Local'
+            def choose(widget=None, selected=job['id'], **kwargs):
+                (self.start_mirror_review if push else self.start_mirror_pull)(selected)
+            box.add(toga.Button(storage + '/' + job['target'], on_press=choose, style=Pack(height=48)))
+        box.add(toga.Button('Choose another folder', on_press=self.show_locations, style=Pack(height=44)))
+        self.show_view(box, destination='files', route='transfer-copy', title='Choose local copy')
 
     async def delete_mirror_copy(self, key):
         if self.cloud_busy or getattr(self, 'transfer_busy', False) or not self.clear_private_reader():
@@ -272,8 +243,7 @@ class MirrorUI:
             self.start_mirror_pull(matches[0]['id'])
             return
         if matches:
-            self.show_transfers()
-            self.transfer_notice.text = 'Multiple local copies match. Choose Pull beside the destination you want.'
+            self.choose_transfer_copy(matches)
             return
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         box.add(toga.Label('Pull ' + remote, style=Pack(font_size=22)))
@@ -305,9 +275,14 @@ class MirrorUI:
         if remote != self.cloud_open_remote:
             self.cloud_status.value = 'Open the remote before reviewing a push.'
             return
-        # Transfer cards retain prefix and identity so a Push cannot select another account.
-        self.show_transfers()
-        self.transfer_notice.text = 'Choose Push beside the local copy to review its destination and replacements.'
+        jobs = [job for job in self.mirror_store().jobs.values()
+                if job['remote'] == remote and self.mirror_store().target(job).is_dir()]
+        if len(jobs) == 1:
+            self.start_mirror_review(jobs[0]['id'])
+        elif jobs:
+            self.choose_transfer_copy(jobs, push=True)
+        else:
+            self.cloud_status.value = 'No local copy exists. Choose a folder in Files and Pull first.'
 
     async def run_mirror_work(self, work, operation):
         if getattr(self, 'transfer_busy', False):

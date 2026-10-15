@@ -28,7 +28,7 @@ class TextEditorView:
         box = self.document_view = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=12))
         self.actions_button = toga.Button('•••', style=Pack(width=44, height=44))
         self.actions = ActionMenu(self.actions_button, self, [
-            ('Open documents', app.show_documents_hub), ('New document', app.new_document),
+            ('Open documents', app.show_documents_hub), ('New document', app.choose_document_type),
             ('Import…', lambda: app.import_document(origin=self)), ('Open from Files…', app.show_editor_open),
             ('Save', app.save_document), ('Save a copy', app.save_copy),
             ('Save As…', app.show_document_save_as), ('Export…', lambda: app.export_document(origin=self)),
