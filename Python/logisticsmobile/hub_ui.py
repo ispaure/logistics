@@ -77,11 +77,17 @@ class PanelGrid(toga.Box):
 
 
 class HubUI:
+    def session_visible(self, session):
+        if session.provider == 'provider-session':
+            manager = getattr(self, 'private_sessions', None)
+            return manager is not None and manager.available(session.id)
+        return True
+
     def build_home(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         box.add(toga.Label('Welcome to Logistics', style=Pack(font_size=28, font_weight='bold', margin_bottom=20)))
         active = self.workspace.sessions.get(self.workspace.active)
-        if active is not None:
+        if active is not None and self.session_visible(active):
             title, kind, details = self.session_summary(active)
             hero = toga.Box(style=Pack(direction=COLUMN, margin_bottom=12))
             hero_content = toga.Box(style=Pack(direction=COLUMN, margin=18))
@@ -130,8 +136,11 @@ class HubUI:
         launchers = []
         self.document_grids = []
         self.document_categories = {}
-        sessions = [(self.session_summary(session)[1], session, self.session_summary(session))
-                    for session in self.workspace.sessions.values()]
+        sessions = []
+        for session in self.workspace.sessions.values():
+            if self.session_visible(session):
+                summary = self.session_summary(session)
+                sessions.append((summary[1], session, summary))
         for title, detail, glyph, extension in (
             ('Text Editor', 'Edit plain text and code files.', 'text', 'txt'),
             ('Markdown Editor', 'Write and preview formatted notes.', 'markdown', 'md'),

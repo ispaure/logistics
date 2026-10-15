@@ -115,6 +115,38 @@ class PrivateSessionTests(unittest.TestCase):
         with patch.object(self.copies, 'open', side_effect=delayed):
             self.run_async(exercise())
 
+    def test_private_names_never_enter_history_and_locked_sessions_are_hidden(self):
+        from types import SimpleNamespace
+        self.app.cloud_client = SimpleNamespace(generation=1, cancel=lambda: None)
+        owner = self.open('Sensitive-title.md', b'Sensitive body')
+        owner.credential_client = self.app.cloud_client
+        owner.credential_generation = self.app.cloud_client.generation
+        # Model the encrypted provider boundary with a memory-only test reader.
+        owner._crypt_reader_store.encrypted = True
+        self.assertTrue(self.app.session_visible(owner.session))
+        self.app.save_workspace()
+        self.app.recent_documents.remember(owner.session)
+        for path in (self.root / 'workspace.json', self.root / 'recent-documents.json'):
+            if path.exists():
+                raw = path.read_text()
+                for secret in ('Sensitive-title', 'Sensitive body', owner.session.resource, 'provider-session'):
+                    self.assertNotIn(secret, raw)
+        self.app.cloud_client.generation += 1
+        self.assertFalse(self.app.session_visible(owner.session))
+        self.assertFalse(self.app.private_sessions.activate(owner.session.id))
+        self.app.show_documents_hub()
+        def texts(widget):
+            return [getattr(widget, 'text', '')] + [text for child in getattr(widget, 'children', ()) for text in texts(child)]
+        self.assertFalse(any('Sensitive-title' in text for text in texts(self.app.document_categories['markdown'])))
+        self.assertEqual(self.app.recent_documents.sessions(), [])
+        # Even an incorrectly cleared transient flag cannot persist a private provider.
+        owner.session.transient = False
+        self.app.workspace.save()
+        self.assertNotIn(owner.session.resource, self.app.workspace.path.read_text())
+        owner.session.transient = True
+        self.app.show_home()
+        self.assertIsNone(getattr(self.app, 'home_continue', None))
+
     def test_two_private_drafts_duplicate_activation_and_inactive_save(self):
         a = self.open('A.md')
         a.crypt_text.value = 'A memory draft'
