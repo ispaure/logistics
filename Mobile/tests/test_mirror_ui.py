@@ -24,6 +24,52 @@ async def drive_review(app, *, declined=False, early=False):
 
 
 class MirrorUITests(unittest.TestCase):
+    def test_transfer_details_keep_review_endpoints_during_work_and_after_reopening(self):
+        from features.rclone.mobile.messages import import_hint
+        class Client(MirrorClient):
+            def crypt_remotes(self): return ['Secret']
+            def cancel(self): pass
+        for crypt, push, new in ((False, False, True), (False, True, False),
+                                 (True, False, False), (True, True, False)):
+            with self.subTest(crypt=crypt, push=push, new=new), TemporaryDirectory() as directory:
+                LogisticsMobile.storage_root = Path(directory)
+                app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                try:
+                    app.cloud_client = Client()
+                    app.show_cloud(present=False)
+                    remote, storage = ('Secret', 'LocalCrypt') if crypt else ('Remote', 'Local')
+                    store = app.mirror_store()
+                    job = store.prepare_review(app.cloud_client, remote, 'folder', storage=storage)
+                    if not new:
+                        job, _ = store.create(app.cloud_client, remote, 'folder', storage=storage)
+                    prefix = job['prefix'] if not new else 'folder'
+                    online = remote + ':' + prefix
+                    local = storage + '/' + job['target'] + ('/' + prefix if crypt else '')
+                    source, destination = (local, online) if push else (online, local)
+                    expected = import_hint(f'From: {source}\nTo: {destination}')
+                    shown = []
+                    original = app.show_transfers
+                    def show(*args, **kwargs):
+                        original(*args, **kwargs)
+                        if getattr(app, 'transfer_endpoints', None):
+                            self.assertEqual(app.transfer_view.content.children[1].text, expected)
+                            shown.append(app.transfer_busy)
+                    async def exercise():
+                        with patch.object(app, 'show_transfers', side_effect=show), patch.object(
+                                app.main_window, 'dialog', new=AsyncMock(return_value=True)):
+                            app.begin_transfer_review(None if new else job['id'], push=push,
+                                                      remote=remote, folder='folder', storage=storage)
+                            self.assertTrue(await drive_review(app))
+                            app.show_locations()
+                            app.show_transfers()
+                        self.assertIn(True, shown)
+                        self.assertIn(False, shown)
+                    app.loop.run_until_complete(exercise())
+                finally:
+                    app.main_window.close()
+                    app.loop.close()
+                    LogisticsMobile.storage_root = None
+
     def test_native_review_replaces_partial_snapshots_and_publishes_final_cleanup(self):
         from features.rclone.review import ReviewScan
         from features.rclone.mobile.transfer_review_ui import native_scanner

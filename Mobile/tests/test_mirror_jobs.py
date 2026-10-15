@@ -83,6 +83,26 @@ class MirrorClient:
 
 
 class MirrorJobTests(unittest.TestCase):
+    def test_inspect_large_copy_and_keep_link_and_cancellation_checks(self):
+        with TemporaryDirectory() as directory:
+            store = MirrorJobs(directory)
+            local = store.root / 'LocalFiles' / 'Large'
+            local.mkdir(parents=True)
+            for index in range(10001):
+                (local / f'{index:05}.txt').touch()
+            for copy_links in (False, True):
+                with self.subTest(copy_links=copy_links):
+                    self.assertEqual(len(store.inspect(local, copy_links=copy_links)), 10001)
+                    with self.assertRaisesRegex(ValueError, 'cancelled'):
+                        store.inspect(local, lambda: True, copy_links=copy_links)
+                    link = local / 'zz-linked-folder'
+                    link.symlink_to(local, target_is_directory=True)
+                    try:
+                        with self.assertRaisesRegex(ValueError, 'Linked directories'):
+                            store.inspect(local, copy_links=copy_links)
+                    finally:
+                        link.unlink()
+
     def test_inferred_push_uses_folder_name_and_specific_push_uses_remote_subfolder(self):
         with TemporaryDirectory() as directory:
             store, client = MirrorJobs(directory), MirrorClient()

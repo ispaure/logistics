@@ -131,6 +131,8 @@ class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, Read
         self.routes.install()
         self.refresh_native_theme()
         self.adaptive.install()
+        from .fold_layout import install as install_fold_layout
+        install_fold_layout(self)
         from commonUtils.ui.native.memory import MemoryPressure
         self.memory_pressure = MemoryPressure(self, on_pressure=self.release_disposable_resources,
                                               on_configuration=self.native_configuration_changed)
@@ -206,7 +208,7 @@ class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, Read
     def resize_workspace(self, widget=None, *args, **kwargs):
         self.adaptive.render()
         if hasattr(self, 'home_panels') and self.main_window.content is self.native_host.root:
-            self.home_panels.reflow(self.main_window.size.width)
+            self.reflow_home()
         if hasattr(self, 'document_launchers'):
             self.document_launchers.reflow(self.main_window.size.width)
         for grid in getattr(self, 'document_grids', []):

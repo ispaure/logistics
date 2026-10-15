@@ -119,8 +119,12 @@ return true;
 })()'''
 
 
-def navigation_clearance(viewport_top, viewport_bottom, bar_top, bar_height):
+def navigation_clearance(viewport_top, viewport_bottom, bar_top, bar_height, *, bar_width=None):
     """Keep the composer twelve points above a visible bar in its viewport."""
+    # Duo can move the tab bar into a vertical rail. UIKit reserves its side
+    # safe area; its height must never become bottom padding for the page.
+    if bar_width is not None and bar_height > bar_width:
+        return 12
     if bar_height <= 0 or bar_top >= viewport_bottom or bar_top + bar_height <= viewport_top:
         return 12
     return max(12, int(viewport_bottom - max(viewport_top, bar_top)) + 12)

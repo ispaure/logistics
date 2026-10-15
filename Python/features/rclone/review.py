@@ -64,8 +64,6 @@ class ReviewScan:
             raise ValueError('Invalid comparison result.')
         with self.lock:
             key = ('cleanup' if kind == 'cleanup' else 'transfer', path)
-            if len(self.changes) >= 10000 and key not in self.changes:
-                raise ValueError('Review exceeds 10,000 entries. Narrow the scope or proceed without a full review.')
             self.changes[key] = (kind, path)
 
     def replace(self, changes):
@@ -75,8 +73,6 @@ class ReviewScan:
             if kind not in ('add', 'replace', 'delete', 'match', 'cleanup') or not isinstance(path, str):
                 raise ValueError('Invalid comparison result.')
             rows[('cleanup' if kind == 'cleanup' else 'transfer', path)] = (kind, path)
-            if len(rows) > 10000:
-                raise ValueError('Review exceeds 10,000 entries. Narrow the scope or proceed without a full review.')
         with self.lock:
             self.changes = rows
 

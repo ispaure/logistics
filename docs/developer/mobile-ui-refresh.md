@@ -6,6 +6,35 @@ pushes, tags or releases were made for this refresh.
 
 ## Implemented presentation
 
+### Duo destination rail clearance
+
+The floating-navigation clearance calculation uses both native bar dimensions.
+A vertical Duo destination rail relies on UIKit's side safe area and adds no
+bottom reservation. Previously, its height was treated as a bottom overlap,
+adding 596 points of margin and reducing Home, Documents and Settings to a
+100-point viewport. Chat uses the same orientation-aware calculation. Horizontal
+bottom-bar clearance and existing reader margins remain in place. The Documents
+empty-state message also uses explicit short lines to fit narrow native labels.
+
+Validation: 56 focused host tests passed, including bottom bar → rail → bottom
+bar margin restoration. The isolated `navigation_clearance_probe` passed 15
+native page measurements on an iOS 27.1 Duo simulator: Home, Documents, Settings,
+Folder Hub and Chat in portrait, landscape and portrait again. Home/Documents/
+Settings occupied all 596 available points in portrait and 384 in landscape;
+Folder Hub and Chat retained their normal 12-point margins. Both tested poses
+used rails; bottom-bar transitions are covered by host regression tests. This
+does not establish physical fold-transition behavior. Results are retained in
+`mobile-evidence/2026-10-15-duo-navigation-clearance.json`.
+
+A follow-up on the user's unfolded 951 × 669-point Duo found an installed build
+whose staged sources still contained the old clearance calculation. The local
+payload and generated iOS app copies were refreshed along with the installed
+app. Direct measurements confirmed Documents and Settings each occupy all 587
+available points; Settings scrolled to its maximum offset of 464 points with
+Save preferences, Reload preferences and About visible. These local diagnostic
+measurements are in `mobile-evidence/2026-10-15-duo-unfolded-navigation-clearance.json`;
+they are not release snapshot certification.
+
 - Local file rows open on tap. Search is always visible; sort/view controls are
   secondary. Item menus select the correct resource without triggering an open.
   Metadata/cover work remains in the bounded commonUtils browser, with Details

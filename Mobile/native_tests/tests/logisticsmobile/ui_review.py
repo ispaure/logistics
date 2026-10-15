@@ -31,12 +31,16 @@ async def exercise_ui_review(app):
     for index, data in enumerate(variants):
         assert private.page(index) == ('image', data)
     record = await asyncio.to_thread(app.reader_manager().catalog.library_store.import_book, LocalDocuments(), comic)
-    await app.open_book(record['id'])
-    assert app.reader_manager().active.book_reader is not None, app.reader_manager().active.book_status.text
-    for index in range(len(variants)):
-        await app.readers.active.display_book_page(index)
-        image = app.reader_manager().active.book_content.children[0].image
-        assert (image.width, image.height) == (2, 3)
+    from unittest.mock import patch
+    # Decoder dimensions refer to individual pages; automatic tablet spreads
+    # are exercised separately by reader/layout checks.
+    with patch.dict(app.preferences.values, comic_layout='single'):
+        await app.open_book(record['id'])
+        assert app.reader_manager().active.book_reader is not None, app.reader_manager().active.book_status.text
+        for index in range(len(variants)):
+            await app.readers.active.display_book_page(index)
+            image = app.reader_manager().active.book_content.children[0].image
+            assert (image.width, image.height) == (2, 3)
     assert comic.read_bytes() == original
     app.readers.close(app.readers.active.session.id)
     screenshots = []

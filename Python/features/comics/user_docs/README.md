@@ -192,6 +192,10 @@ passwords for batch editing come from the copy's nearest `remoteConfig.ini`.
 Batch editing reports locked comics it cannot open; it does not silently
 change their passwords. Saves preserve page bytes, untouched metadata and the inner
 ZIP password, and update the encrypted local copy until you explicitly Push.
+After a desktop metadata save, the LocalCrypt browser refreshes the selected
+comic's information panel. After a Pull, use **Refresh folder** to reload an
+already-open browser. Pull can replace local metadata with the remote version;
+Push saved local edits first if you want them on the remote.
 
 Comic readers and metadata windows opened from private storage begin their titles with **🕵️ Private -**. Ordinary comic windows keep their existing titles.
 
@@ -234,10 +238,24 @@ image formats fail explicitly instead of silently disappearing from the comic.
 Choose **Appearance → Comic page layout** in an imported reader, or **Appearance…**
 in a provider reader, for Single, Automatic or Two pages. Portrait page
 pairs respect manga visual order; landscape and ComicInfo DoublePage pages remain
-single. Previous/Next and swipes advance past the displayed spread. Imported and provider
+single. Automatic is the mobile default: a reading area wider than tall shows two
+portrait pages; a taller or square area shows one. Existing explicit Single or Two
+pages choices remain available. ComicInfo `Manga=YesAndRightToLeft` places the
+earlier page on the right; left-to-right comics place it on the left.
+Previous/Next and swipes advance past the displayed spread. Imported and provider
+readers show a page slider between the arrows when reading controls are visible;
+drag and release it to jump directly to a page. Manga places Next on the left and
+Previous on the right, with slider progress running from right to left.
 Automatic layouts reevaluate when the viewport changes. Single and Two-page
 views also refit to the available width after rotation. Resizing waits while a
 spread is zoomed; fitting it allows the pending layout update.
+
+In fullscreen comics on iOS and Android, hold a thumb on the page for about
+400 ms to show a 2.5× magnifying bubble. Keep holding and drag to inspect another
+area; release to dismiss. The page stays still while the bubble is open. A second
+finger cancels the bubble so pinch zoom remains available. The bubble is disabled
+when reading controls are visible and is cleared on page changes or leaving the
+reader. It works on single pages and spreads, including Local/LocalCrypt comics.
 
 Two-page spreads use one continuous zoom/pan surface. Pinch to zoom both pages
 together, then drag across the gutter to inspect either page. Page proportions and
@@ -320,3 +338,12 @@ current batch and are never added to the ordinary imported index.
 Encrypted standalone imports still require a native archive writer. Private remote
 trees must first have a managed LocalCrypt copy; this action does not recursively
 rewrite a live remote tree. Unapplied forms are memory-only.
+
+On iPhone Duo with a partially open vertical fold, comics use a page on each
+side of the physical center seam. Portrait pages retain their proportions and
+meet at the seam even when their shapes differ; manga keeps its right-to-left
+order. A final unpaired portrait page stays on its reading side. A landscape
+image remains a single page spanning the available display. Fully opening the
+device restores the selected page-layout preference. This applies to imported
+comics and Local/LocalCrypt/remote comics. Zooming retains the current view until
+returning to fit size, when posture changes can reflow it.

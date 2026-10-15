@@ -84,6 +84,42 @@ class RemoteClient:
 
 
 class RemoteReaderTests(unittest.TestCase):
+    def test_parent_folder_is_in_main_browser_and_walks_back_to_remote_root(self):
+        with TemporaryDirectory() as folder:
+            LogisticsMobile.storage_root = Path(folder)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            client = app.cloud_client = RemoteClient()
+
+            async def check():
+                app.show_cloud()
+                toolbar = app.cloud_up.parent
+                ancestor = toolbar
+                while ancestor is not None and ancestor is not app.cloud_view:
+                    ancestor = ancestor.parent
+                self.assertIs(ancestor, app.cloud_view)
+                self.assertIn(app.cloud_status, toolbar.children)
+                self.assertEqual(app.cloud_up.control_icon, 'up')
+                self.assertEqual(app.cloud_up.style.width, 48)
+                self.assertNotIn(app.remote_browser.back_button,
+                                 app.remote_browser.navigation_controls.children)
+                app.cloud_remote.items = ['Files']
+                app.cloud_location.value = 'Books/Series'
+                self.assertTrue(await app.browse_cloud(preserve_path=True))
+                for expected in ('Books', '', ''):
+                    await app.cloud_up.on_press()
+                    self.assertEqual(app.cloud_path, expected)
+                    self.assertEqual(app.cloud_location.value, expected)
+                    self.assertEqual(client.calls[-1], ('list', expected))
+                app.set_cloud_busy(True)
+                self.assertFalse(app.cloud_up.enabled)
+                app.set_cloud_busy(False)
+                self.assertTrue(app.cloud_up.enabled)
+
+            app.loop.run_until_complete(check())
+
     def test_slow_200_folder_listing_keeps_timer_and_hub_menus_live_then_pages_without_relisting(self):
         from threading import Event, get_ident
         started, release = Event(), Event()

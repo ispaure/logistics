@@ -5,11 +5,24 @@ MAX_PIXELS = 16_000_000
 MAX_SIDE = 8192
 
 
-def spread_geometry(sizes, viewport=None):
+def spread_geometry(sizes, viewport=None, *, seam=None, single_right=False):
     """Equal-height, aspect-preserving pages, in visual order; bound allocation."""
     from features.comics.reading import SPREAD_GAP
     if not 1 <= len(sizes) <= 2 or any(w <= 0 or h <= 0 for w, h in sizes):
         raise ValueError('A spread requires one or two nonempty pages.')
+    if seam is not None and viewport and all(w < h for w, h in sizes):
+        width, height = viewport
+        scale = min(1, MAX_SIDE / width, MAX_SIDE / height, sqrt(MAX_PIXELS / (width * height)))
+        width, height = max(2, int(width * scale)), max(1, int(height * scale))
+        center = min(width - 1, max(1, round(width * seam)))
+        rects = []
+        for index, (w, h) in enumerate(sizes):
+            slot = center if index == 0 and not single_right else width - center
+            fit = min(slot / w, height / h)
+            w, h = max(1, int(w * fit)), max(1, int(h * fit))
+            # Inner page edges meet exactly at the seam, even for unequal pages.
+            rects.append((center - w if index == 0 and not single_right else center, (height - h) // 2, w, h))
+        return (width, height), rects
     height = max(h for w, h in sizes)
     source_gap = SPREAD_GAP
     if viewport is not None and len(sizes) == 2:
@@ -41,7 +54,7 @@ def spread_geometry(sizes, viewport=None):
     return (x - gap, height), rects
 
 
-def compose_spread(data, *, right_to_left=False, viewport=None):
+def compose_spread(data, *, right_to_left=False, viewport=None, seam=None):
     """Decode validated pages and draw into an owned native bitmap, without files."""
     import toga
     from toga.platform import get_factory
@@ -50,7 +63,12 @@ def compose_spread(data, *, right_to_left=False, viewport=None):
     sizes = [image_dimensions(page) for page in data]
     if right_to_left:
         data, sizes = list(reversed(data)), list(reversed(sizes))
-    size, rects = spread_geometry(sizes, viewport=viewport)
+    # Keep half-point window centers representable and avoid rasterizing a
+    # portrait spread at only one bitmap pixel per logical point.
+    if seam is not None and viewport:
+        viewport = tuple(max(1, round(value * 2)) for value in viewport)
+    size, rects = spread_geometry(sizes, viewport=viewport, seam=seam,
+                                  single_right=len(data) == 1 and right_to_left)
     images = [toga.Image(src=page) for page in data]
     backend = get_factory().Image.__module__
     if backend.startswith('toga_android.'):

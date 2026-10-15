@@ -4,7 +4,7 @@ from .control_icons import icon_button
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from .action_menu import FeatureCommands
-from .reader_controls import ReadingFrame
+from .reader_controls import ReadingFrame, PageFooter
 
 
 def sync_comic_chrome(app, view):
@@ -39,7 +39,8 @@ class ReaderChrome:
             icon_button('appearance', 'Reading appearance', on_press=self.show_reader_appearance),
             self.reader_actions_button], style=Pack(direction=ROW))
         self.chapter_selector.style.flex = 1
-        self.reader_footer = toga.Box(children=[self.previous_page, toga.Box(style=Pack(flex=1)), self.next_page], style=Pack(direction=ROW))
+        self.page_footer = PageFooter(self.previous_page, self.next_page, self.move_book_page)
+        self.reader_footer = self.page_footer.widget
         self.reader_restore = toga.Button('Show reading controls', on_press=self.toggle_reading_mode, style=Pack(height=48))
         self.book_status.style.font_size = 12
         self.reader_immersive = False

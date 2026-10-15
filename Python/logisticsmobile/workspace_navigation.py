@@ -270,6 +270,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 self.app.render_chat_workspace()
             from .appearance import reserve_navigation
             reserve_navigation(self.app)
+            if hasattr(self.app, 'home_content'):
+                self.app.reflow_home()
         finally:
             self.rendering = False
 

@@ -1,0 +1,156 @@
+{
+  "success": true,
+  "samples": [
+    {
+      "orientation": "portrait",
+      "page": "home",
+      "rail": true,
+      "height": 596.0,
+      "available_height": 596.0,
+      "bottom_margin": 0,
+      "bar_width": 69.0,
+      "bar_height": 678.0
+    },
+    {
+      "orientation": "portrait",
+      "page": "documents",
+      "rail": true,
+      "height": 596.0,
+      "available_height": 596.0,
+      "bottom_margin": 0,
+      "bar_width": 69.0,
+      "bar_height": 678.0
+    },
+    {
+      "orientation": "portrait",
+      "page": "settings",
+      "rail": true,
+      "height": 596.0,
+      "available_height": 596.0,
+      "bottom_margin": 0,
+      "bar_width": 69.0,
+      "bar_height": 678.0
+    },
+    {
+      "orientation": "portrait",
+      "page": "files",
+      "rail": true,
+      "height": 572.0,
+      "available_height": 596.0,
+      "bottom_margin": 12,
+      "bar_width": 69.0,
+      "bar_height": 678.0
+    },
+    {
+      "orientation": "portrait",
+      "page": "chat",
+      "rail": true,
+      "height": 572.0,
+      "available_height": 596.0,
+      "bottom_margin": 12,
+      "bar_width": 69.0,
+      "bar_height": 678.0
+    },
+    {
+      "orientation": "landscape",
+      "page": "home",
+      "rail": true,
+      "height": 384.0,
+      "available_height": 384.0,
+      "bottom_margin": 0,
+      "bar_width": 132.0,
+      "bar_height": 466.0
+    },
+    {
+      "orientation": "landscape",
+      "page": "documents",
+      "rail": true,
+      "height": 384.0,
+      "available_height": 384.0,
+      "bottom_margin": 0,
+      "bar_width": 132.0,
+      "bar_height": 466.0
+    },
+    {
+      "orientation": "landscape",
+      "page": "settings",
+      "rail": true,
+      "height": 384.0,
+      "available_height": 384.0,
+      "bottom_margin": 0,
+      "bar_width": 132.0,
+      "bar_height": 466.0
+    },
+    {
+      "orientation": "landscape",
+      "page": "files",
+      "rail": true,
+      "height": 360.0,
+      "available_height": 384.0,
+      "bottom_margin": 12,
+      "bar_width": 132.0,
+      "bar_height": 466.0
+    },
+    {
+      "orientation": "landscape",
+      "page": "chat",
+      "rail": true,
+      "height": 360.0,
+      "available_height": 384.0,
+      "bottom_margin": 12,
+      "bar_width": 132.0,
+      "bar_height": 466.0
+    },
+    {
+      "orientation": "portrait-return",
+      "page": "home",
+      "rail": true,
+      "height": 596.0,
+      "available_height": 596.0,
+      "bottom_margin": 0,
+      "bar_width": 69.0,
+      "bar_height": 678.0
+    },
+    {
+      "orientation": "portrait-return",
+      "page": "documents",
+      "rail": true,
+      "height": 596.0,
+      "available_height": 596.0,
+      "bottom_margin": 0,
+      "bar_width": 69.0,
+      "bar_height": 678.0
+    },
+    {
+      "orientation": "portrait-return",
+      "page": "settings",
+      "rail": true,
+      "height": 596.0,
+      "available_height": 596.0,
+      "bottom_margin": 0,
+      "bar_width": 69.0,
+      "bar_height": 678.0
+    },
+    {
+      "orientation": "portrait-return",
+      "page": "files",
+      "rail": true,
+      "height": 572.0,
+      "available_height": 596.0,
+      "bottom_margin": 12,
+      "bar_width": 69.0,
+      "bar_height": 678.0
+    },
+    {
+      "orientation": "portrait-return",
+      "page": "chat",
+      "rail": true,
+      "height": 572.0,
+      "available_height": 596.0,
+      "bottom_margin": 12,
+      "bar_width": 69.0,
+      "bar_height": 678.0
+    }
+  ],
+  "backend": "toga_iOS.app"
+}

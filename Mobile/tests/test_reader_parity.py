@@ -42,6 +42,17 @@ class ReaderParityUITests(unittest.TestCase):
                         owner = app.readers.active
                         self.assertEqual(owner.book_reader.right_to_left, rtl)
                         self.assertEqual(owner.comic_navigation.visible, (0, 1))
+                        self.assertTrue(owner.book_content.children[0].magnifier_enabled)
+                        owner.set_reading_mode(False)
+                        self.assertFalse(owner.book_content.children[0].magnifier_enabled)
+                        footer = owner.page_footer
+                        self.assertEqual(list(footer.widget.children),
+                            [owner.next_page if rtl else owner.previous_page, footer.slider,
+                             owner.previous_page if rtl else owner.next_page])
+                        self.assertEqual(owner.next_page.control_icon, 'back' if rtl else 'forward')
+                        self.assertEqual(owner.previous_page.control_icon, 'forward' if rtl else 'back')
+                        self.assertFalse(owner.previous_page.enabled)
+                        self.assertEqual(footer.slider.value, 3 if rtl else 0)
                         pixels = owner.book_content.children[0].canvas.image._impl.native.raw
                         self.assertEqual(pixels.getpixel((20, 20)), (0, 0, 255, 255) if rtl else (255, 0, 0, 255))
                         owner.swipe_book_page(-1 if rtl else 1)
@@ -49,6 +60,33 @@ class ReaderParityUITests(unittest.TestCase):
                         self.assertEqual(owner.comic_navigation.visible, (2, 3))
                         await owner.previous_book_page()
                         self.assertEqual(owner.comic_navigation.visible, (0, 1))
+                        footer.slider.value = 0 if rtl else 3
+                        self.assertEqual(owner.comic_navigation.visible, (0, 1))
+                        await footer.release(footer.slider)
+                        self.assertEqual(owner.book_record['position'], 3)
+                        self.assertFalse(owner.next_page.enabled)
+                        footer.slider.value = 3 if rtl else 0
+                        await footer.release(footer.slider)
+                        self.assertEqual(owner.book_record['position'], 0)
+                        private = PrivateReader('Private.cbz', source.read_bytes())
+                        app.show_cloud()
+                        with patch.object(app.crypt_copies, 'open', return_value=private):
+                            await app.open_crypt(copies=app.crypt_copies, key='c' * 32)
+                        provider = app.private_sessions.active
+                        self.assertTrue(provider.provider_spread.magnifier_enabled)
+                        provider.toggle_private_reading_mode()
+                        self.assertFalse(provider.provider_spread.magnifier_enabled)
+                        footer = provider.page_footer
+                        self.assertEqual(provider.next_page.control_icon, 'back' if rtl else 'forward')
+                        self.assertIs(footer.widget.children[0], provider.next_page if rtl else provider.previous_page)
+                        footer.slider.value = 0 if rtl else 3
+                        await footer.release(footer.slider)
+                        self.assertEqual(provider.crypt_page.value, private.labels[3])
+                        self.assertFalse(provider.next_page.enabled)
+                        self.assertFalse(provider.provider_spread.magnifier_enabled)
+                        provider.toggle_private_reading_mode()
+                        self.assertTrue(provider.provider_spread.magnifier_enabled)
+                        app.private_sessions.close(provider.session.id, discard=True)
                 app.loop.run_until_complete(exercise())
 
     def test_epub_navigation_search_precise_bookmark_resume_and_stale_callback(self):
@@ -411,12 +449,14 @@ class CompositeRenderingTests(unittest.TestCase):
                     "features.comics.mobile.composite.compose_spread",
                     side_effect=ValueError("native allocation failed"),
                 ):
-                    await owner.move_private_page(2)
+                    owner.page_footer.slider.value = 2
+                    await owner.page_footer.release(owner.page_footer.slider)
                 self.assertIs(owner.provider_spread, before)
                 self.assertIs(before.canvas.image, image)
                 self.assertIn(before, owner.crypt_content.children)
                 self.assertEqual(owner.crypt_reader.comic_navigation.visible, (0, 1))
                 self.assertEqual(owner.crypt_page.value, owner.crypt_reader.labels[0])
+                self.assertEqual(owner.page_footer.slider.value, 0)
                 self.assertTrue(
                     app.private_sessions.close(owner.session.id, discard=True)
                 )

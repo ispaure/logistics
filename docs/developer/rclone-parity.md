@@ -52,8 +52,12 @@ Agreed platform differences remain: mobile has one transfer with no queue,
 app-private credential ZIP storage and mobile screen hiding; desktop retains
 multiple transfers and external ZIP paths. Existing platform limits also remain:
 mobile has a restricted backend/configuration allowlist, container-bound storage,
-no mounts, at most 16 managed mappings and 10,000 transfer entries. Desktop has
-the full CLI backend scope and supports relocated LocalCrypt roots. These limits
+no mounts and at most 16 managed mappings. Transfer preflight has no fixed entry
+cap: Python inventories and the embedded bridge validate the entire local tree
+with cancellation checks. Comparison rows and generated-file cleanup plans also
+have no fixed entry cap in either host. CLI comparison inventories have no byte
+cap, and bridge review requests admit cleanup plans without a request-size cap.
+Desktop has the full CLI backend scope and supports relocated LocalCrypt roots. These limits
 are existing capability boundaries, not new user-approved parity decisions.
 Direct encrypted folder copies also differ: desktop preserves a
 ciphertext folder hierarchy; mobile creates per-file offline records, so empty

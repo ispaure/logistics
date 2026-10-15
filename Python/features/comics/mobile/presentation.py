@@ -16,16 +16,24 @@ def page_view(data, *, canvas, on_page, on_toggle, width=None):
 
 class SpreadView(toga.Box):
     """A complete spread on one native canvas, including its shared gutter."""
-    def __init__(self, data, *, canvas, on_page, on_toggle, right_to_left=False, width=None, viewport=None):
+    def __init__(self, data, *, canvas, on_page, on_toggle, right_to_left=False, width=None, viewport=None, seam=None):
         from .composite import compose_spread
         self._on_page = on_page
-        image = compose_spread(data, right_to_left=right_to_left, viewport=viewport or ((width, None) if width else None))
+        image = compose_spread(data, right_to_left=right_to_left, viewport=viewport or ((width, None) if width else None), seam=seam)
         self.canvas = canvas(image=image, on_page=self.turn, on_toggle=on_toggle,
             description='Comic spread. Pinch to zoom both pages; drag across the spread. Swipe at fit size to turn.',
             style=Pack(flex=1))
         self.canvas.page_swipes_at_edges = True
         self.canvases = [self.canvas]
         super().__init__(children=[self.canvas], style=Pack(flex=1, width=width if width is not None else NONE))
+
+    @property
+    def magnifier_enabled(self):
+        return self.canvas.magnifier_enabled
+
+    @magnifier_enabled.setter
+    def magnifier_enabled(self, enabled):
+        self.canvas.magnifier_enabled = enabled
 
     @property
     def zoom_scale(self):

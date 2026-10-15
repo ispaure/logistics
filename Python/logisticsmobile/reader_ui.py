@@ -271,16 +271,21 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                     double_pages=reader.double_pages, right_to_left=reader.right_to_left)
                 self._comic_navigation_reader = reader
             indices, data = await asyncio.to_thread(self.comic_navigation.load, index,
-                viewport=self.comic_viewport(), mode=self.preferences.values['comic_layout'])
+                viewport=self.comic_viewport(), mode=self.comic_layout_mode())
             if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
                 return
             from commonUtils.ui.native.image_canvas import ImageCanvas
-            if len(data) == 1:
+            from .fold_layout import seam_fraction
+            seam = seam_fraction(self, self.book_content)
+            from features.comics.mobile.validation import image_dimensions
+            page_width, page_height = image_dimensions(data[0])
+            portrait = page_width < page_height
+            if len(data) == 1 and (seam is None or not portrait):
                 view = page_view(data[0], canvas=ImageCanvas, on_page=self.swipe_book_page,
                                  on_toggle=self.toggle_reading_mode)
             else:
                 view = SpreadView(data, canvas=ImageCanvas, on_page=self.swipe_book_page,
-                    on_toggle=self.toggle_reading_mode, right_to_left=reader.right_to_left, viewport=self.comic_viewport())
+                    on_toggle=self.toggle_reading_mode, right_to_left=reader.right_to_left, viewport=self.comic_viewport(), seam=seam)
         location = dict(path=reader.spine[index], offset=prepared_epub[1]) if record['kind'] == 'epub' else None
         updated = await asyncio.to_thread(self.library_store.progress, record, index, location=location)
         if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
@@ -297,6 +302,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.book_content.remove(child)
         self.close_read_aloud()
         self.book_content.add(view)
+        if record['kind'] == 'comic':
+            view.magnifier_enabled = self.reader_immersive
         if record['kind'] == 'epub':
             self.watch_epub_width(reader, epoch)
         if record['kind'] == 'comic':
@@ -326,6 +333,9 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         direction = ' · Right-to-left manga' if getattr(reader, 'right_to_left', False) else ''
         position = str(index + 1) if record['kind'] == 'epub' or len(indices) == 1 else f'{indices[0] + 1}–{indices[-1] + 1}'
         self.book_status.text = f'{title} · {position}/{count}{direction}'
+        if hasattr(self, 'page_footer'):
+            self.page_footer.sync(comic=record['kind'] == 'comic', count=count, index=index,
+                                  right_to_left=getattr(reader, 'right_to_left', False))
         self.previous_page.enabled = index > 0 or (record['kind'] == 'epub' and self.epub_offset > 0)
         self.next_page.enabled = index + 1 < count if record['kind'] == 'epub' else self.comic_navigation.next(index) is not None
         self.book_loading = False
@@ -486,6 +496,14 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         self.show_library()
 
 
+    def comic_seam(self):
+        from .fold_layout import seam_fraction
+        return seam_fraction(self, self.book_content)
+
+    def comic_layout_mode(self):
+        from .fold_layout import comic_mode
+        return comic_mode(self, self.book_content)
+
     def comic_viewport(self):
         layout = self.book_content.layout
         return max(1, min(layout.content_width or self.main_window.size.width, self.main_window.size.width)), max(1, layout.content_height or 1)
@@ -500,7 +518,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.set_book_busy(True)
             try:
                 target = await asyncio.to_thread(self.comic_navigation.previous, index,
-                    viewport=self.comic_viewport(), mode=self.preferences.values['comic_layout'])
+                    viewport=self.comic_viewport(), mode=self.comic_layout_mode())
             except Exception as error:
                 self.book_status.text = 'Cannot read previous spread: ' + str(error)[:300]
                 return
@@ -620,7 +638,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         self._comic_layout_task = self.loop.create_task(watch_layout(
             alive=lambda: self.book_reader is reader and self.book_epoch == epoch and self.active_host,
             available=lambda: not self.book_busy and self.manager.active is self,
-            viewport=self.comic_viewport,
+            viewport=lambda: (self.comic_viewport(), self.comic_layout_mode(), self.comic_seam()),
             view=lambda: self.book_content.children[0] if self.book_content.children else None,
             reload=lambda: self.move_book_page(self.book_record['position'])))
 

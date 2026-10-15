@@ -239,6 +239,127 @@ class LocalCryptTests(QtTestCase):
                 self.wait(lambda: not editor.busy)
                 editor.close()
 
+    def test_bulk_metadata_user_input_persists_all_fields_in_localcrypt(self):
+        from io import BytesIO
+        from PySide6.QtTest import QTest
+        from features.comics.comicinfo import ComicInfoXML
+        from features.comics.ui.metadata_editor import MetadataEditor
+        from commonUtils.archives.zip_access import is_encrypted
+        with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
+            f.provider.create_file('second.cbz', BytesIO(f.provider.read_bytes('encrypted.cbz')))
+            paths = [f.item.data / name for name in ('encrypted.cbz', 'second.cbz')]
+            ComicDocument(paths[1], source=f.provider).save({
+                field: '3' if field in ComicInfoXML.INTEGER_FIELDS else
+                ComicInfoXML.ENUMS[field][0] if field in ComicInfoXML.ENUMS else 'Existing ' + field
+                for field in ComicInfoXML.FIELDS if field != 'PageCount'})
+            editor = MetadataEditor(paths, source=f.provider)
+            editor.show()
+            try:
+                self.wait(lambda: not editor.busy)
+                self.assertIsNotNone(editor.selection, editor.message.text())
+                self.assertTrue(all(entry.mixed for entry in editor.tabs.state.fields.values()))
+                expected = {}
+                for field, control in editor.editors.items():
+                    if field in ComicInfoXML.ENUMS or field == 'LanguageISO':
+                        value = 'fr' if field == 'LanguageISO' else ComicInfoXML.ENUMS[field][-1]
+                        control.setCurrentIndex(control.findData(value))
+                    else:
+                        value = '7' if field in ComicInfoXML.INTEGER_FIELDS else (
+                            '1A' if field in ('Number', 'AlternateNumber') else 'Private ' + field)
+                        widget = control.lineEdit() if isinstance(control, (qt.QAbstractSpinBox, qt.QComboBox)) else control
+                        widget.setFocus()
+                        widget.selectAll()
+                        QTest.keyClicks(widget, value)
+                    expected[field] = value
+                self.assertEqual(editor._changes(), expected)
+                for changes in (expected, {'Writer': 'Second apply', 'Count': '9'}):
+                    if changes is not expected:
+                        for field, value in changes.items():
+                            control = editor.editors[field]
+                            widget = control.lineEdit() if isinstance(control, qt.QAbstractSpinBox) else control
+                            widget.setFocus()
+                            widget.selectAll()
+                            QTest.keyClicks(widget, value)
+                        expected.update(changes)
+                    QTest.mouseClick(editor.apply_button, qt.Qt.MouseButton.LeftButton)
+                    self.wait(lambda: not editor.busy)
+                    self.assertIsNone(editor.last_save_error, editor.message.text())
+                    self.assertEqual(editor._changes(), {})
+                    for path in paths:
+                        document = ComicDocument(path, source=f.provider)
+                        self.assertEqual({name: document.info.get_field(name) for name in expected}, expected)
+                        self.assertEqual(ComicPages(path, document).read_page(0)[0], f.image)
+                        with f.provider.open(path) as stream:
+                            self.assertTrue(is_encrypted(stream))
+                        self.assertNotIn(b'Private Writer', f.provider.encrypted_path(path).read_bytes())
+            finally:
+                self.wait(lambda: not editor.busy)
+                editor.close()
+
+    def test_bulk_metadata_save_refreshes_localcrypt_browser_information(self):
+        from features.rclone.ui.local_crypt import CryptBrowserView
+        with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f, \
+             patch('features.rclone.ui.local_crypt.executable.get_rclone_path', return_value=self.binary):
+            view = CryptBrowserView(f.item)
+            view.show()
+            browser = view.file_browser
+            self.wait(lambda: not browser.busy)
+            path = f.item.data / 'plain.cbz'
+            browser.views.select_source(browser.model.browse_index(path))
+            self.wait(lambda: not browser.busy and browser.tabs.count() == 2)
+            self.assertNotIn('Updated from bulk editor', browser.tabs.widget(1).toPlainText())
+            editor = view.edit_metadata(f.item.data)
+            try:
+                self.wait(lambda: not editor.busy)
+                self.assertEqual(len(editor.selection.documents), 2)
+                editor.editors['Writer'].setText('Updated from bulk editor')
+                editor.apply_button.click()
+                self.wait(lambda: not editor.busy and not browser.busy
+                          and not browser.preview.pending and not browser.preview.queued)
+                self.assertIsNone(editor.last_save_error)
+                self.assertEqual(ComicDocument(path, source=f.provider).info.writer, 'Updated from bulk editor')
+                self.assertIn('Updated from bulk editor', browser.tabs.widget(1).toPlainText())
+            finally:
+                self.wait(lambda: not editor.busy)
+                editor.close()
+                self.wait(view.prepare_close)
+                view.close()
+
+    def test_pulled_comic_metadata_is_fresh_after_browser_refresh_and_editor_reopen(self):
+        from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
+        from features.rclone.ui.local_crypt import CryptBrowserView
+        with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f, \
+             patch('features.rclone.ui.local_crypt.executable.get_rclone_path', return_value=self.binary):
+            view = CryptBrowserView(f.item)
+            view.show()
+            browser = view.file_browser
+            self.wait(lambda: not browser.busy)
+            path = f.item.data / 'plain.cbz'
+            browser.views.select_source(browser.model.browse_index(path))
+            self.wait(lambda: not browser.busy and browser.tabs.count() == 2)
+            # Populate provider caches before a real ciphertext pull replaces it.
+            ComicDocument(path, source=view.provider)
+            ComicDocument(f.plain / 'plain.cbz').save({'Writer': 'Writer from remote pull'})
+            environment, source, destination = session.launch(f.context, f.plain, 'Secret:')
+            run_bytes([str(self.binary), '--config', session.NULL_CONFIG, 'copy', str(source), str(destination)],
+                      environment=environment, max_output=0)
+            editor = None
+            try:
+                self.assertTrue(actions.pull_encrypted_copy('Secret', f.context, item=f.item))
+                self.assertEqual(ComicDocument(path, source=view.provider).info.writer, 'Writer from remote pull')
+                browser.refresh()
+                self.wait(lambda: not browser.busy and not browser.preview.pending and not browser.preview.queued)
+                self.assertIn('Writer from remote pull', browser.tabs.widget(1).toPlainText())
+                editor = view.edit_metadata(path)
+                self.wait(lambda: not editor.busy)
+                self.assertEqual(editor.editors['Writer'].text(), 'Writer from remote pull')
+            finally:
+                if editor is not None:
+                    self.wait(lambda: not editor.busy)
+                    editor.close()
+                self.wait(view.prepare_close)
+                view.close()
+
     def test_private_batch_reports_missing_inner_password_without_modifying_archives(self):
         from io import BytesIO
         from features.comics.selection import ComicSelection

@@ -50,6 +50,10 @@ its label does not change the local sync path. Mount paths are separated by conf
 Desktop and mobile Sync preserve empty source folders where the destination
 backend supports directories.
 
+Sync inventories, comparison reviews and their generated-file cleanup plans
+have no fixed entry limit on desktop or mobile. Local safety checks still scan
+the full folder and can be cancelled.
+
 GUI Push/Pull opens a retained **Folder Actions** job with live transfer statistics,
 command output, operation state and retry attempt. Results stay available after completion.
 Success requires a normal exit with code zero; failures show the exit code and
@@ -203,7 +207,8 @@ moving is available in the remote browser.
 The independent mobile app can import the same TXT-in-ZIP credential format into
 an in-memory embedded rclone session, browse supported remotes and preview supported files directly. Managed Local and LocalCrypt folders support repeatable Pull and reviewed
 Push with progress while ordinary writing or reading continues. Transfer details
-show transferred and known totals in megabytes (MB) on both platforms. Both use rclone
+show the transfer's **From** and **To** folders during and after the transfer,
+alongside transferred and known totals in megabytes (MB) on both platforms. Both use rclone
 Sync: files at the destination can be replaced or deleted, with no retained
 backup or rollback. Mobile runs one transfer at a time with no queue; existing
 Local and LocalCrypt copies remain browsable and readable during folder transfers,

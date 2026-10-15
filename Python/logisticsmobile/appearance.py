@@ -98,7 +98,7 @@ def reserve_navigation(app):
         from .chat_presentation import navigation_clearance
         extra = navigation_clearance(float(viewport.origin.y + container.top_inset),
             float(viewport.origin.y + viewport.size.height - container.bottom_inset),
-            float(bounds.origin.y), float(bounds.size.height)) - 12
+            float(bounds.origin.y), float(bounds.size.height), bar_width=float(bounds.size.width)) - 12
     margin = view._navigation_margin + extra
     if view.style.margin_bottom != margin:
         view.style.margin_bottom = margin

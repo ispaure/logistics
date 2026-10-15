@@ -1,0 +1,150 @@
+{
+  "date": "2026-10-15",
+  "scope": "Synthetic native readers with injected landscape/portrait/square pane sizes; no physical-device rotation claim. Host pixel checks verify ComicInfo metadata reaches left/right composition and correct swipe direction.",
+  "android": {
+    "success": true,
+    "samples": [
+      {
+        "right_to_left": false,
+        "viewport": [
+          1100,
+          1000
+        ],
+        "visible": [
+          0,
+          1
+        ]
+      },
+      {
+        "right_to_left": false,
+        "viewport": [
+          1000,
+          1100
+        ],
+        "visible": [
+          0
+        ]
+      },
+      {
+        "right_to_left": false,
+        "viewport": [
+          1000,
+          1000
+        ],
+        "visible": [
+          0
+        ]
+      },
+      {
+        "right_to_left": true,
+        "viewport": [
+          1100,
+          1000
+        ],
+        "visible": [
+          0,
+          1
+        ]
+      },
+      {
+        "right_to_left": true,
+        "viewport": [
+          1000,
+          1100
+        ],
+        "visible": [
+          0
+        ]
+      },
+      {
+        "right_to_left": true,
+        "viewport": [
+          1000,
+          1000
+        ],
+        "visible": [
+          0
+        ]
+      }
+    ],
+    "backend": "toga_android.app"
+  },
+  "ios": {
+    "success": true,
+    "samples": [
+      {
+        "right_to_left": false,
+        "viewport": [
+          1100,
+          1000
+        ],
+        "visible": [
+          0,
+          1
+        ]
+      },
+      {
+        "right_to_left": false,
+        "viewport": [
+          1000,
+          1100
+        ],
+        "visible": [
+          0
+        ]
+      },
+      {
+        "right_to_left": false,
+        "viewport": [
+          1000,
+          1000
+        ],
+        "visible": [
+          0
+        ]
+      },
+      {
+        "right_to_left": true,
+        "viewport": [
+          1100,
+          1000
+        ],
+        "visible": [
+          0,
+          1
+        ]
+      },
+      {
+        "right_to_left": true,
+        "viewport": [
+          1000,
+          1100
+        ],
+        "visible": [
+          0
+        ]
+      },
+      {
+        "right_to_left": true,
+        "viewport": [
+          1000,
+          1000
+        ],
+        "visible": [
+          0
+        ]
+      }
+    ],
+    "backend": "toga_iOS.app"
+  },
+  "python_checks": "30 passed, 4 subtests passed",
+  "source_sha256": {
+    "Python/features/comics/mobile/navigation.py": "e155df9f66469440fff368fa4d7fbd14f3d485e320af517aff98420e4a8cf747",
+    "Python/logisticsmobile/preferences.py": "3fcbc0dc5526126e861de5b47f0f1d960a99acce15d196234a78632edfefadb4",
+    "Mobile/native_tests/tests/logisticsmobile/comic_spread_probe.py": "8ab578413f0f9a1b20fb576242268e9861d6c543651206744cc645f7bf5022c0"
+  },
+  "deployment": {
+    "boox": "Normal APK installed successfully with app data retained; launch succeeded",
+    "ios": "Normal simulator build succeeded; no physical iOS device installation"
+  }
+}

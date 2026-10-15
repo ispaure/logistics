@@ -122,7 +122,7 @@ func TestReviewRetryReplacesFailedAttemptRowsAndRevisions(t *testing.T) {
 	ctx = accounting.WithStatsGroup(ctx, t.Name())
 	stats := accounting.Stats(ctx)
 	defer stats.ResetCounters()
-	c := &comparison{stop: func() {}}
+	c := &comparison{}
 	calls := 0
 	err := syncWithRetries(ctx, t.Name(), stats, c.attempt(func() error {
 		calls++

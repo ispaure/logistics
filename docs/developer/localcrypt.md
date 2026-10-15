@@ -88,6 +88,13 @@ never `Path.is_dir()` on virtual cleartext names. Minimal archive sources retain
 explicit-file selection support. Batch password failures retain the established
 skip/report policy, and saves validate all loaded snapshots before per-file
 encrypted publication. Page data and untouched metadata remain unchanged.
+`CryptBrowserView` connects comic editor `saved` notifications to the selected
+item's existing `ResourcePreview.request` worker, so a successful bulk save
+invalidates displayed metadata even when the browser selection does not change.
+The preview owner coalesces notifications and rejects older in-flight results.
+Pull completion does not notify retained browser views; their Refresh command
+reloads listings and selected metadata. Provider revision checks invalidate cached
+archive bytes after a pull, and a newly opened metadata editor reads that revision.
 
 `ValidatedPasswordDialog` validates credential and file passwords on a worker
 before accepting. Failed attempts retain the dialog, show a sanitized inline

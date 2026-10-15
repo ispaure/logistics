@@ -1,5 +1,11 @@
 # Mobile workspace drawers and paired documents
 
+Remote browsing mounts `cloud_up` beside `cloud_status` in the main browser,
+using the same 48-point up-arrow control as local browsing. It calls the existing
+`parent_cloud` handler and remains disabled during cloud operations. The advanced
+actions route does not retain this control. Parent navigation walks logical paths
+within the selected remote; native route Back retains its separate screen behavior.
+
 The mobile `FileBrowser` bounds List and Tiles at 500 entries per page using the
 shared browser's `page_size` property. Paging controls precede the rows inside
 the scroll content so the bottom destination bar cannot cover Next at the end
@@ -319,3 +325,38 @@ view instead is self-referential and can shrink the workspace on repeated
 layouts. A host regression covers repeated renders and rail allocation; the
 native phone probe checks 411 logical points of body width against the 411-point
 window. Android's action bar follows the same light/dark surface palette.
+
+## Partially open Duo seam layout
+
+`logisticsmobile.fold_layout` observes `UIHingeInteraction` on each host window
+when available (iOS 27.1+), retaining its update block and interaction. Status 2
+activates the seam policy; fully open, unknown/unavailable and horizontal-fold
+orientations use ordinary layout. Coordinates come from the window midpoint
+converted into the actual widget allocation, so asymmetric safe areas and the
+native rail do not shift the seam. The SDK headers are the API contract source;
+older iOS versions skip interaction installation.
+
+Home applies that coordinate to both action and content rows. Imported and
+provider comic loaders select paired portraits in this mode, while preserving
+landscape and explicit double-page isolation. RAM-only composition fits each
+portrait within its own side and places the inner edges at a zero-width join;
+a lone page remains on its reading side. Normal composition keeps its existing
+gutter. Layout watchers compare posture/seam as well as viewport dimensions and
+wait for fit zoom before rebuilding. Provider worker loads use a main-thread
+snapshot of the layout mode and never read UIKit hinge geometry on a worker.
+
+`Mobile/tests/test_fold_layout.py` covers rail offsets, status/orientation fallback,
+unequal aspect ratios, unpaired manga and landscape isolation. The cache-only
+`fold_seam_probe` records native Home joins and a real composed comic; its partial
+status is injected explicitly when the simulator is flat, so it does not claim
+to verify a physical fold gesture.
+
+Local iOS 27.1 Duo verification observed native partial status 2 in the inner
+display's landscape orientation (UIInterfaceOrientation 4). Both Home joins
+measured 475 points against the 475.5-point window center (native layout rounding);
+the composed comic join measured exactly 475.5. The separate probe used cache-only
+fixtures and an existing SDK 27.1 executable with refreshed Python sources.
+The 315-test mobile suite passed 312 checks inside the sandbox; the three blocked
+localhost fixture checks passed on a network-enabled rerun. A focused 76-test
+navigation/reader run passed, as did the final bitmap refinement tests. Evidence:
+[fold seam geometry](mobile-evidence/2026-10-15-duo-fold-seam.json).

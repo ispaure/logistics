@@ -62,7 +62,6 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 	if !(review != nil && missing && !push) && (err != nil || resolved != localPath) {
 		return 0, errors.New("linked sync storage is not supported")
 	}
-	count := 0
 	if !missing {
 		err = filepath.WalkDir(localPath, func(p string, entry os.DirEntry, walkErr error) error {
 			if walkErr != nil {
@@ -71,14 +70,13 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			count++
 			linked := entry.Type()&os.ModeSymlink != 0
 			if linked && cipher == nil {
 				info, e := os.Stat(p)
 				linked = e != nil || !info.Mode().IsRegular()
 			}
-			if count > 10001 || linked {
-				return errors.New("linked storage or sync entry limit exceeded")
+			if linked {
+				return errors.New("linked sync storage is not supported")
 			}
 			return nil
 		})

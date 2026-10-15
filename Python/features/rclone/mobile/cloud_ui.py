@@ -8,6 +8,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from features.rclone.mobile.cloud import CloudClient, Downloads, PACKAGE_LIMIT, download_name
 from features.rclone.mobile.localcrypt_ui import LocalCryptUI
+from logisticsmobile.control_icons import icon_button
 
 
 from features.rclone.mobile.messages import import_hint
@@ -118,7 +119,7 @@ class CloudUI(LocalCryptUI):
             self.cloud_remote_help = toga.Label('Load a credential ZIP to see its remotes.', style=Pack(font_size=14))
             self.cloud_location = toga.TextInput(placeholder='Folder within remote', style=Pack(height=44))
             self.cloud_browse = toga.Button('Browse folder', on_press=self.browse_cloud, style=Pack(flex=1, height=44))
-            self.cloud_up = toga.Button('Parent folder', on_press=self.parent_cloud, style=Pack(flex=1, height=44))
+            self.cloud_up = icon_button('up', 'Parent folder', on_press=self.parent_cloud)
             self.cloud_entries = toga.Selection(style=Pack(height=44))
             from logisticsmobile.browser_ui import FileBrowser as NativeBrowser
             self.remote_browser = NativeBrowser(bounded_pages=True, folder_visible=self.folder_path_visible, selected=self.browser_cloud_selected, open_folder=self.browser_cloud_folder, navigate=self.browser_cloud_location, open_file=self.open_remote_document, item_actions=self.show_remote_item_actions)
@@ -160,6 +161,7 @@ class CloudUI(LocalCryptUI):
             for control in (self.cloud_remote, self.cloud_status, self.remote_browser.widget,
                             self.cloud_open, self.cloud_cancel, self.cloud_browse):
                 advanced.remove(control)
+            self.cloud_up.parent.remove(self.cloud_up)
             from commonUtils.ui.native.presentation import scroll_content
             from logisticsmobile.action_menu import FeatureCommands
             self.cloud_actions_button = toga.Button('•••', style=Pack(width=44, height=44))
@@ -180,10 +182,11 @@ class CloudUI(LocalCryptUI):
             self.cloud_cancel.text = 'Cancel'
             self.cloud_status.style.height = 72
             self.cloud_status.style.font_size = 12
+            self.cloud_status.style.flex = 1
             self.cloud_transfer_progress = toga.ProgressBar(max=100, value=0, style=Pack(height=12))
             self.cloud_view = toga.Box(children=[
                 toga.Box(children=[self.cloud_locations, self.cloud_actions_button], style=Pack(direction=ROW)),
-                self.cloud_status,
+                toga.Box(children=[self.cloud_up, self.cloud_status], style=Pack(direction=ROW)),
                 self.cloud_transfer_progress,
                 toga.ScrollContainer(horizontal=False, content=scroll_content(self.remote_browser.widget), style=Pack(flex=1)),
                 self.cloud_cancel],

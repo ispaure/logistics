@@ -1119,3 +1119,23 @@ outside an otherwise centered canvas. `comic_viewport_probe.py` exercises a
 synthetic cache-only comic through repeated control/fullscreen transitions at
 phone and BOOX-sized tablet dimensions. Shared native container behavior is
 documented in commonUtils rather than duplicated here.
+
+Mobile ComicNavigation maps Auto to a two-page spread only when the measured
+reading pane is wider than tall; portrait, square and not-yet-measured panes use
+one page. This mobile policy does not change desktop fit-based decisions.
+Preferences default to Auto while retaining explicit Single/Double overrides.
+ComicInfo Manga direction flows from the imported/provider reader into the spread
+compositor and swipe direction; logical indices stay in archive reading order.
+Landscape images and DoublePage metadata remain standalone. Native
+`comic_spread_probe.py` checks native composition at injected pane sizes, while
+host pixel tests verify metadata-driven visual order and page turns.
+
+### Fullscreen comic hold magnifier
+
+`ReadingFrame.set_immersive` enables the native canvas magnifier only for
+fullscreen comics. Imported and provider reader page replacements apply the
+current mode to each new canvas; spreads forward the property to their shared
+canvas. The shared native image component owns gesture arbitration, lens drawing
+and cleanup. EPUBs, ordinary image previews and comics with controls visible
+leave it disabled. The lens uses the current in-memory page/spread without
+creating files. Native touch/render validation remains a separate device check.

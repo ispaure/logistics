@@ -18,7 +18,7 @@ from commonUtils.runtime.operations import check_cancelled
 
 
 from .files_ui import FilesUI
-from .reader_controls import ReadingFrame, page_buttons, schedule_swipe
+from .reader_controls import ReadingFrame, PageFooter, page_buttons, schedule_swipe
 
 
 class ProviderUI(FilesUI):
@@ -144,6 +144,7 @@ class ProviderUI(FilesUI):
         try:
             if prepared is None:
                 reader = await asyncio.to_thread(copies.open, key, password=password, cancelled=self._crypt_cancel.is_set)
+                self._provider_comic_mode = self.private_comic_mode()
                 kind, content = await asyncio.to_thread(self.provider_page_content, reader, 0)
             else:
                 reader, kind, content = prepared
@@ -299,6 +300,7 @@ class ProviderUI(FilesUI):
                         if self.crypt_page.value in self.crypt_reader.labels else 0, len(self.crypt_reader.labels) - 1)
             self.crypt_page.items = self.crypt_reader.labels
             self.crypt_page.value = self.crypt_reader.labels[index]
+            self._provider_comic_mode = self.private_comic_mode()
             kind, content = await asyncio.to_thread(self.provider_page_content, self.crypt_reader, index)
             self._show_crypt_content(kind, content)
             self.refresh_private_bookmarks()
@@ -350,7 +352,8 @@ class ProviderUI(FilesUI):
             prepared_spread = SpreadView(data, canvas=ImageCanvas,
                 on_page=controller.swipe_crypt_page, on_toggle=controller.toggle_private_reading_mode,
                 right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
-                viewport=controller.private_comic_viewport(view))
+                viewport=controller.private_comic_viewport(view),
+                seam=controller.private_comic_seam(view))
         for child in list(view.crypt_content.children):
             if hasattr(child, 'dispose') and child is not view.crypt_image:
                 child.dispose()
@@ -390,6 +393,10 @@ class ProviderUI(FilesUI):
         else:
             view.crypt_text.value = content
             view.crypt_content.add(view.crypt_text)
+        comic = view.crypt_reader.kind in {'.cbz', '.zip'}
+        for child in view.crypt_content.children:
+            if hasattr(child, 'magnifier_enabled'):
+                child.magnifier_enabled = comic and getattr(view, 'crypt_immersive', True)
         view._provider_displayed_index = view.crypt_reader.labels.index(view.crypt_page.value)
 
     async def read_crypt_page(self, widget=None, **kwargs):
@@ -403,6 +410,7 @@ class ProviderUI(FilesUI):
         try:
             index = self.crypt_reader.labels.index(self.crypt_page.value)
             self._provider_viewport = self.private_comic_viewport()
+            self._provider_comic_mode = self.private_comic_mode()
             reader = self.crypt_reader
             token = self.workspace.token(self.session.id)
             kind, content = await asyncio.to_thread(self.provider_page_content, reader, index)
@@ -414,6 +422,8 @@ class ProviderUI(FilesUI):
             self.refresh_private_bookmarks()
             self.watch_provider_layout()
             self.watch_provider_epub_width()
+            self.page_footer.sync(comic=reader.kind in {'.cbz', '.zip'}, count=len(reader.labels),
+                                  index=index, right_to_left=getattr(reader, 'right_to_left', False))
             self.previous_page.enabled = reader.book is not None or index > 0
             self.next_page.enabled = reader.book is not None or (reader.comic_navigation.next(index) is not None if hasattr(reader, 'comic_navigation') else index + 1 < len(reader.labels))
         except Exception as error:
@@ -566,7 +576,11 @@ class ProviderUI(FilesUI):
             controls[0].insert(0, reader_menu)
             header = toga.Box(children=controls[:2], style=Pack(direction=COLUMN))
             view.previous_page, view.next_page = page_buttons(self.previous_private_page, self.next_private_page)
-            footer = toga.Box(children=[view.previous_page, toga.Box(style=Pack(flex=1)), view.next_page], style=Pack(direction=ROW))
+            view.page_footer = PageFooter(view.previous_page, view.next_page, self.move_private_page)
+            view.page_footer.sync(comic=view.crypt_reader.kind in {'.cbz', '.zip'},
+                                  count=len(view.crypt_reader.labels), index=0,
+                                  right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
+            footer = view.page_footer.widget
             view.reading_frame = ReadingFrame(view.crypt_content, [header, footer])
             view.crypt_view = view.reading_frame.widget
             view.crypt_view._workspace_menu_button = reader_menu
@@ -651,7 +665,7 @@ class ProviderUI(FilesUI):
             reader.comic_navigation = provider_navigation(reader)
         viewport = getattr(self, '_provider_viewport', (1, 1))
         return 'spread', reader.comic_navigation.load(index, viewport=viewport,
-            mode=self.preferences.values['comic_layout'])
+            mode=getattr(self, '_provider_comic_mode', self.preferences.values['comic_layout']))
 
     async def move_provider_comic(self, direction):
         if self.cloud_busy or self.crypt_reader is None:
@@ -665,7 +679,7 @@ class ProviderUI(FilesUI):
             self.set_cloud_busy(True)
             try:
                 target = await asyncio.to_thread(nav.previous, index,
-                    viewport=getattr(self, '_provider_viewport', (1, 1)), mode=self.preferences.values['comic_layout'])
+                    viewport=getattr(self, '_provider_viewport', (1, 1)), mode=self.private_comic_mode())
             except Exception as error:
                 self.crypt_title.text = private_label('Cannot read previous spread: ' + str(error)[:200])
                 return
@@ -690,6 +704,14 @@ class ProviderUI(FilesUI):
             alive=lambda: getattr(self, 'provider_epub_view', None) is panel,
             width=lambda: pane_width(self.crypt_content, self.main_window.size.width, 24), view=lambda: panel))
 
+    def private_comic_seam(self, view=None):
+        from .fold_layout import seam_fraction
+        return seam_fraction(self, (view or self).crypt_content)
+
+    def private_comic_mode(self):
+        from .fold_layout import comic_mode
+        return comic_mode(self, getattr(self, 'crypt_content', self.main_window.content))
+
     def private_comic_viewport(self, view=None):
         layout = (view or self).crypt_content.layout
         return max(1, min(layout.content_width or self.main_window.size.width, self.main_window.size.width)), max(1, layout.content_height or 1)
@@ -705,7 +727,7 @@ class ProviderUI(FilesUI):
             alive=lambda: self.crypt_reader is reader and self.active_host
                 and hasattr(self, 'provider_spread') and not getattr(self, 'page_suspended', False),
             available=lambda: not self.cloud_busy and self.manager.active is self,
-            viewport=self.private_comic_viewport,
+            viewport=lambda: (self.private_comic_viewport(), self.private_comic_mode(), self.private_comic_seam()),
             view=lambda: getattr(self, 'provider_spread', None), reload=self.read_crypt_page))
 
     def show_provider_layout(self, widget=None, **kwargs):

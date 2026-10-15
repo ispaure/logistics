@@ -1,0 +1,43 @@
+{
+  "success": true,
+  "samples": [
+    {
+      "name": "actions",
+      "join": 475.0,
+      "expected": 475.5,
+      "left": 16.0,
+      "width": 455.0
+    },
+    {
+      "name": "panels",
+      "join": 475.0,
+      "expected": 475.5,
+      "left": 16.0,
+      "width": 454.0
+    }
+  ],
+  "observed_hinge_status": 2,
+  "interaction_installed": true,
+  "interface_orientation": 4,
+  "home": {
+    "seam": 0.5502994011976048,
+    "layout_width": 835,
+    "native_width": 835.0,
+    "widths": [
+      "455",
+      "371"
+    ],
+    "flexes": [
+      "0.0",
+      "0.0"
+    ]
+  },
+  "comic_seam": 0.5484429065743944,
+  "comic_join": {
+    "join": 475.5,
+    "expected": 475.5
+  },
+  "platform": "iOS 27.1 iPhone Duo simulator",
+  "scope": "Isolated cache-only probe using existing SDK 27.1 executable with current Python sources; actual observed partial hinge status, plus explicit fully-open status fallback. No physical fold gesture or production app deployment.",
+  "tests": "315 mobile tests: 312 passed; 3 localhost fixture failures passed on rerun with network permission. 76 focused tests passed; final 17 reader/fold tests plus 4 pixel/geometry checks passed."
+}

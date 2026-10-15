@@ -223,6 +223,6 @@
     "model": "NoteAir5C",
     "install": "adb install -r: Success",
     "launch": "am start -W: Status ok",
-    "physical_after_screenshot": "pending reader reopen"
+    "physical_after_screenshot": "User confirmed portrait fullscreen works"
   }
 }

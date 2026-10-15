@@ -457,7 +457,8 @@ func dispatch(action, input string) (output string) {
 	if action == "image_thumbnail" {
 		requestLimit = 24 * packageLimit
 	}
-	if len(input) > requestLimit {
+	// Review cleanup plans grow with the selected tree and have no size cap.
+	if action != "mirror_review" && len(input) > requestLimit {
 		err = errors.New("request exceeds limits")
 	} else {
 		err = json.Unmarshal([]byte(input), &request)
