@@ -31,6 +31,17 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIn(app.document_view, app.body.children)
         self.assertEqual(app.store.open(first).text, 'Retain my draft')
 
+    def test_home_greeting_has_extra_line_spacing_and_no_tagline(self):
+        import toga
+        app = self.app
+        app.workspace.active = None
+        view = app.build_home()
+        labels = [child.text for child in view.content.children if isinstance(child, toga.Label)]
+        self.assertEqual(labels[0], 'Welcome to Logistics')
+        self.assertEqual(view.content.children[0].style.margin_top, 24)
+        self.assertNotIn('Read. Write. Organize.', labels)
+        self.assertEqual(app.native_host.labels[0], 'Home')
+
     def test_folder_hub_live_transfer_banner_precedes_credential_and_actions_share_row(self):
         app = self.app
         app.transfer_busy = True

@@ -25,6 +25,21 @@ class WorkspaceNavigationTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_home_uses_visible_logistics_navigation_title_without_renaming_tab(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        original = self.app.native_host.adapter
+        bars = [Mock() for _ in self.app.native_host.destinations]
+        self.app.native_host.adapter = SimpleNamespace(navigation=bars)
+        try:
+            with patch.object(self.navigation, 'render'):
+                self.navigation.install()
+            self.assertEqual(bars[0].topViewController.navigationItem.title, 'Logistics')
+            bars[0].setNavigationBarHidden.assert_called_once_with(False, animated=False)
+            self.assertEqual(self.app.native_host.labels[0], 'Home')
+        finally:
+            self.app.native_host.adapter = original
+
     def test_apple_tab_signal_reads_selection_after_native_switch(self):
         from types import SimpleNamespace
         from unittest.mock import Mock

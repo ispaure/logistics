@@ -63,9 +63,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         # their existing native navigation controller, including compact Back.
         adapter = self.app.native_host.adapter
         if adapter is not None and hasattr(adapter, 'navigation'):
-            # Home's greeting is its only heading; keep its bottom tab label.
+            # Brand the page title while preserving Home as the tab label.
             home = adapter.navigation[self.app.native_host.destinations.index('home')]
-            home.setNavigationBarHidden(True, animated=False)
+            home.topViewController.navigationItem.title = 'Logistics'
+            home.setNavigationBarHidden(False, animated=False)
         self.render()
 
     def uninstall(self):

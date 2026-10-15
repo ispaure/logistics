@@ -85,7 +85,7 @@ class HubUI:
 
     def build_home(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Welcome to Logistics', style=Pack(font_size=28, font_weight='bold', margin_bottom=20)))
+        box.add(toga.Label('Welcome to Logistics', style=Pack(font_size=28, font_weight='bold', margin_top=24, margin_bottom=20)))
         active = self.workspace.sessions.get(self.workspace.active)
         if active is not None and self.session_visible(active):
             title, kind, details = self.session_summary(active)
@@ -102,8 +102,6 @@ class HubUI:
             hero_content.add(self.home_continue_button)
             box.add(home_surface(hero, hero=True))
             self.home_continue = hero
-        else:
-            box.add(toga.Label('Read. Write. Organize.', style=Pack(margin_bottom=12)))
         box.add(toga.Box(children=[
             toga.Button('+ New document', on_press=self.new_hub_document, style=Pack(height=48, flex=1, margin_right=8)),
             toga.Button('Open file…', on_press=self.open_hub_file, style=Pack(height=48, flex=1))],
