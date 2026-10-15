@@ -89,7 +89,7 @@ class UXWorkflowTests(unittest.TestCase):
         from unittest.mock import Mock, patch
         app = self.app
         impl = SimpleNamespace(native=SimpleNamespace(getWidth=Mock(return_value=1080)),
-            native_navigationview=SimpleNamespace(getWidth=Mock(return_value=144)),
+            native_navigationview=SimpleNamespace(getWidth=Mock(return_value=144), getVisibility=Mock(return_value=0)),
             scale_out=lambda value: value // 2)
         adapter = SimpleNamespace(impl=impl, mode='bottom')
         app.native_host.adapter = adapter
@@ -104,6 +104,9 @@ class UXWorkflowTests(unittest.TestCase):
                 impl.native.getWidth.return_value = 1400
                 app.adaptive.render()
                 self.assertEqual(app.routes.body().style.width, 628)
+                impl.native_navigationview.getVisibility.return_value = 8
+                app.adaptive.render()
+                self.assertEqual(app.routes.body().style.width, 700)
         finally:
             app.native_host.adapter = None
 

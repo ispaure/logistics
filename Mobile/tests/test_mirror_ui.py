@@ -231,6 +231,8 @@ class MirrorUITests(unittest.TestCase):
         app.refresh_transfer_status.assert_called_once()
         MirrorUI.publish_mirror_progress(app, 1, dict(values, done=50))
         self.assertEqual(bar.value, 50)
+        # Both small counts round to the same MB text; percentage must advance.
+        self.assertIn('0.00 / 0.00 MB', app.transfer_message)
         self.assertEqual(app.refresh_transfer_status.call_count, 2)
         self.assertEqual(app.cloud_status.value, ' '.join(app.transfer_notice.text.splitlines()))
         self.assertIn('\n', app.transfer_notice.text)

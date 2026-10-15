@@ -24,7 +24,8 @@ class ReaderAppearance(toga.ScrollContainer):
             toga.Label('Reading font size'), self.font_choice,
             toga.Label('Line spacing (%)'), self.spacing_choice, toga.Label('Maximum width (0 = automatic)'), self.width_choice,
             toga.Label('Page margins'), self.margin_choice, toga.Label('Theme'), self.theme_choice,
-            toga.Label('Comic page layout'), self.layout_choice, self.status,
+            toga.Label('Comic page layout'), self.layout_choice,
+            toga.Label('Auto: one page in portrait; two pages when the reading area is wider than tall. Comic metadata controls reading direction.'), self.status,
             toga.Button('Apply and return', on_press=on_apply, style=Pack(height=44))],
             style=Pack(direction=COLUMN, margin=12))
         super().__init__(horizontal=False, content=content, style=Pack(flex=1))

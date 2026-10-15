@@ -10,11 +10,15 @@ class ComicNavigation:
         self.sizes = {}
         self.visible = ()
 
-    def load(self, start, *, viewport, mode='single'):
+    def load(self, start, *, viewport, mode='auto'):
         if mode not in {'single', 'auto', 'double'}:
             raise ValueError('Choose single, auto or double page layout.')
         if not 0 <= start < self.count:
             raise IndexError('Page does not exist.')
+        # Mobile auto layout follows the actual reading pane, including split
+        # screens and rotation, rather than the desktop fit-at-full-height rule.
+        if mode == 'auto':
+            mode = 'double' if viewport[0] > viewport[1] > 1 else 'single'
         data = {start: self.read_page(start)[0]}
         self.sizes[start] = image_dimensions(data[start])
         if (mode != 'single' and start + 1 < self.count
@@ -26,7 +30,7 @@ class ComicNavigation:
         # Commit only after every required page has loaded and validated.
         return indices, [data[index] for index in indices]
 
-    def previous(self, start, *, viewport, mode='single'):
+    def previous(self, start, *, viewport, mode='auto'):
         if start <= 0:
             return None
         if start >= 2 and mode != 'single':

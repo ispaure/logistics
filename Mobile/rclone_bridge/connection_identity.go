@@ -76,9 +76,11 @@ func connectionIdentity(name string) (string, error) {
 	if !admitted[name] {
 		return "", errors.New("unlock the matching credential package first")
 	}
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	selected, oauth, err := selectedConnection(store.values.Remotes, name, false)
+	source, original := credentialSource(name)
+	source.mu.Lock()
+	defer source.mu.Unlock()
+	name = original
+	selected, oauth, err := selectedConnection(source.values.Remotes, name, false)
 	if err != nil {
 		return "", err
 	}
@@ -86,22 +88,22 @@ func connectionIdentity(name string) (string, error) {
 	if !oauth {
 		return identity, nil
 	}
-	scope, _, err := selectedConnection(store.values.Remotes, name, true)
+	scope, _, err := selectedConnection(source.values.Remotes, name, true)
 	if err != nil {
 		return "", err
 	}
 	signature := connectionHash(scope)
-	if pin, ok := store.values.Pins[name]; ok && pin.Signature == signature {
+	if pin, ok := source.values.Pins[name]; ok && pin.Signature == signature {
 		return pin.Identity, nil
 	}
 	// Import replaces pins, including a change of account. First use also
 	// migrates an older vault while keeping its current full-hash identity.
-	if store.values.Pins == nil {
-		store.values.Pins = map[string]connectionPin{}
+	if source.values.Pins == nil {
+		source.values.Pins = map[string]connectionPin{}
 	}
-	store.values.Pins[name] = connectionPin{signature, identity}
-	if err := store.save(store.values); err != nil {
-		store.failed = true
+	source.values.Pins[name] = connectionPin{signature, identity}
+	if err := source.save(source.values); err != nil {
+		source.failed = true
 		return "", err
 	}
 	return identity, nil

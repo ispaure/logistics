@@ -193,6 +193,9 @@ class CloudUI(LocalCryptUI):
             if self.cloud_client is not None and getattr(self.cloud_client, 'vault', None) is not None:
                 self.set_cloud_busy(True)
                 self.cloud_restore_task = self.loop.create_task(self.restore_cloud(initial=True))
+        if getattr(self, 'cloud_remote_generation', getattr(self.cloud_client, 'generation', None)) != getattr(self.cloud_client, 'generation', None):
+            self.set_loaded_remote_names(self.loaded_remote_names())
+            self.cloud_package.text = self.loaded_package_label()
         if present:
             self.show_view(self.cloud_view, destination='files', route='remote-browser', title='Remote file browser')
 
@@ -270,10 +273,14 @@ class CloudUI(LocalCryptUI):
         client = getattr(self, 'cloud_client', None)
         generation = getattr(client, 'generation', None)
         if getattr(self, 'cloud_remote_generation', generation) != generation:
-            return []
+            records = getattr(client, 'package_records', ())
+            return self.visible_remote_names([name for item in records for name in item['remotes']]) if records else []
         return [row.value for row in self.cloud_remote.items] if hasattr(self, 'cloud_remote') else []
 
     def set_loaded_remote_names(self, names):
+        records = getattr(self.cloud_client, 'package_records', ())
+        if records:
+            names = self.visible_remote_names([name for item in records for name in item['remotes']])
         self.cloud_remote_generation = getattr(self.cloud_client, 'generation', None)
         self.cloud_remote.items = names
 
@@ -323,7 +330,7 @@ class CloudUI(LocalCryptUI):
                 toga.Label('Connection name'), self.smb_name, toga.Label('Server'), self.smb_host,
                 toga.Label('Username'), self.smb_user, toga.Label('Password'), self.smb_password,
                 toga.Label('Domain'), self.smb_domain, toga.Label('Port'), self.smb_port,
-                self.smb_remember, toga.Label(import_hint('Off keeps connections only for this app session. Reloading saved credentials replaces session connections.')),
+                self.smb_remember, toga.Label(import_hint('Off keeps connections only for this app session. Saved and session-only connections can be loaded together.')),
                 self.smb_connect, self.smb_status], style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
         self.smb_connect.enabled = self.cloud_client is not None
         self.show_view(self.smb_view, destination='files', route='smb-connection', title='SMB / Mac share')
@@ -345,14 +352,15 @@ class CloudUI(LocalCryptUI):
             if not self.active_host:
                 return
             from logisticsmobile.folder_hub import visible_remotes
-            self.set_loaded_remote_names(visible_remotes(names))
+            self.set_loaded_remote_names(self.visible_remote_names(names))
             await self._load_crypt_remote_names()
             self.cloud_remote.value = name
             self.cloud_location.value = self.cloud_path = ''
             self.cloud_open_remote = None
             self.cloud_rows = {}
             self.cloud_entries.items = []
-            self.cloud_package.text = 'Connections: ' + self.cloud_client.package_name
+            self.remember_loaded_packages(self.cloud_client.package_name, names, session_only=not remember)
+            self.cloud_package.text = self.loaded_package_label()
             self.smb_status.text = 'Connection added. Browse a share and choose Pull… for an offline folder.'
         except Exception as error:
             self.smb_status.text = import_hint('Could not add connection: ' + str(error)[:180])
@@ -433,10 +441,38 @@ class CloudUI(LocalCryptUI):
         packages = json.loads(self.preferences.values['remote_packages'])
         packages = [item for item in packages if item['zip'] != name and not item['session_only']]
         association = dict(zip=name, remotes=list(remotes), session_only=session_only)
-        self.session_credential_packages = [association] if session_only else []
+        sessions = [item for item in getattr(self, 'session_credential_packages', ()) if item['zip'] != name]
+        self.session_credential_packages = [*sessions, association] if session_only else sessions
         if not session_only:
             packages.append(association)
         self.preferences.save(remote_packages=json.dumps(packages[-32:]))
+
+    def visible_remote_names(self, names):
+        from logisticsmobile.folder_hub import exclusions
+        from services.folder_policy import visible_name
+        original = {alias: name for item in getattr(self.cloud_client, 'package_records', ())
+                    for name, alias in item.get('aliases', {}).items()}
+        rules = exclusions()
+        return sorted((name for name in names if visible_name(original.get(name, name), rules, remote=True)), key=str.casefold)
+
+    def package_remote_names(self, label, fallback):
+        method = getattr(self.cloud_client, 'package_remotes', None)
+        return method(label, fallback) if method else fallback
+
+    def remember_loaded_packages(self, label, names, *, session_only):
+        from logisticsmobile.folder_hub import visible_remotes
+        records = getattr(self.cloud_client, 'package_records', ())
+        if records:
+            for item in records:
+                self.remember_credential_association(item['package_name'], self.visible_remote_names(item['remotes']), session_only=not item['saved'])
+        else:
+            self.remember_credential_association(label, self.visible_remote_names(names), session_only=session_only)
+
+    def loaded_package_label(self):
+        records = getattr(self.cloud_client, 'package_records', ())
+        if not records:
+            return 'Credential package: ' + (self.cloud_client.package_name or 'none')
+        return 'Loaded:\n' + '\n'.join(item['package_name'] + (' (saved)' if item['saved'] else ' (session only)') for item in records)
 
     def credential_groups(self, choices=None):
         import json
@@ -467,6 +503,8 @@ class CloudUI(LocalCryptUI):
             return []
 
     async def require_remote_credentials_async(self, remote, *, identity=None, resume=None):
+        if identity is not None and hasattr(self.cloud_client, 'resolve_remote'):
+            remote = self.cloud_client.resolve_remote(remote, identity)
         if remote in self.loaded_remote_names() and identity is None:
             return True
         client, generation = self.cloud_client, getattr(self.cloud_client, 'generation', None)
@@ -484,6 +522,8 @@ class CloudUI(LocalCryptUI):
 
     def require_remote_credentials(self, remote, *, identity=None, resume=None, checked=False):
         """Return immediately when loaded; otherwise present the matching ZIP unlock."""
+        if identity is not None and hasattr(self.cloud_client, 'resolve_remote'):
+            remote = self.cloud_client.resolve_remote(remote, identity)
         loaded = self.loaded_remote_names()
         if remote in loaded and identity is None:
             return True
@@ -533,12 +573,13 @@ class CloudUI(LocalCryptUI):
                 self.clear_private_catalog()
                 names = await asyncio.to_thread(self.cloud_client.import_package, cache, key, secret, remember=False)
                 await self._load_crypt_remote_names()
-                self.set_loaded_remote_names(visible_remotes(names))
-                if remote is not None and (remote not in names or (identity is not None
-                        and await asyncio.to_thread(self.cloud_client.connection_identity, remote) != identity)):
+                self.set_loaded_remote_names(self.visible_remote_names(names))
+                checked_remote = self.cloud_client.resolve_remote(remote, identity) if remote is not None and identity is not None and hasattr(self.cloud_client, 'resolve_remote') else remote
+                if checked_remote is not None and (checked_remote not in names or (identity is not None
+                        and await asyncio.to_thread(self.cloud_client.connection_identity, checked_remote) != identity)):
                     raise ValueError('This ZIP does not match the folder connection.')
-                self.remember_credential_association(cache.items[key]['zip'], visible_remotes(names), session_only=True)
-                self.cloud_package.text = 'Credential package: ' + cache.items[key]['zip']
+                self.remember_loaded_packages(cache.items[key]['zip'], names, session_only=True)
+                self.cloud_package.text = self.loaded_package_label()
                 self.cloud_status.value = 'Credential ZIP unlocked for this app session. All its available remotes are now shown.'
                 ready = True
             except (OSError, ValueError) as error:
@@ -574,18 +615,19 @@ class CloudUI(LocalCryptUI):
             names = await asyncio.to_thread(self.cloud_client.restore)
             await self._load_crypt_remote_names()
             from logisticsmobile.folder_hub import visible_remotes
-            self.set_loaded_remote_names(visible_remotes(names))
+            self.set_loaded_remote_names(self.visible_remote_names(names))
             if names and self.cloud_client.package_name:
-                self.remember_credential_association(self.cloud_client.package_name, visible_remotes(names), session_only=False)
+                self.remember_loaded_packages(self.cloud_client.package_name, names, session_only=False)
             self.cloud_entries.items = []
             self.cloud_rows = {}
             self.cloud_open_remote = None
             self.cloud_location.value = self.cloud_path = ''
-            self.cloud_package.text = 'Credential package: ' + (self.cloud_client.package_name or 'none')
+            self.cloud_package.text = self.loaded_package_label()
             if self.cloud_pending_zip is None and names:
-                self.cloud_selected_zip.text = import_hint('Saved ZIP: ' + (self.cloud_client.package_name or 'saved package'))
-                self.cloud_import_message.text = import_hint('Saved remotes are ready. Choose a remote below, then tap Browse folder.\nTo replace them, choose another ZIP.')
-            self.cloud_status.value = (f'{len(names)} saved remote(s) restored. Choose a remote, then browse.'
+                saved = [item['package_name'] for item in getattr(self.cloud_client, 'package_records', ()) if item['saved']]
+                self.cloud_selected_zip.text = import_hint('Saved packages: ' + ', '.join(saved) if saved else 'Loaded ZIP: ' + (self.cloud_client.package_name or 'saved package'))
+                self.cloud_import_message.text = import_hint('Loaded remotes are ready. Open Folder Hub or Browse remote files to choose a remote, then tap Browse folder.\nChoose another ZIP to add another credential package.')
+            self.cloud_status.value = (f'{len(names)} total remote(s) available. Saved packages reloaded; active session-only packages were kept.'
                                        if names else 'No saved credential package. Import a ZIP to get started.')
         except Exception:
             self.cloud_status.value = 'Saved credentials are unavailable. Unlock the device and reload, or forget saved credentials to import again.'
@@ -648,26 +690,28 @@ class CloudUI(LocalCryptUI):
             names = await asyncio.to_thread(self.cloud_client.import_package, selected, None, password, remember=self.cloud_remember.value)
             await self._load_crypt_remote_names()
             from logisticsmobile.folder_hub import visible_remotes
-            self.remember_credential_association(selected.name, visible_remotes(names), session_only=not self.cloud_remember.value)
+            self.remember_loaded_packages(selected.name, names, session_only=not self.cloud_remember.value)
             cache_error = ''
             if not self.cloud_remember.value:
                 try:
                     cache = self.retained_packages()
                     if cache is not None:
-                        identities = {remote: self.cloud_client.connection_identity(remote) for remote in visible_remotes(names)}
-                        await asyncio.to_thread(cache.remember, selected, identities)
+                        identities = {remote: self.cloud_client.connection_identity(remote) for remote in self.visible_remote_names(self.package_remote_names(selected.name, names))}
+                        aliases = next((item.get('aliases', {}) for item in getattr(self.cloud_client, 'package_records', ()) if item['package_name'] == selected.name), {})
+                        aliases = {name: alias for name, alias in aliases.items() if alias in identities}
+                        await asyncio.to_thread(cache.remember, selected, identities, **({'aliases': aliases} if aliases else {}))
                 except (OSError, ValueError) as error:
                     cache_error = ' ZIP not retained; select it again next time. ' + str(error)[:120]
-            self.set_loaded_remote_names(visible_remotes(names))
-            self.cloud_package.text = 'Logistics credential package: ' + getattr(self.cloud_client, 'package_name', 'Imported ZIP')
+            self.set_loaded_remote_names(self.visible_remote_names(names))
+            self.cloud_package.text = self.loaded_package_label()
             self.cloud_location.value = self.cloud_path = ''
             self.cloud_open_remote = None
             self.cloud_rows = {}
             self.cloud_entries.items = []
             self.cloud_pending_zip = None
             self.cloud_selected_zip.text = import_hint('Loaded ZIP: ' + selected.name)
-            self.cloud_import_message.text = import_hint(f'{len(names)} remote(s) loaded. Choose a remote below, then tap Browse folder.' + cache_error)
-            self.cloud_status.value = f'{len(names)} {'saved' if self.cloud_remember.value else 'session'} remote(s) loaded. Choose a remote, then browse. No connection has been made yet.'
+            self.cloud_import_message.text = import_hint(f'{len(names)} total remote(s) available. Open Folder Hub or Browse remote files to choose a remote, then tap Browse folder.' + cache_error)
+            self.cloud_status.value = f'{selected.name} loaded ({"saved" if self.cloud_remember.value else "session only"}). {len(names)} total remote(s) available. Open Folder Hub to browse. No connection has been made yet.'
         except Exception as error:
             self.cloud_status.value = 'Import failed: ' + str(error)[:300]
             self.cloud_import_message.text = import_hint('Could not load ZIP. Check the password and tap Load remotes again.\n' + str(error)[:150])

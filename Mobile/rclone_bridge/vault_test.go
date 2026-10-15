@@ -127,7 +127,7 @@ func TestSessionOnlyImportPreservesSavedCiphertextAndRejectsLinkedVault(t *testi
 	if _, err = importPackageMode(data, "wrong", "Session.zip", true); err == nil {
 		t.Fatal("wrong password accepted")
 	}
-	if store.values.Label != "Saved.zip" || store.path != p {
+	if latestCredential != "Saved.zip" || !admitted["Fixture"] {
 		t.Fatal("failed session import replaced saved session")
 	}
 	if _, err = importPackageMode(data, "synthetic-fixture-password", "Session.zip", true); err != nil {

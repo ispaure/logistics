@@ -287,7 +287,7 @@ def encrypted_document(provider, path):
 
 def encrypted_library_sources(root, jobs, client, remotes):
     """Contribute unlocked encrypted collection roots to the generic catalogue."""
-    from .mirror_jobs import copy_target
+    from .mirror_jobs import copy_target, resolved_job
     sources, failures = [], 0
     if client is None:
         return sources, failures
@@ -298,6 +298,7 @@ def encrypted_library_sources(root, jobs, client, remotes):
             if (collection_path(root, True) / identity).is_dir():
                 sources.append((encrypted_storage(root, client, remote), '', 'LocalCrypt: ' + remote))
             for job in jobs:
+                job = resolved_job(client, job)
                 if (not job['crypt'] or job['remote'] != remote
                         or client.connection_identity(remote) != job['identity']):
                     continue

@@ -26,6 +26,8 @@ def seed_download(store, name, data):
 class MobileCloudTests(unittest.TestCase):
     def test_privacy_gate_tracks_only_successful_session_loads_across_clients(self):
         previous = CloudClient._session_privacy
+        self.addCleanup(setattr, CloudClient, '_package_privacy', CloudClient._package_privacy)
+        CloudClient._package_privacy = {}
         self.addCleanup(setattr, CloudClient, '_session_privacy', previous)
         buffers = []
         response = {'ok': True, 'result': []}
@@ -46,7 +48,7 @@ class MobileCloudTests(unittest.TestCase):
         self.assertIs(second.session_privacy, gate)
         response.update(ok=True)
         first.request('vault_open')
-        self.assertIsNone(second.session_privacy)
+        self.assertIs(second.session_privacy, gate)
         first.request('add_smb', session_only=True, password='smb-password')
         self.assertTrue(second.session_privacy.verify('smb-password'))
         first.request('clear')
@@ -149,3 +151,41 @@ class MobileCloudTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             client.request('core/command')
         self.assertEqual(len(requests), 2)
+
+class MultiPackagePrivacyTests(unittest.TestCase):
+    def setUp(self):
+        for name in ('_package_records', '_package_privacy', '_session_privacy', '_state_epoch'):
+            self.addCleanup(setattr, CloudClient, name, getattr(CloudClient, name))
+        CloudClient._package_records = ()
+        CloudClient._package_privacy = {}
+        CloudClient._session_privacy = None
+        CloudClient._state_epoch = -1
+
+    def test_saved_and_two_session_packages_keep_distinct_resume_gates(self):
+        client = CloudClient.__new__(CloudClient)
+        saved = dict(package_name='Personal.zip', saved=True, remotes=['Main'])
+        first = dict(package_name='Legacy.zip', saved=False, remotes=['Old'])
+        second = dict(package_name='Work.zip', saved=False, remotes=['Work'])
+        client.publish_credentials('import', dict(package_name='Legacy.zip', session_only=True, password='one'),
+                                   dict(epoch=1, packages=[saved, first]))
+        gate = client.session_privacy
+        client.publish_credentials('vault_open', {}, dict(epoch=2, packages=[saved, first]))
+        self.assertIs(client.session_privacy, gate)
+        client.publish_credentials('import', dict(package_name='Work.zip', session_only=True, password='two'),
+                                   dict(epoch=3, packages=[saved, first, second]))
+        self.assertEqual(len(client.session_privacies), 2)
+        self.assertTrue(client.session_privacies[0].verify('one'))
+        self.assertTrue(client.session_privacies[1].verify('two'))
+        client.publish_credentials('import', dict(package_name='Third.zip', session_only=False),
+                                   dict(epoch=4, packages=[saved, first, second, dict(package_name='Third.zip', saved=True, remotes=['Third'])]))
+        self.assertEqual(len(client.session_privacies), 2)
+        client.publish_credentials('clear', {}, dict(epoch=5, packages=[]))
+        self.assertFalse(client.session_privacies)
+        self.assertFalse(client.package_records)
+
+    def test_stale_native_state_cannot_replace_a_newer_package_list(self):
+        client = CloudClient.__new__(CloudClient)
+        latest = dict(package_name='Personal.zip', saved=True, remotes=['Main'])
+        client.publish_credentials('vault_open', {}, dict(epoch=4, packages=[latest]))
+        client.publish_credentials('vault_open', {}, dict(epoch=3, packages=[]))
+        self.assertEqual(client.package_records, (latest,))

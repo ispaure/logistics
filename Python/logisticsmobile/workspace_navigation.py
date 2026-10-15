@@ -107,7 +107,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             bounds, insets = native.bounds.size, native.safeAreaInsets
             if bounds.width > 0:
                 available = float(bounds.width - insets.left - insets.right)
-        elif adapter is not None and getattr(adapter, 'mode', None) == 'rail':
+        elif (adapter is not None and getattr(adapter, 'mode', None) == 'rail'
+              and adapter.impl.native_navigationview.getVisibility() != 8):
             density = self.app._impl.native.getResources().getDisplayMetrics().density
             available -= float(adapter.impl.native_navigationview.getWidth()) / density
         return max(1, int(available) - 24)
@@ -235,7 +236,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 # Retained Android roots can keep an old content minimum after
                 # changing tabs. Use the actual allocation, including rail space.
                 pixels = adapter.impl.native.getWidth()
-                if adapter.mode == 'rail':
+                if adapter.mode == 'rail' and adapter.impl.native_navigationview.getVisibility() != 8:
                     pixels -= adapter.impl.native_navigationview.getWidth()
                 width = adapter.impl.scale_out(pixels)
                 key = destination or self.app.native_host.state.destination

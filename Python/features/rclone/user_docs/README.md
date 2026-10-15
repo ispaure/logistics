@@ -202,7 +202,8 @@ moving is available in the remote browser.
 
 The independent mobile app can import the same TXT-in-ZIP credential format into
 an in-memory embedded rclone session, browse supported remotes and preview supported files directly. Managed Local and LocalCrypt folders support repeatable Pull and reviewed
-Push with progress while ordinary writing or reading continues. Both use rclone
+Push with progress while ordinary writing or reading continues. Transfer details
+show transferred and known totals in megabytes (MB) on both platforms. Both use rclone
 Sync: files at the destination can be replaced or deleted, with no retained
 backup or rollback. Mobile runs one transfer at a time with no queue; existing
 Local and LocalCrypt copies remain browsable and readable during folder transfers,
@@ -442,3 +443,14 @@ source retained as a recovery backup. Credentials and transfer associations stay
 internal. A missing card stops collection operations without an internal fallback.
 See the [mobile storage guide](../../../logisticsmobile/user_docs/README.md#local--localcrypt-location)
 for migration, restart and existing-destination behavior.
+
+### Side-by-side mobile credential packages
+
+Android and iOS can keep several ZIP packages loaded together. Each import's
+**Save credentials on this device** choice applies to that package: saved
+packages persist in the encrypted private vault; session-only packages remain
+active in memory without entering that vault. Folder Hub exposes their separate
+credential groups, and Connections shows their loading modes. Duplicate remote
+names receive package qualifiers and preserve their original account identities.
+Reloading saved credentials keeps active session packages. See the
+[mobile package guide](../../../logisticsmobile/user_docs/README.md#multiple-credential-packages-on-android-and-ios).

@@ -46,6 +46,7 @@ import (
 const packageLimit = 1024 * 1024
 const downloadLimit = 32 * 1024 * 1024
 
+var credentialEpoch uint64
 var serial sync.Mutex
 var cancellation sync.Mutex
 var active context.CancelFunc
@@ -207,9 +208,19 @@ func shutdownClients() {
 
 func clearSession() {
 	shutdownClients()
+	for _, set := range credentialSets {
+		set.storage.detach()
+	}
+	if savedCredentials != nil {
+		savedCredentials.detach()
+	}
 	admitted = map[string]bool{}
 	store.detach()
 	store = newStore()
+	credentialSets = map[string]*credentialSet{}
+	credentialView = store
+	savedCredentials = nil
+	latestCredential = ""
 	config.SetData(store)
 }
 
@@ -221,6 +232,9 @@ func importPackage(data []byte, password string, labels ...string) ([]string, er
 	return importPackageMode(data, password, label, false)
 }
 func importPackageMode(data []byte, password, label string, sessionOnly bool) ([]string, error) {
+	return importPackageWithAliases(data, password, label, sessionOnly, nil)
+}
+func importPackageWithAliases(data []byte, password, label string, sessionOnly bool, aliases map[string]string) ([]string, error) {
 	if len(data) > packageLimit || len(password) > 4096 {
 		return nil, errors.New("credential package exceeds limits")
 	}
@@ -278,27 +292,7 @@ func importPackageMode(data []byte, password, label string, sessionOnly bool) ([
 	if !validLabel(label) {
 		return nil, errors.New("invalid credential package name")
 	}
-	candidate := store
-	if sessionOnly {
-		candidate = newStore()
-	}
-	shutdownClients()
-	if err := candidate.replace(snapshot{Label: label, Remotes: pending, Pins: initialConnectionPins(pending)}); err != nil {
-		return nil, err
-	}
-	if sessionOnly {
-		store.detach()
-		store = candidate
-		config.SetData(store)
-	}
-	admitted = map[string]bool{}
-	names := []string{}
-	for name := range pending {
-		admitted[name] = true
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names, nil
+	return installCredentialPackage(snapshot{Label: label, Remotes: pending, Pins: initialConnectionPins(pending), Aliases: aliases}, sessionOnly)
 }
 
 func remote(ctx context.Context, name string) (fs.Fs, error) {
@@ -420,41 +414,42 @@ func dispatch(action, input string) (output string) {
 	ctx, done := scopedOperation(action)
 	defer done()
 	var request struct {
-		Host           string   `json:"host"`
-		User           string   `json:"user"`
-		Domain         string   `json:"domain"`
-		Port           string   `json:"port"`
-		Package        string   `json:"package"`
-		Password       string   `json:"password"`
-		Remote         string   `json:"remote"`
-		Path           string   `json:"path"`
-		FD             int      `json:"fd"`
-		OutputFD       int      `json:"output_fd"`
-		Member         string   `json:"member"`
-		Expected       string   `json:"expected"`
-		Identity       string   `json:"identity"`
-		Run            string   `json:"run"`
-		Data           string   `json:"data"`
-		Key            string   `json:"key"`
-		ID             string   `json:"id"`
-		Label          string   `json:"package_name"`
-		Session        bool     `json:"session_only"`
-		LocalPath      string   `json:"local_path"`
-		Push           bool     `json:"push"`
-		BWLimit        int      `json:"bw_limit"`
-		TrackRenames   bool     `json:"track_renames"`
-		Excludes       []string `json:"excludes"`
-		CleanupPaths   []string `json:"cleanup_paths"`
-		Decrypted      bool     `json:"decrypted"`
-		Directory      bool     `json:"directory"`
-		Decode         bool     `json:"decode"`
-		SourceRemote   string   `json:"source_remote"`
-		SourcePath     string   `json:"source_path"`
-		SourceIdentity string   `json:"source_identity"`
-		Offset         int64    `json:"offset"`
-		Count          int      `json:"count"`
-		Width          int      `json:"width"`
-		Height         int      `json:"height"`
+		Host           string            `json:"host"`
+		User           string            `json:"user"`
+		Domain         string            `json:"domain"`
+		Port           string            `json:"port"`
+		Package        string            `json:"package"`
+		Password       string            `json:"password"`
+		Remote         string            `json:"remote"`
+		Path           string            `json:"path"`
+		FD             int               `json:"fd"`
+		OutputFD       int               `json:"output_fd"`
+		Member         string            `json:"member"`
+		Expected       string            `json:"expected"`
+		Identity       string            `json:"identity"`
+		Run            string            `json:"run"`
+		Data           string            `json:"data"`
+		Key            string            `json:"key"`
+		ID             string            `json:"id"`
+		Label          string            `json:"package_name"`
+		Aliases        map[string]string `json:"aliases"`
+		Session        bool              `json:"session_only"`
+		LocalPath      string            `json:"local_path"`
+		Push           bool              `json:"push"`
+		BWLimit        int               `json:"bw_limit"`
+		TrackRenames   bool              `json:"track_renames"`
+		Excludes       []string          `json:"excludes"`
+		CleanupPaths   []string          `json:"cleanup_paths"`
+		Decrypted      bool              `json:"decrypted"`
+		Directory      bool              `json:"directory"`
+		Decode         bool              `json:"decode"`
+		SourceRemote   string            `json:"source_remote"`
+		SourcePath     string            `json:"source_path"`
+		SourceIdentity string            `json:"source_identity"`
+		Offset         int64             `json:"offset"`
+		Count          int               `json:"count"`
+		Width          int               `json:"width"`
+		Height         int               `json:"height"`
 	}
 	var result any
 	var err error
@@ -478,7 +473,7 @@ func dispatch(action, input string) (output string) {
 			var data []byte
 			data, err = base64.StdEncoding.DecodeString(request.Package)
 			if err == nil {
-				result, err = importPackageMode(data, request.Password, request.Label, request.Session)
+				result, err = importPackageWithAliases(data, request.Password, request.Label, request.Session, request.Aliases)
 			}
 		case "vault_open":
 			var key []byte
@@ -488,14 +483,7 @@ func dispatch(action, input string) (output string) {
 				next, err = openVault(request.Path, request.ID, key)
 				clear(key)
 				if err == nil {
-					shutdownClients()
-					store.detach()
-					store = next
-					admitted = map[string]bool{}
-					config.SetData(store)
-					for _, name := range store.GetSectionList() {
-						admitted[name] = true
-					}
+					err = installSavedCredentials(next)
 					result = vaultInfo()
 				}
 			}
@@ -610,6 +598,13 @@ func dispatch(action, input string) (output string) {
 		}
 	} else {
 		reply["result"] = result
+		switch action {
+		case "import", "vault_open", "add_smb", "clear":
+			credentialEpoch++
+			info := vaultInfo()
+			info["epoch"] = credentialEpoch
+			reply["credential_state"] = info
+		}
 	}
 	encoded, _ := json.Marshal(reply)
 	return string(encoded)

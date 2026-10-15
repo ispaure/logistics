@@ -25,13 +25,20 @@ class CredentialPackages:
                 raise ValueError('Invalid retained credential packages.')
             for key, item in items.items():
                 if (len(key) != 64 or any(c not in '0123456789abcdef' for c in key)
-                        or not isinstance(item, dict) or set(item) != {'zip', 'remotes'}
+                        or not isinstance(item, dict) or set(item) not in ({'zip', 'remotes'}, {'zip', 'remotes', 'aliases'})
                         or download_name(item['zip']) != item['zip'] or not isinstance(item['remotes'], dict)
                         or len(item['remotes']) > 256 or any(not isinstance(remote, str) or not remote or len(remote) > 80
                             or not isinstance(identity, str) or len(identity) != 64
                             or any(c not in '0123456789abcdef' for c in identity)
                             for remote, identity in item['remotes'].items())):
                     raise ValueError('Invalid retained credential association.')
+            for item in items.values():
+                aliases = item.get('aliases', {})
+                if (not isinstance(aliases, dict) or len(aliases) > 64
+                        or any(not isinstance(name, str) or not 0 < len(name) <= 80
+                               or not isinstance(alias, str) or alias not in item['remotes']
+                               for name, alias in aliases.items())):
+                    raise ValueError('Invalid retained credential aliases.')
             self.items = items
 
     def path(self, key):
@@ -42,7 +49,7 @@ class CredentialPackages:
             raise ValueError('Retained package cannot be linked.')
         return path
 
-    def remember(self, package, remotes):
+    def remember(self, package, remotes, *, aliases=None):
         if len(package.data) > PACKAGE_LIMIT:
             raise ValueError('Credential ZIP exceeds the limit.')
         # The device key alone must never recover decoded session credentials.
@@ -65,6 +72,8 @@ class CredentialPackages:
         if len(next_items) >= 32:
             raise ValueError('Retained credential package limit reached.')
         next_items[key] = dict(zip=package.name, remotes=remotes)
+        if aliases:
+            next_items[key]['aliases'] = dict(aliases)
         atomic_write_bytes(self.path(key), data)
         atomic_write_json(self.index, next_items, max_bytes=128 * 1024)
         previous = self.items
@@ -72,6 +81,9 @@ class CredentialPackages:
         for retired in previous.keys() - next_items.keys():
             self.path(retired).unlink(missing_ok=True)
         return key
+
+    def aliases(self, key):
+        return dict(self.items[key].get('aliases', {}))
 
     @contextmanager
     def open(self, key):

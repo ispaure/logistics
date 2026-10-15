@@ -364,14 +364,14 @@ concurrent edits. The same encrypted storage path persists rclone token-save cal
 failed saves remain visible to subsequent read/list operations. Native backend
 config maps bind getters/setters to their storage generation; late callbacks from
 retired connections cannot update a replacement package or recreate forgotten files. Plaintext serialization
-is disabled. Import validates all members before publishing the replacement. A
-session-only import detaches persistence and preserves the saved ciphertext.
+is disabled. Import validates all members before publishing its package context. A
+session-only context has no persistence parent and preserves the saved ciphertext.
 
-The `add_smb` bridge action appends an explicitly named SMB server to the loaded
-snapshot, rejects duplicates, and preserves existing connection settings and OAuth
+The `add_smb` bridge action appends an explicitly named SMB server to its saved or
+session-only network-shares context, rejects duplicates, and preserves existing connection settings and OAuth
 identity pins. `smb.go` validates the host, explicit username and port, obscures the
 form password for rclone, and publishes through the same encrypted vault. Session
-mode copies the loaded snapshot into detached memory while leaving saved ciphertext
+mode keeps its context in detached memory while leaving saved ciphertext
 unchanged. Cached backend handles are shut down before storage generations change.
 The SMB option allowlist excludes Kerberos config/cache filesystem access. Package
 imports also accept this restricted SMB configuration, with an already obscured
@@ -1074,3 +1074,48 @@ The Android privacy lifecycle proxy explicitly handles the activity configuratio
 callback during uiMode changes. Native reader checks wait for layout-triggered
 reloads before toggling controls; compact iOS Home checks scroll the selected
 action into view before testing native hit dispatch.
+
+## Side-by-side credential contexts
+
+`Mobile/rclone_bridge/credential_sets.go` owns up to 32 package contexts. The
+process-wide rclone config is a nonpersistent aggregate view whose remote aliases
+delegate to their original package stores. Names remain unchanged unless they
+collide; collision aliases incorporate the ZIP filename and package digest.
+Account and crypt identities hash original package configurations, so adding a
+context cannot retarget existing downloaded copies. Crypt backing lookup stays
+within the source package; the aggregate translates only the resulting backing
+remote name. Connection refresh callbacks capture their owning store and its
+generation. Reloaded or retired contexts reject late callbacks.
+
+A saved package store delegates encrypted publication to the private vault root.
+The root contains only saved package snapshots; session stores have no persistence
+parent or path. Saved-package reload preserves session contexts. Existing LGCV1
+snapshots remain readable and migrate through normal saved publication/alias
+normalization; multi-package envelopes use LGCV2 so older builds fail closed
+rather than rewriting only one package. Device key aliases and vault paths are
+unchanged. Package limits and aliases are validated before admitting a vault.
+
+Credential mutations retain the native credential write scope; offline local
+reads keep their independent read scope during transfers. The C response carries
+nonsecret package modes, aliases and identity hashes with a monotonically
+increasing state epoch. `CloudClient` serializes mutation/publication across
+scenes and publishes shared package records and separate session privacy gates.
+ScreenPrivacy shields all loaded session contexts and requires their outstanding
+password gates after backgrounding. Explicit Lock clears all contexts. Retained
+ZIP metadata keeps only its own remotes plus optional alias hints; it never
+includes decoded credentials or other loaded packages.
+
+Folder Hub, encrypted library discovery and transfers resolve existing job
+identities against the loaded package metadata without native I/O while rendering.
+The actual native operation still validates its account/cipher identity.
+
+### Android tablet comic viewport sizing
+
+WorkspaceNavigation reserves Android rail width only while the native rail is
+visible. The fullscreen route retains its existing reader and uses the reclaimed
+allocation after chrome changes. Native reader checks measure both canvas axes
+against the window, as well as the rendered image center, to catch blank space
+outside an otherwise centered canvas. `comic_viewport_probe.py` exercises a
+synthetic cache-only comic through repeated control/fullscreen transitions at
+phone and BOOX-sized tablet dimensions. Shared native container behavior is
+documented in commonUtils rather than duplicated here.
