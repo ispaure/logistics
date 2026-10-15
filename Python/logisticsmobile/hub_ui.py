@@ -269,7 +269,12 @@ class HubUI:
         self.choose_document_type()
 
     async def open_hub_file(self, widget=None, **kwargs):
-        await self.show_editor_open()
+        self.show_cloud(present=False)
+        restore = getattr(self, 'cloud_restore_task', None)
+        if restore is not None:
+            await restore
+        return await self.adaptive.browser('documents').show_main_browser(
+            'Local files', title='Open file')
 
     def refresh_hub(self, destination):
         if destination == 'files' and self.window_id == 'primary':
