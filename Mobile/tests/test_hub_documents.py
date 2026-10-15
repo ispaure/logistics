@@ -147,6 +147,22 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIs(app.body.children[0], app.document_view)
         self.assertEqual(app.editor.value, '# A retained draft')
 
+    def test_open_document_links_have_direct_close_controls_in_both_views(self):
+        import toga
+        app = self.app
+        session = app.editor_view.session
+        for row in (app.session_panel(session, close=True), app.session_card(session, app.session_summary(session))):
+            actions = next(child for child in row.children if any(isinstance(button, toga.Button) for button in child.children))
+            name, close = actions.children
+            self.assertEqual(name.text, app.session_summary(session)[0])
+            self.assertFalse(getattr(name._impl, '_row_hint', False))
+            self.assertEqual(close.text, '×')
+        clean = app.store.create('Close-me.txt')
+        session = app.workspace.open('managed-text', clean.id, 'text', clean.name)
+        row = app.session_panel(session, close=True)
+        row.children[-1].children[-1].on_press()
+        self.assertNotIn(session.id, app.workspace.sessions)
+
     def test_documents_group_only_open_files_by_type(self):
         import toga
         app = self.app
@@ -163,12 +179,12 @@ class HubDocumentTests(unittest.TestCase):
         self.assertFalse(any(label.startswith('Open documents') for label in labels))
         self.assertFalse(any(hasattr(child, 'commands') for child in content.children))
         markdown_content = app.document_categories['markdown'].children[0]
-        self.assertIn('Opened · 2', [child.text for child in markdown_content.children if isinstance(child, toga.Label)])
+        self.assertFalse(any(child.text.startswith('Opened') for child in markdown_content.children if isinstance(child, toga.Label)))
         open_rows = [child for category in app.document_categories.values()
-                     for child in category.children[0].children if hasattr(child, 'commands')]
+                     for child in category.children[0].children if hasattr(child, 'session_id')]
         names = [row.children[-1].children[0].text for row in open_rows]
         self.assertLess(names.index('Notes.txt'), names.index('Plan.MD'))
-        # Clean grouped rows consist only of the filename and close menu.
+        # Clean grouped rows consist only of the filename link and close button.
         self.assertTrue(all(len(row.children) == 1 for row in open_rows))
         stored_names = [child.text for child in content.children if isinstance(child, toga.Button)]
         self.assertEqual(stored_names, [])
@@ -190,7 +206,7 @@ class HubDocumentTests(unittest.TestCase):
             grid.reflow(width)
             self.assertEqual(grid.columns, columns)
             self.assertEqual(len(grid.children[0].children), columns)
-        card.children[-1].on_press()
+        card.children[0].children[0].on_press()
         self.assertEqual(app.workspace.active, session_id)
         self.assertEqual(app.editor.value, '# Current draft\nStill unsaved')
         card.children[0].children[1].on_press()
@@ -210,7 +226,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual(Preferences(app.private_root).values['document_card_overview'], 'false')
         app.show_documents_hub()
         self.assertEqual(app.document_grids, [])
-        self.assertTrue(any(hasattr(child, 'commands') for card in app.document_categories.values()
+        self.assertTrue(any(hasattr(child, 'session_id') for card in app.document_categories.values()
                             for child in card.children[0].children))
 
     def test_cards_do_not_preview_provider_text_or_open_missing_records(self):
@@ -309,7 +325,7 @@ class HubDocumentTests(unittest.TestCase):
         app.store.path(doc.id, '.json').unlink()
         row = app.session_panel(session, close=True, show_kind=False)
         self.assertIn('Unavailable', row.children[0].text)
-        self.assertTrue(hasattr(row, 'commands'))
+        self.assertEqual(row.children[-1].children[-1].text, '×')
 
     def test_restart_clears_clean_sessions_keeps_drafts_conflicts_and_stored_bytes(self):
         app = self.app

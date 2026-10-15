@@ -163,7 +163,6 @@ class HubUI:
             group = [(session, summary) for session_kind, session, summary in sessions if session_kind == kind]
             content = card.children[0]
             if group:
-                content.add(heading(f'Opened · {len(group)}'))
                 if self.preferences.values['document_card_overview'] == 'true':
                     grid = PanelGrid([self.session_card(session, summary) for session, summary in group],
                                      self.main_window.size.width, maximum_columns=1)
@@ -197,8 +196,8 @@ class HubUI:
         box = toga.Box(style=Pack(direction=COLUMN, padding=8, margin_bottom=10))
         box.session_id = session.id
         box.add(toga.Box(children=[
-            list_button(toga.Button(title, on_press=self.session_opener(session.id),
-                                    style=Pack(flex=1, height=44))),
+            toga.Button(title, on_press=self.session_opener(session.id),
+                        style=Pack(flex=1, height=44)),
             toga.Button('×', on_press=self.session_closer(session.id), style=Pack(width=44, height=44))],
             style=Pack(direction=ROW)))
         preview = ''
@@ -216,8 +215,6 @@ class HubUI:
                            style=Pack(height=120, font_size=12, margin_top=8, margin_bottom=8)))
         if details:
             box.add(toga.Label('\n'.join(details), style=Pack(font_size=12)))
-        caption = 'Current document' if self.workspace.active == session.id else 'Resume document'
-        box.add(toga.Button(caption, on_press=self.session_opener(session.id), style=Pack(height=44)))
         return surface(box)
 
     def session_summary(self, session):
@@ -259,13 +256,11 @@ class HubUI:
         box = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
         if details:
             box.add(toga.Label(' · '.join(details), style=Pack(font_size=12)))
-        button = list_button(toga.Button(title, on_press=self.session_opener(session.id), style=Pack(height=48, flex=1)))
+        box.session_id = session.id
+        button = toga.Button(title, on_press=self.session_opener(session.id), style=Pack(height=48, flex=1))
         if close:
-            from .action_menu import FeatureCommands
-            more = toga.Button('•••', style=Pack(width=44, height=48))
-            box.commands = FeatureCommands(more, self,
-                [('Close document', self.session_closer(session.id))], self.session_closer(session.id))
-            box.add(toga.Box(children=[button, more], style=Pack(direction=ROW)))
+            close_button = toga.Button('×', on_press=self.session_closer(session.id), style=Pack(width=44, height=48))
+            box.add(toga.Box(children=[button, close_button], style=Pack(direction=ROW)))
         else:
             box.add(button)
         return box
