@@ -4,8 +4,9 @@ from configparser import ConfigParser, Error as ConfigError
 from pathlib import Path
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW
-from commonUtils.ui.native.presentation import list_button
+from toga.style.pack import COLUMN, ROW, CENTER
+from commonUtils.ui.native.presentation import list_button, template_icon
+from .hub_icons import icon
 from commonUtils.runtime.local_files import LocalFiles
 from features.comics.library_config import library_names
 
@@ -148,9 +149,10 @@ class LibraryCatalog:
                                  enabled=not self.book_busy, style=Pack(height=52))
             list_button(button)
             self.library_row_buttons.append(button)
-            self.library_rows.add(toga.Box(children=[button,
-                toga.Label(record['source'] + ' · ' + record['folder'], style=Pack(font_size=12, margin_bottom=8))],
-                style=Pack(direction=COLUMN, margin_bottom=4)))
+            button.style.flex = 1
+            self.library_rows.add(toga.Box(children=[
+                template_icon(toga.ImageView(icon('files'), style=Pack(width=24, height=24, margin_right=12))),
+                button], style=Pack(direction=ROW, align_items=CENTER, margin_bottom=8, margin_left=8, margin_right=8)))
         if not self.library_row_buttons:
             self.library_rows.add(toga.Label('No matching libraries.' if query else 'No configured comics libraries found in Local or unlocked LocalCrypt copies.',
                                             style=Pack(margin_top=16)))
