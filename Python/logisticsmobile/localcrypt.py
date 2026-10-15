@@ -138,7 +138,7 @@ class LocalCryptCopies:
     def _stream_reader(self, record, path, password='', cancelled=lambda: False):
         from .crypt_stream import NativeSource
         source = NativeSource(self.client, record, path, password=password, cancelled=cancelled)
-        if Path(source.name).suffix.lower() in {'.txt', '.md', '.markdown'}:
+        if Path(source.name).suffix.lower() in {'.txt', '.md', '.markdown', '.ini'}:
             if source.size > 1024 * 1024:
                 raise ValueError('Text editing is limited to 1 MiB; the file can still be moved or exported.')
             with source.open(source.name) as stream:
@@ -148,7 +148,7 @@ class LocalCryptCopies:
     def save(self, reader, text, *, cancelled=lambda: False):
         """Verify staged ciphertext before replacing an unchanged local original."""
         if not reader.editable:
-            raise ValueError('Only text and Markdown copies can be edited.')
+            raise ValueError('Only text, Markdown and INI copies can be edited.')
         data = reader.text_snapshot.encode(text)
         if len(data) > 1024 * 1024:
             raise ValueError('Private text editing is limited to 1 MiB.')
@@ -267,8 +267,8 @@ class PrivateReader:
         self.source = source or MemorySource(name, data)
         self.kind = Path(name).suffix.lower()
         self.book = None
-        self.editable = self.kind in {'.md', '.markdown', '.txt'}
-        if self.kind in {'.md', '.markdown', '.txt'}:
+        self.editable = self.kind in {'.md', '.markdown', '.txt', '.ini'}
+        if self.kind in {'.md', '.markdown', '.txt', '.ini'}:
             if len(data) > 1024 * 1024:
                 raise ValueError('Private text reading is limited to 1 MiB.')
             from commonUtils.persistence.text import TextSession
@@ -301,7 +301,7 @@ class PrivateReader:
                 self.book = EPUBBook(Path(name), source=self.source)
                 self.labels = [f'Chapter {i + 1}' for i in range(len(self.book.spine))]
         else:
-            raise ValueError('Private reading supports UTF-8 text/Markdown, EPUB and PNG/JPEG/WebP CBZ/ZIP comics.')
+            raise ValueError('Private reading supports text/Markdown/INI, EPUB and PNG/JPEG/WebP CBZ/ZIP comics.')
 
     @property
     def comic(self):
@@ -335,7 +335,7 @@ class PrivateReader:
             parser = Text()
             parser.feed(chapter_html(self.book, index))
             return 'text', ''.join(parser.parts)
-        if self.kind in {'.md', '.markdown', '.txt'}:
+        if self.kind in {'.md', '.markdown', '.txt', '.ini'}:
             return 'text', self.text
         from features.comics.mobile.validation import image_dimensions, MAX_IMAGE
         with self.source.open_archive(self.name) if self.streaming else ZipFile(BytesIO(self.data)) as archive:

@@ -990,3 +990,9 @@ On iPhone, changing file-browser locations now refreshes the native picker befor
 selecting the new location. Opening a LocalCrypt comic uses that encrypted folder
 instead of accidentally falling back to Local files. If a private file cannot be
 opened, the reason appears in the file browser instead of only in Connections.
+
+
+LocalCrypt INI files can now open in the memory-only text editor and save back
+to encrypted storage. They use the same 1 MiB limit, encoding/line-ending
+preservation and conflict checks as private text/Markdown files. Opening them
+never adds their names or content to ordinary history or recovery storage.
