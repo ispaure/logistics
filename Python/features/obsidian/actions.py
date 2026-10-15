@@ -9,7 +9,6 @@ import json
 import os
 import secrets
 import shutil
-import stat
 import subprocess
 import time
 from pathlib import Path
@@ -17,6 +16,7 @@ from typing import Any
 from urllib.parse import quote
 
 from commonUtils import ui
+from commonUtils.persistence import atomic_write_bytes
 from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.filesystem.directories import Directory
 from commonUtils.runtime.platform import OS, get_os
@@ -196,27 +196,10 @@ def _write_registry(registry_path: Path, registry: dict[str, Any]) -> None:
     """Atomically write an Obsidian registry, preserving existing file permissions when possible."""
 
     registry_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = registry_path.with_name(f'.{registry_path.name}.logistics.tmp')
-
-    existing_mode = None
-    if registry_path.exists():
-        existing_mode = stat.S_IMODE(registry_path.stat().st_mode)
-
     try:
-        with temp_path.open('w', encoding='utf-8', newline='\n') as registry_file:
-            json.dump(registry, registry_file, separators=(',', ':'), ensure_ascii=False)
-            registry_file.write('\n')
-
-        if existing_mode is not None:
-            temp_path.chmod(existing_mode)
-
-        os.replace(temp_path, registry_path)
+        content = json.dumps(registry, separators=(',', ':'), ensure_ascii=False) + '\n'
+        atomic_write_bytes(registry_path, content.encode('utf-8'))
     except OSError as error:
-        try:
-            temp_path.unlink(missing_ok=True)
-        except OSError:
-            pass
-
         raise RuntimeError(f'Could not write Obsidian registry "{registry_path}": {error}') from error
 
 

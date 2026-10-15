@@ -107,3 +107,9 @@ Logistics uses `commonUtils.ui.workspaces`, `tasks`, `readers`, `settings` and
 have been removed; imports and mock patch targets use the grouped paths. Keep
 application navigation and document policy in Logistics. See the [shared module map](https://github.com/ispaure/commonUtils/blob/main/ui/README.md#module-organization)
 for ownership and canonical paths.
+
+## Consumer consolidation
+
+Feature preference and Obsidian registry writers use shared atomic byte publication.
+Logistics still owns their serialization, schemas, paths, recovery and error messages.
+Registry writes preserve compact UTF-8 JSON and the trailing newline.
