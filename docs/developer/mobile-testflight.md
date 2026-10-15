@@ -45,6 +45,17 @@ and [build upload requirements](https://developer.apple.com/help/app-store-conne
 Check that the selected Xcode/SDK is currently accepted for App Store Connect
 before the first upload. The local selector requires SDK 27.1 or newer.
 
+## Double-click launcher
+
+`Mobile/deploy_ios_testflight.command` uses the existing local environment and
+`testflight_deploy.py` to run plan, archive and export in order. It chooses a build
+number above existing local release workspaces, then asks for an explicit `y`
+before invoking upload with the existing opt-in flag. Failed steps stop the flow;
+an empty answer keeps the verified export. All identity, clean-source, signature
+and distribution checks remain owned by `testflight_tools.py`. An explicit build
+number can be supplied with `--build-number`. Processing and beta review still
+happen through Apple after upload.
+
 ## Local commands
 
 Use the persistent Python 3.12/Briefcase 0.4.5 environment prepared for device
