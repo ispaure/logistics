@@ -5,7 +5,9 @@ from pathlib import Path
 import sys
 import logging
 from datetime import datetime
-from tempfile import NamedTemporaryFile
+from io import StringIO
+
+from commonUtils.persistence import atomic_write_bytes
 
 
 def preferences_path():
@@ -58,13 +60,6 @@ def save_disabled(path, disabled):
         parser.add_section('Features')
     parser.set('Features', 'disabled', '\n'.join(sorted(disabled)))
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    temporary = None
-    try:
-        with NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent, delete=False) as stream:
-            temporary = Path(stream.name)
-            parser.write(stream)
-            stream.flush(); os.fsync(stream.fileno())
-        os.replace(temporary, path)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
+    stream = StringIO()
+    parser.write(stream)
+    atomic_write_bytes(path, stream.getvalue().encode('utf-8'))
