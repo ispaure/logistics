@@ -996,3 +996,10 @@ LocalCrypt INI files can now open in the memory-only text editor and save back
 to encrypted storage. They use the same 1 MiB limit, encoding/line-ending
 preservation and conflict checks as private text/Markdown files. Opening them
 never adds their names or content to ordinary history or recovery storage.
+
+
+LocalCrypt comics use the nearest ancestor `remoteConfig.ini` when an inner
+archive requires its configured `[LogisticsZIP] archive_password`. The lookup
+reads through encrypted storage and stops at that storage root. An empty nearest
+LogisticsZIP section stops inheritance; a manually supplied value takes priority.
+Resolved values stay in memory for the reader session and are cleared on close.

@@ -2,7 +2,7 @@
 from contextlib import contextmanager
 from io import BytesIO
 import base64
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
 from commonUtils.runtime.local_files import LocalFiles
@@ -103,6 +103,22 @@ class CryptFiles(LocalFiles):
             with CryptTransferStream(base64.b64decode(result['data'], validate=True), record, encrypted) as stream:
                 yield stream
 
+    def archive_password(self, path, *, cancelled=lambda: False):
+        from services.zip_passwords import password_from_ini
+        relative = PurePosixPath(self.relative(path))
+        for folder in (relative.parent, *relative.parent.parents):
+            check_cancelled(cancelled)
+            candidate = str(folder / 'remoteConfig.ini')
+            try:
+                with self.open(candidate) as stream:
+                    data = stream.read(65537)
+            except FileNotFoundError:
+                continue
+            password, found = password_from_ini(data)
+            if found:
+                return password
+        return None
+
     def create_file(self, path, stream, *, cancelled=lambda: False):
         with mutation_lock:
             check_cancelled(cancelled)
@@ -148,6 +164,18 @@ class ManagedCopies(LocalCryptCopies):
     def __init__(self, provider):
         self.provider = provider
         super().__init__(provider.root, provider.client)
+
+    def open(self, key, *, password='', cancelled=lambda: False):
+        from commonUtils.archives.zip_access import ArchivePasswordError
+        try:
+            return super().open(key, password=password, cancelled=cancelled)
+        except ArchivePasswordError:
+            if password:
+                raise
+            configured = self.provider.archive_password(key, cancelled=cancelled)
+            if not configured:
+                raise
+            return super().open(key, password=configured, cancelled=cancelled)
 
     def _data(self, key):
         return self.provider._guard(self.provider._physical(key))

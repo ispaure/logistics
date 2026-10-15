@@ -50,6 +50,15 @@ async def exercise_localcrypt(app, passed):
         assert owner is not None and owner.crypt_reader.name == 'plain.cbz'
         assert owner.crypt_image.image.width == 24
         app.close_crypt()
+        # Read collection configuration through the same encrypted provider.
+        from io import BytesIO
+        provider.create_file('remoteConfig.ini', BytesIO(b'[LogisticsZIP]\narchive_password=synthetic-archive-password\n'))
+        provider._physical('encrypted.cbz').write_bytes(base64.b64decode(fixture['copies']['encrypted.cbz']['ciphertext']))
+        assert await drawer.show_main_browser('LocalCrypt: Native check', provider=provider)
+        assert await drawer.open_file({'path': 'encrypted.cbz'}), 'Configured fixture did not open'
+        owner = app.private_sessions.active
+        assert owner is not None and owner.crypt_image.image.width == 24
+        app.close_crypt()
 
     for name in ('note.md', 'text.txt'):
         await open_copy(name)

@@ -229,3 +229,13 @@ covered by the Go round-trip and host UI save tests; the targeted simulator used
 its existing executable for the open/display checks. Source/results/screenshots
 are retained in ignored `Mobile/logs/localcrypt-open-review/`. Android rendering
 and a full native suite were not exercised in this follow-up.
+
+
+ManagedCopies retries a native archive unlock that requires configuration by
+calling CryptFiles.archive_password. That provider walks logical ancestors only
+within its root, reads each virtual remoteConfig.ini with a 64 KiB bound and
+uses services.zip_passwords.password_from_ini for the desktop inheritance policy.
+Plain archives do not require configuration reads. Explicit input is not silently
+overridden. Parsing errors are sanitized and resolved values are never copied to
+preferences, workspace history or diagnostics. A native fixture verifies this
+path on a protected archive without an interactive entry step.
