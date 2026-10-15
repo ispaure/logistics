@@ -147,7 +147,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIs(app.body.children[0], app.document_view)
         self.assertEqual(app.editor.value, '# A retained draft')
 
-    def test_documents_group_open_and_stored_files_by_type(self):
+    def test_documents_group_only_open_files_by_type(self):
         import toga
         app = self.app
         app.preferences.save(document_card_overview='false')
@@ -161,7 +161,7 @@ class HubDocumentTests(unittest.TestCase):
         content = app.build_documents_hub().content
         labels = [child.text for child in content.children if isinstance(child, toga.Label)]
         self.assertEqual([label for label in labels if label.startswith('Markdown ·')],
-                         ['Markdown · 2', 'Markdown · 2'])
+                         ['Markdown · 2'])
         self.assertFalse(any(label.startswith(('EPUB books ·', 'Comics ·')) for label in labels))
         open_rows = [child for child in content.children if hasattr(child, 'commands')]
         names = [row.children[-1].children[0].text for row in open_rows]
@@ -169,8 +169,8 @@ class HubDocumentTests(unittest.TestCase):
         # Clean grouped rows consist only of the filename and close menu.
         self.assertTrue(all(len(row.children) == 1 for row in open_rows))
         stored_names = [child.text for child in content.children if isinstance(child, toga.Button)]
-        self.assertIn('Plan.MD', stored_names)
-        self.assertIn('Plan.MD (2)', stored_names)
+        self.assertEqual(stored_names, [])
+        self.assertFalse(any(label.startswith('Stored documents') for label in labels))
 
     def test_card_overview_defaults_on_reflows_and_resumes_live_draft(self):
         app = self.app
