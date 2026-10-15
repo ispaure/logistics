@@ -133,3 +133,8 @@ Mobile editors bind shared native Find/Replace to explicit editor/container widg
 TextEditorView still owns text-change notification, draft retention and session saves.
 
 Mobile browser byte labels use shared `filesystem.format_size` with binary units.
+
+Repeatable pulls and private-copy revisions use shared verified content snapshots.
+Persisted baselines retain relative names and SHA-256 hex; private revisions retain
+their original five-field stat tuple and digest bytes. Calibre hashing uses shared
+streams; its export plan and destination validation remain feature-owned.

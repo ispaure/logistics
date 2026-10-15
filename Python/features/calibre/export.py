@@ -1,7 +1,6 @@
 """Plan a dedicated book mirror, stage copies, then remove obsolete exports."""
 
 from dataclasses import dataclass
-import hashlib
 import os
 from pathlib import Path
 import shutil
@@ -10,6 +9,7 @@ from tempfile import NamedTemporaryFile
 from commonUtils.filesystem.directories import Directory
 from . import metadata
 from commonUtils.runtime.operations import check_cancelled
+from commonUtils.runtime.streams import file_sha256
 
 
 Signature = tuple[int, int, int, int]
@@ -21,8 +21,7 @@ def signature(path: Path) -> Signature:
 
 
 def checksum(path: Path) -> str:
-    with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+    return file_sha256(path)
 
 
 def path_key(path: Path) -> str:

@@ -1,9 +1,10 @@
 """Repeatable one-way pulls with local-edit guards and recoverable publication."""
-from hashlib import sha256
 import json
 from pathlib import Path
 from uuid import uuid4
 from commonUtils.persistence import atomic_write_json
+from commonUtils.filesystem.snapshots import tree_content_state
+from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.persistence.publication import mutation_lock, rename_exclusive
 from commonUtils.runtime.resource_provider import resource_path
 from .cloud import download_name
@@ -27,38 +28,10 @@ def validate_state(state):
 
 
 def folder_state(root, cancelled=lambda: False):
-    root = Path(root)
-    if root.is_symlink() or not root.is_dir():
-        raise ValueError('The local pull folder is missing or linked; existing files were preserved.')
-    result, pending = {}, [root]
-    while pending:
-        folder = pending.pop()
-        for path in sorted(folder.iterdir()):
-            if cancelled():
-                raise ValueError('Pull cancelled; existing files were preserved.')
-            if path.is_symlink():
-                raise ValueError('Linked files cannot be part of a repeatable pull.')
-            key = path.relative_to(root).as_posix()
-            if path.is_dir():
-                result[key] = None
-                pending.append(path)
-            else:
-                before = path.stat()
-                if not path.is_file() or before.st_nlink != 1:
-                    raise ValueError('The pull folder contains an unsupported resource.')
-                content = sha256()
-                with path.open('rb') as stream:
-                    while block := stream.read(64 * 1024):
-                        if cancelled():
-                            raise ValueError('Pull cancelled; existing files were preserved.')
-                        content.update(block)
-                after = path.stat()
-                if (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns):
-                    raise ValueError('A local file changed during inspection; retry the pull.')
-                result[key] = content.hexdigest()
-            if len(result) > 10000:
-                raise ValueError('Repeatable pulls are limited to 10,000 items.')
-    return validate_state(result)
+    try:
+        return validate_state(tree_content_state(root, cancelled=cancelled, max_entries=10000))
+    except OperationCancelled as error:
+        raise ValueError('Pull cancelled; existing files were preserved.') from error
 
 
 class PullJobs:
