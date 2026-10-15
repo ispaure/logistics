@@ -131,3 +131,5 @@ transfer guards and coroutine scheduling. Editor disposal retires its native men
 
 Mobile editors bind shared native Find/Replace to explicit editor/container widgets.
 TextEditorView still owns text-change notification, draft retention and session saves.
+
+Mobile browser byte labels use shared `filesystem.format_size` with binary units.

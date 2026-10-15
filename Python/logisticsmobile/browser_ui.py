@@ -4,6 +4,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from commonUtils.ui.native_browser import NativeBrowser
+from commonUtils.filesystem import format_size
 from commonUtils.ui.native.presentation import list_button, surface
 
 
@@ -76,9 +77,7 @@ class FileBrowser(NativeBrowser):
                 if entry.container:
                     detail = ''
                 elif isinstance(size, (int, float)):
-                    detail = (f'{size / 1024**3:.1f} GiB' if size >= 1024**3 else
-                              f'{size / 1024**2:.1f} MiB' if size >= 1024**2 else
-                              f'{size / 1024:.1f} KiB' if size >= 1024 else f'{size} B')
+                    detail = format_size(size, binary_units=True)
                 else:
                     detail = entry.suffix.lstrip('.').upper() or 'File'
                 controls = toga.Box(style=Pack(direction=ROW))
