@@ -138,3 +138,7 @@ Repeatable pulls and private-copy revisions use shared verified content snapshot
 Persisted baselines retain relative names and SHA-256 hex; private revisions retain
 their original five-field stat tuple and digest bytes. Calibre hashing uses shared
 streams; its export plan and destination validation remain feature-owned.
+
+Shared archive rebuilding owns byte manifests and member replacement. Logistics'
+metadata service retains comic/EPUB plans, the processing limit and EPUB mimetype
+ordering/storage rules. Native archive shortcuts still avoid decoding whole files.
