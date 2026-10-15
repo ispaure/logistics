@@ -419,7 +419,6 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
     def show_settings(self, widget=None, **kwargs):
         from .hub_ui import heading
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Preferences', style=Pack(font_size=22, margin_bottom=12)))
         box.add(heading('App'))
         self.document_cards_choice = toga.Switch('Document card overview',
             value=self.preferences.values['document_card_overview'] == 'true', style=Pack(height=44))
