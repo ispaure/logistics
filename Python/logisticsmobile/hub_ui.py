@@ -123,12 +123,6 @@ class HubUI:
 
     def build_documents_hub(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Documents', style=Pack(font_size=24, margin_bottom=8)))
-        box.add(toga.Label('Read, write and continue your work.', style=Pack(margin_bottom=12)))
-        box.add(toga.Box(children=[
-            toga.Button('New', on_press=self.new_hub_document, style=Pack(height=44, flex=1)),
-            toga.Button('Open…', on_press=self.open_hub_file, style=Pack(height=44, flex=1))],
-            style=Pack(direction=ROW, margin_bottom=8)))
         launchers = []
         for title, detail, glyph, extension in (
             ('Text Editor', 'Edit plain text and code files.', 'documents', 'txt'),
