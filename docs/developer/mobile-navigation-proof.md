@@ -154,3 +154,17 @@ Local folder deletion reuses shared provider inventory/delete operations and
 removes the mapping after successful deletion. Existing unrelated changes remain
 in the checkout. These changes have host/native-library regression coverage;
 installed iOS/Android visual and network behavior needs a freshly rebuilt app.
+
+
+## Complete simulator test results
+
+The disposable native test app atomically writes `logistics-native-ui-result.json`
+in its cache before printing the chunked stdout report. `ui_tools.py` can read that
+file through `simctl get_app_container` when Apple's log stream drops the final
+chunks/exit marker. It accepts only a file written after that invocation started
+and applies the same full-case, backend, clean-source and exact-commit checks as
+stdout. Independent-window verification remains mandatory for the iPad gate.
+Briefcase's missing-result code 200 can use that verified file; other process
+failures, stale/missing files, incomplete cases and failed tests still block the
+release. Android continues to use its stdout report. The host preserves the
+chosen report transport and Briefcase exit code beside the native evidence.

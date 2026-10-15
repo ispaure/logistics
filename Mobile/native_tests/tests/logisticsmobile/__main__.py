@@ -415,6 +415,12 @@ async def exercise(app):
     report['scene_environment_limit'] = getattr(app, 'scene_environment_limit', '')
     # iOS's OS logger truncates long single-line messages. Emit independently
     # bounded chunks; the host verifier rejects missing/duplicate chunks.
+    # Keep a complete result outside Apple's asynchronous/truncating log stream.
+    # This runs only in the disposable test-mode app; normal launches never write it.
+    result_path = Path(app.paths.cache) / 'logistics-native-ui-result.json'
+    temporary_result = result_path.with_suffix('.tmp')
+    temporary_result.write_text(json.dumps(report, sort_keys=True))
+    temporary_result.replace(result_path)
     encoded = base64.b64encode(json.dumps(report, sort_keys=True).encode()).decode()
     chunks = [encoded[index:index + 450] for index in range(0, len(encoded), 450)]
     for index, chunk in enumerate(chunks):
