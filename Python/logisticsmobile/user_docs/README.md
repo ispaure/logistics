@@ -917,3 +917,29 @@ above the navigation bar, including while the keyboard is open and drafts grow.
 On iPhone, all five bottom-tab labels use their complete names immediately after
 launch. Opening each tab is not needed to make its name fit; the startup layout
 preserves the selected destination and does not open other workspaces.
+
+
+## Credential groups, open documents and privacy
+
+Folder Hub's Credential selector includes All and the names of imported credential
+ZIPs (for example, Personal). All combines known local and remote folder trees.
+Session-only ZIPs imported with this version are retained encrypted on the device,
+without saving their ZIP passwords. A future push, pull or LocalCrypt browse can
+ask for the matching ZIP's password instead of asking you to select the file again.
+A ZIP loaded only for a session before this update must be selected once again to
+retain it. Forget saved credentials also removes retained ZIPs and their device key.
+
+Documents lists opened documents inside their matching format card, below its
+New/Open actions. The menu opens immediately using cached shortcuts, then refreshes
+available folders in the background. Chat opens on its first tab selection.
+On iPhone, plain text actions respond over their visible text or icon; blank space
+beside them does not activate the action. Bordered rows and icon controls retain
+their visible touch targets.
+
+LocalCrypt and private provider documents remain memory-only: their names, paths,
+content and previews do not enter Recent or the saved open-document manifest.
+They disappear from Home and the opened-document cards when their credential
+session is no longer current, and cannot reopen until unlocked. Recent contains
+up to six ordinary local/imported document identities. Explicitly downloading an
+unencrypted local copy makes that copy an ordinary local file, which can appear
+in local document history independently of the original remote's lock state.

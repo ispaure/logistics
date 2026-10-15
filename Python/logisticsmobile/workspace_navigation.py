@@ -523,7 +523,15 @@ class FileDrawer:
     async def refresh(self):
         self.generation += 1
         generation = self.generation
-        roots = await asyncio.to_thread(self.available_roots)
+        try:
+            roots = await asyncio.to_thread(self.available_roots)
+        except (OSError, ValueError) as error:
+            # A failed credential query must not strand the menu refresh task.
+            # Keep Local files usable and report the connection error in-place.
+            if generation != self.generation or not self.app.active_host:
+                return False
+            self.status.text = str(error)[:160]
+            return False
         if generation != self.generation or not self.app.active_host:
             return False
         scope = getattr(self, 'scoped_provider', None)
