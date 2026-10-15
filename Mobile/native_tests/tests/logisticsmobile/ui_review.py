@@ -141,6 +141,10 @@ async def exercise_ui_review(app):
             # Hub action can be below the Home scroll viewport.
             ancestor = native.superview
             while ancestor is not None:
+                if callable(ancestor):
+                    ancestor = ancestor()
+                if ancestor is None:
+                    break
                 if ancestor.isKindOfClass(ObjCClass('UIScrollView')):
                     ancestor.scrollRectToVisible(native.convertRect(native.bounds, toView=ancestor), animated=False)
                     break

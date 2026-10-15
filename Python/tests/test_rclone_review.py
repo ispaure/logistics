@@ -1,5 +1,6 @@
 """Shared review cancellation, stale results and actual CLI dry-run behavior."""
 from pathlib import Path
+import os
 from tempfile import TemporaryDirectory
 from threading import Event
 import unittest
@@ -23,7 +24,7 @@ class ReviewTests(unittest.TestCase):
                 consume(b'[]')
         with patch.object(review_cli, '_lines', side_effect=lines), patch.object(
                 review_cli.session, 'launch', return_value=None):
-            result = self.finish(ReviewScan(scanner('rclone', 'Src:', 'Dst:', '/dev/null',
+            result = self.finish(ReviewScan(scanner('rclone', 'Src:', 'Dst:', os.devnull,
                 cleanup_plan=lambda cancelled: {'junk': ('generated junk', 'version')})))
         self.assertTrue(result.complete)
         self.assertEqual(set(result.changes), {('add', 'current.txt'), ('cleanup', 'generated junk')})
@@ -42,7 +43,6 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(result.changes, (('add', 'valid.txt'),))
 
     def test_directory_membership_type_conflicts_and_stable_revisions(self):
-        import os
         from features.rclone.executable import get_rclone_path
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -53,7 +53,7 @@ class ReviewTests(unittest.TestCase):
             (dst / 'Shared').mkdir()
             (src / 'Conflict').mkdir()
             (dst / 'Conflict').write_text('destination file')
-            compare = scanner(get_rclone_path(), src, dst, '/dev/null')
+            compare = scanner(get_rclone_path(), src, dst, os.devnull)
             first = self.finish(ReviewScan(compare))
             self.assertIn(('add', 'New/Nested/'), first.changes)
             self.assertIn(('delete', 'Gone/'), first.changes)
@@ -138,11 +138,12 @@ class ReviewTests(unittest.TestCase):
             root = Path(directory)
             src, dst = root / 'source', root / 'destination'
             src.mkdir(); dst.mkdir()
-            (src / 'new\nfile.txt').write_text('new')
+            name = 'new␊file.txt' if os.name == 'nt' else 'new\nfile.txt'
+            (src / name).write_text('new')
             (src / 'replace.txt').write_text('new longer content')
             (dst / 'replace.txt').write_text('old')
             (dst / 'delete.txt').write_text('old')
-            compare = scanner(binary, src, dst, '/dev/null')
+            compare = scanner(binary, src, dst, os.devnull)
             first = self.finish(ReviewScan(compare))
             self.assertTrue(first.complete)
             # rclone renders control characters visibly in its JSON logger.
@@ -153,7 +154,7 @@ class ReviewTests(unittest.TestCase):
             (src / 'replace.txt').write_text('a later version')
             self.assertFalse(unchanged(first, self.finish(ReviewScan(compare))))
             proposed = root / 'new-local-copy'
-            snapshot = self.finish(ReviewScan(scanner(binary, src, proposed, '/dev/null')))
+            snapshot = self.finish(ReviewScan(scanner(binary, src, proposed, os.devnull)))
             self.assertTrue(snapshot.complete)
             self.assertFalse(proposed.exists())
 
@@ -169,7 +170,7 @@ class ReviewTests(unittest.TestCase):
             src.mkdir(); dst.mkdir()
             (src / 'ignored.skip').write_text('excluded source')
             (dst / 'retained.skip').write_text('excluded destination')
-            compare = scanner(binary, src, dst, '/dev/null', TransferOptions(excludes=('*.skip',)))
+            compare = scanner(binary, src, dst, os.devnull, TransferOptions(excludes=('*.skip',)))
             first = self.finish(ReviewScan(compare))
             self.assertEqual(first.changes, ())
             (src / 'ignored.skip').write_text('a later excluded source version')
