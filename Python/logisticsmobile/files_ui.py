@@ -128,7 +128,7 @@ class FilesUI:
         # A widget has one native parent; move browser/status into the main view.
         operation_box = self.file_operation_view.content
         operation_box.remove(self.file_browser.widget)
-        from .presentation import scroll_content
+        from commonUtils.ui.native.presentation import scroll_content
         operation_box.remove(self.file_status)
         operation_box.remove(buttons[1])
         operation_box.remove(buttons[2])
