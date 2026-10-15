@@ -207,24 +207,13 @@ class FolderHubUI:
             button = toga.Button('Delete local folder…', on_press=delete, style=Pack(height=44, margin_top=12))
             self.folder_action_controls.append((button, True))
             box.add(button)
-        if entry['kind'] == 'job':
-            def remove_mapping(widget=None, **kwargs):
-                if self.cloud_busy or getattr(self, 'transfer_busy', False):
-                    return
-                try:
-                    self.mirror_store().remove(entry['value'])
-                    if getattr(self, 'mirror_push_plan', None) is not None and self.mirror_push_plan['job'] == entry['value']:
-                        self.invalidate_mirror_review()
-                    self.show_locations()
-                except (OSError, ValueError) as error:
-                    self.folder_picker_status.text = str(error)
-            button = toga.Button('Remove mapping (keep files)', on_press=remove_mapping, style=Pack(height=44))
-            self.folder_action_controls.append((button, True))
-            box.add(button)
         box.add(self.folder_picker_status)
         self.refresh_folder_actions()
         self.register_transfer_status(box)
-        self.show_view(box, destination='files', route='folder-options', title=entry['name'])
+        # Retain a separate action page on phones; wide workspaces pair it with the tree.
+        scroll = toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
+        page = toga.Box(children=[scroll], style=Pack(direction=COLUMN, flex=1, margin=12))
+        self.show_view(page, destination='files', route='folder-options', title=entry['name'])
 
     async def open_picker_folder(self, entry):
         kind, value = entry['kind'], entry['value']

@@ -103,10 +103,11 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         # Focused prompts and reader controls retain their own layout. Main
         # workspaces and each editor get a permanent top-left drawer control.
         eligible = (isinstance(view, toga.Box) and not getattr(view, '_reading_frame', False) and
-                    (root or route in ('editor', 'browser', 'remote-browser')
+                    (root or route in ('editor', 'browser', 'remote-browser', 'folder-options')
                      or (route or '').startswith('private:')))
         if eligible and not hasattr(view, '_workspace_frame'):
             view._workspace_frame = WorkspaceFrame(self, view, destination)
+            view._workspace_frame.folder_options = route == 'folder-options'
             self.frames.add(view._workspace_frame)
         if route == 'preview' and isinstance(view, toga.Box) and not getattr(view, '_workspace_menu', False):
             view.insert(0, menu_button(lambda widget, **kw: self.show_browser(destination)))
@@ -345,6 +346,10 @@ class WorkspaceFrame:
         left = None
         if opened:
             left = navigation.browser(destination).widget
+        elif navigation.wide and destination == 'files' and getattr(self, 'folder_options', False):
+            if not hasattr(self, 'folder_master'):
+                self.folder_master = navigation.app.build_folder_picker()
+            left = self.folder_master
         elif navigation.wide and destination == 'documents':
             view = navigation.session_view(navigation.pinned)
             if view is not None and view is not self.view():
