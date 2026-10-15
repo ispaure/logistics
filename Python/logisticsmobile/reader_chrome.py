@@ -26,7 +26,9 @@ class ReaderChrome:
             ('Contents and bookmarks…', self.show_reader_tools), ('Appearance…', self.show_reader_appearance),
             ('Reading mode', self.toggle_reading_mode), ('Fit comic page', self.fit_comic_page),
             ('Lock protected comic', self.lock_book), ('All documents', self.show_documents_hub)], self.show_reader_tools)
+        from .workspace_navigation import menu_button
         self.reader_header = toga.Box(children=[
+            menu_button(lambda widget, **kw: self.app.adaptive.show_browser(self.presentation_destination)),
             toga.Button('Contents', on_press=self.show_reader_tools, style=Pack(height=44, flex=1)),
             toga.Button('Appearance', on_press=self.show_reader_appearance, style=Pack(height=44, flex=1)),
             self.reader_actions_button], style=Pack(direction=ROW))

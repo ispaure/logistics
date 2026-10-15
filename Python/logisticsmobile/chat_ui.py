@@ -37,7 +37,7 @@ class ChatUI:
             self.chat_transcript = toga.MultilineTextInput(readonly=True, style=Pack(flex=1,
                 font_size=int(self.preferences.values['font_size'])))
             self.chat_prompt = toga.MultilineTextInput(on_change=self.chat_draft_changed,
-                placeholder='Message', style=Pack(height=100, font_size=int(self.preferences.values['font_size'])))
+                placeholder='Message', style=Pack(height=76, font_size=int(self.preferences.values['font_size'])))
             self.chat_send = toga.Button('Send', on_press=self.send_chat, style=Pack(flex=1, height=44))
             self.chat_cancel = toga.Button('Cancel', on_press=self.cancel_chat, enabled=False, style=Pack(flex=1, height=44))
             self.chat_export = toga.Button('Export conversation…', on_press=self.export_chat, style=Pack(height=44))
@@ -48,7 +48,7 @@ class ChatUI:
             self.chat_max_tokens = toga.Selection(items=replies,
                 value=str(self.chat_profile['settings']['max_tokens']), style=Pack(flex=1, height=44))
             self.chat_status = toga.MultilineTextInput(value=error or 'Configure a server; no connection starts automatically.',
-                                                      readonly=True, style=Pack(height=50, font_size=12))
+                                                      readonly=True, style=Pack(height=36, font_size=12))
             self.chat_config_view = toga.Box(children=[
                 toga.Button('Back to conversation', on_press=self.show_chat, style=Pack(height=44)),
                 toga.Label('Server & generation settings'), self.chat_url, self.chat_key, self.chat_model,
@@ -57,17 +57,61 @@ class ChatUI:
                 self.chat_refresh, self.chat_models,
                 toga.Button('Save configuration', on_press=self.save_chat_configuration, style=Pack(height=44))],
                 style=Pack(direction=COLUMN, margin=12))
-            self.chat_view = toga.Box(children=[
-                toga.Button('Server & generation settings…', on_press=self.show_chat_configuration, style=Pack(height=44)),
-                self.chat_selector, self.chat_new, self.chat_transcript,
-                self.chat_prompt, toga.Box(children=[self.chat_send, self.chat_cancel], style=Pack(direction=ROW)),
-                self.chat_export, self.chat_status], style=Pack(direction=COLUMN, margin=12, flex=1))
+            from .workspace_navigation import menu_button
+            self.chat_title = toga.Label('LM Chat', style=Pack(flex=1, margin_top=10))
+            self.chat_menu_button = menu_button(self.toggle_chat_conversations, 'Conversations')
+            self.chat_conversation_list = toga.Box(style=Pack(direction=COLUMN))
+            self.chat_sidebar = toga.Box(children=[toga.Label('Conversations', style=Pack(font_size=20, margin_bottom=12)),
+                self.chat_new,
+                toga.ScrollContainer(horizontal=False, content=self.chat_conversation_list, style=Pack(flex=1)),
+                self.chat_export], style=Pack(direction=COLUMN, flex=1, margin_right=12))
+            self.chat_messages = toga.Box(children=[self.chat_transcript, self.chat_status, self.chat_prompt,
+                toga.Box(children=[self.chat_send, self.chat_cancel], style=Pack(direction=ROW))],
+                style=Pack(direction=COLUMN, flex=1))
+            self.chat_workspace = toga.Box(style=Pack(direction=ROW, flex=1))
+            self.chat_drawer_open = self.adaptive.width() >= 840
+            self.chat_view = toga.Box(children=[toga.Box(children=[self.chat_menu_button, self.chat_title,
+                toga.Button('Settings', on_press=self.show_chat_configuration, style=Pack(height=44))],
+                style=Pack(direction=ROW, margin_bottom=8)), self.chat_workspace],
+                style=Pack(direction=COLUMN, margin=12, flex=1))
             self.refresh_chats()
             if self.chat_labels:
                 self.open_chat(next(iter(self.chat_labels.values())))
             else:
                 self.new_chat()
         self.show_view(self.chat_view, destination='chat', root=True, title='Chat')
+
+    def toggle_chat_conversations(self, widget=None, **kwargs):
+        self.chat_drawer_open = not self.chat_drawer_open
+        self.render_chat_workspace()
+
+    def render_chat_workspace(self):
+        if not hasattr(self, 'chat_workspace'):
+            return
+        children = []
+        if self.chat_drawer_open:
+            children.append(self.chat_sidebar)
+        if not self.chat_drawer_open or self.adaptive.width() >= 840:
+            children.append(self.chat_messages)
+        if list(self.chat_workspace.children) != children:
+            for child in list(self.chat_workspace.children):
+                self.chat_workspace.remove(child)
+            self.chat_workspace.add(*children)
+        if len(children) == 2:
+            available = self.chat_workspace.layout.content_width or max(0, self.adaptive.width() - 24)
+            half = max(1, int(available / 2))
+            self.chat_sidebar.style.width, self.chat_sidebar.style.flex = half, 0
+            self.chat_messages.style.width, self.chat_messages.style.flex = max(1, int(available) - half), 0
+        else:
+            for child in children:
+                del child.style.width
+                child.style.flex = 1
+        self.chat_title.text = 'Conversations' if self.chat_drawer_open and self.adaptive.width() < 840 else 'LM Chat'
+
+    def show_chat_messages(self):
+        if self.adaptive.width() < 840:
+            self.chat_drawer_open = False
+        self.render_chat_workspace()
 
     def show_chat_configuration(self, widget=None, **kwargs):
         if not hasattr(self, 'chat_store'):
@@ -99,6 +143,18 @@ class ChatUI:
         if self.chat_current:
             self.chat_selector.value = next((label for label, key in labels.items() if key == self.chat_current['id']), None)
         self.chat_loading = False
+        from commonUtils.ui.native.presentation import list_button
+        for child in list(self.chat_conversation_list.children):
+            self.chat_conversation_list.remove(child)
+        self.chat_conversation_buttons = []
+        for label, key in labels.items():
+            def select(widget=None, selected=key, **kwargs):
+                self.open_chat(selected)
+            current = self.chat_current is not None and self.chat_current['id'] == key
+            button = list_button(toga.Button(('● ' if current else '') + label, on_press=select,
+                enabled=not self.chat_busy, style=Pack(height=48, margin_bottom=4)))
+            self.chat_conversation_list.add(button)
+            self.chat_conversation_buttons.append(button)
         if warnings:
             self.chat_status.value = f'{len(warnings)} conversation(s) could not be read; originals preserved.'
 
@@ -122,6 +178,7 @@ class ChatUI:
             self.chat_loading = False
             self.update_chat_transcript()
             self.refresh_chats()
+            self.show_chat_messages()
         except (OSError, ValueError) as error:
             self.chat_status.value = str(error)
 
@@ -139,6 +196,7 @@ class ChatUI:
             self.chat_loading = False
             self.update_chat_transcript()
             self.refresh_chats()
+            self.show_chat_messages()
         except (OSError, ValueError) as error:
             self.chat_status.value = str(error)
 
@@ -159,6 +217,8 @@ class ChatUI:
                         self.chat_context, self.chat_max_tokens):
             control.enabled = not busy
         self.chat_cancel.enabled = busy
+        for control in self.chat_conversation_buttons:
+            control.enabled = not busy
 
     def chat_fields(self):
         settings = dict(self.chat_profile['settings'], context_tokens=int(self.chat_context.value),

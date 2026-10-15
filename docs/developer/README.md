@@ -19,6 +19,7 @@ user guide for the workflow you are changing, then follow this map.
 | Prepare the document core for mobile runtimes | [Mobile preparation](mobile-preparation.md) |
 | Review the three-pass alpha audit and its local verification scope | [Alpha verification](mobile-alpha-verification.md) |
 | Review the local mobile presentation changes and actual screen evidence | [Mobile UI refresh](mobile-ui-refresh.md) |
+| Develop mobile file/conversation drawers and paired document panes | [Workspace navigation](mobile-workspace-navigation.md) |
 | Plan mobile reader ownership, feature organization and reusable native UI cleanup | [Mobile architecture roadmap](mobile-architecture-roadmap.md) |
 | Assess existing Qt browser/editor/reader reuse on iOS | [PySide6 iOS proof](mobile-qt-proof.md) |
 | Build, sign and deploy to a paired iPhone over Wi-Fi | [Local iPhone deployment](mobile-device-deployment.md) |

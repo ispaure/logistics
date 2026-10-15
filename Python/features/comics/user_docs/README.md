@@ -211,7 +211,12 @@ current format limits and shared navigation controls.
 
 ## Native mobile library
 
-On iOS and Android, **Books & Comics → Import book/comic…** accepts standalone
+On iOS and Android, **Books & Comics** lists library folders configured by
+`remoteConfig.ini` in Local and unlocked LocalCrypt copies, using the same
+`[LogisticsComics] libraries` names as desktop. Tap a library folder to browse its
+contents. Individual imported files are not library rows.
+
+**Books & Comics → Import…** accepts standalone
 password-protected AES/ZipCrypto CBZ/ZIP comics. Unlock with the comic’s ZIP password;
 rclone credentials are unnecessary. See the [mobile reading guide](../../../logisticsmobile/user_docs/README.md#books-and-comics)
 for password retries, locking and supported page formats.

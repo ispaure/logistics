@@ -25,6 +25,7 @@ class ActionMenu:
             if not owner.app.checkpoint():
                 return
             owner.app.editor_view.capture()
+            owner.app.adaptive.focus_session(owner.session.id)
             owner.bind()
             owner.app.workspace.activate(owner.session.id)
             owner.app.show_documents()

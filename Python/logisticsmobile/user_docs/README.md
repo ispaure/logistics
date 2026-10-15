@@ -49,12 +49,13 @@ platform-specific replacements. Document-provider access is a permission-bearing
 platform handle rather than an ordinary path stored in an INI. Preferences
 migration and general app-data backup/reset behavior remain separate work.
 
-## Home panels and document search
+## Home and document search
 
-Home uses icon panels for Files, Documents, Text & Markdown, Books & Comics and
-LM Chat. Panels stack on phones and use two or three columns in wider windows.
-**Continue** returns to the selected open document, including its Edit/Preview
-mode. **New document** creates and displays a separate editor; **Open file…**
+Home puts the selected document in a prominent **Continue** card, followed by
+**New document** and **Open file…**. Compact Files and Books & Comics rows lead
+to those workspaces; Open documents and LM Chat remain one tap away.
+**Continue** restores the document's Edit/Preview mode.
+**New document** creates and displays a separate editor; **Open file…**
 opens the existing Local/LocalCrypt file picker. Documents offers **New** and
 **Open…**, followed by open and stored documents grouped under Text, Markdown,
 EPUB books or Comics. Empty type groups are hidden. Each row shows the filename;
@@ -69,6 +70,33 @@ belong to each editor, so switching documents keeps their separate queries and
 drafts. **Done** hides the controls. Replacements update the draft and use the
 same checkpoint and conflict-aware save behavior as typing; press Save to publish
 them. Search does not include other files or the separate private reader editor.
+
+## File and conversation drawers
+
+On iPhone, the top-left hamburger in Files and Documents opens a full-height file
+browser. Tap it again to return to the current folder or editor. The browser keeps
+its own storage selection, folder, search and history; using it does not change
+the Files tab's existing folder selection. It browses local files and available
+LocalCrypt copies. **Connections & folders** opens the complete folder hub for
+online connections and managed copies. Selecting a file opens it in the current
+destination through the existing editor/reader workflow.
+
+At window widths of 840 points/dp or more, including a sufficiently wide Duo
+window, an open browser occupies the left half and the current document stays on
+the right. In Documents, **Split** lets you choose a second open text or Markdown
+document, including editable provider files. The first stays on the left and the
+chosen document opens on the right. Opening the hamburger replaces the left
+editor with the browser; closing it restores the pair. **Use one document** in the
+Split picker clears the pair. Narrowing the window shows the current document
+without closing either session or losing its draft. Books and comics keep their
+own reader controls and immersive mode.
+
+LM Chat is a full-screen destination. Its top-left hamburger opens the conversation
+list; choosing a conversation restores its unsent draft and messages. On a wide
+Duo/tablet window the list occupies the left half and the conversation remains on
+the right. Close the menu to give messages the full width. Chat configuration and
+app Settings open as full-screen pages with native Back navigation, rather than
+bottom sheets. Opening these screens does not send a model request.
 
 ## Document workflow
 
@@ -164,9 +192,19 @@ on devices before treating this prototype as a supported mobile product. See
 
 ## Books and comics
 
-From Home, choose **Books & Comics → Open library → Import book/comic…**. EPUB and
+**Books & Comics** lists configured library folders from Local and unlocked
+LocalCrypt copies. Detection uses each collection's `remoteConfig.ini`, matching
+desktop: `[LogisticsComics] libraries = Comics,Mangas` names immediate child
+folders, in that order. Existing ComicRack/YACReaderLibrary configurations also
+identify a collection. Missing folders and unconfigured individual files are not
+listed. Tap a folder to browse it and open a book or comic; **Refresh** discovers
+configuration changes and newly pulled copies. LocalCrypt names stay in memory
+and disappear when credentials are locked or forgotten.
+
+Use **Import…** for a standalone EPUB or comic. EPUB and
 CBZ/ZIP imports create private copies; the selected source is never
-changed. Choose a library item and **Open selected**. Previous/Next and the
+changed. Imports open directly and remain available through document sessions.
+Previous/Next and the
 chapter/page selector navigate the book's reading order. EPUB pages scroll in the
 native web view; comic images fit the native image area. The EPUB view follows
 system light/dark appearance and uses the configured font size.
@@ -678,7 +716,7 @@ rclone's crypt filesystem for automatic encryption/decryption.
 
 **Files → Transfers** opens **Transfer details**: live progress, completed/known
 file and byte counts, cancellation, pending push review, and completion or error
-messages. It does not list remotes or offer folder selection. The transfer banner
+messages, wrapped to fit the phone screen. It does not list remotes or offer folder selection. The transfer banner
 also opens these details; the remote browser reflects the same progress. If a
 remote folder matches several local mappings, Pull opens a focused destination
 chooser for those matches.
@@ -739,15 +777,16 @@ a title or Resume document to continue; the current session is labelled Current
 document. Cards show a short text excerpt for ordinary text/Markdown documents
 and a type placeholder for books, comics and private provider sessions. The **×**
 button closes a session through the existing unsaved-change guard.
-In **Settings → App**, turn off **Document card overview** and Save preferences
-to use the grouped list with its **•••** close menu. Stored documents remain a list.
+In **Settings → App**, turn off **Document card overview** to use the grouped list
+with its **•••** close menu. This switch saves immediately and updates the document
+overview, including when an editor is open. Stored documents remain a list.
 Settings groups feature options under Text & Markdown, Books & Comics, LM Chat
 and Files; reader appearance stays in each open reader. Documents offers New and Open. New asks for TXT or Markdown; Chat has
 its own bottom navigation destination. The Library shortcut has been removed
 from Documents.
 
-The library is a searchable list of books and comics. Tap a title to open its
-reader. Contents/bookmarks and appearance have separate tools, keeping the reading
+The library is a searchable list of configured library folders. Tap a folder to
+browse its books and comics. Contents/bookmarks and appearance have separate tools, keeping the reading
 area clear. An editor's **•••** menu contains less frequent document commands.
 Markdown opened from local/provider files offers Preview/Edit without saving the
 draft; leaving the view clears the rendered preview and keeps the draft in memory.
@@ -770,8 +809,9 @@ show their size and **•••** actions. Opening a folder does not flash a sel
 checkmark. Sort and List/Tiles remain in the Sort controls.
 
 Pull always asks for native **OK / Cancel** confirmation before writing local
-files. Push first shows its changes, then asks for the same native confirmation
-before writing online. Cancel keeps the files unchanged. The popup identifies the
+files. Every **Push…** attempt asks for native confirmation before preparing its
+changes review, then asks again before writing online. Cancel keeps the files
+unchanged. The popup identifies the
 source and destination and warns about replacements/deletions. Changing the
 connection or mapping while the popup is open invalidates that operation.
 A compact transfer strip remains available while writing or reading. The rclone

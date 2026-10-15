@@ -9,6 +9,7 @@ class ReadingFrame:
         self.content, self.controls, self.margin = content, list(controls), margin
         self.widget = toga.Box(children=[*self.controls[:1], content, *self.controls[1:]],
                                style=Pack(direction=COLUMN, margin=margin, flex=1))
+        self.widget._reading_frame = True
         self.immersive = False
 
     def set_immersive(self, immersive, *, comic):

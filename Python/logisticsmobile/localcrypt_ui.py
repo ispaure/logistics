@@ -76,6 +76,8 @@ class LocalCryptUI(FilesUI):
 
     def clear_private_catalog(self):
         self.hub_crypt_locations = []
+        if hasattr(self, 'readers'):
+            self.readers.catalog.clear_private_libraries()
         self.invalidate_mirror_review()
         self.editor_linked_roots = {}
         if hasattr(self, 'pull_jobs'):
@@ -425,6 +427,10 @@ class LocalCryptUI(FilesUI):
                 footer.add(view.crypt_preview_button)
             controls.append(footer)
         if not view.crypt_reader.editable:
+            from .workspace_navigation import menu_button
+            host = getattr(self, 'app', self)
+            controls[0].insert(0, menu_button(lambda widget, **kw:
+                host.adaptive.show_browser(getattr(view, 'presentation_destination', 'documents'))))
             header = toga.Box(children=controls[:2], style=Pack(direction=COLUMN))
             view.previous_page, view.next_page = page_buttons(self.previous_private_page, self.next_private_page)
             footer = toga.Box(children=[view.previous_page, view.next_page], style=Pack(direction=ROW))

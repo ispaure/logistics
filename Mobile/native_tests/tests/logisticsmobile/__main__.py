@@ -62,14 +62,21 @@ async def exercise(app):
         app.show_view(toga.Label('Route detail'), route='route-check', title='Route detail')
         assert app.native_host.state.routes['documents'] == ['editor', 'route-check']
         if get_os() is OS.IOS:
-            if app.adaptive.split is not None:
-                app.adaptive.secondary.popViewControllerAnimated(False)
-            else:
-                app.native_host.adapter.pop('documents')
+            navigation = app.adaptive.secondary if app.adaptive.split is not None else app.native_host.adapter.navigation[2]
+            # UIKit can ignore a pop requested during the preceding push.
+            await asyncio.sleep(.05)
+            for _ in range(60):
+                if navigation.transitionCoordinator is None:
+                    break
+                await asyncio.sleep(.05)
+            navigation.popViewControllerAnimated(False)
         else:
             app._impl.native.getOnBackPressedDispatcher().onBackPressed()
-        await asyncio.sleep(.3)
-        assert app.native_host.state.routes['documents'] == ['editor']
+        for _ in range(60):
+            if app.native_host.state.routes['documents'] == ['editor']:
+                break
+            await asyncio.sleep(.05)
+        assert app.native_host.state.routes['documents'] == ['editor'], app.native_host.state.routes['documents']
         assert app.body.children[0] is app.document_view
         assert app.editor.value == 'Draft survives actual Back'
         passed.append('native_route_back')
@@ -405,7 +412,11 @@ async def exercise(app):
     chunks = [encoded[index:index + 450] for index in range(0, len(encoded), 450)]
     for index, chunk in enumerate(chunks):
         print('LOGISTICS_NATIVE_UI_CHUNK=' + json.dumps(dict(index=index, count=len(chunks), encoding='base64', data=chunk)), flush=True)
+        # The Apple system logger drains asynchronously even after Python's
+        # stream flush. Do not exit with the final chunks still queued.
+        await asyncio.sleep(.02)
     print(f'>>>>>>>>>> EXIT {0 if success else 1} <<<<<<<<<<', flush=True)
+    await asyncio.sleep(.25)
     # This is a disposable test-mode app, never the normal app entry point.
     os._exit(0 if success else 1)
 
@@ -417,7 +428,12 @@ class NativeCheckApp(LogisticsMobile):
         self.workspace_hold = os.environ.get('LOGISTICS_WORKSPACE_HOLD') == '1'
         self.storage_root = Path(self.paths.cache) / ('workspace-navigation-probe' if self.workspace_hold else 'navigation-foundation-probe' if self.navigation_hold
                                                      else 'native-check-' + uuid4().hex)
-        super().startup()
+        try:
+            super().startup()
+        except Exception:
+            # Preserve chained backend errors before the native launcher wraps them.
+            traceback.print_exc()
+            raise
         self.show_documents()
         self.show_home()
 

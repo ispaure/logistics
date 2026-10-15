@@ -29,18 +29,21 @@ class TextEditorView:
         self.actions_button = toga.Button('•••', style=Pack(width=44, height=44))
         self.actions = ActionMenu(self.actions_button, self, [
             ('Open documents', app.show_documents_hub), ('New document', app.choose_document_type),
+            ('Open beside another document', lambda: app.adaptive.show_pair_picker()),
             ('Import…', lambda: app.import_document(origin=self)), ('Open from Files…', app.show_editor_open),
             ('Save', app.save_document), ('Save a copy', app.save_copy),
             ('Save As…', app.show_document_save_as), ('Export…', lambda: app.export_document(origin=self)),
             ('Close document', lambda: app.request_close_session(self.session.id)),
             ('Preview beside editor (wide windows)', self.toggle_split)])
+        # A visible left-hand editor still owns its toolbar commands.
+        self.save_button.on_press = lambda widget, **kw: self.actions.invoke(app.save_document)
         box.add(toga.Box(children=[self.name, self.actions_button], style=Pack(direction=ROW, margin_bottom=8)))
         self.editor_area = toga.Box(children=[self.editor], style=Pack(direction=ROW, flex=1))
         box.add(self.editor_area)
         box.add(self.status)
         box.add(toga.Box(children=[self.save_button,
             toga.Button('Find', on_press=self.toggle_search, style=Pack(flex=1, height=44)),
-            toga.Button('Preview', on_press=app.show_preview, style=Pack(flex=1, height=44))],
+            toga.Button('Preview', on_press=lambda widget, **kw: self.actions.invoke(app.show_preview), style=Pack(flex=1, height=44))],
             style=Pack(direction=ROW, margin_top=8)))
         self.search = EditorSearch(self.editor, self.document_view)
         app.register_transfer_status(box)

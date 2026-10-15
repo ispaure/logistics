@@ -18,7 +18,7 @@ from .navigation import DESTINATION_ITEMS
 from .workspace import Workspace, MAX_SESSIONS
 from .mirror_ui import MirrorUI
 from .editors import TextEditorView
-from .adaptive_workspace import AdaptiveWorkspace
+from .workspace_navigation import WorkspaceNavigation as AdaptiveWorkspace
 from .pull_jobs_ui import PullJobsUI
 from .locations_ui import LocationsUI
 from .folder_hub_ui import FolderHubUI
@@ -198,6 +198,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             return False
         self.mark_navigation()
         target = destination or self.native_host.state.destination
+        self.adaptive.prepare(view, target, route=route, root=root)
         private = getattr(self, 'private_sessions', None)
         if private is not None:
             owner = private.active
@@ -247,6 +248,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         def activate(widget=None, **kwargs):
             session = self.workspace.sessions.get(key)
             if session is not None and self.checkpoint():
+                self.adaptive.focus_session(key)
                 if session.provider == 'library':
                     self.loop.create_task(self.resume_library_session(session))
                 elif session.provider == 'provider-session':
@@ -443,7 +445,32 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             if self.window_id != 'primary':
                 box.add(toga.Button('Close window', on_press=lambda widget, **kw:
                     self.scene_manager.close_window(self), style=Pack(height=44)))
+        self.document_cards_choice.on_change = self.change_document_overview
         self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), destination='settings', root=True)
+
+    def refresh_document_overview(self):
+        # Replace only the retained root, including when a detail is open.
+        # Presenting a new root route would discard the editor's navigation.
+        self.refresh_documents()
+        root = self.routes.roots['documents']
+        view = self.build_documents_hub()
+        self.adaptive.prepare(view, 'documents', root=True)
+        for child in list(root.children):
+            root.remove(child)
+        root.add(view)
+
+    def change_document_overview(self, widget, **kwargs):
+        value = 'true' if widget.value else 'false'
+        if value == self.preferences.values['document_card_overview']:
+            return
+        try:
+            self.preferences.save(document_card_overview=value)
+        except (OSError, ValueError) as error:
+            widget.value = self.preferences.values['document_card_overview'] == 'true'
+            self.settings_status.text = str(error)
+            return
+        self.refresh_document_overview()
+        self.settings_status.text = 'Document view saved on this device.'
 
     def save_preferences(self, widget=None, **kwargs):
         try:
@@ -452,6 +479,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
                 clear_unmodified_documents_on_restart='true' if self.clear_documents_choice.value else 'false',
                 restore_last_document='true' if self.restore_choice.value else 'false')
             self.editor.style.font_size = int(self.preferences.values['font_size'])
+            self.refresh_document_overview()
             self.settings_status.text = 'Preferences saved on this device.'
         except (OSError, ValueError) as error:
             self.settings_status.text = str(error)
@@ -459,6 +487,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
     def reload_preferences(self, widget=None, **kwargs):
         self.preferences.reload()
         self.editor.style.font_size = int(self.preferences.values['font_size'])
+        self.refresh_document_overview()
         self.show_settings()
 
     def show_preview(self, widget=None, **kwargs):

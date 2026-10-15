@@ -88,8 +88,8 @@ class HubDocumentTests(unittest.TestCase):
         first = app.editor_view.session.id
         app.show_preview()
         app.show_home()
-        card = app.body.children[0].content.children[3]
-        card.children[-1].on_press()
+        card = app.home_continue
+        app.home_continue_button.on_press()
         self.assertEqual(app.workspace.active, first)
         self.assertEqual(app.editor.value, '# Retained')
         self.assertEqual(app.editor_view.session.view['markdown_mode'], 'preview')
@@ -130,14 +130,22 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual(first.search.query.value, 'first')
         self.assertEqual(second.document.text, 'changed')
 
-    def test_home_reflows_existing_panels_without_replacing_commands(self):
-        grid = self.app.home_panels
-        cards = list(grid.cards)
-        for width, columns in ((360, 1), (800, 2), (1200, 3), (360, 1)):
-            grid.reflow(width)
-            self.assertEqual(grid.columns, columns)
-            self.assertEqual([card for row in grid.children for card in row.children], cards)
-            self.assertTrue(all(len(row.children) <= columns for row in grid.children))
+    def test_home_prioritizes_actual_active_session_and_keeps_primary_actions(self):
+        import toga
+        app = self.app
+        app.name.value = 'Focus.md'
+        app.editor.value = '# A retained draft'
+        app.show_home()
+        content = app.body.children[0].content
+        self.assertEqual(content.children[1].text, 'Welcome back.')
+        self.assertIn(app.home_continue, content.children)
+        self.assertEqual(app.home_continue.children[0].children[1].text, 'Focus.md')
+        actions = content.children[3]
+        self.assertTrue(all(isinstance(button, toga.Button) for button in actions.children))
+        self.assertEqual([button.text for button in actions.children], ['+ New document', 'Open file…'])
+        app.home_continue_button.on_press()
+        self.assertIs(app.body.children[0], app.document_view)
+        self.assertEqual(app.editor.value, '# A retained draft')
 
     def test_documents_group_open_and_stored_files_by_type(self):
         import toga
@@ -217,6 +225,41 @@ class HubDocumentTests(unittest.TestCase):
         card = app.session_card(missing, app.session_summary(missing))
         self.assertEqual(card.children[1].text, 'Text')
         self.assertIn('Unavailable', card.children[2].text)
+
+    def test_overview_switch_immediately_updates_retained_root_and_keeps_editor(self):
+        from logisticsmobile.preferences import Preferences
+        app = self.app
+        app.editor.value = 'Keep this draft'
+        owner = app.editor_view
+        app.show_documents_hub()
+        app.session_opener(owner.session.id)()
+        routes = list(app.routes.screens['documents'])
+        app.show_settings()
+        settings_body = app.body
+        for enabled in (False, True, False):
+            app.document_cards_choice.value = enabled
+            self.assertEqual(bool(app.document_grids), enabled)
+            self.assertEqual(Preferences(app.private_root).values['document_card_overview'],
+                             'true' if enabled else 'false')
+            self.assertEqual(app.routes.screens['documents'], routes)
+            self.assertIs(app.body, settings_body)
+            self.assertIs(app.editor_view, owner)
+            self.assertEqual(owner.document.text, 'Keep this draft')
+        app.select_destination('documents')
+        self.assertEqual(app.document_grids, [])
+
+    def test_overview_switch_save_failure_restores_switch_and_existing_cards(self):
+        from unittest.mock import patch
+        app = self.app
+        app.show_documents_hub()
+        grids = list(app.document_grids)
+        app.show_settings()
+        with patch.object(app.preferences, 'save', side_effect=OSError('Cannot save settings')):
+            app.document_cards_choice.value = False
+        self.assertTrue(app.document_cards_choice.value)
+        self.assertEqual(app.preferences.values['document_card_overview'], 'true')
+        self.assertEqual(app.document_grids, grids)
+        self.assertIn('Cannot save settings', app.settings_status.text)
 
     def test_restored_sessions_resolve_filenames_without_opening_readers(self):
         from commonUtils.runtime.document_access import LocalDocuments

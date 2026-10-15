@@ -5,6 +5,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from .mirror_jobs import MirrorJobs
+from .cloud_ui import import_hint
 
 
 class MirrorUI:
@@ -108,7 +109,7 @@ class MirrorUI:
         box.add(toga.Label('Transfer details', style=Pack(font_size=22)))
         box.add(toga.Label('Pull: remote → device · Push: device → remote', style=Pack(font_size=12, margin_bottom=8)))
         self.transfer_progress = toga.ProgressBar(max=100, value=100 if getattr(self, 'transfer_complete', False) else 0, style=Pack(height=12))
-        self.transfer_notice = toga.Label(store.error or getattr(self, 'transfer_message', 'Writing and ordinary reading can continue during a transfer.'))
+        self.transfer_notice = toga.Label(import_hint(store.error or getattr(self, 'transfer_message', 'Writing and ordinary reading can continue during a transfer.')))
         box.add(self.transfer_progress)
         box.add(self.transfer_notice)
         if getattr(self, 'mirror_push_plan', None) is not None:
@@ -156,7 +157,7 @@ class MirrorUI:
             self.show_transfers()
             return True
         except (OSError, ValueError) as error:
-            self.transfer_notice.text = 'Deletion stopped: ' + str(error)[:250]
+            self.transfer_notice.text = import_hint('Deletion stopped: ' + str(error)[:250])
             return False
         finally:
             self.set_cloud_busy(False)
@@ -213,8 +214,18 @@ class MirrorUI:
 
     def start_mirror_review(self, key):
         if not getattr(self, 'transfer_busy', False) and not getattr(self, '_transfer_confirmation_pending', False):
-            self.transfer_task = self.loop.create_task(self.run_mirror_work(
-                lambda client, cancel, progress: self.mirror_store().push_plan(key, client, cancelled=cancel, progress=progress), 'review'))
+            job = self.mirror_store().jobs.get(key)
+            if job is None:
+                return
+            signature = self.mirror_job_signature(job)
+            storage = 'LocalCrypt' if job['crypt'] else 'Local'
+            self.transfer_task = self.loop.create_task(self.confirmed_mirror_work(
+                lambda client, cancel, progress: self.mirror_store().push_plan(key, client, cancelled=cancel, progress=progress),
+                'review', 'Review push folder?',
+                f'From: {storage}/{job["target"]}\nTo: {job["remote"]}:{job["prefix"]}\n\n'
+                'Push replaces or removes remote files to match this local folder, with no backup. '
+                'Review the changes? You will confirm again before writing online.',
+                valid=lambda: self.mirror_job_signature(self.mirror_store().jobs.get(key)) == signature))
 
     async def pull_remote_copy(self, widget=None, **kwargs):
         if getattr(self, 'cloud_busy', False) or getattr(self, 'transfer_busy', False):
@@ -333,7 +344,7 @@ class MirrorUI:
                 self.cloud_transfer_progress.stop()
                 self.cloud_transfer_progress.max = 100
                 self.cloud_transfer_progress.value = 100 if result is not None else 0
-                self.transfer_notice.text = self.transfer_message
+                self.transfer_notice.text = import_hint(self.transfer_message)
                 self.transfer_progress.stop()
                 self.transfer_progress.max = 100
                 self.transfer_progress.value = 100 if result is not None else 0
@@ -370,7 +381,7 @@ class MirrorUI:
             # the user opens an unrelated local document during a transfer.
             return
         self._mirror_progress_widgets = widgets
-        self.transfer_notice.text = self.transfer_message
+        self.transfer_notice.text = import_hint(self.transfer_message)
         self.cloud_status.value = self.transfer_message
         origin = getattr(self, 'cloud_transfer_progress', None)
         for bar in (self.transfer_progress, origin):
@@ -391,7 +402,7 @@ class MirrorUI:
         if getattr(self, 'transfer_busy', False):
             self.cancel_cloud()
             self.transfer_message = 'Cancelling sync; completed destination changes remain.'
-            self.transfer_notice.text = self.transfer_message
+            self.transfer_notice.text = import_hint(self.transfer_message)
 
     def show_mirror_push_review(self):
         plan = self.mirror_push_plan
