@@ -956,3 +956,8 @@ card previews in Preferences keeps the same name/close row without the excerpt.
 On iPhone, tab selection waits for UIKit to finish changing its selected screen
 before laying out Documents or Chat, so their content and menus appear on the
 first tap.
+
+
+Chat uses the same rounded, outlined surfaces as the other tabs for its transcript,
+conversation list and message input. On iPhone its conversations menu lives in the
+native top-left navigation bar, matching the Documents menu position.

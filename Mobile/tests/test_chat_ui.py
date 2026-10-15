@@ -31,6 +31,18 @@ class ChatUITests(unittest.TestCase):
         self.app.chat_url.value = url
         self.app.chat_model.value = 'fixture-model'
 
+    def test_chat_cards_use_shared_surface_styling_and_keep_live_content(self):
+        from logisticsmobile.appearance import _surfaces
+        app = self.app
+        self.assertEqual(_surfaces[app.chat_transcript_card._impl], 16)
+        self.assertEqual(_surfaces[app.chat_sidebar._impl], 16)
+        self.assertEqual(_surfaces[app.chat_prompt._impl], 12)
+        self.assertIs(app.chat_transcript.parent.parent, app.chat_transcript_card)
+        app.chat_prompt.value = 'Retain the composer draft'
+        app.toggle_chat_conversations()
+        app.toggle_chat_conversations()
+        self.assertEqual(app.chat_prompt.value, 'Retain the composer draft')
+
     def test_idle_status_collapses_and_growing_draft_survives_history(self):
         app = self.app
         self.assertEqual(list(app.chat_status_box.children), [])
