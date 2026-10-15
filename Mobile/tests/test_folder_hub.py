@@ -58,6 +58,14 @@ class FolderHubTests(unittest.TestCase):
                 self.assertIn('Added later', app.folder_buttons)
                 self.assertFalse(app.routes.screens['files'])
                 self.assertIn('Comics', app.folder_picker_choices)
+                # A newly imported credential is reflected without rebuilding the root.
+                app.preferences.save(remote_packages=json.dumps([dict(zip='Loaded.zip',
+                    remotes=['Loaded drive'], session_only=True)]))
+                app.set_cloud_busy(False)
+                self.assertIn('Loaded.zip', app.folder_credentials)
+                app.folder_credential.value = 'Loaded.zip'
+                self.assertEqual(set(app.folder_buttons), {'Loaded drive'})
+                app.folder_credential.value = 'All'
                 app.folder_buttons['Comics'].on_press()
                 self.assertEqual(app.routes.screens['files'][-1][0], 'folder-options')
                 app.loop.run_until_complete(app.folder_browse_button.on_press())

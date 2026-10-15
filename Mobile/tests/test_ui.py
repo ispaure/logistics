@@ -18,7 +18,7 @@ class MobileUITests(unittest.TestCase):
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
             self.assertEqual(app.native_host.state.destination, 'home')
-            self.assertEqual(app.body.children[0].content.children[0].text, 'Logistics')
+            self.assertEqual(app.body.children[0].content.children[0].text, 'Welcome to Logistics')
             app.show_settings()
             app.font_choice.value = '20'
             app.restore_choice.value = False

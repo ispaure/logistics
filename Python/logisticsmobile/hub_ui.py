@@ -30,7 +30,7 @@ def home_surface(widget, *, hero=False):
 
 
 def panel(title, detail, glyph, actions):
-    box = toga.Box(style=Pack(direction=COLUMN, padding=8, margin_bottom=8))
+    box = toga.Box(style=Pack(direction=COLUMN, margin=16))
     box.add(toga.Box(children=[
         template_icon(toga.ImageView(icon(glyph), style=Pack(width=24, height=24, margin_right=8))),
         toga.Label(title, style=Pack(flex=1, font_size=18, font_weight='bold'))],
@@ -41,7 +41,7 @@ def panel(title, detail, glyph, actions):
     for label, action in actions:
         buttons.add(toga.Button(label, on_press=action, style=Pack(height=44, flex=1)))
     box.add(buttons)
-    return surface(box)
+    return surface(toga.Box(children=[box], style=Pack(direction=COLUMN, margin_bottom=12)))
 
 
 class PanelGrid(toga.Box):
@@ -112,7 +112,8 @@ class HubUI:
             item = toga.Box(children=[
                 template_icon(toga.ImageView(icon(glyph), style=Pack(width=28, height=28, margin_right=12))),
                 text], style=Pack(direction=ROW, align_items=CENTER, margin=16, margin_bottom=12))
-            spaces.add(home_surface(item))
+            card = toga.Box(children=[item], style=Pack(direction=COLUMN, margin_bottom=12))
+            spaces.add(home_surface(card))
         box.add(spaces)
         box.add(toga.Box(children=[
             toga.Button('Open documents', on_press=self.show_documents_hub, style=Pack(height=44, flex=1)),
@@ -125,11 +126,11 @@ class HubUI:
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         launchers = []
         for title, detail, glyph, extension in (
-            ('Text Editor', 'Edit plain text and code files.', 'documents', 'txt'),
+            ('Text Editor', 'Edit plain text and code files.', 'text', 'txt'),
             ('Markdown Editor', 'Write and preview formatted notes.', 'markdown', 'md'),
-            ('EPUB Reader', 'Read books and resume your progress.', 'books', None),
-            ('Comic Reader', 'Read comics and image archives.', 'books', None),
-            ('Archives', 'Browse archive files.', 'files', None),
+            ('EPUB Reader', 'Read books and resume your progress.', 'epub', None),
+            ('Comic Reader', 'Read comics and image archives.', 'comic', None),
+            ('Archives', 'Browse archive files.', 'archives', None),
         ):
             actions = []
             if extension:
