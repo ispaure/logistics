@@ -68,7 +68,18 @@ async def exercise_workspace(app):
     assert second.editor.value == '# Right\n\nAnother independent draft.'
     navigation.pinned = None
     navigation.render()
-    app.show_chat()
+    if get_os() is OS.IOS:
+        # UIKit may signal its item before updating selectedViewController.
+        # A setter-driven test only covers the opposite event order.
+        adapter = app.native_host.adapter
+        adapter.controller.tabBar_didSelectItem_(adapter.controller.tabBar, adapter.navigation[3].tabBarItem)
+        adapter.controller.selectedIndex = 3
+        await asyncio.sleep(.3)
+        assert app.native_host.state.destination == 'chat', 'Chat must open on the first native item signal'
+        assert app.chat_messages in app.chat_workspace.children
+        assert width(app.chat_prompt) > 0
+    else:
+        app.show_chat()
     app.chat_prompt.value = 'Unsent conversation draft'
     key = app.chat_current['id']
     if get_os() is OS.IOS:

@@ -49,6 +49,33 @@ class WorkspaceNavigationTests(unittest.TestCase):
         finally:
             app.native_host.adapter = original
 
+    def test_queued_first_chat_tap_initializes_and_return_keeps_the_draft(self):
+        import asyncio
+        from types import SimpleNamespace
+        from logisticsmobile.navigation import install_apple_selection
+        app = self.app
+        app.show_home()
+        original = app.native_host.adapter
+        app.native_host.adapter = SimpleNamespace(navigation=[])
+        install_apple_selection(app)
+        app.native_host.adapter = original
+        self.assertFalse(hasattr(app, 'chat_view'))
+        app.native_host.root.on_select()
+        app.native_host.root._impl._set_value('current_tab_index', 3)
+        app.loop.run_until_complete(asyncio.sleep(0))
+        self.assertEqual(app.native_host.state.destination, 'chat')
+        self.assertIn(app.chat_view, app.body.children)
+        self.assertIn(app.chat_messages, app.chat_workspace.children)
+        app.chat_prompt.value = 'Keep this draft on the next first tap'
+        view = app.chat_view
+        app.show_home()
+        app.native_host.root.on_select()
+        app.native_host.root._impl._set_value('current_tab_index', 3)
+        app.loop.run_until_complete(asyncio.sleep(0))
+        self.assertEqual(app.native_host.state.destination, 'chat')
+        self.assertIs(app.chat_view, view)
+        self.assertEqual(app.chat_prompt.value, 'Keep this draft on the next first tap')
+
     def test_menu_opens_without_credential_queries_or_leaving_a_draft(self):
         app = self.app
         app.editor.value = 'Retained while the menu opens'

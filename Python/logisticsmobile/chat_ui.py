@@ -114,9 +114,10 @@ class ChatUI:
             # The native tab callback is already selecting Chat. Mount its lazy
             # content without starting a second native selection mid-transition.
             root = self.routes.roots['chat']
-            for child in list(root.children):
-                root.remove(child)
-            root.add(self.chat_view)
+            if list(root.children) != [self.chat_view]:
+                for child in list(root.children):
+                    root.remove(child)
+                root.add(self.chat_view)
             self.render_chat_workspace()
 
     def toggle_chat_conversations(self, widget=None, **kwargs):
