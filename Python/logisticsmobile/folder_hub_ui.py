@@ -1,9 +1,10 @@
 """A folder list and focused, source-owned folder actions."""
 import asyncio
+import json
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
-from .folder_hub import hub_entries
+from .folder_hub import hub_entries, folder_tree, credential_choices
 from .cloud_ui import import_hint
 from textwrap import fill
 from commonUtils.ui.native.presentation import list_button
@@ -47,7 +48,8 @@ class FolderHubUI:
                 title = (name if not jobs[value]['prefix'] else jobs[value]['target']) if kind == 'job' else name
                 if kind == 'remote':
                     value = value, ''
-                copy = dict(source=source, kind=kind, value=value, name=title)
+                remote = jobs[value]['remote'] if kind == 'job' else name if kind in ('crypt', 'remote') else None
+                copy = dict(source=source, kind=kind, value=value, name=title, remote=remote)
                 group = choices.setdefault(title, dict(copy, copies=[]))
                 group['copies'].append(copy)
         if getattr(self, 'cloud_open_remote', None) in remotes:
@@ -55,7 +57,7 @@ class FolderHubUI:
                 if row['directory']:
                     label = self.cloud_open_remote + '/' + row['path']
                     copy = dict(source='Remote', kind='remote',
-                        value=(self.cloud_open_remote, row['path']), name=label)
+                        value=(self.cloud_open_remote, row['path']), name=label, remote=self.cloud_open_remote)
                     group = choices.setdefault(label, dict(copy, copies=[]))
                     group['copies'].append(copy)
         for group in choices.values():
@@ -69,7 +71,7 @@ class FolderHubUI:
                     if job['remote'] in remotes:
                         group['copies'] = [copy for copy in group['copies'] if copy['source'] != 'Remote']
                         group['copies'].append(dict(source='Remote', kind='job-remote',
-                                                    value=job['id'], name=primary['name']))
+                                                    value=job['id'], name=primary['name'], remote=job['remote']))
         return choices
 
     def show_folder_picker(self, *, initialize=True):
@@ -82,9 +84,19 @@ class FolderHubUI:
 
     def build_folder_picker(self):
         self.folder_list = toga.Box(style=Pack(direction=COLUMN))
+        self.folder_collapsed = getattr(self, 'folder_collapsed', set())
+        packages = json.loads(self.preferences.values['remote_packages'])
+        self.folder_credentials = {'All': None}
+        for package in packages:
+            self.folder_credentials[package['zip']] = set(package['remotes'])
+        selected = getattr(self, 'folder_credential_name', 'All')
+        self.folder_credential = toga.Selection(items=list(self.folder_credentials),
+            value=selected if selected in self.folder_credentials else 'All', style=Pack(flex=1, height=44))
+        self.folder_credential.on_change = self.change_folder_credential
         self.folder_refresh_button = refresh_button(self.refresh_folder_hub)
         self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=44, flex=1))
-        box = toga.Box(children=[toga.Box(children=[self.folder_transfers_button, self.folder_refresh_button],
+        box = toga.Box(children=[toga.Box(children=[toga.Label('Credential', style=Pack(margin_right=8)),
+                self.folder_credential], style=Pack(direction=ROW, margin_bottom=8)), toga.Box(children=[self.folder_transfers_button, self.folder_refresh_button],
                 style=Pack(direction=ROW, margin_bottom=12)),
             toga.Button('Add SMB / Mac share…', on_press=self.show_smb_connection, style=Pack(height=44, margin_bottom=8)),
             toga.Label(import_hint('Choose a folder to browse, pull or push its available copies.'), style=Pack(font_size=12, margin_bottom=8)),
@@ -98,12 +110,48 @@ class FolderHubUI:
         for child in list(self.folder_list.children):
             self.folder_list.remove(child)
         self.folder_buttons = {}
-        for name in choices:
-            def select(widget=None, selected=name, **kwargs):
-                self.choose_folder(selected)
-            button = list_button(toga.Button(name, on_press=select, style=Pack(height=48, margin_bottom=4)))
-            self.folder_buttons[name] = button
-            self.folder_list.add(button)
+        selected = self.folder_credentials.get(self.folder_credential.value)
+        visible = choices if selected is None else credential_choices(choices, selected)
+        self.folder_tree_buttons = {}
+
+        def add_branch(branch, ancestors=()):
+            for title, node in sorted(branch.items(), key=lambda item: item[0].casefold()):
+                path = (*ancestors, title)
+                children = node['children']
+                row = toga.Box(style=Pack(direction=ROW, margin_left=18 * len(ancestors)))
+                if children:
+                    def toggle(widget=None, selected=path, **kwargs):
+                        if selected in self.folder_collapsed:
+                            self.folder_collapsed.remove(selected)
+                        else:
+                            self.folder_collapsed.add(selected)
+                        self.update_folder_list(self.folder_picker_choices)
+                    arrow = toga.Button('▸' if path in self.folder_collapsed else '▾', on_press=toggle,
+                                        style=Pack(width=44, height=48))
+                    self.folder_tree_buttons[path] = arrow
+                    row.add(arrow)
+                else:
+                    row.add(toga.Box(style=Pack(width=44)))
+                if node['names']:
+                    name = node['names'][0]
+                    def select(widget=None, selected=name, **kwargs):
+                        self.choose_folder(selected)
+                    button = list_button(toga.Button(title, on_press=select, style=Pack(height=48, flex=1)))
+                    self.folder_buttons[name] = button
+                    row.add(button)
+                else:
+                    row.add(list_button(toga.Button(title, on_press=toggle, style=Pack(height=48, flex=1))))
+                self.folder_list.add(row)
+                if children and path not in self.folder_collapsed:
+                    add_branch(children, path)
+        add_branch(folder_tree(visible))
+        if not visible:
+            self.folder_list.add(toga.Label('No folders available for this credential.'))
+
+    def change_folder_credential(self, widget=None, **kwargs):
+        self.folder_credential_name = self.folder_credential.value
+        self.folder_collapsed.clear()
+        self.update_folder_list(self.folder_choices())
 
     def choose_folder(self, name):
         entry = self.folder_picker_choices.get(name)
