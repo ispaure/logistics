@@ -8,7 +8,7 @@ import traceback
 from uuid import uuid4
 
 from commonUtils.runtime.platform import get_os, OS
-from logisticsmobile.access import LocalDocuments
+from commonUtils.runtime.document_access import LocalDocuments
 from logisticsmobile.app import LogisticsMobile
 from logisticsmobile.preferences import Preferences
 from . import CASES

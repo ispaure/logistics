@@ -120,3 +120,7 @@ The shared helper owns dispatch context restoration; Logistics owns loop lifetim
 Native memory/configuration subscriptions use shared `ui.native.memory`. Logistics
 guards active hosts and chooses resource cleanup/theme refresh; subscriptions
 suppress queued callbacks after disposal.
+
+System document selection and scoped byte access live in shared native documents
+and runtime document-access adapters. `logisticsmobile.pickers` retains document
+name validation, text export limits and MIME policy; Logistics owns import storage.

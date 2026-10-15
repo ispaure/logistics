@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from logisticsmobile.access import LocalDocuments
+from commonUtils.runtime.document_access import LocalDocuments
 from logisticsmobile.app import LogisticsMobile
 from logisticsmobile.cloud_ui import SelectedCredentialZIP
 

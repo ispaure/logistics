@@ -523,7 +523,7 @@ class CloudUI(CopyUI, LocalCryptUI):
             self.download_selector.value = next(key for key, path in self.download_labels.items() if path == selected)
 
     async def open_download(self, widget=None, *, path=None, destination=None, **kwargs):
-        from .access import LocalDocuments
+        from commonUtils.runtime.document_access import LocalDocuments
         selected = path if path is not None else self.download_labels.get(self.download_selector.value)
         independent = (self.cloud_busy and getattr(self, 'transfer_busy', False) and path is not None
                        and selected.resolve().is_relative_to((self.private_root / 'LocalFiles').resolve()))

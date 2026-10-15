@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from logisticsmobile.access import LocalDocuments
+from commonUtils.runtime.document_access import LocalDocuments
 from logisticsmobile.cloud import CloudClient, Downloads, download_name, PACKAGE_LIMIT
 
 

@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from commonUtils.runtime.platform import OS
-from logisticsmobile.access import AndroidDocuments, IOSDocuments, LocalDocuments
+from commonUtils.runtime.document_access import AndroidDocuments, IOSDocuments, LocalDocuments
 from logisticsmobile.pickers import pick_document, export_document
 
 
@@ -34,7 +34,7 @@ class PickerTests(unittest.IsolatedAsyncioTestCase):
             native=SimpleNamespace(getContentResolver=lambda: resolver)))
         java = SimpleNamespace(jclass=lambda name: Intent if name.endswith('Intent') else SimpleNamespace(RESULT_OK=42),
                                jarray=lambda dtype: list, jbyte=object())
-        with patch('logisticsmobile.pickers.get_os', return_value=OS.ANDROID), patch.dict('sys.modules', java=java):
+        with patch('commonUtils.ui.native.documents.get_os', return_value=OS.ANDROID), patch.dict('sys.modules', java=java):
             with self.assertRaises(OSError):
                 await export_document(app, 'Notes.md', b'\xffhello')
         self.assertEqual(closed, [True])
@@ -48,15 +48,15 @@ class PickerTests(unittest.IsolatedAsyncioTestCase):
         with TemporaryDirectory() as directory:
             app = SimpleNamespace(paths=SimpleNamespace(data=Path(directory)),
                                   main_window=SimpleNamespace(dialog=AsyncMock(return_value=None)))
-            with patch('logisticsmobile.pickers.get_os', return_value=OS.MAC):
+            with patch('commonUtils.ui.native.documents.get_os', return_value=OS.MAC):
                 self.assertFalse(await export_document(app, 'Notes.txt', b'copy'))
             observed = []
             async def picker(app, path):
                 observed.append(path)
                 self.assertEqual(path.read_bytes(), b'copy')
                 return False
-            with patch('logisticsmobile.pickers.get_os', return_value=OS.IOS), \
-                    patch('logisticsmobile.pickers.pick_ios', side_effect=picker):
+            with patch('commonUtils.ui.native.documents.get_os', return_value=OS.IOS), \
+                    patch('commonUtils.ui.native.documents.pick_ios', side_effect=picker):
                 self.assertFalse(await export_document(app, 'Notes.txt', b'copy'))
             self.assertFalse(observed[0].exists())
 
@@ -78,7 +78,7 @@ class PickerTests(unittest.IsolatedAsyncioTestCase):
             native=SimpleNamespace(getContentResolver=lambda: resolver)))
         java = SimpleNamespace(jclass=lambda name: Intent if name.endswith('Intent') else SimpleNamespace(RESULT_OK=42))
         # Host sys.platform stays unchanged; only the shared classifier is a fixture.
-        with patch('logisticsmobile.pickers.get_os', return_value=OS.ANDROID), patch.dict('sys.modules', java=java):
+        with patch('commonUtils.ui.native.documents.get_os', return_value=OS.ANDROID), patch.dict('sys.modules', java=java):
             provider, reference = await pick_document(app)
         self.assertIsInstance(provider, AndroidDocuments)
         self.assertIs(provider.resolver, resolver)
@@ -89,11 +89,11 @@ class PickerTests(unittest.IsolatedAsyncioTestCase):
     async def test_ios_and_desktop_selection_use_their_matching_providers(self):
         app = SimpleNamespace(main_window=SimpleNamespace(dialog=AsyncMock(return_value=Path('/selected.txt'))))
         selected = (IOSDocuments(), object())
-        with patch('logisticsmobile.pickers.get_os', return_value=OS.IOS), \
-                patch('logisticsmobile.pickers.pick_ios', new=AsyncMock(return_value=selected)) as picker:
+        with patch('commonUtils.ui.native.documents.get_os', return_value=OS.IOS), \
+                patch('commonUtils.ui.native.documents.pick_ios', new=AsyncMock(return_value=selected)) as picker:
             self.assertIs(await pick_document(app), selected)
             picker.assert_awaited_once_with(app)
-        with patch('logisticsmobile.pickers.get_os', return_value=OS.MAC):
+        with patch('commonUtils.ui.native.documents.get_os', return_value=OS.MAC):
             provider, reference = await pick_document(app)
         self.assertIsInstance(provider, LocalDocuments)
         self.assertEqual(reference, Path('/selected.txt'))
@@ -116,8 +116,8 @@ class PickerTests(unittest.IsolatedAsyncioTestCase):
                     stream.seek(-1, 2)
                     self.assertEqual(stream.read(1), b'x')
                 return True
-            with patch('logisticsmobile.pickers.get_os', return_value=OS.IOS), \
-                    patch('logisticsmobile.pickers.pick_ios', side_effect=picker):
+            with patch('commonUtils.ui.native.documents.get_os', return_value=OS.IOS), \
+                    patch('commonUtils.ui.native.documents.pick_ios', side_effect=picker):
                 self.assertTrue(await export_file(app, source))
             self.assertTrue(source.exists())
             self.assertFalse(observed[0].exists())
