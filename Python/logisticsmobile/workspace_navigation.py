@@ -116,6 +116,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         # before Routes attaches its native screen.
         for frame in list(self.frames):
             frame.restore()
+        # Reparenting invalidates even an otherwise identical layout tuple.
+        self.last_layout = None
         return view
 
     def browser(self, destination):
@@ -124,15 +126,15 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         return self.browsers[destination]
 
     def toggle(self, destination):
-        if not self.app.checkpoint():
-            return
+        # Revealing a menu retains the editor and its draft; file-opening
+        # commands keep their own checkpoint guards.
         self.app.mark_navigation()
         self.menu_open[destination] = not self.menu_open[destination]
-        if self.menu_open[destination]:
-            drawer = self.browser(destination)
+        drawer = self.browser(destination) if self.menu_open[destination] else None
+        self.render()
+        if drawer is not None:
             drawer.extensions = None
             drawer.schedule_refresh()
-        self.render()
 
     def show_browser(self, destination):
         body = self.app.routes.body(destination)
@@ -217,9 +219,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                     item.restore()
                 if frame is not None:
                     frame.render()
-                    frame.sync_native_header()
                     frame.finish_transition(transition)
                 self.last_layout = layout
+            if frame is not None:
+                frame.sync_native_header()
             if hasattr(self.app, 'render_chat_workspace'):
                 self.app.render_chat_workspace()
         finally:
@@ -435,10 +438,9 @@ class FileDrawer:
         from .hub_ui import heading
         for child in list(self.menu_content.children):
             self.menu_content.remove(child)
-        roots = {'Local files': None}
-        if not getattr(self.app, 'cloud_busy', False):
-            roots.update(self.app.existing_crypt_locations())
-            roots.update(self.app.linked_crypt_locations())
+        # The tap path only renders cached results. Native rclone calls run
+        # in refresh() on a worker after the drawer is already visible.
+        roots = self.roots
         for storage in roots:
             async def browse(widget=None, selected=storage, **kwargs):
                 await self.show_main_browser(selected)
@@ -464,7 +466,8 @@ class FileDrawer:
         if not self.recent_buttons:
             self.menu_content.add(toga.Label('No recent documents yet.'))
         self.menu_content.add(heading('Comics Library'))
-        catalog = self.app.reader_manager().catalog
+        readers = getattr(self.app, 'readers', None)
+        catalog = readers.catalog if readers is not None else None
         self.library_buttons = []
         for record in getattr(catalog, 'library_records', ()):
             async def browse_library(widget=None, library=record, **kwargs):
@@ -510,13 +513,19 @@ class FileDrawer:
         self.scoped_provider = None
         self.schedule_refresh()
 
-    async def refresh(self):
-        self.generation += 1
-        generation = self.generation
+    def available_roots(self):
         roots = {'Local files': None}
         if not getattr(self.app, 'cloud_busy', False):
             roots.update(self.app.existing_crypt_locations())
             roots.update(self.app.linked_crypt_locations())
+        return roots
+
+    async def refresh(self):
+        self.generation += 1
+        generation = self.generation
+        roots = await asyncio.to_thread(self.available_roots)
+        if generation != self.generation or not self.app.active_host:
+            return False
         scope = getattr(self, 'scoped_provider', None)
         if scope is not None:
             roots.setdefault(scope[0], None)

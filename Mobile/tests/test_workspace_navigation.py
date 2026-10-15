@@ -25,6 +25,25 @@ class WorkspaceNavigationTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_menu_opens_without_credential_queries_or_leaving_a_draft(self):
+        app = self.app
+        app.editor.value = 'Retained while the menu opens'
+        frame = app.document_view._workspace_frame
+        with patch.object(app, 'existing_crypt_locations', side_effect=AssertionError('No bridge calls in tap')):
+            with patch.object(app, 'linked_crypt_locations', side_effect=AssertionError('No bridge calls in tap')):
+                with patch.object(app, 'checkpoint', return_value=False):
+                    frame.menu.on_press()
+                    self.assertTrue(self.navigation.menu_open['documents'])
+                    self.assertIn(self.navigation.browser('documents').widget, frame.row.children)
+        self.assertEqual(app.editor.value, 'Retained while the menu opens')
+        # Preparing the same retained view restores its children; render must
+        # rebuild the open drawer even though frame/width/menu state match.
+        self.navigation.prepare(app.document_view, 'documents', route='editor')
+        self.navigation.render()
+        self.assertIn(self.navigation.browser('documents').widget, frame.row.children)
+        frame.menu.on_press()
+        self.assertFalse(self.navigation.menu_open['documents'])
+
     def test_documents_menu_recent_reopens_closed_file_and_browse_uses_main_area(self):
         app = self.app
         app.name.value = 'Recent.md'
