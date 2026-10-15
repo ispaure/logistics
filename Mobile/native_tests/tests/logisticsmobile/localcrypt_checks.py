@@ -34,6 +34,23 @@ async def exercise_localcrypt(app, passed):
         await asyncio.sleep(.1)
         return (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None)
 
+    # A fresh iOS picker must select a newly inserted private location before
+    # opening its CBZ; the old backend displayed that label but still read row 0.
+    from tempfile import TemporaryDirectory
+    from logisticsmobile.file_resources import CryptFiles
+    with TemporaryDirectory(dir=app.private_root) as directory:
+        provider = CryptFiles(Path(directory), app.cloud_client, 'Secret')
+        provider._physical('plain.cbz').write_bytes(base64.b64decode(fixture['copies']['plain.cbz']['ciphertext']))
+        drawer = app.adaptive.browser('documents')
+        assert await drawer.show_main_browser('LocalCrypt: Native check', provider=provider)
+        assert drawer.storage.value == 'LocalCrypt: Native check'
+        assert drawer.provider is provider
+        assert await drawer.open_file({'path': 'plain.cbz'}), drawer.status.text
+        owner = app.private_sessions.active
+        assert owner is not None and owner.crypt_reader.name == 'plain.cbz'
+        assert owner.crypt_image.image.width == 24
+        app.close_crypt()
+
     for name in ('note.md', 'text.txt'):
         await open_copy(name)
         assert app.provider_sessions().active.crypt_text.value
