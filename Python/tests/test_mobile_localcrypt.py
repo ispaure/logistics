@@ -7,10 +7,24 @@ import unittest
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from logisticsmobile.localcrypt import LocalCryptCopies, PrivateReader
+from features.rclone.mobile.localcrypt import LocalCryptCopies
+from logisticsmobile.provider_readers import PrivateReader
 from books_fixture import make_book
 
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=')
+
+
+def seed_offline_copy(copies, data=b'opaque-original'):
+    """Seed a pre-existing offline record without a remote download API."""
+    import json
+    from uuid import uuid4
+    key = uuid4().hex
+    folder = copies.root / key
+    folder.mkdir()
+    (folder / 'data').write_bytes(data)
+    (folder / 'record.json').write_text(json.dumps(dict(
+        remote='Secret', encrypted_path='encoded', identity='a' * 64)))
+    return key
 
 
 class MobileLocalCryptTests(unittest.TestCase):
@@ -52,7 +66,7 @@ class MobileLocalCryptTests(unittest.TestCase):
                 self.assertTrue(text.strip())
             self.assertEqual(list(Path(directory).iterdir()), [])
 
-    def test_ciphertext_storage_locked_listing_and_failed_download_cleanup(self):
+    def test_existing_ciphertext_storage_and_locked_listing(self):
         import os
         record = dict(remote='Secret', encrypted_path='encrypted-name', identity='a' * 64)
         class Client:
@@ -61,11 +75,6 @@ class MobileLocalCryptTests(unittest.TestCase):
             def request(self, action, **values):
                 if self.locked:
                     raise ValueError('Unlock credentials')
-                if action == 'crypt_fetch':
-                    os.write(values['fd'], b'ciphertext fixture')
-                    if self.failed:
-                        raise ValueError('Cancelled')
-                    return dict(record)
                 if action == 'crypt_describe':
                     return 'note.md'
                 if action == 'crypt_decode':
@@ -75,7 +84,7 @@ class MobileLocalCryptTests(unittest.TestCase):
             root = Path(directory).resolve()
             client = Client()
             copies = LocalCryptCopies(root, client)
-            key = copies.fetch('Secret', 'note.md')
+            key = seed_offline_copy(copies)
             self.assertEqual(copies.items(), [(key, 'note.md')])
             self.assertEqual(copies.open(key).page(0), ('text', '# secret sentinel'))
             for file in root.rglob('*'):
@@ -87,10 +96,6 @@ class MobileLocalCryptTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 copies.open(key)
             client.locked = False
-            client.failed = True
-            with self.assertRaises(ValueError):
-                copies.fetch('Secret', 'note.md')
-            self.assertEqual(len(list(root.iterdir())), 1)
 
     def test_verified_save_conflict_cancellation_and_encoding(self):
         import os
@@ -99,9 +104,6 @@ class MobileLocalCryptTests(unittest.TestCase):
             cancel_after_encode = False
             fail = False
             def request(self, action, **values):
-                if action == 'crypt_fetch':
-                    os.write(values['fd'], b'opaque-original')
-                    return dict(remote='Secret', encrypted_path='encoded', identity='a' * 64)
                 if action == 'crypt_encode':
                     self.saved = base64.b64decode(values['data'])
                     os.write(values['fd'], b'opaque-updated')
@@ -117,7 +119,7 @@ class MobileLocalCryptTests(unittest.TestCase):
             client = Client()
             cancelled = [False]
             copies = LocalCryptCopies(Path(directory).resolve(), client)
-            key = copies.fetch('Secret', 'note.md')
+            key = seed_offline_copy(copies)
             reader = copies.open(key)
             updated = copies.save(reader, '# Edited\n')
             self.assertEqual(client.saved, b'\xef\xbb\xbf# Edited\r\n')
@@ -156,9 +158,6 @@ class MobileLocalCryptTests(unittest.TestCase):
             corrupt = False
             data = original.getvalue()
             def request(self, action, **values):
-                if action == 'crypt_fetch':
-                    os.write(values['fd'], b'original ciphertext')
-                    return dict(remote='Secret', encrypted_path='encoded', identity='a' * 64)
                 if action == 'crypt_decode':
                     return dict(name='comic.cbz', data=base64.b64encode(self.data).decode())
                 if action == 'crypt_metadata':
@@ -175,7 +174,7 @@ class MobileLocalCryptTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             client = Client()
             copies = LocalCryptCopies(Path(directory).resolve(), client)
-            key = copies.fetch('Secret', 'comic.cbz')
+            key = seed_offline_copy(copies)
             reader = copies.open(key, password='session-only')
             updated = copies.save_metadata(reader, {'Title': 'Edited'})
             self.assertEqual(client.password, 'session-only')
@@ -206,7 +205,7 @@ class LocalAdapterTests(unittest.TestCase):
         from unittest.mock import patch
         from commonUtils.runtime.local_files import LocalFiles
         from commonUtils.runtime.operations import MutationIncomplete
-        from logisticsmobile.file_resources import LocalTextCopies
+        from logisticsmobile.text_resources import LocalTextCopies
         with TemporaryDirectory() as directory:
             provider = LocalFiles(directory)
             path = Path(directory) / 'note.txt'
@@ -231,7 +230,7 @@ class LocalAdapterTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), b'external')
 
     def test_transfer_adapter_rejects_consumed_or_closed_source(self):
-        from logisticsmobile.file_resources import CryptTransferStream
+        from features.rclone.mobile.file_resources import CryptTransferStream
         with TemporaryDirectory() as directory:
             path = Path(directory) / 'cipher'
             path.write_bytes(b'ciphertext')

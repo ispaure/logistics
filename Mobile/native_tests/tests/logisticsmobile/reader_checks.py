@@ -6,6 +6,7 @@ def _assert_comic_centered(view, *, fullscreen=False):
     """Measure the rendered page in the actual native viewport."""
     native = view._impl.native
     if hasattr(view._impl, 'picture'):
+        assert view._impl.container is not None, 'Comic canvas is not attached to a native viewport'
         picture = view._impl.picture
         frame = picture.convertRect(picture.bounds, toView=native)
         bounds = native.bounds
@@ -52,7 +53,8 @@ async def assert_comic_centered(view, *, fullscreen=False):
     while True:
         await asyncio.sleep(.1)
         try:
-            _assert_comic_centered(view, fullscreen=fullscreen)
+            current = view() if callable(view) else view
+            _assert_comic_centered(current, fullscreen=fullscreen)
         except AssertionError:
             centered = 0
             if asyncio.get_running_loop().time() >= deadline:
@@ -67,21 +69,23 @@ async def assert_comic_centered(view, *, fullscreen=False):
 
 async def exercise_reader(app, passed):
     owner = app.reader_manager().active
-    view = app.reader_manager().active.book_content.children[0]
-    view.set_zoom(2)
+    def current_view():
+        displayed = owner.book_content.children[0]
+        return displayed.canvases[0] if hasattr(displayed, 'canvases') else displayed
+    current_view().set_zoom(2)
     await asyncio.sleep(.2)
-    assert 1.9 <= view.zoom_scale <= 2.1, view.zoom_scale
-    view.fit_page()
-    assert view.zoom_scale == 1
+    assert 1.9 <= current_view().zoom_scale <= 2.1, current_view().zoom_scale
+    current_view().fit_page()
+    assert current_view().zoom_scale == 1
     assert owner.reader_immersive and owner.library_view._comic_fullscreen
     assert owner.reader_header not in owner.library_view.children
-    view.toggle_controls()
+    current_view().toggle_controls()
     assert not owner.reader_immersive and owner.reader_header in owner.library_view.children
-    view.toggle_controls()
+    current_view().toggle_controls()
     assert owner.reader_immersive
-    await assert_comic_centered(view, fullscreen=True)
+    await assert_comic_centered(current_view, fullscreen=True)
     def viewport_height():
-        return float(view._impl.native.bounds.size.height) if hasattr(view._impl, 'picture') else view._impl.native.getHeight()
+        return float(current_view()._impl.native.bounds.size.height) if hasattr(current_view()._impl, 'picture') else current_view()._impl.native.getHeight()
     full_height = viewport_height()
     # Reuse the existing reader, leave through another destination, and repeat
     # control/fullscreen transitions. This catches retained native scroll offsets.
@@ -89,28 +93,29 @@ async def exercise_reader(app, passed):
         app.show_settings()
         await asyncio.sleep(.1)
         owner.show_library()
-        view.toggle_controls()
+        current_view().toggle_controls()
         await asyncio.sleep(.1)
-        view.toggle_controls()
-        await assert_comic_centered(view, fullscreen=True)
+        current_view().toggle_controls()
+        await assert_comic_centered(current_view, fullscreen=True)
         assert abs(viewport_height() - full_height) < 1, ('Fullscreen viewport shrank', full_height, viewport_height())
     previous = app.reader_manager().active.book_record['position']
     # Exercise native gesture target dispatch, rather than only the controller.
-    if hasattr(view._impl, 'swipes'):
-        swipe = view._impl.swipes[0]  # UIKit right swipe -> previous.
-        assert view._impl.native.gestureRecognizerShouldBegin(swipe)
-        view._impl.native.pageSwipe(swipe)
+    if hasattr(current_view()._impl, 'swipes'):
+        swipe = current_view()._impl.swipes[0]  # UIKit right swipe -> previous.
+        assert current_view()._impl.native.gestureRecognizerShouldBegin(swipe)
+        current_view()._impl.native.pageSwipe(swipe)
     else:
         from java import jclass
         Event = jclass('android.view.MotionEvent')
-        native = view._impl.native
+        native = current_view()._impl.native
         now = jclass('android.os.SystemClock').uptimeMillis()
         x, y = native.getWidth()*.35, native.getHeight()*.5
         down = Event.obtain(now, now, Event.ACTION_DOWN, x, y, 0)
         up = Event.obtain(now, now+200, Event.ACTION_UP, native.getWidth()*.8, y, 0)
         native.onTouchEvent(down)
         native.onTouchEvent(up)
-        down.recycle(); up.recycle()
+        down.recycle()
+        up.recycle()
     await asyncio.sleep(.4)
     assert app.reader_manager().active.book_record['position'] == previous - 1
     app.reader_manager().active.book_content.children[0].page(1)
@@ -124,6 +129,6 @@ async def exercise_reader(app, passed):
     owner.show_reader_tools()
     assert owner.bookmark_selector in owner.reader_tools_view.content.children
     owner.show_library()
-    await assert_comic_centered(app.reader_manager().active.book_content.children[0], fullscreen=True)
+    await assert_comic_centered(current_view, fullscreen=True)
     passed.append('native_comic_fullscreen_reentry')
     passed.append('native_reader_presentation')

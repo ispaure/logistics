@@ -381,7 +381,7 @@ and copy workflows own transfers. iOS declares SMB in its local-network permissi
 explanation. SMB share paths start with the share name. Local bridge/configuration
 and dummy UI tests do not establish physical Android/iOS SMB server connectivity.
 
-`credential_vault.py` owns a random 32-byte data key: AndroidKeyStore AES-GCM wraps
+`features/rclone/mobile/credential_vault.py` owns a random 32-byte data key: AndroidKeyStore AES-GCM wraps
 it into bounded metadata under noBackupFilesDir; iOS Security.framework uses a
 non-synchronizing WhenUnlockedThisDeviceOnly generic-password item. The iOS vault
 folder is excluded from backup, and the Keychain item is labeled Logistics plus
@@ -403,7 +403,7 @@ failed import. All tests use synthetic credentials and an in-memory remote.
 `cloud.py` owns the ctypes C allocation/free boundary and app-private completed
 copies. Downloads stream into a duplicated caller-owned private descriptor;
 only metadata crosses the C/JSON bridge, avoiding base64 amplification for files.
-`cloud_ui.py` owns explicit picker/import/connect/download controls. Private
+`features/rclone/mobile/cloud_ui.py` owns explicit picker/import/connect/download controls. Private
 copies use exclusive creation in UUID folders and a completion marker, so recovery
 excludes incomplete, linked or invalid entries. Export extends the existing system
 copy adapter to chunked binary output with an explicit 32 MiB maximum; existing
@@ -1010,3 +1010,50 @@ Native comic geometry checks wait for three consecutive centered samples after
 chrome transitions, with a 15-second deadline. This replaces a fixed 300 ms delay
 that could sample the previous viewport during slow hosted Android layout. The
 same two-pixel centering and fullscreen-height assertions still apply.
+
+## Android collection drive selection
+
+`features/rclone/mobile/storage_location.py` owns the shared Local/LocalCrypt
+location. Private `collection-storage.json` records the selected volume and a
+random identity matching `<volume>/Logistics/.logistics-storage`. Unconfigured
+installs retain the existing private `LocalFiles`/`LocalCryptFolders` layout.
+Configured drives use `Logistics/Local` and `Logistics/LocalCrypt`; neither
+credentials nor `mirror-jobs.json` move. All provider, Folder Hub, library and
+transfer destination resolution uses this boundary. Retained collection providers
+revalidate the selected marker before filesystem operations. No missing-card
+fallback or replacement directory is created.
+
+`logisticsmobile/storage_ui.py` enumerates mounted Android storage volumes and
+opens the app-specific All files access Settings screen. The manifest helper
+declares `MANAGE_EXTERNAL_STORAGE` idempotently. The user grants special access;
+no ADB permission override is part of the workflow. This direct-path file-manager
+access supports the existing native rclone bridge and ordinary SD-card folders.
+It is distinct from document import/export URI grants.
+
+Switching is blocked during active cloud/transfers and while provider readers are
+open. It checkpoints managed text, prevents new cloud mutations, inventories both
+trees, checks free space, copies into unique staging directories, flushes copied
+file bytes and compares SHA-256 inventories. Symlinks, hardlinks and special files
+are refused during migration. Different nonempty destination collections are
+never merged or overwritten. An empty source permits adoption of an existing
+collection. The private pointer changes last. Original trees remain for recovery;
+failed switches can retain already verified destination trees for retry. The app
+exits after success so retained providers cannot continue using an old location.
+Root-level marker and private state must be preserved when manually moving cards.
+
+Android and iOS now share the Show Legacy preference and filtering; dummy/desktop
+hosts preserve their existing unfiltered behavior. Tests in `test_storage_location`,
+`test_storage_ui`, `test_reader_build` and `test_workspace_navigation` cover
+migration, missing media, conflicts, private metadata, permission gating, restart
+and cross-platform visibility. Physical SD-card performance and removal during
+native rclone I/O need device verification; availability is checked before each
+host operation, not by a native mid-transfer media monitor.
+
+Android comic immersive mode now asks the shared navigation chrome adapter to
+hide Android system status/navigation bars as well as app bars. The shared
+component owns visibility/behavior restoration and inset reapplication; Logistics
+continues to own which visible reader route requests fullscreen. See commonUtils'
+native component guide for its contract. Android Settings also exposes a direct
+`APPLICATION_DEVELOPMENT_SETTINGS` intent, and the deployment helper caches local
+SDK paths in ignored `Mobile/.tools/android-sdk.json` and reconnects advertised
+`_adb-tls-connect._tcp` endpoints. It never pairs silently or enables debugging.

@@ -47,6 +47,9 @@ available options before starting: the operation changes files at its destinatio
 If several credentials define the same remote name, choose the intended credential;
 its label does not change the local sync path. Mount paths are separated by config.
 
+Desktop and mobile Sync preserve empty source folders where the destination
+backend supports directories.
+
 GUI Push/Pull opens a retained **Folder Actions** job with live transfer statistics,
 command output, operation state and retry attempt. Results stay available after completion.
 Success requires a normal exit with code zero; failures show the exit code and
@@ -113,8 +116,28 @@ no undo for these transfers. Keep independent backups of destination-only files.
 **Track renames**, offered for entire-folder Push, asks rclone to detect renames
 instead of transferring matching content again. Specific-folder Push offers a
 positive bandwidth limit in MB/s; blank means unlimited. Review the displayed
-source and destination before pressing **PUSH**. The dialog shows target paths,
-not a complete file-by-file deletion preview.
+source and destination before pressing **PUSH**. Both Push and Pull then scan a
+detailed review of file additions, replacements and deletions using rclone's own
+dry-run comparison. Review does not write destination files or create a new local
+copy. Confirming a complete review checks for changes again before starting; if
+the comparison changed, inspect the new results and confirm again. Comparison
+scans use rclone’s normal retries on both desktop and mobile. Each attempt
+replaces the previous attempt’s results; an exhausted or cancelled comparison
+remains incomplete. Cancel and **Proceed without full review…** remain available
+while waiting for a retry.
+
+Empty source folders are preserved when the destination backend supports them.
+Both desktop and mobile review list directory changes with a trailing `/`,
+including nested empty folders and decrypted crypt folder labels. The final
+change check tracks directory membership and type without treating directory
+timestamp changes as new transfer work.
+
+While scanning or checking a completed review, **Proceed without full review…**
+lets you stop waiting and explicitly confirm the source and destination. The
+confirmation warns that additional replacements and deletions may occur. It waits
+for the comparison to stop before launching the transfer. Credential, destination
+and LocalCrypt integrity checks still apply. **Cancel** closes the review without
+starting a transfer. An incomplete or failed comparison never starts one by itself.
 
 Ordinary sync follows source file links (`--copy-links`), so linked content can be included.
 Unassociated local folders match accounts by remote name. A folder pulled with
@@ -133,15 +156,59 @@ copy cannot be symbolic links, junctions or hard-linked files. Transfers and
 private browsing reject these entries with an error naming the offending path.
 A missing or invalid credential mapping blocks Push rather than guessing a remote.
 
+## Browse remote files directly
+
+On desktop choose **File Browser → File → Open Remote…**, or **Browse** on a
+Folder Hub remote. Each remote opens in its own tab, labelled with its account
+and remote name. Navigation stays within that remote. Duplicate tabs retain the
+account and current directory; tabs use the existing workspace docking.
+Credentials must already be loaded through rclone settings.
+
+Remote browsing is read-only. Search filters the current folder; it does not scan
+subfolders. Listings, thumbnails and directly opened contents stay in memory,
+without filesystem indexing or persistent preview caches.
+Small text/Markdown/INI files open read-only (up to 1 MiB); PNG/JPEG/WebP images
+use up to 16 MiB. EPUB and CBZ/ZIP comics read archive members on demand, with
+bounded buffers. Inner archive passwords are separate from crypt credentials.
+On mobile, CBZ/ZIP comics first cache the complete archive in RAM, then read
+pages from that session snapshot without further network requests. The limits
+are 128 MiB per comic and 256 MiB across windows. Download progress shows bytes
+and percentage. Closing the comic or retiring its credentials releases the cache;
+it is never written to disk. Larger comics need a managed local copy. Reopen to
+load a newer online version. Mobile remote listings do not fetch thumbnails.
+On mobile, a comic's inner password opens an item-specific password form. The
+file/folder **•••** page also offers **Open preview**/**Open folder** for that item,
+with an optional inner ZIP password for archives. File-opening progress and
+failures appear above the browser listing.
+Other formats and content exceeding the direct-reader limits show a dialog asking
+you to manually make a local copy and open it. External applications require an
+explicit local copy. Remote readers cannot save text or metadata back to storage and show no Save,
+Save As or metadata-edit controls.
+
+Remote browsers on desktop, iOS and Android offer browsing and direct previews
+only. They have no standalone file or folder download/copy actions. To create an
+offline copy, use the existing managed **Pull to Local** or **Pull to LocalCrypt**
+workflow from Folder Hub. Session-only credentials do not create a persistent
+remote document; locking or replacing credentials retires its open readers.
+
+On mobile, open a remote from Folder Hub or **Remote files**, then tap a supported
+file to read it directly. Current-folder filtering and the manual-local-copy
+dialog apply on mobile too. Failed navigation retains the previous listing and
+selection while credentials remain current; credential changes clear stale views.
+Reader menus expose only commands available for the current file type. No remote editing, uploading, renaming, deletion or
+moving is available in the remote browser.
+
 ## Android and iOS prototype
 
 The independent mobile app can import the same TXT-in-ZIP credential format into
-an in-memory embedded rclone session, browse supported remotes and download private
-copies. Managed Local and LocalCrypt folders support repeatable Pull and reviewed
-Push with progress while ordinary writing or reading continues. Pull retains local
-changes as conflict snapshots; Push checks revisions, verifies uploads and retains
-remote backups without deleting remote-only files. Mobile does not offer mounts or
-destructive desktop sync. See the [mobile transfer guide](../../../logisticsmobile/user_docs/README.md#local--localcrypt-pulls-and-pushes)
+an in-memory embedded rclone session, browse supported remotes and preview supported files directly. Managed Local and LocalCrypt folders support repeatable Pull and reviewed
+Push with progress while ordinary writing or reading continues. Both use rclone
+Sync: files at the destination can be replaced or deleted, with no retained
+backup or rollback. Mobile runs one transfer at a time with no queue; existing
+Local and LocalCrypt copies remain browsable and readable during folder transfers,
+including Documents and configured library shortcuts. Empty-folder changes
+participate in the mobile review and its final recheck.
+Mobile does not offer mounts. See the [mobile transfer guide](../../../logisticsmobile/user_docs/README.md#folder-hub-and-local--localcrypt-sync)
 for connection scopes, encrypted storage, cancellation and credential persistence.
 
 ## Read and edit a LocalCrypt copy on desktop
@@ -264,6 +331,11 @@ still blocks the push and is preserved for inspection. A normal ciphertext sync
 also removes the deleted encrypted junk from its destination. Nothing else is deleted by this cleanup, including files matching your
 custom exclusion patterns. Dry runs do not perform cleanup.
 
+The Push review lists these local removals as **Cleanup**, and lists any resulting
+remote removal as **Delete**. Unchanged encrypted junk is therefore shown as a
+planned deletion, rather than hidden among matching files. Cancelling review
+preserves both copies. Encrypted junk must still pass authentication before removal.
+
 The cancellable check then validates every stored name and fully decrypts and
 authenticates every file in memory. Plaintext with an encrypted-looking filename,
 unknown names, corrupt ciphertext and files that change during checking refuse
@@ -290,7 +362,10 @@ New LocalCrypt pulls use the remote's exact name, for example
 `.connections` records. If another credential package already owns that folder
 name (including a difference only in letter case), Pull refuses to mix the copies;
 rename the remote to a distinct folder name before pulling. Existing untracked
-folders also block Pull. Older copies with hashed folder names remain supported.
+folders also block Pull. Old hashed-layout mappings are no longer loaded. Their
+records and ciphertext are preserved; they are not automatically migrated, deleted or adopted by a new
+mapping. An unsupported record for the same account blocks creating a replacement
+mapping until it is explicitly resolved.
 Remote names must be valid portable folder names.
 
 
@@ -321,3 +396,49 @@ unlock without creating an empty private browser. Password-protected file opens
 and metadata edits use the same retry behavior for inner archive passwords.
 
 Folder Hub keeps **Pull** and **Push...** available for LocalCrypt entries. Use the General section’s **Browse in Logistics** button to open the private browser. Tools that require ordinary local files (such as Calibre or Obsidian detection) are excluded from private copies.
+
+### Session privacy
+
+Desktop **Session only** keeps decoded credentials in the running application.
+It does not expire when you navigate away or put the computer to sleep. Forgetting
+or replacing the credential session revokes open private providers, clears their
+caches and hides their document/browser/metadata windows. Reopen after unlocking;
+old windows cannot resume under a new unlock. Cached stream reads also check the
+session. This is not secure erasure of process memory.
+
+On Android and iOS, loading session-only credentials immediately enables screen
+privacy. Leaving the app locks access; returning requires the session password
+while private edits remain in memory. Protection ends only after both credentials
+and associated private views are cleared. Passwordless sessions require a temporary
+lock password. See the [mobile privacy guide](../../../logisticsmobile/user_docs/README.md#localcrypt-session-and-screen-privacy)
+for capture behavior and platform limits.
+
+Session mode does not remove credentials previously saved with **Save**, or your
+original credential ZIP. LocalCrypt honors rclone filename settings: use standard
+filename encryption and enable directory-name encryption to conceal stored names.
+Remote names, package paths, ciphertext sizes and timestamps remain visible.
+Desktop process inspection can expose rclone's decrypted path arguments and key
+bearing environment. Thumbnails and private reading state stay in memory; explicit
+Save As/Move to Local, exports and clipboard copies can expose plaintext.
+
+
+### Mobile folder navigation
+
+In the mobile Folder Hub, tapping a folder opens its preferred available copy.
+The adjacent **•••** action button keeps explicit Browse Local/LocalCrypt/Remote,
+Pull and Push choices together. Mapped copies show Pull and Push direction.
+Delete local folder is separated and styled as destructive, and retains its
+confirmation. Transfer notifications use larger touch targets and an accessible
+dismiss label. Credential, Local, LocalCrypt, Pull and Push terminology is retained.
+
+### Android collection drive
+
+Android and iOS both offer **Settings → Folder Hub → Show Legacy** for Legacy
+folder and credential visibility. Android additionally offers **Local / LocalCrypt
+location…**: choose one drive for both `<drive>/Logistics/Local` and
+`<drive>/Logistics/LocalCrypt`. Android All files access is required for public
+SD-card folders. Downloads are copied and verified before switching, with the
+source retained as a recovery backup. Credentials and transfer associations stay
+internal. A missing card stops collection operations without an internal fallback.
+See the [mobile storage guide](../../../logisticsmobile/user_docs/README.md#local--localcrypt-location)
+for migration, restart and existing-destination behavior.

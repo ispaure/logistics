@@ -214,7 +214,7 @@ current format limits and shared navigation controls.
 On iOS and Android, **Books & Comics** lists library folders configured by
 `remoteConfig.ini` in Local and unlocked LocalCrypt copies, using the same
 `[LogisticsComics] libraries` names as desktop. Tap a library folder to browse its
-contents. Individual imported files are not library rows.
+contents. Imported books/comics appear in their own section beneath configured library folders.
 
 **Books & Comics → Import…** accepts standalone
 password-protected AES/ZipCrypto CBZ/ZIP comics. Unlock with the comic’s ZIP password;
@@ -226,3 +226,97 @@ controls, with Previous/Next available when controls are visible. LocalCrypt
 bookmarks stay in memory and are cleared on close; ordinary library bookmarks
 retain their existing saved behavior. Readers opened from Files return to the
 same folder through Back, including after visiting reader tools.
+
+Mobile imports, provider-backed readers and ordinary browser covers ignore macOS
+resource-fork image entries and use the same natural page order. Unsupported
+image formats fail explicitly instead of silently disappearing from the comic.
+
+Choose **Appearance → Comic page layout** in an imported reader, or **Appearance…**
+in a provider reader, for Single, Automatic or Two pages. Portrait page
+pairs respect manga visual order; landscape and ComicInfo DoublePage pages remain
+single. Previous/Next and swipes advance past the displayed spread. Imported and provider
+Automatic layouts reevaluate when the viewport changes. Single and Two-page
+views also refit to the available width after rotation. Resizing waits while a
+spread is zoomed; fitting it allows the pending layout update.
+
+Two-page spreads use one continuous zoom/pan surface. Pinch to zoom both pages
+together, then drag across the gutter to inspect either page. Page proportions and
+manga order are preserved. **Fit comic page** returns the whole spread to fit size.
+Swipes turn pages only at fit size; while zoomed, dragging pans the spread.
+Rotating while zoomed retains the current spread until you fit it. A failed page
+decode or spread composition keeps the displayed spread and its zoom. Private
+spreads stay in memory and are cleared on suspend/close; returning starts fitted.
+
+Imported reader menus include First/Last page and Previous/Next comic. The page
+selector also supports direct jumps. Neighboring imported comics use natural
+filename order. Provider Previous/Next comic works within the current managed
+folder; standalone encrypted-copy UUID storage has no sibling-folder route.
+
+Ordinary imported comics now have **Edit metadata…**. In the catalogue, select
+imported comic rows and choose **Edit selected comics metadata…** for a batch.
+Only checked fields are written; checking an empty field explicitly clears it.
+Mixed fields are kept unless checked. All selections are validated before writing.
+Successful files stay saved if another file fails. **Cancel after current comic**
+finishes the current verified save and leaves remaining items untouched. Failures
+and unprocessed files are counted, and form values remain available for retry.
+
+Metadata updates preserve page bytes and the external import source. Standalone
+password-protected imports remain readable, but metadata rewriting needs a native
+archive writer and is not enabled. Provider-backed encrypted metadata editing
+retains its existing ciphertext transaction. Mobile compression, CBR conversion,
+organization and provider-wide catalogue indexing remain outstanding. Imported
+catalogue suggestions and recursive LocalCrypt batches are described below.
+
+
+### Mobile collection search and folder batches
+
+The imported catalogue searches filenames and indexed metadata, including title,
+author, tags, series and publisher. Indexing runs in the background and the status
+shows how many imports have been checked. Every ordinary import is eligible; the
+former first-200 limit has been removed. Metadata fields contribute their first
+4,096 characters. The catalogue shows 50 results at a time; use **Previous results**
+and **Next results** to browse, or search across the entire indexed collection.
+Selections remain checked when changing pages or searching.
+
+The disposable index is stored locally, reuses unchanged archive revisions across
+launches and updates after metadata saves. **Refresh** retries unreadable entries,
+updates changed imports and removes deleted imports. Interrupted scans retain
+completed work and continue on the next refresh. Filename search remains available
+while metadata is loading. Protected imports do not contribute metadata or
+suggestions, even if their archive password was remembered elsewhere. Private
+provider documents never enter this ordinary-import index.
+
+Imported single-comic and batch metadata forms offer existing author/tag/publisher
+and other supported suggestions. Choosing a suggestion is an explicit edit; opening
+a form does not change mixed values or select fields for publication. List-field
+suggestions append without duplicates. Only checked batch fields are written.
+
+In **Files → Actions**, choose **Edit comics in this folder…** for an ordinary local
+folder. The selected folder (or current folder when no folder is selected) includes
+nested CBZ/ZIP comics. Review the form and check fields before **Apply selected
+fields**. Scans are bounded to 200 comics, 10,000 entries and 16 folder levels.
+All selected files and patches are checked before the first write; changed or
+unsupported archives stop preflight. After writing starts, files publish
+independently. **Cancel after current comic** leaves completed saves in place and
+remaining files untouched. Errors before publication keep the original contents;
+already published saves are not rolled back. Reopen the batch if a saved revision
+cannot be refreshed. Repeated Apply
+is blocked while a batch is running. Page/resource bytes remain unchanged.
+
+The same action works in an unlocked **LocalCrypt** managed folder. It reads one
+archive at a time and retains only metadata snapshots, bounded to 8 MiB in total.
+Saves use verified ciphertext staging; page/resource bytes remain unchanged, and
+the cloud original is not changed until a separate Push. Inner password-protected
+archives use the folder's configured archive password when available. A wrong or
+missing password stops batch preparation before any file is written.
+
+Private batch forms have no recovery file. Leaving the form, backgrounding the app,
+memory cleanup or replacing/locking credentials closes the batch and clears fields
+and suggestions. Reopen the folder to continue. Closing also cancels pending work
+before publication; an already published save remains saved. Other windows must be
+closed before opening a private batch. Private suggestions are drawn only from the
+current batch and are never added to the ordinary imported index.
+
+Encrypted standalone imports still require a native archive writer. Private remote
+trees must first have a managed LocalCrypt copy; this action does not recursively
+rewrite a live remote tree. Unapplied forms are memory-only.

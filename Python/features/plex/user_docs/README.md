@@ -44,3 +44,8 @@ local source without that credential context does not offer Manage PMS. Package
 creation can replace a previous package in its output location; retain copies
 of backups you want to keep. Pull/Push uses rclone sync semantics, including
 possible destination deletions; see [transfer scope](../../rclone/user_docs/README.md#choose-the-sync-scope).
+
+GUI Push and Pull actions show a detailed rclone review before transferring,
+including additions, replacements and deletions. You can explicitly proceed
+without the full review while a comparison is still running. Confirmation does
+not bypass required credential or encrypted-file checks.

@@ -1,18 +1,26 @@
 """ZIP retention, saved-package migration and password-only session unlock."""
 import base64
+from io import BytesIO
+from zipfile import ZipFile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch, Mock
 from logisticsmobile.app import LogisticsMobile
-from logisticsmobile.credential_packages import CredentialPackages
+from features.rclone.mobile.credential_packages import CredentialPackages
+from features.rclone.mobile.cloud_ui import SelectedCredentialZIP
+from commonUtils.runtime.document_access import LocalDocuments
+
+
+PACKAGE = (Path(__file__).resolve().parents[1] / 'rclone_bridge/testdata/credentials-aes256.zip').read_bytes()
 
 
 class CacheClient:
     generation = 0
     package_name = 'Personal.zip'
     loaded = True
+    remotes = ('Secret',)
     def request(self, action, **values):
         data = base64.b64decode(values['data'])
         return base64.b64encode(bytes(value ^ 125 for value in data)).decode()
@@ -23,29 +31,125 @@ class CacheClient:
     def cancel(self): pass
     def crypt_remotes(self): return []
     def restore(self): return ['Secret']
+    def lock(self):
+        self.loaded = False
+        self.package_name = ''
+        self.generation += 1
     def import_package(self, access, reference, password, **kwargs):
         with access.open(reference) as (name, stream):
-            assert stream.read() == b'synthetic ZIP bytes'
+            assert stream.read() == PACKAGE
         if password != 'correct': raise ValueError('Incorrect ZIP password')
         self.generation += 1
         self.loaded = True
-        return ['Secret']
+        return list(self.remotes)
 
 
 class CredentialPackageTests(unittest.TestCase):
+    def test_settings_unlock_without_local_copy_then_lock_hides_remote_only_entries(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            LogisticsMobile.storage_root = root
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                app.show_cloud(present=False)
+                app.cloud_client = CacheClient()
+                app.cloud_client.loaded = False
+                app.cloud_client.remotes = ('Secret', 'RemoteOnly')
+                vault = SimpleNamespace(root=root / 'Retained', unlock=lambda **kw: dict(key='fixture'))
+                vault.root.mkdir()
+                cache = CredentialPackages(vault, app.cloud_client)
+                key = cache.remember(SimpleNamespace(name='Personal.zip', data=PACKAGE),
+                                     {'Secret': 'a' * 64, 'RemoteOnly': 'a' * 64})
+                with patch.object(app, 'retained_packages', return_value=cache):
+                    self.assertEqual(set(app.folder_choices()), {'All files'})
+                    self.assertEqual(app.credential_groups(), {'All': None})
+                    app.show_cloud_connections()
+                    self.assertEqual(app.native_host.state.destination, 'settings')
+                    app.cloud_retained_buttons[key].on_press()
+                    self.assertEqual(app.routes.screens['settings'][-1][0], 'unlock-credential')
+                    app.credential_unlock_password.value = 'wrong'
+                    app.loop.run_until_complete(app.credential_unlock_button.on_press())
+                    self.assertEqual(set(app.folder_choices()), {'All files'})
+                    self.assertEqual(app.credential_unlock_password.value, '')
+                    app.credential_unlock_password.value = 'correct'
+                    app.loop.run_until_complete(app.credential_unlock_button.on_press())
+                    self.assertEqual(set(app.folder_choices()), {'All files', 'Secret', 'RemoteOnly'})
+                    self.assertEqual(app.native_host.state.destination, 'files')
+                    # A mapped copy remains discoverable without exposing the
+                    # rest of its retained credential's remote list after locking.
+                    job = dict(id='b' * 32, remote='Secret', identity='a' * 64,
+                               cipher_identity='c' * 64, crypt=True, prefix='', target='Secret')
+                    store = app.mirror_store()
+                    store.jobs[job['id']] = job
+                    store.target(job).mkdir(parents=True)
+                    app.loop.run_until_complete(app.lock_cloud())
+                    choices = app.folder_choices()
+                    self.assertEqual(set(choices), {'All files', 'Secret'})
+                    self.assertEqual([copy['source'] for copy in choices['Secret']['copies']], ['LocalCrypt', 'Remote'])
+                    self.assertEqual(app.credential_groups()['Personal'], {'Secret'})
+                    self.assertTrue(cache.path(key).is_file())
+                    self.assertFalse(app.cloud_client.loaded)
+            finally:
+                app.main_window.close()
+                app.loop.close()
+                LogisticsMobile.storage_root = None
+
+    def test_session_import_keeps_zip_association_for_password_only_reopen(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            LogisticsMobile.storage_root = root
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                app.show_cloud(present=False)
+                app.cloud_client = CacheClient()
+                source = root / 'Personal.zip'
+                source.write_bytes(PACKAGE)
+                app.cloud_pending_zip = SelectedCredentialZIP(LocalDocuments(), source)
+                app.cloud_remember.value = False
+                app.cloud_password.value = 'correct'
+                vault = SimpleNamespace(root=root / 'Retained', unlock=lambda **kw: dict(key='fixture'))
+                vault.root.mkdir()
+                cache = CredentialPackages(vault, app.cloud_client)
+                with patch.object(app, 'retained_packages', return_value=cache):
+                    app.loop.run_until_complete(app.import_cloud_package())
+                    self.assertEqual(app.cloud_password.value, '')
+                    self.assertEqual(len(cache.matching('Secret', 'a' * 64)), 1, app.cloud_import_message.text)
+                restored = CredentialPackages(vault, CacheClient())
+                app.preferences.reload()
+                app.session_credential_packages = []
+                with patch.object(app, 'retained_packages', return_value=restored):
+                    self.assertIn('Personal', app.credential_groups())
+                self.assertNotIn('correct', restored.index.read_text())
+            finally:
+                app.main_window.close()
+                app.loop.close()
+                LogisticsMobile.storage_root = None
+
+    def test_unencrypted_zip_is_not_retained_as_session_credentials(self):
+        with TemporaryDirectory() as directory:
+            vault = SimpleNamespace(root=Path(directory), unlock=Mock())
+            cache = CredentialPackages(vault, CacheClient())
+            data = BytesIO()
+            with ZipFile(data, 'w') as archive:
+                archive.writestr('credentials.txt', '[Secret]\npassword=plaintext-sentinel')
+            with self.assertRaisesRegex(ValueError, 'password-protected'):
+                cache.remember(SimpleNamespace(name='Personal.zip', data=data.getvalue()), {'Secret': 'a' * 64})
+            vault.unlock.assert_not_called()
+            self.assertEqual(list(Path(directory).iterdir()), [])
+
     def test_retained_zip_reopens_after_restart_without_storing_password(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             vault = SimpleNamespace(root=root, unlock=lambda **kw: dict(key='fixture'))
             cache = CredentialPackages(vault, CacheClient())
-            key = cache.remember(SimpleNamespace(name='Personal.zip', data=b'synthetic ZIP bytes'), {'Secret': 'a' * 64})
-            self.assertNotIn(b'synthetic ZIP bytes', cache.path(key).read_bytes())
+            key = cache.remember(SimpleNamespace(name='Personal.zip', data=PACKAGE), {'Secret': 'a' * 64})
+            self.assertNotIn(PACKAGE, cache.path(key).read_bytes())
             restored = CredentialPackages(vault, CacheClient())
             self.assertEqual(restored.matching('Secret', 'b' * 64), [])
             self.assertEqual(restored.matching('Secret')[0][0], key)
             with restored.open(key) as (name, stream):
                 self.assertEqual(name, 'Personal.zip')
-                self.assertEqual(stream.read(), b'synthetic ZIP bytes')
+                self.assertEqual(stream.read(), PACKAGE)
             self.assertNotIn('password', restored.index.read_text())
 
     def test_legacy_saved_package_name_and_retained_unlock_route(self):
@@ -61,11 +165,12 @@ class CredentialPackageTests(unittest.TestCase):
                 self.assertEqual(app.folder_credential.value, 'All')
                 vault = SimpleNamespace(root=app.private_root, unlock=lambda **kw: dict(key='fixture'))
                 cache = CredentialPackages(vault, app.cloud_client)
-                cache.remember(SimpleNamespace(name='Personal.zip', data=b'synthetic ZIP bytes'), {'Secret': 'a' * 64})
+                cache.remember(SimpleNamespace(name='Personal.zip', data=PACKAGE), {'Secret': 'a' * 64})
                 app.cloud_remote.items = []
                 app.cloud_client.loaded = False
                 resumed = Mock()
                 with patch.object(app, 'retained_packages', return_value=cache):
+                    self.assertNotIn('Personal', app.credential_groups())
                     self.assertFalse(app.require_remote_credentials('Secret', identity='a' * 64, resume=resumed))
                     self.assertEqual(app.routes.screens['files'][-1][0], 'unlock-credential')
                     app.credential_unlock_password.value = 'wrong'

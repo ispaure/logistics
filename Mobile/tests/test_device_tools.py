@@ -1,13 +1,36 @@
 """Protect identity and physical-device gates used by local deployment."""
 import copy
+import json
+from pathlib import Path
 import shlex
+import subprocess
+import tempfile
 import unittest
+from unittest.mock import patch
 
+from Mobile import device_tools
 from Mobile.cloud_build import ios_compiler
 from Mobile.device_tools import BUNDLE, normal_launcher, select_device, signing_settings
 
 
 class DeviceDeploymentTests(unittest.TestCase):
+    def test_batch_deploy_uses_saved_targets_and_continues_after_failure(self):
+        config = {'device_id': 'phone', 'device_ids': ['phone', 'tablet', 'phone']}
+        with patch.object(device_tools, 'run', side_effect=[subprocess.CalledProcessError(1, 'deploy'), None]) as run:
+            with self.assertRaisesRegex(RuntimeError, 'Deployment failed for: phone'):
+                device_tools.deploy_all(config, allow_wired=True)
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual([call.args[0][-3:] for call in run.call_args_list],
+                         [['--device', 'phone', '--allow-wired'], ['--device', 'tablet', '--allow-wired']])
+
+    def test_batch_deploy_legacy_default_and_invalid_saved_lists(self):
+        with patch.object(device_tools, 'run') as run:
+            device_tools.deploy_all({'device_id': 'phone'})
+            self.assertEqual(run.call_args.args[0][-2:], ['--device', 'phone'])
+            for targets in ([], 'phone', [''], [None], ['--other']):
+                with self.assertRaises(RuntimeError):
+                    device_tools.deploy_all({'device_id': 'phone', 'device_ids': targets})
+
     def project(self):
         return {'objects': {name: {'isa': 'XCBuildConfiguration', 'buildSettings': {
             'PRODUCT_BUNDLE_IDENTIFIER': BUNDLE,
@@ -63,6 +86,49 @@ class DeviceDeploymentTests(unittest.TestCase):
         phone['properties']['connection']['pairingState'] = 'unpaired'
         with self.assertRaises(RuntimeError):
             select_device([phone])
+
+    def test_ipad_selection_with_phone_present_and_simulator_rejected(self):
+        def device(kind, udid, reality='physical'):
+            return {'identifier': udid, 'hardwareProperties': {
+                'reality': reality, 'deviceType': kind, 'udid': udid},
+                'deviceProperties': {'name': kind},
+                'connectionProperties': {'pairingState': 'paired'}}
+        phone = device('iPhone', 'phone')
+        ipad = device('iPad', 'tablet')
+        simulator = device('iPad', 'simulator', 'simulated')
+        devices = [phone, ipad, simulator]
+        self.assertEqual(select_device(devices, 'iPad')[1], 'tablet')
+        self.assertEqual(select_device(devices, 'phone')[1], 'phone')
+        with self.assertRaises(RuntimeError):
+            select_device(devices)
+        with self.assertRaises(RuntimeError):
+            select_device(devices, 'simulator')
+
+    def test_ipad_build_provisions_selected_device_and_preserves_default_and_identity(self):
+        ipad = {'identifier': 'tablet', 'hardwareProperties': {
+            'reality': 'physical', 'deviceType': 'iPad', 'udid': 'tablet-udid'},
+            'connectionProperties': {'pairingState': 'paired'}}
+        identity = {'application_identifier': 'ABCDEFGHIJ.' + BUNDLE}
+        config = dict(bundle_id=BUNDLE, team_id='ABCDEFGHIJ', device_id='phone-udid',
+                      signing_identity=identity)
+        with tempfile.TemporaryDirectory() as temporary:
+            config_path = Path(temporary) / '.device.json'
+            config_path.write_text(json.dumps(config))
+            with (patch.object(device_tools, 'CONFIG', config_path),
+                  patch.object(device_tools, 'ROOT', Path(temporary)),
+                  patch.object(device_tools, 'installed', return_value=[]),
+                  patch.object(device_tools, 'choose', return_value=('/Xcode', '27.1')),
+                  patch.object(device_tools, 'device_json', return_value={'devices': [ipad]}),
+                  patch.object(device_tools, 'refresh_sources'),
+                  patch.object(device_tools, 'prepare_project'),
+                  patch.object(device_tools, 'run') as run,
+                  patch.object(device_tools, 'validate_app', return_value=identity) as validate,
+                  patch('sys.argv', ['device_tools.py', 'build', '--device', 'tablet'])):
+                device_tools.main()
+                command = run.call_args.args[0]
+                self.assertEqual(command[command.index('-destination') + 1], 'id=tablet-udid')
+                validate.assert_called_once_with(device_tools.APP, 'ABCDEFGHIJ', 'tablet-udid')
+                self.assertEqual(json.loads(config_path.read_text()), config)
 
 
 if __name__ == '__main__':

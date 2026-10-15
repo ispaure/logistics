@@ -22,11 +22,26 @@ class SoftwareTests(QtTestCase):
                     for arch in (Arch.X86_64, Arch.ARM_64):
                         with patch.object(software, 'get_os', return_value=platform), patch.object(software, 'get_arch', return_value=arch):
                             spec, path = software.get_software('rclone')
-                        self.assertEqual(spec.version, '1.73.1')
+                        self.assertEqual(spec.version, '1.74.1')
                         self.assertTrue(path.is_relative_to(root))
                         self.assertIn(platform.value, path.parts)
                         self.assertEqual(len(spec.sha256), 64)
                         self.assertEqual(len(spec.installed_sha256), 64)
+
+    def test_rclone_feature_manifest_and_native_pins_agree(self):
+        import configparser
+        import json
+        repo = Path(__file__).resolve().parents[2]
+        manifest = json.loads((repo / 'Python/software_manifest.json').read_text())['rclone']
+        settings = configparser.ConfigParser()
+        settings.read(repo / 'Python/features/rclone/config.ini')
+        for platform, values in manifest.items():
+            for key in ('version', 'url', 'path', 'archive_member', 'sha256', 'installed_sha256'):
+                self.assertEqual(settings[platform][key + '_str'], values[key])
+            self.assertEqual(values['version'], '1.74.1')
+        native = (repo / 'Mobile/rclone_bridge/go.mod').read_text()
+        self.assertIn('github.com/rclone/rclone v1.74.1', native)
+        self.assertIn('fs.Version=v1.74.1', (repo / 'Mobile/cloud_build.py').read_text())
 
     def test_rclone_ini_overrides_and_required_hash_validation(self):
         with TemporaryDirectory() as tmp:

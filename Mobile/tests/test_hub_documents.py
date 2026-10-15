@@ -31,14 +31,14 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIn(app.document_view, app.body.children)
         self.assertEqual(app.store.open(first).text, 'Retain my draft')
 
-    def test_home_greeting_has_extra_line_spacing_and_no_tagline(self):
+    def test_home_heading_is_compact_and_keeps_native_home_label(self):
         import toga
         app = self.app
         app.workspace.active = None
         view = app.build_home()
         labels = [child.text for child in view.content.children if isinstance(child, toga.Label)]
-        self.assertEqual(labels[0], 'Welcome to Logistics')
-        self.assertEqual(view.content.children[0].style.margin_top, 24)
+        self.assertEqual(labels[0], 'Your workspace')
+        self.assertEqual(view.content.children[0].style.margin_top, 8)
         self.assertNotIn('Read. Write. Organize.', labels)
         self.assertEqual(app.native_host.labels[0], 'Home')
 
@@ -102,8 +102,7 @@ class HubDocumentTests(unittest.TestCase):
                 await result
             self.assertEqual(app.native_host.state.destination, 'files')
             self.assertIn('All files', app.folder_picker_choices)
-            app.folder_buttons['All files'].on_press()
-            await app.folder_browse_button.on_press()
+            await app.folder_buttons['All files'].on_press()
             self.assertIn(app.files_view, app.body.children)
             self.assertEqual(app.file_storage.value, 'Local files')
             self.assertEqual(app.file_path, '')
@@ -188,12 +187,12 @@ class HubDocumentTests(unittest.TestCase):
         app.editor.value = '# A retained draft'
         app.show_home()
         content = app.body.children[0].content
-        self.assertEqual(content.children[0].text, 'Welcome to Logistics')
+        self.assertEqual(content.children[0].text, 'Your workspace')
         self.assertIn(app.home_continue, content.children)
         self.assertEqual(app.home_continue.children[0].children[1].text, 'Focus.md')
-        actions = content.children[2]
+        actions = app.home_actions
         self.assertTrue(all(isinstance(button, toga.Button) for button in actions.children))
-        self.assertEqual([button.text for button in actions.children], ['+ New document', 'Open file…'])
+        self.assertEqual([button.text for button in actions.children], ['New document', 'Open file…'])
         app.home_continue_button.on_press()
         self.assertIs(app.body.children[0], app.document_view)
         self.assertEqual(app.editor.value, '# A retained draft')
@@ -227,12 +226,12 @@ class HubDocumentTests(unittest.TestCase):
         app.refresh_documents()
         content = app.build_documents_hub().content
         labels = [child.text for child in content.children if isinstance(child, toga.Label)]
-        self.assertFalse(any(label.startswith('Open documents') for label in labels))
+        self.assertIn('Open documents', labels)
         self.assertFalse(any(hasattr(child, 'commands') for child in content.children))
-        markdown_content = app.document_categories['markdown'].children[0]
+        markdown_content = app.document_categories['markdown']
         self.assertFalse(any(child.text.startswith('Opened') for child in markdown_content.children if isinstance(child, toga.Label)))
         open_rows = [child for category in app.document_categories.values()
-                     for child in category.children[0].children if hasattr(child, 'session_id')]
+                     for child in category.children if hasattr(child, 'session_id')]
         names = [row.children[-1].children[0].text for row in open_rows]
         self.assertLess(names.index('Notes.txt'), names.index('Plan.MD'))
         # Clean grouped rows consist only of the filename link and close button.
@@ -253,7 +252,7 @@ class HubDocumentTests(unittest.TestCase):
         card = next(card for card in grid.cards if card.session_id == session_id)
         self.assertIn('Current draft', card.children[1].text)
         self.assertIn('Unsaved changes', card.children[2].text)
-        for width, columns in ((390, 1), (1200, 1), (390, 1)):
+        for width, columns in ((390, 1), (1200, 3), (390, 1)):
             grid.reflow(width)
             self.assertEqual(grid.columns, columns)
             self.assertEqual(len(grid.children[0].children), columns)
@@ -278,7 +277,7 @@ class HubDocumentTests(unittest.TestCase):
         app.show_documents_hub()
         self.assertEqual(app.document_grids, [])
         self.assertTrue(any(hasattr(child, 'session_id') for card in app.document_categories.values()
-                            for child in card.children[0].children))
+                            for child in card.children))
 
     def test_cards_do_not_preview_provider_text_or_open_missing_records(self):
         app = self.app

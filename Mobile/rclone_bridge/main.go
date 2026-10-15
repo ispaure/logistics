@@ -34,6 +34,7 @@ import (
 	_ "github.com/rclone/rclone/backend/smb"
 	_ "github.com/rclone/rclone/backend/webdav"
 	"github.com/rclone/rclone/fs"
+	"github.com/rclone/rclone/fs/accounting"
 	"github.com/rclone/rclone/fs/cache"
 	"github.com/rclone/rclone/fs/config"
 	"github.com/rclone/rclone/fs/config/configmap"
@@ -70,10 +71,9 @@ func init() {
 	config.SetData(store)
 	ci := fs.GetConfig(context.Background())
 	ci.LogLevel = fs.LogLevelEmergency
-	ci.ConnectTimeout = fs.Duration(15 * time.Second)
-	ci.Timeout = fs.Duration(15 * time.Second)
-	ci.LowLevelRetries = 1
-	ci.Retries = 1
+	// Keep rclone defaults for connection/idle timeouts and retry counts.
+	// Install error accounting once before any bridge worker can run.
+	accounting.Start(context.Background())
 }
 
 func cancel() {
@@ -84,13 +84,23 @@ func cancel() {
 	}
 }
 
-func operation(action string) (context.Context, func()) {
+func operationTimeout(action string) time.Duration {
 	duration := 2 * time.Minute
 	switch action {
-	case "read", "crypt_read", "crypt_fetch", "crypt_raw_write", "crypt_metadata", "crypt_manifest", "mirror_read", "mirror_stat", "mirror_validate", "mirror_write", "mirror_sync":
+	case "mirror_sync", "mirror_review":
+		return 0 // Sync runs until completion or explicit cancellation, as on desktop.
+	case "crypt_raw_write", "crypt_metadata", "crypt_manifest", "mirror_validate":
 		duration = 30 * time.Minute
 	}
-	ctx, stop := context.WithTimeout(context.Background(), duration)
+	return duration
+}
+
+func operation(action string) (context.Context, func()) {
+	ctx, stop := context.WithCancel(context.Background())
+	if duration := operationTimeout(action); duration > 0 {
+		stop()
+		ctx, stop = context.WithTimeout(context.Background(), duration)
+	}
 	cancellation.Lock()
 	active = stop
 	cancellation.Unlock()
@@ -176,8 +186,14 @@ func parseCredential(text []byte) (string, map[string]string, error) {
 }
 
 func shutdownClients() {
+	clearRemoteComics()
+	comparisonState.Lock()
+	comparisonState.current = nil
+	comparisonState.Unlock()
 	cache.Clear()
+	cryptCipherMu.Lock()
 	clear(cryptCiphers)
+	cryptCipherMu.Unlock()
 	ctx, stop := context.WithTimeout(context.Background(), 15*time.Second)
 	defer stop()
 	for _, client := range clients {
@@ -351,49 +367,6 @@ func list(ctx context.Context, name, dir string) ([]entry, error) {
 	return result, nil
 }
 
-// readInto writes only to a caller-owned private descriptor. It duplicates
-// that descriptor so Go can close its own handle without closing Python's.
-func readInto(ctx context.Context, name, p string, fd int) (int64, error) {
-	if kind, _ := store.GetValue(name, "type"); kind == "crypt" {
-		return 0, errors.New("use Download encrypted copy for crypt files")
-	}
-	if p == "" || !validPath(p) || fd < 3 {
-		return 0, errors.New("invalid download destination")
-	}
-	f, err := remote(ctx, name)
-	if err != nil {
-		return 0, err
-	}
-	obj, err := f.NewObject(ctx, p)
-	if err != nil {
-		return 0, errors.New("remote file could not be opened")
-	}
-	if obj.Size() < 0 {
-		return 0, errors.New("download size is unavailable")
-	}
-	target, err := privateOutput(fd)
-	if err != nil {
-		return 0, err
-	}
-	defer target.Close()
-	stream, err := obj.Open(ctx)
-	if err != nil {
-		return 0, errors.New("remote file could not be opened")
-	}
-	count, copyErr := io.Copy(target, contextReader{ctx, stream})
-	closeErr := stream.Close()
-	if copyErr != nil || closeErr != nil || ctx.Err() != nil {
-		return 0, errors.New("download failed or cancelled")
-	}
-	if count != obj.Size() {
-		return 0, errors.New("download size changed or exceeds limits")
-	}
-	if target.Sync() != nil {
-		return 0, errors.New("private download could not be flushed")
-	}
-	return count, nil
-}
-
 func selfCheck(ctx context.Context) (string, error) {
 	// In-memory fixture only: this diagnostic never contacts a user's remote.
 	roots, rootErr := x509.SystemCertPool()
@@ -435,54 +408,53 @@ func dispatch(action, input string) (output string) {
 		cancel()
 		return `{"ok":true}`
 	}
+	if action == "remote_cache_status" || action == "remote_cache_close" {
+		return remoteComicControl(action, input)
+	}
 	if action == "mirror_progress" {
 		return mirrorProgress(input)
 	}
-	// Local archive/image work uses no rclone configuration and can continue
-	// while a remote transfer owns the credential engine. It also must not
-	// replace that transfer's cancellation handle.
-	var ctx context.Context
-	var done context.CancelFunc
-	if action == "file_archive" || action == "file_thumbnail" || action == "image_thumbnail" {
-		ctx, done = context.WithTimeout(context.Background(), 2*time.Minute)
-	} else {
-		serial.Lock()
-		defer serial.Unlock()
-		ctx, done = operation(action)
+	if action == "mirror_review_progress" || action == "mirror_review_clear" {
+		return reviewProgress(input, action == "mirror_review_clear")
 	}
+	ctx, done := scopedOperation(action)
 	defer done()
 	var request struct {
-		Host           string `json:"host"`
-		User           string `json:"user"`
-		Domain         string `json:"domain"`
-		Port           string `json:"port"`
-		Package        string `json:"package"`
-		Password       string `json:"password"`
-		Remote         string `json:"remote"`
-		Path           string `json:"path"`
-		FD             int    `json:"fd"`
-		OutputFD       int    `json:"output_fd"`
-		Member         string `json:"member"`
-		Identity       string `json:"identity"`
-		Expected       string `json:"expected"`
-		Run            string `json:"run"`
-		Data           string `json:"data"`
-		Key            string `json:"key"`
-		ID             string `json:"id"`
-		Label          string `json:"package_name"`
-		Session        bool   `json:"session_only"`
-		LocalPath      string `json:"local_path"`
-		Push           bool   `json:"push"`
-		Decrypted      bool   `json:"decrypted"`
-		Directory      bool   `json:"directory"`
-		Decode         bool   `json:"decode"`
-		SourceRemote   string `json:"source_remote"`
-		SourcePath     string `json:"source_path"`
-		SourceIdentity string `json:"source_identity"`
-		Offset         int64  `json:"offset"`
-		Count          int    `json:"count"`
-		Width          int    `json:"width"`
-		Height         int    `json:"height"`
+		Host           string   `json:"host"`
+		User           string   `json:"user"`
+		Domain         string   `json:"domain"`
+		Port           string   `json:"port"`
+		Package        string   `json:"package"`
+		Password       string   `json:"password"`
+		Remote         string   `json:"remote"`
+		Path           string   `json:"path"`
+		FD             int      `json:"fd"`
+		OutputFD       int      `json:"output_fd"`
+		Member         string   `json:"member"`
+		Expected       string   `json:"expected"`
+		Identity       string   `json:"identity"`
+		Run            string   `json:"run"`
+		Data           string   `json:"data"`
+		Key            string   `json:"key"`
+		ID             string   `json:"id"`
+		Label          string   `json:"package_name"`
+		Session        bool     `json:"session_only"`
+		LocalPath      string   `json:"local_path"`
+		Push           bool     `json:"push"`
+		BWLimit        int      `json:"bw_limit"`
+		TrackRenames   bool     `json:"track_renames"`
+		Excludes       []string `json:"excludes"`
+		CleanupPaths   []string `json:"cleanup_paths"`
+		Decrypted      bool     `json:"decrypted"`
+		Directory      bool     `json:"directory"`
+		Decode         bool     `json:"decode"`
+		SourceRemote   string   `json:"source_remote"`
+		SourcePath     string   `json:"source_path"`
+		SourceIdentity string   `json:"source_identity"`
+		Offset         int64    `json:"offset"`
+		Count          int      `json:"count"`
+		Width          int      `json:"width"`
+		Height         int      `json:"height"`
 	}
 	var result any
 	var err error
@@ -545,36 +517,29 @@ func dispatch(action, input string) (output string) {
 			result = vaultInfo()
 		case "list":
 			result, err = list(ctx, request.Remote, request.Path)
+		case "remote_cache_open":
+			result, err = cacheRemoteComic(ctx, request.Run, request.Remote, request.Path, request.Identity, request.Expected)
+		case "remote_cache_archive":
+			result, err = cachedRemoteArchive(ctx, request.Run, request.Remote, request.Path, request.Identity, request.Expected, request.Password, request.Member)
+		case "remote_stat", "remote_range", "remote_archive":
+			result, err = remoteDocumentRequest(ctx, action, request.Remote, request.Path, request.Identity,
+				request.Expected, request.Password, request.Member, request.Offset, request.Count)
 		case "connection_identity":
 			result, err = connectionIdentity(request.Remote)
 		case "mirror_info":
 			result, err = mirrorInfo(ctx, request.Remote, request.Path)
-		case "mirror_list":
-			result, err = mirrorList(ctx, request.Remote, request.Path, request.Identity)
-		case "mirror_read":
-			result, err = mirrorRead(ctx, request.Remote, request.Path, request.Identity, request.FD)
-		case "mirror_stat":
-			result, err = mirrorStat(ctx, request.Remote, request.Path, request.Identity)
-		case "mirror_mkdir":
-			result, err = mirrorMkdir(ctx, request.Remote, request.Path, request.Identity)
 		case "mirror_validate":
 			result, err = mirrorValidate(ctx, request.Remote, request.Path, request.Identity, request.FD)
 		case "mirror_sync":
+			ctx = context.WithValue(ctx, transferOptionsKey{}, transferOptions{TrackRenames: request.TrackRenames, Excludes: request.Excludes})
 			if store.failure() {
 				err = errors.New("credentials could not be saved securely; sync was not started")
 			} else {
-				result, err = mirrorSync(ctx, request.Remote, request.Path, request.Identity, request.LocalPath, request.Run, request.Push)
+				result, err = mirrorSync(ctx, request.Remote, request.Path, request.Identity, request.LocalPath, request.Run, request.Push, request.BWLimit)
 			}
-		case "mirror_write":
-			if store.failure() {
-				err = errors.New("credentials could not be saved securely; push was not started")
-			} else {
-				result, err = mirrorWrite(ctx, request.Remote, request.Path, request.Identity, request.Expected, request.Run, request.FD)
-			}
-		case "read":
-			result, err = readInto(ctx, request.Remote, request.Path, request.FD)
-		case "crypt_read":
-			result, err = cryptReadInto(ctx, request.Remote, request.Path, request.FD)
+		case "mirror_review":
+			ctx = context.WithValue(ctx, transferOptionsKey{}, transferOptions{TrackRenames: request.TrackRenames, Excludes: request.Excludes, CleanupPaths: request.CleanupPaths})
+			result, err = mirrorReview(ctx, request.Remote, request.Path, request.Identity, request.LocalPath, request.Run, request.Push)
 		case "crypt_remotes":
 			names := []string{}
 			for name := range admitted {
@@ -584,8 +549,6 @@ func dispatch(action, input string) (output string) {
 			}
 			sort.Strings(names)
 			result = names
-		case "crypt_fetch":
-			result, err = cryptFetch(ctx, request.Remote, request.Path, request.FD)
 		case "crypt_path":
 			result, err = cryptPath(request.Remote, request.Path, request.Identity, request.Directory, request.Decode)
 		case "crypt_raw_read":
@@ -633,7 +596,7 @@ func dispatch(action, input string) (output string) {
 			err = errors.New("unsupported mobile operation")
 		}
 	}
-	if err == nil && (action == "list" || action == "read" || action == "crypt_read" || action == "crypt_fetch") && store.failure() {
+	if err == nil && action == "list" && store.failure() {
 		err = errors.New("Credentials refreshed in memory but could not be saved securely. Retry before closing the app.")
 	}
 	reply := map[string]any{"ok": err == nil}

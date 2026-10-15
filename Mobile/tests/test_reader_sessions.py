@@ -22,15 +22,25 @@ class ReaderSessionTests(unittest.TestCase):
                 fixtures.mkdir()
                 _, comic = make_books(fixtures)
                 record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), comic)
+                policy_patch = patch.object(app.native_host.chrome, 'set_page_swipes',
+                                            wraps=app.native_host.chrome.set_page_swipes)
+                page_policy = policy_patch.start()
+                self.addCleanup(policy_patch.stop)
                 async def exercise():
                     await app.open_book(record['id'])
                     owner = app.readers.active
                     self.assertTrue(owner.reader_immersive)
+                    self.assertTrue(page_policy.call_args.args[0])
                     self.assertNotIn(owner.reader_header, owner.library_view.children)
                     self.assertEqual(owner.library_view.style.margin_top, 0)
                     view = owner.book_content.children[0]
+                    from toga.style.pack import NONE
+                    self.assertEqual(view.style.width, NONE)
                     view.toggle_controls()
                     self.assertFalse(owner.reader_immersive)
+                    self.assertEqual(view.style.width, NONE)
+                    self.assertTrue(page_policy.call_args.args[0])
+                    self.assertTrue(view.page_swipes_at_edges)
                     view.toggle_controls()
                     self.assertTrue(owner.reader_immersive)
                     view.page(-1)
@@ -49,6 +59,7 @@ class ReaderSessionTests(unittest.TestCase):
                     self.assertEqual(owner.book_status.text.count('Cannot'), 0)
                     app.show_home()
                     self.assertFalse(app._comic_chrome_hidden)
+                    self.assertFalse(page_policy.call_args.args[0])
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
@@ -182,13 +193,16 @@ class ReaderSessionTests(unittest.TestCase):
             import asyncio
             async def wait_reader():
                 for _ in range(100):
-                    if getattr(getattr(getattr(restored, 'readers', None), 'active', None), 'book_reader', None) is not None:
+                    owner = getattr(getattr(restored, 'readers', None), 'active', None)
+                    if getattr(owner, 'book_reader', None) is not None and not owner.book_busy:
                         break
                     await asyncio.sleep(.01)
             restored.loop.run_until_complete(wait_reader())
             self.assertIsNotNone(restored.readers.active.book_reader)
             self.assertEqual(restored.readers.active.book_record['position'], 1)
             self.assertEqual(restored.workspace.active, selected)
+            for host in (app, restored):
+                host.loop.run_until_complete(host.readers.catalog.metadata_task)
     def test_duplicate_open_switch_reopen_and_close(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -244,7 +258,7 @@ class ReaderSessionTests(unittest.TestCase):
                 owner.reader_font.value, owner.reader_margin.value, owner.reader_theme.value = '20', '24', 'dark'
                 with patch.object(owner.epub_view, 'set_content', wraps=owner.epub_view.set_content) as content:
                     app.loop.run_until_complete(owner.apply_reader_appearance())
-                self.assertIn('margin:24px', content.call_args.args[1])
+                self.assertIn('padding:24px', content.call_args.args[1])
                 self.assertEqual(owner.book_record['position'], 1)
                 self.assertEqual(app.preferences.values['reading_theme'], 'dark')
             finally:

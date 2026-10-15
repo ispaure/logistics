@@ -6,21 +6,42 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	_ "github.com/rclone/rclone/backend/local"
 	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/fs/accounting"
+	"github.com/rclone/rclone/fs/filter"
+	"github.com/rclone/rclone/fs/operations"
 	"github.com/rclone/rclone/fs/rc"
 	rclonesync "github.com/rclone/rclone/fs/sync"
 )
+
+type transferOptionsKey struct{}
+type transferOptions struct {
+	TrackRenames bool
+	Excludes     []string
+	CleanupPaths []string
+}
 
 // Run the same rclone Sync routine as the CLI, inside the app rather than a
 // child process. Only admitted connections and a host-validated private folder
 // are accepted. LocalCrypt selects its backing ciphertext scope; Local uses
 // the crypt filesystem's logical names and automatic encryption/decryption.
-func mirrorSync(ctx context.Context, name, p, identity, localPath, run string, push bool) (int64, error) {
+func mirrorSync(ctx context.Context, name, p, identity, localPath, run string, push bool, bandwidth ...int) (int64, error) {
+	limit := 0
+	if len(bandwidth) > 0 {
+		limit = bandwidth[0]
+	}
+	return mirrorRun(ctx, name, p, identity, localPath, run, push, limit, nil)
+}
+
+func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, push bool, bandwidth int, review *comparison) (int64, error) {
+	if bandwidth < 0 {
+		return 0, errors.New("bandwidth limit must be a positive number of MB/s")
+	}
 	if len(run) != 32 || strings.Trim(run, "0123456789abcdef") != "" {
 		return 0, errors.New("invalid sync transaction")
 	}
@@ -34,26 +55,36 @@ func mirrorSync(ctx context.Context, name, p, identity, localPath, run string, p
 	if !filepath.IsAbs(localPath) || filepath.Clean(localPath) != localPath {
 		return 0, errors.New("sync requires a private absolute directory")
 	}
+	_, statErr := os.Stat(localPath)
+	missing := os.IsNotExist(statErr)
+	// Review of a new destination is read-only, including no mkdir.
 	resolved, err := filepath.EvalSymlinks(localPath)
-	if err != nil || resolved != localPath {
+	if !(review != nil && missing && !push) && (err != nil || resolved != localPath) {
 		return 0, errors.New("linked sync storage is not supported")
 	}
 	count := 0
-	err = filepath.WalkDir(localPath, func(p string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
+	if !missing {
+		err = filepath.WalkDir(localPath, func(p string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			count++
+			linked := entry.Type()&os.ModeSymlink != 0
+			if linked && cipher == nil {
+				info, e := os.Stat(p)
+				linked = e != nil || !info.Mode().IsRegular()
+			}
+			if count > 10001 || linked {
+				return errors.New("linked storage or sync entry limit exceeded")
+			}
+			return nil
+		})
+		if err != nil {
+			return 0, err
 		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		count++
-		if count > 10001 || entry.Type()&os.ModeSymlink != 0 {
-			return errors.New("linked storage or sync entry limit exceeded")
-		}
-		return nil
-	})
-	if err != nil {
-		return 0, err
 	}
 	remoteName := name
 	remoteRoot := p
@@ -69,11 +100,41 @@ func mirrorSync(ctx context.Context, name, p, identity, localPath, run string, p
 		remoteRoot = ""
 	}
 	ctx, config := fs.AddConfig(ctx)
+	opts, _ := ctx.Value(transferOptionsKey{}).(transferOptions)
+	config.TrackRenames = opts.TrackRenames
+	rules, filterErr := filter.NewFilter(nil)
+	if filterErr != nil {
+		return 0, filterErr
+	}
+	ctx = filter.ReplaceConfig(ctx, rules)
+	if len(opts.Excludes) > 200 {
+		return 0, errors.New("use at most 200 exclusions")
+	}
+	if push {
+		for _, pattern := range opts.Excludes {
+			if len(pattern) > 1024 || strings.ContainsAny(pattern, "\r\n\x00") {
+				return 0, errors.New("invalid exclusion pattern")
+			}
+			if err := rules.AddRule("- " + pattern); err != nil {
+				return 0, err
+			}
+		}
+	}
+	if bandwidth > 0 && review == nil {
+		if err := config.BwLimit.Set(strconv.Itoa(bandwidth) + "M"); err != nil {
+			return 0, err
+		}
+		accounting.TokenBucket.StartTokenBucket(ctx)
+		defer accounting.TokenBucket.SetBwLimit(fs.BwPair{})
+	}
 	config.BackupDir = ""
 	config.Suffix = ""
-	config.DryRun = false
+	config.DryRun = review != nil
 	config.MaxStatsGroups = 8
 	config.Transfers = 10
+	if review != nil {
+		ctx = operations.WithLogger(ctx, review.logger(cipher))
+	}
 	ctx = accounting.WithStatsGroup(ctx, run)
 	stats := accounting.Stats(ctx)
 	defer stats.ResetCounters()
@@ -81,7 +142,11 @@ func mirrorSync(ctx context.Context, name, p, identity, localPath, run string, p
 	if err != nil {
 		return 0, err
 	}
-	local, err := fs.NewFs(ctx, localPath)
+	localRoot := localPath
+	if cipher == nil {
+		localRoot = ":local,copy_links=true:" + localPath
+	}
+	local, err := fs.NewFs(ctx, localRoot)
 	if err != nil {
 		return 0, err
 	}
@@ -110,7 +175,12 @@ func mirrorSync(ctx context.Context, name, p, identity, localPath, run string, p
 			}
 		}
 	}()
-	if err = rclonesync.Sync(ctx, destination, source, true); err != nil {
+	syncAttempt := func() error { return rclonesync.Sync(ctx, destination, source, true) }
+	if review != nil {
+		syncAttempt = review.attempt(syncAttempt)
+	}
+	err = syncWithRetries(ctx, run, stats, syncAttempt)
+	if err != nil {
 		return 0, err
 	}
 	return stats.GetTransfers(), nil

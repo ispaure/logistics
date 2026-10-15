@@ -13,7 +13,14 @@ from features.rclone import sync as rclone_sync
 from models.local_folder import LocalFolder
 
 
-def pull_remote(remote_name: str, config_path: str | Path, *, package=None) -> bool:
+def _transfer(source, destination, *, review=False, operation='Push', **kwargs):
+    if review:
+        from .workflow import reviewed_sync
+        return reviewed_sync(source, destination, operation=operation, **kwargs)
+    return rclone_sync.rclone_sync(source, destination, **kwargs)
+
+
+def pull_remote(remote_name: str, config_path: str | Path, *, package=None, review=False) -> bool:
     """Pull an rclone remote to its matching local Logistics folder."""
 
     from .ui.local_crypt import ensure_session
@@ -32,12 +39,13 @@ def pull_remote(remote_name: str, config_path: str | Path, *, package=None) -> b
                    if credential_package and session.credentials(config_path) is not None else None)
     if association:
         association.check()
-    accepted = rclone_sync.rclone_sync(
+    accepted = _transfer(
         source_path,
         destination_path,
-        config_path=config_path
+        config_path=config_path, review=review, operation='Pull',
+        **({'before_start': association.publish} if association and review else {})
     )
-    if accepted and association:
+    if accepted and association and not review:
         association.publish()
     return accepted
 
@@ -45,7 +53,7 @@ def pull_remote(remote_name: str, config_path: str | Path, *, package=None) -> b
 def push_to_cloud(
     folder: LocalFolder,
     config_path: str | Path,
-    track_renames: bool = False
+    track_renames: bool = False, *, review=False
 ) -> bool:
     """Push a local Logistics folder to its rclone remote."""
 
@@ -60,12 +68,12 @@ def push_to_cloud(
     source_path = folder.path
     destination_path = push_target(source_path, config_path, folder.name)
 
-    return rclone_sync.rclone_sync(
+    return _transfer(
         source_path,
         destination_path,
         config_path=config_path,
         track_renames=track_renames,
-        copy_links=for_path(source_path) is None
+        copy_links=for_path(source_path) is None, review=review
     )
 
 
@@ -73,7 +81,7 @@ def push_specific_directory(
     folder: LocalFolder,
     config_path: str | Path,
     directory_path: str,
-    bandwidth_limit: str | None = None
+    bandwidth_limit: str | None = None, *, review=False
 ) -> bool:
     """Push a specific directory into a Logistics folder's rclone remote."""
 
@@ -102,16 +110,16 @@ def push_specific_directory(
     item = for_path(directory.path)
     destination_path = push_target(directory.path, config_path, folder.name, specific=True)
 
-    return rclone_sync.rclone_sync(
+    return _transfer(
         directory.path,
         destination_path,
         config_path=config_path,
         bw_limit=bandwidth_limit,
-        copy_links=item is None
+        copy_links=item is None, review=review
     )
 
 
-def pull_encrypted_copy(remote_name, config_path, *, item=None):
+def pull_encrypted_copy(remote_name, config_path, *, item=None, review=False):
     from .local_crypt import connection, backing_target, unlock
     from .ui.local_crypt import ensure_session
     if not ensure_session(config_path, package=item.package if item else None):
@@ -120,5 +128,9 @@ def pull_encrypted_copy(remote_name, config_path, *, item=None):
     values = unlock(item)
     from .local_crypt import validate_ciphertext_tree
     validate_ciphertext_tree(item)
+    if review:
+        from .workflow import reviewed_sync
+        return reviewed_sync(backing_target(values, remote_name), item.data, operation='Pull',
+            config_path=config_path, copy_links=False, crypt_item=item, before_start=item.publish)
     item.publish()
     return rclone_sync.rclone_sync(backing_target(values, remote_name), item.data, config_path=config_path, copy_links=False)

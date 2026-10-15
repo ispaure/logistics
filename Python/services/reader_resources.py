@@ -66,11 +66,16 @@ def open_reader_choice(choice, parent, kind, *, password=None):
                             opened.append(window)
                         transferred = True
                 else:
+                    if getattr(choice.provider, 'remote_storage', False):
+                        from features.rclone.remote_policy import LOCAL_COPY_MESSAGE
+                        error = error + '\n\n' + LOCAL_COPY_MESSAGE
                     qt.QMessageBox.warning(parent, 'Open', error)
                 return
             if kind == 'epub':
                 from features.books.reader import BookWindow
                 window = BookWindow(document)
+                from services.private_views import protect_private_view
+                protect_private_view(window, choice.provider)
                 window.destroyed.connect(lambda: choice.close())
                 retain(window)
                 transferred = True
@@ -78,6 +83,8 @@ def open_reader_choice(choice, parent, kind, *, password=None):
             else:
                 from features.comics.reader import open_reader
                 window = open_reader(document)
+                from services.private_views import protect_private_view
+                protect_private_view(window, choice.provider)
                 opened.append(window)
                 if window.pages is document:
                     window.destroyed.connect(lambda: choice.close())

@@ -1,5 +1,13 @@
 # Mobile workspace drawers and paired documents
 
+The mobile `FileBrowser` bounds List and Tiles at 500 entries per page using the
+shared browser's `page_size` property. Paging controls precede the rows inside
+the scroll content so the bottom destination bar cannot cover Next at the end
+of a listing. Row command binding uses one button-to-entry map per render,
+avoiding repeated filtering and sorting for every row. Generic folder glyphs
+require no image reads; the shared renderer omits empty image widgets when
+thumbnails are disabled. Thumbnail loading retains its revision-aware RAM bounds.
+
 `workspace_navigation.py` owns feature-level layout inside the existing
 commonUtils native tab and navigation stacks. The host retains native Back,
 keyboard safe areas, immersive-reader chrome and independent window ownership.
@@ -61,18 +69,42 @@ not establish native Duo fold-gesture support.
 
 ## Folder Hub and file browser naming
 
+Reader and preview menus use `mount_native_menu` to occupy the same UIKit
+navigation-item slot as Documents, with native Back preserved. Android retains
+the in-content control with the Documents inset. Normal reading frames participate
+in measured floating-tab clearance; fullscreen comics retain zero margins. The
+base inset comes from `ReadingFrame`, so repeated renders do not accumulate
+bottom padding. Comic canvases flex to the current pane instead of pinning a
+width measured before entering fullscreen.
+
+The physical iPad check on 2026-10-15 used a cache-only synthetic comic and a
+transient workspace session. All ten samples passed: the first fullscreen open
+and repeated reopens occupied the complete 834-point safe width at x=0; normal
+controls used the native Documents menu slot and left reading status 16 points
+above the destination-bar boundary. The diagnostic restored ordinary startup
+after cleanup. Detailed local measurements are retained in ignored
+`Mobile/logs/ipad-reader-layout.json`. This does not establish the cause of the
+user's original intermittent Folder Hub failure.
+
+Folder Hub constructs discovery results and its replacement page before clearing
+the existing root. Discovery failures show a recovery page with Refresh, local
+browsing and Connections instead of an empty tab. Refresh can retry after credentials
+change. Credential selectors guard transient native row indices and compute the
+visible selection before clearing folder rows. Regression tests inject LocalCrypt
+discovery failure during tab entry and transient credential-selection indices.
+
 The `files` destination key remains stable for routing and session origins; its
 visible name is **Folder Hub**, with the desktop three-row hub glyph in navigation
-and on Home. Its root lists logical folders. Selecting a row opens
-`folder-options`; Browse Local/LocalCrypt/Remote then opens the corresponding file
-browser. Pull/Push remain on the folder action page. Browser return links and the
+and on Home. Its root lists logical folders. Selecting a row opens the preferred
+available copy directly. The adjacent actions button opens `folder-options`,
+where Browse Local/LocalCrypt/Remote selects an explicit copy. Pull/Push remain on the folder action page. Browser return links and the
 drawer’s folder-management shortcut are labelled Folder Hub. The Documents drawer offers browse roots, recent identities, discovered libraries
 and creation shortcuts. Browse roots and libraries mount the independent file browser
 in the main route. The Folder Hub drawer implementation remains available, but its
 hamburger is not mounted.
 
 
-## Mobile feedback follow-up (2026-10-15)
+## Mobile feedback follow-up (historical, superseded by the UX passes below)
 
 Home suppresses only its own Apple navigation bar; its bottom tab stays visible.
 `hub_ui` owns padded format-launcher cards, category filters and the open-session
@@ -159,7 +191,7 @@ checks the connection identity, then resumes the requested action. Existing
 session imports without a retained archive need one fresh selection. Forgetting
 credentials destroys the cache key before removing the retained files.
 
-Documents mounts sessions under each matching format card. Private provider
+Documents groups open sessions by format, ahead of recent closed documents. New/Open commands use a compact toolbar rather than tool cards. Private provider
 sessions remain transient and recent history admits only ordinary provider UUIDs.
 Workspace saving also checks that provider allowlist independently of the transient
 flag. PrivateSessions records the opening client/generation; Home, document cards
@@ -251,3 +283,39 @@ Credential group and retained-ZIP chooser labels share the iOS session visibilit
 policy, matching the `Legacy` prefix without requiring a dash. Filter presentation
 without modifying package associations or retained credential data. When a selected
 credential becomes hidden, both the selection and its retained name reset to All.
+
+
+## Task-focused presentation (local UX passes, 2026-10-15)
+
+`HubUI` renders visible open sessions before ordinary recent identities. Recent
+reopening uses the existing checkpoint and reader/editor activation contracts;
+private session titles and previews remain excluded. Card grids reflow to one,
+two or three columns, including spacers for an incomplete row. Home reflows
+Recent and Your spaces independently of the document grids.
+
+Folder row activation enters the existing guarded browser directly. Its adjacent
+action button retains the explicit copy/transfer route. Preparing this route
+without presenting it provides a status and credential-resume owner; failed
+browsing with a status can present the action route. No transient action screen
+is added to the successful browse Back stack.
+
+`appearance.reserve_navigation` applies measured floating UIKit tab-bar overlap
+to the active ordinary view, preserving its original bottom margin. It runs from
+workspace rendering and skips Chat and reading frames because those own their
+clearance/chrome. It subtracts the container's existing safe-area inset before
+measuring overlap. Split bar items are mounted only when a wide editable
+workspace can use them. FileDrawer has one parent-folder control and a breadcrumb;
+the inherited browser-history Back button remains available to code but is not
+mounted in Local/LocalCrypt or Remote browsing. Native route Back stays intact.
+
+Editor status comes from the document owner: durable recovery, source save,
+session-only draft and conflict are distinct. A conflict exposes the existing
+Save a copy command through `ActionMenu`, preserving owner rebinding and close
+guards. No save, transfer, credential or persistence contract was changed.
+
+Android retained destination roots are explicitly sized from the outer native
+allocation, subtracting rail width when present. Measuring the child content
+view instead is self-referential and can shrink the workspace on repeated
+layouts. A host regression covers repeated renders and rail allocation; the
+native phone probe checks 411 logical points of body width against the 411-point
+window. Android's action bar follows the same light/dark surface palette.

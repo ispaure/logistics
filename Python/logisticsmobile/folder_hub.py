@@ -1,5 +1,7 @@
 """Discover logical mobile folders without creating crypt storage or copying files."""
+from features.rclone.mobile.storage_location import collection_path
 from pathlib import Path
+from features.rclone.mobile.mirror_jobs import copy_target
 from services.folder_policy import read_exclusions, visible_name, folder_parts
 
 
@@ -22,10 +24,15 @@ def hub_entries(root, jobs, remotes=(), crypt_locations=()):
     def add(name, source, reference):
         if visible_name(name, rules, remote=source == 'Remote'):
             entries.setdefault(name, []).append((source, reference))
+    try:
+        local = collection_path(root)
+    except (OSError, ValueError):
+        for remote in visible_remotes(remotes):
+            add(remote, 'Remote', ('remote', remote))
+        return [(name, folder_parts(name), entries[name]) for name in sorted(entries, key=str.casefold)]
     mapped = set()
     for job in jobs.values():
-        target = (root / 'LocalCryptFolders' / job['identity'] / job['prefix'] if job['crypt']
-                  else root / 'LocalFiles' / job['target'])
+        target = copy_target(root, job)
         if target.is_dir() and not target.is_symlink():
             add(job['remote'], 'LocalCrypt' if job['crypt'] else 'Local', ('job', job['id']))
             if not job['crypt']:
@@ -34,7 +41,7 @@ def hub_entries(root, jobs, remotes=(), crypt_locations=()):
     for label, remote in crypt_locations:
         if remote not in represented:
             add(remote, 'LocalCrypt', ('crypt', label))
-    local = root / 'LocalFiles'
+    local = collection_path(root)
     if local.is_dir() and not local.is_symlink():
         for path in local.iterdir():
             if path.is_dir() and not path.is_symlink() and path.name not in mapped:

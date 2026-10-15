@@ -7,8 +7,7 @@ from commonUtils.persistence import atomic_write_json
 from commonUtils.filesystem.storage import cache_directory
 from commonUtils.configuration.settings import get_setting
 
-THEMES = {'light': ('#ffffff', '#202124'), 'dark': ('#111111', '#eeeeee'),
-          'sepia': ('#f4ecd8', '#46392c'), 'slate': ('#202630', '#dde5ee')}
+from .themes import THEMES
 
 APPEARANCE_KEYS = {'font_family': ('Styling', 'reading_font_family_str'),
                    'font_size': ('Styling', 'reading_font_size_int'),

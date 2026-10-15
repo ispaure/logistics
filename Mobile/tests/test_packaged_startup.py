@@ -22,6 +22,22 @@ class PackagedStartupTests(unittest.TestCase):
             code = '''
 from pathlib import Path
 import logisticsmobile
+from features.rclone.transfer_options import TransferOptions
+assert TransferOptions().copy_links
+from features.rclone.mobile.cloud import CloudClient
+from features.rclone.mobile.cloud_ui import CloudUI
+from logisticsmobile.provider_ui import ProviderUI
+from logisticsmobile.private_sessions import PrivateController
+from features.rclone.mobile.localcrypt_ui import LocalCryptUI
+from logisticsmobile.native_archives import NativeArchiveAccess
+assert CloudClient.__module__ == 'features.rclone.mobile.cloud'
+assert CloudUI.__module__ == 'features.rclone.mobile.cloud_ui'
+assert ProviderUI.__module__ == 'logisticsmobile.provider_ui'
+assert NativeArchiveAccess.__module__ == 'logisticsmobile.native_archives'
+assert issubclass(PrivateController, ProviderUI)
+assert not issubclass(PrivateController, LocalCryptUI)
+assert not Path('payload/logisticsmobile/cloud.py').exists()
+assert not Path('payload/logisticsmobile/localcrypt_ui.py').exists()
 from logisticsmobile.app import LogisticsMobile
 from logisticsmobile.documents import DocumentStore
 root = Path('private').resolve()
@@ -33,7 +49,7 @@ for saved_document in (False, True):
     LogisticsMobile.storage_root = root
     app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
     assert app.native_host.state.destination == 'home'
-    assert app.body.children[0].content.children[0].text == 'Welcome to Logistics'
+    assert app.body.children[0].content.children[0].text == 'Your workspace'
     app.main_window.close()
     app.loop.close()
 print('PACKAGED_HOME_OK')

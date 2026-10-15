@@ -6,20 +6,98 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 from commonUtils.runtime.document_access import LocalDocuments
-from logisticsmobile.cloud import CloudClient, Downloads, download_name, PACKAGE_LIMIT
+from features.rclone.mobile.cloud import CloudClient, Downloads, download_name, PACKAGE_LIMIT
+
+
+def seed_download(store, name, data):
+    """Represent a completed private copy created by an older app version."""
+    from uuid import uuid4
+    folder = store.root / uuid4().hex
+    folder.mkdir()
+    target = folder / name
+    target.write_bytes(data)
+    (folder / '.complete').write_text(name)
+    return target
 
 
 class MobileCloudTests(unittest.TestCase):
+    def test_privacy_gate_tracks_only_successful_session_loads_across_clients(self):
+        previous = CloudClient._session_privacy
+        self.addCleanup(setattr, CloudClient, '_session_privacy', previous)
+        buffers = []
+        response = {'ok': True, 'result': []}
+        def call(action, data):
+            buffer = ctypes.create_string_buffer(json.dumps(response).encode())
+            buffers.append(buffer)
+            return ctypes.addressof(buffer)
+        first, second = CloudClient.__new__(CloudClient), CloudClient.__new__(CloudClient)
+        first.call, first.free = call, lambda pointer: None
+        first.request('import', session_only=True, password='session-password')
+        gate = first.session_privacy
+        self.assertIs(second.session_privacy, gate)
+        self.assertTrue(gate.verify('session-password'))
+        self.assertFalse(gate.verify('wrong'))
+        response.update(ok=False, error='Wrong ZIP password')
+        with self.assertRaises(ValueError):
+            first.request('import', session_only=True, password='wrong')
+        self.assertIs(second.session_privacy, gate)
+        response.update(ok=True)
+        first.request('vault_open')
+        self.assertIsNone(second.session_privacy)
+        first.request('add_smb', session_only=True, password='smb-password')
+        self.assertTrue(second.session_privacy.verify('smb-password'))
+        first.request('clear')
+        self.assertIsNone(second.session_privacy)
+        first.request('import', session_only=False, password='saved-password')
+        self.assertIsNone(second.session_privacy)
+
+    def test_retired_mirror_operations_never_reach_native_bridge(self):
+        client = CloudClient.__new__(CloudClient)
+        client.call = Mock()
+        for action in ('mirror_list', 'mirror_read', 'mirror_stat', 'mirror_mkdir', 'mirror_write', 'read', 'crypt_read', 'crypt_fetch'):
+            with self.assertRaisesRegex(ValueError, 'Unsupported remote operation'):
+                client.request(action)
+        client.call.assert_not_called()
+
+    def test_lock_unloads_credentials_without_forgetting_saved_vault(self):
+        client = CloudClient.__new__(CloudClient)
+        client.vault = SimpleNamespace(forget=Mock())
+        client.request = Mock()
+        client.package_name, client.vault_attached = 'Personal.zip', True
+        client.lock()
+        client.request.assert_called_once_with('clear')
+        client.vault.forget.assert_not_called()
+        self.assertEqual(client.package_name, '')
+        self.assertFalse(client.vault_attached)
+        client.clear()
+        client.vault.forget.assert_called_once_with()
+
+    def test_native_credential_replacement_invalidates_every_client(self):
+        buffers = []
+        def call(action, data):
+            buffer = ctypes.create_string_buffer(b'{"ok":true,"result":[]}')
+            buffers.append(buffer)
+            return ctypes.addressof(buffer)
+        first, second = CloudClient.__new__(CloudClient), CloudClient.__new__(CloudClient)
+        first.call, first.free = call, lambda pointer: None
+        second.vault_attached = True
+        self.assertTrue(second.vault_attached)
+        generation = second.generation
+        first.request('clear')
+        self.assertGreater(second.generation, generation)
+        self.assertEqual(first.generation, second.generation)
+        self.assertFalse(second.vault_attached)
+
     def test_mobile_cloud_downloads_recover_only_complete_private_copies(self):
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             store = Downloads(root / 'Downloads')
             with patch('os.link', side_effect=PermissionError('No hard links')):
-                first = store.save('fixture.txt', b'private copy')
-                second = store.save('fixture.txt', b'another copy')
+                first = seed_download(store, 'fixture.txt', b'private copy')
+                second = seed_download(store, 'fixture.txt', b'another copy')
             self.assertNotEqual(first, second)
             self.assertEqual(len(Downloads(store.root).items()), 2)
             (first.parent / '.complete').unlink()
@@ -29,7 +107,7 @@ class MobileCloudTests(unittest.TestCase):
             (first.parent / '.complete').write_text(first.name)
             self.assertEqual(store.items(), [second])
             with self.assertRaises(ValueError):
-                store.save('.complete', b'reserved')
+                download_name('.complete')
             with self.assertRaises(ValueError):
                 download_name('back\\slash.txt')
 

@@ -31,7 +31,7 @@ from commonUtils.ui.code_editor import CodeEdit
 from commonUtils.ui.code_editor.syntax import SyntaxHighlighter
 from commonUtils.ui.markdown.viewer import MarkdownViewer
 from commonUtils.ui.workspaces.scoped_tabs import ScopedTabBar
-from logisticsmobile.cloud import CloudClient, Downloads
+from features.rclone.mobile.cloud import CloudClient
 
 source = root / 'sample.py'
 if not source.exists():
@@ -72,7 +72,7 @@ cloud_layout = QVBoxLayout(cloud_page)
 cloud_status = QLabel('Synthetic memory connection only. No user credentials.')
 cloud_status.setWordWrap(True)
 cloud_layout.addWidget(cloud_status)
-cloud_button = QPushButton('Test native rclone import / list / download')
+cloud_button = QPushButton('Test native rclone import / list / preview')
 cloud_layout.addWidget(cloud_button)
 cloud_layout.addStretch()
 window.addTab(cloud_page, 'Rclone')
@@ -85,12 +85,15 @@ def cloud_check():
     names = client.request('import', package=base64.b64encode(package.getvalue()).decode('ascii'), password='', package_name='Synthetic.zip', session_only=True)
     version = client.request('probe')
     entries = client.entries('proof', 'logistics-native-check')
-    downloaded = Downloads(root / 'downloads').fetch(client, 'proof', 'logistics-native-check/fixture.txt')
-    data = downloaded.read_bytes()
+    identity = client.connection_identity('proof')
+    values = dict(remote='proof', path='logistics-native-check/fixture.txt', identity=identity)
+    metadata = client.request('remote_stat', **values)
+    data = base64.b64decode(client.request('remote_range', **values,
+        expected=metadata['revision'], offset=0, count=metadata['size'])['data'], validate=True)
     assert 'proof' in names and entries and data == b'Native rclone fixture\n'
     client.clear()
-    cloud_status.setText(f'Native rclone {version}: import, list and download passed.')
-    return {'version': version, 'entries': len(entries), 'download_bytes': len(data)}
+    cloud_status.setText(f'Native rclone {version}: import, list and direct preview passed.')
+    return {'version': version, 'entries': len(entries), 'preview_bytes': len(data)}
 
 def cloud_clicked():
     try:

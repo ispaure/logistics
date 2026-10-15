@@ -30,6 +30,28 @@ pushes, tags or releases were made for this refresh.
   only change mode when necessary. The existing Push review and Sync engine
   remain authoritative; folder cards move deletion/mapping actions into menus.
 
+## Settings and installed build identity
+
+The app's appearance installer overrides the pinned iOS selection delegate's
+user-selection callback. It updates the field label, resigns the owning
+`UITextField` as first responder, then dispatches `on_change` once. The picker
+closes before handlers can replace a view or navigate. Programmatic selection
+continues through Toga's existing implementation; Android keeps its native
+Spinner behavior.
+
+`logisticsmobile/settings_ui.py` owns compact label/help/switch rows. Help opens
+an `InfoDialog` without mutating preference values. Native accessibility names
+identify the help buttons and textless switches. Existing preference callbacks
+and Save/Reload behavior remain authoritative.
+
+The bottom About section reuses `services.build_version.BuildVersion.label` for
+desktop-style revision/date formatting, with the installed Toga app version,
+platform and short source snapshot. `Mobile/tools.py` includes that portable
+service and stamps `logistics_committed_at` alongside the existing commit, dirty
+flag and source digest in packaged `logisticsmobile/source.json`. Device display
+reads this bundled manifest offline. Source checkouts fall back to the existing
+installed-build service. Only the information is grey; the heading stays normal.
+
 ## Integration fixes
 
 Briefcase packages named sources rather than arbitrary payload-root files. The
@@ -747,3 +769,161 @@ sources; this is targeted evidence, not a new full native-suite/device-build
 claim. Screenshots, the probe and source hashes are retained locally in
 `Mobile/logs/palette-review/`. Android native rendering and physical touch
 confirmation remain pending. No device installation, commit or release was made.
+
+
+## Three UX passes (local, 2026-10-15)
+
+The approved follow-up keeps Credential, Local, LocalCrypt, Pull and Push wording.
+Home now combines Continue, compact New/Open actions, recent ordinary files and
+workspace links. Documents presents open files by type before closed recent
+identities, with one to three card columns rather than nested tool cards.
+Folder taps enter the preferred existing copy directly; the adjacent actions
+route retains explicit copy choices, Pull/Push and confirmed deletion. The
+primary Browse action is filled, deletion is separated and destructive, and
+mapped copies show direction. The underlying operation contracts are retained.
+
+The Open file browser uses Parent folder and a breadcrumb; redundant browser
+history controls are unmounted. Split is shown only when usable. Ordinary iOS
+screens reserve measured floating-tab overlap, including keyboard transitions.
+Editors distinguish recovery copies from saved bytes and expose conflict-safe
+Save a copy. Chat offers setup before Send becomes available, removes nested
+transcript outlines and retains streamed history/drafts. Empty library/search
+views offer direct actions. Settings labels, card insets, 48-point app controls
+and accessible action/close labels were refined. Android retained roots use the
+outer native allocation (minus any rail); its app bar follows the palette.
+
+Validation: the complete mobile host run passed 250 tests. Following the platform
+refinements, 62 targeted workflow tests and 31 navigation/appearance tests passed.
+Synthetic native walkthroughs passed on iPhone and iPad simulators and Android
+emulator, with light/dark captures, direct folder navigation, retained drafts,
+chat setup/rendering and a large-font iPhone editor capture. iOS Save controls
+were measured above the tab bar with and without the keyboard. Android's body
+was measured at the full 411-point window allocation.
+
+Local gallery, scripts, logs, results and source hashes are under
+`Mobile/logs/ux-three-pass/` (`review.html` is the gallery). The Apple probes reuse
+an existing simulator executable with the current Python UI sources; Android
+builds an isolated probe from cached native scaffolding/bridge. These checks do
+not replace the full native release gate, physical touch/screen-reader/OS Dynamic
+Type testing or real document-provider permission checks. No physical-device
+installation, commit, push, TestFlight upload or release was performed.
+
+A concurrent local E Ink presentation change was preserved during this work.
+An additional 24 focused appearance, E Ink, settings, chat and UX integration
+checks passed against the combined local sources. Probe source hashes are
+recorded separately from the current working-tree hashes.
+
+
+## Android opt-in high contrast / E Ink, 2026-10-15
+
+`Preferences.android_eink` defaults to false and validates a stored boolean string.
+Only Android Settings exposes its immediate-save switch; startup applies the value
+before constructing document widgets. Other platforms keep their appearance.
+`palette.py` owns the reversible black/white role palette and HTML override CSS.
+`appearance.py` adapts the pinned Toga Android widgets, including explicit label
+colors, input fields, square outlined cards/buttons, switches and navigation
+selection. It saves/restores button elevation/state animators, bar indicators,
+ripples and system-bar colors. Activity-local DayNight selection forces light
+while enabled and returns to follow-system afterward; it does not change the
+system setting or replace document owners.
+
+Open HTML views are restyled by a reversible DOM style element; new content gets
+the same style at loading time. Private WebViews recheck the UTF-8 memory-only
+bound after injecting CSS, before calling Toga, so appearance never enables a
+plaintext cache fallback. Image elements and comic pixels are not filtered.
+No BOOX SDK, waveform/refresh API, device-global animation setting or hardware
+E Ink detection is used. Physical BOOX validation remains outstanding.
+
+
+Validation: all 258 mobile host tests passed. The isolated Android 15 arm64
+emulator probe passed nine checks across three process launches: default unchanged,
+immediate save, black text on white, draft preservation, live private-WebView
+styling/removal, post-styling private HTML bounds with no disk fallback, enabled
+restart persistence, original dark-palette restoration, and disabled restart
+persistence. The emulator's original system night setting was restored afterward.
+[Report](mobile-evidence/2026-10-15-android-eink-mode.json),
+[Settings screenshot](mobile-evidence/2026-10-15-android-eink-settings.png),
+[editor screenshot](mobile-evidence/2026-10-15-android-eink-editor.png),
+[restored dark appearance](mobile-evidence/2026-10-15-android-eink-restored-dark.png).
+
+## Control icons and iOS/Android parity review (2026-10-15)
+
+`logisticsmobile/control_icons.py` owns compact action presentation: UIKit SF
+Symbols and Android stroked PathShape drawables on the existing Toga buttons.
+It preserves callback/menu ownership and enabled state, sets native accessibility
+names and 48-point targets, and retains readable glyph fallbacks for host tests.
+Android drawables have state-aware text/muted tints and refresh with app appearance
+and E Ink changes. `Mobile/tools.py` explicitly stages this module.
+
+Reader and browser previous/next controls, browser history, parent-folder
+navigation, editor Find and match navigation, reader Contents/Appearance,
+overflow controls and open-document close controls use these icons. Reader page
+controls occupy opposite ends of the footer. Named return destinations, Sort,
+Save, Preview, transfer actions and confirmations retain descriptive text. System
+Back remains owned by native navigation; no synthetic forward-history route was
+added. CommonUtils remains untouched; Logistics decorates its browser/search
+controls at the host boundary.
+
+Current source comparison:
+
+| Area | iOS / iPadOS | Android |
+| --- | --- | --- |
+| Core workflows | Shared editors, imported/provider readers, search/bookmarks, speech panel, metadata, chat, remote browsing and transfer policy | Same workflow implementations; no platform gate found removing these features |
+| App windows | `window_scenes.SceneManager` enables independent windows on iPad when UIKit supports multiple scenes | No corresponding app-managed extra-window implementation; `supported` stays false |
+| Appearance option | System and reader appearance settings | Also has immediate persistent High contrast / E Ink; no BOOX hardware-refresh integration |
+| Legacy filtering | `FolderHubUI.legacy_name_visible` filters `legacy-` folder names and `legacy` credential-package prefixes unless Show Legacy is enabled; filtering also reaches browsers/catalogue | Always returns true; Show Legacy setting row is absent |
+| Navigation | UIKit tab/sidebar/navigation controllers; compact drawer button mounts in the native bar, preserving Back; drawer transition respects Reduce Motion | Material bottom navigation/rail, hardware Back and keyboard inset handling; drawer controls remain in content |
+| Symbols and menus | SF Symbols; UIKit button/bar menus; glass-style drawer control when the OS supplies it | Vector control paths; Android destination resources and anchored popup menus; text-glyph drawer button |
+| Pickers and export | Native document picker and temporary export staging with cleanup | Native read-only activity/resource selection and explicit create-document destination, streamed through a content URI |
+| Sensitive-screen protection | Inactive-window shield and detected recording/mirroring shield; public APIs cannot prevent still screenshots | Sensitive windows use FLAG_SECURE for screenshots, recording, nonsecure displays and task snapshots |
+| Read aloud | AVSpeechSynthesizer, installed system voices; rate maps to Apple's scale | Android TextToSpeech, installed non-network voices; rate uses Android's scale |
+
+Platform-specific code was checked in `app.py`, `folder_hub_ui.py`,
+`window_scenes.py`, `workspace_navigation.py`, `screen_privacy.py`,
+`features/books/mobile/speech_native.py`, and shared native picker/navigation
+adapters. The last two are dependency contracts, not new Logistics-owned API
+documentation. This is a source parity review, not an assertion that every
+physical device, voice, keyboard or OS version behaves identically.
+
+Validation for these control changes:
+
+- 47 focused host tests passed, covering icons, editor/search ownership,
+  ordinary/private readers, file browsing, navigation and staged startup.
+- The broader mobile suite passed 263 of 264 tests. The remaining existing
+  `test_library_empty_state_and_search_have_actionable_exits` assertion expects
+  “Your library is empty”; current catalogue code shows “No configured library
+  folders.” That message path was not changed for the icon work.
+- Isolated iOS Simulator and Android emulator probes validate all eight native
+  images, descriptive accessibility labels and 48-point targets. Light and
+  dark/disabled screenshots are retained under
+  `mobile-evidence/2026-10-15-control-icons-*`. The reusable review app is
+  `Mobile/native_tests/tests/logisticsmobile/control_icons_probe.py`; run it only
+  in a disposable probe bundle, as it replaces its own test workspace view.
+  It uses Logistics' actual scene and appearance handling and also captures
+  Android E Ink. These probes do not certify full physical-device interaction.
+
+### Remote listing responsiveness
+
+The mobile remote browser opts into the shared browser’s bounded pages (24 list
+rows / 16 tiles), rather than the ordinary local browser’s 500-row page. Each
+mobile row creates several UIKit controls and layout updates; publishing hundreds
+of rows synchronously can stall the UI after the background listing has returned.
+The listing activity now spans publication and announces Displaying separately
+from Listing. No listing cache was added. Both plain and encrypted bridge list
+paths call `Fs.List` only for the selected directory, without descending into
+children. Paging, sorting and filtering operate on the current listing.
+
+The remote-reader regression blocks a 200-folder listing in a worker, checks the
+elapsed timer and Folder Hub menu while it is pending, then verifies bounded row
+creation and a single listing call through paging and filtering. The isolated
+`remote_browsing_probe` repeats this with actual native plain/crypt memory backends
+and records UI heartbeat gaps on iOS. These fixtures do not measure a live server’s
+latency.
+
+Validation: 73 affected host tests passed. The iOS Simulator probe passed all
+35 remote-browser cases, including delayed 200-folder listings on both plain and
+crypt backends. Its maximum UI heartbeat gaps were 0.145 s and 0.236 s respectively;
+the timer advanced and another remote’s Hub menu opened before listing completed.
+Bounded remote pages are built offscreen before attachment, avoiding repeated
+layout of the live screen for each row decoration. Evidence:
+`mobile-evidence/2026-10-15-remote-listing-responsiveness-ios-native-ui-local.json`.

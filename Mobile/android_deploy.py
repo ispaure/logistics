@@ -1,5 +1,6 @@
 """Stage current local sources, build and install a normal Android debug app."""
 import argparse
+import json
 import os
 from pathlib import Path
 import platform
@@ -21,13 +22,46 @@ PROJECT = ROOT / 'build/logisticsmobile/android/gradle'
 
 def run(command, env, *, log=None):
     if log is None:
-        return subprocess.run(command, cwd=ROOT, env=env, check=True, capture_output=True, text=True).stdout
+        return subprocess.run(command, cwd=ROOT, env=env, check=True, capture_output=True, text=True, timeout=20).stdout
     log.parent.mkdir(parents=True, exist_ok=True)
     print('Running ' + str(command[0]) + '; log: ' + str(log), flush=True)
     with log.open('w') as output:
         result = subprocess.run(command, cwd=ROOT, env=env, stdout=output, stderr=subprocess.STDOUT)
     if result.returncode:
         raise RuntimeError('Android deployment stopped. See ' + str(log) + '\n' + '\n'.join(log.read_text(errors='replace').splitlines()[-18:]))
+
+
+def deployment_environment():
+    env = dict(os.environ)
+    settings = ROOT / '.tools/android-sdk.json'
+    if settings.is_file():
+        try:
+            saved = json.loads(settings.read_text())
+            if not isinstance(saved, dict):
+                raise ValueError('Invalid SDK settings.')
+            for name in ('ANDROID_HOME', 'BRIEFCASE_HOME'):
+                if isinstance(saved.get(name), str) and Path(saved[name]).is_dir():
+                    env.setdefault(name, saved[name])
+        except (OSError, ValueError, TypeError):
+            pass
+    return env
+
+
+def discover_wireless(adb, env):
+    """Reconnect advertised TLS endpoints; pairing remains an explicit action."""
+    try:
+        services = run([str(adb), 'mdns', 'services'], env)
+    except (OSError, subprocess.SubprocessError):
+        return
+    for line in services.splitlines():
+        parts = line.split()
+        if len(parts) != 3 or parts[1] != '_adb-tls-connect._tcp':
+            continue
+        # adb itself authenticates each peer with the existing pairing keys.
+        try:
+            run([str(adb), 'connect', parts[2]], env)
+        except (OSError, subprocess.SubprocessError):
+            continue
 
 
 def tools_environment(env):
@@ -65,7 +99,7 @@ def select_device(output, requested=None, *, ask=input):
     if len(online) == 1:
         return online[0]
     if not online:
-        raise ValueError('Connect an Android device with USB debugging authorized, or start an emulator, then run again.')
+        raise ValueError('Wake the tablet and enable Wireless debugging on the same Wi-Fi, connect an authorized USB device, or start an emulator, then run again.')
     print('Choose the Android device to update:')
     for number, serial in enumerate(online, 1):
         print(f'  {number}. {serial}')
@@ -103,9 +137,12 @@ def deploy(device=None, *, build_only=False):
     config = tomllib.loads((ROOT / 'pyproject.toml').read_text())['tool']['briefcase']
     if config['bundle'] + '.logisticsmobile' != BUNDLE:
         raise ValueError('Android bundle identity changed; deployment stopped.')
-    env = dict(os.environ)
+    env = deployment_environment()
     refresh_sources(env)
     env, adb = tools_environment(env)
+    settings = ROOT / '.tools/android-sdk.json'
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(json.dumps({name: env[name] for name in ('ANDROID_HOME', 'BRIEFCASE_HOME') if name in env}))
     # The bridge helper also installs current launcher/appearance resources.
     run([sys.executable, 'cloud_build.py', 'android'], env, log=ROOT / 'logs/android-bridge.log')
     run([sys.executable, '-m', 'briefcase', 'build', 'android', '--no-input'], env, log=ROOT / 'logs/android-build.log')
@@ -115,6 +152,7 @@ def deploy(device=None, *, build_only=False):
     if build_only:
         print('Android APK: ' + str(apk))
         return
+    discover_wireless(adb, env)
     serial = select_device(run([str(adb), 'devices'], env), device)
     prefix = [str(adb), '-s', serial]
     # In-place update only. Signature/version failures never trigger uninstall.

@@ -57,7 +57,8 @@ class ReaderController(ReaderHost, ReaderUI):
         self.manager.update_session(self)
 
     def suspend(self):
-        if self.book_busy:
+        pending = getattr(self, '_epub_location_task', None)
+        if self.book_busy or (pending is not None and not pending.done()):
             return False
         self.release_book_reader()
         self.hide_book_unlock()
@@ -120,7 +121,8 @@ class Readers:
 
     def close(self, key):
         owner = self.controllers.get(key)
-        if owner is not None and owner.book_busy:
+        pending = getattr(owner, '_epub_location_task', None)
+        if owner is not None and (owner.book_busy or (pending is not None and not pending.done())):
             owner.book_status.text = 'Wait for this reader operation before closing.'
             return False
         if not self.app.workspace.close(key, guard=lambda session: True):

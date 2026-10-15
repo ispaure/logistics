@@ -101,6 +101,8 @@ def write_remote_credentials_to_config(
         config_file.line_lst.pop()
 
     config_file.write_lines()
+    from .remote_resources import invalidate_config
+    invalidate_config(config_path)
     return True
 
 

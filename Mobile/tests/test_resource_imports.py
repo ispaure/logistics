@@ -5,6 +5,17 @@ import unittest
 from logisticsmobile.app import LogisticsMobile
 
 
+def seed_download(store, name, data):
+    """Represent a completed private copy created by an older app version."""
+    from uuid import uuid4
+    folder = store.root / uuid4().hex
+    folder.mkdir()
+    target = folder / name
+    target.write_bytes(data)
+    (folder / '.complete').write_text(name)
+    return target
+
+
 class ResourceImportTests(unittest.TestCase):
     def test_duplicate_copy_open_keeps_one_document_and_its_draft(self):
         with TemporaryDirectory() as directory:
@@ -14,7 +25,7 @@ class ResourceImportTests(unittest.TestCase):
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
             try:
                 app.show_cloud()
-                path = app.downloads.save('same.md', b'original')
+                path = seed_download(app.downloads, 'same.md', b'original')
                 app.refresh_downloads(path)
                 app.loop.run_until_complete(app.open_download())
                 self.assertEqual(app.editor.value, 'original', app.cloud_status.value)

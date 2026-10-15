@@ -1,64 +1,64 @@
 {
   "rclone": {
     "windows-amd64": {
-      "url": "https://downloads.rclone.org/v1.73.1/rclone-v1.73.1-windows-amd64.zip",
-      "sha256": "b054ffdb21585366fee6f6c5df6988286a99d3ad6c8ea9e935c9494eb637f495",
-      "installed_sha256": "72c49d4529ba243c8e4dd020e3a4d635358d864c8bfe452b1c4a41883cedf651",
-      "archive_member": "rclone-v1.73.1-windows-amd64/rclone.exe",
+      "url": "https://downloads.rclone.org/v1.74.1/rclone-v1.74.1-windows-amd64.zip",
+      "sha256": "51326acc0d9cf60234aa5787d8da66a621430aa373542a6b35bad8a4a26ca43e",
+      "installed_sha256": "688e89ae51d6bdde7aab6bf015144efbc3a665704ebd00e2c9e99b4638df08df",
+      "archive_member": "rclone-v1.74.1-windows-amd64/rclone.exe",
       "name": "rclone",
-      "version": "1.73.1",
+      "version": "1.74.1",
       "executable": true,
-      "path": "Windows/rclone-v1.73.1-windows-amd64/rclone.exe"
+      "path": "Windows/rclone-v1.74.1-windows-amd64/rclone.exe"
     },
     "windows-arm64": {
-      "url": "https://downloads.rclone.org/v1.73.1/rclone-v1.73.1-windows-arm64.zip",
-      "sha256": "d1f6a0bd98a4dfa226b01a6df3be77dfde433a84361245806d7dbf0db6707a22",
-      "installed_sha256": "03fede8ba64fcac6ecd3c7205a00946630910e0357bfeba67cbfc7358134fd70",
-      "archive_member": "rclone-v1.73.1-windows-arm64/rclone.exe",
+      "url": "https://downloads.rclone.org/v1.74.1/rclone-v1.74.1-windows-arm64.zip",
+      "sha256": "317d2080debf0d941b12efb3a327d06e5cc1815c1dc4d79cb3665811b29ed12f",
+      "installed_sha256": "60ccc0a5c9382962a57529c800aab73d58cad2397d303fadb7c599e9ca385b69",
+      "archive_member": "rclone-v1.74.1-windows-arm64/rclone.exe",
       "name": "rclone",
-      "version": "1.73.1",
+      "version": "1.74.1",
       "executable": true,
-      "path": "Windows/rclone-v1.73.1-windows-arm64/rclone.exe"
+      "path": "Windows/rclone-v1.74.1-windows-arm64/rclone.exe"
     },
     "osx-amd64": {
-      "url": "https://downloads.rclone.org/v1.73.1/rclone-v1.73.1-osx-amd64.zip",
-      "sha256": "67afc47a59122ad5600590fc593fdadfb123723470eba7e523c6a9f044be2862",
-      "installed_sha256": "36e911f6cc430059d88b3231a947fcd9171c53312d897ac265ac1b0a34514b59",
-      "archive_member": "rclone-v1.73.1-osx-amd64/rclone",
+      "url": "https://downloads.rclone.org/v1.74.1/rclone-v1.74.1-osx-amd64.zip",
+      "sha256": "4f10d7845422d8568e187a0f6813f124bca9b657ac7becd8bdf8508fa968a336",
+      "installed_sha256": "f7008053d0e84ee45e81ecd8578ec8cf0fe6bf01c47b7840ac09b0c9d70f2e67",
+      "archive_member": "rclone-v1.74.1-osx-amd64/rclone",
       "name": "rclone",
-      "version": "1.73.1",
+      "version": "1.74.1",
       "executable": true,
-      "path": "macOS/rclone-v1.73.1-osx-amd64/rclone"
+      "path": "macOS/rclone-v1.74.1-osx-amd64/rclone"
     },
     "osx-arm64": {
-      "url": "https://downloads.rclone.org/v1.73.1/rclone-v1.73.1-osx-arm64.zip",
-      "sha256": "9fec9a1637f648ce20e9eaf8680fa87006496ccac9d5b034dfb4b8eb480776e3",
-      "installed_sha256": "c6d8f0eef3df86de3e45746d59621c669e8cc7947fec6967916baafe15ec9d2e",
-      "archive_member": "rclone-v1.73.1-osx-arm64/rclone",
+      "url": "https://downloads.rclone.org/v1.74.1/rclone-v1.74.1-osx-arm64.zip",
+      "sha256": "98c04f5f678fe87d435d6f4b1fe204103c5906b151357e631ba0111410691213",
+      "installed_sha256": "078112b57bfa04092dfef1f9b38769d95401ebf3f2c621004e729ad4a3fff533",
+      "archive_member": "rclone-v1.74.1-osx-arm64/rclone",
       "name": "rclone",
-      "version": "1.73.1",
+      "version": "1.74.1",
       "executable": true,
-      "path": "macOS/rclone-v1.73.1-osx-arm64/rclone"
+      "path": "macOS/rclone-v1.74.1-osx-arm64/rclone"
     },
     "linux-amd64": {
-      "url": "https://downloads.rclone.org/v1.73.1/rclone-v1.73.1-linux-amd64.zip",
-      "sha256": "e9bad0be2ed85128e0d977bf36c165dd474a705ea950d18e1005cef98119407b",
-      "installed_sha256": "10ffca7640f0483beba9a9c9f4cdb6a9ca30a13c4ab31f2329d09a832802694d",
-      "archive_member": "rclone-v1.73.1-linux-amd64/rclone",
+      "url": "https://downloads.rclone.org/v1.74.1/rclone-v1.74.1-linux-amd64.zip",
+      "sha256": "67df3059a6233b6e32e604bcd637654bb294ff86291b65ede77123e94818d911",
+      "installed_sha256": "920b6ee51518922a3a8b70509d44410e686146867c2103ad58384a71e1694b75",
+      "archive_member": "rclone-v1.74.1-linux-amd64/rclone",
       "name": "rclone",
-      "version": "1.73.1",
+      "version": "1.74.1",
       "executable": true,
-      "path": "Linux/rclone-v1.73.1-linux-amd64/rclone"
+      "path": "Linux/rclone-v1.74.1-linux-amd64/rclone"
     },
     "linux-arm64": {
-      "url": "https://downloads.rclone.org/v1.73.1/rclone-v1.73.1-linux-arm64.zip",
-      "sha256": "8d40785a789612301aa27e5c6eaf8b4c6e7b9af93b3993280f6aab6f42bc1955",
-      "installed_sha256": "ea441b0133a824920af5d061b4fb66a49799fc450d6e3658f8f21e22fbe2aec0",
-      "archive_member": "rclone-v1.73.1-linux-arm64/rclone",
+      "url": "https://downloads.rclone.org/v1.74.1/rclone-v1.74.1-linux-arm64.zip",
+      "sha256": "c816ed0e568de4dd1bba1a4d0cd47523d3dd54337dd5fde73f1b068857ecf877",
+      "installed_sha256": "9d31b718dc7b230c5ed353ab5909dd301a911f9483e7c92f5fa4b7762bb3c3db",
+      "archive_member": "rclone-v1.74.1-linux-arm64/rclone",
       "name": "rclone",
-      "version": "1.73.1",
+      "version": "1.74.1",
       "executable": true,
-      "path": "Linux/rclone-v1.73.1-linux-arm64/rclone"
+      "path": "Linux/rclone-v1.74.1-linux-arm64/rclone"
     }
   },
   "macfuse": {

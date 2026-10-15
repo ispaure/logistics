@@ -1,5 +1,64 @@
 # Logistics on mobile
 
+## Direct remote reading
+
+Open a remote from Folder Hub or Remote files. Tap a supported file to open a
+read-only, memory-only reader: small text/Markdown/INI, PNG/JPEG/WebP, EPUB and
+CBZ/ZIP comics. Search filters the current folder only. Unsupported files and
+content beyond the reader limits show a dialog asking you to manually make a
+local copy; opening a file never automatically creates one.
+
+Remote browsers have no standalone file or folder download actions, including
+encrypted downloads. Use Folder Hub's managed Pull workflows for offline Local
+or LocalCrypt folders. Existing offline copies remain readable and exportable.
+Direct readers show no Save, Save As or metadata-edit controls. Locking or replacing credentials
+retires their contents, including readers opened with session-only credentials.
+See the [rclone guide](../../features/rclone/user_docs/README.md#browse-remote-files-directly)
+for limits and desktop behavior.
+
+## Android appearance and E Ink status
+
+Android normally follows the device's light/dark mode. This remains the default.
+To opt in, open **Settings → High contrast / E Ink**. The Android-only switch saves
+immediately on this device and persists after restarting the app.
+
+While enabled, the app uses black text on white, black outlines and simpler
+square controls. Navigation keeps a visible selected state. Button elevation and
+navigation ripple effects are removed; HTML text views disable CSS animation and
+transitions. Markdown previews, chat and EPUB text receive the same high-contrast
+treatment, including already-open HTML views. Images and comic pixels are not
+recolored, and no source files or reader theme preferences are changed.
+
+The mode forces this app's light appearance even when Android uses dark mode.
+Turn it off to restore the normal system-following app palette and the original
+reader/HTML styling. Existing documents, drafts and transfers remain in place.
+
+**Settings → Text & Markdown** also provides editor/preview font size (12–32).
+In an open EPUB or comic, **••• → Appearance…** offers reader typography, margins,
+width, theme and comic layout. The high-contrast override takes precedence over
+reader text colors while enabled; turning it off reveals the chosen theme again.
+
+This is an app appearance mode designed to be useful on E Ink devices, including
+BOOX. It does not select BOOX waveforms, force hardware refreshes, remove physical
+ghosting or configure the stylus. Those vendor-specific controls are not part of
+Logistics. Android emulator checks cover toggling, process restarts, live views
+and restoring the normal palette; physical BOOX behavior remains unverified.
+
+## Settings and build information
+
+On iPhone and iPad, choosing a dropdown option closes its picker immediately.
+
+Settings switches use one compact row: label, **ⓘ** help, then the on/off switch.
+Tap **ⓘ** for an explanation without changing the setting. This includes
+**Document card overview**, **Restore last document**, **Close saved documents on restart** and,
+on iOS, **Show Legacy**. Save/reload preferences continue to work as before;
+document overview and Show Legacy still apply immediately.
+
+**About** at the bottom of Settings shows muted build information: the app version,
+short source revision and commit time when available, plus the platform and
+packaged source snapshot. Local modified builds are identified. This information
+is available offline; the About heading keeps its normal appearance.
+
 ## Current feature support
 
 Android and iOS have the same prototype scope. “Implemented” describes code in
@@ -20,7 +79,7 @@ the native app; real-device interaction testing is still required.
 | File browser | Shared native list/tile views, thumbnails and file information for app-managed Local/LocalCrypt files and remote browsing |
 | Bulk rename, IDE and Git/Perforce UI | Not ported |
 | LM chat | Native text conversations, configured server/model, streaming/cancel, private history and Markdown export |
-| rclone remote files | Credential ZIP import, ordinary downloads/export, LocalCrypt encrypted offline reading/editing, local folder management and Save As; encrypted saved or session-only credentials |
+| rclone remote files | Credential ZIP import, direct remote previews, existing offline copies/export, LocalCrypt encrypted offline reading/editing, local folder management and Save As; encrypted saved or session-only credentials |
 | Media/image tools, archives and other desktop integrations | Not ported |
 
 ## Preferences and storage
@@ -28,7 +87,43 @@ the native app; real-device interaction testing is still required.
 The launcher icon includes light and dark artwork. On supported iOS versions it
 also includes a monochrome variant for tinted icons; Android 13+ launchers can use
 the monochrome artwork for themed icons. The system or launcher controls this
-appearance, independently of the app's own theme setting.
+appearance, separately from the app's system-following surfaces and reader themes.
+
+### Local / LocalCrypt location
+
+On Android, open **Settings → Folder Hub → Local / LocalCrypt location…**.
+One drive setting controls both collections. Select the SD card to use:
+
+```text
+<SD card>/Logistics/Local
+<SD card>/Logistics/LocalCrypt
+```
+
+Tap **Allow SD card / shared storage access…**, enable Android's **All files
+access** for Logistics, and return to the app. Then choose **Copy collections
+and use this drive…**. Close open readers and provider documents first and wait
+for transfers to finish. Logistics copies existing managed Local and LocalCrypt
+folders, checks file contents, and saves the new location only after verification.
+Different files already in the destination stop the switch without overwriting;
+when there are no existing source files, collections on the selected drive may
+be adopted. The app closes after a successful switch; reopen it.
+
+The original copies remain as a recovery backup and continue to occupy space.
+Only the selected location is used afterward. Switching back refuses to replace a
+backup whose files differ from the current collection. Interrupted migration can
+leave copied destination folders, but the original selection remains active until
+both collections pass verification. Repeating the switch reuses matching copies.
+
+Credentials, transfer mappings, preferences, imported standalone books, text
+imports and recovery drafts remain in internal app storage. Local is readable
+storage; other apps with access to the card can read it. LocalCrypt preserves
+its encrypted filenames and bytes and still requires the matching credentials.
+The public collections survive app uninstall, but private credentials and
+transfer associations do not. Reinserting the card alone cannot recover those.
+
+If the card is missing or permission is revoked, local collection operations
+stop; Logistics does not silently download into internal storage. Reinsert the
+same card or restore permission. iOS keeps its existing private storage location.
 
 Developers can update Logistics on a paired iPhone over Wi-Fi using the
 [local deployment workflow](../../../Mobile/README.md#build-and-deploy-to-a-paired-iphone-over-wi-fi).
@@ -56,22 +151,28 @@ migration and general app-data backup/reset behavior remain separate work.
 
 ## Home and document search
 
-Home puts the selected document in a prominent **Continue** card, followed by
-**New document** and **Open file…**. Compact Folder Hub and Books & Comics rows lead
-to those workspaces; Open documents and LM Chat remain one tap away.
-**Continue** restores the document's Edit/Preview mode.
-**New document** creates and displays a separate editor; **Open file…**
-opens the existing Local/LocalCrypt file picker. Home starts with **Welcome to
-Logistics** and vertically centered icons in its padded Your spaces cards.
-Documents offers Text Editor, Markdown Editor, EPUB Reader, Comic Reader and
-Archives cards. Text and Markdown have **New** and **Open…**; readers and Archives
-have **Open…**. Each Open action browses matching formats in the main area.
-Archives currently filters ZIP/CBZ/EPUB files for the existing readers; the desktop
-archive manager is not ported. Only opened documents appear below the cards,
-grouped under Text, Markdown, EPUB books or Comics. Empty type groups are hidden. Each row shows the filename;
-restored sessions reload names from their stored document or library record.
-Open rows show unsaved changes, session-only status and known conflicts. Closing an open row
-uses the existing save/discard workflow and keeps its stored file.
+Home shows **Your workspace**, with a **Continue** card for the selected document,
+**New document** and **Open file…**. Recent lists up to three other ordinary
+files; Folder Hub and Books & Comics remain available below. Wider windows put
+Recent and Your spaces side by side. Continue restores the document's
+Edit/Preview mode. Open file browses existing Local/LocalCrypt files and detects
+the supported format when you open one.
+
+Documents puts **Open documents** first, with New document and Open file in a
+compact toolbar. Open files are grouped by Text, Markdown, EPUB books and Comics;
+empty groups are omitted. **Document card overview** switches between preview
+cards and compact rows. Cards use bounded excerpts of ordinary text drafts;
+private provider contents are never previewed here. Cards use one column on
+phones, two in wider windows and three on large tablets. Closing an item retains
+its stored file and uses the existing unsaved-change guard. Recent appears below
+open documents and excludes files already open. Private provider sessions and
+protected readers remain excluded from durable recent history.
+
+Editor status distinguishes **Unsaved changes · recovery copy kept** from
+**Saved on this device**. A recovery copy protects your draft; it does not save
+back to an imported original or upload to Remote. A detected external file
+change remains visible and offers **Save a copy…**. Local/LocalCrypt provider
+editors retain their own source-save and session-only status.
 
 The ordinary text/Markdown editor offers **Find** beside Save and Preview.
 Search is literal, wraps through the active document, and supports **Match case**,
@@ -87,7 +188,8 @@ Documents has a hamburger in its navigation bar. Opening it reveals a menu
 with **Browse Local Files**, on-disk unlocked LocalCrypt locations, **Recent**
 (up to six ordinary documents), **Comics Library**, and **Shortcuts** for new text,
 new Markdown and Folder Hub. Browse and library shortcuts open the existing file
-browser in the main area. Recent can reopen a closed document. Private provider
+browser in the main area. LocalCrypt browse labels show the remote name without
+a transfer-status suffix. Recent can reopen a closed document. Private provider
 sessions and password-protected reader sessions are excluded from durable recent
 history. The menu's comics folders come from the same discovery as Home's
 **Books & Comics**; both show folder names without full paths. Books & Comics
@@ -101,7 +203,7 @@ actions instead.
 
 At window widths of 640 points/dp or more, including a sufficiently wide Duo
 window, the open Documents menu occupies the left half and the current document stays on
-the right. In Documents, **Split** lets you choose a second open text or Markdown
+the right. In Documents, **Split** appears in a wide window with an editable document and lets you choose a second open text or Markdown
 document, including editable provider files. The first stays on the left and the
 chosen document opens on the right. Opening the hamburger replaces the left
 editor with the menu; closing it restores the pair. **Use one document** in the
@@ -121,8 +223,14 @@ bottom sheets. Opening these screens does not send a model request.
 The app opens on **Home**, a landing page with quick access to files, editors,
 books/comics and chat. The house icon is the first native destination, before
 **Folder Hub**, **Documents**, **Chat** and **Settings**. **Folder Hub** lists folders and their available local, encrypted and remote copies.
-Select a folder to see its Browse, Pull and Push actions. Browse opens the file
-browser for the chosen copy. Local browsing uses app-managed files rather than
+If folder discovery fails while credentials change, Folder Hub shows an error
+with **Refresh**, **Browse local files** and **Connections…**. Retry there after
+the connection is ready; restarting the app is unnecessary.
+Tap a folder to browse its preferred available copy directly. The **•••** button
+beside a folder opens its Browse Local/LocalCrypt/Remote, Pull, Push and management
+actions. The main Browse action is prominent; Delete local folder is separated
+and uses destructive styling. Pull/Push direction is shown for mapped copies.
+Deletion still requires confirmation, and Push retains its existing review. Local browsing uses app-managed files rather than
 the entire device filesystem. Choose **Documents → New** for **Plain text (.txt)** or **Markdown (.md)**.
 Books and comics are available through Folder Hub or Home’s Books & Comics panel;
 Chat has its own bottom navigation button between Documents and Settings. Native tab
@@ -153,7 +261,7 @@ close**, **Discard changes and close**, or **Cancel**. Retained drafts remain on
 overwriting changes made outside the editor or recreating a deleted file. A
 failed save or conflict keeps the document open; use **Save a copy** to preserve
 both versions. Session-only drafts offer Save, Discard, and Cancel without durable
-draft retention. **Clear documents with no pending changes on restart** is enabled
+draft retention. **Close saved documents on restart** is enabled
 by default in Settings. On restart, saved text and reader sessions leave Open
 documents; stored files and reading progress remain available. Unsaved text,
 conflicts and unreadable recovery entries stay in the open list. Turn this setting
@@ -222,6 +330,9 @@ and disappear when credentials are locked or forgotten.
 Use **Import…** for a standalone EPUB or comic. EPUB and
 CBZ/ZIP imports create private copies; the selected source is never
 changed. Imports open directly and remain available through document sessions.
+The Books and Comics library shows configured library folders only; it has no
+separate imported-items section, selection switches or imported-results paging.
+There is no folder search field; the available configured folders appear directly.
 Previous/Next and the
 chapter/page selector navigate the book's reading order. EPUB pages scroll in the
 native web view; comic images fit the native image area. The EPUB view follows
@@ -242,6 +353,15 @@ scroll position inside a chapter. **Bookmark** / **Unbookmark** toggles that
 chapter/page; the bookmark selector returns to saved positions. Comic pages use
 natural filename order. Right-to-left manga metadata is identified; single-page
 Previous/Next controls still refer to reading-order positions.
+In the comic reader, horizontal swipes turn pages in both normal and fullscreen
+views, including swipes from the screen edge. They do not navigate Back. Zoomed
+pages use dragging to pan; fit the page to resume swipe paging. Use the visible
+Back control to leave the reader.
+Comics fill the available reading width immediately on opening and resize with
+the reader. The image keeps its aspect ratio, so some pages can have natural
+letterboxing. With controls visible, books and comics use the same hamburger
+position as Documents; on iOS it is in the navigation bar. Bottom controls,
+reading status and progress indicators stay above the destination bar.
 
 Ordinary CBZ/ZIP comics stream into the private library without a fixed archive
 or total decompressed-size cap. Reading seeks archive headers and fetches only the
@@ -320,12 +440,18 @@ are rejected rather than executed.
 
 ## Remote files and credential ZIPs
 
-Select a folder in **Folder Hub**, then choose **Browse Remote** to open its
+Open a folder’s **•••** actions in **Folder Hub**, then choose **Browse Remote** to open its
 online file browser. Credential setup is under
-**Settings → Remote connections** (also reached through **Manage connections…**
+**Settings → rclone / Remote connections…** (also reached through **Manage connections…**
 in the remote browser). The native app embeds rclone 1.74.1; no desktop
 executable, shell, mount, or separate RC server is required. **Check rclone engine**
 performs an offline in-memory read and displays the engine version.
+
+The online browser loads filenames and sizes without fetching thumbnails, in
+both list and tile views. Opening a folder or file shows the current step and
+elapsed seconds, with an animated progress bar. Remote previews report connection
+checks, archive index reads and member/data reads; **Cancel** stops the pending
+request. The elapsed time is a wait indicator, not a download percentage.
 
 Tap **Choose credential ZIP…** and select your existing Logistics credential
 package. Its filename appears under the button. Enter its password, then tap
@@ -351,42 +477,48 @@ must use HTTPS. Certificate verification stays enabled. A single crypt layer ove
 one supported backing remote is available for [LocalCrypt reading](#localcrypt-encrypted-offline-reading).
 
 Choose a connection and tap **Open remote**. **Connections…** opens credential
-setup. Tap folders to open them; **Back** in the browser returns through successful
-folder visits. **Folder Hub** returns to the folder list. Choose a file
-and tap **Copy to device…**, or open a folder and tap **Copy this folder…**.
-The copy screen shows the source and a browsable **On this device** destination.
-Open a destination folder and tap **Copy here**; no path typing is required.
-Existing files are preserved, with a separate copy name when needed.
-**Open copied location** opens the result in the local browser and selects a
-copied file so **Open file** is immediately available.
+setup. Tap folders to open them; **Back** returns through successful visits.
+**Folder Hub** returns to the folder list. Tap supported files for read-only,
+in-memory previews. Unsupported files show a dialog asking you to make a local
+copy yourself. The remote browser has no file or folder download/copy actions;
+use the managed Pull workflows to create or refresh offline folders.
 
-The progress bar tracks bytes for the current file when its size is known,
-with an animated bar when the size is unavailable. Folder copies also show the
-number of completed files. **Cancel** stops the transfer; unsuccessful transfers
-do not publish a partial copy. The bar reaches 100% after the copy is published.
-Folder copies preserve empty folders and are limited to 10,000 items. Each folder
-copy gets a separate name to preserve previous copies and local edits.
+Remote CBZ/ZIP comics download completely into memory once before opening.
+The status shows downloaded MiB and percentage; subsequent page turns read that
+snapshot without contacting the share. The cache allows up to 128 MiB per comic
+and 256 MiB across open comics in all windows. Close a remote comic to free its
+cache. Closing, locking or replacing credentials clears its cache; nothing is
+written to disk. Larger comics require a managed local copy. To see changes made
+to the online archive after it was cached, close and reopen the comic.
 
-Crypt sources show an explicit **unencrypted copy** notice before copying.
-**Actions → Encrypted offline copies…** provides encrypted LocalCrypt downloads.
-**Actions → Downloaded copies…** retains the older private-download workflow,
-including **Download** / **Download decrypted**, opening and system export.
-The mobile bridge copies from remote to device; uploads and remote rename/delete
-are not implemented. Individual network reads have a 15-second timeout; browsing
-has a two-minute deadline and transfers have a 30-minute deadline. Cancellation
+While an online request is running, Folder Hub's action menus and local folders
+remain available. Another online operation shows a busy message and **Cancel
+current request** rather than silently waiting. LocalCrypt browsing can continue
+during transfers and remote reads; credential replacement must finish first.
+Returning to Folder Hub and opening **•••** use the last discovered folder
+metadata without rechecking rclone. Credential loading and **Refresh** update
+encrypted-folder discovery in the background. Opening a mapped remote shows
+**Checking connection…** while its identity and folder path are checked; menus
+and navigation remain usable during that check.
+
+A file or folder's **•••** opens actions for that item: **Open preview** for a file
+or **Open folder** for a folder. Comic archives offer an inner ZIP password field;
+opening a password-protected comic also brings up this form automatically.
+The browser status shows when a remote file is opening and reports opening failures.
+
+**Search** filters names in the current folder. Changing folders clears search.
+Remote listings read only the selected folder's immediate children. Remote
+screens display 24 rows per list page or 16 tiles, with **Previous** and **Next**
+above the items; paging, sorting and filtering do not contact the remote again.
+The status distinguishes **Listing…** from **Displaying…** and keeps an elapsed
+timer while waiting. Folder Hub and its action menus remain available during listing.
+Failed navigation preserves the prior listing and history. Browsing has a
+two-minute deadline; managed Sync has no fixed overall deadline. Cancellation
 may wait for an upstream network call to return.
 
-**Search** searches names in this folder and its subfolders in the background,
-up to 10,000 scanned entries and 1,000 displayed results. Sort by name, size or
-modified time; folders remain first. Changing folders clears search, and hiding a
-selected file clears its copy selection. Failed navigation preserves the prior
-listing and history.
-
-Select a private download and choose **Open private copy** to import it into the
-text/Markdown editor or EPUB/CBZ library, subject to those readers' existing format
-and size limits. Other/bigger files can use **Export private copy…**, through the
-system destination picker, streamed without a fixed whole-file size cap. Repeated downloads produce separate private
-copies; incomplete copies are excluded from the selector after a restart.
+**Actions → Downloaded copies…** and **Encrypted offline copies…** retain access
+to copies created by older versions. Open or export existing private copies;
+new standalone copies cannot be downloaded from the browser.
 
 **Save credentials on this device** is enabled by default. Turn it off before
 importing to keep credentials only in memory for this app session. A session-only
@@ -420,10 +552,9 @@ available crypt remotes and confirms when a crypt is selected. If it reports
 no crypt remote, the loaded ZIP must include both the crypt configuration and
 its backing remote configuration; choosing only the backing Dropbox/Drive/etc.
 remote does not apply crypt decryption.
-Choose a file and **Download encrypted copy**. The app saves the original rclone
-ciphertext under its private LocalCrypt storage; it does not save decrypted content
-or add a plaintext filename to the copy's record. Filename privacy still depends
-on the crypt remote's filename-encryption settings.
+For a new encrypted offline folder, use Folder Hub's managed **Pull to LocalCrypt**
+workflow. Existing individual encrypted copies remain readable with matching
+credentials; the remote browser no longer creates them.
 
 Remote browsing and unlocked copies show decrypted names. **Manage local files
 and folders** opens a local browser with **Local files** and existing
@@ -511,7 +642,7 @@ created. Conflicts, incorrect passwords, cancellation and failed verification ke
 the original encrypted copy. Failed saves keep your edits in the form. **Back to
 reader** keeps the form draft; **Discard changes and close** explicitly discards it.
 
-Encrypted downloads, moves, reads and metadata rewrites have no fixed whole-file
+Encrypted managed transfers, moves, reads and metadata rewrites have no fixed whole-file
 size cap. Archive headers and individual members are read as needed; metadata
 verification streams every member. Text editing is limited to 1 MiB, archive
 member reads to 16 MiB, and comic pages to
@@ -594,8 +725,8 @@ the server's IP address. Legacy AFP shares are not supported.
 
 The browser first lists the server's shares. Open a share, then the folder you
 want, and use **Pull…** in its folder actions to create a managed offline copy.
-Existing Pull progress, cancellation and refresh rules apply. **Copy this folder…**
-also provides a one-time copy. A network/login failure keeps the added connection;
+Existing Pull progress, cancellation and refresh rules apply. A network/login
+failure keeps the added connection;
 retry browsing after fixing network access. **Forget saved credentials** removes
 the saved connection set for all servers, as it does for credential ZIPs.
 
@@ -604,28 +735,12 @@ configuration with `host`, `user`, `pass`, `domain`, and `port`; `pass` in a ZIP
 must already be rclone-obscured. The direct form accepts your ordinary password.
 Physical-device SMB transfers still require validation with an actual server.
 
-### Repeatable folder pulls
+### Managed folder pulls
 
-Earlier mobile versions offered **Save repeatable folder pull**. New transfers use **Pull…** and the sync engine below. Legacy copy jobs remain readable through their compatibility route. This downloads
-a complete local copy and adds a job under **Folder Hub → Folder pulls**. **Refresh**
-fetches the current remote contents. It never uploads or deletes remote files.
-
-If the local folder is unchanged, Refresh keeps its previous version in a
-separate `-previous-…` folder and updates the original local folder. If you edited,
-added or removed local files, Refresh keeps that folder untouched and saves the
-remote version in a separate folder. The status identifies the resulting folder;
-**Open downloaded folder** opens it. Inspect conflicts before moving files yourself.
-Previous versions remain available until you explicitly delete them. **Remove
-job** removes only the job, preserving every local copy. Failed/interrupted
-publication preserves surviving folders and is reconciled before the next retry.
-
-Ordinary jobs can be reopened after launch with the matching connection. Changing
-a connection makes its old jobs unavailable. Crypt jobs stay in this app session
-and are forgotten when credentials are cleared; their downloaded copies are
-explicitly unencrypted. Up to 16 jobs are supported, with 10,000 items per folder.
-
-Reopening a downloaded copy or imported local book now returns to its existing
-document/library identity rather than importing another duplicate.
+Use **Pull…** from Folder Hub for reviewed Local or LocalCrypt sync. The older
+snapshot-style repeatable-pull workflow has been removed. Existing downloaded
+folders remain on the device; they can still be browsed as local files. Sync can
+replace or delete destination files after confirmation, without a retained backup.
 
 ## File browser locations and actions
 
@@ -636,6 +751,9 @@ it. Search stays visible; **Sort** reveals sorting and list/tile options. The
 **•••** beside an item selects that item and opens its commands without opening
 its contents. Rename, Move, New folder and archive-password entry have focused
 screens. **Details** shows metadata and bounded previews.
+Folders containing up to 500 items scroll in one list, in both List and Tiles.
+Larger listings show **Previous** and **Next** above the items, keeping paging
+controls clear of the bottom destination bar.
 Files opened from this browser stay in the Folder Hub navigation stack. Native Back
 returns to the same folder, search, sorting, selection and scroll position.
 Back leaves the reading/editing session open, including unsaved provider text
@@ -649,10 +767,9 @@ changed connection reports unavailable instead of opening another provider.
 Encrypted folder paths cannot be pinned for restoration. Remove pin removes only
 the shortcut. Malformed or concurrently changed pin records are preserved.
 
-Folder pulls can refresh a local folder repeatedly. Local changes produce a
-separate incoming snapshot; they are never overwritten by a refresh. Unchanged
-folders can update while their previous copies remain available. Removing a job
-keeps all local folders. Remote data is never changed by a folder pull.
+Managed folders use the reviewed Pull/Push workflow. Pull refreshes the selected
+local destination; Push updates the remote. Both can replace or delete destination
+files, and cancellation leaves any already completed changes in place.
 
 ## Reader and editor presentation (Phase 3 Part 1)
 
@@ -714,8 +831,11 @@ all local and loaded remote copies. Choose a credential ZIP to filter its folder
 Dash-separated names form expanded levels (for example Server → Lib → ComicRack);
 triangles collapse or expand parent levels. Its action page reflects the copies available. **Browse Local** opens readable files on this device, **Browse LocalCrypt** opens
 the encrypted device copy, and **Browse Remote** opens the online folder. Only
-available copies receive a browse button; each copy is offered once. Remote
-browsing opens the online file browser, with copy-to-device and secondary download
+available copies receive a browse button; each copy is offered once. Existing
+mapped Local and LocalCrypt folders retain **Browse Remote** even while their
+credentials are locked; opening it prompts for the matching credentials and
+returns to the mapped online subfolder. Remote
+browsing opens the read-only online file browser, with direct previews and existing offline-copy
 actions. Choose folders and start Push/Pull from their Folder Hub action pages.
 Existing managed copies remember their storage type and transfer association.
 The first pull chooses storage; later transfers reuse it. **Refresh** updates
@@ -737,13 +857,16 @@ remote root and `Remote:folder/subfolder` for a folder within it. “Root” is 
 added as a folder name.
 LocalCrypt requires a crypt remote with encryption keys. Existing ordinary
 folders matching the remote/folder name can be adopted as the Local destination.
-Both storage types belong to the app's private space. Crypt storage choices only
+Both storage types default to the app's private space. Android can instead place
+both on one selected drive (see **Local / LocalCrypt location** below). Crypt storage choices only
 appear when a corresponding copy exists; loading credentials does not imply the
 folders are downloaded.
 
 **Pull** makes the local destination match the remote source. **Push…** makes the
-selected remote destination match local, after a review showing replacements
-and destination-only entries to remove. Files missing from the source are removed
+selected remote destination match local. Both open a detailed review of file
+additions, replacements and deletions, based on rclone's dry-run comparison.
+Confirming a completed review checks it again before writing; changed results
+require another review and confirmation. Files missing from the source are removed
 from the destination, within the selected folder. Both operations call the embedded
 rclone library's standard Sync routine, with no backup option or new retained
 snapshots. Transfers use rclone's normal incremental comparison. LocalCrypt syncs
@@ -751,7 +874,7 @@ ciphertext to/from the backing scope; a readable Local copy of a crypt remote us
 rclone's crypt filesystem for automatic encryption/decryption.
 
 **Folder Hub → Transfers** opens **Transfer details**: live progress, completed/known
-file and byte counts, cancellation, pending push review, and completion or error
+file and byte counts, cancellation, active review, and completion or error
 messages, wrapped to fit the phone screen. It does not list remotes or offer folder selection. The transfer banner
 also opens these details; the remote browser reflects the same progress. If a
 remote folder matches several local mappings, Pull opens a focused destination
@@ -761,9 +884,8 @@ Folder action pages offer **Delete local folder…** and, for managed copies,
 **Remove mapping (keep files)**. Delete local folder requires confirmation and
 removes only the app-private local folder and everything inside it permanently;
 the online folder remains. Confirmation appears without scanning folder contents.
-Deletion creates no backup and has no app recovery or undo. Obsolete transfer
-snapshots are discarded during deletion or the next transfer; they cannot be
-opened or restored. Removing a mapping keeps its local files. A missing or changed
+Deletion creates no backup and has no app recovery or undo. The app no longer runs the obsolete snapshot-recovery workflow or automatically
+deletes its old backup trees. Those old files remain untouched. Removing a mapping keeps its local files. A missing or changed
 connection blocks transfers until you load the matching credential ZIP.
 
 For session-only connections, `preferences.ini` remembers the ZIP filename and
@@ -778,15 +900,31 @@ transferred bytes. Known totals can grow as rclone discovers more files; discove
 uses a steady activity indicator until a byte total is available. A zero completed
 file count can mean files are still transferring, rather than no work happening.
 New copies use the exact remote name (or selected Local subfolder name), without
-a random suffix. On the next pull, an older generated suffixed Local folder is
-renamed together with its mapping if the destination is free. LocalCrypt keeps its
-private account storage and updates its copy label. Conflicting names, including
+a random suffix. Existing copy mappings keep their recorded destination. No automatic suffix
+renaming or legacy folder migration runs. LocalCrypt keeps its private account
+storage. Conflicting names, including
 case-only differences, refuse the pull and preserve existing copies.
+
+Both desktop and mobile preserve empty source folders when the destination
+backend supports directories. Managed Sync uses rclone’s normal retry policy
+(three attempts and ten low-level retries); mobile progress shows retry attempts.
+Fatal and non-retryable errors stop immediately. Cancel also interrupts a retry
+wait, including a server-requested Retry-After. Review comparisons use the same
+retry policy. A fresh attempt replaces the previous attempt’s comparison rows,
+and a failed or cancelled comparison stays incomplete. **Proceed without full
+review…** remains available while waiting for a comparison retry.
 
 Transfers support cancellation. An interrupted sync can leave
 completed writes/deletions at the destination, just like CLI rclone sync; retry
-uses the same recorded location. Other ordinary documents remain usable while
-sync runs. Save or close provider edits before syncing their local files. Transfers
+uses the same recorded location. Mobile runs one transfer at a time and does not
+queue another transfer. Existing Local and LocalCrypt folders remain browsable
+and readable while a folder transfer runs, including through Documents’ hamburger
+menu, configured library shortcuts and Folder Hub. Opening a library keeps its
+encrypted provider and account namespace. Locking or replacing credentials still
+invalidates those private shortcuts. LocalCrypt listings omit rclone's
+incomplete download files; refresh to discover newly completed files. A file that
+changes during reading must be reopened. File-management mutations remain blocked
+during a transfer. Save or close provider edits before syncing their local files. Transfers
 do not promise continued execution while iOS/Android suspends the app. Host tests
 verify the UI and embedded rclone tests verify incremental transfers, deletion in
 both directions, plain/crypt destinations and absence of new backups. Physical
@@ -809,15 +947,14 @@ Results arriving after their window has been replaced do not update that old vie
 
 Home offers Continue and compact shortcuts to Folder Hub, writing and the library.
 Documents groups open sessions by type and shows preview cards by default. Tap
-a title or Resume document to continue; the current session is labelled Current
-document. Cards show a short text excerpt for ordinary text/Markdown documents
+a filename to continue. Cards show a short text excerpt for ordinary text/Markdown documents
 and a type placeholder for books, comics and private provider sessions. The **×**
 button closes a session through the existing unsaved-change guard.
 In **Settings → App**, turn off **Document card overview** to use the grouped list
-with its **•••** close menu. This switch saves immediately and updates the document
+with the same direct **×** close control. This switch saves immediately and updates the document
 overview, including when an editor is open. Stored documents are not listed in the overview.
 Settings groups feature options under Text & Markdown, Books & Comics, LM Chat
-and Folder Hub; reader appearance stays in each open reader. Documents offers New and Open within its category cards; Chat has
+and Folder Hub; reader appearance stays in each open reader. Documents offers New document and Open file in its toolbar; Chat has
 its own bottom navigation destination. The Library shortcut has been removed
 from Documents.
 
@@ -829,6 +966,9 @@ draft; leaving the view clears the rendered preview and keeps the draft in memor
 Closing or locking private content clears the preview as well as its editor text.
 
 Folder Hub starts with a scrollable list of folders. Names have no Local/Remote prefix.
+Name-based groups (such as Server → Library → Comics) remain expandable. The Hub
+lists storage entry points and managed copies; browsing a remote does not add its
+contents to this tree. Open an entry to browse actual subfolders in its file browser.
 Tap a folder row to open its action page. **Browse Local**, **Browse LocalCrypt** or **Browse Remote** opens the file browser for that copy.
 Managed copies offer **Pull…** and **Push…**. Folders with a loaded remote offer
 Pull to create or associate a copy. Local folders also offer **Delete local
@@ -837,19 +977,46 @@ transfers finish. **Choose another folder** returns to the list. At widths of at
 least 640 points/dp, the tree remains on the left and actions appear on the right,
 in equal panes centered in the available content. Narrow windows use a separate
 action screen. Mapping removal is not offered on this page.
-**Settings → Remote connections…** loads credentials. **Transfers** and
+**Settings → rclone / Remote connections…** loads credentials. **Transfers** and
 **Refresh** stay above the scrolling list. Transfers opens progress and managed-copy
 options; Refresh has its own circular-arrow icon and updates folder discovery.
 Returning through the bottom Folder Hub tab refreshes the same complete list.
+
+An ordinary local folder can also **Push…** before its first Pull. **Push whole
+folder…** infers the remote from the folder name: `Books` goes to `Books:` in the
+matching credential package. **Push as subfolder…** lets you select a loaded
+remote: local `Comics` beneath `Books` goes to `Books:Comics`. Existing mappings
+retain their account and destination. Review and execution use the same exact
+mapping; confirmation does not rename the local folder or resolve another target.
+New copies use readable folder names without generated ID suffixes.
+
+In **Transfers → Transfer settings…**, choose rename tracking, an optional positive
+whole-number bandwidth limit in MB/s, and Push exclusions (one rclone pattern per
+line). Defaults match desktop Push filters. Excluded destination files are kept;
+Pull does not apply these exclusions. The review captures the options used by
+execution, including when you proceed without the full review. Ordinary Local
+transfers follow file links. Links inside LocalCrypt remain rejected.
+
+LocalCrypt Push removes only independent generated files named `.DS_Store`,
+`Thumbs.db`, `ehthumbs.db` or `ehthumbs_vista.db`, case-insensitively, including
+encrypted names. Review shows **Cleanup** for local removals and **Delete** for
+resulting remote removals, without changing files. Plain generated files with an
+exact raw allowlisted name can be removed directly; encrypted generated files
+must authenticate before removal. Corrupted ciphertext blocks Push and is
+preserved. Custom exclusions never authorize local cleanup.
 
 Folder rows use one line with an icon/name and a navigation chevron. Files can
 show their size and **•••** actions. Opening a folder does not flash a selection
 checkmark. Sort and List/Tiles remain in the Sort controls.
 
-Pull always asks for native **OK / Cancel** confirmation before writing local
-files. Every **Push…** attempt asks for native confirmation before preparing its
-changes review, then asks again before writing online. Cancel keeps the files
-unchanged. The popup identifies the
+Push and Pull scan their comparison without changing destination files. Both ask
+for native **OK / Cancel** confirmation before writing. **Proceed without full
+review…** is available while scanning or checking a completed review: it stops the
+comparison and asks you to confirm with an explicit warning that more replacements
+and deletions may occur. Required credential, destination and LocalCrypt integrity
+checks still run. Comparison failure or cancellation never starts a transfer by
+itself. Cancelling the review keeps destination files unchanged and does not publish
+a new-copy mapping. The popup identifies the
 source and destination and warns about replacements/deletions. Changing the
 connection or mapping while the popup is open invalidates that operation.
 A compact transfer strip remains available while writing or reading. The rclone
@@ -928,29 +1095,32 @@ preserves the selected destination and does not open other workspaces.
 
 Folder Hub's Credential selector includes All and the names of imported credential
 ZIPs (for example, Personal). All combines known local and remote folder trees.
-Session-only ZIPs imported with this version are retained encrypted on the device,
-without saving their ZIP passwords. A future push, pull or LocalCrypt browse can
-ask for the matching ZIP's password instead of asking you to select the file again.
-A ZIP loaded only for a session before this update must be selected once again to
-retain it. Forget saved credentials also removes retained ZIPs and their device key.
+For session-only imports, password-protected source ZIPs are retained under device
+encryption with their remote names and crypt-setting fingerprints. LocalCrypt can
+therefore find the matching ZIP after restarting and ask only for its password.
+The ZIP password and decoded credentials remain in memory for the current app
+session; the retained ZIP does not restore an unlocked session. Unencrypted ZIPs
+are not retained in session mode: select them again next time. **Forget saved
+credentials** removes retained ZIPs and their device key. Association metadata
+includes ZIP labels and remote names, not decrypted document names or contents.
+Previously saved credentials remain saved until explicitly forgotten.
 
-Documents lists opened documents inside their matching format card, below its
-New/Open actions. The menu opens immediately using cached shortcuts, then refreshes
+Documents lists open files in type groups below its compact New/Open toolbar. The menu opens immediately using cached shortcuts, then refreshes
 available folders in the background. Chat opens on its first tab selection.
-On iPhone, plain text actions respond over their visible text or icon; blank space
-beside them does not activate the action. Bordered rows and icon controls retain
-their visible touch targets.
+On iPhone, plain text actions retain at least a 44-point-wide hit area around
+their text or icon, bounded by their own controls. Bordered rows and icon controls
+retain their full visible touch targets.
 
 LocalCrypt and private provider documents remain memory-only: their names, paths,
 content and previews do not enter Recent or the saved open-document manifest.
 They disappear from Home and the opened-document cards when their credential
 session is no longer current, and cannot reopen until unlocked. Recent contains
-up to six ordinary local/imported document identities. Explicitly downloading an
-unencrypted local copy makes that copy an ordinary local file, which can appear
+up to six ordinary local/imported document identities. Pulling an
+unencrypted managed Local copy makes that copy an ordinary local file, which can appear
 in local document history independently of the original remote's lock state.
 
 
-Opened documents use their filename as the blue resume link, with a direct ×
+Opened documents use their filename as the resume link, with a direct ×
 close control beside it. There is no separate opened-count heading. Turning off
 card previews in Preferences keeps the same name/close row without the excerpt.
 On iPhone, tab selection waits for UIKit to finish changing its selected screen
@@ -975,8 +1145,8 @@ Add share opens the SMB / Mac share connection form. The transfer banner also
 shows completion and opens the existing transfer details screen.
 
 
-Home has a Logistics navigation title above the spaced Welcome to Logistics
-greeting. The former “Read. Write. Organize.” tagline has been removed; the bottom
+Home has a Logistics navigation title above the compact Your workspace
+heading. The former “Read. Write. Organize.” tagline has been removed; the bottom
 navigation tab remains named Home.
 
 
@@ -1004,15 +1174,170 @@ reads through encrypted storage and stops at that storage root. An empty nearest
 LogisticsZIP section stops inheritance; a manually supplied value takes priority.
 Resolved values stay in memory for the reader session and are cleared on close.
 
-On iOS, folders whose names start with `Legacy-` are hidden in Folder Hub,
+On Android and iOS, folders whose names start with `Legacy-` are hidden in Folder Hub,
 file browsers and library shortcuts by default, including Local, Remote and
 LocalCrypt folders. Settings → Folder Hub → **Show Legacy** changes visibility
 for the current session. Press **Save preferences** to keep the choice after
 restarting; **Reload preferences** restores the saved choice. Files with that
 prefix remain visible when their parent folders are visible.
 
-The same iOS **Show Legacy** switch also hides credential/ZIP choices whose
+The same **Show Legacy** switch also hides credential/ZIP choices whose
 names start with `Legacy` (case-insensitive, no dash required), including retained
 ZIP unlock choices. Turning it on reveals these choices immediately. Hiding a
 selected credential returns the Folder Hub selector to **All**; stored credentials
 and their ZIPs are retained.
+
+### LocalCrypt session and screen privacy
+
+A session lasts for the running app process. Privacy protection starts as soon
+as session-only credentials load, before any document is opened. A configured
+crypt, saved credentials or a selected ZIP alone does not activate it. Protection
+continues until both those credentials and all associated private views are cleared.
+Navigating between tabs does not lock the session. Leaving the app or locking
+the device covers it immediately; returning shows a lock screen until you enter
+the session's ZIP or connection password. Private edits remain in memory behind
+the lock. Private views with a separate archive password may require that password
+as well. Passwordless sessions first ask you to set a temporary lock password.
+On iOS, the lock form stays inside the safe area, clear of the status bar, notch
+and home indicator in portrait and landscape.
+These lock passwords and their verification data are never saved to disk.
+Closing/replacing credentials retires private readers; cached plaintext reads
+check the credential generation shared by all windows. Private thumbnails, names,
+reading positions and drafts do not enter document history or recovery files.
+This does not promise secure erasure of RAM or protection on a compromised device.
+
+On iOS, windows with loaded session-only credentials or associated private views
+are covered while inactive before app-switcher snapshots. Fresh launches and
+saved credentials alone do not activate the black privacy screen. Loaded private
+session content is also covered during detected recording/mirroring. Stop capture
+to use the session or its lock screen. External displays receive a blank screen,
+never a separate workspace or frozen Home view. iOS does not provide
+a supported general switch to prevent still screenshots; screenshot detection
+happens after capture. On Android, secure windows block ordinary screenshots and
+nonsecure capture while session-only credentials or associated private views remain loaded. Native device
+behavior can vary; these controls do not block an external camera.
+
+LocalCrypt follows the credential package's filename settings. Names remain
+readable if filename or directory-name encryption was disabled; ciphertext sizes,
+counts and timestamps and connection/remote labels are not secret. **Pull to Local**, Move/Save As to Local, exports and clipboard copies intentionally
+produce plaintext. Session-only imports leave an older saved credential vault
+unchanged; use **Forget saved credentials** to remove it and older retained ZIPs.
+
+### Locked credentials and Folder Hub
+
+Mobile now follows desktop Folder Hub visibility. Before a session-only credential
+is unlocked, only its existing mapped Local/LocalCrypt copies appear. Retaining
+a ZIP remembers which password can unlock a local copy; it does not expose the
+ZIP's entire remote list in Folder Hub. Credential groups with no visible copies
+are omitted there while locked. After unlocking, all normally visible remotes in
+that credential appear, including remotes without a local copy.
+
+Use **Settings → rclone / Remote connections… → Unlock <ZIP name>** to unlock a
+retained ZIP even if it has no local folders. Enter its ZIP password; a wrong
+password keeps the prompt open and the remote-only list hidden. Success returns
+to Folder Hub with the loaded remotes. **Choose credential ZIP…** still imports a
+new ZIP or one that was not retained. **Lock credential session** clears the
+unlocked credentials and hides remote-only entries while keeping local copies,
+retained ZIPs and previously saved credentials. Save or discard private edits
+before locking. **Forget saved credentials** also removes retained ZIPs and keys.
+
+
+### Reader navigation and imported metadata
+
+Imported EPUBs now provide nested contents/internal links, current-chapter search,
+screen-step navigation and passage-based resume/bookmarks. Android and iOS provider
+EPUBs share rich rendering, nested contents, internal links, highlighted search and
+appearance controls through a private browser view. Their positions and bookmarks
+remain session-only; other backends retain bounded native text passages. See the [Books guide](../../features/books/user_docs/README.md#native-mobile-reading)
+for pagination and persistence differences.
+
+Comic readers offer single/automatic/two-page layouts, manga-aware spreads and
+spread-aware turns. Imported comics also have first/last and neighboring-comic
+commands; folder-backed provider comics can open neighboring comics from their
+reader menu. See the [Comics guide](../../features/comics/user_docs/README.md#native-mobile-library).
+
+The Books & Comics catalogue now includes imported copies. Reader menus edit
+metadata on ordinary imported EPUBs/comics; selecting comic rows opens explicit-field
+batch editing. These writes change the imported copy, preserve page/resources and
+leave the external source untouched. Existing provider metadata saves keep their
+own encrypted-publication policy. A recovery journal completes an imported
+archive/checksum-record publication interrupted after the archive was saved.
+
+
+### Mobile EPUB speech and expanded appearance
+
+EPUB reader menus now include **Read aloud…**, with installed offline voices,
+speed, selected-passage playback, pause/resume and stop. Resume repeats the current
+sentence/passage. Private-reader suspension stops speech and clears its queued text.
+Appearance includes local font families, custom line spacing and maximum width,
+and Sepia/Slate alongside existing themes. See the
+[Books guide](../../features/books/user_docs/README.md#native-mobile-reading).
+
+Imported catalogue search indexes all ordinary imports incrementally, persists a
+disposable local cache, and shows 50 results per page. Comic edit forms offer
+collection suggestions. Ordinary local and unlocked LocalCrypt folders have recursive comic
+metadata batches through **Files → Actions → Edit comics in this folder…**. See the
+[Comics guide](../../features/comics/user_docs/README.md#mobile-collection-search-and-folder-batches)
+for scan limits, explicit-field saves and private-session cleanup.
+
+## Focused browsing and setup
+
+In the Local/LocalCrypt file browser, **Parent folder** moves up the folder tree;
+the native Back action leaves the current screen. The Open file browser displays
+the current folder breadcrumb beside Parent folder. Duplicate browser Back
+controls are omitted; Sort and view controls remain secondary to search and files.
+
+Chat shows **Set up chat** until a server and model are configured. Send is
+disabled until configuration is available; opening setup does not connect to a
+server or discard an unsent draft. User messages retain bubbles; assistant
+messages use an open layout. The conversation menu, streaming Stop action and
+history remain available.
+
+An empty Books & Comics library offers **Import a book or comic…** and
+**Open Folder Hub**. An empty search offers **Clear search**. Library search has
+its own row so Refresh and Import do not crowd the search field.
+
+On iOS, ordinary screens reserve the measured overlap of the floating tab bar,
+including keyboard changes. Chat and immersive readers retain their own chrome
+ownership. The local presentation uses larger touch targets and names document
+close/action controls for accessibility.
+
+### Compact mobile control icons
+
+Reader Previous/Next page controls use left/right chevrons. File-browser history
+uses a back chevron; **Parent folder** uses an up arrow, so moving up a directory
+remains distinct from leaving a screen. Browser result paging and editor Find
+Previous/Next match controls also use chevrons. Reading Contents uses a list icon,
+Appearance uses a text-size icon, and editor Find uses a magnifying glass.
+Overflow menus use an ellipsis and document close controls use a cross.
+
+These controls have 48-point touch targets and descriptive VoiceOver/TalkBack
+names, including the affected filename on row menus and close buttons. Save,
+transfer, deletion confirmations, and named return destinations keep text labels.
+The icons follow system appearance, including Android's high-contrast setting.
+
+### Current iOS and Android differences
+
+Both platforms share the main file, editor, EPUB/comic, chat, and transfer
+workflows. Navigation bars, pickers, menus and installed speech voices use each
+platform's native presentation. iPad supports additional app windows; Android
+currently keeps one app workspace/window. Android alone offers **High contrast /
+E Ink**. iOS alone offers **Show Legacy**, which controls visibility of names
+beginning with `legacy-` and credential package names beginning with `legacy`; Android shows them without that filter.
+
+Android protects sensitive windows with its secure-window flag. iOS hides content
+for inactive app snapshots and detected recording/mirroring, but cannot prevent
+still screenshots. See the developer [parity review](../../../docs/developer/mobile-ui-refresh.md#control-icons-and-iosandroid-parity-review-2026-10-15)
+for the implementation boundaries and verification scope.
+
+### Android fullscreen comics and developer settings
+
+Comic reading mode hides both Logistics navigation and Android's status/navigation
+bars. Tap the comic to restore reading controls; navigating away restores system
+bars. An edge swipe can temporarily reveal Android's system bars. Image fitting
+still preserves page aspect ratio, so a page need not cover every pixel.
+
+Android **Settings → Developer settings…** opens the system developer options
+directly, including Wireless debugging, once developer mode is enabled. This
+avoids a separate settings-launcher app. It does not keep wireless debugging
+enabled if the tablet's firmware disables it during sleep or a Wi-Fi change.

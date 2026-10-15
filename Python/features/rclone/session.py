@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import re
 import threading
+import weakref
 from uuid import uuid4
 
 # rclone compares Go's Windows null-device spelling case-sensitively.
@@ -15,6 +16,42 @@ _sets = {}
 _private = set()
 _known_packages = {}
 _parents = {}
+_revocations = {}
+
+
+def on_forget(config_path, callback):
+    """Observe one credential generation without keeping its owner alive."""
+    path, token = Path(config_path), uuid4().hex
+    reference = weakref.WeakMethod(callback)
+    with _lock:
+        active = path in _sets
+        if active:
+            _revocations.setdefault(path, {})[token] = reference
+    if not active:
+        callback()
+    def unsubscribe(*_):
+        with _lock:
+            _revocations.get(path, {}).pop(token, None)
+    return unsubscribe
+
+
+def _forget_locked(path):
+    callbacks = []
+    for child, parent in tuple(_parents.items()):
+        if parent == path:
+            callbacks.extend(_forget_locked(child)[1])
+    _parents.pop(path, None)
+    _private.discard(path)
+    removed = _sets.pop(path, None) is not None
+    callbacks.extend(_revocations.pop(path, {}).values())
+    return removed, callbacks
+
+
+def _notify(callbacks):
+    for reference in callbacks:
+        callback = reference()
+        if callback is not None:
+            callback()
 
 
 def read_package(path, password):
@@ -59,7 +96,7 @@ def remember(config_path, values, *, package_path=None, private=False, parent=No
         config_path = Path(config_path)
         if parent is not None and Path(parent) not in _sets:
             raise ValueError('The credential session is locked.')
-        forget(config_path)
+        _, callbacks = _forget_locked(config_path)
         if parent is not None:
             _parents[config_path] = Path(parent)
         _sets[Path(config_path)] = (uuid4().hex, values, Path(package_path) if package_path else None)
@@ -67,6 +104,7 @@ def remember(config_path, values, *, package_path=None, private=False, parent=No
             _known_packages[Path(config_path)] = Path(package_path)
         if private:
             _private.add(Path(config_path))
+    _notify(callbacks)
 
 
 def names(config_path):
@@ -82,13 +120,9 @@ def paths():
 
 def forget(config_path):
     with _lock:
-        config_path = Path(config_path)
-        for child, parent in tuple(_parents.items()):
-            if parent == config_path:
-                forget(child)
-        _parents.pop(config_path, None)
-        _private.discard(config_path)
-        return _sets.pop(config_path, None) is not None
+        removed, callbacks = _forget_locked(Path(config_path))
+    _notify(callbacks)
+    return removed
 
 
 def launch(config_path, source, destination):

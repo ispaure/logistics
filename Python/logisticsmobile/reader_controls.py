@@ -2,14 +2,16 @@
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
+from .control_icons import icon_button
 
 
 class ReadingFrame:
-    def __init__(self, content, controls, *, margin=8):
+    def __init__(self, content, controls, *, margin=16):
         self.content, self.controls, self.margin = content, list(controls), margin
         self.widget = toga.Box(children=[*self.controls[:1], content, *self.controls[1:]],
                                style=Pack(direction=COLUMN, margin=margin, flex=1))
         self.widget._reading_frame = True
+        self.widget._reading_frame_owner = self
         self.immersive = False
 
     def set_immersive(self, immersive, *, comic):
@@ -26,8 +28,8 @@ class ReadingFrame:
 
 
 def page_buttons(previous, next_page):
-    return (toga.Button('Previous', on_press=previous, style=Pack(height=44, flex=1)),
-            toga.Button('Next', on_press=next_page, style=Pack(height=44, flex=1)))
+    return (icon_button('back', 'Previous page', on_press=previous),
+            icon_button('forward', 'Next page', on_press=next_page))
 
 
 def schedule_swipe(owner, direction, *, position, count, right_to_left, busy, move):

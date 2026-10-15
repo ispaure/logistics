@@ -4,9 +4,9 @@ Matches the desktop Slate defaults (including its 6% blue dark tint). Light
 cards use a near-white surface so large mobile screens avoid a stark white fill.
 """
 LIGHT = dict(window='#f0f2f6', surface='#fafbfc', alternate='#f5f7fa',
-             text='#202838', muted='#606b7c', border='#c5cedb', accent='#2563eb', hover='#e3eaf7')
+             text='#202838', muted='#606b7c', border='#c5cedb', primary='#2563eb', accent='#2563eb', hover='#e3eaf7')
 DARK = dict(window='#23262c', surface='#2d3035', alternate='#34373c',
-            text='#eef1f7', muted='#a6b0c0', border='#52555a', accent='#75a7ff', hover='#3d4045')
+            text='#eef1f7', muted='#a6b0c0', border='#52555a', primary='#2563eb', accent='#75a7ff', hover='#3d4045')
 
 
 def argb(value):
@@ -29,3 +29,47 @@ def themed_chapter(content, mode):
     """Style the sanitized chapter without changing its offline content policy."""
     return content.replace('</style>', css_variables(mode)
         + 'body{background:var(--surface);color:var(--text)}</style>', 1)
+
+
+EINK = dict(window='#ffffff', surface='#ffffff', alternate='#ffffff',
+            text='#000000', muted='#000000', border='#000000',
+            primary='#000000', accent='#000000', hover='#ffffff')
+_eink_enabled = False
+
+
+def set_eink_enabled(enabled):
+    global _eink_enabled
+    _eink_enabled = bool(enabled)
+
+
+def eink_enabled():
+    return _eink_enabled
+
+
+def android_palette(dark=False):
+    return EINK if eink_enabled() else DARK if dark else LIGHT
+
+
+EINK_CSS = (':root{color-scheme:light!important}'
+    'html,body,body *:not(img):not(svg):not(svg *){background-color:#fff!important;color:#000!important;'
+    'text-shadow:none!important;box-shadow:none!important;animation:none!important;transition:none!important}'
+    'a{text-decoration:underline!important}button,input,textarea,select{border:1px solid #000!important}'
+    '::selection{background:#000!important;color:#fff!important}')
+
+
+def eink_html(content):
+    """Add reversible presentation CSS without altering document pixels or data."""
+    if not eink_enabled():
+        return content
+    style = '<style id="logistics-eink">' + EINK_CSS + '</style>'
+    if '</head>' in content:
+        return content.replace('</head>', style + '</head>', 1)
+    return style + content
+
+
+def eink_script():
+    import json
+    return ('(()=>{const old=document.getElementById("logistics-eink");if(old)old.remove();'
+        + ('const style=document.createElement("style");style.id="logistics-eink";style.textContent='
+           + json.dumps(EINK_CSS) + ';(document.head||document.documentElement).appendChild(style);' if eink_enabled() else '')
+        + '})()')

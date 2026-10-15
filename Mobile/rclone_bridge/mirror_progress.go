@@ -2,12 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"io"
 	"sync"
 )
 
 var mirrorProgressState struct {
 	sync.Mutex
+	Attempt, MaxAttempts                      int
+	Retrying                                  bool
 	Run, Phase                                string
 	Done, Total                               int64
 	Files, TotalFiles, Checks, Listed, Active int64
@@ -16,25 +17,11 @@ var mirrorProgressState struct {
 func mirrorPhase(run, phase string, total int64) {
 	mirrorProgressState.Lock()
 	defer mirrorProgressState.Unlock()
+	mirrorProgressState.Attempt, mirrorProgressState.MaxAttempts, mirrorProgressState.Retrying = 0, 0, false
 	mirrorProgressState.Run, mirrorProgressState.Phase = run, phase
 	mirrorProgressState.Done, mirrorProgressState.Total = 0, total
 	mirrorProgressState.Files, mirrorProgressState.TotalFiles = 0, 0
 	mirrorProgressState.Checks, mirrorProgressState.Listed, mirrorProgressState.Active = 0, 0, 0
-}
-
-type mirrorCounter struct {
-	reader io.Reader
-	run    string
-}
-
-func (reader mirrorCounter) Read(data []byte) (int, error) {
-	n, err := reader.reader.Read(data)
-	mirrorProgressState.Lock()
-	if mirrorProgressState.Run == reader.run {
-		mirrorProgressState.Done += int64(n)
-	}
-	mirrorProgressState.Unlock()
-	return n, err
 }
 
 func mirrorProgress(input string) string {
@@ -50,7 +37,8 @@ func mirrorProgress(input string) string {
 	if request.Run != "" && request.Run == mirrorProgressState.Run {
 		result = map[string]any{"phase": mirrorProgressState.Phase, "done": mirrorProgressState.Done, "total": mirrorProgressState.Total,
 			"files": mirrorProgressState.Files, "total_files": mirrorProgressState.TotalFiles,
-			"checks": mirrorProgressState.Checks, "listed": mirrorProgressState.Listed, "active": mirrorProgressState.Active}
+			"checks": mirrorProgressState.Checks, "listed": mirrorProgressState.Listed, "active": mirrorProgressState.Active,
+			"attempt": mirrorProgressState.Attempt, "max_attempts": mirrorProgressState.MaxAttempts, "retrying": mirrorProgressState.Retrying}
 	}
 	data, _ := json.Marshal(map[string]any{"ok": true, "result": result})
 	return string(data)

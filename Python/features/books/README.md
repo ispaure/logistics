@@ -97,3 +97,42 @@ or malformed records.
 `source.open(path)` and `source.version(path)`, without resolving a local file.
 This supports mobile LocalCrypt reading in RAM. The ordinary filesystem constructor
 and metadata-writing workflows are unchanged; source-backed books are read-only.
+
+## Desktop/mobile ownership
+
+`xhtml.py` shares offline named-entity parsing between the Qt and mobile renderers.
+`mobile/content.py` owns sanitized HTML and the provider text fallback;
+`locations.py` and `mobile/navigation.py` supply text locations, search, nested
+contents and chapter labels. `mobile/presentation.py` owns trusted WebView
+commands. `mobile/provider_reader.py` reuses that bridge for private rich EPUBs;
+`mobile/private_view.py` configures the nonpersistent iOS/Android backend and clears
+it on disposal. `mobile/text_reader.py` remains the unsupported-backend fallback.
+`mobile/appearance.py` supplies the shared native Books & Comics appearance form.
+`mobile/metadata.py` owns field and patch semantics.
+Mobile rendering and chapter labels are feature-owned; import records, provider
+transactions and session/privacy policy remain host-owned. See the
+[parity assessment](../../../docs/developer/books-comics-parity.md) for remaining
+reader and editing gaps. Shared parsing does not imply full reading parity.
+
+
+## Native speech and typography
+
+`mobile/typography.py` owns validated font/spacing/width options and offline CSS;
+`themes.py` supplies the canonical colours to both desktop and mobile. Native
+fonts are enumerated locally. The host stores preference values and reloads the
+current chapter; DOM offsets continue to index the same sanitized text.
+
+`mobile/speech.py` segments bounded UTF-16 utterances and owns generation-checked
+play/pause/resume/stop state. `mobile/speech_native.py` adapts AVSpeechSynthesizer
+and Android TextToSpeech using installed offline voices. Android progress/error
+callbacks are implemented in the feature's `mobile/android/` Java source; the host
+build stages that source and merges the feature-owned speech-service query.
+`mobile/speech_view.py` owns the inline native controls. Hosts provide current
+text/selection and range-follow callbacks, then dispose speech before chapter
+replacement or reader retirement. Resume repeats the current bounded utterance.
+
+The trusted DOM bridge preserves selection offsets when native controls take
+focus or resize the WebView. Programmatic scroll restoration is distinguished
+from user movement so reflow does not replace a precise anchor with the beginning
+of its newly wrapped line. No speech text, voice buffer or private selection is
+written to the catalogue or recovery records.

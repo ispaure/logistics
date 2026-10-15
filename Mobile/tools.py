@@ -8,17 +8,23 @@ from pathlib import Path
 import shutil
 import subprocess
 
-APP_MODULES = ('palette.py', 'workspace_navigation.py', 'document_choices.py', 'comic_layout_check.py', 'appearance.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'recent_documents.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
-               'hub_ui.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
-               'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_presentation.py', 'chat_fixture.py', 'cloud.py', 'resource_imports.py', 'folder_download.py', 'pull_jobs.py', 'pull_jobs_ui.py', 'mirror_jobs.py', 'mirror_ui.py', 'cloud_ui.py', 'copy_ui.py', 'credential_vault.py', 'credential_packages.py', 'localcrypt.py', 'localcrypt_ui.py', 'file_resources.py', 'files_ui.py', 'crypt_stream.py', 'browser_preview.py', 'comic_source.py')
+APP_MODULES = ('storage_ui.py', 'settings_ui.py', 'screen_privacy.py', 'palette.py', 'workspace_navigation.py', 'document_choices.py', 'comic_layout_check.py', 'appearance.py', 'native_archives.py', 'provider_ui.py', 'provider_readers.py', 'text_resources.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'recent_documents.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
+               'hub_ui.py', 'control_icons.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library_edits.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
+               'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_presentation.py', 'chat_fixture.py', 'resource_imports.py', 'files_ui.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
+    'features/rclone/mobile/storage_location.py',
+    'features/rclone/mobile/session_privacy.py',
+    'features/rclone/mobile/cloud_ui.py', 'features/rclone/mobile/mirror_ui.py', 'features/rclone/mobile/transfer_review_ui.py', 'features/rclone/mobile/localcrypt_ui.py', 'features/rclone/mobile/messages.py',
+    'features/rclone/mobile/__init__.py', 'features/rclone/mobile/cloud.py', 'features/rclone/mobile/remote_readers.py', 'features/rclone/mobile/credential_vault.py', 'features/rclone/mobile/credential_packages.py', 'features/rclone/mobile/crypt_stream.py', 'features/rclone/mobile/previews.py', 'features/rclone/mobile/mirror_jobs.py', 'features/rclone/mobile/localcrypt.py', 'features/rclone/mobile/file_resources.py',
+    'features/rclone/__init__.py', 'features/rclone/transfer_options.py', 'features/rclone/review.py', 'features/rclone/remote_policy.py', 'features/rclone/local_policy.py', 'features/rclone/scope.py',
     'features/__init__.py', 'features/books/__init__.py', 'features/books/epub.py',
-    'features/books/metadata.py', 'features/comics/__init__.py',
-    'features/books/mobile/__init__.py', 'features/books/mobile/content.py', 'features/books/mobile/presentation.py',
-    'features/comics/mobile/__init__.py', 'features/comics/mobile/validation.py', 'features/comics/mobile/presentation.py',
+    'features/books/locations.py', 'features/books/themes.py', 'features/books/metadata.py', 'features/books/xhtml.py', 'features/comics/__init__.py',
+    'features/books/mobile/appearance.py', 'features/books/mobile/typography.py', 'features/books/mobile/speech.py', 'features/books/mobile/speech_native.py', 'features/books/mobile/android/io/github/ispaure/logistics/books/BookSpeechListener.java', 'features/books/mobile/speech_view.py',
+    'features/books/mobile/provider_reader.py', 'features/books/mobile/private_view.py', 'features/books/mobile/metadata.py', 'features/books/mobile/text_reader.py', 'features/books/mobile/navigation.py', 'features/books/mobile/__init__.py', 'features/books/mobile/content.py', 'features/books/mobile/presentation.py',
+    'features/comics/catalog_values.py', 'features/comics/mobile/collection.py', 'features/comics/mobile/private_batch.py', 'features/comics/mobile/index.py', 'features/comics/edit_state.py', 'features/comics/mobile/metadata.py', 'features/comics/reading.py', 'features/comics/mobile/navigation.py', 'features/comics/mobile/pages.py', 'features/comics/mobile/__init__.py', 'features/comics/mobile/validation.py', 'features/comics/mobile/composite.py', 'features/comics/mobile/presentation.py',
     'features/comics/archive_io.py', 'features/comics/comicinfo.py',
     'features/comics/library.py', 'features/comics/pages.py', 'features/comics/library_config.py',
-    'configFile.ini', 'services/folder_policy.py', 'services/__init__.py', 'services/zip_passwords.py', 'services/document_metadata.py',
+    'configFile.ini', 'services/build_version.py', 'services/identifiers.py', 'services/folder_policy.py', 'services/__init__.py', 'services/zip_passwords.py', 'services/document_metadata.py',
     'features/lm/__init__.py', 'features/lm/domain.py', 'features/lm/screenshots.py',
 )
 
@@ -37,25 +43,32 @@ SHARED_REQUIRED_MODULES += ('runtime/document_access.py', 'runtime/protected_key
                             'ui/native/presentation.py', 'ui/native/editor_search.py')
 
 
-def validate_app_modules(root, modules=APP_MODULES):
-    """Fail before packaging when an app-owned import is outside the allowlist."""
+def validate_app_modules(root, modules=APP_MODULES, feature_modules=None):
+    """Validate host and rclone-adapter imports against the isolated payload."""
     root = Path(root)
-    included = set(modules)
-    for name in modules:
-        tree = ast.parse((root / name).read_text(encoding='utf-8'), filename=name)
+    feature_modules = tuple(name for name in DOCUMENT_MODULES if name.startswith('features/rclone/')) if feature_modules is None else feature_modules
+    included = {'logisticsmobile/' + name for name in modules} | set(DOCUMENT_MODULES)
+    included -= {name for name in DOCUMENT_MODULES if name.startswith('features/rclone/')}
+    included.update(feature_modules)
+    sources = [('logisticsmobile/' + name, root / name) for name in modules]
+    sources += [(name, root.parent / name) for name in feature_modules if name.startswith('features/rclone/mobile/')]
+    for relative, path in sources:
+        tree = ast.parse(path.read_text(encoding='utf-8'), filename=relative)
+        package = relative.rsplit('/', 1)[0].replace('/', '.')
         for node in ast.walk(tree):
             dependencies = []
-            if isinstance(node, ast.ImportFrom) and node.level == 1:
-                dependencies = ([node.module.split('.')[0]] if node.module
-                                else [alias.name for alias in node.names])
-            elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                names = [alias.name for alias in node.names] if isinstance(node, ast.Import) else [node.module or '']
-                dependencies = [value.split('.')[1] for value in names
-                                if value.startswith('logisticsmobile.')]
+            if isinstance(node, ast.ImportFrom):
+                module = importlib.util.resolve_name('.' * node.level + (node.module or ''), package) if node.level else node.module or ''
+                dependencies = [module] if node.module else [module + '.' + alias.name for alias in node.names]
+            elif isinstance(node, ast.Import):
+                dependencies = [alias.name for alias in node.names]
             for dependency in dependencies:
-                if dependency + '.py' not in included:
-                    raise ValueError(f'{name} imports unstaged logisticsmobile.{dependency}; '
-                                     'add its module to APP_MODULES before building.')
+                if not dependency.startswith(('logisticsmobile.', 'features.rclone.')):
+                    continue
+                target = dependency.replace('.', '/')
+                if target + '.py' not in included and target + '/__init__.py' not in included:
+                    raise ValueError(f'{path.name} imports unstaged {dependency}; '
+                                     'add its module to the mobile payload before building.')
 
 
 def stage(repo, destination, *, testbed=False, allow_dirty=False):
@@ -109,6 +122,8 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     manifest['commonUtils_dirty'] = manifest.get('commonUtils_dirty', False) or new_shared
     manifest.update(logistics_commit=subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip(),
                     dirty=dirty or manifest.get('commonUtils_dirty', False), features=['text', 'markdown', 'epub', 'comics', 'lm', 'rclone'])
+    manifest['logistics_committed_at'] = subprocess.check_output(
+        ['git', '-C', str(repo), 'show', '-s', '--format=%cI', 'HEAD'], text=True).strip()
     # Identify the exact local source snapshot independently of commit IDs.
     digest = sha256()
     roots = ((destination, ''), (repo / 'Mobile/rclone_bridge', 'bridge/'),

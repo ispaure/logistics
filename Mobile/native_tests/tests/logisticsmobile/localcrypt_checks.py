@@ -7,12 +7,27 @@ from pathlib import Path
 
 
 async def exercise_localcrypt(app, passed):
+    def canvas(owner):
+        spread = getattr(owner, 'provider_spread', None)
+        return spread.canvases[0] if spread is not None else owner.crypt_image
+    async def book_text(expected):
+        view = app.provider_sessions().active.provider_epub_view
+        if not hasattr(view, 'webview'):
+            assert expected in view.text.value
+            return
+        last = ''
+        for _ in range(200):
+            last = await view.webview.evaluate_javascript('document.body ? document.body.textContent : ""')
+            if expected in str(last):
+                return
+            await asyncio.sleep(.1)
+        raise AssertionError(f'Private EPUB did not render {expected!r}: {last!r}')
     fixture = json.loads(Path(__file__).with_name('localcrypt_fixture.json').read_text())
     app.show_cloud()
     if getattr(app, 'cloud_restore_task', None):
         await app.cloud_restore_task
     assert not app.cloud_busy
-    app.cloud_client.request('import', package=fixture['package'], password='', package_name='Synthetic.zip', session_only=True)
+    app.cloud_client.request('import', package=fixture['package'], password='synthetic-session-password', package_name='Synthetic.zip', session_only=True)
     app.crypt_copies.client = app.cloud_client
     for item in fixture['copies'].values():
         folder = app.crypt_copies.root / item['key']
@@ -37,7 +52,7 @@ async def exercise_localcrypt(app, passed):
     # A fresh iOS picker must select a newly inserted private location before
     # opening its CBZ; the old backend displayed that label but still read row 0.
     from tempfile import TemporaryDirectory
-    from logisticsmobile.file_resources import CryptFiles
+    from features.rclone.mobile.file_resources import CryptFiles
     with TemporaryDirectory(dir=app.private_root) as directory:
         provider = CryptFiles(Path(directory), app.cloud_client, 'Secret')
         provider._physical('plain.cbz').write_bytes(base64.b64decode(fixture['copies']['plain.cbz']['ciphertext']))
@@ -48,7 +63,7 @@ async def exercise_localcrypt(app, passed):
         assert await drawer.open_file({'path': 'plain.cbz'}), drawer.status.text
         owner = app.private_sessions.active
         assert owner is not None and owner.crypt_reader.name == 'plain.cbz'
-        assert owner.crypt_image.image.width == 24
+        assert canvas(owner).image.width == 24
         app.close_crypt()
         # Read collection configuration through the same encrypted provider.
         from io import BytesIO
@@ -57,7 +72,7 @@ async def exercise_localcrypt(app, passed):
         assert await drawer.show_main_browser('LocalCrypt: Native check', provider=provider)
         assert await drawer.open_file({'path': 'encrypted.cbz'}), 'Configured fixture did not open'
         owner = app.private_sessions.active
-        assert owner is not None and owner.crypt_image.image.width == 24
+        assert owner is not None and canvas(owner).image.width == 24
         app.close_crypt()
 
     for name in ('note.md', 'text.txt'):
@@ -66,7 +81,7 @@ async def exercise_localcrypt(app, passed):
         app.close_crypt()
     for name, password in (('plain.cbz', ''), ('encrypted.cbz', 'synthetic-archive-password')):
         await open_copy(name, password)
-        assert app.provider_sessions().active.crypt_image.image.width == 24
+        assert canvas(app.provider_sessions().active).image.width == 24
         from .reader_checks import assert_comic_centered
         owner = app.private_sessions.active
         owner.toggle_private_bookmark()
@@ -75,10 +90,10 @@ async def exercise_localcrypt(app, passed):
             app.show_settings()
             await asyncio.sleep(.1)
             owner.resume_crypt()
-            owner.crypt_image.toggle_controls()
+            canvas(owner).toggle_controls()
             await asyncio.sleep(.1)
-            owner.crypt_image.toggle_controls()
-            await assert_comic_centered(owner.crypt_image, fullscreen=True)
+            canvas(owner).toggle_controls()
+            await assert_comic_centered(lambda: canvas(owner), fullscreen=True)
             assert owner.crypt_bookmarks == {0}
         owner.toggle_private_bookmark()
         assert owner.crypt_bookmarks == set()
@@ -86,20 +101,42 @@ async def exercise_localcrypt(app, passed):
         assert not owner.crypt_bookmarks
     for name, password in (('book.epub', ''), ('protected.epub', 'synthetic-archive-password')):
         await open_copy(name, password)
-        assert 'First chapter' in app.provider_sessions().active.crypt_text.value
+        await book_text('First chapter')
         app.provider_sessions().active.crypt_page.value = (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None).labels[1]
         await app.read_crypt_page()
-        assert 'Second chapter' in app.provider_sessions().active.crypt_text.value
+        await book_text('Second chapter')
         owner = app.private_sessions.active
         owner.toggle_private_bookmark()
-        assert owner.crypt_bookmarks == {1}
+        assert owner.epub_session_bookmarks == {(1, owner.provider_epub_view.offset)}
         app.save_workspace()
         manifest = (app.private_root / 'workspace.json').read_text()
-        assert 'crypt_bookmarks' not in manifest and owner.session.id not in manifest
+        assert 'crypt_bookmarks' not in manifest and 'epub_session_bookmarks' not in manifest and owner.session.id not in manifest
         app.close_crypt()
     passed.append('native_localcrypt_reading')
 
     await open_copy('note.md')
+    privacy = app.screen_privacy
+    privacy.conceal()
+    if privacy.backend.startswith('toga_iOS.'):
+        assert privacy.shield is not None
+        parent = privacy.shield.superview()
+        native_window = app.main_window._impl.native
+        assert parent is not None and parent.ptr.value == native_window.ptr.value, f'Snapshot shield parent {parent!r}; window {native_window!r}'
+        from .fixtures import capture_window
+        await capture_window(app, app.private_root / 'localcrypt-privacy-shield.png')
+    privacy.reveal()
+    if privacy.backend.startswith('toga_iOS.'):
+        assert privacy.shield is None
+    assert app.main_window.content is privacy.lock_view
+    privacy.lock_password.value = 'wrong-password'
+    await privacy.unlock()
+    assert app.main_window.content is privacy.lock_view
+    privacy.lock_password.value = 'synthetic-session-password'
+    await privacy.unlock()
+    assert app.main_window.content is not privacy.lock_view
+    assert app.provider_sessions().active.crypt_reader.name == 'note.md'
+    passed.append('native_localcrypt_resume_password_lock')
+    passed.append('native_localcrypt_snapshot_shield')
     first = app.private_sessions.active
     first.crypt_text.value = 'First native memory-only draft'
     await open_copy('text.txt')
@@ -240,11 +277,11 @@ async def exercise_localcrypt(app, passed):
     passed.append('native_localcrypt_failure_and_lock')
 
     # Exercise actual native folder controls and the shared move engine.
-    app.cloud_client.request('import', package=fixture['package'], password='', package_name='Synthetic.zip', session_only=True)
+    app.cloud_client.request('import', package=fixture['package'], password='synthetic-session-password', package_name='Synthetic.zip', session_only=True)
     await app._load_crypt_remote_names()
     # A loaded remote alone is no longer a local storage location. Seed an
     # actual encrypted fixture folder before exercising destination mutations.
-    from logisticsmobile.file_resources import CryptFiles
+    from features.rclone.mobile.file_resources import CryptFiles
     remote = fixture['copies']['note.md']['record']['remote']
     provider = CryptFiles(app.private_root / 'LocalCryptFolders', app.cloud_client, remote)
     provider.mkdir('fixture-seed')
@@ -345,11 +382,11 @@ async def exercise_localcrypt(app, passed):
     assert not (local / 'exported').exists()
     await app.clear_cloud()
     # Shared native presentation and a file exceeding the former 32 MiB cap.
-    app.cloud_client.request('import', package=fixture['package'], password='', package_name='Synthetic.zip', session_only=True)
+    app.cloud_client.request('import', package=fixture['package'], password='synthetic-session-password', package_name='Synthetic.zip', session_only=True)
     await app._load_crypt_remote_names()
     await app.show_files()
     from zipfile import ZipFile
-    from logisticsmobile.file_resources import ManagedCopies
+    from features.rclone.mobile.file_resources import ManagedCopies
     from commonUtils.runtime.resource_mutations import move_resource
     from commonUtils.runtime.local_files import LocalFiles
     plain_copy = app.crypt_copies.open(fixture['copies']['plain.cbz']['key'])
@@ -429,7 +466,11 @@ async def exercise_localcrypt(app, passed):
     assert app.save_as_storage.value == 'Local files'
     from .mirror_checks import exercise_crypt_mirror
     await exercise_crypt_mirror(app, fixture)
+    passed.append('native_localcrypt_read_during_download')
     passed.append('native_localcrypt_folder_pull_push')
+    from .review_checks import exercise_reviews
+    await exercise_reviews(app)
+    passed.append('native_shared_transfer_reviews')
     await app.clear_cloud()
     assert not browser.icons and not browser.info.children and not browser.entries
     passed.append('native_localcrypt_file_management')

@@ -6,50 +6,10 @@ from unittest.mock import AsyncMock, patch
 
 from commonUtils.runtime.document_access import LocalDocuments
 from logisticsmobile.app import LogisticsMobile
-from logisticsmobile.cloud_ui import SelectedCredentialZIP
+from features.rclone.mobile.cloud_ui import SelectedCredentialZIP
 
 
 class CredentialImportUITests(unittest.TestCase):
-    def test_explicit_decrypted_download_and_failed_partial_copy_cleanup(self):
-        import os
-        class Client:
-            fail = False
-            def crypt_remotes(self): return ['Secret']
-            def cancel(self): pass
-            def download_into(self, *args): raise AssertionError('Ordinary read used for crypt')
-            def download_decrypted_into(self, remote, path, descriptor):
-                self.requested = (remote, path)
-                os.write(descriptor, b'decrypted fixture contents')
-                if self.fail: raise ValueError('Synthetic authentication failure')
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
-            try:
-                app.cloud_client = Client()
-                app.show_cloud()
-                app.loop.run_until_complete(app._load_crypt_remote_names())
-                app.cloud_remote.items = ['Secret']
-                app.cloud_open_remote = 'Secret'
-                app.cloud_rows = {'file': {'path': 'folder/note.txt', 'directory': False}}
-                app.cloud_entries.items = ['file']
-                self.assertTrue(app.cloud_download.enabled)
-                self.assertTrue(app.crypt_download.enabled)
-                self.assertIn('saved unencrypted', app.cloud_download_help.text.replace('\n', ' '))
-                app.loop.run_until_complete(app.download_cloud())
-                self.assertEqual(app.cloud_client.requested, ('Secret', 'folder/note.txt'))
-                self.assertEqual(app.downloads.items()[0].read_bytes(), b'decrypted fixture contents')
-                self.assertTrue(app.download_export.enabled)
-                self.assertIn('unencrypted', app.cloud_status.value)
-                self.assertEqual(app.crypt_labels, {})
-                app.cloud_client.fail = True
-                app.loop.run_until_complete(app.download_cloud())
-                self.assertEqual(len(app.downloads.items()), 1)
-                self.assertEqual(len(list(app.downloads.root.iterdir())), 1)
-                self.assertIn('Download failed', app.cloud_status.value)
-            finally:
-                app.main_window.close()
-                app.loop.close()
     def test_remote_selector_explains_available_crypts_and_selected_kind(self):
         class Client:
             def crypt_remotes(self): return ['Private', 'Books']
@@ -68,9 +28,8 @@ class CredentialImportUITests(unittest.TestCase):
                 app.cloud_remote.value = 'Private'
                 self.assertIn('Crypt remote selected: Private', app.cloud_remote_help.text.replace('\n', ' '))
                 self.assertIn('decrypted filenames', app.cloud_remote_help.text.replace('\n', ' '))
-                self.assertTrue(app.crypt_download.enabled)
-                self.assertTrue(app.cloud_download.enabled)
-                self.assertEqual(app.cloud_download.text, 'Download decrypted')
+                self.assertFalse(hasattr(app, 'cloud_download'))
+                self.assertFalse(hasattr(app, 'crypt_download'))
                 app.cloud_crypt_remotes = set()
                 app.cloud_remote.value = 'Dropbox'
                 self.assertIn('No crypt remote', app.cloud_remote_help.text)

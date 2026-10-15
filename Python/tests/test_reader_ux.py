@@ -42,6 +42,21 @@ class ReaderUXTests(QtTestCase):
         self.comic.show()
         self.settle()
 
+    def test_remote_readers_hide_metadata_controls_and_restore_them_for_local_files(self):
+        from types import SimpleNamespace
+        remote = SimpleNamespace(remote_storage=True)
+        with patch.object(self.book.book, 'source', remote), patch.object(self.comic.pages.document, 'source', remote):
+            self.book._set_busy(False)
+            self.comic._update_controls()
+            self.assertFalse(self.book.menus.metadata_action.isVisible())
+            self.assertTrue(self.book.metadata_button.isHidden())
+            self.assertFalse(self.comic.edit_metadata_action.isVisible())
+        self.book._set_busy(False)
+        self.comic._update_controls()
+        self.assertTrue(self.book.menus.metadata_action.isVisible())
+        self.assertFalse(self.book.metadata_button.isHidden())
+        self.assertTrue(self.comic.edit_metadata_action.isVisible())
+
     def settle(self):
         deadline = time.monotonic() + 3
         while time.monotonic() < deadline:

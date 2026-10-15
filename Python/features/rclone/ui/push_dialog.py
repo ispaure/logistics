@@ -242,7 +242,7 @@ class RclonePushDialog(pyside.QDialog):
             started = actions.push_to_cloud(
                 self.entry.local,
                 self.config_path,
-                track_renames=self.track_renames.isChecked()
+                track_renames=self.track_renames.isChecked(), review=True
             )
             if started:
                 self.accept()
@@ -266,6 +266,6 @@ class RclonePushDialog(pyside.QDialog):
             self.entry.local,
             self.config_path,
             directory_path,
-            bandwidth_limit
+            bandwidth_limit, review=True
         ):
             self.accept()

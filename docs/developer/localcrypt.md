@@ -12,9 +12,11 @@ and documented in that repository.
 name to a stable directory under the Logistics per-user application support root's
 `LocalCrypt`. `.connections` records contain
 only schema, package path and remote name. Schema 2 stores new copies directly at
-`LocalCrypt/<remote-name>`; schema 1 retains the original hashed package/remote
-layout. Connection lookup preserves existing schema-1 mappings. Publication is
-serialized, rejects case-insensitive name ownership conflicts and untracked
+`LocalCrypt/<remote-name>`. Only schema 2 is loaded/published; the hashed-layout
+compatibility branch is removed. Unsupported records and their ciphertext are
+preserved without migration or deletion. A same-account unsupported record blocks
+publication of a replacement mapping instead of adopting or overwriting data.
+Publication is serialized, rejects case-insensitive name ownership conflicts and untracked
 existing destinations, and requires portable folder names rather than silently
 sanitizing them. Malformed records are ignored. Package
 moves change identity; missing mappings block transfers inside the LocalCrypt
@@ -111,13 +113,26 @@ but settings are not written to plaintext config files or command arguments.
 
 ## Mobile
 
+
+Mobile rclone ownership is under `Python/features/rclone/mobile`: bridge/credentials,
+transfer jobs, ciphertext copies/providers and their native operation screens.
+The app retains generic provider-document controllers in
+`logisticsmobile/provider_ui.py`, memory-only format coordination in
+`provider_readers.py`, ordinary text adapters in `text_resources.py`, and the shared
+native archive facade in `native_archives.py`. Private sessions, format-feature
+views, navigation, persistence and screen privacy remain with their existing owners.
+The rclone catalog UI subclasses the generic provider UI; generic private-session
+controllers inherit `ProviderUI` directly, without inheriting remote download UI.
+See the [module ownership map](../../Python/features/rclone/README.md#mobile-ownership).
+
+
 The embedded bridge implements crypt using rclone's cipher over an allowlisted
 backing remote in the same credential package. It does not instantiate arbitrary
 filesystem or nested wrapper configurations. Validation runs on import and vault
 restore before replacing active credentials.
 
 `crypt_fetch` downloads original ciphertext through a caller-owned descriptor.
-`logisticsmobile/localcrypt.py` stores completed UUID copies under app-private
+`features/rclone/mobile/localcrypt.py` stores completed UUID copies under app-private
 `LocalCrypt`, with an encrypted relative path, remote and crypt-settings fingerprint.
 No decoded filename or key is added to those records. The rclone settings determine
 whether original filename encryption is enabled. Incomplete/invalid copies are
@@ -430,10 +445,39 @@ still completes before publication, preserving the original on failure.
 
 ## Mobile sync progress and copy names
 
+### Local reading during folder transfers
+
+Local crypt reads use a credential read scope independent of the bridge's serial
+network-operation mutex. Path decoding, stat/range reads, archive inspection,
+manifests and thumbnails can proceed during a managed folder transfer. Each has
+an independent deadline and does not replace the transfer cancellation handle.
+Credential import, replacement and clear take an exclusive scope; cipher-cache
+publication is separately synchronized. Online operations and local crypt writes
+remain serialized with the transfer.
+
+Folder Hub and Files permit LocalCrypt browsing and private document opening
+during transfers. These providers are offline reads even though they require
+unlocked keys in the native bridge. Browser cancellation and private-session
+cancellation remain independent of transfer cancellation. Listings omit rclone's
+`<name>.<8-hex-hash>.partial` objects and tolerate entries removed during listing;
+range/archive revision checks still reject files changed during reading.
+File-management mutations remain unavailable while a transfer runs. The same
+offline-read policy covers Documents and library shortcuts; private rows and
+opens are bound to the current client and credential generation. Encrypted source
+discovery and reader-store construction are feature-owned adapter functions.
+
 The embedded `mirrorSync` uses rclone accounting scoped to its transaction ID.
 `mirror_progress` returns transferred/total known bytes, completed/total known
 files, active transfers, listed entries and checks. It publishes a final snapshot
-before resetting the accounting group. Python forwards those counters without
+before resetting the accounting group. It also reports attempt/max-attempt counts
+and retry-wait state. Sync uses rclone defaults and operation-scoped accounting
+for CLI-style high-level retries, including read-only reviews. Waits are
+cancellable; Sync and review have no fixed overall deadline. Each comparison
+attempt clears its rows and revisions. Shared review state atomically replaces
+progress snapshots; the native polling thread retires before publishing final
+rows and cleanup, preventing late progress from overwriting the final result.
+The desktop adapter resets rows at CLI failed-attempt boundaries too. Failed or
+cancelled comparisons remain incomplete and never authorize execution. Python forwards those counters without
 substituting zero file counts. The UI distinguishes discovery, transfer and final
 checking, shows activity when totals are unknown, and changes animation mode only
 when a known byte total appears or disappears. Percentages describe known work;
@@ -461,3 +505,201 @@ leaves the destination unchanged. The UI checks captured connection generation
 and mapping/plan identity again after approval, so changing credentials or targets
 while the dialog is open cannot authorize an old transfer. The existing rclone
 Sync scope and comparison rules are unchanged.
+
+## Security audit and session hardening (2026-10-15)
+
+Scope: desktop credential sessions, private browser/editor/reader handoffs,
+provider/range/thumbnail caches, mobile native crypt/vault operations, offline
+records, private sessions, preferences and iOS scene lifecycle. This is a source
+and regression audit, not a penetration-test certification.
+
+Confirmed issues corrected:
+
+- Desktop `CryptResources.open` now supplies a RangeReader validator. Previously
+  the reader's own cached blocks bypassed credential revocation, cancellation and
+  physical revision checks. Validation now runs before cached reads and seeks.
+- Credential generations have weak revocation observers. Revoking/replacing a
+  parent closes its providers and clears their decrypted caches. Desktop private
+  browser, editor, reader and metadata windows retire on revocation, replace their
+  titles and refuse to become visible again. These windows must be reopened.
+- Mobile session-only import retains only password-protected original ZIPs under
+  device encryption, with package/remote association metadata and settings
+  fingerprints for password-only reopening after restart. ZIP passwords and
+  decoded credentials are not retained. Unencrypted ZIP retention is rejected so
+  a device key alone cannot recover session-only decoded credentials. Association
+  metadata is intentionally persistent for easy access; duplicate session-only
+  preference associations are removed on reload. No decrypted document names are
+  added to these associations.
+- Mobile credential generations now cover the whole process, matching the native
+  bridge's shared store. Replacement through another client invalidates native
+  source caches and retires stale reader views. Ordinary local provider sessions
+  remain independent of credential generations.
+- iOS windows with a privacy gate receive an opaque interactive shield
+  synchronously on resigning active, before background snapshots; scene callbacks
+  cover independent windows. Inactivity, including an unattached startup scene,
+  and capture signals alone never shield a window without a gate. Clearing the
+  last gate removes an existing shield even if those signals remain active.
+  Active recording/mirroring is observed through the scene capture trait on iOS
+  17+ and UIScreen capture notifications, with the legacy signal on older systems.
+  The shield also dismisses the keyboard. Android applies FLAG_SECURE while
+  session-only credentials or their associated private views exist.
+
+### Mobile resume lock (October 15, 2026)
+
+`CloudClient.session_privacy` follows the process-global native credential store.
+Only successful session-mode imports/additions create a memory-only resume gate;
+failed imports preserve the existing gate, and saved-vault opens/clears remove it.
+Private controllers and collection batches retain the gate they were opened with,
+so clearing credentials alone cannot remove protection from retained private views.
+Ordinary local provider views and saved credential packages do not enable privacy.
+An explicitly supplied private archive password creates its own resume gate.
+
+`ScreenPrivacy` covers the complete window on inactivity and replaces the entire
+navigation root with a password screen. Routes and worker completions may update
+the retained navigation tree but cannot reveal it through the lock screen. UIKit
+scene/app notifications and Android activity pause/resume callbacks lock before
+returning control to the OS. Foreground activation never unlocks a gate. Resume
+verification runs off the UI thread, checks gate identity and lifecycle revisions,
+and restores navigation only after every remaining gate is unlocked. A renewed
+background transition or credential replacement invalidates an in-flight unlock.
+Private drafts stay in RAM. Passwordless sessions require a confirmed temporary
+password before access. Salted PBKDF2-SHA256 verifiers (200,000 iterations) stay in
+RAM only; they do not reload credentials or persist passwords.
+
+iOS scene-capture traits and legacy screen-capture notifications still conceal
+the complete window during recording/mirroring. Non-application scene roles get
+a black external-display window without constructing a workspace or loading its
+catalog. This addresses independent external scenes displaying frozen Home.
+It does not disable AirPlay itself or prevent iOS still screenshots. Physical
+AirPlay and OS lifecycle enforcement require device validation; mocked policy
+tests do not establish those platform guarantees.
+
+The isolated native probe passed on an iOS simulator and Android emulator with
+the source fingerprint recorded in the [iOS result](mobile-evidence/2026-10-15-session-privacy-ios.json)
+and [Android result](mobile-evidence/2026-10-15-session-privacy-android.json).
+It checks credential-load activation before a view opens, a real switch to
+Settings and back, wrong/correct resume passwords, preserved unsaved edits,
+Save As draft protection after credentials are cleared, and final protection
+release after the remaining view closes. Android also checks FLAG_SECURE on/off.
+The returned lock screens are recorded for [iOS](mobile-evidence/2026-10-15-session-privacy-ios-locked.png)
+and [Android](mobile-evidence/2026-10-15-session-privacy-android-locked.png).
+These checks do not validate physical AirPlay, all capture routes or frame-by-frame
+OS snapshot timing. The focused host regression run passed 63 tests. The broader
+mobile run has an unrelated library-label expectation failure; loopback fixture
+tests blocked by the sandbox passed when rerun with local socket access.
+
+### Boundaries that still matter
+
+"Session only" means the current application process. Mobile background locking
+preserves unsaved RAM edits and credentials behind resume authentication;
+navigation within the app does not lock it. Revocation retires private
+views and prevents further reads, but Python/Qt/Go and OS memory management do
+not promise secure memory erasure, protection from a compromised process, swap,
+crash dumps or a privileged local attacker.
+
+No application plaintext thumbnail cache, document history, reading-position file
+or recovery record was found in the reviewed LocalCrypt reader paths. Providers
+and previews use RAM; mobile private workspace sessions are excluded from saved
+workspace and recent-document records. Explicit decrypted download, Move to Local,
+Save As to Local, clipboard copying and exports intentionally publish plaintext.
+They are outside ciphertext-only storage.
+
+LocalCrypt honors the source rclone crypt settings. `filename_encryption=off`
+leaves filenames visible; `directory_name_encryption=false` leaves directory
+names visible. Obfuscated names are not cryptographic name protection. Do not
+claim name secrecy without standard filename and directory-name encryption.
+Remote names, credential-package paths/names, connection records, ciphertext
+sizes/counts/timestamps and local root names are not all encrypted. Desktop rclone
+command arguments can contain decrypted relative paths and child-process private
+environments contain keys. Session mode does not hide these from a same-account
+process inspector or administrator. Saved credential mode intentionally persists
+recoverable credentials; switching to session mode does not erase an earlier
+saved config/vault or the user's source credential ZIP.
+
+Apple exposes no general supported API to disable still screenshots. Its
+[screenshot notification](https://developer.apple.com/documentation/uikit/uiapplication/userdidtakescreenshotnotification)
+arrives after capture. The shield addresses
+[background snapshots](https://developer.apple.com/library/archive/qa/qa1838/_index.html)
+and responds to [active capture](https://developer.apple.com/documentation/swiftui/protecting-sensitive-content-when-screen-sharing).
+It cannot guarantee that the first frame of a recording never contains content,
+block a camera, or delete a screenshot already taken. Android's
+[FLAG_SECURE](https://developer.android.com/security/fraud-prevention/activities)
+is a platform capture control, not a defense against a compromised device.
+
+### Verification for this audit
+
+- 222 mobile host tests passed, including mocked native screen-state transitions,
+  secure-window flags, session-label migration and displayed plaintext retirement.
+- 54 desktop/core LocalCrypt, cloud, mobile-reader and file-operation tests ran:
+  51 passed and 3 optional native-bridge tests skipped without the host library.
+  All 4 desktop credential-session tests passed separately.
+- The iOS 27.0 iPhone simulator passed all 27 native UI cases, including private
+  reading/editing/metadata, revocation, file management and direct shield
+  conceal/reveal. The captured covered UIWindow is entirely black and foreground
+  recovery was verified. [Native report](mobile-evidence/2026-10-15-localcrypt-security-ios-native-ui-local.json)
+  and [shield image](mobile-evidence/2026-10-15-localcrypt-privacy-shield.png).
+  The local source snapshot is `051f545d7d49c74ec83a3974c9acc747ef3f6e16fc877f0e395b22779ad18a5f`.
+- Ruff and diff whitespace checks passed. Android capture enforcement, physical
+  iOS app-switcher snapshots, actual recording/mirroring transitions and iPad
+  multiwindow native behavior were not verified in this run. Still-screenshot
+  prevention is not claimed. The screenshot above is a direct UIKit window
+  capture while explicitly concealed, not proof of every OS capture path.
+
+### Easy-access follow-up
+
+The initial audit temporarily disabled new ZIP retention. The user's requested
+easy-access workflow is restored: original password-protected ZIPs remain
+device-encrypted and mapped by remote/settings identity; each new app session
+still needs the ZIP password. New unencrypted ZIPs are not retained in session
+mode. Credential-package tests cover retained association recovery, wrong-password
+retry, password-only unlock, automatic session-import retention and rejection of
+unencrypted ZIP persistence. The native report above predates this follow-up;
+its screen and revocation protections are unchanged.
+
+## Mobile Folder Hub visibility and Settings unlocking
+
+Folder Hub derives remote-only entries from `CloudUI.loaded_remote_names`, which
+checks the credential generation associated with its selector snapshot. Retained
+ZIP/preferences metadata supplies ownership/grouping only; it cannot contribute
+remote-only rows. Mirror records with an existing physical target still
+contribute local rows while locked. Credential groups intersect their associated
+remotes with the actually available Folder Hub copies.
+
+Settings' rclone connections page enumerates retained ZIP labels independently of
+Folder Hub. Its unlock action uses the same password-only session import as a
+local-copy unlock, with no required remote/folder selection. Wrong passwords leave
+the prompt open; success publishes a generation-stamped remote list and returns
+to Folder Hub. The explicit session lock uses native `clear` without deleting the
+saved vault or retained-package key, clears selectors/private catalog state, and
+preserves the existing save/discard guard for private edits. Saved-vault reload
+remains an explicit separate action after locking.
+
+Validation: 225 mobile host tests passed, including the no-local-folder Settings
+unlock, wrong-password retry, remote-only visibility after unlock, and retaining
+an existing LocalCrypt copy after session lock. Eight cloud/vault core tests
+passed, including confirmation that session lock never deletes the saved vault.
+All 28 iOS simulator UI cases passed with real native widgets and the compiled
+bridge; the new credential-visibility case checks Settings unlocking, wrong
+passwords, hidden locked remote-only actions and preservation of saved ciphertext.
+[Native evidence](mobile-evidence/2026-10-15-folder-hub-credential-visibility-ios-native-ui-local.json).
+Ruff and diff whitespace checks passed. Android native runtime behavior was not
+rerun for this change; its Folder Hub and Settings controller code is shared.
+
+The old native per-file mirror list/read/stat/mkdir/write operations are retired.
+Test fixtures seed and inspect synthetic remotes with `mirror_sync`; backing
+filesystem access in Go tests is test-only. `mirror_validate` is retained for
+crypt authentication and version checks before Push, along with independent
+regular-file descriptor checks (zero offset, one link, no pipe/directory).
+`privateOutput` and the scoped document/crypt APIs retain their existing guards.
+
+### Completed final consolidation items
+
+See the [current rclone record](rclone-parity.md#current-audit--2026-10-15) for
+validation and retained platform boundaries. Desktop hashed-layout compatibility
+is removed, and desktop/native engine pins are aligned on 1.74.1. Desktop review
+adds directory membership/type rows with decoded names, including encryption-off
+and directory-name-encryption-off settings; directory timestamps do not invalidate
+an otherwise unchanged review. `mobile/previews.py` now owns native crypt source
+construction and encrypted thumbnails; the app keeps generic preview orchestration.
+Crypt authentication, staged-save verification, link/hard-link rejection and
+independent regular-file descriptor requirements remain in place.

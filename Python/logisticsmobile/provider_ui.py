@@ -1,0 +1,766 @@
+"""App-hosted provider documents: private drafts, format views and session controls."""
+import asyncio
+import threading
+import textwrap
+from pathlib import Path
+import toga
+from .control_icons import icon_button
+from toga.style import Pack
+from toga.style.pack import COLUMN, ROW
+
+def private_label(value):
+    # Native labels use their longest line as a minimum width. Bound messages
+    # and virtual filenames so they cannot widen a phone's entire reader.
+    return textwrap.fill(str(value), width=30)
+
+
+from commonUtils.runtime.operations import check_cancelled
+
+
+from .files_ui import FilesUI
+from .reader_controls import ReadingFrame, page_buttons, schedule_swipe
+
+
+class ProviderUI(FilesUI):
+
+    def private_dirty(self):
+        return bool(self.crypt_reader and ((self.crypt_reader.editable and self.crypt_text.value != self.crypt_reader.text)
+                    or any(field.value != self.crypt_metadata_initial[key] for key, field in self.crypt_metadata_fields.items())))
+
+    def resume_crypt(self, widget=None, **kwargs):
+        if self.crypt_reader is not None:
+            self.show_view(self.crypt_view, destination='documents')
+
+    def clear_private_reader(self, *, discard=False):
+        if getattr(self, '_crypt_cancel', None) is not None:
+            return False
+        if self.private_dirty() and not discard:
+            self.crypt_title.text = private_label('Unsaved changes: save, or discard and close.')
+            self.resume_crypt()
+            return False
+        for name in ('_provider_layout_task', '_provider_width_task'):
+            task = getattr(self, name, None)
+            if task is not None:
+                task.cancel()
+                setattr(self, name, None)
+        if hasattr(self, 'provider_epub_view'):
+            self.provider_epub_view.dispose()
+            del self.provider_epub_view
+        self._provider_epub_locations = {}
+        self.crypt_reader = None
+        for field in self.crypt_metadata_fields.values():
+            field.value = ''
+        self.crypt_metadata_fields = {}
+        self.crypt_metadata_initial = {}
+        self.crypt_metadata_values = {}
+        if hasattr(self, 'crypt_metadata_view'):
+            self.crypt_metadata_view.content = None
+            self.crypt_metadata_status.text = ''
+        self.clear_private_preview()
+        if hasattr(self, 'crypt_text'):
+            self.crypt_text.value = ''
+        if hasattr(self, 'provider_spread'):
+            self.provider_spread.dispose()
+        if hasattr(self, 'crypt_image'):
+            self.crypt_image.dispose()
+        if hasattr(self, 'crypt_page'):
+            self.crypt_page.items = []
+        if hasattr(self, 'epub_session_bookmarks'):
+            self.epub_session_bookmarks.clear()
+        if hasattr(self, 'crypt_bookmarks'):
+            self.crypt_bookmarks.clear()
+            self.crypt_bookmark_selector.items = []
+        if hasattr(self, 'crypt_title'):
+            self.crypt_title.text = private_label('Encrypted copy closed')
+        if hasattr(self, 'crypt_password'):
+            self.crypt_password.value = ''
+        return True
+
+    def clear_private_catalog(self):
+        self.hub_crypt_locations = []
+        if hasattr(self, 'remote_item_view'):
+            self.remote_item_password.value = ''
+            for child in list(self.remote_item_view.children):
+                self.remote_item_view.remove(child)
+            self.remote_item_view.add(toga.Label('Connection closed. Browse the remote again.'))
+        if hasattr(self, 'readers'):
+            self.readers.catalog.clear_private_libraries()
+        for drawer in getattr(self.adaptive, 'browsers', {}).values():
+            drawer.generation += 1
+            drawer.scoped_provider = None
+            if drawer.provider is not None and drawer.provider.private:
+                drawer.provider = None
+                drawer.browser.stop()
+                drawer.status.text = 'Private folders locked. Choose an available location.'
+            if drawer.destination == 'documents':
+                drawer.refresh_menu()
+        self.editor_linked_roots = {}
+        for name in ('file_browser', 'editor_browser', 'remote_browser'):
+            browser = getattr(self, name, None)
+            if browser is not None:
+                browser.stop()
+        self.save_as_data = None
+        self.save_as_privacy_gate = None
+        self.save_as_source_document = None
+        self.editor_picker_rows = {}
+        self.editor_picker_location = None
+        if hasattr(self, 'picker_entries'):
+            self.picker_entries.items = []
+            self.picker_folder.value = ''
+        if hasattr(self, 'save_as_view'):
+            self.save_as_name.value = ''
+            self.save_as_storage.items = []
+            self.save_as_status.value = ''
+        if hasattr(self, 'files_view'):
+            self.file_rows = {}
+            self.file_roots = {}
+            self.file_storage.items = self.file_destination.items = []
+            self.file_provider = None
+            self.file_selection.items = []
+            self.file_name.value = self.file_target.value = self.file_location.value = ''
+            self.file_status.value = ''
+        self.crypt_labels = {}
+        self.crypt_selector.items = []
+
+
+
+    async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, independent=False, **kwargs):
+        copies = copies or self.crypt_copies
+        key = key if key is not None else self.crypt_labels.get(self.crypt_selector.value)
+        if (self.cloud_busy and not (independent and self.transfer_busy and getattr(copies, 'offline', False))) or key is None:
+            return
+        password = self.crypt_password.value
+        self.crypt_password.value = ''
+        if self._crypt_cancel is not None:
+            return
+        if prepared is None and self.private_dirty():
+            self.crypt_title.text = private_label('Unsaved changes: save, or discard and close.')
+            self.resume_crypt()
+            return
+        if not independent:
+            self.set_cloud_busy(True)
+        self._crypt_cancel = threading.Event()
+        reader = None
+        try:
+            if prepared is None:
+                reader = await asyncio.to_thread(copies.open, key, password=password, cancelled=self._crypt_cancel.is_set)
+                kind, content = await asyncio.to_thread(self.provider_page_content, reader, 0)
+            else:
+                reader, kind, content = prepared
+            check_cancelled(self._crypt_cancel.is_set)
+            from types import SimpleNamespace
+            view = SimpleNamespace()
+            view.crypt_reader = reader
+            view._crypt_reader_store = copies
+            view.crypt_title = toga.Label(private_label(reader.name), style=Pack(font_size=18))
+            view.crypt_page = toga.Selection(items=reader.labels, style=Pack(height=44))
+            view.crypt_page.value = reader.labels[0]
+            view.crypt_read_page = toga.Button('Read selected page', on_press=self.read_crypt_page, style=Pack(height=44))
+            view.crypt_bookmarks = set()
+            view.epub_session_bookmarks = set()
+            view.crypt_bookmark_button = toga.Button('Bookmark', on_press=self.toggle_private_bookmark,
+                                                    enabled=not reader.editable, style=Pack(height=44))
+            view.crypt_bookmark_selector = toga.Selection(items=['Bookmarks…'],
+                on_change=self.select_private_bookmark, enabled=not reader.editable, style=Pack(height=44))
+            view.crypt_text = toga.MultilineTextInput(readonly=not reader.editable,
+                style=Pack(flex=1, font_size=int(self.preferences.values['font_size'])))
+            if getattr(reader, 'read_only', False):
+                view.crypt_text.readonly = True
+            from commonUtils.ui.native.image_canvas import ImageCanvas
+            view.crypt_image = ImageCanvas(on_page=self.swipe_crypt_page,
+                page_swipes_at_edges=reader.kind in {'.cbz', '.zip'},
+                on_toggle=self.toggle_private_reading_mode, style=Pack(flex=1))
+            view.crypt_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
+            self._show_crypt_content(kind, content, view=view)
+            view.crypt_save = toga.Button('Save encrypted copy' if getattr(copies, 'encrypted', True) else 'Save local file', on_press=self.save_crypt, enabled=reader.editable and not getattr(reader, 'read_only', False), style=Pack(height=44))
+            view.crypt_read_page.enabled = not reader.editable
+            read_only = getattr(reader, 'read_only', False)
+            mutation_controls = [] if read_only else [view.crypt_save,
+                toga.Button('Save As…', on_press=self.show_crypt_save_as, enabled=reader.editable, style=Pack(height=44)),
+                toga.Button('Edit metadata…', on_press=self.edit_crypt_metadata, enabled=not reader.editable, style=Pack(height=44))]
+            view.crypt_view = toga.Box(children=[view.crypt_title, view.crypt_page, view.crypt_read_page, view.crypt_content,
+                *mutation_controls,
+                toga.Button('Open…', on_press=self.show_editor_open, style=Pack(height=44)),
+                toga.Label(private_label('Remote preview · Read-only' if read_only else
+                    ('Edits stay in memory until saved to the selected local file.' if reader.editable else 'Reading position stays in this session'))),
+                toga.Button('Cancel request', on_press=self.cancel_cloud, style=Pack(height=44)),
+                *([] if read_only else [toga.Button('Discard changes and close', on_press=self.discard_crypt, style=Pack(height=44))]),
+                toga.Button('Close private reader', on_press=self.close_crypt, style=Pack(height=44))],
+                style=Pack(direction=COLUMN, flex=1, margin=12))
+            self.compact_private_view(view)
+            if password:
+                from features.rclone.mobile.session_privacy import ResumePassword
+                view.privacy_gate = ResumePassword(password)
+            elif getattr(self, 'privacy_gate', None) is not None:
+                view.privacy_gate = self.privacy_gate
+            handoff = (prepared is not None and getattr(self, 'save_as_source_document', None) is self.current
+                       and getattr(self.current, 'private', False))
+            if not self.show_view(view.crypt_view, checkpoint=not handoff, destination='documents'):
+                return False
+            self._crypt_cancel = None
+            self.clear_private_reader(discard=True)
+            self.__dict__.update(vars(view))
+            privacy = getattr(getattr(self, 'app', self), 'screen_privacy', None)
+            if privacy is not None:
+                privacy.refresh()
+            self.watch_provider_layout()
+            self.watch_provider_epub_width()
+            return True
+        except Exception as error:
+            if self._crypt_cancel is not None and self._crypt_cancel.is_set():
+                self.cloud_status.value = 'Remote opening cancelled.' if getattr(copies, 'remote_storage', False) else 'Private reading cancelled.'
+                return False
+            self.cloud_status.value = 'Private reading failed: ' + str(error)[:300]
+            if getattr(copies, 'remote_storage', False):
+                from commonUtils.archives.zip_access import ArchivePasswordError
+                if isinstance(error, ArchivePasswordError):
+                    row = next((row for row in self.app.cloud_rows.values() if row['path'] == key),
+                               dict(path=key, directory=False, size=0))
+                    self.app.show_remote_item_actions(row, password_required=True)
+                    return False
+                from features.rclone.remote_policy import LOCAL_COPY_MESSAGE
+                await self.main_window.dialog(toga.InfoDialog('Remote preview unavailable',
+                    str(error)[:200] + '\n\n' + LOCAL_COPY_MESSAGE))
+        finally:
+            if (prepared is None and getattr(copies, 'remote_storage', False) and reader is not None
+                    and getattr(self, 'crypt_reader', None) is not reader):
+                reader.source.close()
+            password = None
+            self._crypt_cancel = None
+            if not independent:
+                self.set_cloud_busy(False)
+
+    def edit_crypt_metadata(self, widget=None, **kwargs):
+        if getattr(self.crypt_reader, 'read_only', False):
+            return
+        if self.cloud_busy or self.crypt_reader is None or self.crypt_reader.editable:
+            return
+        if self.crypt_metadata_fields:
+            self.show_view(self.crypt_metadata_view)
+            return
+        reader = self.crypt_reader
+        if reader.kind == '.epub':
+            from features.books.mobile.metadata import values
+            initial, self.crypt_metadata_values = values(reader.book)
+        else:
+            try:
+                from features.comics.mobile.metadata import values
+                initial = values(reader.comic)
+            except Exception as error:
+                self.crypt_title.text = private_label('Cannot edit metadata: ' + str(error)[:200])
+                return
+        self.crypt_metadata_initial = initial
+        self.crypt_metadata_fields = {key: toga.MultilineTextInput(value=value, style=Pack(height=80)) for key, value in initial.items()}
+        self.crypt_metadata_status = toga.Label(private_label('Save updates only the encrypted local copy.'))
+        children = [toga.Label(private_label('Edit metadata: ' + reader.name)), self.crypt_metadata_status]
+        for key, field in self.crypt_metadata_fields.items():
+            children.extend([toga.Label(key), field])
+        self.crypt_metadata_save = toga.Button('Save encrypted metadata', on_press=self.save_crypt_metadata, style=Pack(height=44))
+        children.extend([self.crypt_metadata_save,
+            toga.Button('Cancel request', on_press=self.cancel_cloud, style=Pack(height=44)),
+            toga.Button('Back to reader', on_press=self.resume_crypt, style=Pack(height=44)),
+            toga.Button('Discard changes and close', on_press=self.discard_crypt, style=Pack(height=44))])
+        self.crypt_metadata_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=children, style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+        self.show_view(self.crypt_metadata_view)
+
+    async def save_crypt_metadata(self, widget=None, **kwargs):
+        if getattr(self.crypt_reader, 'read_only', False):
+            return
+        if self.cloud_busy or self.crypt_reader is None:
+            return
+        edited = {key: field.value for key, field in self.crypt_metadata_fields.items()}
+        if self.crypt_reader.kind == '.epub':
+            from features.books.mobile.metadata import patch
+            changes = patch(self.crypt_metadata_initial, edited, self.crypt_metadata_values)
+        else:
+            from features.comics.mobile.metadata import patch
+            changes = patch(self.crypt_metadata_initial, edited)
+        if not changes:
+            self.crypt_metadata_status.text = 'No changes to save.'
+            return
+        self.set_cloud_busy(True)
+        self._crypt_cancel = threading.Event()
+        self.crypt_metadata_save.enabled = False
+        for field in self.crypt_metadata_fields.values():
+            field.readonly = True
+        try:
+            self.crypt_reader = await asyncio.to_thread(self._crypt_reader_store.save_metadata, self.crypt_reader, changes, cancelled=self._crypt_cancel.is_set)
+            if self.crypt_reader.kind == '.epub':
+                self.crypt_metadata_values = {key: self.crypt_reader.book.values(key) for key in self.crypt_metadata_fields}
+                saved = {key: '\n'.join(value) if key in {'creator', 'subject'} else next(iter(value), '')
+                         for key, value in self.crypt_metadata_values.items()}
+            else:
+                saved = {key: self.crypt_reader.comic.info.get_field(key) for key in self.crypt_metadata_fields}
+            for key, field in self.crypt_metadata_fields.items():
+                field.value = saved[key]
+            self.crypt_metadata_initial = saved
+            self.crypt_metadata_status.text = 'Metadata saved encrypted locally.'
+            index = min(self.crypt_reader.labels.index(self.crypt_page.value)
+                        if self.crypt_page.value in self.crypt_reader.labels else 0, len(self.crypt_reader.labels) - 1)
+            self.crypt_page.items = self.crypt_reader.labels
+            self.crypt_page.value = self.crypt_reader.labels[index]
+            kind, content = await asyncio.to_thread(self.provider_page_content, self.crypt_reader, index)
+            self._show_crypt_content(kind, content)
+            self.refresh_private_bookmarks()
+            self.watch_provider_layout()
+            self.watch_provider_epub_width()
+        except Exception as error:
+            self.crypt_metadata_status.text = private_label('Save failed; edits retained: ' + str(error)[:200])
+        finally:
+            self._crypt_cancel = None
+            self.crypt_metadata_save.enabled = True
+            for field in self.crypt_metadata_fields.values():
+                field.readonly = False
+            self.set_cloud_busy(False)
+
+    async def save_crypt(self, widget=None, **kwargs):
+        if getattr(self.crypt_reader, 'read_only', False):
+            return
+        if self.cloud_busy or self.crypt_reader is None or not self.crypt_reader.editable:
+            return
+        self.set_cloud_busy(True)
+        self.crypt_save.enabled = False
+        self.crypt_text.readonly = True
+        self._crypt_cancel = threading.Event()
+        try:
+            self.crypt_reader = await asyncio.to_thread(self._crypt_reader_store.save, self.crypt_reader, self.crypt_text.value, cancelled=self._crypt_cancel.is_set)
+            self.crypt_title.text = private_label(self.crypt_reader.name + (' · Saved encrypted locally' if getattr(self._crypt_reader_store, 'encrypted', True) else ' · Saved locally'))
+        except Exception as error:
+            self.crypt_title.text = private_label('Save failed; edits retained: ' + str(error)[:200])
+        finally:
+            self._crypt_cancel = None
+            self.crypt_text.readonly = False
+            self.crypt_save.enabled = True
+            self.set_cloud_busy(False)
+
+    def discard_crypt(self, widget=None, **kwargs):
+        if not self.cloud_busy and self.clear_private_reader(discard=True):
+            self.show_cloud()
+
+    def _show_crypt_content(self, kind, content, *, view=None, owner=None):
+        controller = owner or self
+        view = self if view is None else view
+        prepared_spread = None
+        if view.crypt_reader.book is None and kind == 'spread':
+            from features.comics.mobile.presentation import SpreadView
+            from commonUtils.ui.native.image_canvas import ImageCanvas
+            indices, data = content
+            # Decode/compose before retiring the displayed private pixels. Native
+            # allocation or decoder failures must preserve the previous spread.
+            prepared_spread = SpreadView(data, canvas=ImageCanvas,
+                on_page=controller.swipe_crypt_page, on_toggle=controller.toggle_private_reading_mode,
+                right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
+                viewport=controller.private_comic_viewport(view))
+        for child in list(view.crypt_content.children):
+            if hasattr(child, 'dispose') and child is not view.crypt_image:
+                child.dispose()
+            view.crypt_content.remove(child)
+        view.crypt_text.value = ''
+        view.crypt_image.image = None
+        if hasattr(view, 'provider_epub_view'):
+            view.provider_epub_view.dispose()
+            del view.provider_epub_view
+        if view.crypt_reader.book is not None:
+            from features.books.mobile.provider_reader import provider_view
+            from features.books.mobile.typography import options as typography_options
+            book = view.crypt_reader.book
+            index = view.crypt_reader.labels.index(view.crypt_page.value)
+            locations = getattr(view, '_provider_epub_locations', {})
+            view._provider_epub_locations = locations
+            target = getattr(controller, '_provider_epub_target', None)
+            controller._provider_epub_target = None
+            offset = locations.get(book.spine[index], 0)
+            if target is not None:
+                from features.books.locations import ChapterText
+                from features.books.mobile.content import chapter_html
+                offset = ChapterText(chapter_html(book, index)).anchors.get(target, 0) if isinstance(target, str) else target
+            view.provider_epub_view = provider_view(book, index, offset=offset,
+                font_size=int(self.preferences.values['font_size']),
+                margin=int(self.preferences.values['reading_margin']), theme=self.preferences.values['reading_theme'], typography=typography_options(self.preferences.values),
+                on_chapter=controller.open_provider_epub_chapter,
+                on_position=lambda value: locations.update({book.spine[index]: value}))
+            view.crypt_content.add(view.provider_epub_view)
+        elif kind == 'spread':
+            view.provider_spread = prepared_spread
+            view.crypt_content.add(prepared_spread)
+            view.crypt_reader.comic_navigation.visible = indices
+        elif kind == 'image':
+            view.crypt_image.image = toga.Image(src=content)
+            view.crypt_content.add(view.crypt_image)
+        else:
+            view.crypt_text.value = content
+            view.crypt_content.add(view.crypt_text)
+        view._provider_displayed_index = view.crypt_reader.labels.index(view.crypt_page.value)
+
+    async def read_crypt_page(self, widget=None, **kwargs):
+        if self.cloud_busy or self.crypt_reader is None or self.crypt_reader.editable:
+            return
+        panel = getattr(self, 'provider_epub_view', None)
+        if panel is not None and hasattr(panel, 'close_read_aloud'):
+            panel.close_read_aloud()
+        self.set_cloud_busy(True)
+        self.crypt_read_page.enabled = False
+        try:
+            index = self.crypt_reader.labels.index(self.crypt_page.value)
+            self._provider_viewport = self.private_comic_viewport()
+            reader = self.crypt_reader
+            token = self.workspace.token(self.session.id)
+            kind, content = await asyncio.to_thread(self.provider_page_content, reader, index)
+            if (not self.active_host or self.crypt_reader is not reader
+                    or not self.workspace.accepts(token) or self.manager.active is not self):
+                return
+            self._show_crypt_content(kind, content)
+            self.page_suspended = False
+            self.refresh_private_bookmarks()
+            self.watch_provider_layout()
+            self.watch_provider_epub_width()
+            self.previous_page.enabled = reader.book is not None or index > 0
+            self.next_page.enabled = reader.book is not None or (reader.comic_navigation.next(index) is not None if hasattr(reader, 'comic_navigation') else index + 1 < len(reader.labels))
+        except Exception as error:
+            self.crypt_title.text = private_label('Cannot read page: ' + str(error)[:200])
+            if self.crypt_reader is not None:
+                self.crypt_page.value = self.crypt_reader.labels[getattr(self, '_provider_displayed_index', 0)]
+        finally:
+            self.crypt_read_page.enabled = True
+            self.set_cloud_busy(False)
+
+    def refresh_private_bookmarks(self):
+        index = self.crypt_reader.labels.index(self.crypt_page.value)
+        self.crypt_bookmark_selector.on_change = None
+        self.provider_bookmark_choices = {}
+        if self.crypt_reader.book is not None:
+            for chapter, offset in sorted(getattr(self, 'epub_session_bookmarks', set())):
+                label = f'{self.crypt_reader.labels[chapter]} · text {offset}'
+                self.provider_bookmark_choices[label] = (chapter, offset)
+        self.crypt_bookmark_selector.items = ['Bookmarks…',
+            *(self.crypt_reader.labels[i] for i in sorted(self.crypt_bookmarks)),
+            *self.provider_bookmark_choices]
+        self.crypt_bookmark_selector.value = 'Bookmarks…'
+        self.crypt_bookmark_selector.on_change = self.select_private_bookmark
+        marked = ((index, self.provider_epub_view.offset) in getattr(self, 'epub_session_bookmarks', set())) if self.crypt_reader.book is not None else index in self.crypt_bookmarks
+        self.crypt_bookmark_button.text = 'Unbookmark' if marked else 'Bookmark'
+
+    def toggle_private_bookmark(self, widget=None, **kwargs):
+        if self.cloud_busy or self.crypt_reader is None or self.crypt_reader.editable:
+            return
+        index = self.crypt_reader.labels.index(self.crypt_page.value)
+        if self.crypt_reader.book is not None:
+            offset = self.provider_epub_view.offset
+            value = (index, offset)
+            if value in self.epub_session_bookmarks:
+                self.epub_session_bookmarks.remove(value)
+            elif len(self.epub_session_bookmarks) < 200:
+                self.epub_session_bookmarks.add(value)
+            self.refresh_private_bookmarks()
+            return
+        if index in self.crypt_bookmarks:
+            self.crypt_bookmarks.remove(index)
+        elif len(self.crypt_bookmarks) < 200:
+            self.crypt_bookmarks.add(index)
+        self.refresh_private_bookmarks()
+
+    def select_private_bookmark(self, widget=None, **kwargs):
+        if self.cloud_busy or self.crypt_reader is None:
+            return
+        try:
+            label = self.crypt_bookmark_selector.value
+        except IndexError:
+            return
+        if label in getattr(self, 'provider_bookmark_choices', {}):
+            chapter, offset = self.provider_bookmark_choices[label]
+            self._provider_epub_target = offset
+            self.loop.create_task(self.move_private_page(chapter))
+        elif label in self.crypt_reader.labels:
+            self.crypt_page.value = label
+            self.loop.create_task(self.read_crypt_page())
+
+    def swipe_crypt_page(self, direction):
+        if self.crypt_reader is None or self.crypt_reader.editable:
+            return
+        if hasattr(self.crypt_reader, 'comic_navigation'):
+            if not self.cloud_busy:
+                task = getattr(self, '_comic_swipe_task', None)
+                if task is None or task.done():
+                    amount = -direction if getattr(self.crypt_reader, 'right_to_left', False) else direction
+                    self._comic_swipe_task = self.loop.create_task(self.move_provider_comic(amount))
+            return
+        schedule_swipe(self, direction, position=self.crypt_reader.labels.index(self.crypt_page.value),
+                       count=len(self.crypt_reader.labels), right_to_left=getattr(self.crypt_reader, 'right_to_left', False),
+                       busy=self.cloud_busy, move=self.move_private_page)
+
+    async def move_private_page(self, index):
+        if self.cloud_busy or self.crypt_reader is None or not 0 <= index < len(self.crypt_reader.labels):
+            return
+        self.crypt_page.value = self.crypt_reader.labels[index]
+        await self.read_crypt_page()
+
+    async def previous_private_page(self, widget=None, **kwargs):
+        if self.crypt_reader is not None and hasattr(self.crypt_reader, 'comic_navigation'):
+            await self.move_provider_comic(-1)
+            return
+        if hasattr(self, 'provider_epub_view') and self.provider_epub_view.turn(-1):
+            return
+        if self.crypt_reader is not None:
+            await self.move_private_page(self.crypt_reader.labels.index(self.crypt_page.value) - 1)
+
+    async def next_private_page(self, widget=None, **kwargs):
+        if self.crypt_reader is not None and hasattr(self.crypt_reader, 'comic_navigation'):
+            await self.move_provider_comic(1)
+            return
+        if hasattr(self, 'provider_epub_view') and self.provider_epub_view.turn(1):
+            return
+        if self.crypt_reader is not None:
+            await self.move_private_page(self.crypt_reader.labels.index(self.crypt_page.value) + 1)
+
+    def compact_private_view(self, view):
+        from .action_menu import FeatureCommands
+        old = view.crypt_view
+        view.crypt_actions = icon_button('more', 'Private document actions')
+        for control in (view.crypt_title, view.crypt_page, view.crypt_read_page, view.crypt_content, view.crypt_save):
+            if control in old.children:
+                old.remove(control)
+        view.crypt_tools_view = toga.ScrollContainer(horizontal=False, content=old, style=Pack(flex=1))
+        old.add(toga.Button('Return to private document', on_press=self.resume_crypt, style=Pack(height=44)))
+        if not view.crypt_reader.editable:
+            old.insert(0, view.crypt_bookmark_button)
+            old.insert(1, view.crypt_bookmark_selector)
+            old.insert(2, toga.Label('Bookmarks stay in this session and are cleared on close.'))
+        if getattr(view.crypt_reader, 'read_only', False):
+            actions = [('Reader tools…', self.show_private_tools)]
+            if view.crypt_reader.book is not None:
+                actions.extend([('Read aloud…', self.show_provider_read_aloud), ('Appearance…', self.show_provider_layout)])
+            elif view.crypt_reader.kind in {'.cbz', '.zip'}:
+                actions.extend([('Appearance…', self.show_provider_layout), ('Fit comic page', self.fit_private_page)])
+            elif getattr(view.crypt_reader, 'image_document', False):
+                actions.append(('Fit image', self.fit_private_page))
+            actions.append(('Close private document', self.close_crypt))
+        else:
+            actions = [('Open / Save As / Metadata…', self.show_private_tools),
+                ('Read aloud…', self.show_provider_read_aloud), ('Appearance…', self.show_provider_layout),
+                ('Previous comic', self.previous_provider_comic_file), ('Next comic', self.next_provider_comic_file),
+                ('Fit comic page', self.fit_private_page), ('Close private document', self.close_crypt)]
+        view.crypt_actions_menu = FeatureCommands(view.crypt_actions, self, actions, self.show_private_tools)
+        view.crypt_title.style.flex = 1
+        view.crypt_page.style.flex = 1
+        view.crypt_title.style.font_size = 12
+        controls = [toga.Box(children=[view.crypt_title, view.crypt_actions], style=Pack(direction=ROW))]
+        if not view.crypt_reader.editable:
+            controls.append(toga.Box(children=[view.crypt_page, view.crypt_read_page], style=Pack(direction=ROW)))
+        controls.append(view.crypt_content)
+        if view.crypt_reader.editable:
+            view.crypt_save.text = 'Save'
+            footer = toga.Box(children=[] if getattr(view.crypt_reader, 'read_only', False) else [view.crypt_save],
+                              style=Pack(direction=ROW, margin_top=4))
+            view.crypt_save.style.flex = 1
+            if view.crypt_reader.kind in {'.md', '.markdown'}:
+                view.crypt_preview_button = toga.Button('Preview', on_press=self.toggle_private_preview,
+                                                       style=Pack(height=44, flex=1))
+                footer.add(view.crypt_preview_button)
+            if footer.children:
+                controls.append(footer)
+        if not view.crypt_reader.editable:
+            from .workspace_navigation import menu_button
+            host = getattr(self, 'app', self)
+            reader_menu = menu_button(lambda widget, **kw:
+                host.adaptive.show_browser(getattr(view, 'presentation_destination', 'documents')))
+            controls[0].insert(0, reader_menu)
+            header = toga.Box(children=controls[:2], style=Pack(direction=COLUMN))
+            view.previous_page, view.next_page = page_buttons(self.previous_private_page, self.next_private_page)
+            footer = toga.Box(children=[view.previous_page, toga.Box(style=Pack(flex=1)), view.next_page], style=Pack(direction=ROW))
+            view.reading_frame = ReadingFrame(view.crypt_content, [header, footer])
+            view.crypt_view = view.reading_frame.widget
+            view.crypt_view._workspace_menu_button = reader_menu
+            view.crypt_controls = view.reading_frame.controls
+            view.previous_page.enabled = False
+            view.next_page.enabled = view.crypt_reader.book is not None or len(view.crypt_reader.labels) > 1
+        else:
+            view.crypt_view = toga.Box(children=controls, style=Pack(direction=COLUMN, margin=12, flex=1))
+            view.crypt_controls = [control for control in controls if control is not view.crypt_content]
+        view.crypt_immersive = view.crypt_reader.kind in {'.cbz', '.zip'}
+        if view.crypt_immersive:
+            view.reading_frame.set_immersive(True, comic=True)
+        self.register_transfer_status(view.crypt_view)
+
+    def toggle_private_reading_mode(self, widget=None, **kwargs):
+        if self.crypt_reader is None or self.crypt_reader.kind not in {'.cbz', '.zip'}:
+            return
+        self.crypt_immersive = not self.crypt_immersive
+        self.reading_frame.set_immersive(self.crypt_immersive, comic=True)
+        self.refresh_transfer_status()
+        self.resume_crypt()
+
+    def clear_private_preview(self):
+        preview = getattr(self, 'crypt_preview', None)
+        if preview is not None:
+            native = getattr(preview._impl, 'native', None)
+            if native is not None:
+                native.stopLoading()
+            preview.set_content('https://logistics.invalid/closed/', '<p>Preview closed.</p>')
+            if preview in self.crypt_content.children:
+                self.crypt_content.remove(preview)
+                self.crypt_content.add(self.crypt_text)
+            self.crypt_preview_button.text = 'Preview'
+
+    def toggle_private_preview(self, widget=None, **kwargs):
+        if (self.cloud_busy and not getattr(self, 'transfer_busy', False)) or self.crypt_reader is None or not self.crypt_reader.editable:
+            return
+        preview = getattr(self, 'crypt_preview', None)
+        if preview is not None and preview in self.crypt_content.children:
+            self.clear_private_preview()
+            return
+        from .preview import markdown_preview
+        from uuid import uuid4
+        try:
+            content = markdown_preview(self.crypt_text.value, int(self.preferences.values['font_size']))
+        except ValueError as error:
+            self.crypt_title.text = private_label(str(error))
+            return
+        if preview is None:
+            self.crypt_preview = preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
+                                                       style=Pack(flex=1))
+        preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
+        self.crypt_content.remove(self.crypt_text)
+        self.crypt_content.add(preview)
+        self.crypt_preview_button.text = 'Text' if getattr(self.crypt_reader, 'read_only', False) else 'Edit'
+
+    def show_private_tools(self, widget=None, **kwargs):
+        if not self.cloud_busy:
+            self.show_view(self.crypt_tools_view, destination='documents', route='private-tools', title='Private document actions')
+
+    def fit_private_page(self, widget=None, **kwargs):
+        view = getattr(self, 'provider_spread', self.crypt_image)
+        view.fit_page()
+
+    def close_crypt(self, widget=None, **kwargs):
+        if not self.cloud_busy and self.clear_private_reader():
+            self.show_cloud()
+
+
+    def open_provider_epub_chapter(self, index, fragment=''):
+        if self.cloud_busy or self.crypt_reader is None:
+            return
+        self._provider_epub_target = fragment
+        self.loop.create_task(self.move_private_page(index))
+
+
+    def provider_page_content(self, reader, index):
+        if reader.book is not None or reader.editable or getattr(reader, 'image_document', False):
+            return reader.page(index)
+        from features.comics.mobile.navigation import provider_navigation
+        if not hasattr(reader, 'comic_navigation'):
+            reader.comic_navigation = provider_navigation(reader)
+        viewport = getattr(self, '_provider_viewport', (1, 1))
+        return 'spread', reader.comic_navigation.load(index, viewport=viewport,
+            mode=self.preferences.values['comic_layout'])
+
+    async def move_provider_comic(self, direction):
+        if self.cloud_busy or self.crypt_reader is None:
+            return
+        reader = self.crypt_reader
+        index = reader.labels.index(self.crypt_page.value)
+        nav = reader.comic_navigation
+        if direction > 0:
+            target = nav.next(index)
+        else:
+            self.set_cloud_busy(True)
+            try:
+                target = await asyncio.to_thread(nav.previous, index,
+                    viewport=getattr(self, '_provider_viewport', (1, 1)), mode=self.preferences.values['comic_layout'])
+            except Exception as error:
+                self.crypt_title.text = private_label('Cannot read previous spread: ' + str(error)[:200])
+                return
+            finally:
+                self.set_cloud_busy(False)
+        if target is not None:
+            await self.move_private_page(target)
+
+
+    def watch_provider_epub_width(self):
+        task = getattr(self, '_provider_width_task', None)
+        if not hasattr(self, 'provider_epub_view'):
+            return
+        panel = self.provider_epub_view
+        if task is not None and not task.done():
+            if getattr(self, '_provider_width_panel', None) is panel:
+                return
+            task.cancel()
+        self._provider_width_panel = panel
+        from features.books.mobile.presentation import watch_width, pane_width
+        self._provider_width_task = self.loop.create_task(watch_width(
+            alive=lambda: getattr(self, 'provider_epub_view', None) is panel,
+            width=lambda: pane_width(self.crypt_content, self.main_window.size.width, 24), view=lambda: panel))
+
+    def private_comic_viewport(self, view=None):
+        layout = (view or self).crypt_content.layout
+        return max(1, min(layout.content_width or self.main_window.size.width, self.main_window.size.width)), max(1, layout.content_height or 1)
+
+    def watch_provider_layout(self):
+        task = getattr(self, '_provider_layout_task', None)
+        reader = self.crypt_reader
+        if (reader is None or not hasattr(reader, 'comic_navigation')
+                or (task is not None and not task.done())):
+            return
+        from features.comics.mobile.presentation import watch_layout
+        self._provider_layout_task = self.loop.create_task(watch_layout(
+            alive=lambda: self.crypt_reader is reader and self.active_host
+                and hasattr(self, 'provider_spread') and not getattr(self, 'page_suspended', False),
+            available=lambda: not self.cloud_busy and self.manager.active is self,
+            viewport=self.private_comic_viewport,
+            view=lambda: getattr(self, 'provider_spread', None), reload=self.read_crypt_page))
+
+    def show_provider_layout(self, widget=None, **kwargs):
+        if self.crypt_reader is None or self.crypt_reader.editable:
+            return
+        from features.books.mobile.appearance import ReaderAppearance
+        view = ReaderAppearance(self.preferences.values, self.apply_provider_layout)
+        self.provider_appearance = view
+        self.provider_font, self.provider_margin = view.font_choice, view.margin_choice
+        self.provider_theme, self.provider_layout = view.theme_choice, view.layout_choice
+        self.show_view(view, route='private:' + self.session.id + ':layout', title='Reading appearance')
+
+    async def apply_provider_layout(self, widget=None, **kwargs):
+        if self.cloud_busy or self.crypt_reader is None:
+            return
+        try:
+            self.preferences.save(comic_layout=self.provider_layout.value, font_size=self.provider_font.value,
+                reading_margin=self.provider_margin.value, reading_theme=self.provider_theme.value, **self.provider_appearance.typography())
+        except (OSError, ValueError) as error:
+            self.provider_appearance.status.text = str(error)
+            return
+        await self.read_crypt_page()
+        self.resume_crypt()
+
+    async def adjacent_provider_comic(self, direction):
+        if self.cloud_busy or self.crypt_reader is None or self.crypt_reader.book is not None or self.crypt_reader.editable:
+            return
+        store = self._crypt_reader_store
+        provider = getattr(store, 'provider', None)
+        if provider is None:
+            self.crypt_title.text = private_label('Open a folder-backed comic to navigate neighboring files.')
+            return
+        from features.comics.mobile.navigation import adjacent_comic
+        key = self.crypt_reader.key
+        token = self.workspace.token(self.session.id)
+        try:
+            rows = await asyncio.to_thread(provider.list, key.rpartition('/')[0])
+        except Exception as error:
+            self.crypt_title.text = private_label('Cannot list neighboring comics: ' + str(error)[:200])
+            return
+        if not self.active_host or not self.workspace.accepts(token) or self.manager.active is not self:
+            return
+        target = adjacent_comic([(row['path'], row['name']) for row in rows
+            if not row['directory'] and Path(row['name']).suffix.lower() in {'.cbz', '.zip'}], key, direction)
+        if target is not None:
+            await self.manager.open(store, target, destination=self.presentation_destination)
+
+    async def previous_provider_comic_file(self, widget=None, **kwargs):
+        await self.adjacent_provider_comic(-1)
+
+    async def next_provider_comic_file(self, widget=None, **kwargs):
+        await self.adjacent_provider_comic(1)
+
+
+    def show_provider_read_aloud(self, widget=None, **kwargs):
+        panel = getattr(self, 'provider_epub_view', None)
+        if panel is not None and hasattr(panel, 'show_read_aloud') and not self.cloud_busy:
+            panel.show_read_aloud(self.loop)

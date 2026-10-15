@@ -172,7 +172,10 @@ class BooksPage(Bookmarks, qt.QWidget):
         self.open_button.setEnabled(not busy)
         self.menus.open_action.setEnabled(not busy)
         self.menus.recent.setEnabled(not busy and not self.private)
-        self.menus.metadata_action.setEnabled(self.book is not None and not busy)
+        remote = getattr(getattr(self.book, 'source', None), 'remote_storage', False)
+        self.menus.metadata_action.setVisible(not remote)
+        self.metadata_button.setVisible(not remote)
+        self.menus.metadata_action.setEnabled(self.book is not None and not busy and not remote)
         self.menus.find_action.setEnabled(self.book is not None and not busy)
         self.add_bookmark_action.setEnabled(self.book is not None and not busy)
         self.go_page_action.setEnabled(self.book is not None and not busy)
@@ -187,6 +190,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         enabled = self.book is not None and not busy
         for widget in (self.metadata_button, self.chapters, self.bookmark_button, self.bookmarks, self.remove_bookmark):
             widget.setEnabled(enabled)
+        self.metadata_button.setEnabled(enabled and not getattr(getattr(self.book, 'source', None), 'remote_storage', False))
         self.previous.setEnabled(enabled and (self._current > 0 or self.text.page_index > 0))
         self.next.setEnabled(enabled and (self.text.page_index + self.spread.step < self.text.page_count
                                          or self._current + 1 < len(self.book.spine if self.book else [])))
@@ -484,6 +488,8 @@ class BooksPage(Bookmarks, qt.QWidget):
 
     def edit_metadata(self):
         if not self.book or self.worker:
+            return
+        if getattr(self.book.source, 'remote_storage', False):
             return
         dialog = MetadataEditor(self.book, self)
         try:

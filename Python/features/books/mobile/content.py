@@ -1,24 +1,26 @@
 """Inert offline EPUB HTML for mobile WebViews."""
 import base64
 from html import escape
-from xml.etree import ElementTree as ET
+from urllib.parse import quote
+from features.books.xhtml import chapter_document
 from features.books.epub import resolve_href
 from features.comics.mobile.validation import image_dimensions
 
 
-def chapter_html(book, index, font_size=16, *, margin=16, theme='system'):
+def chapter_html(book, index, font_size=16, *, margin=16, theme='system', links=False, font_family='system', line_spacing=150, reading_width='800'):
     if not 0 <= index < len(book.spine):
         raise IndexError('Chapter does not exist.')
     size = int(font_size)
     if not 12 <= size <= 32:
         raise ValueError('Invalid reading font size.')
-    if margin not in (8, 16, 24, 32) or theme not in ('system', 'light', 'dark'):
+    if margin not in (8, 16, 24, 32) or theme not in ('system', 'light', 'dark', 'sepia', 'slate'):
         raise ValueError('Invalid reader appearance.')
+    from .typography import css
     path = book.spine[index]
     source = book.read(path)
     if len(source) > 2 * 1024 * 1024:
         raise ValueError('Mobile EPUB chapters are limited to 2 MiB.')
-    root = ET.fromstring(source)
+    root = chapter_document(source)
     body = next((node for node in root.iter() if isinstance(node.tag, str)
                  and node.tag.rsplit('}', 1)[-1].lower() == 'body'), root)
     allowed = {'p', 'div', 'span', 'section', 'article', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -51,19 +53,55 @@ def chapter_html(book, index, font_size=16, *, margin=16, theme='system'):
                 return f'<img alt="{escape(node.get("alt", ""), quote=True)}" src="data:{mime};base64,{base64.b64encode(data).decode()}">'
             except (ValueError, KeyError):
                 return '<span>[Image omitted: unsupported or too large]</span>'
+        attributes = ''
+        for key in ('id', 'name'):
+            if node.get(key):
+                attributes += f' {key}="{escape(node.get(key), quote=True)}"'
+        if tag == 'a' and links and node.get('href'):
+            try:
+                from features.books.locations import link_destination
+                link_destination(book, index, node.get('href'))
+                attributes += ' href="reader-link:' + quote(node.get('href'), safe='') + '"'
+            except ValueError:
+                pass
         text = escape(node.text or '')
         for child in node:
             text += render(child, depth + 1) + escape(child.tail or '')
         if tag in {'br', 'hr'}:
             return '<' + tag + '>'
-        return '<' + tag + '>' + text + '</' + tag + '>' if tag in allowed else text
+        if tag in allowed or tag == 'a':
+            return '<' + tag + attributes + '>' + text + '</' + tag + '>'
+        return '<span' + attributes + '>' + text + '</span>' if attributes else text
     content = render(body)
     result = ('<!doctype html><html><head><meta charset="utf-8">'
               '<meta name="viewport" content="width=device-width, initial-scale=1">'
               '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">'
-              f'<style>html{{color-scheme:{"light dark" if theme == "system" else theme}}}body{{background:Canvas;color:CanvasText;font:{size}px system-ui;line-height:1.5;margin:{margin}px;overflow-wrap:anywhere}}'
+              '<style>' + css(size, margin, theme, font_family=font_family, line_spacing=line_spacing, reading_width=reading_width) +
               'img{max-width:100%;height:auto}pre{white-space:pre-wrap}table{max-width:100%}</style>'
               '</head><body>' + content + '</body></html>')
     if len(result.encode('utf-8')) > 2 * 1024 * 1024:
         raise ValueError('Rendered chapter exceeds the mobile 2 MiB limit.')
     return result
+
+
+def chapter_text(book, index):
+    """Inert text fallback for provider readers, without a native WebView."""
+    from html.parser import HTMLParser
+    class Text(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.parts, self.hidden = [], 0
+        def handle_starttag(self, tag, attrs):
+            if tag in {'head', 'style', 'script'}:
+                self.hidden += 1
+            if tag in {'p', 'div', 'br', 'h1', 'h2', 'h3', 'li', 'tr'} and not self.hidden:
+                self.parts.append('\n')
+        def handle_endtag(self, tag):
+            if tag in {'head', 'style', 'script'}:
+                self.hidden = max(0, self.hidden - 1)
+        def handle_data(self, value):
+            if not self.hidden:
+                self.parts.append(value)
+    parser = Text()
+    parser.feed(chapter_html(book, index))
+    return ''.join(parser.parts)

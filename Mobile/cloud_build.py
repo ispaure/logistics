@@ -45,6 +45,17 @@ def configure_android_appearance(project):
         flags = activity.get(key, '').split('|')
         if 'uiMode' not in flags:
             activity.set(key, '|'.join([flag for flag in flags if flag] + ['uiMode']))
+    root = tree.getroot()
+    permission = 'android.permission.MANAGE_EXTERNAL_STORAGE'
+    if not any(item.get('{' + namespace + '}name') == permission for item in root.findall('uses-permission')):
+        ET.SubElement(root, 'uses-permission', {'{' + namespace + '}name': permission})
+    speech_queries = ET.parse(ROOT.parent / 'Python/features/books/mobile/android_speech_queries.xml').getroot()
+    query = root.find('queries')
+    if query is None:
+        root.append(speech_queries)
+    elif not any(action.get('{' + namespace + '}name') == 'android.intent.action.TTS_SERVICE'
+                 for action in query.findall('intent/action')):
+        query.append(speech_queries.find('intent'))
     tree.write(manifest, encoding='utf-8', xml_declaration=True)
 
 

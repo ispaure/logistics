@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run from any directory; double-click in Finder for a wireless deployment.
+# Run from any directory; double-click to deploy to all saved iOS devices.
 set -eu
 MOBILE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 if [ -x "$MOBILE_DIR/.tools/go/bin/go" ]; then
@@ -11,6 +11,6 @@ if [ ! -x "$MOBILE_DIR/.venv/bin/python" ]; then
     exit 1
 fi
 if [ "$#" -eq 0 ]; then
-    set -- deploy
+    set -- deploy-all --allow-wired
 fi
 exec "$MOBILE_DIR/.venv/bin/python" "$MOBILE_DIR/device_tools.py" "$@"

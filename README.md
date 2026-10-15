@@ -74,14 +74,17 @@ Save As across Local/LocalCrypt storage. Encrypted transfers and archive metadat
 updates and ordinary comic imports stream large files without a fixed whole-file
 size cap. Standalone AES/legacy password-protected CBZ/ZIP comics open with an
 inline password prompt and can be locked after reading. Shared mobile browsing includes folder taps, Back history and search/sort. See its
-guide for format limits and validation status. Mobile Pull and reviewed Push show
+guide for format limits and validation status. Native readers include EPUB passage resume/search,
+comic spreads and imported-copy metadata editing, including explicit-field comic batches. Mobile Pull and reviewed Push show
 progress while ordinary documents remain usable. Mobile can save multiple SMB/Mac server
-connections and pull shared folders into device storage. Mobile includes a Focus home
+connections and pull shared folders into device storage. Android can keep Local and
+LocalCrypt together on a selected SD card under `Logistics/Local` and `Logistics/LocalCrypt`.
+Mobile includes a Focus home
 screen, file/conversation drawers and equal-width browser/document
 or two-text-document panes in wide windows. Chat and Settings use full-screen destinations.
 Independent ordinary iPad windows
 have separate workspaces and prevent duplicate writers. Crypt files offer both encrypted
-offline copies and explicit decrypted downloads. A Mac can build, install and launch
+offline copies and direct remote previews. A Mac can build, install and launch
 the iPhone app over Wi-Fi using the [paired-device workflow](Mobile/README.md#build-and-deploy-to-a-paired-iphone-over-wi-fi).
 A [double-click Android launcher](Mobile/README.md#double-click-android-deployment) stages local sources, builds and installs on a connected Android device.
 An [opt-in TestFlight workflow](docs/developer/mobile-testflight.md) prepares
@@ -100,7 +103,7 @@ with the [mobile build and release handbook](docs/developer/mobile-handbook.md).
 | [Books](Python/features/books/user_docs/README.md) and [Comics](Python/features/comics/user_docs/README.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
 | [Archives](Python/features/archives/user_docs/README.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
 | [Images](Python/features/images/user_docs/README.md) | Compress images and work with photo metadata |
-| [rclone](Python/features/rclone/user_docs/README.md) | Transfer files between local folders and remote storage |
+| [rclone](Python/features/rclone/user_docs/README.md) | Browse remotes in read-only tabs, open supported files in memory, and use managed Pull/Push for local or encrypted folders |
 | [FUSE](Python/features/fuse/user_docs/README.md) | Open supported remote storage as a mounted folder |
 | [Calibre](Python/features/calibre/user_docs/README.md) | Open book libraries and export books |
 | [Plex](Python/features/plex/user_docs/README.md) | Back up and restore media-server data |

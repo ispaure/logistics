@@ -53,7 +53,7 @@ async def exercise(app):
         # Scene activation may restore a destination after startup. Exercise
         # Home explicitly once the native app is running.
         app.show_home()
-        assert app.body.children[0].content.children[0].text == 'Welcome to Logistics'
+        assert app.body.children[0].content.children[0].text == 'Your workspace'
         assert app.native_host.state.destination == 'home'
         assert [tab.text for tab in app.navigation.content] == ['Home', 'Folder Hub', 'Documents', 'Chat', 'Settings']
         passed.append('native_hub')
@@ -170,7 +170,8 @@ async def exercise(app):
         await wait_for_text(app.reader_manager().active.book_content.children[0], 'Native EPUB second')
         passed.append('native_epub_reader')
         await app.toggle_bookmark()
-        assert app.reader_manager().catalog.library_store.open(record['id'])[0]['bookmarks'] == [1]
+        assert app.reader_manager().catalog.library_store.open(record['id'])[0]['epub_bookmarks'] == [
+            dict(path=app.reader_manager().active.book_reader.spine[1], offset=app.reader_manager().active.epub_offset)]
         passed.append('native_bookmarks')
         record = await asyncio.to_thread(app.reader_manager().catalog.library_store.import_book, LocalDocuments(), comic)
         background_comic = record['id']
@@ -298,7 +299,7 @@ async def exercise(app):
             assert 'synthetic-native-key' not in app.chat_store.path(app.chat_current['id']).read_text()
             assert 'synthetic-native-key' not in (app.chat_store.root / 'profile.json').read_text()
         passed.append('native_lm_chat')
-        from logisticsmobile.cloud import CloudClient
+        from features.rclone.mobile.cloud import CloudClient
         from .fixtures import AES_CREDENTIALS
         from unittest.mock import AsyncMock, patch
         app.cloud_client = CloudClient()
@@ -319,50 +320,28 @@ async def exercise(app):
         assert app.cloud_pending_zip is None and 'Browse folder' in app.cloud_import_message.text.replace('\n', ' ')
         assert app.cloud_remote.value == 'Fixture' and len(app.cloud_remote.items) == 1, app.cloud_status.value
         await app.browse_cloud()
-        label = next(key for key, row in app.cloud_rows.items() if row['path'] == 'logistics-native-check')
-        app.cloud_entries.value = label
-        assert await app.download_cloud(), app.cloud_status.value
-        assert app.cloud_folder_open.enabled, app.cloud_status.value
-        await app.open_downloaded_folder()
-        assert app.file_path == app.cloud_downloaded_folder
-        local_fixture = app.private_root / 'LocalFiles' / app.file_path / 'fixture.txt'
-        assert local_fixture.read_text() == 'Native rclone fixture\n'
-        app.show_cloud()
-        await app.open_cloud_folder()
-        assert app.cloud_rows, app.cloud_status.value
-        label = next(key for key, row in app.cloud_rows.items() if row['path'].endswith('fixture.txt'))
-        app.cloud_entries.value = label
-        await app.download_cloud()
-        assert len(app.downloads.items()) == 1, app.cloud_status.value
-        await app.open_download()
-        assert app.editor.value == 'Native rclone fixture\n', app.cloud_status.value
-        imported_id = app.current.id
-        await app.open_download()
-        assert app.current.id == imported_id
+        row = next(row for row in app.cloud_rows.values() if row['path'] == 'logistics-native-check')
+        assert await app.browser_cloud_folder(row)
+        row = next(row for row in app.cloud_rows.values() if row['path'].endswith('fixture.txt'))
+        assert await app.open_remote_document(row), app.cloud_status.value
+        owner = app.provider_sessions().active
+        assert owner is not None and owner.crypt_text.readonly
+        assert owner.crypt_text.value == 'Native rclone fixture\n'
+        assert app.provider_sessions().close(owner.session.id, discard=True)
+        assert not hasattr(app, 'download_cloud') and not hasattr(app, 'choose_cloud_copy')
+        assert not app.downloads.items()
+        passed.append('native_remote_preview_only')
         from .files_checks import exercise_files
         await exercise_files(app, passed)
-        app.show_cloud()
-        app.cloud_remote.value = 'Fixture'
-        app.cloud_location.value = 'logistics-native-check'
-        await app.browse_cloud(preserve_path=True)
-        row = next(row for row in app.cloud_rows.values() if row['path'].endswith('fixture.txt'))
-        app.browser_cloud_selected(row)
-        assert await app.choose_cloud_copy()
-        assert await app.confirm_cloud_copy(), app.copy_status.value
-        assert app.copy_progress.value == 100
-        assert (app.private_root / 'LocalFiles' / app.copy_result[0]).read_text() == 'Native rclone fixture\n'
-        await app.open_cloud_copy()
-        assert app.file_rows[app.file_selection.value]['path'] == app.copy_result[0]
-        passed.append('native_guided_remote_copy')
         from .mirror_checks import exercise_mirrors
         await exercise_mirrors(app, background_comic)
         passed.append('native_background_local_pull_push')
         app.show_cloud()
         await app.clear_cloud()
         assert not list(app.cloud_remote.items)
-        assert len(app.downloads.items()) == 1
+        assert not app.downloads.items()
         passed.append('native_rclone_files')
-        from logisticsmobile.credential_vault import ProtectedVault
+        from features.rclone.mobile.credential_vault import ProtectedVault
         vault = ProtectedVault.for_app(app)
         app.cloud_client.vault = vault
         app.cloud_remember.value = True
@@ -384,6 +363,27 @@ async def exercise(app):
         with patch('logisticsmobile.pickers.pick_document', new=AsyncMock(return_value=(LocalDocuments(), credentials))):
             await app.import_cloud_package()
         assert vault.ciphertext.read_bytes() == encrypted
+        cache = app.retained_packages()
+        matches = cache.matching('Fixture')
+        assert len(matches) == 1, app.cloud_import_message.text
+        retained_key = matches[0][0]
+        await app.lock_cloud()
+        locked_choice = app.folder_choices().get('Fixture', {})
+        assert all(copy['source'] != 'Remote' for copy in locked_choice.get('copies', ()))
+        app.show_cloud_connections()
+        assert app.native_host.state.destination == 'settings'
+        app.cloud_retained_buttons[retained_key].on_press()
+        assert app.routes.screens['settings'][-1][0] == 'unlock-credential'
+        app.credential_unlock_password.value = 'incorrect-fixture-password'
+        await app.credential_unlock_button.on_press()
+        assert not app.loaded_remote_names()
+        assert app.credential_unlock_password.value == ''
+        app.credential_unlock_password.value = 'synthetic-fixture-password'
+        await app.credential_unlock_button.on_press()
+        assert app.loaded_remote_names() == ['Fixture'], app.credential_unlock_status.text
+        assert any(copy['source'] == 'Remote' for copy in app.folder_choices()['Fixture']['copies'])
+        assert cache.path(retained_key).is_file()
+        assert vault.ciphertext.read_bytes() == encrypted
         # Key loss must not regenerate a key or overwrite the saved ciphertext.
         app.cloud_client.request('clear')
         vault.keys.delete(vault.metadata()['id'])
@@ -395,6 +395,7 @@ async def exercise(app):
         assert not vault.ciphertext.exists() and not vault.record.exists(), app.cloud_status.value
         assert vault.unlock() is None
         passed.append('native_secure_credentials')
+        passed.append('native_credential_visibility')
         from .localcrypt_checks import exercise_localcrypt
         await exercise_localcrypt(app, passed)
         from .ui_review import exercise_ui_review

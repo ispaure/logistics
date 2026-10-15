@@ -87,6 +87,8 @@ class MarkdownStorage:
             self.window.pending_close = False
 
     def read_bytes(self, path):
+        if hasattr(self.provider, '_check_active'):
+            self.provider._check_active()
         if path != self.path:
             raise ValueError('Open other documents through the private browser.')
         return self.data
@@ -147,6 +149,8 @@ class MarkdownStorage:
         return False
 
     def load_resource(self, kind, url):
+        if hasattr(self.provider, '_check_active'):
+            self.provider._check_active()
         if not url.isLocalFile():
             url = qt.QUrl.fromLocalFile(str(self.path.parent) + '/').resolved(url)
         data = self.resources.get(Path(url.toLocalFile()))
@@ -200,6 +204,8 @@ class PrivateMarkdownWindow(MarkdownWindow):
         self.pending_close = False
         super().__init__(path, allow_edit=True, storage=storage)
         storage.bind_window(self)
+        from services.private_views import protect_private_view
+        protect_private_view(self, storage.provider)
 
     def _update_title(self):
         super()._update_title()
@@ -257,6 +263,8 @@ class CryptBrowserView(qt.QMainWindow):
                 qt.QMessageBox.warning(self, 'Encrypted copy', 'The local crypt view could not be opened.')
 
     def _install_browser(self, directory):
+        from services.private_views import protect_private_view
+        protect_private_view(self, self.provider)
         self._release_provider = self.provider.acquire()
         self.destroyed.connect(self._release_provider)
         self.file_browser = ResourceBrowser(self.provider, self, directory=directory, thumbnail=self._thumbnail, details=self._details, actions=(
@@ -403,6 +411,8 @@ class CryptBrowserView(qt.QMainWindow):
             release()
             raise
         window.destroyed.connect(release)
+        from services.private_views import protect_private_view
+        protect_private_view(window, self.provider)
         _windows.append(window)
         window.destroyed.connect(lambda: _windows.remove(window) if window in _windows else None)
         window.show()
@@ -421,6 +431,8 @@ class CryptBrowserView(qt.QMainWindow):
             release()
             raise
         window.destroyed.connect(release)
+        from services.private_views import protect_private_view
+        protect_private_view(window, self.provider)
         _windows.append(window)
         window.destroyed.connect(lambda: _windows.remove(window) if window in _windows else None)
         window.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)

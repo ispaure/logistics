@@ -129,14 +129,11 @@ class MobileWorkflowTests(unittest.TestCase):
             def crypt_remotes(self): return []
             def restore(self, **kwargs): return []
             def cancel(self): release.set()
-            def request(self, action, **values):
-                if action == 'mirror_read' and not started.is_set():
-                    started.set()
-                    # Keep the fixture transfer pending through cold CI widget
-                    # and reader startup; the test releases it in finally.
-                    if not release.wait(30):
-                        raise RuntimeError('Pull fixture was not released')
-                return super().request(action, **values)
+            def copy_remote_file(self, path, stream):
+                started.set()
+                if not release.wait(30):
+                    raise RuntimeError('Pull fixture was not released')
+                return super().copy_remote_file(path, stream)
         app.cloud_client = Client()
         root = app.private_root / 'LocalFiles' / 'Reference'
         root.mkdir(parents=True)

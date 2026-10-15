@@ -73,6 +73,7 @@ class MainWindow(pyside.Window):
         self.height = 800
         self.dlg.resize(self.width, self.height)
         self.dlg.setMinimumSize(850, 550)
+        self.dlg.open_browser_location = self._open_browser_location
 
         self.tabs = pyside.QTabWidget()
         self.tabs.tabBar().hide()
@@ -502,6 +503,17 @@ class MainWindow(pyside.Window):
         else:
             page.workspace.add_view(path)
         self.tabs.setCurrentWidget(page)
+
+    def _open_browser_location(self, location):
+        """Host a typed browser location supplied by a feature-owned workflow."""
+        page = next((page for _, _, page in self._core_pages if isinstance(page, FileBrowserPage)), None)
+        if page is None:
+            return None
+        view = page.workspace.add_view(location)
+        if view is not None:
+            self._reveal_hub()
+            self.tabs.setCurrentWidget(page)
+        return view
 
     def _show_documents(self):
         if self._launch_mode == 'landing':

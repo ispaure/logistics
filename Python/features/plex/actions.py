@@ -18,7 +18,7 @@ from commonUtils.runtime.platform import OS, get_os
 
 from features.plex import detection as plex_detection
 from features.plex import folders as plex_folders
-from features.rclone import sync as rclone_sync
+from features.rclone.workflow import reviewed_sync
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -73,10 +73,10 @@ def pull_pms(remote_cls, config_path: str | Path):
     source_path = remote_cls_pmsdata.name + ':'
     destination_path = Path(config.LogisticsConfig().path_remote_local, remote_cls_pmsdata.name)
 
-    rclone_sync.rclone_sync(
+    reviewed_sync(
         source_path,
         destination_path,
-        config_path=config_path
+        config_path=config_path, operation='Pull'
     )
 
 
@@ -88,10 +88,10 @@ def push_pms(remote_cls, config_path: str | Path):
     source_path = local_cls_pmsdata.path
     destination_path = local_cls_pmsdata.name + ':'
 
-    rclone_sync.rclone_sync(
+    reviewed_sync(
         source_path,
         destination_path,
-        config_path=config_path
+        config_path=config_path, operation='Push'
     )
 
 

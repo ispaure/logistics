@@ -1,4 +1,4 @@
-"""Build and update Logistics on a paired physical iPhone, preserving identity."""
+"""Build and update Logistics on a paired iPhone or iPad, preserving identity."""
 import argparse
 import json
 import os
@@ -57,17 +57,17 @@ def properties(device):
 
 def select_device(devices, requested=None):
     physical = [d for d in devices if properties(d)[0].get('reality') == 'physical'
-                and properties(d)[0].get('deviceType') == 'iPhone']
+                and properties(d)[0].get('deviceType') in ('iPhone', 'iPad')]
     if requested:
         physical = [d for d in physical if requested in
                     (d['identifier'], properties(d)[0].get('udid'),
                      d.get('properties', {}).get('state', {}).get('name'),
                      d.get('deviceProperties', {}).get('name'))]
     if len(physical) != 1:
-        raise RuntimeError('Connect one paired iPhone, or specify its UDID with --device.')
+        raise RuntimeError('Connect one paired iPhone or iPad, or specify its UDID with --device.')
     hardware, connection = properties(physical[0])
     if connection.get('pairingState') != 'paired':
-        raise RuntimeError('Pair the iPhone in Xcode first.')
+        raise RuntimeError('Pair the device in Xcode first.')
     return physical[0], hardware['udid'], connection
 
 
@@ -153,8 +153,8 @@ def launch_app(config, env, developer, sdk, *, allow_wired=False, install=False)
     _, _, connection = select_device(devices, config['device_id'])
     transport = connection.get('transportType')
     if not allow_wired and transport not in ('wireless', 'localNetwork'):
-        raise RuntimeError(f'Expected wireless transport, found {transport}. Unplug USB, unlock the iPhone, and use the same Wi-Fi.')
-    report = dict(config['signing_identity'], developer_dir=developer, sdk=sdk,
+        raise RuntimeError(f'Expected wireless transport, found {transport}. Unplug USB, unlock the device, and use the same Wi-Fi.')
+    report = dict(config['signing_identity'], device_id=config['device_id'], developer_dir=developer, sdk=sdk,
                   transport=transport, installed=False, launched=False)
     report_path = ROOT / 'logs/device-deployment.json'
     report_path.parent.mkdir(exist_ok=True)
@@ -166,21 +166,51 @@ def launch_app(config, env, developer, sdk, *, allow_wired=False, install=False)
     try:
         report['launch'] = device_json(['device', 'process', 'launch', '--device', config['device_id'], BUNDLE], env)
     except subprocess.CalledProcessError as error:
-        raise RuntimeError('Launch failed; see the device error above. For a trust error, trust the developer in iPhone Settings > General > VPN & Device Management, then run launch. Do not uninstall.') from error
+        raise RuntimeError('Launch failed; see the device error above. For a trust error, trust the developer in device Settings > General > VPN & Device Management, then run launch. Do not uninstall.') from error
     report['launched'] = True
     report_path.write_text(json.dumps(report, indent=2) + '\n')
+    (report_path.parent / f"device-deployment-{config['device_id']}.json").write_text(
+        json.dumps(report, indent=2) + '\n')
     print(('Installed and launched' if install else 'Launched') + ' Logistics over ' + transport + '.')
+
+
+def deploy_all(config, *, allow_wired=False):
+    """Run the normal verified deployment for every explicitly saved target."""
+    targets = config.get('device_ids', [config['device_id']])
+    if (not isinstance(targets, list) or not targets
+            or any(not isinstance(target, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*', target)
+                   for target in targets)):
+        raise RuntimeError('device_ids must be a nonempty list of device UDIDs in .device.json.')
+    failures = []
+    for target in dict.fromkeys(targets):
+        print(f'\nDeploying Logistics to {target}...', flush=True)
+        command = [sys.executable, str(Path(__file__).resolve()), 'deploy', '--device', target]
+        if allow_wired:
+            command.append('--allow-wired')
+        try:
+            run(command)
+        except (RuntimeError, subprocess.CalledProcessError) as error:
+            failures.append(target)
+            print(f'Deployment failed for {target}: {error}', file=sys.stderr, flush=True)
+    if failures:
+        raise RuntimeError('Deployment failed for: ' + ', '.join(failures))
+    print(f'Updated all {len(set(targets))} saved iOS devices.', flush=True)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('configure', 'status', 'build', 'deploy', 'launch'))
+    parser.add_argument('command', choices=('configure', 'status', 'build', 'deploy', 'deploy-all', 'launch'))
     parser.add_argument('--team', help='Existing Apple development team ID (configure only)')
-    parser.add_argument('--device', help='Paired iPhone UDID/name (configure only)')
+    parser.add_argument('--device', help='Paired iPhone/iPad UDID/name; defaults to the saved device')
     parser.add_argument('--allow-wired', action='store_true', help='Allow a USB-connected deployment')
     args = parser.parse_args()
-    if args.command != 'configure' and (args.team or args.device):
-        parser.error('Team/device choices are pinned by configure, not overridden on deployment.')
+    if args.command != 'configure' and args.team:
+        parser.error('The signing team is pinned by configure, not overridden on deployment.')
+    if args.command == 'deploy-all':
+        if args.device:
+            parser.error('Use deploy --device for a single target, or deploy-all for saved targets.')
+        deploy_all(saved_config(), allow_wired=args.allow_wired)
+        return
     developer, sdk = choose(installed())
     env = dict(os.environ, DEVELOPER_DIR=developer)
     ROOT.joinpath('build').mkdir(exist_ok=True)
@@ -198,6 +228,10 @@ def main():
         print('Saved device and signing team in local .device.json.')
         return
     config = saved_config()
+    default_device = config['device_id']
+    if args.device:
+        _, config['device_id'], _ = select_device(
+            device_json(['list', 'devices'], env)['devices'], args.device)
     if args.command == 'launch':
         if not config.get('signing_identity'):
             raise RuntimeError('Build and deploy once before using launch.')
@@ -211,14 +245,14 @@ def main():
     refresh_sources(env)
     prepare_project(config['team_id'])
     run(['xcodebuild', '-project', str(PBX.parent), '-scheme', 'Logistics Mobile',
-         '-configuration', 'Debug', '-sdk', 'iphoneos', '-destination', 'generic/platform=iOS',
+         '-configuration', 'Debug', '-sdk', 'iphoneos', '-destination', f"id={config['device_id']}",
          '-derivedDataPath', str(DERIVED), '-allowProvisioningUpdates',
          '-allowProvisioningDeviceRegistration', 'build'], env=env, log=ROOT / 'logs/device-build.log')
     identity = validate_app(APP, config['team_id'], config['device_id'])
     if config.get('signing_identity') and config['signing_identity'] != identity:
         raise RuntimeError('Previously built signing/keychain identity differs; refusing deployment.')
     config['signing_identity'] = identity
-    CONFIG.write_text(json.dumps(config, indent=2) + '\n')
+    CONFIG.write_text(json.dumps(dict(config, device_id=default_device), indent=2) + '\n')
     print('Verified signed physical-device build.', flush=True)
     if args.command == 'build':
         return
