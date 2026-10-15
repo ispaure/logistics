@@ -68,7 +68,7 @@ class CloudUI(CopyUI, LocalCryptUI):
             self.cloud_up = toga.Button('Parent folder', on_press=self.parent_cloud, style=Pack(flex=1, height=44))
             self.cloud_entries = toga.Selection(style=Pack(height=44))
             from .browser_ui import FileBrowser as NativeBrowser
-            self.remote_browser = NativeBrowser(selected=self.browser_cloud_selected, open_folder=self.browser_cloud_folder, navigate=self.browser_cloud_location)
+            self.remote_browser = NativeBrowser(folder_visible=self.folder_path_visible, selected=self.browser_cloud_selected, open_folder=self.browser_cloud_folder, navigate=self.browser_cloud_location)
             self.cloud_open = toga.Button('Open folder', on_press=self.open_cloud_folder, style=Pack(height=44))
             self.cloud_download = toga.Button('Download private copy', on_press=self.download_cloud, style=Pack(height=44))
             self.cloud_download_help = toga.Label('', style=Pack(font_size=14))
@@ -520,7 +520,7 @@ class CloudUI(CopyUI, LocalCryptUI):
             import base64
             from commonUtils.runtime.resource_provider import resource_path
             root = Path('/remote') / remote
-            provider = SimpleNamespace(root=root, relative=lambda path: resource_path(str(Path(path).relative_to(root)) if Path(path).is_absolute() else path))
+            provider = SimpleNamespace(root=root, remote=remote, relative=lambda path: resource_path(str(Path(path).relative_to(root)) if Path(path).is_absolute() else path))
             generation = getattr(self.cloud_client, 'generation', 0)
             def list_children(path, *, cancelled):
                 if cancelled() or getattr(self.cloud_client, 'generation', 0) != generation:

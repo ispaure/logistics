@@ -403,7 +403,7 @@ class FileDrawer:
         self.refresh_requested = False
         self.storage = toga.Selection(items=['Local files'], style=Pack(height=44))
         self.status = toga.Label('', style=Pack(font_size=12, margin_bottom=4))
-        self.browser = FileBrowser(selected=lambda row: None, open_folder=self.open_folder,
+        self.browser = FileBrowser(folder_visible=self.app.folder_path_visible, selected=lambda row: None, open_folder=self.open_folder,
                                    navigate=self.navigate, open_file=self.open_file, preview=False)
         self.widget = toga.Box(children=[self.storage,
             toga.Button('Up', on_press=self.up, style=Pack(height=44)), self.status,
@@ -443,6 +443,9 @@ class FileDrawer:
         # in refresh() on a worker after the drawer is already visible.
         roots = self.roots
         for storage in roots:
+            remote = getattr(roots[storage], 'remote', '') or storage.removeprefix('LocalCrypt: ')
+            if not self.app.folder_path_visible(remote):
+                continue
             async def browse(widget=None, selected=storage, **kwargs):
                 await self.show_main_browser(selected)
             title = 'Browse Local Files' if storage == 'Local files' else 'Browse ' + storage
@@ -471,6 +474,8 @@ class FileDrawer:
         catalog = readers.catalog if readers is not None else None
         self.library_buttons = []
         for record in getattr(catalog, 'library_records', ()):
+            if not self.app.library_folder_visible(record):
+                continue
             async def browse_library(widget=None, library=record, **kwargs):
                 provider = library['provider']
                 if provider.private and (self.app.cloud_client is not library['client']

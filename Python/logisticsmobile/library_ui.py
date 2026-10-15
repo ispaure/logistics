@@ -123,6 +123,8 @@ class LibraryCatalog:
         self.library_row_buttons = []
         query = self.library_search.value.casefold().strip()
         for record in self.library_records:
+            if not self.app.library_folder_visible(record):
+                continue
             if query and query not in record['name'].casefold():
                 continue
             async def open_item(widget=None, library=record, **kw):

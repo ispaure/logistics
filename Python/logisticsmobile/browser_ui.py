@@ -23,7 +23,8 @@ def middle_filename(button):
 
 
 class FileBrowser(NativeBrowser):
-    def __init__(self, *, open_file=None, item_actions=None, **kwargs):
+    def __init__(self, *, open_file=None, item_actions=None, folder_visible=None, **kwargs):
+        self.folder_visible = folder_visible
         self.on_open_file, self.on_item_actions = open_file, item_actions
         super().__init__(**kwargs)
         # Keep search visible. Sorting and layout are secondary controls.
@@ -41,6 +42,18 @@ class FileBrowser(NativeBrowser):
         self.page_label.style.flex = 1
         self.page_label.style.font_size = 12
         self.widget.add(self.items)
+
+    @property
+    def entries(self):
+        rows = super().entries
+        if self.folder_visible is None:
+            return rows
+        provider = getattr(self, 'search_provider', None)
+        remote = getattr(getattr(provider, 'provider', provider), 'remote', '')
+        if not self.folder_visible(remote):
+            return []
+        return [entry for entry in rows if self.folder_visible(
+            entry.payload.get('path', entry.label), directory=entry.container)]
 
     def open_search(self, widget=None, **kwargs):
         self.search.focus()
@@ -122,7 +135,7 @@ class FileBrowser(NativeBrowser):
             self.page_label.text = f'{len(self.entries)} items'
 
     async def _select_pressed(self, entry, widget, **kwargs):
-        if self.closed or self.navigation_busy or not self.tree or entry.identity not in self.tree.entries:
+        if self.closed or self.navigation_busy or not self.tree or entry.identity not in self.tree.entries or entry not in self.entries:
             return
         if entry.container and self.on_open_folder:
             self.navigation_busy = True

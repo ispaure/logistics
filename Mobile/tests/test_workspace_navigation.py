@@ -25,6 +25,48 @@ class WorkspaceNavigationTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_legacy_session_toggle_save_reload_and_platform_scope(self):
+        from logisticsmobile.preferences import Preferences
+        app = self.app
+        backend = type(app._impl)
+        with patch.object(backend, '__module__', 'toga_iOS.app'):
+            self.assertFalse(app.folder_path_visible('Books/Legacy-old'))
+            self.assertFalse(app.folder_path_visible('Legacy-old/book.cbz', directory=False))
+            self.assertTrue(app.folder_path_visible('Books/Legacy-file.cbz', directory=False))
+            app.show_settings()
+            app.show_legacy_choice.value = True
+            self.assertTrue(app.folder_path_visible('Legacy-old'))
+            self.assertEqual(Preferences(app.preferences.path.parent).values['show_legacy'], 'false')
+            app.save_preferences()
+            self.assertEqual(Preferences(app.preferences.path.parent).values['show_legacy'], 'true')
+            app.show_legacy_choice.value = False
+            self.assertFalse(app.folder_path_visible('Legacy-old'))
+            app.reload_preferences()
+            self.assertTrue(app.folder_path_visible('Legacy-old'))
+        app.show_legacy_session = False
+        self.assertTrue(app.folder_path_visible('Legacy-old'))
+
+    def test_browser_filters_folder_paths_and_search_results_for_all_providers(self):
+        from types import SimpleNamespace
+        from logisticsmobile.browser_ui import FileBrowser
+        app = self.app
+        with patch.object(type(app._impl), '__module__', 'toga_iOS.app'):
+            browser = FileBrowser(selected=lambda row: None, folder_visible=app.folder_path_visible)
+            for remote in ('', 'ordinary', 'Legacy-remote'):
+                provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path, remote=remote)
+                rows = [dict(path=path, name=Path(path).name, directory=directory)
+                        for path, directory in [('Legacy-old', True), ('Books', True),
+                            ('Books/Legacy-file.cbz', False), ('Legacy-old/book.cbz', False)]]
+                from commonUtils.runtime.resource_selection import ResourceSelection
+                browser.set_entries(ResourceSelection(provider), '', rows)
+                expected = [] if remote.startswith('Legacy-') else ['Books', 'Legacy-file.cbz']
+                self.assertEqual(sorted(entry.label for entry in browser.entries), expected)
+                app.change_show_legacy(SimpleNamespace(value=True))
+                browser.query_changed()
+                self.assertEqual(len(browser.entries), 4)
+                app.change_show_legacy(SimpleNamespace(value=False))
+            app.loop.run_until_complete(browser.close())
+
     def test_private_open_failure_is_visible_in_the_browser(self):
         from types import SimpleNamespace
         from unittest.mock import AsyncMock
