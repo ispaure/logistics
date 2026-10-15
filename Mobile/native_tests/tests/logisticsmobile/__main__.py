@@ -46,6 +46,10 @@ async def exercise(app):
         assert get_os() in {OS.ANDROID, OS.IOS}
         backend = type(app._impl).__module__
         assert backend.startswith('toga_android.' if get_os() is OS.ANDROID else 'toga_iOS.')
+        if get_os() is OS.IOS:
+            from .navigation_checks import assert_cold_iphone_tab_labels
+            await asyncio.sleep(.3)
+            assert_cold_iphone_tab_labels(app)
         # Scene activation may restore a destination after startup. Exercise
         # Home explicitly once the native app is running.
         app.show_home()

@@ -114,3 +114,32 @@ Folder Hub panes measured 405/405 points and met at x=417 in an 834-point window
 These are targeted local checks, not full native-suite, Android-rendering,
 physical-device or Duo fold-transition evidence. Probe sources, screenshots,
 results and source hashes are retained under `Mobile/logs/feedback-review/`.
+
+
+## iPhone tab labels at cold start
+
+After installing the app-owned Folder Hub glyph, `navigation.refresh_apple_tab_items`
+creates a fresh `UITabBarItem` for each wrapped navigation controller, using the
+final destination title and image, then refreshes the native tab array. This avoids
+reusing the original OptionContainer items' compressed label geometry on iOS 26.
+The change does not select destinations, initialize Chat or change the route stacks.
+No private UIKit label classes or frame writes are used by the application.
+
+An iOS 26.5 cold-start probe reproduced Folder Hub at 24.3 points wide despite a
+55.3-point intrinsic width; selecting it repaired the label. With fresh items, all
+five labels fit before any selection, and their heights increase from the clipped
+7–8 points to 12 points. Cold-start label checks passed on iOS 26.5 and 27.0.
+Native suite startup now inspects rendered iPhone label bounds before it exercises
+navigation, and host coverage verifies titles, glyphs and selection preservation.
+The iPad's hidden legacy tab labels are excluded from the phone-only pixel check;
+its visible native tab/sidebar presentation is checked separately. Local captures
+and measurements live in `Mobile/logs/tab-label-review/`.
+
+
+Validation for this fix: 185 mobile host tests passed, including startup from the
+staged payload and title/image/selection preservation. Targeted native probes
+passed phone cold-start bounds on iOS 26.5 and 27.0 and iPad tab/sidebar selection.
+The signed update was installed in place on the paired iPhone; a physical-device
+capture showed all five complete labels. That capture was on Documents, so the
+before-selection assertion specifically comes from the cold-launch simulator
+probes, not the physical screenshot. Lint and whitespace checks passed.

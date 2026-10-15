@@ -1,5 +1,7 @@
 """Shared state and dummy-host contracts; actual adapters have native cases."""
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 import toga
 from logisticsmobile.navigation import NavigationState, DESTINATION_ITEMS
 from commonUtils.ui.native.navigation import NativeNavigationHost
@@ -7,6 +9,29 @@ from commonUtils.ui.native.routes import Routes
 
 
 class NavigationTests(unittest.TestCase):
+    def test_apple_tab_rebuild_preserves_titles_glyphs_and_selection(self):
+        from logisticsmobile.navigation import refresh_apple_tab_items
+        selected = Mock()
+        host = NativeNavigationHost(DESTINATION_ITEMS, on_select=selected)
+        images = [object() for _ in host.destinations]
+        navigation = [SimpleNamespace(tabBarItem=SimpleNamespace(image=image)) for image in images]
+        refresh = Mock()
+        host.adapter = SimpleNamespace(navigation=navigation, impl=SimpleNamespace(refresh_tabs=refresh))
+        factory = Mock()
+        factory.alloc.return_value.initWithTitle.side_effect = lambda title, image, tag: SimpleNamespace(
+            title=title, image=image, tag=tag)
+        bridge = SimpleNamespace(ObjCClass=Mock(return_value=factory))
+        with patch.dict('sys.modules', {'rubicon.objc': bridge}):
+            refresh_apple_tab_items(host)
+        self.assertEqual([item.tabBarItem.title for item in navigation], list(host.labels))
+        self.assertEqual([item.tabBarItem.image for item in navigation], images)
+        self.assertEqual([item.tabBarItem.tag for item in navigation], list(range(5)))
+        self.assertEqual([item.tabBarItem.accessibilityLabel for item in navigation], list(host.labels))
+        self.assertEqual(host.state.destination, 'home')
+        self.assertEqual(host.root.current_tab.text, 'Home')
+        selected.assert_not_called()
+        refresh.assert_called_once_with()
+
     def test_back_is_destination_local_and_preserves_screen_and_guard(self):
         host = NativeNavigationHost(DESTINATION_ITEMS)
         allowed = [True]
