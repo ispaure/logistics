@@ -116,3 +116,7 @@ Registry writes preserve compact UTF-8 JSON and the trailing newline.
 
 Mobile startup binds its cooperative loop through `commonUtils.ui.native.event_loop`.
 The shared helper owns dispatch context restoration; Logistics owns loop lifetime.
+
+Native memory/configuration subscriptions use shared `ui.native.memory`. Logistics
+guards active hosts and chooses resource cleanup/theme refresh; subscriptions
+suppress queued callbacks after disposal.
