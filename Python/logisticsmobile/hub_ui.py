@@ -1,7 +1,7 @@
 """Native launch panels and live document summaries over existing commands."""
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW
+from toga.style.pack import COLUMN, ROW, CENTER
 from .hub_icons import icon
 from commonUtils.ui.native.presentation import list_button, template_icon
 from .appearance import surface
@@ -105,12 +105,13 @@ class HubUI:
             ('Folder Hub', 'Your folders · browse, pull & push', 'folder_hub', self.show_home_files),
             ('Books & Comics', 'Your library, ready to read', 'books', self.show_library),
         ):
-            row = toga.Box(children=[
-                template_icon(toga.ImageView(icon(glyph), style=Pack(width=24, height=24, margin_right=12))),
-                list_button(toga.Button(title, on_press=action, style=Pack(height=48, flex=1)))],
-                style=Pack(direction=ROW))
-            item = toga.Box(children=[row, toga.Label(subtitle, style=Pack(font_size=12, margin_left=36))],
-                            style=Pack(direction=COLUMN, padding=10, margin_bottom=6))
+            text = toga.Box(children=[
+                list_button(toga.Button(title, on_press=action, style=Pack(height=44))),
+                toga.Label(subtitle, style=Pack(font_size=12, margin_left=8, margin_right=8))],
+                style=Pack(direction=COLUMN, flex=1))
+            item = toga.Box(children=[
+                template_icon(toga.ImageView(icon(glyph), style=Pack(width=28, height=28, margin_right=12))),
+                text], style=Pack(direction=ROW, align_items=CENTER, margin=16, margin_bottom=12))
             spaces.add(home_surface(item))
         box.add(spaces)
         box.add(toga.Box(children=[
