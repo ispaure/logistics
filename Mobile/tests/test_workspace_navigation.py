@@ -46,6 +46,47 @@ class WorkspaceNavigationTests(unittest.TestCase):
         app.show_legacy_session = False
         self.assertTrue(app.folder_path_visible('Legacy-old'))
 
+    def test_legacy_credentials_use_prefix_without_dash_and_toggle_in_place(self):
+        import json
+        from types import SimpleNamespace
+        app = self.app
+        packages = [dict(zip=name, remotes=[remote], session_only=True) for name, remote in
+                    [('Personal.zip', 'Main'), ('LegacyArchive.zip', 'Old'),
+                     ('legacy.zip', 'Old2'), ('MyLegacy.zip', 'Other')]]
+        app.preferences.save(remote_packages=json.dumps(packages))
+        app.show_locations()
+        with patch.object(type(app._impl), '__module__', 'toga_iOS.app'):
+            app.change_show_legacy(SimpleNamespace(value=False))
+            self.assertEqual(list(app.folder_credentials), ['All', 'Personal', 'MyLegacy'])
+            self.assertEqual([row.value for row in app.folder_credential.items], list(app.folder_credentials))
+            app.change_show_legacy(SimpleNamespace(value=True))
+            self.assertIn('LegacyArchive', app.folder_credentials)
+            app.folder_credential.value = 'LegacyArchive'
+            app.change_show_legacy(SimpleNamespace(value=False))
+            self.assertEqual(app.folder_credential.value, 'All')
+            self.assertEqual(app.folder_credential_name, 'All')
+            self.assertEqual(json.loads(app.preferences.values['remote_packages']), packages)
+        self.assertIn('LegacyArchive', app.credential_groups())
+
+    def test_retained_zip_unlock_chooser_skips_legacy_prefix(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        app = self.app
+        app.show_cloud(present=False)
+        cache = SimpleNamespace(matching=lambda remote, identity: [
+            ('old', dict(zip='LegacyArchive.zip')), ('current', dict(zip='Personal.zip'))])
+        with patch.object(type(app._impl), '__module__', 'toga_iOS.app'), \
+                patch.object(app, 'cloud_client', SimpleNamespace(
+                    connection_identity=Mock(side_effect=ValueError('Locked')))), \
+                patch.object(app, 'retained_packages', return_value=cache), \
+                patch.object(app, 'show_retained_unlock', new_callable=Mock) as unlock:
+            app.require_remote_credentials('Main')
+            unlock.assert_called_once_with('current', 'Main', identity=None, resume=None)
+            app.show_legacy_session = True
+            app.require_remote_credentials('Main')
+            self.assertEqual(unlock.call_count, 1)
+            self.assertEqual(app.routes.screens['files'][-1][0], 'choose-credential')
+
     def test_browser_filters_folder_paths_and_search_results_for_all_providers(self):
         from types import SimpleNamespace
         from logisticsmobile.browser_ui import FileBrowser

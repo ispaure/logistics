@@ -301,6 +301,8 @@ class CloudUI(CopyUI, LocalCryptUI):
         from pathlib import Path
         groups = {'All': None}
         for item in json.loads(self.preferences.values['remote_packages']):
+            if not self.legacy_name_visible(Path(item['zip']).name, prefix='legacy'):
+                continue
             title = Path(item['zip']).stem
             if title in groups:
                 title = item['zip']
@@ -320,7 +322,8 @@ class CloudUI(CopyUI, LocalCryptUI):
             pass
         try:
             cache = self.retained_packages()
-            matches = cache.matching(remote, identity) if cache else []
+            matches = [(key, item) for key, item in cache.matching(remote, identity)
+                       if self.legacy_name_visible(item['zip'], prefix='legacy')] if cache else []
         except (OSError, ValueError) as error:
             self.cloud_status.value = str(error)
             matches = []

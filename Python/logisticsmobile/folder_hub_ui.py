@@ -26,14 +26,16 @@ def refresh_button(action):
 
 
 class FolderHubUI:
-    def folder_path_visible(self, path, *, directory=True):
-        from pathlib import PurePosixPath
+    def legacy_name_visible(self, name, *, prefix='legacy-'):
         if not type(self._impl).__module__.startswith('toga_iOS.'):
             return True
         show = getattr(self, 'show_legacy_session', self.preferences.values['show_legacy'] == 'true')
+        return show or not str(name).casefold().startswith(prefix)
+
+    def folder_path_visible(self, path, *, directory=True):
+        from pathlib import PurePosixPath
         parts = PurePosixPath(str(path)).parts
-        return show or not any(part.casefold().startswith('legacy-')
-                               for part in (parts if directory else parts[:-1]))
+        return all(self.legacy_name_visible(part) for part in (parts if directory else parts[:-1]))
 
     def library_folder_visible(self, record):
         return (self.folder_path_visible(record['folder'])
@@ -151,6 +153,7 @@ class FolderHubUI:
             self.folder_credential.on_change = None
             self.folder_credential.items = list(credentials)
             self.folder_credential.value = selected if selected in credentials else 'All'
+            self.folder_credential_name = self.folder_credential.value
             self.folder_credential.on_change = self.change_folder_credential
         self.folder_picker_choices = choices
         for child in list(self.folder_list.children):
