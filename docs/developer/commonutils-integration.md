@@ -142,3 +142,7 @@ streams; its export plan and destination validation remain feature-owned.
 Shared archive rebuilding owns byte manifests and member replacement. Logistics'
 metadata service retains comic/EPUB plans, the processing limit and EPUB mimetype
 ordering/storage rules. Native archive shortcuts still avoid decoding whole files.
+
+Legacy rclone migration delegates directory relocation/link rebasing to shared
+filesystem relocation. Application Support locations and migration triggers remain
+in `features.rclone.storage`. Neither repository changes existing stored paths.
