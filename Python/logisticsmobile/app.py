@@ -151,6 +151,10 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             self.body = adaptive.detail_routes[-1][1]
         else:
             self.body = self.routes.body(destination)
+        if adaptive is not None:
+            # Tab selection callbacks run before the host commits destination.
+            # Render the new root and its toolbar against the selected tab.
+            adaptive.render(destination=destination)
         from .reader_chrome import sync_comic_chrome
         sync_comic_chrome(self, self.body)
         # Material selection is reported before the shared destination commits.
@@ -169,6 +173,8 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
 
     def route_changed(self, body):
         self.body = body
+        # UIKit Back/swipe callbacks also need to restore the retained toolbar.
+        self.loop.call_soon(self.adaptive.render)
         private = getattr(self, 'private_sessions', None)
         if private is not None and getattr(self, 'files_view', None) in body.children:
             # Native Back does not call show_view. Apply the same hidden private
@@ -198,7 +204,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
             return False
         self.mark_navigation()
         target = destination or self.native_host.state.destination
-        self.adaptive.prepare(view, target, route=route, root=root)
+        view = self.adaptive.prepare(view, target, route=route, root=root)
         private = getattr(self, 'private_sessions', None)
         if private is not None:
             owner = private.active
@@ -434,7 +440,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         box.add(toga.Label('Use Appearance in an open reader\nto adjust its pages.', style=Pack(font_size=12)))
         box.add(heading('LM Chat'))
         box.add(toga.Button('Server & generation settings…', on_press=self.show_chat_configuration, style=Pack(height=44)))
-        box.add(heading('Files'))
+        box.add(heading('Folder Hub'))
         box.add(toga.Button('Remote connections…', on_press=self.show_cloud_connections, style=Pack(height=44)))
         box.add(heading('Apply preferences'))
         box.add(toga.Button('Save preferences', on_press=self.save_preferences, style=Pack(height=44)))
@@ -454,7 +460,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         self.refresh_documents()
         root = self.routes.roots['documents']
         view = self.build_documents_hub()
-        self.adaptive.prepare(view, 'documents', root=True)
+        view = self.adaptive.prepare(view, 'documents', root=True)
         for child in list(root.children):
             root.remove(child)
         root.add(view)

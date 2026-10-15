@@ -118,7 +118,7 @@ async def exercise_ui_review(app):
     (folder / 'WebP comic.cbz').write_bytes(original)
     (folder / 'Cover.webp').write_bytes(webp)
     def home_browse_button(widget):
-        if isinstance(widget, toga.Button) and widget.text == 'Browse files':
+        if isinstance(widget, toga.Button) and widget.text == 'Folder Hub':
             return widget
         children = list(widget.children)
         if isinstance(widget, toga.ScrollContainer) and widget.content is not None:
@@ -269,8 +269,9 @@ async def exercise_ui_review(app):
             colour = ObjCClass('UIColor')
             traits = native.traitCollection
             actual = native.textColor.resolvedColorWithTraitCollection(traits)
-            expected = colour.labelColor().resolvedColorWithTraitCollection(traits)
-            background = colour.secondarySystemBackgroundColor().resolvedColorWithTraitCollection(traits)
+            from logisticsmobile.appearance import apple_color
+            expected = apple_color('text').resolvedColorWithTraitCollection(traits)
+            background = apple_color('surface').resolvedColorWithTraitCollection(traits)
             assert actual.isEqual(expected), 'Editor uses a fixed foreground colour'
             assert not actual.isEqual(background), 'Editor foreground matches its background'
         else:
@@ -311,6 +312,15 @@ async def exercise_ui_review(app):
         await capture('local-markdown-' + mode)
         app.private_sessions.close(owner.session.id, discard=True)
         app.show_home()
+        if get_os() is OS.IOS:
+            from rubicon.objc import ObjCClass
+            from logisticsmobile.appearance import apple_color
+            native = app.home_continue._impl.native
+            traits = native.traitCollection
+            assert native.backgroundColor.resolvedColorWithTraitCollection(traits).isEqual(
+                apple_color('surface').resolvedColorWithTraitCollection(traits))
+            stroke = ObjCClass('UIColor').colorWithCGColor(native.layer.borderColor)
+            assert stroke.isEqual(apple_color('border').resolvedColorWithTraitCollection(traits))
         await capture('home-' + mode)
         app.show_locations()
         await capture('folder-picker-' + mode)

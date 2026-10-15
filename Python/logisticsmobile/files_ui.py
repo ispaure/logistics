@@ -86,7 +86,7 @@ class FilesUI:
                     self.file_browser.search.value = ''
                     self.file_browser.history.clear()
                 await self.browse_files()
-            self.show_view(self.files_view, destination='files', route='browser', title='Files and folders')
+            self.show_view(self.files_view, destination='files', route='browser', title='File browser')
             return
         if hasattr(self, 'file_browser'):
             await self.file_browser.close()
@@ -116,7 +116,7 @@ class FilesUI:
             ('Cancel operation', self.cancel_cloud), ('Back to remote files', self.files_back))]
         self.file_commands = buttons
         self.file_operation_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
-            toga.Button('Locations', on_press=self.show_locations, style=Pack(height=44)),
+            toga.Button('Folder Hub', on_press=self.show_locations, style=Pack(height=44)),
             toga.Label('Local files and folders'), self.file_storage, self.file_location, buttons[0],
             toga.Button('Parent folder', on_press=self.parent_file_folder, style=Pack(height=44)),
             self.file_password, self.file_browser.widget, buttons[1], buttons[2], self.file_name, *buttons[3:6],
@@ -143,7 +143,7 @@ class FilesUI:
              ('Delete selected…', self.delete_file), ('Change location…', lambda: self.show_file_actions(operation='location')),
              ('Archive password…', lambda: self.show_file_actions(operation='password'))], self.show_file_actions)
         self.files_view = toga.Box(children=[
-            toga.Box(children=[toga.Button('Locations', on_press=self.show_locations, style=Pack(height=44, flex=1)),
+            toga.Box(children=[toga.Button('Folder Hub', on_press=self.show_locations, style=Pack(height=44, flex=1)),
                                self.file_actions_button], style=Pack(direction=ROW)),
             self.file_storage,
             toga.Box(children=[toga.Button('Up', on_press=self.parent_file_folder, style=Pack(height=44)),
@@ -151,7 +151,7 @@ class FilesUI:
             toga.ScrollContainer(horizontal=False, content=scroll_content(self.file_browser.widget), style=Pack(flex=1))],
             style=Pack(direction=COLUMN, margin=12, flex=1))
         self.file_status.style.flex = 1
-        self.show_view(self.files_view, destination='files', route='browser', title='Files and folders')
+        self.show_view(self.files_view, destination='files', route='browser', title='File browser')
         await self.browse_files()
         self.file_storage.on_change = self.change_file_storage
 

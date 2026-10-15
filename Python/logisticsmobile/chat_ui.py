@@ -1,14 +1,16 @@
 """Native text chat controls; only explicit user actions contact a server."""
 import asyncio
 from copy import deepcopy
+import inspect
 import time
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW
+from toga.style.pack import COLUMN, ROW, END
 
 from features.lm.domain import build_request, message, validate_settings
 from .chat import ChatStore, DEFAULT_SETTINGS, export_chat
 from .chat_transport import ChatClient, ChatCancelled
+from .chat_presentation import composer_height, transcript_document, transcript_entries, transcript_update
 
 
 class ChatUI:
@@ -34,12 +36,18 @@ class ChatUI:
             self.chat_refresh = toga.Button('Refresh models', on_press=self.refresh_chat_models, style=Pack(height=44))
             self.chat_selector = toga.Selection(on_change=self.select_chat, style=Pack(height=44))
             self.chat_new = toga.Button('New conversation', on_press=self.new_chat, style=Pack(height=44))
-            self.chat_transcript = toga.MultilineTextInput(readonly=True, style=Pack(flex=1,
-                font_size=int(self.preferences.values['font_size'])))
+            self.chat_render_ready = False
+            self.chat_render_revision = 0
+            self.chat_render_generation = 0
+            self.chat_render_task = None
+            self.chat_render_key = None
+            self.chat_render_entries = []
+            self.chat_force_latest = False
+            self.chat_transcript = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
+                on_webview_load=self.chat_transcript_loaded, style=Pack(flex=1))
             self.chat_prompt = toga.MultilineTextInput(on_change=self.chat_draft_changed,
-                placeholder='Message', style=Pack(height=76, font_size=int(self.preferences.values['font_size'])))
-            self.chat_send = toga.Button('Send', on_press=self.send_chat, style=Pack(flex=1, height=44))
-            self.chat_cancel = toga.Button('Cancel', on_press=self.cancel_chat, enabled=False, style=Pack(flex=1, height=44))
+                placeholder='Message…', style=Pack(flex=1, height=52, font_size=int(self.preferences.values['font_size'])))
+            self.chat_send = toga.Button('Send', on_press=self.chat_primary_action, style=Pack(width=64, height=52))
             self.chat_export = toga.Button('Export conversation…', on_press=self.export_chat, style=Pack(height=44))
             contexts = sorted({'2048', '4096', '8192', '16384', '32768', str(self.chat_profile['settings']['context_tokens'])}, key=int)
             replies = sorted({'256', '512', '1024', '2048', '4096', str(self.chat_profile['settings']['max_tokens'])}, key=int)
@@ -47,31 +55,47 @@ class ChatUI:
                 value=str(self.chat_profile['settings']['context_tokens']), style=Pack(flex=1, height=44))
             self.chat_max_tokens = toga.Selection(items=replies,
                 value=str(self.chat_profile['settings']['max_tokens']), style=Pack(flex=1, height=44))
-            self.chat_status = toga.MultilineTextInput(value=error or 'Configure a server; no connection starts automatically.',
-                                                      readonly=True, style=Pack(height=36, font_size=12))
-            self.chat_config_view = toga.Box(children=[
+            self.chat_status = toga.MultilineTextInput(readonly=True, style=Pack(height=44, font_size=12))
+            self.chat_config_status = toga.MultilineTextInput(readonly=True, style=Pack(height=44, font_size=12))
+            self.chat_config_status_box = toga.Box(style=Pack(direction=COLUMN))
+            self.chat_config_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
                 toga.Button('Back to conversation', on_press=self.show_chat, style=Pack(height=44)),
                 toga.Label('Server & generation settings'), self.chat_url, self.chat_key, self.chat_model,
                 toga.Label('Context tokens / maximum\nreply tokens'),
                 toga.Box(children=[self.chat_context, self.chat_max_tokens], style=Pack(direction=ROW)),
-                self.chat_refresh, self.chat_models,
+                self.chat_refresh, self.chat_models, self.chat_config_status_box,
                 toga.Button('Save configuration', on_press=self.save_chat_configuration, style=Pack(height=44))],
-                style=Pack(direction=COLUMN, margin=12))
+                style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
             from .workspace_navigation import menu_button
-            self.chat_title = toga.Label('LM Chat', style=Pack(flex=1, margin_top=10))
+            self.chat_title = toga.Label('New conversation', style=Pack(font_weight='bold', font_size=16))
+            self.chat_model_label = toga.Label('', style=Pack(font_size=12))
             self.chat_menu_button = menu_button(self.toggle_chat_conversations, 'Conversations')
+            self.chat_actions_button = toga.Button('•••', style=Pack(width=44, height=44))
+            from commonUtils.ui.native.menus import NativeMenu
+            self.chat_actions = NativeMenu(self.chat_actions_button, [
+                ('New conversation', self.new_chat), ('Export conversation…', self.export_chat),
+                ('Server & model settings', self.show_chat_configuration)], invoke=self.invoke_chat_action,
+                context=lambda: self._impl.native, fallback=self.show_chat_actions)
+            backend = type(self.chat_actions_button._impl).__module__
+            if backend.startswith('toga_iOS.'):
+                self.chat_actions_button._impl.native.accessibilityLabel = 'Conversation actions'
+            elif backend.startswith('toga_android.'):
+                self.chat_actions_button._impl.native.setContentDescription('Conversation actions')
             self.chat_conversation_list = toga.Box(style=Pack(direction=COLUMN))
             self.chat_sidebar = toga.Box(children=[toga.Label('Conversations', style=Pack(font_size=20, margin_bottom=12)),
                 self.chat_new,
                 toga.ScrollContainer(horizontal=False, content=self.chat_conversation_list, style=Pack(flex=1)),
-                self.chat_export], style=Pack(direction=COLUMN, flex=1, margin_right=12))
-            self.chat_messages = toga.Box(children=[self.chat_transcript, self.chat_status, self.chat_prompt,
-                toga.Box(children=[self.chat_send, self.chat_cancel], style=Pack(direction=ROW))],
+                self.chat_export], style=Pack(direction=COLUMN, flex=1))
+            self.chat_status_box = toga.Box(style=Pack(direction=COLUMN))
+            self.chat_composer = toga.Box(children=[self.chat_prompt, self.chat_send],
+                style=Pack(direction=ROW, align_items=END, margin_top=8))
+            self.chat_messages = toga.Box(children=[self.chat_transcript, self.chat_status_box, self.chat_composer],
                 style=Pack(direction=COLUMN, flex=1))
             self.chat_workspace = toga.Box(style=Pack(direction=ROW, flex=1))
-            self.chat_drawer_open = self.adaptive.width() >= 840
-            self.chat_view = toga.Box(children=[toga.Box(children=[self.chat_menu_button, self.chat_title,
-                toga.Button('Settings', on_press=self.show_chat_configuration, style=Pack(height=44))],
+            self.chat_drawer_open = self.adaptive.width() >= 640
+            self.chat_view = toga.Box(children=[toga.Box(children=[self.chat_menu_button,
+                toga.Box(children=[self.chat_title, self.chat_model_label], style=Pack(direction=COLUMN, flex=1, margin_left=4)),
+                self.chat_actions_button],
                 style=Pack(direction=ROW, margin_bottom=8)), self.chat_workspace],
                 style=Pack(direction=COLUMN, margin=12, flex=1))
             self.refresh_chats()
@@ -79,6 +103,11 @@ class ChatUI:
                 self.open_chat(next(iter(self.chat_labels.values())))
             else:
                 self.new_chat()
+            if error:
+                self.set_chat_status(error)
+            self.chat_transcript.set_content('https://logistics.invalid/chat/', transcript_document())
+        self.chat_prompt.style.font_size = int(self.preferences.values['font_size'])
+        self.update_chat_transcript()
         self.show_view(self.chat_view, destination='chat', root=True, title='Chat')
 
     def toggle_chat_conversations(self, widget=None, **kwargs):
@@ -91,14 +120,14 @@ class ChatUI:
         children = []
         if self.chat_drawer_open:
             children.append(self.chat_sidebar)
-        if not self.chat_drawer_open or self.adaptive.width() >= 840:
+        if not self.chat_drawer_open or self.adaptive.width() >= 640:
             children.append(self.chat_messages)
         if list(self.chat_workspace.children) != children:
             for child in list(self.chat_workspace.children):
                 self.chat_workspace.remove(child)
             self.chat_workspace.add(*children)
         if len(children) == 2:
-            available = self.chat_workspace.layout.content_width or max(0, self.adaptive.width() - 24)
+            available = self.adaptive.content_width('chat')
             half = max(1, int(available / 2))
             self.chat_sidebar.style.width, self.chat_sidebar.style.flex = half, 0
             self.chat_messages.style.width, self.chat_messages.style.flex = max(1, int(available) - half), 0
@@ -106,10 +135,57 @@ class ChatUI:
             for child in children:
                 del child.style.width
                 child.style.flex = 1
-        self.chat_title.text = 'Conversations' if self.chat_drawer_open and self.adaptive.width() < 840 else 'LM Chat'
+        self.update_chat_header()
+        self.resize_chat_composer()
+
+    def update_chat_header(self):
+        sidebar = self.chat_drawer_open and self.adaptive.width() < 640
+        title = (self.chat_current or {}).get('title', 'New conversation')
+        # A bounded, two-line native heading must not dictate the pane width.
+        available = self.chat_view.layout.content_width or max(1, self.adaptive.width() - 24)
+        limit = max(12, int((available - 112) / 9))
+        self.chat_title.text = 'Conversations' if sidebar else title[:limit] + ('…' if len(title) > limit else '')
+        model = self.chat_profile.get('model') or 'Set up a server'
+        self.chat_model_label.text = model[:limit] + ('…' if len(model) > limit else '')
+
+    def resize_chat_composer(self):
+        if not hasattr(self, 'chat_messages'):
+            return
+        width = self.chat_messages.layout.content_width or max(1, self.adaptive.width() - 24)
+        self.chat_prompt.style.height = composer_height(self.chat_prompt.value, width - 64,
+                                                       int(self.preferences.values['font_size']))
+
+    def set_chat_status(self, value):
+        for status, box in ((self.chat_status, self.chat_status_box),
+                            (self.chat_config_status, self.chat_config_status_box)):
+            status.value = value
+            if value and status not in box.children:
+                box.add(status)
+            elif not value and status in box.children:
+                box.remove(status)
+
+    def show_chat_actions(self, widget=None, **kwargs):
+        box = toga.Box(children=[
+            toga.Button('Back to conversation', on_press=self.show_chat, style=Pack(height=44)),
+            toga.Button('New conversation', on_press=self.new_chat_from_actions, style=Pack(height=44)),
+            toga.Button('Export conversation…', on_press=self.export_chat, style=Pack(height=44)),
+            toga.Button('Server & model settings', on_press=self.show_chat_configuration, style=Pack(height=44))],
+            style=Pack(direction=COLUMN, margin=12))
+        self.show_view(box, destination='chat', route='chat-actions', title='Conversation')
+
+    def new_chat_from_actions(self, widget=None, **kwargs):
+        self.new_chat()
+        self.show_chat()
+
+    def invoke_chat_action(self, callback):
+        if self.chat_busy or not self.active_host:
+            return
+        result = callback()
+        if inspect.isawaitable(result):
+            self.loop.create_task(result)
 
     def show_chat_messages(self):
-        if self.adaptive.width() < 840:
+        if self.adaptive.width() < 640:
             self.chat_drawer_open = False
         self.render_chat_workspace()
 
@@ -123,10 +199,10 @@ class ChatUI:
             return
         try:
             self.chat_fields()
-            self.chat_status.value = 'Configuration saved. The API key stays in this session only.'
+            self.set_chat_status('Configuration saved. The API key stays in this session only.')
             self.show_chat()
         except (OSError, ValueError) as error:
-            self.chat_status.value = str(error)
+            self.set_chat_status(str(error))
             self.show_chat()
 
     def refresh_chats(self):
@@ -156,7 +232,7 @@ class ChatUI:
             self.chat_conversation_list.add(button)
             self.chat_conversation_buttons.append(button)
         if warnings:
-            self.chat_status.value = f'{len(warnings)} conversation(s) could not be read; originals preserved.'
+            self.set_chat_status(f'{len(warnings)} conversation(s) could not be read; originals preserved.')
 
     def checkpoint_chat(self):
         if self.chat_current is None:
@@ -165,7 +241,7 @@ class ChatUI:
             self.chat_store.save(self.chat_current)
             return True
         except (OSError, ValueError) as error:
-            self.chat_status.value = 'Chat not saved: ' + str(error)
+            self.set_chat_status('Chat not saved: ' + str(error))
             return False
 
     def open_chat(self, key):
@@ -176,11 +252,12 @@ class ChatUI:
             self.chat_loading = True
             self.chat_prompt.value = self.chat_current['draft']
             self.chat_loading = False
+            self.set_chat_status('')
             self.update_chat_transcript()
             self.refresh_chats()
             self.show_chat_messages()
         except (OSError, ValueError) as error:
-            self.chat_status.value = str(error)
+            self.set_chat_status(str(error))
 
     def select_chat(self, widget, **kwargs):
         if not self.chat_loading and not self.chat_busy and widget.value in self.chat_labels:
@@ -194,29 +271,83 @@ class ChatUI:
             self.chat_loading = True
             self.chat_prompt.value = ''
             self.chat_loading = False
+            self.set_chat_status('')
             self.update_chat_transcript()
             self.refresh_chats()
             self.show_chat_messages()
         except (OSError, ValueError) as error:
-            self.chat_status.value = str(error)
+            self.set_chat_status(str(error))
 
     def chat_draft_changed(self, widget, **kwargs):
+        self.resize_chat_composer()
         if not self.chat_loading and self.chat_current is not None:
             self.chat_current['draft'] = widget.value
             self.checkpoint_chat()
 
     def update_chat_transcript(self):
-        self.chat_transcript.value = '\n\n'.join(
-            entry['role'].title() + (' (' + entry['status'] + ')' if entry['status'] != 'complete' else '')
-            + '\n' + entry['content'] for entry in self.chat_current['messages'])
+        self.chat_render_revision += 1
+        self.update_chat_header()
+        self.schedule_chat_render()
 
-    def set_chat_busy(self, busy):
+    def chat_transcript_loaded(self, widget=None, **kwargs):
+        self.chat_render_ready = True
+        self.chat_render_revision += 1
+        self.chat_render_generation += 1
+        self.chat_render_key = None
+        self.chat_render_entries = []
+        self.schedule_chat_render()
+
+    def schedule_chat_render(self):
+        if self.chat_render_ready and (self.chat_render_task is None or self.chat_render_task.done()):
+            self.chat_render_task = self.loop.create_task(self.render_chat_transcript())
+
+    async def render_chat_transcript(self):
+        rendered = -1
+        try:
+            while rendered != self.chat_render_revision:
+                rendered = self.chat_render_revision
+                generation = self.chat_render_generation
+                data = self.chat_current
+                if data is None:
+                    return
+                force_latest, self.chat_force_latest = self.chat_force_latest, False
+                previous = self.chat_render_entries if self.chat_render_key == data['id'] else []
+                entries = transcript_entries(data['messages'], previous)
+                start = 0
+                while start < min(len(entries), len(previous)) and entries[start] is previous[start]:
+                    start += 1
+                script = transcript_update(data['id'], entries[start:],
+                    self.preferences.values['font_size'],
+                    configured=bool(self.chat_profile['base_url'] and self.chat_profile['model']),
+                    force_latest=force_latest, start=start)
+                ready = await self.chat_transcript.evaluate_javascript(script)
+                if not ready:
+                    # The initial blank-page load may finish before set_content.
+                    # Its next real load event will render the current record.
+                    if rendered == self.chat_render_revision:
+                        self.chat_render_ready = False
+                        return
+                elif generation == self.chat_render_generation:
+                    self.chat_render_key, self.chat_render_entries = data['id'], entries
+        except (RuntimeError, ValueError) as error:
+            self.set_chat_status('Conversation display unavailable: ' + str(error)[:200])
+
+    async def chat_primary_action(self, widget=None, **kwargs):
+        if self.chat_busy:
+            if self.chat_generating:
+                self.cancel_chat()
+        else:
+            await self.send_chat()
+
+    def set_chat_busy(self, busy, *, generating=False):
         self.chat_busy = busy
+        self.chat_generating = busy and generating
         for control in (self.chat_url, self.chat_key, self.chat_model, self.chat_models, self.chat_selector,
-                        self.chat_new, self.chat_refresh, self.chat_send, self.chat_export,
+                        self.chat_new, self.chat_refresh, self.chat_export, self.chat_actions_button,
                         self.chat_context, self.chat_max_tokens):
             control.enabled = not busy
-        self.chat_cancel.enabled = busy
+        self.chat_send.text = 'Stop' if self.chat_generating else 'Send'
+        self.chat_send.enabled = not busy or self.chat_generating
         for control in self.chat_conversation_buttons:
             control.enabled = not busy
 
@@ -243,9 +374,9 @@ class ChatUI:
             self.chat_models.items = models
             if models:
                 self.chat_model.value = self.chat_profile['model'] if self.chat_profile['model'] in models else models[0]
-            self.chat_status.value = f'{len(models)} model(s) available.' if models else 'No models are loaded on the server.'
+            self.set_chat_status(f'{len(models)} model(s) available.' if models else 'No models are loaded on the server.')
         except Exception as error:
-            self.chat_status.value = 'Models unavailable: ' + str(error)[:400]
+            self.set_chat_status('Models unavailable: ' + str(error)[:400])
         finally:
             self.chat_client = None
             self.set_chat_busy(False)
@@ -255,12 +386,12 @@ class ChatUI:
             return
         prompt = self.chat_prompt.value.strip()
         if not prompt:
-            self.chat_status.value = 'Enter a message first.'
+            self.set_chat_status('Enter a message first.')
             return
         if len(self.chat_current['messages']) > 198:
-            self.chat_status.value = 'This conversation has reached 200 messages. Start a new conversation.'
+            self.set_chat_status('This conversation has reached 200 messages. Start a new conversation.')
             return
-        self.set_chat_busy(True)
+        self.set_chat_busy(True, generating=True)
         self.chat_cancelled = False
         assistant = None
         pending = []
@@ -285,6 +416,7 @@ class ChatUI:
             self.chat_loading = True
             self.chat_prompt.value = ''
             self.chat_loading = False
+            self.resize_chat_composer()
             if not self.checkpoint_chat():
                 data.clear()
                 data.update(before)
@@ -293,9 +425,10 @@ class ChatUI:
                 self.chat_prompt.value = data['draft']
                 self.chat_loading = False
                 raise ValueError('The request was not sent because its recovery record could not be saved.')
+            self.chat_force_latest = True
             self.update_chat_transcript()
             omitted = metadata['omitted_turns']
-            self.chat_status.value = f'Generating… {omitted} older turn(s) omitted from the estimated context budget.'
+            self.set_chat_status(f'Generating… {omitted} older turn(s) omitted from context.' if omitted else 'Generating…')
             def fragment(text):
                 loop.call_soon_threadsafe(pending.append, text)
             task = asyncio.create_task(asyncio.to_thread(self.chat_client.stream, payload, fragment))
@@ -313,11 +446,11 @@ class ChatUI:
             reason = await task
             assistant['status'] = 'cancelled' if self.chat_cancelled else 'complete'
             assistant['finish_reason'] = reason
-            self.chat_status.value = 'Reply cancelled; partial text preserved.' if self.chat_cancelled else 'Reply complete.'
+            self.set_chat_status('Reply stopped; partial text preserved.' if self.chat_cancelled else '')
         except ChatCancelled:
             if assistant:
                 assistant['status'] = 'cancelled'
-            self.chat_status.value = 'Request cancelled; partial text preserved.'
+            self.set_chat_status('Request cancelled; partial text preserved.')
         except asyncio.CancelledError:
             if assistant:
                 assistant['status'] = 'interrupted'
@@ -326,7 +459,7 @@ class ChatUI:
             if assistant:
                 assistant['status'] = 'failed'
                 assistant['error'] = str(error)[:400]
-            self.chat_status.value = 'Chat failed: ' + str(error)[:400]
+            self.set_chat_status('Chat failed: ' + str(error)[:400])
         finally:
             self.chat_loading = False
             if self.chat_client:
@@ -341,7 +474,8 @@ class ChatUI:
         self.chat_cancelled = True
         if self.chat_client:
             self.chat_client.cancel()
-        self.chat_status.value = 'Cancelling…'
+        self.chat_send.enabled = False
+        self.set_chat_status('Stopping…')
 
     async def export_chat(self, widget=None, **kwargs):
         from .pickers import export_document
@@ -350,6 +484,6 @@ class ChatUI:
         try:
             content = export_chat(self.chat_current).encode('utf-8')
             done = await export_document(self, 'Conversation.md', content)
-            self.chat_status.value = 'Conversation exported.' if done else 'Export cancelled.'
+            self.set_chat_status('Conversation exported.' if done else 'Export cancelled.')
         except Exception as error:
-            self.chat_status.value = 'Export failed: ' + str(error)[:400]
+            self.set_chat_status('Export failed: ' + str(error)[:400])

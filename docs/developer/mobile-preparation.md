@@ -38,7 +38,7 @@ Session generations prevent late results from reviving closed or invalidated
 resources. `workspace_navigation.py` supplies the active adaptive presentation
 inside the existing native destination/Back stacks on both Apple and Android.
 It replaces the earlier Documents-only native split installation from
-`adaptive_workspace.py`. At 840 points/dp it can place a browser or retained text
+`adaptive_workspace.py`. At 640 points/dp it can place a browser or retained text
 editor beside the current document, in equal halves. Compact windows show a
 full-height drawer or the current document. A Material rail starts separately at
 600 dp. Resizing never closes a session. `action_menu.py` isolates native editor

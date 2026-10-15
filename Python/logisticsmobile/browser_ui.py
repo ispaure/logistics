@@ -5,7 +5,8 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from commonUtils.ui.native_browser import NativeBrowser
 from commonUtils.filesystem import format_size
-from commonUtils.ui.native.presentation import list_button, surface
+from commonUtils.ui.native.presentation import list_button
+from .appearance import surface
 
 
 class FileBrowser(NativeBrowser):

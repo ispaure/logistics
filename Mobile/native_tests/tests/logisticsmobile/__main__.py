@@ -51,7 +51,7 @@ async def exercise(app):
         app.show_home()
         assert app.body.children[0].content.children[0].text == 'Logistics'
         assert app.native_host.state.destination == 'home'
-        assert [tab.text for tab in app.navigation.content] == ['Home', 'Files', 'Documents', 'Chat', 'Settings']
+        assert [tab.text for tab in app.navigation.content] == ['Home', 'Folder Hub', 'Documents', 'Chat', 'Settings']
         passed.append('native_hub')
         from .navigation_checks import exercise_navigation
         navigation_proof = await exercise_navigation(app)
@@ -284,6 +284,13 @@ async def exercise(app):
             await app.send_chat()
             assert app.chat_current['messages'][-1]['status'] == 'complete', app.chat_status.value
             assert app.chat_current['messages'][-1]['content'] == 'Native fixture reply'
+            await wait_for_text(app.chat_transcript, 'Native fixture reply')
+            assert await app.chat_transcript.evaluate_javascript(
+                'document.querySelectorAll("article.user").length >= 1 && '
+                'document.querySelectorAll("article.assistant").length >= 1 && '
+                'document.documentElement.scrollWidth <= innerWidth')
+            assert app.chat_send.text == 'Send' and app.chat_send.enabled
+            assert not app.chat_status_box.children
             assert 'synthetic-native-key' not in app.chat_store.path(app.chat_current['id']).read_text()
             assert 'synthetic-native-key' not in (app.chat_store.root / 'profile.json').read_text()
         passed.append('native_lm_chat')

@@ -85,7 +85,7 @@ class LocalCryptUI(FilesUI):
         if hasattr(self, 'pull_job_box'):
             for child in list(self.pull_job_box.children):
                 self.pull_job_box.remove(child)
-            self.pull_job_box.add(toga.Label('Folder pulls locked. Reopen from Files.'))
+            self.pull_job_box.add(toga.Label('Folder pulls locked. Reopen from Folder Hub.'))
             self.pull_message = ''
         for name in ('file_browser', 'editor_browser', 'remote_browser'):
             browser = getattr(self, name, None)
