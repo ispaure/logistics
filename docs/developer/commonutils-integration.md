@@ -108,7 +108,7 @@ have been removed; imports and mock patch targets use the grouped paths. Keep
 application navigation and document policy in Logistics. See the [shared module map](https://github.com/ispaure/commonUtils/blob/main/ui/README.md#module-organization)
 for ownership and canonical paths.
 
-## Consumer consolidation
+## Consumer consolidation (October 14, 2026)
 
 Feature preference and Obsidian registry writers use shared atomic byte publication.
 Logistics still owns their serialization, schemas, paths, recovery and error messages.
@@ -151,3 +151,8 @@ Device-key mechanics use shared `runtime.protected_keys`. Logistics supplies its
 existing Android alias/AAD prefixes and iOS Keychain service/labels unchanged;
 protected-key records, backup exclusions, ciphertext paths and forget/recovery
 policy remain local. No key or credential migration is performed.
+
+These extractions preserve the Qt/Toga split and existing user workflows. Mobile
+staging explicitly requires the new shared modules and removes their former
+Logistics implementations. The host still owns scene/workspace composition,
+private-content policy and cloud transfer approval. File-object copying is unchanged.
