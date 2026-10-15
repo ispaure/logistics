@@ -3,7 +3,6 @@ import base64
 from contextlib import contextmanager
 from io import BytesIO
 import json
-from hashlib import sha256
 import threading
 import os
 from pathlib import Path
@@ -12,6 +11,7 @@ from uuid import uuid4
 from zipfile import ZipFile
 
 from commonUtils.archives.zip_access import validate_members
+from commonUtils.filesystem.snapshots import verified_file_snapshot
 from .cloud import DOWNLOAD_LIMIT, download_name
 from commonUtils.persistence.text import decode_bytes
 from commonUtils.runtime.operations import check_cancelled
@@ -100,16 +100,11 @@ class LocalCryptCopies:
         return self._snapshot_path(record, path)
 
     def _snapshot_path(self, record, path):
-        info = path.stat()
-        digest = sha256()
-        with path.open('rb') as stream:
-            while chunk := stream.read(512 * 1024):
-                digest.update(chunk)
-        revision = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-        after = path.stat()
-        if revision != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns):
-            raise ValueError('Encrypted copy changed while checking its revision.')
-        return (record, revision, digest.digest())
+        try:
+            revision, digest = verified_file_snapshot(path)
+        except ValueError as error:
+            raise ValueError('Encrypted copy changed while checking its revision.') from error
+        return record, revision, digest
 
     def _request(self, action, record, path, *, mode='rb', **values):
         with path.open(mode) as stream:

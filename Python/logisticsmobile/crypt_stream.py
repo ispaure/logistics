@@ -7,12 +7,12 @@ from pathlib import Path
 from zipfile import ZipInfo
 
 from commonUtils.runtime.range_reader import RangeReader
+from commonUtils.filesystem.snapshots import file_revision
 from commonUtils.runtime.operations import check_cancelled
 
 
 def revision(path):
-    info = Path(path).stat()
-    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+    return file_revision(path)
 
 
 class NativeArchive:
