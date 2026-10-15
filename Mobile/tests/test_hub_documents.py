@@ -31,6 +31,27 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIn(app.document_view, app.body.children)
         self.assertEqual(app.store.open(first).text, 'Retain my draft')
 
+    def test_folder_hub_live_transfer_banner_precedes_credential_and_actions_share_row(self):
+        app = self.app
+        app.transfer_busy = True
+        app.show_locations()
+        view = app.body.children[0]
+        frame = view._workspace_frame
+        self.assertIs(view.children[0], view.transfer_banner)
+        self.assertEqual(view.transfer_banner.notice.text, 'Transfer in progress · Details')
+        self.assertFalse(view.transfer_banner.dismiss.enabled)
+        credential_row = app.folder_credential.parent
+        self.assertIs(frame.main.children[0], credential_row)
+        actions = app.folder_transfers_button.parent
+        self.assertEqual(list(actions.children), [app.folder_transfers_button, app.folder_refresh_button, app.folder_add_share_button])
+        app.transfer_busy = False
+        app.transfer_notification = True
+        app.transfer_complete = True
+        app.refresh_transfer_status()
+        self.assertEqual(view.transfer_banner.notice.text, 'Transfer finished · Details')
+        app.dismiss_transfer_status()
+        self.assertNotIn(view.transfer_banner, view.children)
+
     def test_home_open_file_lists_all_formats_and_dispatches_archives_to_reader(self):
         from unittest.mock import AsyncMock, patch
         app = self.app

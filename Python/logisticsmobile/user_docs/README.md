@@ -967,3 +967,9 @@ Home's Open file action browses all file formats in Local/available LocalCrypt
 folders. Comic ZIP/CBZ archives and EPUBs remain visible alongside text files;
 opening them uses their reader, while text and Markdown use the editor. The
 format-specific Open actions inside Documents retain their category filters.
+
+
+Folder Hub shows active transfer progress directly below its navigation title,
+above Credential. Transfers, Refresh and Add share appear on a single row;
+Add share opens the SMB / Mac share connection form. The transfer banner also
+shows completion and opens the existing transfer details screen.
