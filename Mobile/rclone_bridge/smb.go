@@ -1,13 +1,11 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"net"
 	"strconv"
 	"strings"
 
-	"github.com/rclone/rclone/fs/config"
 	"github.com/rclone/rclone/fs/config/obscure"
 	"github.com/rclone/rclone/fs/fspath"
 )
@@ -61,36 +59,18 @@ func addSMB(name, host, user, password, domain, port string, sessionOnly bool) (
 	if err := validateSMB(values); err != nil {
 		return nil, err
 	}
-	store.mu.Lock()
-	data, err := json.Marshal(store.values)
-	store.mu.Unlock()
-	if err != nil {
-		return nil, errors.New("could not copy connection settings")
+	ensureCredentialSets()
+	label := "Network shares"
+	if sessionOnly {
+		label = "Session network shares"
 	}
-	var pending snapshot
-	if err := json.Unmarshal(data, &pending); err != nil {
-		return nil, err
+	pending := snapshot{Label: label, Remotes: map[string]map[string]string{}, Pins: map[string]connectionPin{}}
+	if previous := credentialSets[packageID(label)]; previous != nil {
+		pending = copySnapshot(previous.storage.values)
 	}
 	if len(pending.Remotes) >= 64 {
-		return nil, errors.New("up to 64 connections are supported")
+		return nil, errors.New("up to 64 connections per credential package are supported")
 	}
 	pending.Remotes[name] = values
-	if pending.Label == "" {
-		pending.Label = "Network shares"
-	}
-	candidate := store
-	if sessionOnly {
-		candidate = newStore()
-	}
-	shutdownClients()
-	if err := candidate.replace(pending); err != nil {
-		return nil, err
-	}
-	if sessionOnly {
-		store.detach()
-		store = candidate
-		config.SetData(store)
-	}
-	admitted[name] = true
-	return store.GetSectionList(), nil
+	return installCredentialPackage(pending, sessionOnly)
 }

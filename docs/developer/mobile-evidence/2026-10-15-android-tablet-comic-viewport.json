@@ -1,0 +1,228 @@
+{
+  "date": "2026-10-15",
+  "scope": "Synthetic cache-only comic; Android emulator at phone and BOOX NoteAir5C display sizes. Physical BOOX screenshot confirmed the original bottom/right gap.",
+  "before_tablet": {
+    "canvas": [
+      1725,
+      2091
+    ],
+    "window": [
+      1860,
+      2480
+    ]
+  },
+  "tablet": {
+    "success": true,
+    "samples": [
+      {
+        "fullscreen": true,
+        "canvas": [
+          1860,
+          2481
+        ],
+        "window": [
+          1860,
+          2480
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "image_center": [
+          930.0,
+          1240.5
+        ]
+      },
+      {
+        "fullscreen": false,
+        "canvas": [
+          1665,
+          1952
+        ],
+        "window": [
+          1860,
+          2480
+        ],
+        "origin": [
+          165,
+          293
+        ],
+        "image_center": [
+          832.5,
+          976.0
+        ]
+      },
+      {
+        "fullscreen": true,
+        "canvas": [
+          1860,
+          2481
+        ],
+        "window": [
+          1860,
+          2480
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "image_center": [
+          930.0,
+          1240.5
+        ]
+      },
+      {
+        "fullscreen": false,
+        "canvas": [
+          1665,
+          1952
+        ],
+        "window": [
+          1860,
+          2480
+        ],
+        "origin": [
+          165,
+          293
+        ],
+        "image_center": [
+          832.5,
+          976.0
+        ]
+      },
+      {
+        "fullscreen": true,
+        "canvas": [
+          1860,
+          2481
+        ],
+        "window": [
+          1860,
+          2480
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "image_center": [
+          930.0,
+          1240.5
+        ]
+      }
+    ],
+    "navigation_mode": "rail"
+  },
+  "phone": {
+    "success": true,
+    "samples": [
+      {
+        "fullscreen": true,
+        "canvas": [
+          1079,
+          1919
+        ],
+        "window": [
+          1080,
+          1920
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "image_center": [
+          539.5,
+          959.5
+        ]
+      },
+      {
+        "fullscreen": false,
+        "canvas": [
+          995,
+          1011
+        ],
+        "window": [
+          1080,
+          1920
+        ],
+        "origin": [
+          42,
+          388
+        ],
+        "image_center": [
+          497.5,
+          505.5
+        ]
+      },
+      {
+        "fullscreen": true,
+        "canvas": [
+          1079,
+          1919
+        ],
+        "window": [
+          1080,
+          1920
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "image_center": [
+          539.5,
+          959.5
+        ]
+      },
+      {
+        "fullscreen": false,
+        "canvas": [
+          995,
+          1011
+        ],
+        "window": [
+          1080,
+          1920
+        ],
+        "origin": [
+          42,
+          388
+        ],
+        "image_center": [
+          497.5,
+          505.5
+        ]
+      },
+      {
+        "fullscreen": true,
+        "canvas": [
+          1079,
+          1919
+        ],
+        "window": [
+          1080,
+          1920
+        ],
+        "origin": [
+          0,
+          0
+        ],
+        "image_center": [
+          539.5,
+          959.5
+        ]
+      }
+    ],
+    "navigation_mode": "bottom"
+  },
+  "python_checks": "32 passed, 4 subtests passed",
+  "source_sha256": {
+    "Python/logisticsmobile/workspace_navigation.py": "6482ab64e73025a98605456a53767cc57b4f5f468c820c049bf35a11c03f3c16",
+    "Python/commonUtils/ui/native/navigation.py": "31d6523bf265ae1c5cc6b092f29afb84fe51638b77e583fcbc6081fd8c975748",
+    "Mobile/native_tests/tests/logisticsmobile/comic_viewport_probe.py": "fd40b425c24ee6fea49e0674599a967d52591f07baf6cafae4c287d665dfed98"
+  },
+  "boox_deployment": {
+    "model": "NoteAir5C",
+    "install": "adb install -r: Success",
+    "launch": "am start -W: Status ok",
+    "physical_after_screenshot": "pending reader reopen"
+  }
+}

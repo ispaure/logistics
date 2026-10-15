@@ -118,6 +118,7 @@ class ScreenPrivacy:
                       getattr(batch, 'privacy_gate', None)]
         if getattr(self.app, 'save_as_data', None) is not None:
             candidates.append(getattr(self.app, 'save_as_privacy_gate', None))
+        candidates.extend(CloudClient._package_privacy.values())
         candidates.extend(getattr(owner, 'privacy_gate', None) for owner in owners.values())
         return tuple(dict.fromkeys(gate for gate in candidates if gate is not None))
 

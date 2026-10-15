@@ -71,5 +71,5 @@ class SMBConnectionTests(unittest.TestCase):
         with patch.object(client, 'restore') as restore:
             client.add_smb('Guest', 'guest.local', 'guest', '', remember=False)
             restore.assert_not_called()
-        self.assertFalse(client.vault_attached)
+        self.assertTrue(client.vault_attached)
         client.vault.set_label.assert_not_called()

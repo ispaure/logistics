@@ -23,7 +23,13 @@ def copy_target(root, job):
             else collection_path(root) / job['target'])
 
 
+def resolved_job(client, job):
+    resolve = getattr(client, 'resolve_remote', None)
+    return dict(job, remote=resolve(job['remote'], job['identity'])) if resolve else job
+
+
 def remote_location(client, job):
+    job = resolved_job(client, job)
     if client.connection_identity(job['remote']) != job['identity']:
         raise ValueError('Load the matching connection first.')
     path = job['prefix']
@@ -133,6 +139,7 @@ class MirrorJobs:
     def check(self, client, job, cancelled):
         if cancelled():
             raise ValueError('Transfer cancelled; completed changes remain in the destination.')
+        job['remote'] = resolved_job(client, job)['remote']
         if client.connection_identity(job['remote']) != job['identity']:
             raise ValueError('The connection changed. Unlock the original package before transferring this copy.')
 

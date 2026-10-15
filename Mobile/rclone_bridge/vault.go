@@ -22,9 +22,11 @@ var store = newStore()
 var vaultError = errors.New("Saved credentials could not be accessed safely; unlock or forget them before importing again.")
 
 type snapshot struct {
-	Label   string                       `json:"package_name"`
-	Remotes map[string]map[string]string `json:"remotes"`
-	Pins    map[string]connectionPin     `json:"connection_pins,omitempty"`
+	Label    string                       `json:"package_name"`
+	Remotes  map[string]map[string]string `json:"remotes"`
+	Pins     map[string]connectionPin     `json:"connection_pins,omitempty"`
+	Aliases  map[string]string            `json:"aliases,omitempty"`
+	Packages map[string]snapshot          `json:"packages,omitempty"`
 }
 type vaultStorage struct {
 	mu            sync.Mutex
@@ -33,6 +35,9 @@ type vaultStorage struct {
 	key, expected []byte
 	failed        bool
 	generation    uint64
+	parent        *vaultStorage
+	packageID     string
+	origins       map[string]credentialOrigin
 }
 
 func newStore() *vaultStorage {
@@ -55,11 +60,18 @@ func (s *vaultStorage) HasSection(n string) bool {
 	return ok
 }
 func (s *vaultStorage) DeleteSection(n string) {
+	if origin, ok := s.origins[n]; ok {
+		origin.storage.DeleteSection(origin.name)
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.values.Remotes, n)
 }
 func (s *vaultStorage) GetKeyList(n string) []string {
+	if origin, ok := s.origins[n]; ok {
+		return origin.storage.GetKeyList(origin.name)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	keys := []string{}
@@ -70,12 +82,19 @@ func (s *vaultStorage) GetKeyList(n string) []string {
 	return keys
 }
 func (s *vaultStorage) GetValue(n, k string) (string, bool) {
+	if origin, ok := s.origins[n]; ok {
+		return origin.storage.GetValue(origin.name, k)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v, ok := s.values.Remotes[n][k]
 	return v, ok
 }
 func (s *vaultStorage) SetValue(n, k, v string) {
+	if origin, ok := s.origins[n]; ok {
+		origin.storage.SetValue(origin.name, k, v)
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.values.Remotes[n] == nil {
@@ -84,6 +103,9 @@ func (s *vaultStorage) SetValue(n, k, v string) {
 	s.values.Remotes[n][k] = v
 }
 func (s *vaultStorage) DeleteKey(n, k string) bool {
+	if origin, ok := s.origins[n]; ok {
+		return origin.storage.DeleteKey(origin.name, k)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_, ok := s.values.Remotes[n][k]
@@ -95,19 +117,41 @@ func (s *vaultStorage) Serialize() (string, error) {
 	return "", errors.New("plaintext credential serialization is disabled")
 }
 func (s *vaultStorage) Save() error {
+	if s.origins != nil {
+		for _, set := range credentialSets {
+			if err := set.storage.Save(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	err := s.save(s.values)
 	s.failed = err != nil
 	return err
 }
-func (s *vaultStorage) failure() bool { s.mu.Lock(); defer s.mu.Unlock(); return s.failed }
+func (s *vaultStorage) failure() bool {
+	if s.origins != nil {
+		for _, set := range credentialSets {
+			if set.storage.failure() {
+				return true
+			}
+		}
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.failed
+}
 func (s *vaultStorage) detach() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	clear(s.key)
 	s.key = nil
 	s.path = ""
+	s.parent = nil
+	s.origins = nil
 	s.generation++
 	s.values = snapshot{Remotes: map[string]map[string]string{}}
 }
@@ -154,6 +198,32 @@ func readVault(p string) ([]byte, error) {
 	return data, nil
 }
 func (s *vaultStorage) save(values snapshot) error {
+	if s.parent != nil {
+		parent := s.parent
+		parent.mu.Lock()
+		defer parent.mu.Unlock()
+		next := copySnapshot(parent.values)
+		next.Packages = map[string]snapshot{}
+		if len(parent.values.Packages) == 0 && len(parent.values.Remotes) > 0 {
+			next.Packages[packageID(parent.values.Label)] = copySnapshot(parent.values)
+		}
+		for id, value := range parent.values.Packages {
+			next.Packages[id] = copySnapshot(value)
+		}
+		next.Packages[s.packageID] = copySnapshot(values)
+		if len(next.Packages) > 32 {
+			return errors.New("up to 32 saved credential packages are supported")
+		}
+		next.Label = values.Label
+		next.Remotes = copySnapshot(values).Remotes
+		next.Pins = copySnapshot(values).Pins
+		next.Aliases = values.Aliases
+		if err := parent.save(next); err != nil {
+			return err
+		}
+		parent.values = next
+		return nil
+	}
 	if s.path == "" {
 		return nil
 	}
@@ -173,7 +243,11 @@ func (s *vaultStorage) save(values snapshot) error {
 	if _, err = rand.Read(nonce); err != nil {
 		return vaultError
 	}
-	encrypted := append([]byte("LGCV1"), nonce...)
+	prefix := "LGCV1"
+	if len(values.Packages) > 0 {
+		prefix = "LGCV2"
+	}
+	encrypted := append([]byte(prefix), nonce...)
 	encrypted = gcm.Seal(encrypted, nonce, data, s.aad())
 	f, err := os.CreateTemp(filepath.Dir(s.path), ".vault-")
 	if err != nil {
@@ -222,7 +296,7 @@ func openVault(p, id string, key []byte) (*vaultStorage, error) {
 		return s, nil
 	}
 	gcm, err := s.aead()
-	if err != nil || len(encrypted) < 5+gcm.NonceSize()+gcm.Overhead() || string(encrypted[:5]) != "LGCV1" {
+	if err != nil || len(encrypted) < 5+gcm.NonceSize()+gcm.Overhead() || (string(encrypted[:5]) != "LGCV1" && string(encrypted[:5]) != "LGCV2") {
 		return nil, vaultError
 	}
 	nonce := encrypted[5 : 5+gcm.NonceSize()]
@@ -230,41 +304,21 @@ func openVault(p, id string, key []byte) (*vaultStorage, error) {
 	if err != nil {
 		return nil, vaultError
 	}
-	if json.Unmarshal(plain, &s.values) != nil || !validLabel(s.values.Label) || len(s.values.Remotes) == 0 || len(s.values.Remotes) > 64 {
+	if json.Unmarshal(plain, &s.values) != nil || validateCredentialEnvelope(s.values) != nil {
 		return nil, vaultError
 	}
-	for name, values := range s.values.Remotes {
-		text := "[" + name + "]\n"
-		for k, v := range values {
-			text += k + "=" + v + "\n"
-		}
-		n, _, err := parseCredential([]byte(text))
-		if err != nil || n != name {
-			return nil, vaultError
-		}
-	}
-	if validateCryptRemotes(s.values.Remotes) != nil {
-		return nil, vaultError
-	}
-	if len(s.values.Pins) > 64 {
-		return nil, vaultError
-	}
-	for name, pin := range s.values.Pins {
-		if s.values.Remotes[name] == nil || !validDigest(pin.Signature) || !validDigest(pin.Identity) {
-			return nil, vaultError
-		}
-	}
+
 	return s, nil
 }
 func vaultInfo() map[string]any {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	names := []string{}
-	for n := range store.values.Remotes {
-		names = append(names, n)
+	packages := credentialPackageInfo()
+	saved := false
+	for _, item := range packages {
+		if item["saved"].(bool) {
+			saved = true
+		}
 	}
-	sort.Strings(names)
-	return map[string]any{"package_name": store.values.Label, "remotes": names, "saved": store.path != "", "save_failed": store.failed}
+	return map[string]any{"package_name": latestCredential, "remotes": store.GetSectionList(), "saved": saved, "save_failed": store.failure(), "packages": packages}
 }
 
 // Each native backend captures its storage and generation. A late OAuth refresh
@@ -277,6 +331,9 @@ type connectionConfig struct {
 }
 
 func (s *vaultStorage) connection(name string) connectionConfig {
+	if origin, ok := s.origins[name]; ok {
+		return origin.storage.connection(origin.name)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return connectionConfig{s, s.generation, name}

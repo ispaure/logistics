@@ -92,7 +92,9 @@ class MirrorUI(TransferReviewUI):
             return result
         from features.rclone.mobile.file_resources import CryptFiles
         store = self.mirror_store()
+        from features.rclone.mobile.mirror_jobs import resolved_job
         for job in store.jobs.values():
+            job = resolved_job(client, job)
             if not job['crypt'] or job['remote'] not in getattr(self, 'cloud_crypt_remotes', ()):
                 continue
             try:
@@ -331,14 +333,16 @@ class MirrorUI(TransferReviewUI):
         if values.get('listed', 0) or values.get('checks', 0):
             self.transfer_message += f' · {values.get("listed", 0):,} discovered · {values.get("checks", 0):,} checked'
         if total > 0:
-            self.transfer_message += f' · {done:,} / {total:,} bytes (known so far)'
+            self.transfer_message += f' · {done / 1_000_000:,.2f} / {total / 1_000_000:,.2f} MB (known so far)'
         elif done > 0:
-            self.transfer_message += f' · {done:,} bytes transferred'
+            self.transfer_message += f' · {done / 1_000_000:,.2f} MB transferred'
         widgets = (id(self.transfer_notice), id(self.cloud_status), id(self.transfer_progress),
-                   id(getattr(self, 'cloud_transfer_progress', None)))
+                   id(getattr(self, 'cloud_transfer_progress', None)), done, total)
         if self.transfer_message == previous and widgets == getattr(self, '_mirror_progress_widgets', None):
             # Repeated polling must not force native text/layout redraws while
             # the user opens an unrelated local document during a transfer.
+            # Keep exact byte counts in the key so rounded MB cannot hide a
+            # changed percentage or a switch from discovery to a known total.
             return
         self._mirror_progress_widgets = widgets
         self.transfer_notice.text = import_hint(self.transfer_message)

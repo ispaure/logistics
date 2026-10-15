@@ -72,13 +72,15 @@ func cryptConnection(name string) (*crypt.Cipher, string, string, string, error)
 	if !admitted[name] {
 		return nil, "", "", "", errors.New("unlock the matching credential package first")
 	}
-	store.mu.Lock()
+	source, original := credentialSource(name)
+	source.mu.Lock()
 	values := make(map[string]string)
-	for k, v := range store.values.Remotes[name] {
+	for k, v := range source.values.Remotes[original] {
 		values[k] = v
 	}
-	backing, root, err := cryptBacking(values, store.values.Remotes)
-	store.mu.Unlock()
+	backing, root, err := cryptBacking(values, source.values.Remotes)
+	source.mu.Unlock()
+	backing = sourceAlias(source, backing)
 	if values["type"] != "crypt" || err != nil {
 		return nil, "", "", "", errors.New("choose a valid crypt remote")
 	}

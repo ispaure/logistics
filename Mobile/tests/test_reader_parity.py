@@ -20,6 +20,37 @@ class ReaderParityUITests(unittest.TestCase):
         self.addCleanup(app.main_window.close)
         return app
 
+    def test_auto_spread_uses_metadata_for_page_order_and_swipe_direction(self):
+        from io import BytesIO
+        from PIL import Image
+        for rtl in (False, True):
+            with self.subTest(right_to_left=rtl), TemporaryDirectory() as directory:
+                root = Path(directory)
+                app = self.host(root)
+                self.assertEqual(app.preferences.values['comic_layout'], 'auto')
+                source = root / 'order.cbz'
+                with ZipFile(source, 'w') as archive:
+                    for index, color in enumerate(('red', 'blue', 'green', 'yellow')):
+                        data = BytesIO()
+                        Image.new('RGBA', (90, 100), color).save(data, format='PNG')
+                        archive.writestr(f'page{index}.png', data.getvalue())
+                    archive.writestr('ComicInfo.xml', '<ComicInfo><Manga>' + ('YesAndRightToLeft' if rtl else 'No') + '</Manga></ComicInfo>')
+                record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), source)
+                async def exercise():
+                    with patch('logisticsmobile.reader_ui.ReaderUI.comic_viewport', return_value=(1100, 1000)):
+                        await app.open_book(record['id'])
+                        owner = app.readers.active
+                        self.assertEqual(owner.book_reader.right_to_left, rtl)
+                        self.assertEqual(owner.comic_navigation.visible, (0, 1))
+                        pixels = owner.book_content.children[0].canvas.image._impl.native.raw
+                        self.assertEqual(pixels.getpixel((20, 20)), (0, 0, 255, 255) if rtl else (255, 0, 0, 255))
+                        owner.swipe_book_page(-1 if rtl else 1)
+                        await owner._comic_swipe_task
+                        self.assertEqual(owner.comic_navigation.visible, (2, 3))
+                        await owner.previous_book_page()
+                        self.assertEqual(owner.comic_navigation.visible, (0, 1))
+                app.loop.run_until_complete(exercise())
+
     def test_epub_navigation_search_precise_bookmark_resume_and_stale_callback(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

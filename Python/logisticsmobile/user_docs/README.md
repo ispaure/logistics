@@ -51,7 +51,7 @@ On iPhone and iPad, choosing a dropdown option closes its picker immediately.
 Settings switches use one compact row: label, **ⓘ** help, then the on/off switch.
 Tap **ⓘ** for an explanation without changing the setting. This includes
 **Document card overview**, **Restore last document**, **Close saved documents on restart** and,
-on iOS, **Show Legacy**. Save/reload preferences continue to work as before;
+on Android and iOS, **Show Legacy**. Save/reload preferences continue to work as before;
 document overview and Show Legacy still apply immediately.
 
 **About** at the bottom of Settings shows muted build information: the app version,
@@ -464,8 +464,8 @@ or connect to a remote. TXT entries must each contain one `[Remote name]`
 section and rclone settings, including `type`. Plain, ZipCrypto and WinZip AES
 packages are readable; importing never extracts files or modifies the source ZIP.
 ZIPs are limited to 1 MiB, 64 entries and 256 KiB per TXT entry. Duplicate remote
-names, unsafe archive paths and unsupported settings are rejected before replacing
-the previously loaded session. Loading a valid package replaces that session's
+names within a ZIP, unsafe archive paths and unsupported settings are rejected
+before changing any loaded package. Reloading the same ZIP filename replaces only that package's
 remote list; it makes no remote connection by itself.
 
 This first mobile adapter includes Google Drive, Dropbox, OneDrive, S3 and WebDAV,
@@ -522,8 +522,9 @@ new standalone copies cannot be downloaded from the browser.
 
 **Save credentials on this device** is enabled by default. Turn it off before
 importing to keep credentials only in memory for this app session. A session-only
-import leaves any previously saved package unchanged; **Reload saved credentials**
-returns to that package. One saved package is supported at a time. Its ZIP filename
+import leaves saved packages unchanged; **Reload saved credentials** reloads
+saved packages while keeping currently loaded session-only packages active. Multiple
+saved and session-only packages are supported together. Each ZIP filename
 appears above the remote selector, so the package and its remote names stay associated.
 
 Saved settings and refreshed OAuth tokens use an AES-256-GCM encrypted private
@@ -714,9 +715,9 @@ names already in use. **Save credentials on this device** defaults to on: userna
 and passwords are stored in the existing encrypted credential vault, protected by
 Android Keystore or iOS Keychain, and restored when Folder Hub initializes. Turn it off
 for a session-only connection; this leaves previously saved credentials unchanged.
-Reload saved credentials before adding a saved server if you previously chose
-session-only connections: reloading replaces those temporary connections. Importing
-a credential ZIP also replaces the loaded connection set.
+Saved and session-only servers can remain loaded together.
+Reloading saved credentials preserves temporary connections;
+loading a credential ZIP adds or replaces only its own package context.
 
 On a Mac, enable **File Sharing**, enable sharing using **SMB**, and allow the
 account used here to access the desired shared folders. Connect from the same
@@ -874,7 +875,7 @@ ciphertext to/from the backing scope; a readable Local copy of a crypt remote us
 rclone's crypt filesystem for automatic encryption/decryption.
 
 **Folder Hub → Transfers** opens **Transfer details**: live progress, completed/known
-file and byte counts, cancellation, active review, and completion or error
+file counts and transferred/known megabytes (MB), cancellation, active review, and completion or error
 messages, wrapped to fit the phone screen. It does not list remotes or offer folder selection. The transfer banner
 also opens these details; the remote browser reflects the same progress. If a
 remote folder matches several local mappings, Pull opens a focused destination
@@ -896,7 +897,8 @@ credentials also clears these associations. Saved credentials retain the existin
 protected-vault behavior.
 
 Transfers show completed and active file counts, discovered entries, checks and
-transferred bytes. Known totals can grow as rclone discovers more files; discovery
+transferred megabytes (MB, 1 MB = 1,000,000 bytes), shown to two decimal places on
+both iOS and Android. Known totals can grow as rclone discovers more files; discovery
 uses a steady activity indicator until a byte total is available. A zero completed
 file count can mean files are still transferring, rather than no work happening.
 New copies use the exact remote name (or selected Local subfolder name), without
@@ -1332,6 +1334,10 @@ for the implementation boundaries and verification scope.
 
 ### Android fullscreen comics and developer settings
 
+Fullscreen comics reclaim the tablet navigation rail's width and the space from
+hidden bars. The page stays centered and keeps its proportions; any remaining
+balanced border comes from fitting the page's aspect ratio to the screen.
+
 Comic reading mode hides both Logistics navigation and Android's status/navigation
 bars. Tap the comic to restore reading controls; navigating away restores system
 bars. An edge swipe can temporarily reveal Android's system bars. Image fitting
@@ -1344,3 +1350,34 @@ enabled if the tablet's firmware disables it during sleep or a Wi-Fi change.
 
 Android theme and orientation changes keep the privacy listener attached and
 refresh the current protection state without recreating document owners.
+
+### Multiple credential packages on Android and iOS
+
+Load each ZIP with **Save credentials on this device** set independently. For
+example, load Personal with it on and Legacy with it off. Both remain active and
+appear as separate credential groups in Folder Hub; select **All** to see all
+available folders. Connections lists each loaded package with **saved** or
+**session only** status. **Show Legacy** still controls Legacy-prefixed groups
+and folders on both platforms.
+
+Up to 32 loaded packages are supported, with up to 64 configured remotes per
+package. A ZIP filename identifies its package: reloading that filename replaces
+only its active context. If two packages contain a remote with the same name,
+the additional remote is qualified with its package name and an identifying
+suffix. Their backing remotes, account identities and token updates remain
+separate. Existing downloaded copies use their recorded connection identities
+to resolve the matching loaded context.
+
+Saved packages are encrypted in the private device vault and return after
+restart. Session-only decoded credentials and resume-password verifiers remain
+in memory. Their original password-protected ZIPs can be retained in additionally
+device-encrypted form for password-only unlocking after restart; each retained
+ZIP contains only its own package. Reloading saved credentials does not discard
+active session packages. Adding or refreshing a saved package never serializes
+session-only contexts. Existing saved vaults migrate using their current device
+key; package vaults use a new header which older builds refuse to load.
+
+Loading a previously saved filename as session-only does not erase its older
+saved copy; use Forget saved credentials if you want to remove saved secrets.
+**Lock credential session** unloads all active contexts. **Forget saved credentials**
+retains its existing explicit all-credentials removal behavior.

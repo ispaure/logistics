@@ -11,7 +11,7 @@ from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_
 DEFAULTS = {'android_eink': 'false', 'font_size': '16', 'restore_last_document': 'true', 'last_document': '',
             'document_card_overview': 'true', 'show_legacy': 'false',
             'clear_unmodified_documents_on_restart': 'true',
-            'comic_layout': 'single', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS}
+            'comic_layout': 'auto', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS}
 
 
 class Preferences:

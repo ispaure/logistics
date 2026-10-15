@@ -40,6 +40,8 @@ def _assert_comic_centered(view, *, fullscreen=False):
             native.getLocationOnScreen(location)
             decor = view._impl._native_activity.getWindow().getDecorView()
             bars = decor.getRootWindowInsets().getInsets(jclass('android.view.WindowInsets$Type').systemBars())
+            assert abs(native.getWidth() - (decor.getWidth() - bars.left - bars.right)) <= 2, ('Comic viewport loses screen width', native.getWidth(), decor.getWidth())
+            assert abs(native.getHeight() - (decor.getHeight() - bars.top - bars.bottom)) <= 2, ('Comic viewport loses screen height', native.getHeight(), decor.getHeight())
             dy = location[1] + rect.centerY() - (bars.top + decor.getHeight() - bars.bottom) / 2
         assert abs(dy) < 2, ('Comic misses screen centre', dy,
             float(native.bounds.size.height) if hasattr(view._impl, 'picture') else

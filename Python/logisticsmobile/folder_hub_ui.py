@@ -104,7 +104,9 @@ class FolderHubUI:
             self.folder_hub_error = ''
 
     def folder_choices(self):
-        jobs = self.mirror_store().jobs
+        from features.rclone.mobile.mirror_jobs import resolved_job
+        client = getattr(self, 'cloud_client', None)
+        jobs = {key: resolved_job(client, job) for key, job in self.mirror_store().jobs.items()}
         # Retained ZIP metadata associates local copies with credentials; it
         # must not advertise remote-only folders before those credentials unlock.
         remotes = self.loaded_remote_names()

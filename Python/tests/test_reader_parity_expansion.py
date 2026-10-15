@@ -98,6 +98,19 @@ class ReaderExpansionTests(unittest.TestCase):
         self.assertEqual(adjacent_comic([('10','comic10.cbz'), ('2','comic2.cbz')], '2', 1), '10')
         self.assertIsNone(adjacent_comic([('2', 'comic2.cbz')], '2', -1))
 
+    def test_mobile_auto_follows_orientation_and_spread_navigation(self):
+        for right_to_left in (False, True):
+            nav = ComicNavigation(lambda i: (portrait(90, 100), 'image/png'), 5, right_to_left=right_to_left)
+            self.assertEqual(nav.load(0, viewport=(1100, 1000))[0], (0, 1))
+            self.assertEqual(nav.load(0, viewport=(1000, 1100))[0], (0,))
+            self.assertEqual(nav.load(0, viewport=(1000, 1000))[0], (0,))
+            nav.visible = nav.load(0, viewport=(1100, 1000))[0]
+            self.assertEqual(nav.next(0), 2)
+            self.assertEqual(nav.previous(2, viewport=(1100, 1000)), 0)
+            self.assertEqual(nav.previous(2, viewport=(1000, 1100)), 1)
+            self.assertEqual(nav.load(4, viewport=(1100, 1000))[0], (4,))
+            self.assertEqual(nav.load(0, viewport=(1100, 1000), mode='single')[0], (0,))
+
     def test_import_metadata_preserves_resources_digest_and_original_source(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
