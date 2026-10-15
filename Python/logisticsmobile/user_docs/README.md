@@ -1341,3 +1341,6 @@ Android **Settings → Developer settings…** opens the system developer option
 directly, including Wireless debugging, once developer mode is enabled. This
 avoids a separate settings-launcher app. It does not keep wireless debugging
 enabled if the tablet's firmware disables it during sleep or a Wi-Fi change.
+
+Android theme and orientation changes keep the privacy listener attached and
+refresh the current protection state without recreating document owners.

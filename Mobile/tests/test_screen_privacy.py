@@ -22,6 +22,22 @@ class ScreenPrivacyTests(unittest.TestCase):
         privacy.sync_lock_view = Mock()
         return privacy
 
+    def test_android_configuration_callback_refreshes_only_its_activity(self):
+        application = SimpleNamespace(registerActivityLifecycleCallbacks=Mock())
+        activity = SimpleNamespace(getApplication=lambda: application)
+        privacy = self.privacy(SimpleNamespace(_impl=SimpleNamespace(native=activity)), 'toga_android.app')
+        privacy.refresh = Mock()
+        with patch.dict(sys.modules, {
+            'android.app': SimpleNamespace(Application=SimpleNamespace(ActivityLifecycleCallbacks=object)),
+            'java': SimpleNamespace(dynamic_proxy=lambda interface: object),
+        }):
+            privacy.install_android_lifecycle()
+        listener = application.registerActivityLifecycleCallbacks.call_args.args[0]
+        listener.onActivityConfigurationChanged(object())
+        privacy.refresh.assert_not_called()
+        listener.onActivityConfigurationChanged(activity)
+        privacy.refresh.assert_called_once_with()
+
     def test_ios_background_recording_and_foreground_recovery(self):
         class Shield:
             @classmethod

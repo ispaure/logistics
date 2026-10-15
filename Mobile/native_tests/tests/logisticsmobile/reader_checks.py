@@ -89,13 +89,22 @@ async def exercise_reader(app, passed):
     full_height = viewport_height()
     # Reuse the existing reader, leave through another destination, and repeat
     # control/fullscreen transitions. This catches retained native scroll offsets.
+    async def toggle_controls():
+        deadline = asyncio.get_running_loop().time() + 15
+        while owner.book_busy:
+            assert asyncio.get_running_loop().time() < deadline, 'Reader reload did not finish'
+            await asyncio.sleep(.05)
+        previous = owner.reader_immersive
+        current_view().toggle_controls()
+        assert owner.reader_immersive is not previous, 'Reader controls did not toggle'
+
     for _ in range(3):
         app.show_settings()
         await asyncio.sleep(.1)
         owner.show_library()
-        current_view().toggle_controls()
+        await toggle_controls()
         await asyncio.sleep(.1)
-        current_view().toggle_controls()
+        await toggle_controls()
         await assert_comic_centered(current_view, fullscreen=True)
         assert abs(viewport_height() - full_height) < 1, ('Fullscreen viewport shrank', full_height, viewport_height())
     previous = app.reader_manager().active.book_record['position']
