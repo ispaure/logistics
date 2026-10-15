@@ -973,3 +973,8 @@ Folder Hub shows active transfer progress directly below its navigation title,
 above Credential. Transfers, Refresh and Add share appear on a single row;
 Add share opens the SMB / Mac share connection form. The transfer banner also
 shows completion and opens the existing transfer details screen.
+
+
+Home has a Logistics navigation title above the spaced Welcome to Logistics
+greeting. The former “Read. Write. Organize.” tagline has been removed; the bottom
+navigation tab remains named Home.
