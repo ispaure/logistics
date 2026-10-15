@@ -802,8 +802,9 @@ title bar. Transfer banners appear with reading controls and stay hidden during
 immersive comic reading; this does not pause transfers in the background.
 
 In fullscreen comics on iOS and Android, hold a thumb on the page for about
-400 ms to show a 2.5× magnifying bubble. Keep holding and drag to inspect another
-area; release to dismiss. The page stays still while the bubble is open. A second
+400 ms to show a 2.5× magnifying bubble. The bubble enlarges the page beneath
+its center. Keep holding and drag to move the bubble over another area; release
+to dismiss. The page stays still while the bubble is open. A second
 finger cancels the bubble so pinch zoom remains available. The bubble is disabled
 when reading controls are visible and is cleared on page changes or leaving the
 reader. It works on single pages and spreads, including Local/LocalCrypt comics.
