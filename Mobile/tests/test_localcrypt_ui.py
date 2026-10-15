@@ -9,6 +9,45 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class LocalCryptUITests(unittest.TestCase):
+    def test_ini_opens_edits_and_saves_without_plaintext_history(self):
+        class Client:
+            generation = 0
+            data = b'[Settings]\r\nvalue=private-ini-sentinel\r\n'
+            def request(self, action, **values):
+                if action == 'crypt_fetch':
+                    os.write(values['fd'], b'opaque ini ciphertext')
+                    return dict(remote='Secret', encrypted_path='encoded-name', identity='a' * 64)
+                if action == 'crypt_decode':
+                    return dict(name='settings.ini', data=base64.b64encode(self.data).decode())
+                if action == 'crypt_encode':
+                    self.data = base64.b64decode(values['data'])
+                    os.write(values['fd'], b'new opaque ini ciphertext')
+                    return True
+                raise AssertionError(action)
+            def crypt_remotes(self): return []
+            def cancel(self): pass
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            LogisticsMobile.storage_root = root
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            app.cloud_client = Client()
+            app.show_cloud(present=False)
+            key = app.crypt_copies.fetch('Secret', 'settings.ini')
+            self.assertTrue(app.loop.run_until_complete(app.open_crypt(copies=app.crypt_copies, key=key)), app.cloud_status.value)
+            owner = app.private_sessions.active
+            self.assertIn('value=private-ini-sentinel', owner.crypt_text.value)
+            owner.crypt_text.value = '[Settings]\nvalue=edited-private-ini-sentinel\n'
+            app.loop.run_until_complete(owner.save_crypt())
+            self.assertFalse(owner.private_dirty(), owner.crypt_title.text)
+            self.assertEqual(app.cloud_client.data, b'[Settings]\r\nvalue=edited-private-ini-sentinel\r\n')
+            app.close_crypt()
+            for path in root.rglob('*'):
+                if path.is_file():
+                    self.assertNotIn(b'private-ini-sentinel', path.read_bytes())
+
     def test_download_read_close_and_forget_without_plaintext_documents(self):
         class Client:
             def request(self, action, **values):

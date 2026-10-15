@@ -280,9 +280,9 @@ func cryptEncode(ctx context.Context, name, encrypted, identity, encoded string,
 		return false, err
 	}
 	switch strings.ToLower(path.Ext(plain)) {
-	case ".txt", ".md", ".markdown":
+	case ".txt", ".md", ".markdown", ".ini":
 	default:
-		return false, errors.New("only text and Markdown copies can be edited")
+		return false, errors.New("only text, Markdown and INI copies can be edited")
 	}
 	if len(encoded) > 2*packageLimit {
 		return false, errors.New("text exceeds 1 MiB")

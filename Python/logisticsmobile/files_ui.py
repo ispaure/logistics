@@ -611,7 +611,7 @@ class FilesUI:
         try:
             def read():
                 model = ResourceSelection(self.editor_provider(label), mode=self.editor_picker_mode,
-                                          extensions=('.txt', '.md', '.markdown'))
+                                          extensions=('.txt', '.md', '.markdown', '.ini'))
                 return model.list(folder, cancelled=self._crypt_cancel.is_set)
             rows = await asyncio.to_thread(read)
             self.editor_picker_rows = {f'{i+1}. {"Folder" if row["directory"] else "File"}: {row["name"]}': row for i,row in enumerate(rows)}
@@ -622,7 +622,7 @@ class FilesUI:
                 picker.reloadAllComponents()
             if self.editor_picker_rows:
                 self.picker_entries.value = next(iter(self.editor_picker_rows))
-            self.editor_browser.set_entries(ResourceSelection(self.editor_provider(label), mode=self.editor_picker_mode, extensions=('.txt', '.md', '.markdown')), folder, rows, location=(label, folder))
+            self.editor_browser.set_entries(ResourceSelection(self.editor_provider(label), mode=self.editor_picker_mode, extensions=('.txt', '.md', '.markdown', '.ini')), folder, rows, location=(label, folder))
             self.save_as_status.value = f'{len(rows)} entries. Choose a folder or file.'
             return True
         except Exception as error:
@@ -669,7 +669,7 @@ class FilesUI:
         try:
             def resolve():
                 provider = self.editor_provider(label)
-                path = ResourceSelection(provider, extensions=('.txt', '.md', '.markdown')).resolve(folder, name, cancelled=self._crypt_cancel.is_set)
+                path = ResourceSelection(provider, extensions=('.txt', '.md', '.markdown', '.ini')).resolve(folder, name, cancelled=self._crypt_cancel.is_set)
                 return provider, path
             provider, path = await asyncio.to_thread(resolve)
         except Exception as error:
@@ -699,7 +699,7 @@ class FilesUI:
                 raise ValueError('Choose a text or Markdown filename; saves are limited to 1 MiB.')
             def save():
                 provider = self.editor_provider(label)
-                destination = ResourceSelection(provider, mode='save', extensions=('.txt', '.md', '.markdown')).resolve(folder, target, cancelled=self._crypt_cancel.is_set)
+                destination = ResourceSelection(provider, mode='save', extensions=('.txt', '.md', '.markdown', '.ini')).resolve(folder, target, cancelled=self._crypt_cancel.is_set)
                 source_document = getattr(self, 'save_as_source_document', None)
                 if provider.private and source_document is not None:
                     self.store.privatize(source_document)

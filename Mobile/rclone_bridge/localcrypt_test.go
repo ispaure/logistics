@@ -359,3 +359,37 @@ func TestFileOperationsRawRewrapRejectsPlaintextAndPreservesInnerBytes(t *testin
 		t.Fatal("different key accepted")
 	}
 }
+
+func TestINIEncryptedSaveRoundTrip(t *testing.T) {
+	clearSession()
+	t.Cleanup(clearSession)
+	if _, err := importPackage(cryptPackage(t, "Cloud:ini-fixture"), ""); err != nil {
+		t.Fatal(err)
+	}
+	cipher, _, _, identity, err := cryptConnection("Secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encrypted := cipher.EncryptFileName("Settings.INI")
+	file, err := os.CreateTemp(t.TempDir(), "ciphertext")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	plain := []byte("[Settings]\r\nvalue=private-sentinel\r\n")
+	if _, err := cryptEncode(context.Background(), "Secret", encrypted, identity, base64.StdEncoding.EncodeToString(plain), int(file.Fd())); err != nil {
+		t.Fatal(err)
+	}
+	ciphertext, _ := os.ReadFile(file.Name())
+	if bytes.Contains(ciphertext, plain) {
+		t.Fatal("plaintext persisted")
+	}
+	decoded, err := cryptDecode(context.Background(), "Secret", encrypted, identity, int(file.Fd()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := base64.StdEncoding.DecodeString(decoded["data"])
+	if err != nil || !bytes.Equal(actual, plain) {
+		t.Fatal("INI bytes changed")
+	}
+}

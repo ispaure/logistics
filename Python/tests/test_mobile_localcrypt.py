@@ -14,6 +14,16 @@ PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4
 
 
 class MobileLocalCryptTests(unittest.TestCase):
+    def test_ini_reader_is_editable_memory_only_and_preserves_line_endings(self):
+        data = b'[Settings]\r\nvalue=private-sentinel\r\n'
+        with patch.object(Path, 'open', side_effect=AssertionError('No plaintext files')):
+            reader = PrivateReader('Settings.INI', data)
+            self.assertTrue(reader.editable)
+            self.assertEqual(reader.page(0), ('text', '[Settings]\nvalue=private-sentinel\n'))
+            self.assertEqual(reader.text_snapshot.encode(reader.text), data)
+        with self.assertRaises(ValueError):
+            PrivateReader('large.ini', b'x' * (1024 * 1024 + 1))
+
     def test_text_and_comic_reads_are_memory_only(self):
         reader = PrivateReader('note.md', b'# private sentinel')
         self.assertEqual(reader.page(0), ('text', '# private sentinel'))
