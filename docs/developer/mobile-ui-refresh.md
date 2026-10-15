@@ -567,3 +567,10 @@ next transfer; snapshot browse actions are removed. Push review baselines remain
 in use for remote mutation review. Regression tests cover immediate confirmation,
 changes during confirmation, both local storage types, link boundaries, and legacy
 backup removal across restart.
+
+## Native screenshot capture
+
+Native evidence captures the complete UIKit window or Android activity decor view,
+including navigation containers. Toga's content-only screenshot can have zero bounds
+while native navigation reparents content. Android capture waits for positive native
+window bounds and still fails on empty/invalid PNG data; it does not skip screenshots.
