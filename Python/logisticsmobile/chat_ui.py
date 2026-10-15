@@ -8,6 +8,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, END
 
 from features.lm.domain import build_request, message, validate_settings
+from .appearance import surface
 from .chat import ChatStore, DEFAULT_SETTINGS, export_chat
 from .chat_transport import ChatClient, ChatCancelled
 from .chat_presentation import composer_height, transcript_document, transcript_entries, transcript_update
@@ -82,21 +83,26 @@ class ChatUI:
             elif backend.startswith('toga_android.'):
                 self.chat_actions_button._impl.native.setContentDescription('Conversation actions')
             self.chat_conversation_list = toga.Box(style=Pack(direction=COLUMN))
-            self.chat_sidebar = toga.Box(children=[toga.Label('Conversations', style=Pack(font_size=20, margin_bottom=12)),
+            sidebar = toga.Box(children=[toga.Label('Conversations', style=Pack(font_size=20, margin_bottom=12)),
                 self.chat_new,
                 toga.ScrollContainer(horizontal=False, content=self.chat_conversation_list, style=Pack(flex=1)),
-                self.chat_export], style=Pack(direction=COLUMN, flex=1))
+                self.chat_export], style=Pack(direction=COLUMN, flex=1, margin=12))
+            self.chat_sidebar = surface(toga.Box(children=[sidebar], style=Pack(direction=COLUMN, flex=1)), radius=16)
             self.chat_status_box = toga.Box(style=Pack(direction=COLUMN))
             self.chat_composer = toga.Box(children=[self.chat_prompt, self.chat_send],
                 style=Pack(direction=ROW, align_items=END, margin_top=8))
-            self.chat_messages = toga.Box(children=[self.chat_transcript, self.chat_status_box, self.chat_composer],
+            self.chat_transcript_card = surface(toga.Box(children=[toga.Box(children=[self.chat_transcript],
+                style=Pack(direction=COLUMN, flex=1, margin=10))], style=Pack(direction=COLUMN, flex=1)), radius=16)
+            surface(self.chat_prompt, radius=12)
+            self.chat_messages = toga.Box(children=[self.chat_transcript_card, self.chat_status_box, self.chat_composer],
                 style=Pack(direction=COLUMN, flex=1))
             self.chat_workspace = toga.Box(style=Pack(direction=ROW, flex=1))
             self.chat_drawer_open = self.adaptive.width() >= 640
-            self.chat_view = toga.Box(children=[toga.Box(children=[self.chat_menu_button,
+            self.chat_header = toga.Box(children=[self.chat_menu_button,
                 toga.Box(children=[self.chat_title, self.chat_model_label], style=Pack(direction=COLUMN, flex=1, margin_left=4)),
                 self.chat_actions_button],
-                style=Pack(direction=ROW, margin_bottom=8)), self.chat_workspace],
+                style=Pack(direction=ROW, margin_bottom=8))
+            self.chat_view = toga.Box(children=[self.chat_header, self.chat_workspace],
                 style=Pack(direction=COLUMN, margin=12, flex=1))
             self.refresh_chats()
             if self.chat_labels:
@@ -145,9 +151,27 @@ class ChatUI:
             for child in children:
                 del child.style.width
                 child.style.flex = 1
+        self.sync_chat_navigation()
         self.reserve_chat_navigation()
         self.update_chat_header()
         self.resize_chat_composer()
+
+    def sync_chat_navigation(self):
+        """Place the iPhone drawer in the same native bar as Documents' menu."""
+        if not self.routes.apple or self.chat_view not in self.routes.body('chat').children:
+            return
+        from rubicon.objc import ObjCClass, SEL
+        if self.chat_menu_button in self.chat_header.children:
+            self.chat_header.remove(self.chat_menu_button)
+        self.chat_menu_button.app, self.chat_menu_button.window = self, self.main_window
+        if not hasattr(self, 'chat_native_menu'):
+            self.chat_native_menu = ObjCClass('UIBarButtonItem').alloc().initWithImage(
+                ObjCClass('UIImage').systemImageNamed('line.3.horizontal'), style=0,
+                target=self.chat_menu_button._impl.native, action=SEL('onPress:'))
+        index = self.native_host.destinations.index('chat')
+        controller = self.native_host.adapter.navigation[index].topViewController
+        controller.navigationItem.leftBarButtonItem = self.chat_native_menu
+        self.chat_native_menu.accessibilityLabel = 'Close conversations' if self.chat_drawer_open else 'Conversations'
 
     def reserve_chat_navigation(self):
         """The floating UIKit tab bar can extend above its reported safe inset."""

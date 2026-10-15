@@ -45,7 +45,7 @@ def transcript_document():
 ''' + css_variables() + '''
 :root { --ink:var(--text); --user:var(--hover); --line:var(--border) }
 * { box-sizing:border-box } body { margin:0; padding:12px 8px 20px; background:var(--surface); color:var(--ink); font:16px/1.5 system-ui; overflow-wrap:anywhere }
-main { max-width:780px; margin:auto } article { margin:0 0 24px } article.user { margin-left:28px; padding:12px 16px; background:var(--user); border-radius:18px 18px 4px 18px }
+main { max-width:780px; margin:auto } article { margin:0 0 16px; padding:12px 16px; border:1px solid var(--line); border-radius:16px } article.user { margin-left:28px; background:var(--user) }
 .role { color:var(--muted); font-size:.75em; margin-bottom:6px } .user .role { color:var(--ink) }
 p { margin:0 0 12px } p:last-child { margin-bottom:0 } .plain { white-space:pre-wrap }
 ul,ol { padding-left:24px; margin:8px 0 16px } li { margin-bottom:6px }
