@@ -11,6 +11,18 @@ from test_mirror_jobs import MirrorClient
 
 
 class FolderHubTests(unittest.TestCase):
+    def test_dash_hierarchy_keeps_all_levels_and_credential_copies(self):
+        from logisticsmobile.folder_hub import folder_tree, credential_choices
+        choices = {
+            'Server-Lib-ComicRack': dict(remote='Server-Lib-ComicRack', copies=[dict(source='Local')]),
+            'Server-Lib-Calibre': dict(remote='Server-Lib-Calibre', copies=[dict(source='Remote')]),
+            'Other': dict(remote=None, copies=[])}
+        tree = folder_tree(choices)
+        self.assertEqual(set(tree['Server']['children']['Lib']['children']), {'ComicRack', 'Calibre'})
+        selected = credential_choices(choices, {'Server-Lib-ComicRack'})
+        self.assertEqual(list(selected), ['Server-Lib-ComicRack'])
+        self.assertIs(selected['Server-Lib-ComicRack'], choices['Server-Lib-ComicRack'])
+
     def test_list_uses_loaded_remote_values_and_opens_tapped_local_folder(self):
         import toga
         from logisticsmobile.app import LogisticsMobile
@@ -25,13 +37,14 @@ class FolderHubTests(unittest.TestCase):
                 app.cloud_remote.items = ['Loaded drive']
                 app.show_locations()
                 view = app.body.children[0]._workspace_frame.main
-                self.assertEqual(view.children[0].text, 'Folder Hub')
+                self.assertEqual(view.children[0].children[0].text, 'Credential')
+                self.assertEqual(app.folder_credential.value, 'All')
                 self.assertEqual(app.native_host.labels[app.native_host.destinations.index('files')], 'Folder Hub')
                 self.assertEqual(view.children[1].children,
                                  [app.folder_transfers_button, app.folder_refresh_button])
                 self.assertIsInstance(view.children[-1], toga.ScrollContainer)
                 self.assertIs(view.children[-1].content, app.folder_list)
-                self.assertEqual(list(app.folder_buttons), list(app.folder_picker_choices))
+                self.assertEqual(set(app.folder_buttons), set(app.folder_picker_choices))
                 self.assertFalse(any(isinstance(child, toga.Selection) for child in view.children))
                 self.assertIn('↻', app.folder_refresh_button.text)
                 self.assertIn('Loaded drive', app.folder_picker_choices)

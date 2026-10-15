@@ -42,3 +42,23 @@ def hub_entries(root, jobs, remotes=(), crypt_locations=()):
     for remote in visible_remotes(remotes):
         add(remote, 'Remote', ('remote', remote))
     return [(name, folder_parts(name), entries[name]) for name in sorted(entries, key=str.casefold)]
+
+
+def folder_tree(choices):
+    """Build every dash-separated level, preserving selectable folder identities."""
+    tree = {}
+    for name in choices:
+        parts = tuple(part for part in name.replace('/', '-').split('-') if part) or (name,)
+        branch = tree
+        for part in parts:
+            node = branch.setdefault(part, dict(children={}, names=[]))
+            branch = node['children']
+        node['names'].append(name)
+    return tree
+
+
+def credential_choices(choices, remotes):
+    """Keep all available copies of a folder owned by this credential."""
+    return {name: entry for name, entry in choices.items()
+            if entry.get('remote') in remotes or any(copy.get('remote') in remotes
+                                                    for copy in entry.get('copies', ()))}
