@@ -348,6 +348,18 @@ class HubDocumentTests(unittest.TestCase):
         finally:
             restored.main_window.close()
 
+    def test_first_chat_tab_selection_mounts_without_reentrant_navigation(self):
+        from unittest.mock import patch
+        app = self.app
+        app.show_home()
+        self.assertFalse(hasattr(app, 'chat_view'))
+        with patch.object(app.native_host, 'activate', side_effect=AssertionError('Nested tab selection')):
+            self.assertTrue(app.select_destination('chat'))
+        self.assertIn(app.chat_view, app.routes.roots['chat'].children)
+        self.assertIn(app.chat_messages, app.chat_workspace.children)
+        self.assertIs(app.body, app.routes.roots['chat'])
+        self.assertEqual(app.native_host.state.destination, 'home')
+
     def test_markdown_choice_and_independent_chat_destination(self):
         app = self.app
         app.new_hub_document()
