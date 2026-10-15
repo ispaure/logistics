@@ -527,6 +527,20 @@ func dispatch(action, input string) (output string) {
 					result = vaultInfo()
 				}
 			}
+		case "protect_package", "unprotect_package":
+			var key, data []byte
+			key, err = base64.StdEncoding.DecodeString(request.Key)
+			if err == nil {
+				data, err = base64.StdEncoding.DecodeString(request.Data)
+			}
+			if err == nil {
+				data, err = protectPackage(data, key, request.ID, action == "unprotect_package")
+				if err == nil {
+					result = base64.StdEncoding.EncodeToString(data)
+				}
+			}
+			clear(key)
+			clear(data)
 		case "vault_info":
 			result = vaultInfo()
 		case "list":

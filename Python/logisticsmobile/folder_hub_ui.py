@@ -37,6 +37,8 @@ class FolderHubUI:
     def folder_choices(self):
         jobs = self.mirror_store().jobs
         remotes = [row.value for row in self.cloud_remote.items] if hasattr(self, 'cloud_remote') else []
+        known = json.loads(self.preferences.values['remote_packages'])
+        remotes = list(dict.fromkeys([*remotes, *(remote for item in known for remote in item['remotes'])]))
         crypt = dict(getattr(self, 'hub_crypt_locations', ()))
         if not getattr(self, 'cloud_busy', False):
             crypt = dict(self.existing_crypt_locations())
@@ -85,10 +87,7 @@ class FolderHubUI:
     def build_folder_picker(self):
         self.folder_list = toga.Box(style=Pack(direction=COLUMN))
         self.folder_collapsed = getattr(self, 'folder_collapsed', set())
-        packages = json.loads(self.preferences.values['remote_packages'])
-        self.folder_credentials = {'All': None}
-        for package in packages:
-            self.folder_credentials[package['zip']] = set(package['remotes'])
+        self.folder_credentials = self.credential_groups()
         selected = getattr(self, 'folder_credential_name', 'All')
         self.folder_credential = toga.Selection(items=list(self.folder_credentials),
             value=selected if selected in self.folder_credentials else 'All', style=Pack(flex=1, height=44))
@@ -106,8 +105,7 @@ class FolderHubUI:
         return box
 
     def update_folder_list(self, choices):
-        credentials = {'All': None, **{item['zip']: set(item['remotes'])
-                       for item in json.loads(self.preferences.values['remote_packages'])}}
+        credentials = self.credential_groups()
         if credentials != self.folder_credentials:
             self.folder_credentials = credentials
             selected = self.folder_credential.value
@@ -226,6 +224,13 @@ class FolderHubUI:
 
     async def open_picker_folder(self, entry):
         kind, value = entry['kind'], entry['value']
+        if entry['source'] != 'Local':
+            remote = entry.get('remote')
+            job = self.mirror_store().jobs.get(value) if kind in ('job', 'job-remote') else None
+            remote = job['remote'] if job else remote or (value[0] if kind == 'remote' else '')
+            if remote and not self.require_remote_credentials(remote, identity=job['identity'] if job else None,
+                    resume=lambda: self.open_picker_folder(entry)):
+                return False
         if self.cloud_busy and entry['source'] != 'Local':
             self.folder_picker_status.text = 'This connection is busy. Local folders remain available.'
             return False
@@ -280,8 +285,7 @@ class FolderHubUI:
         if (not busy and hasattr(self, 'folder_list') and host is not None
                 and host.state.destination == 'files' and not self.routes.screens['files']):
             choices = self.folder_choices()
-            packages = json.loads(self.preferences.values['remote_packages'])
-            credentials = {'All': None, **{item['zip']: set(item['remotes']) for item in packages}}
+            credentials = self.credential_groups()
             if choices != self.folder_picker_choices or credentials != self.folder_credentials:
                 self.update_folder_list(choices)
         status = getattr(self, 'folder_picker_status', None)

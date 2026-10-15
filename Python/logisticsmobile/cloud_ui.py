@@ -280,6 +280,108 @@ class CloudUI(CopyUI, LocalCryptUI):
         self.cloud_crypt_remotes = set(await asyncio.to_thread(kinds))
         self.refresh_cloud_remote_help()
 
+    def retained_packages(self):
+        if getattr(self.cloud_client, 'vault', None) is None:
+            return None
+        if not hasattr(self, 'credential_packages'):
+            from .credential_packages import CredentialPackages
+            from .credential_vault import ProtectedVault
+            self.credential_packages = CredentialPackages(ProtectedVault.for_app(self, packages=True), self.cloud_client)
+        return self.credential_packages
+
+    def remember_credential_association(self, name, remotes, *, session_only):
+        import json
+        packages = json.loads(self.preferences.values['remote_packages'])
+        packages = [item for item in packages if item['zip'] != name]
+        packages.append(dict(zip=name, remotes=list(remotes), session_only=session_only))
+        self.preferences.save(remote_packages=json.dumps(packages[-32:]))
+
+    def credential_groups(self):
+        import json
+        from pathlib import Path
+        groups = {'All': None}
+        for item in json.loads(self.preferences.values['remote_packages']):
+            title = Path(item['zip']).stem
+            if title in groups:
+                title = item['zip']
+            groups[title] = set(item['remotes'])
+        return groups
+
+    def require_remote_credentials(self, remote, *, identity=None, resume=None):
+        """Return immediately when loaded; otherwise present the matching ZIP unlock."""
+        loaded = [row.value for row in self.cloud_remote.items]
+        if remote in loaded and identity is None:
+            return True
+        try:
+            current = self.cloud_client.connection_identity(remote)
+            if identity is None or current == identity:
+                return True
+        except (OSError, ValueError, AttributeError):
+            pass
+        try:
+            cache = self.retained_packages()
+            matches = cache.matching(remote, identity) if cache else []
+        except (OSError, ValueError) as error:
+            self.cloud_status.value = str(error)
+            matches = []
+        if len(matches) == 1:
+            self.show_retained_unlock(matches[0][0], remote, identity=identity, resume=resume)
+        elif matches:
+            box = toga.Box(style=Pack(direction=COLUMN, margin=16))
+            box.add(toga.Label('Choose credential ZIP'))
+            for key, item in matches:
+                def choose(widget=None, selected=key, **kwargs):
+                    self.show_retained_unlock(selected, remote, identity=identity, resume=resume)
+                box.add(toga.Button(item['zip'], on_press=choose, style=Pack(height=44)))
+            self.show_view(box, destination='files', route='choose-credential', title='Unlock connection')
+        else:
+            self.show_cloud_connections()
+            self.cloud_import_message.text = import_hint('Load the credential ZIP for ' + remote + '. Previously loaded ZIPs can be retained for password-only unlocking after this update.')
+        return False
+
+    def show_retained_unlock(self, key, remote, *, identity=None, resume=None):
+        cache = self.retained_packages()
+        password = self.credential_unlock_password = toga.PasswordInput(placeholder='ZIP password', style=Pack(height=44))
+        status = self.credential_unlock_status = toga.Label('')
+        async def unlock(widget=None, **kwargs):
+            if self.cloud_busy or getattr(self, 'transfer_busy', False):
+                return
+            secret = password.value
+            password.value = ''
+            self.set_cloud_busy(True)
+            ready = False
+            try:
+                if not self.clear_private_reader():
+                    raise ValueError('Save or discard private edits before unlocking another credential.')
+                self.clear_private_catalog()
+                names = await asyncio.to_thread(self.cloud_client.import_package, cache, key, secret, remember=False)
+                await self._load_crypt_remote_names()
+                self.cloud_remote.items = visible_remotes(names)
+                if remote not in names or (identity is not None and self.cloud_client.connection_identity(remote) != identity):
+                    raise ValueError('This ZIP does not match the folder connection.')
+                ready = True
+            except (OSError, ValueError) as error:
+                status.text = import_hint('Unlock failed: ' + str(error)[:160])
+            finally:
+                secret = None
+                self.set_cloud_busy(False)
+            if ready:
+                self.routes.back()
+                if resume is not None:
+                    import inspect
+                    result = resume()
+                    if inspect.isawaitable(result):
+                        await result
+        from .folder_hub import visible_remotes
+        password.on_confirm = unlock
+        self.credential_unlock_button = toga.Button('Unlock', on_press=unlock, style=Pack(height=44))
+        box = toga.Box(children=[toga.Label(import_hint('Unlock ' + cache.items[key]['zip']), style=Pack(font_size=18)),
+            toga.Label(import_hint('Its ZIP is retained on this device. The password is needed for this session and is never saved.')),
+            password, self.credential_unlock_button, status,
+            toga.Button('Cancel', on_press=lambda widget, **kw: self.routes.back(), style=Pack(height=44))],
+            style=Pack(direction=COLUMN, margin=16))
+        self.show_view(box, destination='files', route='unlock-credential', title='Unlock credential')
+
     async def restore_cloud(self, widget=None, *, initial=False, **kwargs):
         if (self.cloud_busy and not initial) or self.cloud_client is None:
             return
@@ -292,6 +394,8 @@ class CloudUI(CopyUI, LocalCryptUI):
             await self._load_crypt_remote_names()
             from .folder_hub import visible_remotes
             self.cloud_remote.items = visible_remotes(names)
+            if names and self.cloud_client.package_name:
+                self.remember_credential_association(self.cloud_client.package_name, visible_remotes(names), session_only=False)
             self.cloud_entries.items = []
             self.cloud_rows = {}
             self.cloud_open_remote = None
@@ -363,11 +467,15 @@ class CloudUI(CopyUI, LocalCryptUI):
             names = await asyncio.to_thread(self.cloud_client.import_package, selected, None, password, remember=self.cloud_remember.value)
             await self._load_crypt_remote_names()
             from .folder_hub import visible_remotes
-            import json
-            packages = json.loads(self.preferences.values['remote_packages'])
-            packages = [item for item in packages if item['zip'] != selected.name]
-            packages.append(dict(zip=selected.name, remotes=visible_remotes(names), session_only=not self.cloud_remember.value))
-            self.preferences.save(remote_packages=json.dumps(packages[-32:]))
+            self.remember_credential_association(selected.name, visible_remotes(names), session_only=not self.cloud_remember.value)
+            cache_error = ''
+            try:
+                cache = self.retained_packages()
+                if cache is not None and not self.cloud_remember.value:
+                    identities = {remote: self.cloud_client.connection_identity(remote) for remote in visible_remotes(names)}
+                    await asyncio.to_thread(cache.remember, selected, identities)
+            except (OSError, ValueError) as error:
+                cache_error = ' ZIP could not be retained; choose it again next launch: ' + str(error)[:100]
             self.cloud_remote.items = visible_remotes(names)
             self.cloud_package.text = 'Logistics credential package: ' + getattr(self.cloud_client, 'package_name', 'Imported ZIP')
             self.cloud_location.value = self.cloud_path = ''
@@ -376,7 +484,7 @@ class CloudUI(CopyUI, LocalCryptUI):
             self.cloud_entries.items = []
             self.cloud_pending_zip = None
             self.cloud_selected_zip.text = import_hint('Loaded ZIP: ' + selected.name)
-            self.cloud_import_message.text = import_hint(f'{len(names)} remote(s) loaded. Choose a remote below, then tap Browse folder.')
+            self.cloud_import_message.text = import_hint(f'{len(names)} remote(s) loaded. Choose a remote below, then tap Browse folder.' + cache_error)
             self.cloud_status.value = f'{len(names)} {'saved' if self.cloud_remember.value else 'session'} remote(s) loaded. Choose a remote, then browse. No connection has been made yet.'
         except Exception as error:
             self.cloud_status.value = 'Import failed: ' + str(error)[:300]
@@ -567,6 +675,9 @@ class CloudUI(CopyUI, LocalCryptUI):
             self.cloud_selected_zip.text = 'No ZIP selected'
             self.cloud_import_message.text = import_hint('Choose a ZIP, then enter its password and tap Load remotes.')
             self.cloud_package.text = 'Credential package: none'
+            cache = self.retained_packages()
+            if cache is not None:
+                cache.forget()
             self.preferences.save(remote_packages='[]')
             self.cloud_status.value = 'Saved and session credentials forgotten. Private downloads remain available.'
         except Exception:
