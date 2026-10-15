@@ -1,5 +1,6 @@
 """Stage selected public sources and verify genuine mobile runtime evidence."""
 import argparse
+import ast
 import importlib.util
 import json
 from hashlib import sha256
@@ -7,7 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
-APP_MODULES = ('palette.py', 'workspace_navigation.py', 'document_choices.py', 'comic_layout_check.py', 'appearance.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
+APP_MODULES = ('palette.py', 'workspace_navigation.py', 'document_choices.py', 'comic_layout_check.py', 'appearance.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'recent_documents.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
                'hub_ui.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
                'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_presentation.py', 'chat_fixture.py', 'cloud.py', 'resource_imports.py', 'folder_download.py', 'pull_jobs.py', 'pull_jobs_ui.py', 'mirror_jobs.py', 'mirror_ui.py', 'cloud_ui.py', 'copy_ui.py', 'credential_vault.py', 'localcrypt.py', 'localcrypt_ui.py', 'file_resources.py', 'files_ui.py', 'crypt_stream.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
@@ -36,6 +37,27 @@ SHARED_REQUIRED_MODULES += ('runtime/document_access.py', 'runtime/protected_key
                             'ui/native/presentation.py', 'ui/native/editor_search.py')
 
 
+def validate_app_modules(root, modules=APP_MODULES):
+    """Fail before packaging when an app-owned import is outside the allowlist."""
+    root = Path(root)
+    included = set(modules)
+    for name in modules:
+        tree = ast.parse((root / name).read_text(encoding='utf-8'), filename=name)
+        for node in ast.walk(tree):
+            dependencies = []
+            if isinstance(node, ast.ImportFrom) and node.level == 1:
+                dependencies = ([node.module.split('.')[0]] if node.module
+                                else [alias.name for alias in node.names])
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                names = [alias.name for alias in node.names] if isinstance(node, ast.Import) else [node.module or '']
+                dependencies = [value.split('.')[1] for value in names
+                                if value.startswith('logisticsmobile.')]
+            for dependency in dependencies:
+                if dependency + '.py' not in included:
+                    raise ValueError(f'{name} imports unstaged logisticsmobile.{dependency}; '
+                                     'add its module to APP_MODULES before building.')
+
+
 def stage(repo, destination, *, testbed=False, allow_dirty=False):
     repo, destination = Path(repo).resolve(), Path(destination).resolve()
     if destination.exists():
@@ -48,6 +70,7 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     dirty = bool(subprocess.check_output(['git', '-C', str(repo), 'status', '--porcelain', '--', *paths]))
     if dirty and not allow_dirty:
         raise ValueError('Commit mobile sources before creating a release/testbed payload.')
+    validate_app_modules(repo / 'Python/logisticsmobile')
     destination.mkdir(parents=True)
     shared = repo / 'Python/commonUtils'
     spec = importlib.util.spec_from_file_location('shared_mobile_tools', shared / 'tools/mobile_ci.py')

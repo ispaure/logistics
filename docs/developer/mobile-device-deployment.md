@@ -20,8 +20,8 @@ rejected. Debug and Release target configurations receive automatic signing
 with the selected team. An existing different team or bundle ID is rejected;
 the helper does not resolve mismatches by changing identity or uninstalling.
 
-Each build stages the explicit public mobile source allowlist with local dirty
-sources allowed, refreshes the generated Briefcase application and native
+Each build validates app-owned imports against `APP_MODULES`, then stages the
+explicit public mobile source allowlist with local dirty sources allowed, refreshes the generated Briefcase application and native
 license notices, rebuilds both native bridge variants, restores the plist's
 `MainModule` to `logisticsmobile`, and runs a Debug arm64 device build.
 The toolchain selector requires SDK 27.1 or newer and supplies `DEVELOPER_DIR`
@@ -69,3 +69,27 @@ listed by CoreDevice. iOS relocated the data-container path during installation;
 path equality is not used as a data-preservation assertion. This check examined
 file metadata, not document contents, and does not establish byte-for-byte
 data equality. No uninstall, device reset or unpairing was performed.
+
+
+## Packaged-startup regression (2026-10-15)
+
+`recent_documents.py` must ship with the application: startup imports it before
+creating the main window. Omitting it from `APP_MODULES` left the physical iPhone
+showing a black screen even though signing, installation and process launch all
+succeeded. Simulator probes that overlay the whole source package do not detect
+an omitted allowlist entry.
+
+`Mobile/tools.py` now rejects app-relative imports absent from the allowlist before
+creating a payload. Packaging tests remove the recent-documents entry to assert
+that this check fails. `Mobile/tests/test_packaged_startup.py` stages the actual
+allowlist and starts Home in a separate process with only that payload on its
+application import path, using empty and existing-document storage. This host test
+uses Toga's dummy backend; a successful deploy must still be visually checked on
+the physical device when diagnosing native startup problems.
+
+
+The corrected signed build was installed in place over Wi-Fi on the existing
+paired iPhone 15 Pro Max. A physical-device screenshot showed Home and the
+existing unsaved document's Continue card. No app uninstall or data reset was
+performed. The screenshot and deployment logs are retained locally as
+`Mobile/logs/iphone-startup-check.png` and `iphone-startup-fix-deploy.log`.
