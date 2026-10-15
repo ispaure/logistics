@@ -16,3 +16,28 @@ DESTINATION_ITEMS = (
 class NavigationState(DestinationState):
     def __init__(self, destination='home'):
         super().__init__(DESTINATIONS, destination=destination)
+
+
+def install_folder_hub_icon(host):
+    """Use the desktop hub glyph on both native navigation presentations."""
+    from .hub_icons import ICONS
+    adapter = host.adapter
+    if adapter is None:
+        return
+    index = host.destinations.index('files')
+    if hasattr(adapter, 'navigation'):
+        from rubicon.objc import ObjCClass
+        data = ObjCClass('NSData').alloc().initWithBase64EncodedString(ICONS['folder_hub'], options=0)
+        image = ObjCClass('UIImage').imageWithData(data)
+        image = ObjCClass('UIImage').imageWithCGImage(image.CGImage, scale=3, orientation=0)
+        adapter.navigation[index].tabBarItem.image = image.imageWithRenderingMode(2)
+    elif hasattr(adapter, 'bottom'):
+        from android.util import Base64
+        from android.graphics import BitmapFactory
+        from android.graphics.drawable import BitmapDrawable
+        data = Base64.decode(ICONS['folder_hub'], Base64.DEFAULT)
+        bitmap = BitmapFactory.decodeByteArray(data, 0, len(data))
+        drawable = BitmapDrawable(adapter.impl.native.getResources(), bitmap)
+        for bar in (adapter.bottom, adapter.rail):
+            if bar is not None:
+                bar.getMenu().getItem(index).setIcon(drawable)
