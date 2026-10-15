@@ -99,7 +99,7 @@ class FilesUI:
         self.file_location = toga.TextInput(placeholder='Folder path (empty for root)', style=Pack(height=44))
         self.file_selection = toga.Selection(style=Pack(height=44))
         from .browser_ui import FileBrowser as NativeBrowser
-        self.file_browser = NativeBrowser(selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open, item_actions=self.show_file_actions)
+        self.file_browser = NativeBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open, item_actions=self.show_file_actions)
         self.file_password = toga.PasswordInput(placeholder='Inner archive password, when needed', style=Pack(height=44))
         self.file_name = toga.TextInput(placeholder='New name / folder name', style=Pack(height=44))
         self.file_destination = toga.Selection(items=list(self.file_roots), style=Pack(height=44))
@@ -556,7 +556,7 @@ class FilesUI:
         self.picker_folder = toga.TextInput(placeholder='Folder within storage', style=Pack(height=44))
         self.picker_entries = toga.Selection(style=Pack(height=44))
         from .browser_ui import FileBrowser as NativeBrowser
-        self.editor_browser = NativeBrowser(selected=self.browser_editor_selected, open_folder=self.browser_editor_folder, navigate=self.browser_editor_location, preview=False)
+        self.editor_browser = NativeBrowser(folder_visible=self.folder_path_visible, selected=self.browser_editor_selected, open_folder=self.browser_editor_folder, navigate=self.browser_editor_location, preview=False)
         self.save_as_name = toga.TextInput(value=name, placeholder='File name', style=Pack(height=44))
         self.save_as_status = toga.MultilineTextInput(readonly=True, style=Pack(height=75))
         self.save_as_view = toga.Box(children=[toga.Label('Open' if mode == 'open' else 'Save As'),

@@ -448,6 +448,11 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
         box.add(heading('LM Chat'))
         box.add(toga.Button('Server & generation settings…', on_press=self.show_chat_configuration, style=Pack(height=44)))
         box.add(heading('Folder Hub'))
+        self.show_legacy_choice = toga.Switch('Show Legacy',
+            value=getattr(self, 'show_legacy_session', self.preferences.values['show_legacy'] == 'true'),
+            on_change=self.change_show_legacy, style=Pack(height=44))
+        if type(self._impl).__module__.startswith('toga_iOS.'):
+            box.add(self.show_legacy_choice)
         box.add(toga.Button('Remote connections…', on_press=self.show_cloud_connections, style=Pack(height=44)))
         box.add(heading('Apply preferences'))
         box.add(toga.Button('Save preferences', on_press=self.save_preferences, style=Pack(height=44)))
@@ -488,6 +493,7 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
     def save_preferences(self, widget=None, **kwargs):
         try:
             self.preferences.save(font_size=self.font_choice.value,
+                show_legacy='true' if self.show_legacy_choice.value else 'false',
                 document_card_overview='true' if self.document_cards_choice.value else 'false',
                 clear_unmodified_documents_on_restart='true' if self.clear_documents_choice.value else 'false',
                 restore_last_document='true' if self.restore_choice.value else 'false')
@@ -499,6 +505,8 @@ class LogisticsMobile(HubUI, FolderHubUI, LocationsUI, MirrorUI, PullJobsUI, Rea
 
     def reload_preferences(self, widget=None, **kwargs):
         self.preferences.reload()
+        self.show_legacy_session = self.preferences.values['show_legacy'] == 'true'
+        self.refresh_folder_visibility()
         self.editor.style.font_size = int(self.preferences.values['font_size'])
         self.refresh_document_overview()
         self.show_settings()

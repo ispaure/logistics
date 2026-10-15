@@ -239,3 +239,10 @@ Plain archives do not require configuration reads. Explicit input is not silentl
 overridden. Parsing errors are sanitized and resolved values are never copied to
 preferences, workspace history or diagnostics. A native fixture verifies this
 path on a protected archive without an interactive entry step.
+
+The iOS-only `show_legacy` preference defaults to false. FolderHubUI owns a
+session override; the Settings switch refreshes retained browsers, the hub and
+library shortcuts immediately without writing preferences. Explicit save
+persists it; reload discards the override. FileBrowser filters logical directory
+components before pagination, including search results and provider remote roots,
+so LocalCrypt uses decoded names. The filter changes presentation only.

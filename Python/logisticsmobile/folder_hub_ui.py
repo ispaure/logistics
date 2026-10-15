@@ -26,6 +26,38 @@ def refresh_button(action):
 
 
 class FolderHubUI:
+    def folder_path_visible(self, path, *, directory=True):
+        from pathlib import PurePosixPath
+        if not type(self._impl).__module__.startswith('toga_iOS.'):
+            return True
+        show = getattr(self, 'show_legacy_session', self.preferences.values['show_legacy'] == 'true')
+        parts = PurePosixPath(str(path)).parts
+        return show or not any(part.casefold().startswith('legacy-')
+                               for part in (parts if directory else parts[:-1]))
+
+    def library_folder_visible(self, record):
+        return (self.folder_path_visible(record['folder'])
+                and self.folder_path_visible(getattr(record['provider'], 'remote', '')))
+
+    def change_show_legacy(self, widget, **kwargs):
+        self.show_legacy_session = widget.value
+        self.refresh_folder_visibility()
+
+    def refresh_folder_visibility(self):
+        if hasattr(self, 'folder_list'):
+            self.update_folder_list(self.folder_picker_choices)
+        for name in ('file_browser', 'remote_browser', 'editor_browser'):
+            browser = getattr(self, name, None)
+            if browser is not None:
+                browser.query_changed()
+        for drawer in self.adaptive.browsers.values():
+            drawer.browser.query_changed()
+            if drawer.destination == 'documents':
+                drawer.refresh_menu()
+        readers = getattr(self, 'readers', None)
+        if readers is not None:
+            readers.catalog.filter_library()
+
     async def refresh_folder_hub(self, widget=None, **kwargs):
         self.show_cloud(present=False)
         if not self.cloud_busy:
@@ -126,6 +158,8 @@ class FolderHubUI:
         self.folder_buttons = {}
         selected = self.folder_credentials.get(self.folder_credential.value)
         visible = choices if selected is None else credential_choices(choices, selected)
+        visible = {name: entry for name, entry in visible.items()
+                   if self.folder_path_visible(name) and self.folder_path_visible(entry.get('remote') or '')}
         self.folder_tree_buttons = {}
 
         def add_branch(branch, ancestors=()):

@@ -1003,3 +1003,10 @@ archive requires its configured `[LogisticsZIP] archive_password`. The lookup
 reads through encrypted storage and stops at that storage root. An empty nearest
 LogisticsZIP section stops inheritance; a manually supplied value takes priority.
 Resolved values stay in memory for the reader session and are cleared on close.
+
+On iOS, folders whose names start with `Legacy-` are hidden in Folder Hub,
+file browsers and library shortcuts by default, including Local, Remote and
+LocalCrypt folders. Settings → Folder Hub → **Show Legacy** changes visibility
+for the current session. Press **Save preferences** to keep the choice after
+restarting; **Reload preferences** restores the saved choice. Files with that
+prefix remain visible when their parent folders are visible.
