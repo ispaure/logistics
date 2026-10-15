@@ -22,6 +22,7 @@ class LocalCryptConfigurationTests(unittest.TestCase):
             vanished.write_bytes(b'old ciphertext')
             provider = object.__new__(CryptFiles)
             LocalFiles.__init__(provider, root)
+            provider.collection_storage_root = None
             def mapping(path, directory=False, decode=False):
                 self.assertNotEqual(path, partial.name)
                 if path == vanished.name and decode:

@@ -226,7 +226,7 @@ class MirrorUI(TransferReviewUI):
             return
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         box.add(toga.Label('Pull ' + remote, style=Pack(font_size=22)))
-        box.add(toga.Label('Choose app-private storage.\nLocal stores readable files.\nLocalCrypt retains encrypted names and bytes.\nPull replaces local contents to match this remote.'))
+        box.add(toga.Label('Choose local storage type.\nLocal stores readable files.\nLocalCrypt retains encrypted names and bytes.\nPull replaces local contents to match this remote.'))
         def start(storage):
             def handler(widget=None, **kw):
                 if client is not self.cloud_client or client.generation != generation:

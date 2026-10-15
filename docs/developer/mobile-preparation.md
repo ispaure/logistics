@@ -1057,3 +1057,11 @@ native component guide for its contract. Android Settings also exposes a direct
 `APPLICATION_DEVELOPMENT_SETTINGS` intent, and the deployment helper caches local
 SDK paths in ignored `Mobile/.tools/android-sdk.json` and reconnects advertised
 `_adb-tls-connect._tcp` endpoints. It never pairs silently or enables debugging.
+
+Native validation for these changes passed on the Android emulator using the
+disposable `storage_chrome_probe.py` harness. The actual comic canvas measured
+1079×1919 inside a 1080×1920 window with status/navigation bars hidden; both
+controls and route exit restored them. The probe also exercised Android volume
+enumeration, external app-specific file copying, the Legacy switch and dispatch
+of developer settings. This does not establish physical removable-card behavior.
+See [retained proof](mobile-evidence/2026-10-15-storage-android-fullscreen.json).
