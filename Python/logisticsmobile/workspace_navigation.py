@@ -248,7 +248,9 @@ class WorkspaceFrame:
             self.pair = toga.Button('Split', on_press=navigation.show_pair_picker, style=Pack(height=44))
             self.header.add(self.pair)
         self.row = toga.Box(children=[self.main], style=Pack(direction=ROW, flex=1))
-        view.add(self.header, self.row)
+        if destination != 'files':
+            view.add(self.header)
+        view.add(self.row)
 
     def restore(self):
         self.compact_open = False
@@ -287,7 +289,9 @@ class WorkspaceFrame:
             self.native_menu = ObjCClass('UIBarButtonItem').alloc().initWithImage(
                 ObjCClass('UIImage').systemImageNamed('line.3.horizontal'), style=0,
                 target=self.menu._impl.native, action=SEL('onPress:'))
-        item.leftBarButtonItem = self.native_menu
+        # Folder Hub enters browsers through its folder actions. Keep the drawer
+        # implementation available without mounting a menu in this destination.
+        item.leftBarButtonItem = self.native_menu if self.destination != 'files' else None
         if hasattr(self, 'pair'):
             self.pair.app, self.pair.window = app, app.main_window
             if not hasattr(self, 'native_pair'):
