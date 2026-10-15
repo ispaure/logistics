@@ -160,10 +160,12 @@ class HubDocumentTests(unittest.TestCase):
         app.refresh_documents()
         content = app.build_documents_hub().content
         labels = [child.text for child in content.children if isinstance(child, toga.Label)]
-        self.assertEqual([label for label in labels if label.startswith('Markdown ·')],
-                         ['Markdown · 2'])
-        self.assertFalse(any(label.startswith(('EPUB books ·', 'Comics ·')) for label in labels))
-        open_rows = [child for child in content.children if hasattr(child, 'commands')]
+        self.assertFalse(any(label.startswith('Open documents') for label in labels))
+        self.assertFalse(any(hasattr(child, 'commands') for child in content.children))
+        markdown_content = app.document_categories['markdown'].children[0]
+        self.assertIn('Opened · 2', [child.text for child in markdown_content.children if isinstance(child, toga.Label)])
+        open_rows = [child for category in app.document_categories.values()
+                     for child in category.children[0].children if hasattr(child, 'commands')]
         names = [row.children[-1].children[0].text for row in open_rows]
         self.assertLess(names.index('Notes.txt'), names.index('Plan.MD'))
         # Clean grouped rows consist only of the filename and close menu.
@@ -184,7 +186,7 @@ class HubDocumentTests(unittest.TestCase):
         card = next(card for card in grid.cards if card.session_id == session_id)
         self.assertIn('Current draft', card.children[1].text)
         self.assertIn('Unsaved changes', card.children[2].text)
-        for width, columns in ((390, 2), (1200, 3), (390, 2)):
+        for width, columns in ((390, 1), (1200, 1), (390, 1)):
             grid.reflow(width)
             self.assertEqual(grid.columns, columns)
             self.assertEqual(len(grid.children[0].children), columns)
@@ -208,7 +210,8 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual(Preferences(app.private_root).values['document_card_overview'], 'false')
         app.show_documents_hub()
         self.assertEqual(app.document_grids, [])
-        self.assertTrue(any(hasattr(child, 'commands') for child in app.body.children[0].content.children))
+        self.assertTrue(any(hasattr(child, 'commands') for card in app.document_categories.values()
+                            for child in card.children[0].children))
 
     def test_cards_do_not_preview_provider_text_or_open_missing_records(self):
         app = self.app
