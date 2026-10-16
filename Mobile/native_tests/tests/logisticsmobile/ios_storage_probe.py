@@ -15,11 +15,14 @@ def exercise_ios_storage(app):
     private = paths.config.parent / 'Logistics'
     try:
         assert prepare_for_app(SimpleNamespace(paths=paths)) == private
-        assert collection_path(private) == documents
-        assert (documents / 'native.txt').read_bytes() == b'ordinary native fixture'
+        local = documents / 'Local'
+        assert collection_path(private) == local
+        assert (local / 'native.txt').read_bytes() == b'ordinary native fixture'
         assert not (documents / 'Credentials').exists()
         assert (private / 'Credentials/probe.bin').read_bytes() == b'wrapped native fixture'
         assert prepare_for_app(SimpleNamespace(paths=paths)) == private
+        assert collection_path(private, True) == private / 'LocalCryptFolders'
+        assert not (documents / 'native.txt').exists()
         print('LOGISTICS_NATIVE_IOS_STORAGE=private-migration-and-shared-local-verified', flush=True)
     finally:
         _shared_local_roots.pop(private, None)
