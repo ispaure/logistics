@@ -64,6 +64,7 @@ Desktop.ini
 /Mobile/.testflight-auth.json
 /Mobile/.testflight-keys/
 /Mobile/.tools/
+/Mobile/.android-beta/
 *.p8
 *.p12
 *.mobileprovision

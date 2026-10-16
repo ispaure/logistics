@@ -298,6 +298,33 @@ and host tests are described in [Mobile/README.md](../../Mobile/README.md#host-v
 passing them does not replace simulator and physical-device testing.
 
 
+## Android tester distribution and combined launcher
+
+`Mobile/deploy_android_firebase.command` wraps `firebase_deploy.py`. It uses
+interactive Firebase CLI Google sign-in, verifies project access and the registered
+Android package, and resolves the configured tester group by alias or display
+name without assuming capitalization. Authentication/setup failures stop before
+native build preparation. `--login` signs in and verifies setup without building;
+`--check` verifies existing access. Firebase configuration lives in
+`Mobile/firebase-distribution.json`; private credentials are never stored there.
+
+The builder reuses Android local-source staging and the rclone bridge helper.
+It uses Gradle `assembleRelease` with a temporary init script for versionCode,
+then SDK zipalign/apksigner and aapt for signature and package/version verification.
+It does not rewrite debug signing or the generated project's default version.
+The persistent PKCS12 key/password and reserved version counter live under ignored,
+owner-only `Mobile/.android-beta/`; back up this directory securely. A nonblocking
+lock prevents concurrent beta runs. Device deployment and beta building share
+the generated project/payload: do not run them concurrently in separate terminals.
+Builds/logs are under `Mobile/build/firebase/<number>/`. No device is installed
+or uninstalled by the beta builder. Upload requires an explicit confirmation.
+Firebase handles invitations and notifications; testers approve APK installation.
+
+`Mobile/deploy_all.command` invokes the two device launchers followed by the two
+distribution launchers sequentially. Distribution prompts are retained. On failure,
+the user can stop or continue; any failed step produces a nonzero final status.
+See [the mobile launcher guide](../../Mobile/README.md#double-click-android-firebase-distribution).
+
 ## Android deploy launcher
 
 For a normal Android app, `Mobile/deploy_android.command` stages current Logistics

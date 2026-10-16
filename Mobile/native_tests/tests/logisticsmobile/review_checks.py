@@ -41,9 +41,15 @@ async def exercise_reviews(app):
                 raise AssertionError('Review exited before confirmation: ' + app.cloud_status.value)
             await asyncio.sleep(.05)
         raise AssertionError('Native review never completed: ' + app.cloud_status.value)
-    async def finish():
+    async def finish(phase='review'):
         done, _ = await asyncio.wait([app.transfer_task], timeout=30)
-        assert done, 'Native reviewed transfer did not retire'
+        if not done:
+            view = getattr(app, '_transfer_review_view', None)
+            status = view.children[2].text if view is not None else 'review closed'
+            details = view.children[3].value if view is not None else ''
+            raise AssertionError('Native reviewed transfer did not retire: '
+                                 + phase + '; status=' + status + '; progress='
+                                 + app.transfer_message + '; details=' + details[:2000])
         return await app.transfer_task
     before = store.path.read_bytes()
     app.start_mirror_pull(key)
@@ -159,7 +165,7 @@ async def exercise_reviews(app):
     assert 'excluded.skip' not in view.children[3].value
     with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
         await view.children[-1].children[1].on_press()
-    assert await finish(), app.transfer_message
+    assert await finish('options-push'), app.transfer_message
     inferred = next(item for item in store.jobs.values() if item['target'] == folder)
     assert inferred['prefix'] == folder and inferred['remote'] == job['remote'] and not inferred['crypt']
     observed = await remote_files(client, inferred, 'linked.txt', 'excluded.skip')

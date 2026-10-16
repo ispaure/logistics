@@ -96,3 +96,5 @@ rendering, allowing at most one successor while native UI work is busy. Existing
 epoch checks reject stale snapshots; completion and cancellation still publish
 terminal UI state synchronously. Burst, concurrent-render and stale-epoch tests
 cover these delivery guarantees.
+Native reviewed-transfer timeouts retain the review status, visible comparison
+and latest progress text, distinguishing a pending recheck from active I/O.
