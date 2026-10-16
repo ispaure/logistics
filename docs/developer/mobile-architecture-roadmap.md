@@ -16,6 +16,27 @@ until the user authorizes commits and pushes.
 
 ## Local implementation status
 
+The October 16 cleanup consolidates library and provider gesture scheduling in
+`logisticsmobile.reader_controls.schedule_swipe`. Both spread-relative and
+absolute-page gestures reject busy, closed and inactive-host sessions and retain
+one in-flight task. Format adapters still choose spread targets, store progress,
+report read failures and enforce their own private-content policies.
+`ReadingFrame` also owns the EPUB restore-controls button across repeated
+immersive transitions; comics retain their image gesture for restoring controls.
+
+Retained import inventory/deletion lives in `logisticsmobile.saved_files_ui`,
+separate from preference rows and installed-build information in `settings_ui`.
+The new owner is explicitly included in the curated payload list. Its existing
+multi-window, busy-reader, confirmation and original-source protections remain
+part of the deletion workflow.
+
+The native acceptance runner composes document, reader, chat and connection
+workflows. Reader import/password/large-archive cases now sit with the existing
+native reader geometry checks in `reader_checks`; WebView readiness is shared
+through `web_checks`. The ordered 31-case contract and exact-source/backend
+verification remain mandatory. Scenario extraction does not convert host checks
+into native evidence or remove any acceptance assertions.
+
 The core cleanup is implemented locally in the delivery order below. Reader
 controllers now use enumerated host services rather than broad app fallback or
 state publication. Provider cancellation/busy state belongs to its controller;

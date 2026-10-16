@@ -31,12 +31,12 @@ class ChatUITests(unittest.TestCase):
         self.app.chat_url.value = url
         self.app.chat_model.value = 'fixture-model'
 
-    def test_chat_cards_use_shared_surface_styling_and_keep_live_content(self):
+    def test_chat_drawer_uses_neutral_layers_and_keeps_live_content(self):
         from logisticsmobile.appearance import _surfaces
         app = self.app
         self.assertNotIn(app.chat_transcript_card._impl, _surfaces)
-        self.assertEqual(_surfaces[app.chat_sidebar._impl], 16)
-        self.assertEqual(_surfaces[app.chat_prompt._impl], 12)
+        self.assertEqual(_surfaces[app.chat_sidebar._impl], 0)
+        self.assertEqual(_surfaces[app.chat_prompt._impl], 22)
         self.assertIs(app.chat_transcript.parent, app.chat_transcript_card)
         app.chat_prompt.value = 'Retain the composer draft'
         app.toggle_chat_conversations()
@@ -70,7 +70,7 @@ class ChatUITests(unittest.TestCase):
                 task = asyncio.create_task(app.chat_primary_action())
                 await asyncio.sleep(.01)
                 self.assertTrue(app.chat_busy)
-                self.assertEqual(app.chat_send.text, 'Stop')
+                self.assertEqual(app.chat_send.accessible_name, 'Stop')
                 self.assertTrue(app.chat_send.enabled)
                 app.chat_prompt.value = 'Next unsent draft'
                 await task
@@ -78,7 +78,7 @@ class ChatUITests(unittest.TestCase):
         self.assertEqual(app.chat_current['messages'][-1]['content'], 'Native fixture reply')
         self.assertEqual(app.chat_prompt.value, 'Next unsent draft')
         self.assertEqual(app.chat_store.load(app.chat_current['id'])['draft'], 'Next unsent draft')
-        self.assertEqual(app.chat_send.text, 'Send')
+        self.assertEqual(app.chat_send.accessible_name, 'Send')
         self.assertTrue(app.chat_send.enabled)
         self.assertEqual(app.chat_status.value, '')
         self.assertEqual(len(requests), 1)
@@ -104,13 +104,13 @@ class ChatUITests(unittest.TestCase):
         saved = app.chat_store.load(app.chat_current['id'])
         self.assertEqual(saved['messages'][-1]['status'], 'cancelled')
         self.assertFalse(app.chat_busy)
-        self.assertEqual(app.chat_send.text, 'Send')
+        self.assertEqual(app.chat_send.accessible_name, 'Send')
         self.assertTrue(app.chat_send.enabled)
 
     def test_model_refresh_cannot_turn_the_primary_button_into_stop(self):
         app = self.app
         app.set_chat_busy(True)
-        self.assertEqual(app.chat_send.text, 'Send')
+        self.assertEqual(app.chat_send.accessible_name, 'Send')
         self.assertFalse(app.chat_send.enabled)
         app.set_chat_busy(False)
 

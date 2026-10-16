@@ -1,4 +1,4 @@
-"""Native widget password retry/lock flow with an isolated archive callback."""
+"""Native widget password retry/close flow with an isolated archive callback."""
 import base64
 import json
 import os
@@ -12,7 +12,7 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class ComicPasswordUITests(unittest.TestCase):
-    def test_import_retry_unlock_cancel_and_lock_do_not_save_passwords(self):
+    def test_import_retry_unlock_cancel_and_close_do_not_save_passwords(self):
         fixture = json.loads((Path(__file__).parents[1] / 'native_tests/tests/logisticsmobile/comic_fixture.json').read_text())
         class LocalArchiveClient:
             def request(self, action, **values):
@@ -55,10 +55,13 @@ class ComicPasswordUITests(unittest.TestCase):
                 raw_source = app.reader_manager().active.book_reader.document.source
                 app.loop.run_until_complete(app.next_book_page())
                 self.assertEqual(app.reader_manager().active.book_record['position'], 1)
-                app.lock_book()
+                owner = app.reader_manager().active
+                self.assertNotIn('Lock protected comic', [label for label, _ in owner.reader_actions.actions])
+                self.assertFalse(hasattr(owner, 'book_lock'))
+                self.assertTrue(app.close_session(owner.session.id))
                 self.assertIsNone(raw_source.password)
                 self.assertEqual(raw_source.cache_bytes, 0)
-                self.assertFalse(app.reader_manager().active.book_content.children)
+                self.assertFalse(owner.book_content.children)
                 self.assertTrue(app.reader_manager().catalog.library_store.path(record['id'], '.cbz').exists())
             finally:
                 app.main_window.close()

@@ -56,6 +56,21 @@ and restoring the normal palette; physical BOOX behavior remains unverified.
 
 ## Settings and build information
 
+**Settings → Books & Comics → Saved books & comics…** lists every retained
+library import, including copies no longer open or in Recent. It shows the count,
+combined archive/reading-record size and each import's size. Incomplete or unreadable
+records appear under their internal identifier where possible. Local/LocalCrypt
+folders and remote previews held only in RAM are separate from this inventory.
+On iOS these imports live in private app storage and do not appear in Files.
+Older import records do not identify their original source; the inventory says
+so rather than guessing whether a copy originally came from cloud storage.
+
+**Close** in Open documents keeps the saved file and its progress. To reclaim
+space, use **Delete local copy…** in the Settings inventory and confirm. This
+closes its reader and removes its imported archive, reading progress, bookmarks
+and Recent entry; the original source or cloud file is unchanged. Finish reader
+or import operations and close other app windows before deleting a copy.
+
 On iPhone and iPad, choosing a dropdown option closes its picker immediately.
 
 Settings switches use one compact row: label, **ⓘ** help, then the on/off switch.
@@ -384,20 +399,39 @@ on iOS and Android, without rclone or a credential package. Import one through
 Folder Hub, then enter its ZIP password and choose **Unlock comic**, or press Enter.
 A wrong password clears the field and keeps the prompt ready for another attempt.
 **Cancel** keeps the imported encrypted copy. The password stays only with the
-active reader; **Lock comic** clears the password, decoded-page cache and displayed
-pages. Opening after locking or restarting asks again. The library keeps the
+active reader; closing the reader clears the password, decoded-page cache and
+displayed pages. Opening after closing or restarting asks again. There is no
+separate relock command. Local/LocalCrypt folder readers continue to use the
+configured INI archive password when available. The library keeps the
 original encrypted archive bytes and never writes an extracted/decrypted archive.
 ZIP member names remain visible, as they do in ordinary password-protected ZIPs.
 
 Progress remembers the current EPUB chapter or comic page, rather than an exact
-scroll position inside a chapter. **Bookmark** / **Unbookmark** toggles that
-chapter/page; the bookmark selector returns to saved positions. Comic pages use
+scroll position inside a chapter. EPUB **Bookmark** / **Unbookmark** and its
+bookmark selector return to saved passages. Comics have page navigation without
+bookmark controls. Comic pages use
 natural filename order. Right-to-left manga metadata is identified; single-page
 Previous/Next controls still refer to reading-order positions.
 Comic layout defaults to **auto**: two portrait pages when the reading area is
 wider than tall, otherwise one. Right-to-left metadata places the earlier page on
 the right and reverses swipe direction. Existing Single/Double choices can be
 changed under **Appearance → Comic page layout**.
+Comic appearance contains only page layout. Font family/size, line spacing, text
+width, text margins and text themes belong to EPUB appearance. Comic menus omit
+read-aloud, chapter search and contents/bookmarks; imported comics offer **Comic
+pages…** for direct page selection. The same format split applies to LocalCrypt
+and remote previews. Applying comic layout does not change EPUB preferences.
+All comic readers use the same menu order, **Comic pages…** selector and
+**Close comic** command. Read-only previews omit metadata editing. With reading
+controls visible, **Previous comic** (`|≪`) and **Next comic** (`≫|`) are icon
+buttons above the image; page arrows and the page slider remain below it. These
+file buttons hide in fullscreen and remain disabled when unavailable. Switching
+comics with them preserves whether reading controls are visible. First/last page
+jumps use the page slider or **Comic pages…** selector. The overflow menu omits
+file switching and **All documents**; use the existing navigation to leave reading.
+**… → Info…** shows the opened comic's path. Saved imports show their current
+local copy, remote previews show `remote:path`, and LocalCrypt folder readers
+show their logical LocalCrypt path. The dialog contains no credentials.
 In the comic reader, horizontal swipes turn pages in both normal and fullscreen
 views, including swipes from the screen edge. They do not navigate Back. Zoomed
 pages use dragging to pan; fit the page to resume swipe paging. Use the visible
@@ -446,7 +480,7 @@ These settings, URL and model persist privately. API keys remain in memory for
 this app session and are not written to configuration or conversation fields.
 Re-enter a required key after restarting. Opening chat alone makes no request.
 
-**New conversation** starts a private thread. Drafts are checkpointed while typing.
+**New chat** at the bottom of the conversation drawer starts a private thread. Drafts are checkpointed while typing.
 **Send** streams a text reply and preserves partial progress during generation.
 The same button becomes **Stop** during generation; it stops the connection and
 retains received text with cancelled status.
@@ -456,8 +490,13 @@ conversation menu reopens saved conversations. Malformed, oversized or concurren
 are preserved, and saving reports the problem. Export can preserve a current
 valid in-memory copy before reopening a conflicting file.
 
+The chat canvas follows the device’s light/dark theme: white in light mode and
+black in dark mode, including the background while messages load. Messages fade
+into that background at the top as you scroll. On iPad and unfolded Duo, the
+composer stays centered and caps its width for comfortable reading; long header
+titles truncate before reaching the action buttons.
 The header shows the conversation title and configured model. Your messages use
-compact bubbles; assistant replies use the full reading width with offline basic
+right-aligned grey bubbles; assistant replies use the full reading width with offline basic
 Markdown formatting (headings, bulleted/numbered lists, bold and code). Raw HTML is
 escaped and links/images do not load external resources. **Copy** copies a reply's
 displayed text; if the platform declines copying, select the text and use its
@@ -465,7 +504,10 @@ system Copy command. Streaming follows the latest reply only while you are near
 the bottom. **Latest message ↓** returns there after reading older messages.
 
 The native message field grows as you type, up to a bounded height; longer drafts
-scroll inside it. Send/Stop sits beside the field. Status appears only for ongoing
+scroll inside it. A circular up-arrow sends your message; it becomes a square Stop
+control during generation, inside the same rounded composer. The header’s pencil
+button starts a new conversation. Completed messages omit visible role headings;
+interrupted and incomplete replies keep their status labels. Status appears only for ongoing
 work, feedback or problems. Server/model settings and **Export conversation…**
 are in the **•••** menu. Configuration is scrollable when the keyboard reduces
 the available space. Draft storage and text-only request limits are unchanged.
@@ -822,8 +864,10 @@ files, and cancellation leaves any already completed changes in place.
 ## Reader and editor presentation (Phase 3 Part 1)
 
 Open EPUB and comic sessions now give content the main area, with compact page
-navigation and an Actions menu for contents, bookmarks, appearance and reading
-mode. EPUB reading mode hides those controls and keeps a visible Restore controls
+navigation and a format-specific Actions menu. EPUB offers contents, bookmarks,
+text appearance, chapter search and read-aloud; comics offer page navigation,
+page layout, fit and neighboring-comic actions where supported. EPUB reading
+mode hides those controls and keeps a visible Restore controls
 button. Comics open with controls hidden and zero page margins; tap the page to
 show or hide reading controls. Native navigation bars hide with comic controls
 and return when controls are shown or when leaving the reader. EPUB appearance offers supported font sizes, margins and system/light/dark
@@ -1188,8 +1232,9 @@ before laying out Documents or Chat, so their content and menus appear on the
 first tap.
 
 
-Chat uses the same rounded, outlined surfaces as the other tabs for its transcript,
-conversation list and message input. On iPhone its conversations menu lives in the
+Chat uses neutral surfaces: a flat conversation drawer, rounded current-thread
+highlights, a bottom New chat pill and a rounded message field. Dark mode uses
+black and charcoal; light mode uses white and soft grey. On iPhone its conversations menu lives in the
 native top-left navigation bar, matching the Documents menu position.
 
 

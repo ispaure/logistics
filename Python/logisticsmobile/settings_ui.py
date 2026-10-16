@@ -6,7 +6,7 @@ from textwrap import fill
 
 import toga
 from toga.style import Pack
-from toga.style.pack import ROW, CENTER
+from toga.style.pack import COLUMN, ROW, CENTER
 from services.build_version import BuildVersion, installed_build
 
 

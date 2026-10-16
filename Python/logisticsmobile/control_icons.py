@@ -8,11 +8,15 @@ from .appearance import accessible_name
 ICONS = {
     'back': ('chevron.left', '‹', (((15, 5), (8, 12), (15, 19)),)),
     'forward': ('chevron.right', '›', (((9, 5), (16, 12), (9, 19)),)),
+    'previous_comic': ('backward.end', '|≪', (((4, 5), (4, 19)), ((13, 5), (7, 12), (13, 19)), ((21, 5), (15, 12), (21, 19)))),
+    'next_comic': ('forward.end', '≫|', (((20, 5), (20, 19)), ((3, 5), (9, 12), (3, 19)), ((11, 5), (17, 12), (11, 19)))),
     'up': ('arrow.up', '↑', (((5, 11), (12, 4), (19, 11)), ((12, 4), (12, 21)))),
     'find': ('magnifyingglass', '⌕', (((15, 15), (21, 21)),)),
     'contents': ('list.bullet', '≡', tuple(((7, y), (21, y)) for y in (6, 12, 18))),
     'appearance': ('textformat.size', 'Aa', (((3, 19), (9, 5), (15, 19)), ((5, 14), (13, 14)), ((16, 19), (19, 12), (22, 19)), ((17, 17), (21, 17)))),
     'more': ('ellipsis', '•••', ()),
+    'compose': ('square.and.pencil', '✎', (((14, 4), (4, 4), (4, 20), (20, 20), (20, 10)), ((10, 14), (11, 10), (19, 2), (22, 5), (14, 13), (10, 14)))),
+    'stop': ('stop.fill', '■', (((6, 6), (18, 6), (18, 18), (6, 18), (6, 6)),)),
     'close': ('xmark', '×', (((6, 6), (18, 18)), ((18, 6), (6, 18)))),
 }
 _android_controls = weakref.WeakSet()
@@ -24,8 +28,10 @@ def tint_android(impl):
     from .palette import argb, android_palette
     dark = impl.native.getResources().getConfiguration().uiMode & 0x30 == 0x20
     colors = android_palette(dark)
+    foreground = getattr(impl, '_surface_roles', ('', 'text', False))[1]
     impl._control_drawable.setTintList(ColorStateList(
-        [[-R.attr.state_enabled], []], [argb(colors['muted']), argb(colors['text'])]))
+        [[-R.attr.state_enabled], []],
+        [argb(colors['muted']), argb(colors.get(foreground, colors['text']))]))
 
 
 def refresh_icons():
@@ -67,7 +73,7 @@ def apply_icon(button, name, label):
                 path.addCircle(x, 12, 1, Path.Direction.CW)
         drawable = ShapeDrawable(PathShape(path, 24, 24))
         paint = drawable.getPaint()
-        paint.setStyle(Paint.Style.STROKE)
+        paint.setStyle(Paint.Style.FILL if name == 'stop' else Paint.Style.STROKE)
         paint.setStrokeWidth(1.8)
         paint.setStrokeCap(Paint.Cap.ROUND)
         paint.setStrokeJoin(Paint.Join.ROUND)

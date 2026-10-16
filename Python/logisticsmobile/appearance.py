@@ -123,24 +123,51 @@ def apple_color(role):
 
 def paint_surface(impl, radius):
     backend = type(impl).__module__
+    background, foreground, outlined = getattr(impl, '_surface_roles', ('surface', None, True))
     if backend.startswith('toga_iOS.'):
         native = impl.native
-        impl._default_background_color = apple_color('surface')
+        impl._default_background_color = apple_color(background)
         native.backgroundColor = impl._default_background_color
         native.layer.cornerRadius = radius
-        native.layer.borderWidth = 1
+        native.layer.borderWidth = 1 if outlined else 0
         native.layer.borderColor = apple_color('border').resolvedColorWithTraitCollection(native.traitCollection).CGColor
+        if foreground:
+            if hasattr(impl.interface, 'on_press'):
+                native.configuration = None
+                native.tintColor = apple_color(foreground)
+                native.setTitleColor(apple_color(foreground), forState=0)
+                native.setTitleColor(apple_color('muted'), forState=2)
+            else:
+                native.textColor = apple_color(foreground)
     elif backend.startswith('toga_android.'):
         from android.graphics.drawable import GradientDrawable
         colors = android_palette(impl.native.getResources().getConfiguration().uiMode & 0x30 == 0x20)
         drawable = GradientDrawable()
-        drawable.setColor(argb(colors['surface']))
+        drawable.setColor(argb(colors.get(background, colors['surface'])))
         drawable.setCornerRadius(0 if eink_enabled() else impl.scale_in(radius))
-        drawable.setStroke(max(1, impl.scale_in(1)), argb(colors['border']))
-        impl.native.setBackground(drawable)
+        if outlined or eink_enabled():
+            drawable.setStroke(max(1, impl.scale_in(1)), argb(colors['border']))
+        if foreground:
+            from android.content.res import ColorStateList
+            from android import R
+            impl.native.setTextColor(ColorStateList(
+                [[-R.attr.state_enabled], []], [argb(colors['muted']), argb(colors.get(foreground, colors['text']))]))
+        if hasattr(impl.interface, 'on_press'):
+            from android.content.res import ColorStateList
+            from android.graphics.drawable import RippleDrawable
+            impl.native.setBackgroundTintList(None)
+            impl.native.setBackground(RippleDrawable(ColorStateList.valueOf(argb(colors['hover'])), drawable, None))
+        else:
+            impl.native.setBackground(drawable)
+        if hasattr(impl, '_control_drawable'):
+            from .control_icons import tint_android
+            tint_android(impl)
 
 
-def surface(widget, *, radius=12):
+def surface(widget, *, radius=12, background='surface', foreground=None, outlined=True):
+    widget._impl._surface_roles = (background, foreground, outlined)
+    if foreground and hasattr(widget, 'on_press'):
+        widget._impl._row_hint = True
     _surfaces[widget._impl] = radius
     paint_surface(widget._impl, radius)
     return widget
@@ -416,6 +443,8 @@ def refresh_appearance(app):
                 host.adapter.controller.tabBar.tintColor = apple_color('accent')
         for impl, radius in list(_surfaces.items()):
             paint_surface(impl, radius)
+        if hasattr(app, 'chat_view'):
+            app.sync_chat_appearance()
         return
     if not type(app._impl).__module__.startswith('toga_android.'):
         return

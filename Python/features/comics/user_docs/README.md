@@ -215,6 +215,13 @@ current format limits and shared navigation controls.
 
 ## Native mobile library
 
+To inspect retained imports, open **Settings → Books & Comics → Saved books &
+comics…**. The page shows the file count, total archive/reading-record size and
+per-import sizes, including closed imports. **Delete local copy…** removes the
+import and its reading records after confirmation, leaving its original source
+unchanged. Closing a comic in Open documents only closes the reader. Imported
+copies are private app data on iOS and do not appear in Files.
+
 On iOS and Android, **Books & Comics** lists library folders configured by
 `remoteConfig.ini` in Local and unlocked LocalCrypt copies, using the same
 `[LogisticsComics] libraries` names as desktop. Tap a library folder to browse its
@@ -223,12 +230,13 @@ contents. Imported books/comics appear in their own section beneath configured l
 **Books & Comics → Import…** accepts standalone
 password-protected AES/ZipCrypto CBZ/ZIP comics. Unlock with the comic’s ZIP password;
 rclone credentials are unnecessary. See the [mobile reading guide](../../../logisticsmobile/user_docs/README.md#books-and-comics)
-for password retries, locking and supported page formats.
+for password retries and supported page formats. There is no separate comic
+relock action; configured INI archive passwords continue to unlock folder reads.
+Rclone crypt credential locking is a separate connection operation.
 
 Mobile Local and LocalCrypt comics use the same fit/zoom/swipe and reading-mode
 controls, with Previous/Next available when controls are visible. LocalCrypt
-bookmarks stay in memory and are cleared on close; ordinary library bookmarks
-retain their existing saved behavior. Readers opened from Files return to the
+readers expose page navigation without bookmark controls. Readers opened from Files return to the
 same folder through Back, including after visiting reader tools.
 
 Mobile imports, provider-backed readers and ordinary browser covers ignore macOS
@@ -242,6 +250,21 @@ single. Automatic is the mobile default: a reading area wider than tall shows tw
 portrait pages; a taller or square area shows one. Existing explicit Single or Two
 pages choices remain available. ComicInfo `Manga=YesAndRightToLeft` places the
 earlier page on the right; left-to-right comics place it on the left.
+Comic appearance shows only page layout. EPUB font, spacing, text width, margins
+and theme controls do not appear in comics, and applying comic layout leaves
+those preferences unchanged. Comic menus omit read-aloud, chapter search and
+bookmarks; **Comic pages…** in an imported reader opens the page selector.
+Imported, Local, LocalCrypt and remote comics use the same menu names and order,
+page selector and appearance form. Read-only remote previews omit metadata
+editing. Previous/Next comic use `|≪` / `≫|` buttons above the image when controls
+are visible, separate from the page arrows and slider below. File buttons disable
+when unavailable and hide in fullscreen. Switching comics preserves the controls'
+visibility. Neither file switching nor All documents appears in the overflow menu.
+**Close comic** closes the reader without deleting a saved copy.
+**… → Info…** shows only the opened comic's path: the saved file path for an
+import, `remote:path` for a remote preview, or the logical LocalCrypt location
+for a folder-backed encrypted file. Imported copies show their current stored
+path; their original import location is not reconstructed.
 Previous/Next and swipes advance past the displayed spread. Imported and provider
 readers show a page slider between the arrows when reading controls are visible;
 drag and release it to jump directly to a page. Manga places Next on the left and

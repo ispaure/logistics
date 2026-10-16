@@ -142,6 +142,59 @@ invalidates drawer enumeration, clears private browser rows and rebuilds the men
 window's private workspace. It omits titles and transient/provider-session entries,
 preserves malformed history, and can reopen a closed ordinary document or book.
 
+`SavedFilesUI` exposes retained library imports in Settings independently of the
+six recent identities and active workspace sessions. `LibraryStore.stored_files`
+counts UUID archive/JSON pairs once and includes incomplete or corrupt imports;
+linked or invalid identities are reported as unmeasurable. Sizes cover archive
+and reading-record bytes, excluding the derived metadata index, Local/LocalCrypt
+folders and remote RAM snapshots. Confirmed deletion refuses concurrent app
+windows and busy library operations, closes the matching reader, forgets its
+Recent identity and deletes only that UUID's archives, record and edit journal
+under the publication mutation lock. Source files remain outside this operation.
+Deletion also forgets matching `ResourceImports` identities so reopening a
+retained source can import it again instead of targeting a removed library UUID.
+Import records contain no source provenance; the inventory explicitly labels
+the original source as unrecorded. Direct remote/provider sessions remain absent
+from this inventory and persisted workspace/history, including after restart.
+
+Comic reader menus and tools have no standalone ZIP relock command. Archive
+password lookup/unlock is unchanged; ordinary reader closure releases its source,
+password and decoded pages. This does not change rclone crypt credential lifecycle.
+
+Imported `ReaderChrome` selects menu/tools content from the session's format;
+provider readers use the opened reader's EPUB/comic capabilities and read-only
+flag. Comics expose no text appearance, speech, chapter search or bookmark UI.
+`ReaderAppearance(kind=...)` constructs either EPUB typography or comic layout;
+its `settings()` returns only that format's preference changes. Provider comic
+tools omit disabled text-save/discard actions. Page sliders, direct page selection,
+fit, reading mode and supported metadata/neighbor actions remain available.
+`reader_controls.COMIC_COMMANDS` is the single ordered comic-menu definition.
+Imported and provider controllers supply callbacks to `comic_actions`; unsupported
+capabilities are omitted. Both use `comic_pages` for their page-selection screen
+and the same comic `ReaderAppearance`. Provider storage adapters do not define
+separate comic menus. EPUB and text/image commands remain format-owned.
+
+`ComicHeader` is shared by imported and provider comics: existing browser navigation,
+48-point previous/next-file icons and overflow. Native SF Symbols/Android vectors
+distinguish file skip from the footer's single page arrows. `COMIC_COMMANDS` keeps
+only page selection, appearance, reading mode, fit, supported metadata and close;
+navigation and first/last-page duplicates are omitted. Imported boundaries disable
+file buttons; unavailable provider file navigation disables them. The header guards
+overlapping taps, and adjacent-file handlers preserve fullscreen/control visibility.
+Provider comic status/page numbers sit beneath the footer and hide with controls.
+Folder-backed providers enumerate neighboring comics on a worker to set file-button
+boundaries. Imported reader titles identify the opened comic instead of the generic
+Books & Comics page. iPhone simulator review used a separate app identity and
+synthetic comic; ten fullscreen/controls/reopen captures passed the native layout
+diagnostic. That diagnostic now centers against the actual viewport and separately
+requires fullscreen viewport origin/height to match the window; hidden chrome
+does not leave safe-area padding. Android icon/layout behavior remains host-tested.
+The shared comic menu includes `Info…`. Imported readers resolve their current
+library UUID archive; provider readers format remote name/key, a logical LocalCrypt
+location or the opened local file. This is an on-demand dialog without config
+reads, source-provenance guesses or new persistence. Unavailable private sessions
+cannot show their path.
+
 Chat reserves the actual overlap between the native tab bar and the content
 viewport. This handles floating bars extending above UIKit's reported bottom safe
 inset, both before and after keyboard layout. It does not add a second keyboard
@@ -391,3 +444,58 @@ including EPUB margins, restore controls and status-bar restoration;
 see [regular iPhone evidence](mobile-evidence/2026-10-15-reader-fullscreen-iphone.json).
 Android uses the existing shared immersive-bar implementation; these iOS reports
 do not claim native Android gesture verification.
+
+## Chat presentation
+
+Chat uses dedicated neutral palette roles for its drawer, selected conversation,
+reading pane and composer on iOS and Android. The shared `surface` helper accepts
+background/foreground roles and optional outlines; registered surfaces are repainted
+on theme changes and retain Android e-ink overrides. UIKit colours remain dynamic.
+The drawer places New chat and settings beneath its scrollable history; selected
+rows use a rounded fill rather than a title prefix. Export remains in the header
+actions menu. Hamburger mounting and compact/wide pane ownership are unchanged.
+
+Validation: 36 focused chat, appearance and workspace checks plus six transcript
+presentation checks passed. An isolated UIKit preview verified compact iPhone
+and wide Duo layouts, native menu ownership and rounded composer rendering.
+Android uses the shared layout and its native surface painter; this change has
+not yet been visually verified on an Android device.
+
+The main transcript uses `chat_background` and a separate `chat_bubble` role.
+Completed message role labels remain available to accessibility without visible
+headings; partial/recovered message status stays visible. The native composer
+shares one rounded surface with its growing input and circular Send/Stop icon.
+Icon controls retain accessible action names and Android disabled/tint states.
+The header groups New conversation and More without moving the native hamburger.
+
+A compact UIKit preview verified the main transcript, unified composer and
+generation Stop icon against synthetic offline messages, with the native
+hamburger still mounted in its original navigation slot.
+
+Chat's native WebView backing and HTML root use the same dynamic
+`chat_background` role as its body, covering load and overscroll areas. A live
+UIKit light → dark switch verified computed transcript backgrounds of white
+and black respectively without replacing the conversation; paired screenshots
+were captured from the same running preview. Thirteen focused appearance and
+transcript checks passed.
+
+## Chat top fade and large-screen geometry
+
+The transcript's fixed, noninteractive top gradient fades scrolling messages
+into the active canvas colour. The header remains fully opaque. Chat alone
+uses a matching UIKit navigation appearance and root background, refreshed
+with system appearance; other destination bars retain their existing styling.
+The native hamburger stays in its existing navigation slot.
+
+Header labels use a single line with native ellipsis and measured bounds so
+long conversation/model names cannot push the action capsule out of its safe
+area. Composer and status margins center a roughly 780-point maximum reading
+width when a pane is wide, while split panes retain their existing allocation.
+
+Local validation passed 37 chat/appearance/workspace checks and six transcript
+checks. An isolated preview with valid synthetic domain messages passed 16
+configurations across iPad and Duo: portrait/landscape, light/dark, and drawer
+open/closed. Native assertions verified action bounds, centered composer width,
+bottom containment, noninteractive fade, and unchanged hamburger ownership.
+See [native measurements](mobile-evidence/2026-10-16-chat-wide-layout.json).
+These are simulator results, not physical fold/keyboard interaction evidence.

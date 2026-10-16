@@ -176,16 +176,16 @@ class ProviderUI(FilesUI):
             view.crypt_save = toga.Button('Save encrypted copy' if getattr(copies, 'encrypted', True) else 'Save local file', on_press=self.save_crypt, enabled=reader.editable and not getattr(reader, 'read_only', False), style=Pack(height=44))
             view.crypt_read_page.enabled = not reader.editable
             read_only = getattr(reader, 'read_only', False)
-            mutation_controls = [] if read_only else [view.crypt_save,
-                toga.Button('Save As…', on_press=self.show_crypt_save_as, enabled=reader.editable, style=Pack(height=44)),
-                toga.Button('Edit metadata…', on_press=self.edit_crypt_metadata, enabled=not reader.editable, style=Pack(height=44))]
+            mutation_controls = [] if read_only else ([view.crypt_save,
+                toga.Button('Save As…', on_press=self.show_crypt_save_as, style=Pack(height=44))]
+                if reader.editable else [toga.Button('Edit metadata…', on_press=self.edit_crypt_metadata, style=Pack(height=44))])
             view.crypt_view = toga.Box(children=[view.crypt_title, view.crypt_page, view.crypt_read_page, view.crypt_content,
                 *mutation_controls,
                 toga.Button('Open…', on_press=self.show_editor_open, style=Pack(height=44)),
                 toga.Label(private_label('Remote preview · Read-only' if read_only else
                     ('Edits stay in memory until saved to the selected local file.' if reader.editable else 'Reading position stays in this session'))),
                 toga.Button('Cancel request', on_press=self.cancel_cloud, style=Pack(height=44)),
-                *([] if read_only else [toga.Button('Discard changes and close', on_press=self.discard_crypt, style=Pack(height=44))]),
+                *([] if read_only or not reader.editable else [toga.Button('Discard changes and close', on_press=self.discard_crypt, style=Pack(height=44))]),
                 toga.Button('Close private reader', on_press=self.close_crypt, style=Pack(height=44))],
                 style=Pack(direction=COLUMN, flex=1, margin=12))
             self.compact_private_view(view)
@@ -206,6 +206,8 @@ class ProviderUI(FilesUI):
                 privacy.refresh()
             self.watch_provider_layout()
             self.watch_provider_epub_width()
+            if view.crypt_reader.kind in {'.cbz', '.zip'}:
+                await self.refresh_provider_comic_neighbors()
             return True
         except Exception as error:
             if self._crypt_cancel is not None and self._crypt_cancel.is_set():
@@ -419,6 +421,8 @@ class ProviderUI(FilesUI):
                 return
             self._show_crypt_content(kind, content)
             self.page_suspended = False
+            if reader.kind in {'.cbz', '.zip'}:
+                self.crypt_title.text = private_label(f'{reader.name} · {index + 1}/{len(reader.labels)}')
             self.refresh_private_bookmarks()
             self.watch_provider_layout()
             self.watch_provider_epub_width()
@@ -488,11 +492,8 @@ class ProviderUI(FilesUI):
         if self.crypt_reader is None or self.crypt_reader.editable:
             return
         if hasattr(self.crypt_reader, 'comic_navigation'):
-            if not self.cloud_busy:
-                task = getattr(self, '_comic_swipe_task', None)
-                if task is None or task.done():
-                    amount = -direction if getattr(self.crypt_reader, 'right_to_left', False) else direction
-                    self._comic_swipe_task = self.loop.create_task(self.move_provider_comic(amount))
+            schedule_swipe(self, direction, right_to_left=getattr(self.crypt_reader, 'right_to_left', False),
+                           busy=self.cloud_busy, move=self.move_provider_comic)
             return
         schedule_swipe(self, direction, position=self.crypt_reader.labels.index(self.crypt_page.value),
                        count=len(self.crypt_reader.labels), right_to_left=getattr(self.crypt_reader, 'right_to_left', False),
@@ -524,31 +525,40 @@ class ProviderUI(FilesUI):
 
     def compact_private_view(self, view):
         from .action_menu import FeatureCommands
+        from .reader_controls import ComicHeader, comic_actions, comic_pages
         old = view.crypt_view
-        view.crypt_actions = icon_button('more', 'Private document actions')
+        comic = view.crypt_reader.kind in {'.cbz', '.zip'}
+        view.crypt_actions = icon_button('more', 'Reader actions' if comic else 'Private document actions')
         for control in (view.crypt_title, view.crypt_page, view.crypt_read_page, view.crypt_content, view.crypt_save):
             if control in old.children:
                 old.remove(control)
         view.crypt_tools_view = toga.ScrollContainer(horizontal=False, content=old, style=Pack(flex=1))
         old.add(toga.Button('Return to private document', on_press=self.resume_crypt, style=Pack(height=44)))
-        if not view.crypt_reader.editable:
+        if view.crypt_reader.book is not None:
             old.insert(0, view.crypt_bookmark_button)
             old.insert(1, view.crypt_bookmark_selector)
             old.insert(2, toga.Label('Bookmarks stay in this session and are cleared on close.'))
-        if getattr(view.crypt_reader, 'read_only', False):
+        if comic:
+            host = getattr(self, 'app', self)
+            writable = not getattr(view.crypt_reader, 'read_only', False)
+            neighbors = writable and getattr(view._crypt_reader_store, 'provider', None) is not None
+            actions = comic_actions(pages=self.show_private_tools, appearance=self.show_provider_layout,
+                reading_mode=self.toggle_private_reading_mode, fit=self.fit_private_page,
+                metadata=self.edit_crypt_metadata if writable else None, info=self.show_provider_comic_info,
+                close=self.close_crypt)
+            view.crypt_tools_view = comic_pages(view.crypt_page, self.resume_crypt)
+        elif getattr(view.crypt_reader, 'read_only', False):
             actions = [('Reader tools…', self.show_private_tools)]
             if view.crypt_reader.book is not None:
                 actions.extend([('Read aloud…', self.show_provider_read_aloud), ('Appearance…', self.show_provider_layout)])
-            elif view.crypt_reader.kind in {'.cbz', '.zip'}:
-                actions.extend([('Appearance…', self.show_provider_layout), ('Fit comic page', self.fit_private_page)])
             elif getattr(view.crypt_reader, 'image_document', False):
                 actions.append(('Fit image', self.fit_private_page))
             actions.append(('Close private document', self.close_crypt))
         else:
-            actions = [('Open / Save As / Metadata…', self.show_private_tools),
-                ('Read aloud…', self.show_provider_read_aloud), ('Appearance…', self.show_provider_layout),
-                ('Previous comic', self.previous_provider_comic_file), ('Next comic', self.next_provider_comic_file),
-                ('Fit comic page', self.fit_private_page), ('Close private document', self.close_crypt)]
+            actions = [('Open / Save As…' if view.crypt_reader.editable else 'Open / Metadata…', self.show_private_tools)]
+            if view.crypt_reader.book is not None:
+                actions.extend([('Read aloud…', self.show_provider_read_aloud), ('Appearance…', self.show_provider_layout)])
+            actions.append(('Close private document', self.close_crypt))
         if view.crypt_reader.book is not None:
             actions.append(('Reading mode', self.toggle_private_reading_mode))
         view.crypt_actions_menu = FeatureCommands(view.crypt_actions, self, actions, self.show_private_tools)
@@ -556,7 +566,7 @@ class ProviderUI(FilesUI):
         view.crypt_page.style.flex = 1
         view.crypt_title.style.font_size = 12
         controls = [toga.Box(children=[view.crypt_title, view.crypt_actions], style=Pack(direction=ROW))]
-        if not view.crypt_reader.editable:
+        if not view.crypt_reader.editable and not comic:
             controls.append(toga.Box(children=[view.crypt_page, view.crypt_read_page], style=Pack(direction=ROW)))
         controls.append(view.crypt_content)
         if view.crypt_reader.editable:
@@ -576,14 +586,26 @@ class ProviderUI(FilesUI):
             reader_menu = menu_button(lambda widget, **kw:
                 host.adaptive.show_browser(getattr(view, 'presentation_destination', 'documents')))
             controls[0].insert(0, reader_menu)
-            header = toga.Box(children=controls[:2], style=Pack(direction=COLUMN))
+            if comic:
+                controls[0].remove(reader_menu)
+                controls[0].remove(view.crypt_actions)
+                controls[0].remove(view.crypt_title)
+                view.comic_header = ComicHeader(reader_menu, view.crypt_actions,
+                    previous=self.previous_provider_comic_file if neighbors else None,
+                    following=self.next_provider_comic_file if neighbors else None)
+                header = view.comic_header.widget
+            else:
+                header = toga.Box(children=controls[:-1], style=Pack(direction=COLUMN))
             view.previous_page, view.next_page = page_buttons(self.previous_private_page, self.next_private_page)
             view.page_footer = PageFooter(view.previous_page, view.next_page, self.move_private_page)
             view.page_footer.sync(comic=view.crypt_reader.kind in {'.cbz', '.zip'},
                                   count=len(view.crypt_reader.labels), index=0,
                                   right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
             footer = view.page_footer.widget
-            view.reading_frame = ReadingFrame(view.crypt_content, [header, footer])
+            view.reader_restore = (toga.Button('Show reading controls', on_press=self.toggle_private_reading_mode,
+                                             style=Pack(height=48)) if view.crypt_reader.book is not None else None)
+            view.reading_frame = ReadingFrame(view.crypt_content,
+                [header, footer, view.crypt_title] if comic else [header, footer], restore=view.reader_restore)
             view.crypt_view = view.reading_frame.widget
             view.crypt_view._workspace_menu_button = reader_menu
             view.crypt_controls = view.reading_frame.controls
@@ -595,9 +617,6 @@ class ProviderUI(FilesUI):
         view.crypt_immersive = view.crypt_reader.kind in {'.cbz', '.zip'}
         if view.crypt_immersive:
             view.reading_frame.set_immersive(True, comic=True)
-        if view.crypt_reader.book is not None:
-            view.reader_restore = toga.Button('Show reading controls', on_press=self.toggle_private_reading_mode,
-                                             style=Pack(height=48))
         self.register_transfer_status(view.crypt_view)
 
     def toggle_private_reading_mode(self, widget=None, **kwargs):
@@ -607,11 +626,6 @@ class ProviderUI(FilesUI):
         self.crypt_immersive = not self.crypt_immersive
         comic = self.crypt_reader.kind in {'.cbz', '.zip'}
         self.reading_frame.set_immersive(self.crypt_immersive, comic=comic)
-        if not comic:
-            if self.crypt_immersive and self.reader_restore not in self.crypt_view.children:
-                self.crypt_view.add(self.reader_restore)
-            elif not self.crypt_immersive and self.reader_restore in self.crypt_view.children:
-                self.crypt_view.remove(self.reader_restore)
         self.refresh_transfer_status()
         self.resume_crypt()
 
@@ -651,7 +665,16 @@ class ProviderUI(FilesUI):
 
     def show_private_tools(self, widget=None, **kwargs):
         if not self.cloud_busy:
-            self.show_view(self.crypt_tools_view, destination='documents', route='private-tools', title='Private document actions')
+            title = 'Comic pages' if self.crypt_reader is not None and self.crypt_reader.kind in {'.cbz', '.zip'} else 'Private document actions'
+            self.show_view(self.crypt_tools_view, destination='documents', route='private-tools', title=title)
+
+    async def show_provider_comic_info(self, widget=None, **kwargs):
+        if (self.crypt_reader is None or self.crypt_reader.kind not in {'.cbz', '.zip'}
+                or not self.manager.available(self.session.id)):
+            return
+        from .reader_controls import provider_comic_path
+        path = provider_comic_path(self._crypt_reader_store, self.crypt_reader)
+        await self.main_window.dialog(toga.InfoDialog('Comic path', path))
 
     def fit_private_page(self, widget=None, **kwargs):
         view = getattr(self, 'provider_spread', self.crypt_image)
@@ -743,26 +766,51 @@ class ProviderUI(FilesUI):
             view=lambda: getattr(self, 'provider_spread', None), reload=self.read_crypt_page))
 
     def show_provider_layout(self, widget=None, **kwargs):
-        if self.crypt_reader is None or self.crypt_reader.editable:
+        if (self.crypt_reader is None or self.crypt_reader.editable
+                or (self.crypt_reader.book is None and self.crypt_reader.kind not in {'.cbz', '.zip'})):
             return
         from features.books.mobile.appearance import ReaderAppearance
-        view = ReaderAppearance(self.preferences.values, self.apply_provider_layout)
+        kind = 'epub' if self.crypt_reader.book is not None else 'comic'
+        view = ReaderAppearance(self.preferences.values, self.apply_provider_layout, kind=kind)
         self.provider_appearance = view
-        self.provider_font, self.provider_margin = view.font_choice, view.margin_choice
-        self.provider_theme, self.provider_layout = view.theme_choice, view.layout_choice
+        if kind == 'epub':
+            self.provider_font, self.provider_margin = view.font_choice, view.margin_choice
+            self.provider_theme = view.theme_choice
+        else:
+            self.provider_layout = view.layout_choice
         self.show_view(view, route='private:' + self.session.id + ':layout', title='Reading appearance')
 
     async def apply_provider_layout(self, widget=None, **kwargs):
         if self.cloud_busy or self.crypt_reader is None:
             return
         try:
-            self.preferences.save(comic_layout=self.provider_layout.value, font_size=self.provider_font.value,
-                reading_margin=self.provider_margin.value, reading_theme=self.provider_theme.value, **self.provider_appearance.typography())
+            self.preferences.save(**self.provider_appearance.settings())
         except (OSError, ValueError) as error:
             self.provider_appearance.status.text = str(error)
             return
         await self.read_crypt_page()
         self.resume_crypt()
+
+    async def refresh_provider_comic_neighbors(self):
+        header = getattr(self, 'comic_header', None)
+        reader = self.crypt_reader
+        provider = getattr(self._crypt_reader_store, 'provider', None)
+        if header is None or reader is None or provider is None:
+            return
+        header.sync(False, False)
+        token = self.workspace.token(self.session.id)
+        key = reader.key
+        try:
+            rows = await asyncio.to_thread(provider.list, key.rpartition('/')[0])
+        except Exception:
+            return
+        if not self.active_host or self.crypt_reader is not reader or not self.workspace.accepts(token):
+            return
+        from features.comics.mobile.navigation import adjacent_comic
+        comics = [(row['path'], row['name']) for row in rows
+                  if not row['directory'] and Path(row['name']).suffix.lower() in {'.cbz', '.zip'}]
+        header.sync(adjacent_comic(comics, key, -1) is not None,
+                    adjacent_comic(comics, key, 1) is not None)
 
     async def adjacent_provider_comic(self, direction):
         if self.cloud_busy or self.crypt_reader is None or self.crypt_reader.book is not None or self.crypt_reader.editable:
@@ -785,7 +833,11 @@ class ProviderUI(FilesUI):
         target = adjacent_comic([(row['path'], row['name']) for row in rows
             if not row['directory'] and Path(row['name']).suffix.lower() in {'.cbz', '.zip'}], key, direction)
         if target is not None:
-            await self.manager.open(store, target, destination=self.presentation_destination)
+            immersive = self.crypt_immersive
+            if await self.manager.open(store, target, destination=self.presentation_destination):
+                owner = self.manager.active
+                if owner.crypt_immersive != immersive:
+                    owner.toggle_private_reading_mode()
 
     async def previous_provider_comic_file(self, widget=None, **kwargs):
         await self.adjacent_provider_comic(-1)

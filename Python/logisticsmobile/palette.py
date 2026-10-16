@@ -9,6 +9,14 @@ DARK = dict(window='#23262c', surface='#2d3035', alternate='#34373c',
             text='#eef1f7', muted='#a6b0c0', border='#52555a', primary='#2563eb', accent='#75a7ff', hover='#3d4045')
 
 
+# Chat uses neutral layers like the conversation drawer, independent of Slate's
+# blue tint elsewhere. Keep a light counterpart and dynamic platform colours.
+LIGHT.update(chat_background='#ffffff', chat_panel='#f7f7f7', chat_selected='#e9e9e9',
+             chat_input='#f0f0f0', chat_bubble='#e9e9e9', chat_primary='#202020', chat_on_primary='#ffffff')
+DARK.update(chat_background='#000000', chat_panel='#141414', chat_selected='#222222',
+            chat_input='#141414', chat_bubble='#353535', chat_primary='#f3f3f3', chat_on_primary='#111111')
+
+
 def argb(value):
     value = 0xff000000 | int(value.lstrip('#'), 16)
     return value - 2**32

@@ -46,12 +46,6 @@ class ReaderController(ReaderHost, ReaderUI):
             self.session.view['position'] = self.book_record['position']
         self.manager.update_session(self)
 
-    def lock_book(self, widget=None, **kwargs):
-        if self.session is not None:
-            self.app.workspace.invalidate(self.session.id)
-        super().lock_book(widget, **kwargs)
-        self.manager.update_session(self)
-
     def cancel_book_unlock(self, widget=None, **kwargs):
         super().cancel_book_unlock(widget, **kwargs)
         self.manager.update_session(self)
@@ -171,9 +165,6 @@ class ReaderWorkspace:
 
     async def unlock_book(self, widget=None, **kwargs):
         return await self.reader_manager().active.unlock_book(widget, **kwargs)
-
-    def lock_book(self, widget=None, **kwargs):
-        return self.reader_manager().active.lock_book(widget, **kwargs)
 
     def cancel_book_unlock(self, widget=None, **kwargs):
         return self.reader_manager().active.cancel_book_unlock(widget, **kwargs)

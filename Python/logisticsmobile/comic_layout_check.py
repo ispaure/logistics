@@ -71,7 +71,9 @@ async def run(app):
             rect = canvas.picture.convertRect(canvas.picture.bounds, toView=window)
             viewport = canvas.native.convertRect(canvas.native.bounds, toView=window)
             size, safe = window.bounds.size, window.safeAreaInsets
-            expected = (safe.top + size.height - safe.bottom) / 2
+            # Immersive image canvases deliberately extend under safe areas;
+            # center within the actual viewport, not the removed chrome's inset.
+            expected = viewport.origin.y + viewport.size.height / 2
             center = rect.origin.y + rect.size.height / 2
             sample = dict(name=name, fullscreen=owner.reader_immersive,
                 window_height=float(size.height), top=float(rect.origin.y),
@@ -125,7 +127,9 @@ async def run(app):
         report['success'] = all(
             (abs(item['delta']) < 2
              and abs(item['viewport_width'] - item['expected_width']) < 2
-             and abs(item['viewport_left'] - item['expected_left']) < 2) if item['fullscreen']
+             and abs(item['viewport_left'] - item['expected_left']) < 2
+             and abs(item['viewport_top']) < 2
+             and abs(item['viewport_height'] - item['window_height']) < 2) if item['fullscreen']
             else item['native_menu'] and item['status_accessible'] for item in report['samples'])
     except Exception as error:
         report['error'] = str(error)

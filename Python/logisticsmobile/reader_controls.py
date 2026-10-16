@@ -6,9 +6,79 @@ from .control_icons import icon_button, apply_icon
 from .appearance import accessible_name
 
 
+# One comic menu contract; storage adapters only supply supported callbacks.
+COMIC_COMMANDS = (
+    ('pages', 'Comic pages…'), ('appearance', 'Appearance…'),
+    ('reading_mode', 'Reading mode'), ('fit', 'Fit comic page'),
+    ('metadata', 'Edit metadata…'), ('info', 'Info…'),
+    ('close', 'Close comic'),
+)
+
+
+def comic_actions(**callbacks):
+    return [(label, callbacks[key]) for key, label in COMIC_COMMANDS if callbacks.get(key) is not None]
+
+
+def provider_comic_path(copies, reader):
+    """Describe the opened location without loading configs or retaining names."""
+    from pathlib import Path
+    key = reader.key
+    if getattr(copies, 'remote_storage', False):
+        return f'{copies.remote}:{key}'
+    provider = getattr(copies, 'provider', None)
+    if provider is not None and getattr(provider, 'private', False):
+        return f"LocalCrypt: {getattr(provider, 'remote', '')}/{key}"
+    path = getattr(getattr(reader, 'source', None), 'path', None)
+    if path is not None and Path(path).is_absolute():
+        return str(path)
+    if hasattr(copies, '_data'):
+        return str(copies._data(key))
+    return str(Path(copies.root) / key)
+
+
+def comic_pages(selector, back):
+    return toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
+        toga.Label('Comic pages', style=Pack(font_size=20, margin_bottom=8)), selector,
+        toga.Button('Return to reading', on_press=back, style=Pack(height=48))],
+        style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+
+
+class ComicHeader:
+    """File navigation above the page; page navigation remains in the footer."""
+    def __init__(self, browser, more, *, previous=None, following=None):
+        self.busy = False
+        self.supported = previous is not None, following is not None
+        def handler(callback):
+            async def switch(widget=None, **kwargs):
+                if callback is None or self.busy:
+                    return
+                self.busy = True
+                self.sync(*self.available)
+                try:
+                    import inspect
+                    result = callback()
+                    if inspect.isawaitable(result):
+                        await result
+                finally:
+                    self.busy = False
+                    self.sync(*self.available)
+            return switch
+        self.previous = icon_button('previous_comic', 'Previous comic', on_press=handler(previous))
+        self.following = icon_button('next_comic', 'Next comic', on_press=handler(following))
+        self.sync(previous is not None, following is not None)
+        self.widget = toga.Box(children=[browser, toga.Box(style=Pack(flex=1)),
+            self.previous, self.following, more], style=Pack(direction=ROW))
+
+    def sync(self, previous, following):
+        self.available = previous and self.supported[0], following and self.supported[1]
+        self.previous.enabled = self.available[0] and not self.busy
+        self.following.enabled = self.available[1] and not self.busy
+
+
 class ReadingFrame:
-    def __init__(self, content, controls, *, margin=16):
+    def __init__(self, content, controls, *, margin=16, restore=None):
         self.content, self.controls, self.margin = content, list(controls), margin
+        self.restore = restore
         self.widget = toga.Box(children=[*self.controls[:1], content, *self.controls[1:]],
                                style=Pack(direction=COLUMN, margin=margin, flex=1))
         self.widget._reading_frame = True
@@ -27,6 +97,11 @@ class ReadingFrame:
             self.widget.insert(0, self.controls[0])
             for control in self.controls[1:]:
                 self.widget.add(control)
+        if self.restore is not None:
+            if self.restore in self.widget.children:
+                self.widget.remove(self.restore)
+            if immersive and not comic:
+                self.widget.add(self.restore)
         self.widget.style.margin = 0 if immersive and comic else self.margin
         self.widget._comic_fullscreen = immersive and comic
         self.widget._reader_fullscreen = immersive
@@ -74,12 +149,15 @@ class PageFooter:
             self.slider.value = self.count - 1 - self.index if self.rtl else self.index
 
 
-def schedule_swipe(owner, direction, *, position, count, right_to_left, busy, move):
+def schedule_swipe(owner, direction, *, right_to_left, busy, move, position=None, count=None):
+    """Queue one live-session gesture, using spread steps or absolute pages."""
     if busy or not owner.active_host or owner.session.id not in owner.workspace.sessions:
         return
-    index = position + (-direction if right_to_left else direction)
-    if not 0 <= index < count:
-        return
+    target = -direction if right_to_left else direction
+    if position is not None:
+        target += position
+        if not 0 <= target < count:
+            return
     task = getattr(owner, '_comic_swipe_task', None)
     if task is None or task.done():
-        owner._comic_swipe_task = owner.loop.create_task(move(index))
+        owner._comic_swipe_task = owner.loop.create_task(move(target))

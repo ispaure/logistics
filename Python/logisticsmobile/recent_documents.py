@@ -41,3 +41,12 @@ class RecentDocuments:
 
     def sessions(self):
         return [Session(id='', **item) for item in self.items]
+
+    def forget(self, provider, resource):
+        if self.error:
+            raise ValueError('Recent history could not be read; it was preserved.')
+        items = [item for item in self.items
+                 if (item['provider'], item['resource']) != (provider, resource)]
+        if items != self.items:
+            atomic_write_json(self.path, items, max_bytes=4096, durable_directory=True)
+            self.items = items

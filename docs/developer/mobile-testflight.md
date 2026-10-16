@@ -304,7 +304,7 @@ review-only credentials through App Store Connect. Never supply personal keys.
 | --- | --- |
 | App name / platform | Logistics Mobile / iOS |
 | Bundle ID | `io.github.ispaure.logisticsmobile` |
-| Version | `0.1.5` in `Mobile/pyproject.toml`; confirm against the selected archive |
+| Version | `0.1.7` in `Mobile/pyproject.toml`; confirm against the selected archive |
 | Primary language and SKU | Choose when creating the app record; a proposed internal SKU is `logistics-mobile-ios` |
 | Feedback email | Owner must choose a monitored address |
 | Beta review contact | Owner must supply name, email and phone |

@@ -54,3 +54,12 @@ class ResourceImports:
         updated[key] = dict(provider=provider, resource=resource)
         atomic_write_json(self.path, dict(schema=1, items=updated), max_bytes=65536, durable_directory=True)
         self.items = updated
+
+    def forget(self, provider, resource):
+        if self.error or self.path.is_symlink():
+            raise ValueError(self.error or 'Import index cannot be linked.')
+        updated = {key: value for key, value in self.items.items()
+                   if (value['provider'], value['resource']) != (provider, resource)}
+        if updated != self.items:
+            atomic_write_json(self.path, dict(schema=1, items=updated), max_bytes=65536, durable_directory=True)
+            self.items = updated
