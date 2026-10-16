@@ -80,7 +80,8 @@ def reserve_navigation(app):
     view = body.children[0]
     # Chat owns composer clearance; fullscreen comics hide their navigation.
     # Readers with controls still need room above a floating destination bar.
-    if view is getattr(app, 'chat_view', None) or getattr(view, '_comic_fullscreen', False):
+    if (view is getattr(app, 'chat_view', None) or getattr(view, '_comic_fullscreen', False)
+            or getattr(view, '_reader_fullscreen', False)):
         return
     container = view._impl.container
     if container is None or container.native.bounds.size.height <= 0:
@@ -186,6 +187,8 @@ def install_appearance(app):
     if backend in _installed:
         return
     if backend.startswith('toga_iOS.'):
+        from .ios_reader_chrome import install
+        install()
         from rubicon.objc import ObjCClass, objc_method, send_super, objc_id
         import toga_iOS.widgets.box as box_module
         # CALayer stores a resolved CGColor. Refresh card strokes when UIKit

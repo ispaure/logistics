@@ -1,0 +1,66 @@
+{
+  "success": true,
+  "samples": [
+    {
+      "immersive": true,
+      "x": 0.0,
+      "width": 402.0,
+      "window_width": 402.0,
+      "insets": [
+        0.0,
+        0.0
+      ],
+      "status_hidden": true,
+      "image": [
+        768.0,
+        1024.0
+      ]
+    },
+    {
+      "immersive": false,
+      "x": 16.0,
+      "width": 370.0,
+      "window_width": 402.0,
+      "insets": [
+        0.0,
+        0.0
+      ],
+      "status_hidden": false,
+      "image": [
+        768.0,
+        1024.0
+      ]
+    },
+    {
+      "immersive": true,
+      "x": 0.0,
+      "width": 402.0,
+      "window_width": 402.0,
+      "insets": [
+        0.0,
+        0.0
+      ],
+      "status_hidden": true,
+      "image": [
+        768.0,
+        1024.0
+      ]
+    }
+  ],
+  "ebook": [
+    {
+      "immersive": true,
+      "status_hidden": true,
+      "margin": 16,
+      "restore_visible": true
+    },
+    {
+      "immersive": false,
+      "status_hidden": false,
+      "margin": 16,
+      "restore_visible": false
+    }
+  ],
+  "restored_status": true,
+  "scope": "Regular iPhone 17 Pro simulator, synthetic comic and imported EPUB; no physical-device gesture assertion"
+}

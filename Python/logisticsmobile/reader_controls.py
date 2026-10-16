@@ -29,6 +29,7 @@ class ReadingFrame:
                 self.widget.add(control)
         self.widget.style.margin = 0 if immersive and comic else self.margin
         self.widget._comic_fullscreen = immersive and comic
+        self.widget._reader_fullscreen = immersive
 
 
 def page_buttons(previous, next_page):

@@ -549,6 +549,8 @@ class ProviderUI(FilesUI):
                 ('Read aloud…', self.show_provider_read_aloud), ('Appearance…', self.show_provider_layout),
                 ('Previous comic', self.previous_provider_comic_file), ('Next comic', self.next_provider_comic_file),
                 ('Fit comic page', self.fit_private_page), ('Close private document', self.close_crypt)]
+        if view.crypt_reader.book is not None:
+            actions.append(('Reading mode', self.toggle_private_reading_mode))
         view.crypt_actions_menu = FeatureCommands(view.crypt_actions, self, actions, self.show_private_tools)
         view.crypt_title.style.flex = 1
         view.crypt_page.style.flex = 1
@@ -593,13 +595,23 @@ class ProviderUI(FilesUI):
         view.crypt_immersive = view.crypt_reader.kind in {'.cbz', '.zip'}
         if view.crypt_immersive:
             view.reading_frame.set_immersive(True, comic=True)
+        if view.crypt_reader.book is not None:
+            view.reader_restore = toga.Button('Show reading controls', on_press=self.toggle_private_reading_mode,
+                                             style=Pack(height=48))
         self.register_transfer_status(view.crypt_view)
 
     def toggle_private_reading_mode(self, widget=None, **kwargs):
-        if self.crypt_reader is None or self.crypt_reader.kind not in {'.cbz', '.zip'}:
+        if self.crypt_reader is None or (self.crypt_reader.kind not in {'.cbz', '.zip'}
+                                        and self.crypt_reader.book is None):
             return
         self.crypt_immersive = not self.crypt_immersive
-        self.reading_frame.set_immersive(self.crypt_immersive, comic=True)
+        comic = self.crypt_reader.kind in {'.cbz', '.zip'}
+        self.reading_frame.set_immersive(self.crypt_immersive, comic=comic)
+        if not comic:
+            if self.crypt_immersive and self.reader_restore not in self.crypt_view.children:
+                self.crypt_view.add(self.reader_restore)
+            elif not self.crypt_immersive and self.reader_restore in self.crypt_view.children:
+                self.crypt_view.remove(self.reader_restore)
         self.refresh_transfer_status()
         self.resume_crypt()
 

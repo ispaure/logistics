@@ -1,0 +1,66 @@
+{
+  "success": true,
+  "samples": [
+    {
+      "immersive": true,
+      "x": 0.0,
+      "width": 951.0,
+      "window_width": 951.0,
+      "insets": [
+        0.0,
+        0.0
+      ],
+      "status_hidden": true,
+      "image": [
+        1902.0,
+        1338.0
+      ]
+    },
+    {
+      "immersive": false,
+      "x": 16.0,
+      "width": 835.0,
+      "window_width": 951.0,
+      "insets": [
+        0.0,
+        84.0
+      ],
+      "status_hidden": false,
+      "image": [
+        1670.0,
+        862.0
+      ]
+    },
+    {
+      "immersive": true,
+      "x": 0.0,
+      "width": 951.0,
+      "window_width": 951.0,
+      "insets": [
+        0.0,
+        0.0
+      ],
+      "status_hidden": true,
+      "image": [
+        1902.0,
+        1338.0
+      ]
+    }
+  ],
+  "ebook": [
+    {
+      "immersive": true,
+      "status_hidden": true,
+      "margin": 16,
+      "restore_visible": true
+    },
+    {
+      "immersive": false,
+      "status_hidden": false,
+      "margin": 16,
+      "restore_visible": false
+    }
+  ],
+  "restored_status": true,
+  "scope": "Duo simulator, synthetic comic and imported EPUB; partial posture injected; no physical fold assertion"
+}

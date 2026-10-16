@@ -350,3 +350,13 @@ image remains a single page spanning the available display. Fully opening the
 device restores the selected page-layout preference. This applies to imported
 comics and Local/LocalCrypt/remote comics. Zooming retains the current view until
 returning to fit size, when posture changes can reflow it.
+
+### iOS edge-to-edge reading
+
+Fullscreen comics hide the system status indicators as well as app navigation.
+The image canvas uses the full window, including the former status-indicator strip.
+On a partially folded Duo, the page join stays at the physical crease; equal-shaped
+pages have equal available space without shrinking the left page to match a reserved
+right-hand strip. Source aspect ratios and built-in page borders remain unchanged.
+Tap the page to restore controls and normal safe areas. Android retains its immersive
+system-bar behavior. Ordinary and private comics share this presentation.

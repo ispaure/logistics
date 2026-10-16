@@ -137,3 +137,10 @@ paired iPhone 15 Pro Max. A physical-device screenshot showed Home and the
 existing unsaved document's Continue card. No app uninstall or data reset was
 performed. The screenshot and deployment logs are retained locally as
 `Mobile/logs/iphone-startup-check.png` and `iphone-startup-fix-deploy.log`.
+
+## Deployment terminology
+
+When the owner requests **All mobile devices**, deploy in place to the configured
+physical iOS devices and connected/paired Android devices. Tester distribution to
+TestFlight and Firebase remains a separate action when requested. Preserve signing
+identity and app data; do not uninstall to bypass deployment errors.
