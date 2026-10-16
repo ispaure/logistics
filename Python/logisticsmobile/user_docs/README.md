@@ -66,9 +66,10 @@ Older import records do not identify their original source; the inventory says
 so rather than guessing whether a copy originally came from cloud storage.
 
 **Close** in Open documents keeps the saved file and its progress. To reclaim
-space, use **Delete local copy…** in the Settings inventory and confirm. This
-closes its reader and removes its imported archive, reading progress, bookmarks
-and Recent entry; the original source or cloud file is unchanged. Finish reader
+space, use **Delete local copy…**, or **Delete all local copies…** to clear the
+listed saved books and comics with one confirmation. These actions
+close the affected readers and remove their imported archives, reading progress,
+bookmarks and Recent entries; the original source or cloud file is unchanged. Finish reader
 or import operations and close other app windows before deleting a copy.
 
 On iPhone and iPad, choosing a dropdown option closes its picker immediately.
@@ -116,19 +117,21 @@ appearance, separately from the app's system-following surfaces and reader theme
 
 ### Local / LocalCrypt location
 
-On iPhone and iPad, **Local is the root of Logistics' file-sharing area**. Open
-the updated app once to finish automatic migration before connecting for file
-sharing. In Finder, choose your device → **Files → Logistics**; on Windows use
-Apple Devices or iTunes File Sharing. The same files appear in Apple's Files app
-under **On My iPhone/iPad → Logistics**. There is no enclosing `Local` folder.
-Files added here are ordinary local files; adding a folder does not create a
-remote mapping. Existing remote-linked Local folders retain their mappings.
-Computer file sharing can also copy out or delete these files.
+On iPhone and iPad, **Local lives in `Logisticks/Local`** in Apple's
+Files app under **On My iPhone/iPad**. Launch the app once to create the `Local`
+folder, even before pulling any remotes. The app recreates it on later launches
+if it was removed. In Finder, choose your device → **Files → Logisticks**;
+on Windows use Apple Devices or iTunes File Sharing, then open `Local`.
+Pulled ordinary remotes and files added inside `Local` appear in Folder Hub.
+Adding a folder does not create a remote mapping. Computer file sharing can also
+copy out or delete these files. Files already beside `Local` are left in place;
+this layout change does not move existing shared files.
 
-The first launch moves existing Local files into this shared root automatically.
+The existing upgrade preparation keeps private application data separate.
 Credentials, settings, saved editor/library documents and both kinds of encrypted
 offline storage are relocated into private Application Support storage. LocalCrypt
-stays encrypted and is not exposed through file sharing. Migration uses moves
+stays in its current private location, encrypted and not exposed through file sharing.
+The existing private-data migration uses moves
 within the app container, retains file contents, and resumes after interruption.
 Conflicting destination names stop migration without overwriting either copy;
 resolve the conflict and reopen the app to retry.

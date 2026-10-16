@@ -20,6 +20,7 @@ class DeviceDeploymentTests(unittest.TestCase):
             root = Path(directory)
             config = root / 'pyproject.toml'
             config.write_text('[tool.briefcase.app.logisticsmobile.iOS.info]\n'
+                              'CFBundleDisplayName = "Logisticks"\nCFBundleName = "Logisticks"\n'
                               'UIFileSharingEnabled = true\nLSSupportsOpeningDocumentsInPlace = true\n')
             pbx, info = root / 'project.pbxproj', root / 'Info.plist'
             info.write_bytes(plistlib.dumps({'CFBundleIdentifier': BUNDLE, 'MainModule': 'tests.logisticsmobile'}))
@@ -28,6 +29,9 @@ class DeviceDeploymentTests(unittest.TestCase):
                   patch('subprocess.check_output', return_value=json.dumps(self.project()).encode())):
                 device_tools.prepare_project('ABCDEFGHIJ')
                 result = plistlib.loads(info.read_bytes())
+                self.assertEqual(result['CFBundleDisplayName'], 'Logisticks')
+                self.assertEqual(result['CFBundleName'], 'Logisticks')
+                self.assertEqual(result['CFBundleIdentifier'], BUNDLE)
                 self.assertIs(result['UIFileSharingEnabled'], True)
                 self.assertIs(result['LSSupportsOpeningDocumentsInPlace'], True)
                 self.assertEqual(result['MainModule'], 'logisticsmobile')
