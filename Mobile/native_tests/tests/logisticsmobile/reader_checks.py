@@ -30,15 +30,14 @@ def _assert_comic_centered(view, *, fullscreen=False):
             if callable(window):
                 window = window()
             rect = picture.convertRect(picture.bounds, toView=window)
-            # The native controller's root defines the readable column on iPad
-            # and the screen on iPhone, excluding system/window chrome. This
-            # is independent of the Python comic widget. The height-stability
-            # assertion below also detects shrinkage of this entire host.
+            # Comic fullscreen deliberately zeros the host's content insets in
+            # ios_reader_chrome. Measure its full native column on iPad and
+            # screen on iPhone; UIKit's retained safeAreaInsets must not be
+            # subtracted again. The reentry checks also reject host shrinkage.
             host = view._impl.container.native
             host_rect = host.convertRect(host.bounds, toView=window)
-            safe = host.safeAreaInsets
             dy = rect.origin.y + rect.size.height / 2 - (
-                host_rect.origin.y + (safe.top + host_rect.size.height - safe.bottom) / 2)
+                host_rect.origin.y + host_rect.size.height / 2)
         else:
             from java import jarray, jint
             location = jarray(jint)(2)
