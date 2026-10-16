@@ -28,7 +28,13 @@ Retained import inventory/deletion lives in `logisticsmobile.saved_files_ui`,
 separate from preference rows and installed-build information in `settings_ui`.
 The new owner is explicitly included in the curated payload list. Its existing
 multi-window, busy-reader, confirmation and original-source protections remain
-part of the deletion workflow.
+part of the deletion workflow. The Settings page remains named Saved books &
+comics because its inventory covers retained CBZ/EPUB imports and their records.
+Single-item and Delete all local copies actions share the same deletion path;
+bulk deletion confirms the measured inventory once, rechecks window/reader state,
+closes affected sessions and forgets Recent and source-import mappings. Local and
+LocalCrypt collections are outside this inventory. Failed inventory entries are
+preserved, and a deletion failure reports how many copies were already removed.
 
 The native acceptance runner composes document, reader, chat and connection
 workflows. Reader import/password/large-archive cases now sit with the existing

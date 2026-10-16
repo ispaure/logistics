@@ -20,7 +20,7 @@ def use_shared_local(private_root, documents):
     private_root, documents = _unlinked(private_root), _unlinked(documents)
     if private_root == documents or private_root.is_relative_to(documents) or documents.is_relative_to(private_root):
         raise ValueError('Shared Local storage must be separate from private app data.')
-    _shared_local_roots[private_root] = documents
+    _shared_local_roots[private_root] = _unlinked(documents / 'Local')
 
 
 def _unlinked(path):

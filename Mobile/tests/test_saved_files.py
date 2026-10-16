@@ -86,6 +86,44 @@ class SavedFilesTests(unittest.TestCase):
             self.assertIn('1 saved file(s)', app.saved_files_summary.text)
             self.drain(app)
 
+    def test_delete_all_confirms_once_and_preserves_sources_and_local_folders(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            LogisticsMobile.storage_root = root / 'app'
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
+            fixtures = root / 'fixtures'
+            fixtures.mkdir()
+            epub, comic = make_books(fixtures)
+            store = app.reader_manager().catalog.library_store
+            records = [store.import_book(LocalDocuments(), source) for source in (epub, comic)]
+            app.loop.run_until_complete(app.open_book(records[0]['id']))
+            from features.rclone.mobile.storage_location import collection_path
+            local = collection_path(app.private_root) / 'retained'
+            local.mkdir(parents=True)
+            (local / 'note.txt').write_text('keep')
+            with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=False)):
+                app.loop.run_until_complete(app.delete_all_saved_files())
+            self.assertEqual(len(store.stored_files()[0]), 2)
+            async def becomes_busy(dialog):
+                app.reader_manager().catalog.book_busy = True
+                return True
+            with patch.object(app.main_window, 'dialog', new=AsyncMock(side_effect=becomes_busy)):
+                app.loop.run_until_complete(app.delete_all_saved_files())
+            self.assertEqual(len(store.stored_files()[0]), 2)
+            app.reader_manager().catalog.book_busy = False
+            with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)) as dialog:
+                app.loop.run_until_complete(app.delete_all_saved_files())
+                dialog.assert_awaited_once()
+            self.assertEqual(store.stored_files(), ([], []))
+            self.assertFalse(any(session.provider == 'library' for session in app.workspace.sessions.values()))
+            self.assertFalse(app.recent_documents.items)
+            self.assertTrue(epub.exists())
+            self.assertTrue(comic.exists())
+            self.assertEqual((local / 'note.txt').read_text(), 'keep')
+            self.assertIn('2 local copies deleted', app.saved_files_status.text)
+            self.drain(app)
+
     def test_remote_preview_never_becomes_a_saved_import_or_recent_after_restart(self):
         from test_remote_readers import RemoteClient
         from features.rclone.mobile.remote_readers import RemoteReaders

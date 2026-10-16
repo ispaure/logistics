@@ -11,6 +11,7 @@ from features.rclone.mobile.storage_location import collection_path, CollectionF
 from features.rclone.mobile.mirror_jobs import MirrorJobs
 from logisticsmobile.ios_storage import MIGRATION, prepare_storage, prepare_for_app
 from logisticsmobile.documents import DocumentStore
+from logisticsmobile.folder_hub import hub_entries
 from test_mirror_jobs import MirrorClient
 
 
@@ -53,23 +54,47 @@ class IOSStorageTests(unittest.TestCase):
         self.prepare()
         restored = MirrorJobs(self.private)
         self.assertEqual(restored.path.read_bytes(), old_records)
-        self.assertEqual(collection_path(self.private), self.documents)
+        self.assertEqual(collection_path(self.private), self.documents / 'Local')
         self.assertEqual(collection_path(self.private, True), self.private / 'LocalCryptFolders')
         self.assertEqual((restored.target(local) / 'note.txt').read_bytes(), b'first')
         self.assertEqual((restored.target(crypt) / 'opaque-name').read_bytes(), b'ciphertext')
         self.assertEqual((self.private / 'Credentials/credentials.bin').read_bytes(), b'wrapped credentials')
         self.assertEqual((self.private / 'LocalCrypt/ciphertext').read_bytes(), b'encrypted offline copy')
         self.assertEqual(DocumentStore(self.private / 'Documents').open(document.id).text, '# saved')
-        self.assertEqual({p.name for p in self.documents.iterdir()}, {local['target']})
+        self.assertEqual({p.name for p in self.documents.iterdir()}, {'Local'})
         self.assertFalse((self.private / 'LocalFiles').exists())
         self.exclude.assert_called_once_with(self.documents)
         # Imported files are local, while pull still resolves the original mapping.
-        (self.documents / 'from-computer.txt').write_bytes(b'imported')
+        (self.documents / 'Local/from-computer.txt').write_bytes(b'imported')
         self.assertEqual(CollectionFiles(self.private).entry('from-computer.txt')['size'], len(b'imported'))
         client = MirrorClient()
         client.data['folder/note.txt'] = b'updated'
         restored.pull(local['id'], client)
         self.assertEqual((restored.target(local) / 'note.txt').read_bytes(), b'updated')
+
+    def test_empty_local_is_created_and_recreated_on_launch(self):
+        self.prepare()
+        local = self.documents / 'Local'
+        self.assertTrue(local.is_dir())
+        self.assertEqual(list(local.iterdir()), [])
+        self.assertFalse(collection_path(self.private, True).exists())
+        local.rmdir()
+        self.prepare()
+        self.assertTrue(local.is_dir())
+        self.assertEqual(list(local.iterdir()), [])
+
+    def test_completed_layout_leaves_shared_root_files_in_place(self):
+        self.prepare()
+        existing = self.documents / 'old-remote'
+        existing.mkdir()
+        (existing / 'note.txt').write_bytes(b'existing')
+        self.prepare()
+        self.assertEqual((existing / 'note.txt').read_bytes(), b'existing')
+        self.assertEqual(list((self.documents / 'Local').iterdir()), [])
+        store = MirrorJobs(self.private)
+        job, _ = store.create(MirrorClient(), 'Remote', 'folder')
+        self.assertEqual(store.target(job).parent, self.documents / 'Local')
+        self.assertEqual([row[0] for row in hub_entries(self.private, store.jobs)], ['Remote'])
 
     def test_new_install_and_later_launches_keep_user_files_in_shared_root(self):
         (self.documents / 'book.epub').write_bytes(b'book')
@@ -106,9 +131,9 @@ class IOSStorageTests(unittest.TestCase):
                 self.assertEqual(len(calls), 1)
                 prepare_storage(documents, private, exclude_backup=self.exclude, move=self.move)
                 self.addCleanup(_shared_local_roots.pop, private, None)
-                self.assertEqual((documents / 'a.txt').read_bytes(), b'A')
-                self.assertEqual((documents / 'b.txt').read_bytes(), b'B')
-                self.assertTrue((documents / 'empty').is_dir())
+                self.assertEqual((documents / 'Local/a.txt').read_bytes(), b'A')
+                self.assertEqual((documents / 'Local/b.txt').read_bytes(), b'B')
+                self.assertTrue((documents / 'Local/empty').is_dir())
                 self.assertEqual((private / 'workspace.json').read_bytes(), b'private state')
 
     def test_private_and_local_conflicts_preserve_both_versions(self):
@@ -122,7 +147,7 @@ class IOSStorageTests(unittest.TestCase):
         def conflict(source, destination):
             if source.name == 'LocalFiles':
                 self.move(source, destination)
-                (self.documents / next(destination.iterdir()).name).mkdir()
+                (self.documents / 'Local' / next(destination.iterdir()).name).mkdir(parents=True)
             else:
                 self.move(source, destination)
         with self.assertRaises(FileExistsError):

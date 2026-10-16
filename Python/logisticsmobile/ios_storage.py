@@ -20,7 +20,7 @@ def prepare_storage(documents, private, *, exclude_backup, move):
     """Resume same-volume, exclusive moves before starting any app services.
 
     Journal the old root's names before moving anything. Once private state is
-    relocated, publish LocalFiles' children directly into Documents. Renames
+    relocated, publish LocalFiles' children into Documents/Local. Renames
     preserve bytes without requiring a second copy of a large collection. A
     crash leaves each entry at its source or destination; retries never overwrite.
     """
@@ -59,10 +59,16 @@ def prepare_storage(documents, private, *, exclude_backup, move):
         atomic_write_json(journal, state, durable_directory=True)
     if state['phase'] == 'local':
         source = _unlinked(private / 'LocalFiles')
-        _move_entries(source, documents, state['names'], move)
+        local = _unlinked(documents / 'Local')
+        local.mkdir(exist_ok=True)
+        _move_entries(source, local, state['names'], move)
         if source.exists():
             source.rmdir()
         atomic_write_json(journal, dict(phase='done', names=[]), durable_directory=True)
+    # Keep a visible child even before the first pull, and recreate it if deleted
+    # in Files. No migration of files already in the shared root is needed.
+    local = _unlinked(documents / 'Local')
+    local.mkdir(exist_ok=True)
     use_shared_local(private, documents)
     return private
 
