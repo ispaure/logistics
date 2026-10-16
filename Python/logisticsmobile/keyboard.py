@@ -3,6 +3,10 @@
 _apple_delegate = None
 
 
+def native_value(value):
+    return value() if callable(value) else value
+
+
 def install(app):
     if not type(app.main_window._impl).__module__.startswith('toga_iOS.'):
         return
@@ -16,15 +20,17 @@ def install(app):
 
             @objc_method
             def gestureRecognizer_shouldReceiveTouch_(self, gesture, touch) -> bool:
-                view = touch.view
+                touched = view = native_value(touch.view)
                 # Text controls must keep selection, cursor and keyboard behavior.
                 while view is not None:
                     if (view.isKindOfClass(ObjCClass('UITextField'))
-                            or (view.isKindOfClass(ObjCClass('UITextView')) and view.editable)
+                            or (view.isKindOfClass(ObjCClass('UITextView')) and native_value(view.editable))
                             or view.isKindOfClass(ObjCClass('WKWebView'))):
                         return False
-                    view = view.superview
-                touch.view.window.endEditing(True)
+                    view = native_value(view.superview)
+                window = native_value(touched.window) if touched is not None else None
+                if window is not None:
+                    window.endEditing(True)
                 # Observe only: buttons, scrolling and other gestures still win.
                 return False
         _apple_delegate = LogisticsKeyboardDismissal

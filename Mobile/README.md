@@ -43,6 +43,40 @@ the native developer screen. Discovery cannot enable debugging on the tablet.
 Several connected devices still require a selection.
 New Logistics modules still need registration in the mobile source manifest.
 
+## Double-click Android Firebase distribution
+
+Double-click `deploy_android_firebase.command` to send a signed Android APK to
+the configured Firebase App Distribution group. On first use it downloads the
+official standalone Firebase CLI into ignored `.tools/`, opens Google sign-in,
+and checks that the Firebase app has the existing Android package identity.
+It resolves the configured **Friends** display name to its actual group alias.
+Use the Google account that owns the Firebase project. The CLI stores sign-in
+credentials in its own user configuration; never commit or share them.
+
+For sign-in without building, run `Mobile/deploy_android_firebase.command --login`.
+`--check` verifies access and group configuration. After setup, double-clicking
+stages current local sources (including uncommitted edits), builds a release APK,
+assigns an increasing version code, aligns/signs/verifies it, then asks before
+uploading and notifying testers. `--build-only` saves the signed APK without upload.
+No connected Android device, Firebase SDK, Analytics SDK or Play account is needed.
+The app ID and group are configured in `firebase-distribution.json`.
+
+Back up ignored `Mobile/.android-beta/` securely: it contains the persistent
+signing key, its private password and build counter. Losing the key prevents
+updates to previously distributed builds. Missing signing files stop deployment;
+they are never silently replaced. APKs and logs live in `Mobile/build/firebase/`.
+Firebase CLI diagnostic logs stay in ignored `.tools/`.
+Release-signed betas cannot update a debug-signed device installation in place;
+this launcher never uninstalls an app or deletes its data.
+
+## Double-click all deployments
+
+`deploy_all.command` runs the saved iOS device installs, Android device install,
+TestFlight distribution and Firebase distribution, in that order, sequentially.
+Have your devices available. Each distribution keeps its upload confirmation.
+After a failed step it asks whether to continue; the combined run still reports
+failure. Canceling an upload leaves its prepared build on disk.
+
 ## Double-click TestFlight deployment
 
 On the configured Mac, double-click `deploy_ios_testflight.command` beside

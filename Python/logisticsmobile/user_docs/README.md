@@ -1,5 +1,15 @@
 # Logistics on mobile
 
+## Installing Android test builds
+
+Invited Android testers can accept a Firebase App Distribution invitation using
+their Google account, download the APK and permit installation from that source
+when Android asks. New build notifications lead to updates that you approve on
+the device. Keep the existing beta installation to retain its data. A separately
+debug-signed developer build has a different signing identity and cannot be
+replaced by the beta in place. See the
+[distribution launcher guide](../../../Mobile/README.md#double-click-android-firebase-distribution).
+
 ## Direct remote reading
 
 Open a remote from Folder Hub or Remote files. Tap a supported file to open a

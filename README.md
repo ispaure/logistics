@@ -88,6 +88,7 @@ have separate workspaces and prevent duplicate writers. Crypt files offer both e
 offline copies and direct remote previews. A Mac can build, install and launch
 the iPhone app over Wi-Fi using the [paired-device workflow](Mobile/README.md#build-and-deploy-to-a-paired-iphone-over-wi-fi).
 A [double-click Android launcher](Mobile/README.md#double-click-android-deployment) stages local sources, builds and installs on a connected Android device.
+A [Firebase beta launcher](Mobile/README.md#double-click-android-firebase-distribution) builds and signs Android APKs for invited testers; a combined launcher runs device installs and both beta distributions.
 An [opt-in TestFlight workflow](docs/developer/mobile-testflight.md) prepares
 archives and uploads with the same app identity after developer enrollment approval.
 For first-time Xcode setup, local builds, TestFlight and Android instructions, start
