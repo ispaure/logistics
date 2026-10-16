@@ -242,3 +242,12 @@ rewrite books, and retain the current logical text anchor when layout changes.
 other archive resources and leave the external import source unchanged. Failed
 saves retain the form edits. The library recovers an interrupted checksum-record
 publication when reopening the edited copy.
+
+### Mobile fullscreen reading
+
+On iPhone, iPad and Android, choose **Reading mode** from an EPUB reader menu
+to hide app navigation and system bars. Text retains its reading margins and safe
+areas. **Show reading controls** remains available below the text so you can restore
+Contents, Appearance, bookmarks and navigation without a gesture that interferes
+with text selection or links. Imported and provider/private EPUBs support this mode;
+private positions and bookmarks retain their existing session-only lifetime.

@@ -10,11 +10,18 @@ from .reader_controls import ReadingFrame, PageFooter
 def sync_comic_chrome(app, view):
     """Host decides when to hide chrome; shared adapters own native restoration."""
     def immersive(widget):
-        return getattr(widget, '_comic_fullscreen', False) or any(immersive(child) for child in widget.children)
+        return (getattr(widget, '_reader_fullscreen', False)
+                or getattr(widget, '_comic_fullscreen', False)
+                or any(immersive(child) for child in widget.children))
     hidden = immersive(view)
-    app._comic_chrome_hidden = hidden
+    def comic(widget):
+        return getattr(widget, '_comic_fullscreen', False) or any(comic(child) for child in widget.children)
+    app._comic_chrome_hidden = comic(view)
+    app._reader_chrome_hidden = hidden
     navigation = app.adaptive.secondary if app.adaptive.split is not None and app.native_host.state.destination == 'documents' else None
     app.native_host.chrome.set_hidden(hidden, navigation=navigation)
+    from .ios_reader_chrome import sync
+    sync(app)
     def page_swipes(widget):
         return getattr(widget, 'page_swipes_at_edges', False) or any(page_swipes(child) for child in widget.children)
     app.native_host.chrome.set_page_swipes(page_swipes(view), navigation=navigation)

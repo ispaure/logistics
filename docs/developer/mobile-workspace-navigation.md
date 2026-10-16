@@ -365,3 +365,29 @@ The 315-test mobile suite passed 312 checks inside the sandbox; the three blocke
 localhost fixture checks passed on a network-enabled rerun. A focused 76-test
 navigation/reader run passed, as did the final bitmap refinement tests. Evidence:
 [fold seam geometry](mobile-evidence/2026-10-15-duo-fold-seam.json).
+
+## Fullscreen reader system chrome
+
+`ReadingFrame` marks all immersive readers with `_reader_fullscreen` and only comic
+images with `_comic_fullscreen`. The shared navigation chrome hides bars on both
+platforms; only comic images extend beyond UIKit safe areas. EPUB text keeps its
+normal margins and a 48-point Show reading controls action. Transfer banners stay
+hidden during either immersive mode without pausing transfers.
+
+`ios_reader_chrome` installs a pinned-backend outer navigation-controller subclass
+before window construction. A weak window-to-host map scopes status-bar preferences
+to the owning workspace. The Apple content-layout adapter restores measured safe
+areas normally and clears image insets during immersive comics. It does not change
+the spread scale algorithm, reading direction, private storage or credential policy.
+
+The isolated Duo simulator check passed comic fullscreen → controls → fullscreen
+transitions at the full 951-point window width, with status-bar restoration.
+Imported EPUB fullscreen retained 16-point outer margins and its restore action.
+The check uses only synthetic cache fixtures and an injected partial posture;
+see [local reader evidence](mobile-evidence/2026-10-15-reader-fullscreen-duo.json).
+
+The same isolated check passed on a regular iPhone 17 Pro at 402 points,
+including EPUB margins, restore controls and status-bar restoration;
+see [regular iPhone evidence](mobile-evidence/2026-10-15-reader-fullscreen-iphone.json).
+Android uses the existing shared immersive-bar implementation; these iOS reports
+do not claim native Android gesture verification.

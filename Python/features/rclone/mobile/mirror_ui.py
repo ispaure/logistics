@@ -68,7 +68,8 @@ class MirrorUI(TransferReviewUI):
             live.append((parent_ref, bar_ref))
             # Immersive comics use the full reading area. Transfer work and
             # its notification state continue; show the banner with controls.
-            if visible and not getattr(parent, '_comic_fullscreen', False):
+            if visible and not (getattr(parent, '_comic_fullscreen', False)
+                                or getattr(parent, '_reader_fullscreen', False)):
                 if bar not in parent.children:
                     parent.insert(0, bar)
                 bar.notice.text = 'Transfer in progress · Details' if busy else 'Transfer finished · Details'
