@@ -101,6 +101,29 @@ appearance, separately from the app's system-following surfaces and reader theme
 
 ### Local / LocalCrypt location
 
+On iPhone and iPad, **Local is the root of Logistics' file-sharing area**. Open
+the updated app once to finish automatic migration before connecting for file
+sharing. In Finder, choose your device → **Files → Logistics**; on Windows use
+Apple Devices or iTunes File Sharing. The same files appear in Apple's Files app
+under **On My iPhone/iPad → Logistics**. There is no enclosing `Local` folder.
+Files added here are ordinary local files; adding a folder does not create a
+remote mapping. Existing remote-linked Local folders retain their mappings.
+Computer file sharing can also copy out or delete these files.
+
+The first launch moves existing Local files into this shared root automatically.
+Credentials, settings, saved editor/library documents and both kinds of encrypted
+offline storage are relocated into private Application Support storage. LocalCrypt
+stays encrypted and is not exposed through file sharing. Migration uses moves
+within the app container, retains file contents, and resumes after interruption.
+Conflicting destination names stop migration without overwriting either copy;
+resolve the conflict and reopen the app to retry.
+
+Logistics excludes the shared root from iCloud and computer device backups and
+reapplies that exclusion on launch. Keep another copy of important Local files;
+these files do not sync through iCloud Drive. File sharing becomes enabled when
+the update is installed, so the previous storage layout can be visible to a
+trusted computer until the updated app has been opened and migration completes.
+
 On Android, open **Settings → Folder Hub → Local / LocalCrypt location…**.
 One drive setting controls both collections. Select the SD card to use:
 

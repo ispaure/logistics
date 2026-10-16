@@ -80,6 +80,8 @@ comic spreads and imported-copy metadata editing, including explicit-field comic
 progress while ordinary documents remain usable. Mobile can save multiple SMB/Mac server
 connections and pull shared folders into device storage. Android can keep Local and
 LocalCrypt together on a selected SD card under `Logistics/Local` and `Logistics/LocalCrypt`.
+On iPhone/iPad, Local uses the Finder/iTunes and Files app sharing root, with automatic
+migration and exclusion from device backups; LocalCrypt remains private.
 Mobile includes a Focus home
 screen, file/conversation drawers and equal-width browser/document
 or two-text-document panes in wide windows. Chat and Settings use full-screen destinations.

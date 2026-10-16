@@ -37,4 +37,6 @@ min_os_version = "15.0"
 requires = ["toga-iOS==0.5.7"]
 
 [tool.briefcase.app.logisticsmobile.iOS.info]
+UIFileSharingEnabled = true
+LSSupportsOpeningDocumentsInPlace = true
 NSLocalNetworkUsageDescription = "Connect to SMB file shares and the LM server you configure on your local network."
