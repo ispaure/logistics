@@ -495,13 +495,13 @@ in-memory previews. Unsupported files show a dialog asking you to make a local
 copy yourself. The remote browser has no file or folder download/copy actions;
 use the managed Pull workflows to create or refresh offline folders.
 
-Remote CBZ/ZIP comics download completely into memory once before opening.
+Remote EPUB books and CBZ/ZIP comics download completely into memory once before opening.
 The status shows downloaded MiB and percentage; subsequent page turns read that
-snapshot without contacting the share. The cache allows up to 128 MiB per comic
-and 256 MiB across open comics in all windows. Close a remote comic to free its
+snapshot without contacting the share. The cache allows up to 128 MiB per archive
+and 256 MiB across open books and comics in all windows. Close a remote reader to free its
 cache. Closing, locking or replacing credentials clears its cache; nothing is
-written to disk. Larger comics require a managed local copy. To see changes made
-to the online archive after it was cached, close and reopen the comic.
+written to disk. Larger archives require a managed local copy. To see changes made
+to the online archive after it was cached, close and reopen the reader.
 
 While an online request is running, Folder Hub's action menus and local folders
 remain available. Another online operation shows a busy message and **Cancel
@@ -518,9 +518,9 @@ or **Open folder** for a folder. Comic archives offer an inner ZIP password fiel
 opening a password-protected comic also brings up this form automatically.
 The browser status shows when a remote file is opening and reports opening failures.
 
-**Search** filters names in the current folder. Changing folders clears search.
+**Search** filters names in the current folder. Changing folders clears search. Tapping outside a search field dismisses the keyboard.
 Remote listings read only the selected folder's immediate children. Remote
-screens display 24 rows per list page or 16 tiles, with **Previous** and **Next**
+screens display up to 500 items per page in both List and Tiles, with **Previous** and **Next**
 above the items; paging, sorting and filtering do not contact the remote again.
 The status distinguishes **Listing…** from **Displaying…** and keeps an elapsed
 timer while waiting. Folder Hub and its action menus remain available during listing.

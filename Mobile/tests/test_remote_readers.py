@@ -162,12 +162,12 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertTrue(await task)
                 browser = app.remote_browser
                 self.assertEqual(len(browser.entries), 200)
-                self.assertEqual(len(browser.buttons), 24)
-                self.assertIn(browser.paging, browser.widget.children)
+                self.assertEqual(len(browser.buttons), 200)
+                self.assertNotIn(browser.paging, browser.widget.children)
                 browser.next_page()
-                self.assertEqual(len(browser.buttons), 24)
+                self.assertEqual(len(browser.buttons), 200)
                 browser.show_tiles()
-                self.assertEqual(len(browser.buttons), 16)
+                self.assertEqual(len(browser.buttons), 200)
                 browser.search.value = 'series-199'
                 self.assertEqual(len(browser.buttons), 1)
                 self.assertEqual(client.calls, [('list', 'mangas')])
@@ -205,6 +205,25 @@ class RemoteReaderTests(unittest.TestCase):
         self.assertFalse(client.cached)
         self.assertIsNone(source.cache_token)
 
+    def test_epub_snapshot_survives_remote_removal_and_releases_on_close(self):
+        from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
+        from features.rclone.mobile.remote_readers import RemoteReaders
+        with TemporaryDirectory() as folder:
+            epub, _ = make_books(Path(folder))
+            client = RemoteClient()
+            client.files['book.epub'] = epub.read_bytes()
+            reader = RemoteReaders(client, 'Files').open('book.epub')
+            source = reader.source
+            self.addCleanup(source.close)
+            self.assertEqual(sum(action == 'remote_cache_open' for action, _ in client.calls), 1)
+            del client.files['book.epub']
+            client.calls.clear()
+            self.assertIn('Native EPUB first', reader.page(0)[1])
+            self.assertFalse(any(action in {'remote_range', 'remote_stat', 'remote_archive'}
+                                 for action, _ in client.calls))
+            source.close()
+            self.assertFalse(client.cached)
+
     def test_comic_download_failure_releases_partial_cache(self):
         from features.rclone.mobile.remote_readers import RemoteReaders
         class BrokenClient(RemoteClient):
@@ -214,10 +233,12 @@ class RemoteReaderTests(unittest.TestCase):
                     raise OSError('Synthetic interrupted download')
                 return result
         client = BrokenClient()
-        client.files['comic.cbz'] = b'partial archive'
-        with self.assertRaisesRegex(OSError, 'interrupted'):
-            RemoteReaders(client, 'Files').open('comic.cbz')
-        self.assertFalse(client.cached)
+        for name in ('comic.cbz', 'book.epub'):
+            with self.subTest(name=name):
+                client.files[name] = b'partial archive'
+                with self.assertRaisesRegex(OSError, 'interrupted'):
+                    RemoteReaders(client, 'Files').open(name)
+                self.assertFalse(client.cached)
 
     def test_remote_browsing_never_fetches_thumbnails_in_list_or_tiles(self):
         with TemporaryDirectory() as folder:

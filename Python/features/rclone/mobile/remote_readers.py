@@ -1,4 +1,4 @@
-"""Memory-only remote documents, with complete in-memory remote comic snapshots."""
+"""Memory-only remote documents, with complete in-memory remote archive snapshots."""
 import base64
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -80,12 +80,12 @@ class RemoteSource(NativeArchiveAccess):
                     total, done = status['total'], status['done']
                     if total and (done, total) != previous:
                         previous = done, total
-                        self.progress(f'Downloading comic to memory: {100 * done // total}% '
+                        self.progress(f'Downloading archive to memory: {100 * done // total}% '
                                       f'({done / 1048576:.1f} / {total / 1048576:.1f} MiB)')
                 except Exception:
                     return
         worker = Thread(target=poll, daemon=True)
-        self.progress('Downloading comic to memory: 0%')
+        self.progress('Downloading archive to memory: 0%')
         worker.start()
         try:
             self.client.request('remote_cache_open', remote=self.remote, path=self.path,
@@ -97,7 +97,7 @@ class RemoteSource(NativeArchiveAccess):
         finally:
             stopped.set()
             worker.join()
-        self.progress('Comic downloaded: 100% · Preparing reader from memory')
+        self.progress('Archive downloaded: 100% · Preparing reader from memory')
 
     @contextmanager
     def open(self, path):
@@ -139,7 +139,7 @@ class RemoteReaders:
                     data = stream.read()
                 reader = RemoteImageReader(key, data, source)
             else:
-                if Path(key).suffix.lower() in {'.cbz', '.zip'}:
+                if Path(key).suffix.lower() in {'.epub', '.cbz', '.zip'}:
                     source.cache_archive()
                 reader = PrivateReader(key, source=source)
             reader.key, reader.password, reader.read_only = key, password, True

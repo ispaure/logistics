@@ -15,7 +15,7 @@ class NativeBrowserTests(unittest.TestCase):
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            browser = FileBrowser(item_actions=lambda: None)
+            browser = FileBrowser(item_actions=lambda: None, bounded_pages=True)
             provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path)
             rows = [dict(path=f'{index}.txt', name=f'{index}.txt', directory=index % 2 == 0, size=index)
                     for index in range(501)]

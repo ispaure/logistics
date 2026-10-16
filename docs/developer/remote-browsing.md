@@ -37,7 +37,7 @@ Mobile remote reads use the existing serialized native network-operation scope.
 Every stat/range/archive request binds a connection fingerprint; content requests
 also bind a metadata revision. A credential-generation check rejects cached content
 after replacement. Archive members and range blocks stay in bounded RAM buffers.
-Mobile CBZ/ZIP sources use `remote_cache_open` to read one continuous logical
+Mobile EPUB and CBZ/ZIP sources use `remote_cache_open` to read one continuous logical
 remote stream into native RAM, validating the metadata revision before and after
 the fetch. Opaque per-reader tokens bind the connection, path and revision.
 `remote_cache_archive` uses that immutable snapshot and the existing native

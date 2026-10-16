@@ -8,7 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
-APP_MODULES = ('fold_layout.py', 'storage_ui.py', 'settings_ui.py', 'screen_privacy.py', 'palette.py', 'workspace_navigation.py', 'document_choices.py', 'comic_layout_check.py', 'appearance.py', 'native_archives.py', 'provider_ui.py', 'provider_readers.py', 'text_resources.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'recent_documents.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
+APP_MODULES = ('keyboard.py', 'fold_layout.py', 'storage_ui.py', 'settings_ui.py', 'screen_privacy.py', 'palette.py', 'workspace_navigation.py', 'document_choices.py', 'comic_layout_check.py', 'appearance.py', 'native_archives.py', 'provider_ui.py', 'provider_readers.py', 'text_resources.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'recent_documents.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
                'hub_ui.py', 'control_icons.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library_edits.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
                'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_presentation.py', 'chat_fixture.py', 'resource_imports.py', 'files_ui.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (

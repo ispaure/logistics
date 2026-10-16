@@ -7,12 +7,17 @@ actions route does not retain this control. Parent navigation walks logical path
 within the selected remote; native route Back retains its separate screen behavior.
 
 The mobile `FileBrowser` bounds List and Tiles at 500 entries per page using the
-shared browser's `page_size` property. Paging controls precede the rows inside
+shared browser's `page_size` property, including bounded remote browsers. Paging controls precede the rows inside
 the scroll content so the bottom destination bar cannot cover Next at the end
 of a listing. Row command binding uses one button-to-entry map per render,
 avoiding repeated filtering and sorting for every row. Generic folder glyphs
 require no image reads; the shared renderer omits empty image widgets when
 thumbnails are disabled. Thumbnail loading retains its revision-aware RAM bounds.
+
+`keyboard.py` observes outside touches without consuming control events. On iOS,
+a window-local recognizer delegate ends editing outside editable text controls;
+Android browser views dismiss a focused search field on outside touch-down.
+Text-field touches keep normal cursor and selection behavior.
 
 `workspace_navigation.py` owns feature-level layout inside the existing
 commonUtils native tab and navigation stacks. The host retains native Back,

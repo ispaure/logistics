@@ -122,6 +122,8 @@ class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, Read
         self.show_home()
         self.save_workspace(capture=False)
         self.main_window.show()
+        from .keyboard import install as install_keyboard
+        install_keyboard(self)
         from .screen_privacy import ScreenPrivacy
         self.screen_privacy = ScreenPrivacy(self)
         self.native_host.install(self.main_window)
