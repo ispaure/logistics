@@ -26,10 +26,7 @@ def middle_filename(button):
 class FileBrowser(NativeBrowser):
     @property
     def page_size(self):
-        if self.bounded_pages:
-            return super().page_size
-        # Ordinary folders scroll continuously; bound native widget creation
-        # only for very large directories, in either presentation mode.
+        # Local and remote folders share the same widget bound in both layouts.
         return 500
 
     def __init__(self, *, open_file=None, item_actions=None, folder_visible=None, bounded_pages=False, **kwargs):
@@ -158,6 +155,9 @@ class FileBrowser(NativeBrowser):
                         toga.Label(detail, style=Pack(width=64, font_size=11, margin_top=17)))
                 row.add(controls)
                 surface(row)
+
+        from .keyboard import bind_browser
+        bind_browser(self)
 
         if self.previous.enabled or self.next.enabled:
             if self.paging not in self.widget.children:

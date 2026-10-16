@@ -104,12 +104,12 @@ class RemoteProbe(LogisticsMobile):
                 browser = self.remote_browser
                 assert len(browser.entries) == 200
                 assert all(entry.container for entry in browser.entries)
-                assert len(browser.buttons) == 24
+                assert len(browser.buttons) == 200
                 browser.next_page()
-                assert len(browser.buttons) == 24
+                assert len(browser.buttons) == 200
                 await asyncio.sleep(.1)
                 browser.show_tiles()
-                assert len(browser.buttons) == 16
+                assert len(browser.buttons) == 200
                 await asyncio.sleep(.1)
                 browser.search.value = 'series-199'
                 assert len(browser.buttons) == 1

@@ -47,7 +47,7 @@ func remoteComicControl(action, input string) string {
 		Run string `json:"run"`
 	}
 	if len(input) > 1024 || json.Unmarshal([]byte(input), &request) != nil || len(request.Run) != 32 {
-		return `{"ok":false,"error":"invalid comic cache request"}`
+		return `{"ok":false,"error":"invalid archive cache request"}`
 	}
 	if action == "remote_cache_close" {
 		releaseRemoteComic(request.Run)
@@ -64,23 +64,23 @@ func remoteComicControl(action, input string) string {
 
 func cacheRemoteComic(ctx context.Context, run, name, p, identity, expected string) (any, error) {
 	if len(run) != 32 {
-		return nil, errors.New("invalid comic cache key")
+		return nil, errors.New("invalid archive cache key")
 	}
 	reader, size, revision, err := remoteDocument(ctx, name, p, identity)
 	if err != nil {
 		return nil, err
 	}
 	if size <= 0 || size > remoteComicLimit {
-		return nil, errors.New("comic exceeds the 128 MiB memory preview limit; make a local copy")
+		return nil, errors.New("archive exceeds the 128 MiB memory preview limit; make a local copy")
 	}
 	if expected == "" || expected != revision {
-		return nil, errors.New("remote comic changed; reopen it")
+		return nil, errors.New("remote archive changed; reopen it")
 	}
 	item := &remoteComic{remote: name, path: p, identity: identity, revision: revision, total: size}
 	remoteComics.Lock()
 	if remoteComics.entries[run] != nil || remoteComics.bytes+size > remoteComicPoolLimit {
 		remoteComics.Unlock()
-		return nil, errors.New("comic memory cache is full; close another remote comic and retry")
+		return nil, errors.New("archive memory cache is full; close another remote archive and retry")
 	}
 	remoteComics.entries[run] = item
 	remoteComics.bytes += size
@@ -114,20 +114,20 @@ func cacheRemoteComic(ctx context.Context, run, name, p, identity, expected stri
 		retained := remoteComics.entries[run] == item
 		remoteComics.Unlock()
 		if !retained {
-			return nil, errors.New("comic cache was closed")
+			return nil, errors.New("archive cache was closed")
 		}
 		if readErr != nil {
-			return nil, errors.New("remote comic download is incomplete")
+			return nil, errors.New("remote archive download is incomplete")
 		}
 	}
 	_, _, after, err := remoteDocument(ctx, name, p, identity)
 	if err != nil || after != revision {
-		return nil, errors.New("remote comic changed while downloading; reopen it")
+		return nil, errors.New("remote archive changed while downloading; reopen it")
 	}
 	remoteComics.Lock()
 	if remoteComics.entries[run] != item {
 		remoteComics.Unlock()
-		return nil, errors.New("comic cache was closed")
+		return nil, errors.New("archive cache was closed")
 	}
 	item.data, item.ready = data, true
 	remoteComics.Unlock()
@@ -140,13 +140,13 @@ func cachedRemoteArchive(ctx context.Context, run, name, p, identity, expected, 
 	item := remoteComics.entries[run]
 	if item == nil || !item.ready || item.remote != name || item.path != p || item.identity != identity || item.revision != expected {
 		remoteComics.Unlock()
-		return nil, errors.New("comic memory cache is unavailable; reopen it")
+		return nil, errors.New("archive memory cache is unavailable; reopen it")
 	}
 	data := item.data
 	remoteComics.Unlock()
 	current, err := connectionIdentity(name)
 	if err != nil || current != identity {
-		return nil, errors.New("credentials changed; reopen the comic")
+		return nil, errors.New("credentials changed; reopen the archive")
 	}
 	return archiveContents(ctx, bytes.NewReader(data), int64(len(data)), password, member, 10000, 16*1024*1024)
 }
