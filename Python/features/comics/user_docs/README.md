@@ -251,8 +251,9 @@ views also refit to the available width after rotation. Resizing waits while a
 spread is zoomed; fitting it allows the pending layout update.
 
 In fullscreen comics on iOS and Android, hold a thumb on the page for about
-400 ms to show a 2.5× magnifying bubble. The bubble enlarges the page beneath
-its center and grows larger on tablet screens. Keep holding and drag to move
+400 ms to show a 2× magnifying bubble. The bubble enlarges the page beneath
+its center and grows larger on tablet screens. The bubble sits close
+to the thumb with a slight overlap. Keep holding and drag to move
 the bubble. Near a screen edge, keep dragging toward the edge to inspect the
 outermost pixels even after the bubble stops moving. Release to dismiss. The page stays still while the bubble is open. A second
 finger cancels the bubble so pinch zoom remains available. The bubble is disabled

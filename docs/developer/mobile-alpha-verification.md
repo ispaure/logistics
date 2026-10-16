@@ -87,3 +87,12 @@ Only the probe's abandoned bytes are removed between routes; a reviewed native
 push removes the synthetic remote object before later remote observations.
 This avoids assuming one transfer outlasts all four cold layout sequences and
 does not raise the native gate's 15-minute deadline.
+The initial reviewed push that seeds this bulk fixture has a 120-second budget;
+ordinary document reviews retain their 30-second budget.
+
+Worker progress is coalesced per transfer: a lock protects the latest snapshot
+and one pending event-loop callback. The callback releases the lock before
+rendering, allowing at most one successor while native UI work is busy. Existing
+epoch checks reject stale snapshots; completion and cancellation still publish
+terminal UI state synchronously. Burst, concurrent-render and stale-epoch tests
+cover these delivery guarantees.

@@ -173,7 +173,9 @@ async def exercise_crypt_mirror(app, fixture):
         await asyncio.to_thread(provider.create_file, payload, source)
     local_probe.unlink()
     app.start_mirror_review(job['id'])
-    await approve_transfer(app)
+    # Seeding the real 256 MiB remote object needs more time than the small
+    # document reviews. Keep their default budget and the overall gate intact.
+    await approve_transfer(app, timeout=120)
     provider._locate(payload).unlink()
     assert app.clear_private_reader(discard=True)
     async def files_route():

@@ -7,7 +7,7 @@ from threading import Event
 from unittest.mock import AsyncMock, patch
 
 
-async def approve_transfer(app):
+async def approve_transfer(app, *, timeout=30):
     for _ in range(600):
         view = getattr(app, '_transfer_review_view', None)
         if view is not None and view.children[-1].children[1].enabled:
@@ -19,7 +19,7 @@ async def approve_transfer(app):
         raise AssertionError('Native review never completed: ' + app.cloud_status.value)
     with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
         await view.children[-1].children[1].on_press()
-    assert await asyncio.wait_for(app.transfer_task, timeout=30), app.transfer_message
+    assert await asyncio.wait_for(app.transfer_task, timeout=timeout), app.transfer_message
 
 
 async def exercise_reviews(app):

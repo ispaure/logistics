@@ -214,6 +214,8 @@ backup or rollback. Mobile runs one transfer at a time with no queue; existing
 Local and LocalCrypt copies remain browsable and readable during folder transfers,
 including Documents and configured library shortcuts. Empty-folder changes
 participate in the mobile review and its final recheck.
+Progress displays the latest reported totals, without queuing older updates
+ahead of browsing when native rendering is busy.
 Mobile does not offer mounts. See the [mobile transfer guide](../../../logisticsmobile/user_docs/README.md#folder-hub-and-local--localcrypt-sync)
 for connection scopes, encrypted storage, cancellation and credential persistence.
 
