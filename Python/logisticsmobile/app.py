@@ -45,6 +45,9 @@ class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, Read
         from .appearance import install_appearance
         install_appearance(self)
         root = Path(self.storage_root or self.paths.data)
+        if type(self._impl).__module__.startswith('toga_iOS.') and self.storage_root is None:
+            from .ios_storage import prepare_for_app
+            root = prepare_for_app(self)
         self.private_root = root
         host_identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
         previous_host = _active_hosts.get(host_identity)

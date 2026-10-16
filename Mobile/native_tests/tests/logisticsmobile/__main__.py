@@ -47,6 +47,8 @@ async def exercise(app):
         backend = type(app._impl).__module__
         assert backend.startswith('toga_android.' if get_os() is OS.ANDROID else 'toga_iOS.')
         if get_os() is OS.IOS:
+            from .ios_storage_probe import exercise_ios_storage
+            exercise_ios_storage(app)
             from .navigation_checks import assert_cold_iphone_tab_labels
             await asyncio.sleep(.3)
             assert_cold_iphone_tab_labels(app)

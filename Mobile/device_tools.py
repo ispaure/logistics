@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 
 try:
     from .select_ios_sdk import choose, installed
@@ -93,14 +94,25 @@ def normal_launcher(info):
     return info
 
 
+def configured_ios_info():
+    with (ROOT / 'pyproject.toml').open('rb') as stream:
+        return tomllib.load(stream)['tool']['briefcase']['app']['logisticsmobile']['iOS'].get('info', {})
+
+
 def prepare_project(team):
     data = json.loads(subprocess.check_output(['plutil', '-convert', 'json', '-o', '-', str(PBX)]))
     PBX.write_bytes(plistlib.dumps(signing_settings(data, team), sort_keys=False))
-    INFO.write_bytes(plistlib.dumps(normal_launcher(plistlib.loads(INFO.read_bytes()))))
+    info = plistlib.loads(INFO.read_bytes())
+    # Briefcase update refreshes Python sources but leaves the generated plist's
+    # original extra keys in place. Reapply the canonical platform settings.
+    info.update(configured_ios_info())
+    INFO.write_bytes(plistlib.dumps(normal_launcher(info)))
 
 
 def validate_app(app, team, udid):
     info = plistlib.loads((app / 'Info.plist').read_bytes())
+    if any(info.get(key) != value for key, value in configured_ios_info().items()):
+        raise RuntimeError('Built app is missing configured iOS plist settings; refusing installation.')
     if info.get('CFBundleIdentifier') != BUNDLE or info.get('MainModule') != 'logisticsmobile':
         raise RuntimeError('Built app identity or launcher is incorrect; refusing installation.')
     profile = plistlib.loads(subprocess.check_output(['security', 'cms', '-D', '-i', str(app / 'embedded.mobileprovision')]))

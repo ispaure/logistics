@@ -1,6 +1,7 @@
 """Protect identity and physical-device gates used by local deployment."""
 import copy
 import json
+import plistlib
 from pathlib import Path
 import shlex
 import subprocess
@@ -14,6 +15,25 @@ from Mobile.device_tools import BUNDLE, normal_launcher, select_device, signing_
 
 
 class DeviceDeploymentTests(unittest.TestCase):
+    def test_existing_project_receives_new_ios_sharing_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / 'pyproject.toml'
+            config.write_text('[tool.briefcase.app.logisticsmobile.iOS.info]\n'
+                              'UIFileSharingEnabled = true\nLSSupportsOpeningDocumentsInPlace = true\n')
+            pbx, info = root / 'project.pbxproj', root / 'Info.plist'
+            info.write_bytes(plistlib.dumps({'CFBundleIdentifier': BUNDLE, 'MainModule': 'tests.logisticsmobile'}))
+            with (patch.object(device_tools, 'ROOT', root), patch.object(device_tools, 'PBX', pbx),
+                  patch.object(device_tools, 'INFO', info),
+                  patch('subprocess.check_output', return_value=json.dumps(self.project()).encode())):
+                device_tools.prepare_project('ABCDEFGHIJ')
+                result = plistlib.loads(info.read_bytes())
+                self.assertIs(result['UIFileSharingEnabled'], True)
+                self.assertIs(result['LSSupportsOpeningDocumentsInPlace'], True)
+                self.assertEqual(result['MainModule'], 'logisticsmobile')
+                device_tools.prepare_project('ABCDEFGHIJ')
+                self.assertEqual(plistlib.loads(info.read_bytes()), result)
+
     def test_batch_deploy_uses_saved_targets_and_continues_after_failure(self):
         config = {'device_id': 'phone', 'device_ids': ['phone', 'tablet', 'phone']}
         with patch.object(device_tools, 'run', side_effect=[subprocess.CalledProcessError(1, 'deploy'), None]) as run:

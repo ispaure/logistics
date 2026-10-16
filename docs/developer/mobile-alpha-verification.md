@@ -98,3 +98,6 @@ terminal UI state synchronously. Burst, concurrent-render and stale-epoch tests
 cover these delivery guarantees.
 Native reviewed-transfer timeouts retain the review status, visible comparison
 and latest progress text, distinguishing a pending recheck from active I/O.
+The iOS native gate also exercises Foundation backup exclusion and exclusive
+moves against a disposable legacy-storage fixture, checking that ordinary files
+become shared Local files while credentials remain under private support storage.

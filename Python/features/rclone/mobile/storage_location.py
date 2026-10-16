@@ -11,6 +11,16 @@ from commonUtils.runtime.local_files import LocalFiles
 
 CONFIG = 'collection-storage.json'
 MARKER = '.logistics-storage'
+# Registered by iOS startup after its legacy private-data migration completes.
+# Keep this process-local: absolute iOS container paths change on restore/update.
+_shared_local_roots = {}
+
+
+def use_shared_local(private_root, documents):
+    private_root, documents = _unlinked(private_root), _unlinked(documents)
+    if private_root == documents or private_root.is_relative_to(documents) or documents.is_relative_to(private_root):
+        raise ValueError('Shared Local storage must be separate from private app data.')
+    _shared_local_roots[private_root] = documents
 
 
 def _unlinked(path):
@@ -57,6 +67,8 @@ def collection_base(private_root):
 
 
 def collection_path(private_root, crypt=False):
+    if not crypt and Path(private_root) in _shared_local_roots:
+        return _unlinked(_shared_local_roots[Path(private_root)])
     base = collection_base(private_root)
     external = base != Path(private_root)
     return _unlinked(base / (('LocalCrypt' if crypt else 'Local') if external
@@ -118,6 +130,8 @@ def switch_location(private_root, volume):
     trees can be reused on retry only if every byte matches the active source.
     """
     private_root = Path(private_root)
+    if private_root in _shared_local_roots:
+        raise ValueError('iOS Local uses the file-sharing root; drive selection is Android-only.')
     source_base = collection_base(private_root)
     volume = _unlinked(volume) if volume is not None else None
     if volume is not None and not volume.is_dir():

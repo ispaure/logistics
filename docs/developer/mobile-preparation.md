@@ -1016,7 +1016,7 @@ same two-pixel centering and fullscreen-height assertions still apply.
 `features/rclone/mobile/storage_location.py` owns the shared Local/LocalCrypt
 location. Private `collection-storage.json` records the selected volume and a
 random identity matching `<volume>/Logistics/.logistics-storage`. Unconfigured
-installs retain the existing private `LocalFiles`/`LocalCryptFolders` layout.
+Android installs retain the existing private `LocalFiles`/`LocalCryptFolders` layout.
 Configured drives use `Logistics/Local` and `Logistics/LocalCrypt`; neither
 credentials nor `mirror-jobs.json` move. All provider, Folder Hub, library and
 transfer destination resolution uses this boundary. Retained collection providers
@@ -1040,6 +1040,44 @@ collection. The private pointer changes last. Original trees remain for recovery
 failed switches can retain already verified destination trees for retry. The app
 exits after success so retained providers cannot continue using an old location.
 Root-level marker and private state must be preserved when manually moving cards.
+
+### iOS shared Local storage
+
+`logisticsmobile/ios_storage.py` prepares production iOS storage before any
+preferences, workspace, providers or transfer services are created. Toga iOS
+0.5.7's `paths.data` is the system `Documents` directory, so enabling file sharing
+requires relocating the old private root to `Library/Application Support/Logistics`.
+Fixture `storage_root` overrides are unchanged; secondary scenes reuse the prepared
+private root. `UIFileSharingEnabled` and `LSSupportsOpeningDocumentsInPlace` expose
+Documents through computer file sharing and the Files app.
+
+A durable private `ios-file-sharing-migration.json` journals the original root
+entry names, moves them into Application Support (except the system import Inbox),
+then publishes `LocalFiles` children directly into Documents. Old-layout names
+identify an existing install; a fresh install without these names keeps any
+already-added files in the shared root. `NSFileManager.moveItemAtPath:toPath:error:`
+performs exclusive same-container moves without a second full copy or decryption.
+Conflicts never merge/overwrite existing directories. Interrupted phases resume
+from entries present at source or destination; missing entries stop migration.
+Errors stop startup before services can use a partial layout. Completion is
+journaled so future imported files, even with formerly private names, stay Local.
+
+On every production launch, Documents receives `NSURLIsExcludedFromBackupKey`
+before migration or provider registration; failure stops startup. This excludes
+the shared Local root from both iCloud and computer device backups. It does not
+enable iCloud Drive synchronization. The feature's process-local shared-root
+registration is rebuilt each launch, avoiding persisted absolute iOS container
+paths. `collection_path(private_root)` resolves to Documents, while crypt paths
+remain private. Mapping records retain their relative targets and stay private;
+arbitrary computer imports do not create mapping records. Android's drive switch
+is refused for a registered iOS root.
+
+Installation enables the static plist capability before first launch. Old root
+contents can therefore be visible to a trusted computer between installation and
+the first successful migration; users must open the update before file sharing.
+There is no runtime plist switch that can defer this capability until migration.
+`Mobile/tests/test_ios_storage.py` covers data/mapping preservation, fresh installs,
+relaunch, interruption in both phases, conflicts, links, and backup failure.
 
 Android and iOS now share the Show Legacy preference and filtering; dummy/desktop
 hosts preserve their existing unfiltered behavior. Tests in `test_storage_location`,

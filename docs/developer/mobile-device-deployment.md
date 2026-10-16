@@ -58,6 +58,30 @@ and recursive code signature before installation. Application identifier and
 Keychain groups are recorded in the local configuration and must match on
 subsequent builds, including after clearing generated build directories.
 
+Briefcase `update` also leaves extra plist settings from project creation in
+place. `prepare_project` reapplies the canonical `[tool.briefcase.app.logisticsmobile.iOS.info]`
+settings before building; `validate_app` rejects a signed build missing any of
+those values. This includes the Local file-sharing keys. The focused deployment
+tests cover refreshing an existing generated project, including repeated runs.
+
+## Local-only file-sharing verification, 2026-10-15
+
+The signed development update was installed in place on the paired iPhone and
+launched successfully. Its built plist contains both file-sharing keys. A device
+inventory comparison found all 8,678 pre-existing files under the new private
+Application Support root with matching sizes, including 8,617 encrypted files
+totalling 48,372,039,025 bytes. This comparison checked metadata, not content
+hashes. There were no ordinary `LocalFiles` files on this phone before migration;
+nonempty Local migration remains covered by the focused host fixtures.
+
+The device's shared Documents directory reported Apple's MobileBackup exclusion
+attribute. A real House Arrest `VendDocuments` session over the existing wireless
+tunnel wrote/read/deleted a temporary file, verified its bytes, and denied access
+to private Application Support storage. The shared directory was empty again
+after cleanup. A physical-device screenshot showed the normal Settings UI.
+This validates the Documents-only service without claiming a manual Finder USB
+interaction. Ignored evidence is retained in `Mobile/logs/iphone-local-sharing-*`.
+
 `deploy` verifies CoreDevice transport immediately before installation.
 `localNetwork` (Xcode 27.1) and `wireless` are accepted; a wired deployment
 requires explicit `--allow-wired`. Installation is an in-place CoreDevice app
