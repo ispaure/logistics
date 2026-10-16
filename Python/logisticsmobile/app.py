@@ -23,11 +23,12 @@ from .locations_ui import LocationsUI
 from .folder_hub_ui import FolderHubUI
 from .hub_ui import HubUI, text_document_kind
 from .storage_ui import StorageUI
+from .saved_files_ui import SavedFilesUI
 
 _active_hosts = weakref.WeakValueDictionary()
 
 
-class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, ReaderWorkspace, ChatUI, CloudUI, toga.App):
+class LogisticsMobile(SavedFilesUI, StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, ReaderWorkspace, ChatUI, CloudUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def __init__(self, *args, **kwargs):
@@ -478,6 +479,7 @@ class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, Read
         box.add(toga.Label('Editor and preview font size'))
         box.add(self.font_choice)
         box.add(heading('Books & Comics'))
+        box.add(toga.Button('Saved books & comics…', on_press=self.show_saved_files, style=Pack(height=48)))
         box.add(toga.Label('Use Appearance in an open reader\nto adjust its pages.', style=Pack(font_size=12)))
         box.add(heading('LM Chat'))
         box.add(toga.Button('Server & generation settings…', on_press=self.show_chat_configuration, style=Pack(height=48)))

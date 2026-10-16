@@ -84,8 +84,8 @@ async def exercise_localcrypt(app, passed):
         assert canvas(app.provider_sessions().active).image.width == 24
         from .reader_checks import assert_comic_centered
         owner = app.private_sessions.active
-        owner.toggle_private_bookmark()
-        assert owner.crypt_bookmarks == {0}
+        assert owner.crypt_bookmark_button not in owner.crypt_tools_view.content.children
+        assert owner.crypt_bookmark_selector not in owner.crypt_tools_view.content.children
         for _ in range(2):
             app.show_settings()
             await asyncio.sleep(.1)
@@ -94,9 +94,7 @@ async def exercise_localcrypt(app, passed):
             await asyncio.sleep(.1)
             canvas(owner).toggle_controls()
             await assert_comic_centered(lambda: canvas(owner), fullscreen=True)
-            assert owner.crypt_bookmarks == {0}
-        owner.toggle_private_bookmark()
-        assert owner.crypt_bookmarks == set()
+            assert not owner.crypt_bookmarks
         app.close_crypt()
         assert not owner.crypt_bookmarks
     for name, password in (('book.epub', ''), ('protected.epub', 'synthetic-archive-password')):

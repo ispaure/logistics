@@ -38,10 +38,11 @@ class ReaderFullscreenTests(unittest.TestCase):
 
     def test_provider_epub_can_restore_controls_without_changing_location(self):
         from logisticsmobile.provider_ui import ProviderUI
-        frame = ReadingFrame(toga.Box(), [toga.Box(), toga.Box()])
+        restore = toga.Button('Show reading controls')
+        frame = ReadingFrame(toga.Box(), [toga.Box(), toga.Box()], restore=restore)
         reader = NS(kind='.epub', book=object(), editable=False)
         owner = NS(crypt_reader=reader, crypt_immersive=False, reading_frame=frame,
-                   crypt_view=frame.widget, reader_restore=toga.Button('Show reading controls'),
+                   crypt_view=frame.widget, reader_restore=restore,
                    refresh_transfer_status=Mock(), resume_crypt=Mock(), epub_offset=1234)
         ProviderUI.toggle_private_reading_mode(owner)
         self.assertTrue(frame.widget._reader_fullscreen)

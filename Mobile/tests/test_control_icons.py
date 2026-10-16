@@ -43,3 +43,28 @@ class ControlIconTests(unittest.TestCase):
         self.assertEqual(button.accessible_name, 'Go back')
         self.assertEqual(browser.previous.accessible_name, 'Previous results')
         self.assertEqual(browser.next.accessible_name, 'Next results')
+
+    def test_repeated_file_skip_taps_do_not_skip_multiple_comics(self):
+        import asyncio
+        import toga
+        from logisticsmobile.reader_controls import ComicHeader
+        async def exercise():
+            started, release = asyncio.Event(), asyncio.Event()
+            calls = []
+            async def next_comic():
+                calls.append('next')
+                started.set()
+                await release.wait()
+            header = ComicHeader(toga.Button('Browse'), toga.Button('More'), following=next_comic)
+            pending = header.following.on_press()
+            await started.wait()
+            try:
+                self.assertFalse(header.following.enabled)
+                await header.following.on_press()
+                self.assertEqual(calls, ['next'])
+            finally:
+                release.set()
+                await pending
+            self.assertTrue(header.following.enabled)
+            self.assertFalse(header.previous.enabled)
+        self.app.loop.run_until_complete(exercise())

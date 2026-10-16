@@ -237,6 +237,8 @@ from 12–32, line spacing from 100–220%, maximum reading width from 480–140
 theme colours are shared with desktop. On a narrow screen, reading width stays
 inside the available pane. These settings are global mobile preferences, do not
 rewrite books, and retain the current logical text anchor when layout changes.
+These text controls appear only for EPUBs. Comic appearance shows its page-layout
+choice separately, and applying a comic layout does not rewrite EPUB preferences.
 
 **Edit metadata…** also works on an ordinary imported EPUB copy. Saves preserve
 other archive resources and leave the external import source unchanged. Failed

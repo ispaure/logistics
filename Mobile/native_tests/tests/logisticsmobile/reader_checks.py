@@ -1,5 +1,10 @@
 """Actual native image zoom, compact reading and sanitized appearance content."""
 import asyncio
+import base64
+import json
+from pathlib import Path
+from commonUtils.runtime.document_access import LocalDocuments
+from .web_checks import wait_for_text
 
 
 def _assert_comic_centered(view, *, fullscreen=False):
@@ -149,13 +154,140 @@ async def exercise_reader(app, passed):
     await wait_for_reader(owner, position=previous)
     assert app.reader_manager().active.book_record['position'] == previous
     owner.show_reader_appearance()
-    owner.reader_margin.value, owner.reader_theme.value = '24', 'dark'
+    owner.reader_layout.value = 'single'
     await owner.apply_reader_appearance()
-    assert app.preferences.values['reading_margin'] == '24'
+    assert app.preferences.values['comic_layout'] == 'single'
     assert app.reader_manager().active.book_record['position'] == previous
     owner.show_reader_tools()
-    assert owner.bookmark_selector in owner.reader_tools_view.content.children
+    assert owner.bookmark_selector not in owner.reader_tools_view.content.children
+    assert owner.chapter_selector in owner.reader_tools_view.content.children
     owner.show_library()
     await assert_comic_centered(current_view, fullscreen=True)
     passed.append('native_comic_fullscreen_reentry')
     passed.append('native_reader_presentation')
+
+
+async def exercise_library(app, fixtures, epub, comic, passed):
+    app.show_library()
+    record = await asyncio.to_thread(app.reader_manager().catalog.library_store.import_book, LocalDocuments(), epub)
+    app.refresh_library()
+    await app.open_book(record['id'])
+    assert app.reader_manager().active.book_reader is not None, app.reader_manager().active.book_status.text
+    await wait_for_text(app.reader_manager().active.book_content.children[0], 'Native EPUB first')
+    original_reader = app.reader_manager().active.book_content.children[0]
+    deadline = asyncio.get_running_loop().time() + 15
+    while not await original_reader.evaluate_javascript('Boolean(window.reader)'):
+        assert asyncio.get_running_loop().time() < deadline, 'EPUB navigation bridge did not initialize'
+        await asyncio.sleep(.05)
+    await wait_for_reader(app.reader_manager().active)
+    await app.next_book_page()
+    assert app.reader_manager().active.book_content.children[0] is original_reader
+    await wait_for_text(app.reader_manager().active.book_content.children[0], 'Native EPUB second')
+    passed.append('native_epub_reader')
+    await app.toggle_bookmark()
+    assert app.reader_manager().catalog.library_store.open(record['id'])[0]['epub_bookmarks'] == [
+        dict(path=app.reader_manager().active.book_reader.spine[1], offset=app.reader_manager().active.epub_offset)]
+    passed.append('native_bookmarks')
+    record = await asyncio.to_thread(app.reader_manager().catalog.library_store.import_book, LocalDocuments(), comic)
+    background_comic = record['id']
+    app.refresh_library()
+    await app.open_book(record['id'])
+    assert app.reader_manager().active.book_reader is not None, app.reader_manager().active.book_status.text
+    assert app.reader_manager().active.book_reader.pages == ['page2.png', 'page10.png']
+    assert app.reader_manager().active.book_content.children[0].image.width == 1
+    await app.next_book_page()
+    assert app.reader_manager().active.book_record['position'] == 1
+    await exercise_reader(app, passed)
+    # Exercise a real archive larger than the former ordinary-library cap.
+    from zipfile import ZipFile
+    large = fixtures / 'large-ordinary.cbz'
+    def make_large():
+        with ZipFile(comic) as original, ZipFile(large, 'w') as archive:
+            archive.writestr('page2.png', original.read('page2.png'))
+            archive.writestr('page10.png', original.read('page10.png'))
+            with archive.open('unrelated.bin', 'w') as output:
+                for _ in range(257):
+                    output.write(b'x' * 1024 * 1024)
+    await asyncio.to_thread(make_large)
+    record = await asyncio.to_thread(app.reader_manager().catalog.library_store.import_book, LocalDocuments(), large)
+    app.refresh_library()
+    await app.open_book(record['id'])
+    assert app.reader_manager().active.book_reader is not None, app.reader_manager().active.book_status.text
+    assert app.reader_manager().catalog.library_store.path(record['id'], '.cbz').stat().st_size > 256 * 1024 * 1024
+    assert app.reader_manager().active.book_content.children[0].image.width == 1
+    await app.next_book_page()
+    assert app.reader_manager().active.book_record['position'] == 1 and app.reader_manager().active.book_content.children[0].image.width == 1
+    large.unlink()
+    protected_fixture = json.loads(Path(__file__).with_name('comic_fixture.json').read_text())
+    from commonUtils.archives.zip_access import ArchivePasswordError
+    from logisticsmobile.library import LibraryStore
+    for codec in ('aes', 'legacy'):
+        protected_comic = fixtures / (codec + '-standalone.cbz')
+        original = base64.b64decode(protected_fixture[codec])
+        protected_comic.write_bytes(original)
+        protected_record = await asyncio.to_thread(app.reader_manager().catalog.library_store.import_book, LocalDocuments(), protected_comic)
+        app.refresh_library()
+        await app.open_book(protected_record['id'])
+        assert app.reader_manager().active.book_reader is None and app.reader_manager().active.book_pending_key == protected_record['id'], app.reader_manager().active.book_status.text
+        assert app.reader_manager().active.book_unlock_panel in app.reader_manager().active.library_view.children
+        app.reader_manager().active.book_password.value = 'wrong password'
+        await app.unlock_book()
+        assert app.reader_manager().active.book_reader is None and app.reader_manager().active.book_pending_key == protected_record['id'], app.reader_manager().active.book_status.text
+        assert app.reader_manager().active.book_password.value == '' and 'Try again' in app.reader_manager().active.book_status.text
+        app.reader_manager().active.book_password.value = protected_fixture['password']
+        await app.unlock_book()
+        assert app.reader_manager().active.book_reader is not None, app.reader_manager().active.book_status.text
+        assert app.reader_manager().active.book_reader.right_to_left and app.reader_manager().active.book_reader.pages == ['page2.png', 'page10.png']
+        assert app.reader_manager().active.book_content.children[0].image.width == 1
+        assert app.reader_manager().active.book_password.value == '' and app.reader_manager().active.book_unlock_panel not in app.reader_manager().active.library_view.children
+        await app.next_book_page()
+        assert app.reader_manager().active.book_record['position'] == 1
+        assert app.reader_manager().active.bookmark_button not in app.reader_manager().active.reader_tools_view.content.children
+        raw_source = app.reader_manager().active.book_reader.document.source
+        owner = app.reader_manager().active
+        assert app.close_session(owner.session.id)
+        assert owner.book_reader is None and not owner.book_content.children
+        assert raw_source.password is None and not raw_source.cache
+        assert app.reader_manager().catalog.library_store.path(protected_record['id'], '.cbz').read_bytes() == original
+        assert protected_fixture['password'].encode() not in app.reader_manager().catalog.library_store.path(protected_record['id'], '.json').read_bytes()
+        reopened_store = LibraryStore(app.reader_manager().catalog.library_store.root)
+        try:
+            reopened_store.open(protected_record['id'])
+        except ArchivePasswordError:
+            pass
+        else:
+            raise AssertionError('Standalone comic password persisted across reader restart.')
+        assert protected_comic.read_bytes() == original
+    # Password detection must not grab keyboard focus after leaving reading.
+    from threading import Event
+    from unittest.mock import patch
+    started, release = Event(), Event()
+    original_open = app.reader_manager().catalog.library_store.open
+    def delayed_password(*args, **kwargs):
+        started.set()
+        if not release.wait(10):
+            raise RuntimeError('Native password fixture was not released')
+        return original_open(*args, **kwargs)
+    with patch.object(app.reader_manager().catalog.library_store, 'open', side_effect=delayed_password):
+        task = asyncio.create_task(app.open_book(protected_record['id']))
+        try:
+            for _ in range(200):
+                if started.is_set():
+                    break
+                await asyncio.sleep(.01)
+            assert started.is_set()
+            owner = app.readers.active
+            with patch.object(owner.book_password, 'focus') as focus:
+                app.show_settings()
+                body = app.body
+                release.set()
+                await task
+                focus.assert_not_called()
+                assert app.native_host.state.destination == 'settings' and app.body is body
+                assert owner.book_pending_key == protected_record['id']
+            app.cancel_book_unlock()
+        finally:
+            release.set()
+            await task
+    passed.append('native_comic_reader')
+    return background_comic

@@ -84,12 +84,22 @@ class AppearanceTests(unittest.TestCase):
             self.assertGreaterEqual(contrast_ratio(argb(palette['accent']), argb(palette['surface'])), 4.5)
 
     def test_preview_and_chat_follow_the_same_system_palette(self):
-        for html in (markdown_preview('# Notes'), transcript_document()):
+        for html, background in ((markdown_preview('# Notes'), 'surface'), (transcript_document(), 'chat_background')):
             self.assertIn('@media(prefers-color-scheme:dark)', html)
             for palette in (LIGHT, DARK):
                 for role, color in palette.items():
                     self.assertIn(f'--{role}:{color}', html)
-            self.assertIn('background:var(--surface)', html)
+            self.assertIn(f'background:var(--{background})', html)
+
+    def test_chat_canvas_tracks_system_light_and_dark_themes(self):
+        html = transcript_document()
+        self.assertEqual(LIGHT['chat_background'], '#ffffff')
+        self.assertEqual(DARK['chat_background'], '#000000')
+        self.assertIn('html { min-height:100%; background:var(--chat_background) }', html)
+        self.assertIn('@media(prefers-color-scheme:dark)', html)
+        for palette in (LIGHT, DARK):
+            self.assertGreaterEqual(contrast_ratio(argb(palette['text']),
+                                                   argb(palette['chat_background'])), 4.5)
 
     def test_explicit_reader_appearance_overrides_device_mode(self):
         content = '<html><head><style>body{margin:24px}</style></head><body>Book</body></html>'

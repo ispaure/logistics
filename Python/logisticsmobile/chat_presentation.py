@@ -43,18 +43,23 @@ def transcript_document():
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <style>
 ''' + css_variables() + '''
-:root { --ink:var(--text); --user:var(--hover); --line:var(--border) }
-* { box-sizing:border-box } body { margin:0; padding:12px 8px 20px; background:var(--surface); color:var(--ink); font:16px/1.5 system-ui; overflow-wrap:anywhere }
-main { max-width:780px; margin:auto } article { margin:0 0 16px; padding:12px 16px; border:0; border-radius:16px } article.user { margin-left:28px; background:var(--user) }
-.role { color:var(--muted); font-size:.75em; margin-bottom:6px } .user .role { color:var(--ink) }
+:root { --ink:var(--text); --user:var(--chat_bubble); --line:var(--border) }
+html { min-height:100%; background:var(--chat_background) }
+body::before { content:""; position:fixed; top:0; left:0; right:0; height:40px; z-index:10;
+ background:linear-gradient(to bottom, var(--chat_background), transparent); pointer-events:none }
+* { box-sizing:border-box } body { margin:0; padding:48px 4px 24px; background:var(--chat_background); color:var(--ink); font:16px/1.5 system-ui; overflow-wrap:anywhere }
+main { max-width:780px; margin:auto } article { margin:0 0 28px; padding:0 4px; border:0 }
+article.user { width:fit-content; max-width:84%; margin-left:auto; padding:12px 16px; border-radius:24px; background:var(--user) }
+.role { color:var(--muted); font-size:.8em; margin-bottom:10px }
+.role.complete { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap }
 p { margin:0 0 12px } p:last-child { margin-bottom:0 } .plain { white-space:pre-wrap }
 ul,ol { padding-left:24px; margin:8px 0 16px } li { margin-bottom:6px }
 pre { padding:12px; background:var(--user); border-radius:8px; white-space:pre-wrap; overflow-wrap:anywhere } code { font-family:monospace }
 h1,h2,h3,h4,h5,h6 { font-size:1.15em; margin:16px 0 8px } .muted { color:var(--muted) }
 .copy { min-height:48px; min-width:48px; padding:8px 0; border:0; background:transparent; color:var(--muted); font:inherit; font-size:.75em }
 button { touch-action:manipulation } button:focus-visible { outline:2px solid var(--accent) }
-#latest { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); padding:10px 16px; min-height:48px; border:1px solid var(--line); border-radius:24px; background:var(--surface); color:var(--ink); font:inherit; font-size:.8em }
-#empty { padding:36px 12px } #empty h1 { font-size:1.25em; margin:0 0 8px } #copy-status { position:fixed; bottom:0; background:var(--surface); color:var(--ink); font-size:.8em }
+#latest { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); padding:10px 16px; min-height:48px; border:1px solid var(--line); border-radius:24px; background:var(--chat_background); color:var(--ink); font:inherit; font-size:.8em }
+#empty { padding:20vh 16px 36px; text-align:center } #empty h1 { font-size:1.25em; margin:0 0 8px } #copy-status { position:fixed; bottom:0; background:var(--chat_background); color:var(--ink); font-size:.8em }
 </style></head><body><main id="messages" aria-label="Conversation"></main>
 <section id="empty"><h1>Start a conversation</h1><p class="muted" id="hint">Write a message below.</p></section>
 <button id="latest" hidden>Latest message ↓</button><div id="copy-status" role="status"></div></body></html>'''
@@ -91,7 +96,7 @@ data.entries.forEach((entry, offset) => {
  let article = root.children[index];
  if (!article) { article = document.createElement('article'); root.append(article); }
  article.className = entry.role;
- const label = document.createElement('div'); label.className = 'role'; label.textContent = entry.label;
+ const label = document.createElement('div'); label.className = entry.label.includes(' · ') ? 'role' : 'role complete'; label.textContent = entry.label;
  const content = document.createElement('div'); content.innerHTML = entry.html;
  article.replaceChildren(label, content);
  if (entry.role === 'assistant' && entry.text) {

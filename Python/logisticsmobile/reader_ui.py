@@ -36,7 +36,6 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.book_unlock_panel = toga.Box(children=[self.book_password,
                 toga.Box(children=[self.book_unlock, self.book_unlock_cancel], style=Pack(direction=ROW))],
                 style=Pack(direction=COLUMN))
-            self.book_lock = toga.Button('Lock comic', on_press=self.lock_book, style=Pack(height=44))
             self.book_open = toga.Button('Open selected', on_press=self.open_selected_book, style=Pack(height=44))
             self.book_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
             self.chapter_selector = toga.Selection(on_change=self.select_chapter, style=Pack(height=44))
@@ -45,7 +44,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.bookmark_selector = toga.Selection(on_change=self.select_bookmark, style=Pack(height=44))
             self.library_view = toga.Box(children=[
                 toga.Button('All documents', on_press=self.show_documents_hub, style=Pack(height=44)),
-                self.book_selector, self.book_import, self.book_open, self.book_lock,
+                self.book_selector, self.book_import, self.book_open,
                 self.chapter_selector, self.book_content,
                 toga.Box(children=[self.previous_page, self.next_page, self.bookmark_button],
                          style=Pack(direction=ROW)), self.bookmark_selector, self.book_status],
@@ -60,22 +59,30 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         if not hasattr(self.library_view, 'transfer_banner'):
             self.register_transfer_status(self.library_view)
         if present:
-            self.show_view(self.library_view, destination='documents', route='library', title='Books & Comics')
+            title = self.session.title if getattr(self, 'session', None) is not None else 'Books & Comics'
+            self.show_view(self.library_view, destination='documents', route='library', title=title)
 
 
 
 
     def set_book_busy(self, busy):
         self.book_busy = busy
+        header = getattr(self, 'comic_header', None)
+        if header is not None:
+            from features.comics.mobile.navigation import adjacent_comic
+            records = [(record['id'], record['name']) for record in getattr(self, 'imported_records', ())
+                       if record['kind'] == 'comic']
+            key = self.session.resource
+            header.sync(not busy and adjacent_comic(records, key, -1) is not None,
+                        not busy and adjacent_comic(records, key, 1) is not None)
         for button in getattr(self, 'library_row_buttons', ()):
             button.enabled = not busy
         for control in (self.book_selector, self.book_import, self.book_open, self.chapter_selector,
                         self.previous_page, self.next_page, self.bookmark_button, self.bookmark_selector,
-                        self.book_password, self.book_unlock, self.book_unlock_cancel, self.book_lock):
+                        self.book_password, self.book_unlock, self.book_unlock_cancel):
             control.enabled = not busy
         if not busy:
             self.book_open.enabled = bool(self.book_labels)
-            self.book_lock.enabled = bool(getattr(getattr(self.book_reader, 'document', None), 'password', None))
             loaded = self.book_record is not None and self.book_reader is not None
             for control in (self.chapter_selector, self.bookmark_button, self.bookmark_selector):
                 control.enabled = loaded
@@ -173,15 +180,6 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         if not self.book_busy:
             self.hide_book_unlock()
             self.book_status.text = 'Comic unlock cancelled. Its encrypted copy was kept.'
-
-    def lock_book(self, widget=None, **kwargs):
-        if not self.book_busy:
-            self.book_loading = True
-            self.release_book_reader()
-            self.hide_book_unlock()
-            self.book_loading = False
-            self.set_book_busy(False)
-            self.book_status.text = 'Comic locked. Open it again to enter its password.'
 
     async def open_book(self, key, *, password=None):
         if self.book_busy:
@@ -539,7 +537,9 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         target = adjacent_comic([(r['id'], r['name']) for r in records if r['kind'] == 'comic'],
                                 self.book_record['id'], direction)
         if target is not None:
-            await self.manager.open(target, destination=self.presentation_destination)
+            immersive = self.reader_immersive
+            if await self.manager.open(target, destination=self.presentation_destination):
+                self.manager.active.set_reading_mode(immersive)
 
     async def previous_comic_file(self, widget=None, **kwargs):
         await self.adjacent_book_comic(-1)

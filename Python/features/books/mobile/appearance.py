@@ -5,9 +5,19 @@ from toga.style.pack import COLUMN
 
 
 class ReaderAppearance(toga.ScrollContainer):
-    def __init__(self, values, on_apply):
+    def __init__(self, values, on_apply, *, kind='epub'):
+        self.kind = kind
         def select(key, items):
             return toga.Selection(items=items, value=values[key], style=Pack(height=44))
+        if kind == 'comic':
+            self.layout_choice = select('comic_layout', ['single', 'auto', 'double'])
+            self.status = toga.Label('Layout changes keep your current page.')
+            content = toga.Box(children=[toga.Label('Comic page layout'), self.layout_choice,
+                toga.Label('Auto: one page in portrait; two pages when the reading area is wider than tall. Comic metadata controls reading direction.'),
+                self.status, toga.Button('Apply and return', on_press=on_apply, style=Pack(height=44))],
+                style=Pack(direction=COLUMN, margin=12))
+            super().__init__(horizontal=False, content=content, style=Pack(flex=1))
+            return
         from .typography import FONT_SIZES
         self.font_choice = select('font_size', list(FONT_SIZES))
         self.margin_choice = select('reading_margin', ['8', '16', '24', '32'])
@@ -18,14 +28,12 @@ class ReaderAppearance(toga.ScrollContainer):
         self.spacing_choice = toga.NumberInput(min=100, max=220, step=5, value=int(values['line_spacing']), style=Pack(height=44))
         self.width_choice = toga.NumberInput(min=0, max=1400, step=20, value=0 if values['reading_width'] == 'auto' else int(values['reading_width']), style=Pack(height=44))
         self.theme_choice = select('reading_theme', list(THEMES))
-        self.layout_choice = select('comic_layout', ['single', 'auto', 'double'])
         self.status = toga.Label('Appearance changes keep your current passage.')
         content = toga.Box(children=[toga.Label('Reading font'), self.family_choice,
             toga.Label('Reading font size'), self.font_choice,
             toga.Label('Line spacing (%)'), self.spacing_choice, toga.Label('Maximum width (0 = automatic)'), self.width_choice,
             toga.Label('Page margins'), self.margin_choice, toga.Label('Theme'), self.theme_choice,
-            toga.Label('Comic page layout'), self.layout_choice,
-            toga.Label('Auto: one page in portrait; two pages when the reading area is wider than tall. Comic metadata controls reading direction.'), self.status,
+            self.status,
             toga.Button('Apply and return', on_press=on_apply, style=Pack(height=44))],
             style=Pack(direction=COLUMN, margin=12))
         super().__init__(horizontal=False, content=content, style=Pack(flex=1))
@@ -40,3 +48,9 @@ class ReaderAppearance(toga.ScrollContainer):
             reading_width='auto' if self.width_choice.value == 0 else str(int(self.width_choice.value)))
         validate(dict(values, reading_theme=self.theme_choice.value))
         return values
+
+    def settings(self):
+        if self.kind == 'comic':
+            return dict(comic_layout=self.layout_choice.value)
+        return dict(font_size=self.font_choice.value, reading_margin=self.margin_choice.value,
+                    reading_theme=self.theme_choice.value, **self.typography())

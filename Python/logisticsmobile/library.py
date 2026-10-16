@@ -86,6 +86,38 @@ class LibraryStore(LibraryEdits):
                 failures.append((path.name, str(error)))
         return sorted(records, key=lambda r: r['name'].casefold()), failures
 
+    def stored_files(self):
+        """Inventory retained imports, including incomplete/corrupt records."""
+        keys = {path.stem for suffix in ('.cbz', '.epub', '.json')
+                for path in self.root.glob('*' + suffix)}
+        items, failures = [], []
+        for key in sorted(keys):
+            try:
+                paths = [self.path(key, suffix) for suffix in ('.cbz', '.epub', '.json')]
+                size = sum(path.stat().st_size for path in paths if path.exists())
+                try:
+                    record = self._read_record(key)[0]
+                    name, kind = record['name'], record['kind']
+                except (OSError, ValueError, KeyError, TypeError):
+                    name, kind = key, 'Unrecognized import'
+                items.append(dict(id=key, name=name, kind=kind, size=size))
+            except (OSError, ValueError) as error:
+                failures.append((key, str(error)))
+        return sorted(items, key=lambda item: (item['name'].casefold(), item['id'])), failures
+
+    def delete_local_copy(self, key):
+        """Delete only this UUID's import and records, never its original source."""
+        from commonUtils.persistence.publication import mutation_lock
+        with mutation_lock:
+            paths = [self.path(key, suffix) for suffix in ('.cbz', '.epub', '.json')]
+            journal = self.edit_journal(key)
+            for path in (*paths, journal):
+                if path.exists() and not path.is_file():
+                    raise ValueError('Import storage contains a non-file; it was preserved.')
+            for path in (*paths, journal):
+                path.unlink(missing_ok=True)
+            self.verified.clear()
+
     @staticmethod
     def validate_archive(path, kind='epub'):
         with ZipFile(path) as archive:
