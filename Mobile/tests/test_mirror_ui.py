@@ -8,6 +8,83 @@ from logisticsmobile.app import LogisticsMobile
 from test_mirror_jobs import MirrorClient
 
 
+class ProgressDeliveryTests(unittest.TestCase):
+    def test_worker_bursts_queue_one_callback_with_latest_values(self):
+        from threading import Thread
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from features.rclone.mobile.mirror_ui import coalesced_progress
+        queued, published = [], Mock()
+        loop = SimpleNamespace(call_soon_threadsafe=lambda callback: queued.append(callback))
+        progress = coalesced_progress(loop, published)
+        def worker(start):
+            for done in range(start, start + 100):
+                progress(done=done)
+        workers = [Thread(target=worker, args=(start,)) for start in (0, 100, 200, 300)]
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join()
+        progress(done=400)
+        self.assertEqual(len(queued), 1)
+        published.assert_not_called()
+        queued.pop(0)()
+        published.assert_called_once_with({'done': 400})
+
+    def test_arrivals_during_render_queue_one_successor_without_blocking_worker(self):
+        from threading import Thread
+        from types import SimpleNamespace
+        from features.rclone.mobile.mirror_ui import coalesced_progress
+        queued, published = [], []
+        loop = SimpleNamespace(call_soon_threadsafe=lambda callback: queued.append(callback))
+        def publish(values):
+            published.append(values['done'])
+            if values['done'] == 0:
+                def worker():
+                    for done in range(1, 101):
+                        progress(done=done)
+                thread = Thread(target=worker, daemon=True)
+                thread.start()
+                thread.join(timeout=2)
+                self.assertFalse(thread.is_alive(), 'Native rendering held the progress worker lock')
+        progress = coalesced_progress(loop, publish)
+        progress(done=0)
+        queued.pop(0)()
+        self.assertEqual(published, [0])
+        self.assertEqual(len(queued), 1)
+        queued.pop(0)()
+        self.assertEqual(published, [0, 100])
+        self.assertFalse(queued)
+
+    def test_old_queued_progress_cannot_overwrite_terminal_or_new_transfer(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from features.rclone.mobile.mirror_ui import MirrorUI, coalesced_progress
+        queued = []
+        loop = SimpleNamespace(call_soon_threadsafe=lambda callback: queued.append(callback))
+        bar = SimpleNamespace(max=100, value=100, start=Mock(), stop=Mock())
+        app = SimpleNamespace(active_host=True, transfer_epoch=1, transfer_busy=True,
+            transfer_message='Finished', transfer_notice=SimpleNamespace(text='Finished'),
+            cloud_status=SimpleNamespace(value='Finished'), transfer_progress=bar,
+            cloud_transfer_progress=None, refresh_transfer_status=Mock())
+        values = dict(phase='Transferring', files=1, done=20, total=100)
+        old_progress = coalesced_progress(loop, lambda values: MirrorUI.publish_mirror_progress(app, 1, values))
+        old_progress(**values)
+        app.transfer_epoch, app.transfer_busy = 2, False
+        queued.pop(0)()
+        self.assertEqual(app.transfer_notice.text, 'Finished')
+        self.assertEqual(bar.value, 100)
+        app.refresh_transfer_status.assert_not_called()
+        old_progress(**dict(values, done=50))
+        app.transfer_epoch, app.transfer_busy = 3, True
+        new_progress = coalesced_progress(loop, lambda values: MirrorUI.publish_mirror_progress(app, 3, values))
+        new_progress(**dict(values, done=30))
+        for callback in queued:
+            callback()
+        self.assertEqual(bar.value, 30)
+        app.refresh_transfer_status.assert_called_once()
+
+
 async def drive_review(app, *, declined=False, early=False):
     for _ in range(200):
         view = getattr(app, '_transfer_review_view', None)

@@ -1,13 +1,38 @@
 """Managed copies and transfers which keep ordinary Documents usable."""
 from features.rclone.mobile.storage_location import collection_path
 import asyncio
-from threading import Event
+from threading import Event, Lock
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from features.rclone.mobile.mirror_jobs import MirrorJobs
 from features.rclone.mobile.messages import import_hint
 from features.rclone.mobile.transfer_review_ui import TransferReviewUI
+
+
+def coalesced_progress(loop, publish):
+    """Keep only the newest worker snapshot while native UI rendering is busy."""
+    lock = Lock()
+    latest, scheduled = None, False
+
+    def drain():
+        nonlocal latest, scheduled
+        with lock:
+            values, latest, scheduled = latest, None, False
+        # Rendering can be slow. Do not hold the worker lock across native UI;
+        # arrivals during this call can schedule at most one successor.
+        publish(values)
+
+    def progress(**values):
+        nonlocal latest, scheduled
+        with lock:
+            latest = values
+            if scheduled:
+                return
+            scheduled = True
+        loop.call_soon_threadsafe(drain)
+
+    return progress
 
 
 class MirrorUI(TransferReviewUI):
@@ -282,8 +307,7 @@ class MirrorUI(TransferReviewUI):
         self.show_transfers(present=self.native_host.state.destination == 'files')
         self.refresh_transfer_status()
         epoch = self.transfer_epoch = getattr(self, 'transfer_epoch', 0) + 1
-        def progress(**values):
-            self.loop.call_soon_threadsafe(self.publish_mirror_progress, epoch, values)
+        progress = coalesced_progress(self.loop, lambda values: self.publish_mirror_progress(epoch, values))
         result = None
         try:
             result = await asyncio.to_thread(work, client, cancel.is_set, progress)
