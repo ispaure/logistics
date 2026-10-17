@@ -9,7 +9,8 @@ buffer, recovery and Save actions. There is no automatic preview split on phones
 or tablets. See [Reading and editing](../../../../../docs/user_mobile/documents/reading-and-editing.md)
 for supported formatting and syntax that uses Source mode.
 
-Markdown previews and vault notes offer **Read aloud**, with offline system
+Tap the **speaker** icon in the Markdown preview or vault reader toolbar to open
+**Read aloud**, with offline system
 voices, speed, pause/resume and stop controls. Select a passage to read it, or
 play the whole rendered note. See [Reading and editing](../../../../../docs/user_mobile/documents/reading-and-editing.md#markdown-read-aloud).
 

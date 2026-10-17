@@ -609,6 +609,9 @@ class ProviderUI(FilesUI):
         view.crypt_page.style.flex = 1
         view.crypt_title.style.font_size = 12
         controls = [toga.Box(children=[view.crypt_title, view.crypt_actions], style=Pack(direction=ROW))]
+        view.reader_toolbar = controls[0]
+        if view.crypt_reader.book is not None:
+            view.reader_toolbar.insert(1, icon_button('speaker', 'Read aloud', on_press=self.show_provider_read_aloud))
         if view.crypt_reader.kind == '.pdf':
             async def jump(widget=None, **kwargs):
                 from features.pdf.document import page_index
@@ -708,8 +711,9 @@ class ProviderUI(FilesUI):
         speech = getattr(self, "markdown_speech", None)
         if speech is not None:
             speech.close()
-            if speech.button in self.crypt_content.children:
-                self.crypt_content.remove(speech.button)
+            toolbar = getattr(self, 'reader_toolbar', None)
+            if toolbar is not None and speech.button in toolbar.children:
+                toolbar.remove(speech.button)
         formatted = getattr(self, 'crypt_formatted', None)
         if formatted is not None:
             formatted.dispose()
@@ -798,7 +802,8 @@ class ProviderUI(FilesUI):
                 privacy_gate=lambda: getattr(self, "privacy_gate", None), valid=lambda: speech_session_valid(self))
         speech.close()
         speech.web = preview
-        self.crypt_content.insert(0, speech.button)
+        if speech.button not in self.reader_toolbar.children:
+            self.reader_toolbar.insert(len(self.reader_toolbar.children) - 1, speech.button)
         self.crypt_preview_button.text = 'Text' if getattr(self.crypt_reader, 'read_only', False) else 'Edit Markdown'
 
     def private_edit_mode_changed(self, widget=None, **kwargs):

@@ -74,11 +74,11 @@ class VaultBrowser:
             valid=lambda: not self.cancelled.is_set() and app.active_host
                 and (not self.provider.private or (self.client is app.cloud_client
                     and self.generation == getattr(self.client, "generation", None))))
-        self.article.insert(2, self.speech.button)
         self.speech.button.enabled = False
         self.sidebar = AdaptiveSidebar(self.tree, self.article, label='Vault folders and Markdown notes')
         self.menu = icon_button('obsidian', 'Browse Obsidian vault notes', on_press=self.sidebar.toggle)
-        self.view = toga.Box(children=[toga.Box(children=[self.menu, self.notice], style=Pack(direction=ROW)),
+        self.view = toga.Box(children=[toga.Box(children=[self.menu, self.notice,
+            toga.Box(style=Pack(flex=1)), self.speech.button], style=Pack(direction=ROW)),
             self.sidebar.view], style=Pack(direction=COLUMN, margin=12, flex=1))
         self.reflow(app.adaptive.content_width(destination, margin=0))
         self.sidebar.show_sidebar()

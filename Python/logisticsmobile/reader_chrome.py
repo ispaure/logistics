@@ -56,6 +56,7 @@ class ReaderChrome:
         else:
             self.reader_header = toga.Box(children=[browser,
                 toga.Box(style=Pack(flex=1)),
+                icon_button('speaker', 'Read aloud', on_press=self.show_read_aloud),
                 icon_button('fullscreen', 'Enter fullscreen', on_press=self.toggle_reading_mode),
                 icon_button('appearance', 'Reading appearance', on_press=self.show_reader_appearance),
                 self.reader_actions_button], style=Pack(direction=ROW))

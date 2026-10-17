@@ -38,11 +38,12 @@ class MarkdownSpeechTests(unittest.TestCase):
         self.app.editor.value = '# Draft'
         self.app.show_preview()
         normal = self.app.editor_view.markdown_speech
-        self.assertIn(normal.button, self.app.preview_box.children)
+        self.assertIn(normal.button.parent, self.app.preview_box.children)
+        self.assertEqual(normal.button.control_icon, 'speaker')
 
         async def exercise():
             with patch('features.books.mobile.speech_view.NativeSpeech', Engine):
-                normal.show()
+                normal.button.on_press()
                 panel = normal.panel
                 await panel.ready_task
                 (self.root / 'Private.md').write_text('# Private')
@@ -50,8 +51,8 @@ class MarkdownSpeechTests(unittest.TestCase):
                 self.assertTrue(panel.closed)
                 owner = self.app.private_sessions.active
                 speech = owner.markdown_speech
-                self.assertIn(speech.button, owner.crypt_content.children)
-                speech.show()
+                self.assertIn(speech.button, owner.reader_toolbar.children)
+                speech.button.on_press()
                 panel = speech.panel
                 await panel.ready_task
                 with patch.object(owner.crypt_preview, 'evaluate_javascript', AsyncMock(return_value=json.dumps('Private'))):
@@ -60,7 +61,7 @@ class MarkdownSpeechTests(unittest.TestCase):
                 owner.clear_private_preview()
                 self.assertTrue(panel.engine.closed)
                 self.assertEqual(panel.session.ranges, [])
-                self.assertNotIn(speech.button, owner.crypt_content.children)
+                self.assertNotIn(speech.button, owner.reader_toolbar.children)
         self.run_async(exercise())
 
     def test_vault_playback_pause_navigation_and_late_dom_result(self):
@@ -69,7 +70,8 @@ class MarkdownSpeechTests(unittest.TestCase):
             await owner.open_note('Vault/Home.md')
             speech = owner.speech
             with patch('features.books.mobile.speech_view.NativeSpeech', Engine):
-                speech.show()
+                self.assertIn(speech.button, owner.view.children[0].children)
+                speech.button.on_press()
                 panel = speech.panel
                 await panel.ready_task
                 with patch.object(owner.web, 'evaluate_javascript', AsyncMock(return_value=json.dumps('Home\nA readable note.'))):

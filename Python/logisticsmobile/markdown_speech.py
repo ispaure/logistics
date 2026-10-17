@@ -3,10 +3,8 @@ import json
 from types import SimpleNamespace
 from weakref import WeakSet
 
-import toga
-from toga.style import Pack
-
 from features.books.mobile.speech_view import ReadAloudPanel
+from .control_icons import icon_button
 
 
 class MarkdownSpeechPanel(ReadAloudPanel):
@@ -24,7 +22,7 @@ class MarkdownSpeech:
         self.privacy_gate, self.valid = privacy_gate, valid
         self.panel = None
         self.generation = 0
-        self.button = toga.Button('Read aloud', on_press=self.show, style=Pack(height=48))
+        self.button = icon_button('speaker', 'Read aloud', on_press=self.show)
         if not hasattr(app, '_markdown_speech'):
             app._markdown_speech = WeakSet()
         app._markdown_speech.add(self)
