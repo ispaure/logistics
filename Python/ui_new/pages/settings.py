@@ -125,16 +125,14 @@ class FeatureSettingsPanel(qt.QWidget):
         self.title.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         header = qt.QHBoxLayout()
         header.addWidget(self.title, 1)
-        self.guide = Path(registry.__file__).parent / state.name / 'user_docs' / 'index.md'
-        markdown_files = {path.name for path in self.guide.parent.glob('*.md') if path.is_file()}
-        if markdown_files == {'index.md', 'README.md'}:
-            self.guide = self.guide.parent / 'README.md'
+        from services.documentation import feature_guide
+        self.guide, self.guide_directory = feature_guide(Path(registry.__file__).parent / state.name)
         self.guide_button = qt.QPushButton('User Guide')
         self.guide_button.setAccessibleName(f'{state.label} user guide')
         self.guide_button.setEnabled(self.guide.is_file())
         self.guide_button.setToolTip('Open user documentation (hold Alt to edit)' if self.guide.is_file()
                                      else 'No user guide is installed.')
-        self.guide_button.clicked.connect(lambda: open_markdown(self.guide, parent=self.window(), detached=True, allow_new_tabs=False))
+        self.guide_button.clicked.connect(lambda: open_markdown(self.guide, directory=self.guide_directory, parent=self.window(), detached=True, allow_new_tabs=False))
         header.addWidget(self.guide_button)
         self.layout.addLayout(header)
         self.status = qt.QLabel()

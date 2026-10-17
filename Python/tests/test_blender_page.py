@@ -24,13 +24,13 @@ class BlenderPageTests(QtTestCase):
         self.addCleanup(self.temporary.cleanup)
         self.manager = BlenderManager(Path(self.temporary.name))
         from features.blender.library import AddonLibrary
-        library = patch('features.blender.page.AddonLibrary', side_effect=lambda manager: AddonLibrary(manager, provided_root=Path(self.temporary.name) / 'provided'))
+        library = patch('features.blender.ui.page.AddonLibrary', side_effect=lambda manager: AddonLibrary(manager, provided_root=Path(self.temporary.name) / 'provided'))
         library.start(); self.addCleanup(library.stop)
         disabled = patch('features.blender.bluehole.DEFAULT', {'enabled': False, 'branch': 'main'})
         disabled.start()
         self.addCleanup(disabled.stop)
         self.builds = load_releases(platform='windows-x64')
-        self.patched = patch('features.blender.page.load_releases', return_value=self.builds)
+        self.patched = patch('features.blender.ui.page.load_releases', return_value=self.builds)
         self.patched.start()
         self.addCleanup(self.patched.stop)
 
@@ -108,7 +108,7 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual([group.child(i).text(0) for i in range(group.childCount())], ['2.0.0', '1.0.0'])
         self.assertEqual(group.child(0).text(5), 'Shared')
         group.setExpanded(True)
-        with patch('features.blender.page.qt.QFileDialog.getOpenFileName', return_value=(str(personal), '')):
+        with patch('features.blender.ui.page.qt.QFileDialog.getOpenFileName', return_value=(str(personal), '')):
             page.add_addon.click()
         self._wait_for_operation(page)
         self.assertEqual(page.choices.item(0, 3).text(), '3.0.0')
@@ -240,7 +240,7 @@ class BlenderPageTests(QtTestCase):
         self.app.processEvents()
         item = page.preset_list.item(0)
         menu = qt.QMenu(page)
-        with patch('features.blender.page.qt.QMenu', return_value=menu), patch.object(menu, 'exec'):
+        with patch('features.blender.ui.page.qt.QMenu', return_value=menu), patch.object(menu, 'exec'):
             page._preset_context_menu(page.preset_list.visualItemRect(item).center())
         self.assertEqual([a.text() for a in menu.actions()], ['Rename…', 'Duplicate…', 'Copy to Another Version…', 'Delete…'])
         with patch.object(page, '_confirm', return_value=True):
@@ -355,7 +355,7 @@ class BlenderPageTests(QtTestCase):
         page = BlenderPage(manager=self.manager)
         rows = [{'name': 'Tool', 'module': 'tool', 'version': '1.0', 'kind': 'Legacy addon',
                  'enabled': True, 'path': str(root / 'scripts/addons/tool.py')}]
-        with patch('features.blender.page.inspect_addons', return_value=(rows, 'Saved state')):
+        with patch('features.blender.ui.page.inspect_addons', return_value=(rows, 'Saved state')):
             page._inspect()
             deadline = monotonic() + 3
             while page.task.busy and monotonic() < deadline:

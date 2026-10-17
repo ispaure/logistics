@@ -1,4 +1,6 @@
 """Memory-only document readers shared by ordinary and encrypted providers."""
+from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
+
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
@@ -31,8 +33,8 @@ class PrivateReader:
         self.source = source or MemorySource(name, data)
         self.kind = Path(name).suffix.lower()
         self.book = None
-        self.editable = self.kind in {'.md', '.markdown', '.txt', '.ini'}
-        if self.kind in {'.md', '.markdown', '.txt', '.ini'}:
+        self.editable = self.kind in SOURCE_EXTENSIONS
+        if self.kind in SOURCE_EXTENSIONS:
             if len(data) > 1024 * 1024:
                 raise ValueError('Private text reading is limited to 1 MiB.')
             from commonUtils.persistence.text import TextSession
@@ -79,7 +81,7 @@ class PrivateReader:
         if self.book is not None:
             from features.books.mobile.content import chapter_text
             return 'text', chapter_text(self.book, index)
-        if self.kind in {'.md', '.markdown', '.txt', '.ini'}:
+        if self.kind in SOURCE_EXTENSIONS:
             return 'text', self.text
         from features.comics.mobile.validation import image_dimensions, MAX_IMAGE
         with self.source.open_archive(self.name) if self.streaming else ZipFile(BytesIO(self.data)) as archive:

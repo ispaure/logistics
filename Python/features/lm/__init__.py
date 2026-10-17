@@ -3,7 +3,7 @@ FEATURE_DESCRIPTION = 'Chat with an existing LM server and keep conversations lo
 
 
 def create_page(parent=None):
-    from .page import LMPage
+    from .ui.page import LMPage
     return LMPage(parent)
 
 

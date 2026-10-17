@@ -50,6 +50,17 @@ for saved_document in (False, True):
     app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
     assert app.native_host.state.destination == 'home'
     assert app.body.children[0].content.children[0].text == 'Your workspace'
+    from logisticsmobile.documentation_ui import show_documentation
+    owner = show_documentation(app)
+    assert owner.path.name == 'user_mobile.md'
+    assert owner.catalog.root == Path(logisticsmobile.__file__).resolve().parent / 'help/docs'
+    owner.follow_link(owner.web, '../../Python/features/lm/docs/user_mobile/user_mobile.md')
+    assert owner.catalog.root == Path(logisticsmobile.__file__).resolve().parent / 'help/Python/features/lm/docs'
+    assert owner.path.name == 'user_mobile.md'
+    assert owner.back()
+    assert owner.catalog.root == Path(logisticsmobile.__file__).resolve().parent / 'help/docs'
+    assert not (Path(logisticsmobile.__file__).parent / 'help/Python/features/emulation').exists()
+    assert not (Path(logisticsmobile.__file__).parent / 'help/Python/commonUtils').exists()
     app.main_window.close()
     app.loop.close()
 print('PACKAGED_HOME_OK')

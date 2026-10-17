@@ -252,6 +252,8 @@ class FolderHubTests(unittest.TestCase):
                 app.show_locations()
                 self.assertIn('Server-Library-Comics', app.folder_buttons)
                 self.assertIn(('Server', 'Library'), app.folder_tree_buttons)
+                self.assertNotIn('Local-Comics', app.folder_buttons)
+                app.change_folder_source('Local')
                 self.assertIn('Local-Comics', app.folder_buttons)
                 self.assertFalse(any('/' in name or 'Actual subfolder' in name
                                      for name in app.folder_picker_choices))
@@ -279,6 +281,7 @@ class FolderHubTests(unittest.TestCase):
                 app.loop.run_until_complete(recovery.children[2].on_press())
                 self.assertTrue(app.routes.roots['files'].children)
             app.loop.run_until_complete(app.refresh_folder_hub())
+            app.change_folder_source('Local')
             self.assertIn('All files', app.folder_buttons)
 
     def test_transient_native_credential_index_does_not_clear_folder_rows(self):
@@ -293,6 +296,7 @@ class FolderHubTests(unittest.TestCase):
             app.show_locations()
             with patch.object(type(app.folder_credential), 'value', new_callable=PropertyMock, side_effect=IndexError):
                 app.update_folder_list(app.folder_picker_choices)
+            app.change_folder_source('Local')
             self.assertIn('All files', app.folder_buttons)
             self.assertTrue(app.folder_list.children)
 
@@ -322,14 +326,15 @@ class FolderHubTests(unittest.TestCase):
                 app.cloud_remote.items = ['Loaded drive']
                 app.show_locations()
                 view = app.body.children[0]._workspace_frame.main
-                self.assertEqual(view.children[0].children[0].text, 'Credential')
+                self.assertEqual([button.text for button in view.children[0].children], ['rclone', 'Local', 'Network shares'])
+                self.assertEqual(view.children[1].children[0].children[0].text, 'Credential')
                 self.assertEqual(app.folder_credential.value, 'All')
                 self.assertEqual(app.native_host.labels[app.native_host.destinations.index('files')], 'Folder Hub')
-                self.assertEqual(view.children[1].children,
+                self.assertEqual(view.children[2].children,
                                  [app.folder_transfers_button, app.folder_refresh_button, app.folder_add_share_button])
                 self.assertIsInstance(view.children[-1], toga.ScrollContainer)
                 self.assertIs(view.children[-1].content, app.folder_list)
-                self.assertEqual(set(app.folder_buttons), set(app.folder_picker_choices))
+                self.assertEqual(set(app.folder_buttons), {'Loaded drive'})
                 self.assertFalse(any(isinstance(child, toga.Selection) for child in view.children))
                 self.assertIn('↻', app.folder_refresh_button.text)
                 self.assertIn('Loaded drive', app.folder_picker_choices)
@@ -340,7 +345,10 @@ class FolderHubTests(unittest.TestCase):
                 # Refresh discovers new local folders in the visible list.
                 (root.parent / 'Added later').mkdir()
                 app.loop.run_until_complete(app.folder_refresh_button.on_press())
+                self.assertNotIn('Added later', app.folder_buttons)
+                app.change_folder_source('Local')
                 self.assertIn('Added later', app.folder_buttons)
+                app.change_folder_source('rclone')
                 self.assertFalse(app.routes.screens['files'])
                 self.assertIn('Comics', app.folder_picker_choices)
                 # A newly imported credential is reflected without rebuilding the root.
@@ -351,6 +359,7 @@ class FolderHubTests(unittest.TestCase):
                 app.folder_credential.value = 'Loaded'
                 self.assertEqual(set(app.folder_buttons), {'Loaded drive'})
                 app.folder_credential.value = 'All'
+                app.change_folder_source('Local')
                 app.loop.run_until_complete(app.folder_buttons['Comics'].on_press())
                 self.assertEqual(app.routes.screens['files'][-1][0], 'browser')
                 self.assertEqual(app.file_path, 'Comics')

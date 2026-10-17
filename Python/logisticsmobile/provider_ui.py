@@ -59,6 +59,9 @@ class ProviderUI(FilesUI):
         self.clear_private_preview()
         if hasattr(self, 'crypt_text'):
             self.crypt_text.value = ''
+            dispose = getattr(self.crypt_text, 'dispose', None)
+            if dispose is not None:
+                dispose()
         if hasattr(self, 'provider_spread'):
             self.provider_spread.dispose()
         if hasattr(self, 'crypt_image'):
@@ -94,23 +97,11 @@ class ProviderUI(FilesUI):
                 drawer.status.text = 'Private folders locked. Choose an available location.'
             if drawer.destination == 'documents':
                 drawer.refresh_menu()
-        self.editor_linked_roots = {}
-        for name in ('file_browser', 'editor_browser', 'remote_browser'):
+        self.editor_picker().clear()
+        for name in ('file_browser', 'remote_browser'):
             browser = getattr(self, name, None)
             if browser is not None:
                 browser.stop()
-        self.save_as_data = None
-        self.save_as_privacy_gate = None
-        self.save_as_source_document = None
-        self.editor_picker_rows = {}
-        self.editor_picker_location = None
-        if hasattr(self, 'picker_entries'):
-            self.picker_entries.items = []
-            self.picker_folder.value = ''
-        if hasattr(self, 'save_as_view'):
-            self.save_as_name.value = ''
-            self.save_as_storage.items = []
-            self.save_as_status.value = ''
         if hasattr(self, 'files_view'):
             self.file_rows = {}
             self.file_roots = {}
@@ -163,7 +154,9 @@ class ProviderUI(FilesUI):
                                                     enabled=not reader.editable, style=Pack(height=44))
             view.crypt_bookmark_selector = toga.Selection(items=['Bookmarks…'],
                 on_change=self.select_private_bookmark, enabled=not reader.editable, style=Pack(height=44))
-            view.crypt_text = toga.MultilineTextInput(readonly=not reader.editable,
+            from commonUtils.ui.native.code_input import CodeInput
+            view.crypt_text = CodeInput(loop=self.loop, filename=reader.name, readonly=not reader.editable,
+                on_change=self.private_source_changed,
                 style=Pack(flex=1, font_size=int(self.preferences.values['font_size'])))
             if getattr(reader, 'read_only', False):
                 view.crypt_text.readonly = True
@@ -201,6 +194,8 @@ class ProviderUI(FilesUI):
             self._crypt_cancel = None
             self.clear_private_reader(discard=True)
             self.__dict__.update(vars(view))
+            if reader.editable and not getattr(reader, 'read_only', False) and reader.kind in {'.md', '.markdown'}:
+                self.toggle_private_preview()
             privacy = getattr(getattr(self, 'app', self), 'screen_privacy', None)
             if privacy is not None:
                 privacy.refresh()
@@ -357,7 +352,7 @@ class ProviderUI(FilesUI):
                 viewport=controller.private_comic_viewport(view),
                 seam=controller.private_comic_seam(view))
         for child in list(view.crypt_content.children):
-            if hasattr(child, 'dispose') and child is not view.crypt_image:
+            if hasattr(child, 'dispose') and child not in (view.crypt_image, view.crypt_text):
                 child.dispose()
             view.crypt_content.remove(child)
         view.crypt_text.value = ''
@@ -630,6 +625,10 @@ class ProviderUI(FilesUI):
         self.resume_crypt()
 
     def clear_private_preview(self):
+        pending = getattr(self, '_private_preview_pending', None)
+        if pending is not None:
+            pending.cancel()
+            self._private_preview_pending = None
         preview = getattr(self, 'crypt_preview', None)
         if preview is not None:
             native = getattr(preview._impl, 'native', None)
@@ -638,8 +637,31 @@ class ProviderUI(FilesUI):
             preview.set_content('https://logistics.invalid/closed/', '<p>Preview closed.</p>')
             if preview in self.crypt_content.children:
                 self.crypt_content.remove(preview)
-                self.crypt_content.add(self.crypt_text)
+                if self.crypt_text not in self.crypt_content.children:
+                    self.crypt_content.add(self.crypt_text)
             self.crypt_preview_button.text = 'Preview'
+
+    def private_source_changed(self, widget, **kwargs):
+        if widget is not getattr(self, 'crypt_text', None):
+            return
+        preview = getattr(self, 'crypt_preview', None)
+        if preview is None or preview not in self.crypt_content.children:
+            return
+        pending = getattr(self, '_private_preview_pending', None)
+        if pending is not None:
+            pending.cancel()
+        reader = self.crypt_reader
+        def render():
+            self._private_preview_pending = None
+            if self.crypt_reader is not reader or reader is None:
+                return
+            from .preview import markdown_preview
+            try:
+                preview.set_content('https://logistics.invalid/live/',
+                    markdown_preview(widget.value, int(self.preferences.values['font_size'])))
+            except ValueError as error:
+                self.crypt_title.text = private_label(str(error))
+        self._private_preview_pending = self.loop.call_later(.25, render)
 
     def toggle_private_preview(self, widget=None, **kwargs):
         if (self.cloud_busy and not getattr(self, 'transfer_busy', False)) or self.crypt_reader is None or not self.crypt_reader.editable:
@@ -659,9 +681,14 @@ class ProviderUI(FilesUI):
             self.crypt_preview = preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
                                                        style=Pack(flex=1))
         preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
-        self.crypt_content.remove(self.crypt_text)
+        read_only = getattr(self.crypt_reader, 'read_only', False)
+        if read_only:
+            self.crypt_content.remove(self.crypt_text)
+        else:
+            from commonUtils.ui.native.adaptive import allocated_width
+            self.crypt_content.style.direction = ROW if allocated_width(self.crypt_content, self.main_window.size.width) >= 720 else COLUMN
         self.crypt_content.add(preview)
-        self.crypt_preview_button.text = 'Text' if getattr(self.crypt_reader, 'read_only', False) else 'Edit'
+        self.crypt_preview_button.text = 'Text' if read_only else 'Hide preview'
 
     def show_private_tools(self, widget=None, **kwargs):
         if not self.cloud_busy:

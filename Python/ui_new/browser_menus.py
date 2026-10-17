@@ -55,8 +55,8 @@ class BrowserMenus(qt.QObject):
         return action
 
     def guide(self):
-        from commonUtils.ui.markdown import open_markdown
-        open_markdown(Path(__file__).with_name('user_docs') / 'README.md',
+        from services.documentation import open_guide
+        open_guide(Path(__file__).resolve().parents[2] / 'docs/user/files-and-documents.md',
                       parent=self.view.window(), detached=True, allow_new_tabs=False)
 
     def workspace(self):

@@ -1,5 +1,5 @@
 # Git
 
-[Open the git user guide](README.md).
+[Open the user guide](../docs/user/user.md).
 
-This entry is retained for Logistics’ in-app help. The linked guide is canonical.
+Compatibility entry for in-app help; the linked guide is canonical.

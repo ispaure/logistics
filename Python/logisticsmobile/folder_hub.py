@@ -69,3 +69,14 @@ def credential_choices(choices, remotes):
     return {name: entry for name, entry in choices.items()
             if entry.get('remote') in remotes or any(copy.get('remote') in remotes
                                                     for copy in entry.get('copies', ()))}
+
+
+def source_choices(choices, source, network_remotes=()):
+    """Separate logical folders by ownership, keeping their related copies together."""
+    network_remotes = set(network_remotes)
+    def owner(entry):
+        remotes = {copy.get('remote') for copy in [entry, *entry.get('copies', ())]} - {None, ''}
+        if remotes & network_remotes:
+            return 'Network shares'
+        return 'rclone' if remotes else 'Local'
+    return {name: entry for name, entry in choices.items() if owner(entry) == source}

@@ -72,6 +72,7 @@ class UXWorkflowTests(unittest.TestCase):
         root.mkdir(parents=True)
         (root / 'Draft.md').write_text('# File')
         app.show_locations()
+        app.folder_source_buttons['Local'].on_press()
         app.loop.run_until_complete(app.folder_buttons['Notes'].on_press())
         self.assertEqual([route[0] for route in app.routes.screens['files']], ['browser'])
         self.assertEqual(app.file_path, 'Notes')

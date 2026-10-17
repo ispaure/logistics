@@ -17,6 +17,7 @@ from .changes import ChangesPanel
 from .dialogs import FormDialog
 from .jobs import GitJobs
 from .repository_tools import RepositoryTools
+from .history_controller import RepositoryHistory
 
 
 from .application_preferences import ApplicationPreferences
@@ -31,6 +32,47 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
     view_title = "Repository (Git)"
     idle = qt.Signal()
 
+    # Compatibility accessors keep job and host callbacks on one state owner.
+    @property
+    def history_limit(self):
+        return self.history_controller.limit
+
+    @history_limit.setter
+    def history_limit(self, value):
+        self.history_controller.limit = value
+
+    @property
+    def _preview_reload(self):
+        return self.history_controller.reload
+
+    @_preview_reload.setter
+    def _preview_reload(self, value):
+        self.history_controller.reload = value
+
+    @property
+    def _search_pending(self):
+        return self.history_controller.search_pending
+
+    @_search_pending.setter
+    def _search_pending(self, value):
+        self.history_controller.search_pending = value
+
+    @property
+    def _focus_search_pending(self):
+        return self.history_controller.focus_pending
+
+    @_focus_search_pending.setter
+    def _focus_search_pending(self, value):
+        self.history_controller.focus_pending = value
+
+    @property
+    def _comparison_selection(self):
+        return self.history_controller.comparison_selection
+
+    @_comparison_selection.setter
+    def _comparison_selection(self, value):
+        self.history_controller.comparison_selection = value
+
     def __init__(self, parent=None, *, preferences_path=None, preferences=None, repository_opener=None, restore_last=True):
         super().__init__(parent)
         self.setProperty('navigation_position', 'workspace')
@@ -42,7 +84,7 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         self.worker = None
         self.snapshot = None
         self.path = None
-        self.history_limit = 200
+        self.history_controller = RepositoryHistory(self)
         self._template_message = ''
         self.closing = False
         self._refresh_pending = False
@@ -370,31 +412,7 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
             self._repositories()
 
     def preview_change(self, change, staged):
-        if self.busy or not self.path: return
-        if self.skip_preview(change.path): return
-        self._comparison_selection = (change, staged)
-        self.preview.compare_button.setVisible(not change.conflict and change.submodule == "N...")
-        self._preview_reload = lambda: self.preview_change(change, staged)
-        path = self.path
-        ignore_whitespace = self.preview.ignore_whitespace.isChecked()
-        def read(runner):
-            repo = Repository(path, runner)
-            return repo.untracked_preview(change.path) if change.index == '?' else repo.diff(
-                change.path, staged=staged, ignore_whitespace=ignore_whitespace)
-        self.preview.set_file_actions(staged, change.index != '?' and not change.conflict)
-        def show(text):
-            title = ('Staged: ' if staged else 'Working tree: ') + change.path
-            text = text or ('No differences with whitespace ignored.' if ignore_whitespace else 'No textual differences.')
-            if change.index == '?':
-                self.preview.show_text(title, text)
-            else:
-                allowed = not (ignore_whitespace or change.conflict or change.original_path or change.submodule != 'N...'
-                               or any(line.startswith(('old mode ', 'new mode ', 'rename ', 'copy ')) for line in text.splitlines()))
-                context = {'root': str(path), 'path': change.path, 'staged': staged, 'patch': text,
-                           'allowed': allowed, 'reason': '' if allowed else
-                           'Use the complete file action, or turn off Ignore whitespace for hunk actions.'}
-                self.preview.show_diff(title, text, hunk_context=context)
-        self._job('Read file changes', read, show)
+        return self.history_controller.preview_change(change, staged)
 
     def apply_hunk(self, context, index, action):
         if self.busy or not self.path or str(self.path) != context['root'] or not context['allowed']: return
@@ -407,178 +425,40 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
             context['path'], index, context['patch'], staged=context['staged'], discard=action == 'discard'), applied)
 
     def compare_change(self):
-        if self.busy or not self.path or not getattr(self, '_comparison_selection', None):
-            return
-        from commonUtils.ui.code_editor.diff import DiffDialog, compare_text
-        change, staged = self._comparison_selection
-        path = self.path
-        names = ('HEAD', 'Index') if staged else ('Index', 'Working file')
-        def read(runner):
-            left, right = Repository(path, runner).comparison_inputs(change.path, staged=staged)
-            return compare_text(left, right, *names)
-        def show(model):
-            if self.path == path and not self.closing:
-                dialog = DiffDialog(model, self, left_name=names[0], right_name=names[1], path=path/change.path)
-                from features.code_font import bind_code_views
-                bind_code_views(dialog)
-                dialog.show()
-        self._job('Compare file versions', read, show)
+        return self.history_controller.compare_change()
 
     def _reload_preview(self, *args):
-        reload = getattr(self, '_preview_reload', None)
-        if reload and not self.busy: reload()
+        return self.history_controller._reload_preview(*args)
 
     def preview_commit(self, commit, panel=None):
-        if self.busy or not self.path or commit is None: return
-        panel = panel or self.history
-        self._preview_reload = None
-        path = self.path
-        full_tree = bool(panel.file_mode.currentIndex())
-        def read(runner):
-            repo = Repository(path, runner)
-            return repo.commit_metadata(commit.oid), (repo.tree(commit.oid) if full_tree else repo.commit_files(commit.oid))
-        def show(result):
-            details, entries = result
-            self.preview.show_text(commit.oid + ' · ' + commit.subject, 'Select a file to review its changes.')
-            panel.set_tree(entries)
-            panel.set_metadata(details)
-            self.preview.hide_file_actions()
-            panel.select_first_file()
-        self._job('Read commit', read, show)
+        return self.history_controller.preview_commit(commit, panel)
 
     def focus_parent(self, oid):
-        if self.busy or not self.path: return
-        self.history.search.clear()
-        self.history.branch_filter.setCurrentIndex(0)
-        if self.history.select_ref(oid): return
-        path = self.path
-        def show(commits):
-            self.history_limit = 5000
-            self.history.set_commits(commits, False)
-            if not self.history.select_ref(oid):
-                self.status.setText('Parent is outside the 5,000-commit history limit.')
-        self._job('Load parent history', lambda runner: Repository(path, runner).history(5000), show)
+        return self.history_controller.focus_parent(oid)
 
     def preview_blob(self, entry):
-        if self.skip_preview(entry.path): return
-        if entry.kind == 'working':
-            change = next((change for change in self.snapshot.status.changes if change.path == entry.path), None)
-            if change is not None: self.preview_working_file(change)
-            return
-        if self.busy or not self.path: return
-        self._preview_reload = lambda: self.preview_blob(entry)
-        if entry.kind == 'change':
-            path = self.path
-            ignore_whitespace = self.preview.ignore_whitespace.isChecked()
-            self._job('Read commit file diff', lambda runner: Repository(path, runner).commit_file_diff(
-                entry.oid, entry.path, ignore_whitespace=ignore_whitespace),
-                lambda text: self.preview.show_diff(entry.path,
-                    text or ('No differences with whitespace ignored.' if ignore_whitespace else 'No textual differences.')))
-            return
-        if entry.kind == 'commit':
-            self.preview.show_text(entry.path, f'Submodule commit: {entry.oid}\nOpen its repository to browse its files.')
-            return
-        path = self.path
-        self._job('Read historical file', lambda runner: Repository(path, runner).blob(entry.oid),
-                  lambda text: self.preview.show_text(entry.path + ' · ' + entry.oid[:8], text))
+        return self.history_controller.preview_blob(entry)
 
     def _view_changed(self, index):
-        target = (self.change_preview_layout, self.history_preview_layout, self.search_preview_layout)[index]
-        target.addWidget(self.preview)
-        self.preview.hide_file_actions()
-        self._select_navigation(index)
-        if index == 2:
-            if self.search_results.stale:
-                self.search_history()
-            elif self.search_results.selected_commit():
-                self.preview_commit(self.search_results.selected_commit(), self.search_results)
-        elif index == 1:
-            if self.history.working_copy_is_selected():
-                self.preview_working_copy()
-            elif self.history.selected_commit() is None and self.history.table.topLevelItemCount():
-                for i in range(self.history.table.topLevelItemCount()):
-                    item = self.history.table.topLevelItem(i)
-                    if item.data(1, qt.Qt.ItemDataRole.UserRole):
-                        self.history.table.setCurrentItem(item)
-                        break
-            elif self.history.selected_commit(): self.preview_commit(self.history.selected_commit())
-        else:
-            for tree in (self.changes.staged_files, self.changes.unstaged_files):
-                item=tree.currentItem()
-                if item:
-                    self.preview_change(*item.data(0,qt.Qt.ItemDataRole.UserRole))
-                    break
-            else:
-                self._preview_reload = None
-                self.preview.show_text('Select a changed file', '')
+        return self.history_controller._view_changed(index)
 
     def preview_working_copy(self):
-        if not self.snapshot: return
-        from ..models import TreeEntry
-        changes = self.snapshot.status.changes
-        self._preview_reload = None
-        self.history.set_tree([TreeEntry(change.index + change.worktree, 'working', '', change.path)
-                               for change in changes])
-        self.history.metadata.setPlainText(f'Uncommitted changes\n{len(changes)} changed files in {self.path}')
-        self.preview.show_text('Uncommitted changes', 'Select a file to review its changes.')
-        self.preview.hide_file_actions()
-        self.history.select_first_file()
+        return self.history_controller.preview_working_copy()
 
     def preview_working_file(self, change):
-        if self.busy or not self.path: return
-        path = self.path
-        plain = change.index == '?' or self.snapshot.status.oid in ('', '(initial)')
-        ignore = self.preview.ignore_whitespace.isChecked()
-        self._preview_reload = lambda: self.preview_working_file(change)
-        self.preview.hide_file_actions()
-        def read(runner):
-            repo = Repository(path, runner)
-            return repo.untracked_preview(change.path) if plain else repo.diff(
-                change.path, against_head=True, ignore_whitespace=ignore)
-        display = self.preview.show_text if plain else self.preview.show_diff
-        self._job('Read uncommitted file', read, lambda text: display('Uncommitted: ' + change.path,
-                  text or 'No textual differences.'))
+        return self.history_controller.preview_working_file(change)
 
     def search_history(self):
-        panel = self.search_results
-        if not self.path or self.closing: return
-        panel.timer.stop()
-        if self.views.currentIndex() != 2:
-            panel.stale = True
-            return
-        if self.busy:
-            self._search_pending = True
-            return
-        self._search_pending = False
-        panel.stale = False
-        query, mode, since, until = panel.query()
-        token = panel.query(), panel.limit
-        path = self.path
-        def show(commits):
-            if self.path != path or token != (panel.query(), panel.limit):
-                self._search_pending = True
-                return
-            panel.set_commits(commits[:panel.limit], len(commits) > panel.limit and panel.limit < 5000)
-            with qt.QSignalBlocker(panel.table): panel.table.setCurrentItem(None)
-            panel.tree.clear()
-            panel.metadata.clear()
-            if self.views.currentIndex() == 2:
-                self.preview.show_text('Search results', 'Select a commit to review its files.')
-                panel.select_ref(commits[0].oid) if commits else None
-        self._job('Search repository history', lambda runner: Repository(path, runner).search_history(
-            query, mode, since, until, panel.limit), show)
+        return self.history_controller.search_history()
 
     def _search_parent(self, oid):
-        self.search_results.mode.setCurrentText('Commit SHA')
-        self.search_results.search.setText(oid)
+        return self.history_controller._search_parent(oid)
 
     def load_more_search(self):
-        self.search_results.limit = min(5000, self.search_results.limit + 200)
-        self.search_history()
+        return self.history_controller.load_more_search()
 
     def load_more(self):
-        self.history_limit = min(5000, self.history_limit + 200)
-        self.refresh()
+        return self.history_controller.load_more()
 
     def commit(self, message, amend):
         if not message.strip():
@@ -740,35 +620,7 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
             self._operation('Create tracking branch', checkout)
 
     def show_ref_commit(self, ref):
-        # Tags can point to annotated tag objects: resolve to a commit first.
-        self._preview_reload = None
-        path = self.path
-        full_tree = bool(self.history.file_mode.currentIndex())
-        def read(runner):
-            repo = Repository(path, runner)
-            oid = repo.run(['rev-parse', '--verify', ref.name + '^{commit}']).stdout.decode('ascii').strip()
-            return oid, repo.commit_metadata(oid), (repo.tree(oid) if full_tree else repo.commit_files(oid))
-        def show(result):
-            oid, details, entries = result
-            self.history.search.clear()
-            self.history.branch_filter.setCurrentIndex(0)
-            with qt.QSignalBlocker(self.history.table):
-                self.history.table.setCurrentItem(None)
-                for index in range(self.history.table.topLevelItemCount()):
-                    item = self.history.table.topLevelItem(index)
-                    commit = item.data(1, qt.Qt.ItemDataRole.UserRole)
-                    if commit and commit.oid == oid:
-                        self.history.table.setCurrentItem(item)
-                        break
-            self.preview.show_text(ref.name, 'Select a file to review its changes.')
-            self.history.set_tree(entries)
-            self.history.set_metadata(details)
-            self.preview.hide_file_actions()
-            with qt.QSignalBlocker(self.views): self.views.setCurrentIndex(1)
-            self.history_preview_layout.addWidget(self.preview)
-            self._select_navigation(1)
-            self.history.select_first_file()
-        self._job('Read reference commit', read, show)
+        return self.history_controller.show_ref_commit(ref)
 
     def stash_action(self, action, ref):
         if self._confirm(action.capitalize() + ' stash?', f'{action.capitalize()} {ref}?' + (' Dropped stashes may be difficult to recover.' if action == 'drop' else ' Conflicts may need manual resolution.')):
@@ -904,17 +756,7 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         if self.path and Path(path).resolve().is_relative_to(self.path.resolve()): self.refresh()
 
     def compare_to_head(self):
-        selected = self.history.selected_commit()
-        if not selected or not self.snapshot:
-            self._message('Select a commit in History first.', error=True)
-            return
-        first, second, path = selected.oid, self.snapshot.status.oid, self.path
-        self.preview.hide_file_actions()
-        self._preview_reload = self.compare_to_head
-        ignore_whitespace = self.preview.ignore_whitespace.isChecked()
-        self._job('Compare revisions', lambda runner: Repository(path, runner).compare(
-            first, second, ignore_whitespace=ignore_whitespace),
-            lambda text: self.preview.show_diff(f'{first[:8]} → HEAD {second[:8]}', text or 'No differences.'))
+        return self.history_controller.compare_to_head()
 
     def tag_dialog(self):
         dialog = FormDialog('Create tag', self, 'Leave the message empty for a lightweight tag. Tags are created locally; use the tag context menu to push one.')

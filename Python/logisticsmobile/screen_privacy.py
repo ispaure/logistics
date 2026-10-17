@@ -131,6 +131,9 @@ class ScreenPrivacy:
             self.lock_password.value = self.lock_confirmation.value = ''
         for gate in self.gates():
             gate.lock()
+        picker = getattr(self.app, '_editor_picker', None)
+        if picker is not None:
+            picker.cancel()
         # Cover synchronously before releasing anything or taking a snapshot.
         self.refresh()
         self.app.retire_private_comic_batch()

@@ -3,13 +3,31 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
 from commonUtils.filesystem import format_size
+from .host_services import HostService
 
 
 def stored_size(size):
     return format_size(size, binary_units=True)
 
 
-class SavedFilesUI:
+class SavedFilesController:
+    active_host = HostService('active_host')
+    main_window = HostService('main_window')
+    private_root = HostService('private_root')
+    reader_manager = HostService('reader_manager')
+    recent_documents = HostService('recent_documents')
+    refresh_library = HostService('refresh_library')
+    save_workspace = HostService('save_workspace')
+    scene_manager = HostService('scene_manager')
+    show_settings = HostService('show_settings')
+    show_view = HostService('show_view')
+    workspace = HostService('workspace')
+    resource_imports = HostService('resource_imports')
+
+    def __init__(self, app):
+        self.app = app
+        self.saved_files_message = ''
+
     def show_saved_files(self, widget=None, **kwargs):
         from .hub_ui import heading
         store = self.reader_manager().catalog.library_store
@@ -106,3 +124,7 @@ class SavedFilesUI:
                 self.save_workspace()
             self.saved_files_message = (f'{deleted} local copies deleted. ' if deleted else '') + 'Could not delete local copy: ' + str(error)
             self.show_saved_files()
+
+
+# Compatibility import; instantiate the controller with its host.
+SavedFilesUI = SavedFilesController

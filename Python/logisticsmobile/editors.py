@@ -7,6 +7,9 @@ from .documents import document_name
 from .action_menu import ActionMenu
 from .appearance import action_button
 from commonUtils.ui.native.editor_search import EditorSearch
+from commonUtils.ui.native.code_input import CodeInput
+from commonUtils.formats.code_syntax import LANGUAGES
+from commonUtils.ui.native.adaptive import allocated_width
 
 FIELDS = ('selector', 'name', 'editor', 'status', 'recovery_notice', 'import_button',
           'save_button', 'export_button', 'document_view')
@@ -28,8 +31,12 @@ class TextEditorView:
         self.split_preview = None
         self.selector = toga.Selection(on_change=self.selected, style=Pack(flex=1, height=48))
         self.name = toga.TextInput(placeholder='Document name', on_change=self.name_changed, style=Pack(flex=1, height=48))
-        self.editor = toga.MultilineTextInput(on_change=self.text_changed,
+        self.editor = CodeInput(loop=app.loop, on_change=self.text_changed,
             style=Pack(flex=1, font_size=int(app.preferences.values['font_size']), margin_top=4))
+        self.language_choice = toga.Selection(items=['Automatic', *[name for name, code in LANGUAGES]],
+            on_change=self.language_changed, style=Pack(flex=1, height=48))
+        self.line_count = toga.Label('1 line', style=Pack(margin=8))
+        self.live_button = toga.Button('Live preview', on_press=lambda widget, **kw: self.toggle_split(), style=Pack(height=48))
         self.status = toga.Label('', style=Pack(font_size=12, margin_top=4))
         self.recovery_notice = toga.Label('', style=Pack(font_size=12))
         self.import_button = toga.Button('Import…', on_press=app.import_document, style=Pack(flex=1, height=48))
@@ -47,10 +54,11 @@ class TextEditorView:
             ('Save', app.save_document), ('Save a copy', app.save_copy),
             ('Save As…', app.show_document_save_as), ('Export…', lambda: app.export_document(origin=self)),
             ('Close document', lambda: app.request_close_session(self.session.id)),
-            ('Preview beside editor (wide windows)', self.toggle_split)])
+            ('Show/hide live preview', self.toggle_split)])
         # A visible left-hand editor still owns its toolbar commands.
         self.save_button.on_press = lambda widget, **kw: self.actions.invoke(app.save_document)
         box.add(toga.Box(children=[self.name, self.actions_button], style=Pack(direction=ROW, margin_bottom=8)))
+        box.add(toga.Box(children=[self.language_choice, self.line_count, self.live_button], style=Pack(direction=ROW)))
         self.editor_area = toga.Box(children=[self.editor], style=Pack(direction=ROW, flex=1))
         box.add(self.editor_area)
         box.add(self.status)
@@ -73,6 +81,9 @@ class TextEditorView:
         self.document, self.session = document, session
         self.loading = True
         self.name.value, self.editor.value = document.name, document.text
+        self.editor.set_filename(document.name)
+        session.view.setdefault('markdown_split', session.kind == 'markdown')
+        self.update_source_info()
         self.refresh_status()
         self.loading = False
 
@@ -104,6 +115,9 @@ class TextEditorView:
             self.document.name = document_name(widget.value)
             self.session.title = self.document.name
             self.session.kind = 'markdown' if self.document.name.lower().endswith(('.md', '.markdown')) else 'text'
+            self.editor.set_filename(self.document.name)
+            self.update_source_info()
+            self.apply_split(self.app.main_window.size.width)
             self.preserve()
             self.app.routes.update_title(self.document_view, self.document.name)
             self.app.adaptive.update_title(self.document_view, self.document.name)
@@ -116,19 +130,35 @@ class TextEditorView:
             return
         self.document.text = widget.value
         self.search.changed()
+        self.update_source_info()
         self.preserve()
         self.schedule_preview()
+
+    def update_source_info(self):
+        count = len(self.editor.line_starts)
+        self.line_count.text = f'{count} line' + ('s' if count != 1 else '')
+        if self.session is not None:
+            self.live_button.enabled = self.session.kind == 'markdown'
+
+    def language_changed(self, widget, **kwargs):
+        if not hasattr(self, 'editor'):
+            return
+        self.editor.set_language(dict(LANGUAGES).get(widget.value))
 
     def toggle_split(self):
         if self.session is None:
             return
         self.session.view['markdown_split'] = not self.session.view.get('markdown_split', False)
         self.apply_split(self.app.main_window.size.width)
+        self.app.save_workspace()
 
     def apply_split(self, width):
         if self.session is None:
             return
-        show = width >= 1100 and self.session.view.get('markdown_split', False)
+        show = self.session.kind == 'markdown' and self.session.view.get('markdown_split', True)
+        usable_width = allocated_width(self.editor_area, width)
+        self.editor_area.style.direction = ROW if usable_width >= 720 else COLUMN
+        self.live_button.text = 'Hide preview' if show else 'Live preview'
         if show and self.split_preview is None:
             self.split_preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False, style=Pack(flex=1))
         if show and self.split_preview not in self.editor_area.children:
@@ -136,6 +166,9 @@ class TextEditorView:
             self.schedule_preview()
         elif not show and self.split_preview in self.editor_area.children:
             self.editor_area.remove(self.split_preview)
+            if self.preview_pending is not None:
+                self.preview_pending.cancel()
+                self.preview_pending = None
 
     def schedule_preview(self):
         if self.preview_pending is not None:
@@ -156,6 +189,7 @@ class TextEditorView:
         self.preview_pending = self.app.loop.call_later(.25, render)
 
     def dispose(self):
+        self.editor.dispose()
         self.actions.dispose()
         if self.preview_pending is not None:
             self.preview_pending.cancel()
@@ -179,7 +213,7 @@ class TextEditorView:
     def capture(self):
         if self.session is None:
             return
-        backend = type(self.editor._impl).__module__
+        backend = self.editor.backend_name
         native = getattr(self.editor._impl, 'native', None)
         if backend.startswith('toga_android.'):
             start, end = max(0, int(native.getSelectionStart())), max(0, int(native.getSelectionEnd()))
@@ -198,7 +232,7 @@ class TextEditorView:
         size = len(self.document.text.encode('utf-16-le')) // 2
         start = min(size, state.get('cursor', 0))
         end = min(size, start + state.get('selection_length', 0))
-        backend = type(self.editor._impl).__module__
+        backend = self.editor.backend_name
         native = getattr(self.editor._impl, 'native', None)
         if backend.startswith('toga_android.'):
             native.setSelection(start, end)

@@ -169,7 +169,13 @@ def publish_handoff(choice, data, parent, *, markdown=False, completed=lambda: N
     return True
 
 
+def open_linked_text(path, parent=None):
+    from features.text_editor.service import editor_service
+    return editor_service().open(path)
+
+
 def install_editor_dialogs():
     app = qt.QApplication.instance()
     if app:
         app._commonutils_markdown_resource_action = markdown_action
+        app._commonutils_open_text_file = open_linked_text
