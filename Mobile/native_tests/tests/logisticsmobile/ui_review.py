@@ -11,7 +11,7 @@ async def exercise_ui_review(app):
     variants = [webp,
         base64.b64decode('UklGRjwAAABXRUJQVlA4IDAAAADQAQCdASoCAAMAAUAmJaACdLoB+AADsAD+8ut//NgVzXPv9//S4P0uD9Lg/9KQAAA='),
         base64.b64decode('UklGRl4AAABXRUJQVlA4WAoAAAAQAAAAAQAAAgAAQUxQSAcAAAAAgICAgICAAFZQOCAwAAAA0AEAnQEqAgADAAFAJiWgAnS6AfgAA7AA/vLrf/zYFc1z7/f/0uD9Lg/S4P/SkAAA')]
-    from features.comics.mobile.validation import image_dimensions
+    from features.images.validation import image_dimensions
     from services.document_readers import PrivateReader
     from commonUtils.runtime.document_access import LocalDocuments
     from zipfile import ZipFile

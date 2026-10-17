@@ -2,7 +2,7 @@
 import toga
 from toga.style import Pack
 from toga.style.pack import NONE
-from .validation import image_dimensions
+from features.images.validation import image_dimensions
 
 
 def page_view(data, *, canvas, on_page, on_toggle, width=None):

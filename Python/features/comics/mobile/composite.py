@@ -58,7 +58,7 @@ def compose_spread(data, *, right_to_left=False, viewport=None, seam=None):
     """Decode validated pages and draw into an owned native bitmap, without files."""
     import toga
     from toga.platform import get_factory
-    from .validation import image_dimensions
+    from features.images.validation import image_dimensions
     # Validate the complete spread before any native decoding/allocation.
     sizes = [image_dimensions(page) for page in data]
     if right_to_left:

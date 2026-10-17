@@ -56,3 +56,7 @@ Image compression may replace original image files with WEBP versions when the c
 EXIF operations modify JPG metadata in place.
 
 Use disposable copies when testing behavioral changes to these operations.
+
+## Portable image validation
+
+`validation.py` validates bounded PNG/JPEG/WebP dimensions before native decoding. Books, Comics and provider readers share it without loading Qt, Toga or image-processing tools. The existing 8 MiB, 8192-pixel-axis and 16-megapixel limits are unchanged.
