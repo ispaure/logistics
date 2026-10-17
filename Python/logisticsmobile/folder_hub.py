@@ -2,7 +2,7 @@
 from features.rclone.mobile.storage_location import collection_path
 from pathlib import Path
 from features.rclone.transfers.mobile.jobs import copy_target
-from services.folder_policy import read_exclusions, visible_name, folder_parts
+from services.folders.policy import read_exclusions, visible_name, folder_parts
 
 
 def exclusions():

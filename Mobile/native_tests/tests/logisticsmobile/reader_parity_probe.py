@@ -266,7 +266,7 @@ class ReaderProbe(LogisticsMobile):
                 cases.append('bookmark_reopen')
                 self.cloud_client = ProbeClient()
                 self.show_cloud(present=False)
-                from services.document_readers import PrivateReader
+                from services.documents.readers import PrivateReader
                 sentinel = 'private-' + uuid4().hex
                 class Copies:
                     root = self.private_root / 'ProbeProvider'

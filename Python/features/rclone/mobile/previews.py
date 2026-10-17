@@ -19,7 +19,7 @@ def encrypted_thumbnail(provider, client, row, size, *, password='', cancelled=l
     suffix = Path(row['path']).suffix.lower()
     member = ''
     if suffix in {'.zip', '.cbz', '.epub'}:
-        from services.document_readers import PrivateReader
+        from services.documents.readers import PrivateReader
         reader = PrivateReader(item.name, source=item)
         member = reader.book.cover_path() if reader.book else reader.pages[0]
         if not member:

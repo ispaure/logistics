@@ -9,7 +9,7 @@ from features.comics.pages import ComicPages
 from features.comics.reading import comic_siblings, visible_pages
 from features.comics.reading_state import ReadingState, remember_position
 from commonUtils.ui.tasks.operations import Operation
-from services.zip_passwords import is_password_error
+from services.documents.zip_passwords import is_password_error
 from ui_new.dialogs.archive_password import ask_password
 from .reader_pages import PageCanvas, read_image, read_candidates, read_previous
 from .reader_controls import ReaderControls, ReaderMenus
@@ -354,7 +354,7 @@ class ComicReaderWindow(qt.QMainWindow):
             log(Severity.WARNING, 'Comic Reader', f'Reading position could not be saved: {error}')
 
     def _choose_file(self):
-        from services.reader_resources import choose_reader_document
+        from services.documents.ui.readers import choose_reader_document
         return choose_reader_document(self, 'comic', current=self.pages.document,
                                       open_local=None if self.pages.document.private else self._request_file)
 

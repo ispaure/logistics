@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
-from services import folder_safety
+from services.folders import safety as folder_safety
 
 
 class FolderSafetyTests(unittest.TestCase):

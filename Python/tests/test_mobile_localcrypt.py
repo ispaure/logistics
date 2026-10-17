@@ -8,7 +8,7 @@ from unittest.mock import patch
 from zipfile import ZipFile
 
 from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
-from services.document_readers import PrivateReader
+from services.documents.readers import PrivateReader
 from books_fixture import make_book
 
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=')
@@ -149,7 +149,7 @@ class MobileLocalCryptTests(unittest.TestCase):
 
     def test_metadata_plan_and_verified_transaction_preserve_comic_pages(self):
         import os
-        from services.document_metadata import rewrite_metadata
+        from services.documents.metadata import rewrite_metadata
         original = BytesIO()
         with ZipFile(original, 'w') as archive:
             archive.writestr('page.png', PNG)

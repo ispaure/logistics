@@ -451,7 +451,7 @@ class CloudUI(LocalCryptUI):
 
     def visible_remote_names(self, names):
         exclusions = self.rclone_ui.exclusions
-        from services.folder_policy import visible_name
+        from services.folders.policy import visible_name
         original = {alias: name for item in getattr(self.cloud_client, 'package_records', ())
                     for name, alias in item.get('aliases', {}).items()}
         rules = exclusions()

@@ -35,7 +35,7 @@ class LocalCryptTests(QtTestCase):
                     stream.seek(0)
 
     def test_revocation_retires_private_window_and_blocks_reshow(self):
-        from services.private_views import protect_private_view
+        from services.documents.ui.private_views import protect_private_view
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             window = qt.QMainWindow()
             window.setWindowTitle('Secret document sentinel')
@@ -54,7 +54,7 @@ class LocalCryptTests(QtTestCase):
 
     def test_private_view_guard_follows_save_as_provider(self):
         from types import SimpleNamespace
-        from services.private_views import protect_private_view
+        from services.documents.ui.private_views import protect_private_view
         with TemporaryDirectory() as directory:
             first = SimpleNamespace(private=True, context=Path(directory) / 'first.session')
             second = SimpleNamespace(private=True, context=Path(directory) / 'second.session')
@@ -124,7 +124,7 @@ class LocalCryptTests(QtTestCase):
         from features.rclone.localcrypt import connections as local_connections
         from features.rclone import ui_contributions
         from models.local_folder import LocalFolder
-        from services.folder_entries import get_folder_entries
+        from services.folders.entries import get_folder_entries
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             self.assertTrue(actions.pull_remote('Secret', f.context))
             item, = local_connections.connections()
@@ -888,7 +888,7 @@ class LocalCryptTests(QtTestCase):
     def test_private_comic_picker_owns_provider_and_reused_reader_releases_extra_choice(self):
         from commonUtils.runtime.resource_selection import ResourceChoice
         from commonUtils.ui.readers.reader_menus import RecentFiles
-        from services.reader_resources import open_reader_choice
+        from services.documents.ui.readers import open_reader_choice
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             released = []
             def choice(label):
@@ -924,7 +924,7 @@ class LocalCryptTests(QtTestCase):
         from commonUtils.runtime.resource_selection import ResourceChoice
         from commonUtils.ui.readers.reader_menus import RecentFiles
         from features.books.epub import EPUBBook
-        from services.reader_resources import open_reader_choice
+        from services.documents.ui.readers import open_reader_choice
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             data = BytesIO(); make_book(data)
             f.provider.command('rcat', 'book.epub', input_data=data.getvalue(), limit=0)
@@ -1019,7 +1019,7 @@ class LocalCryptTests(QtTestCase):
                 self.wait(lambda: not storage.operation.busy)
                 self.assertEqual((local_root / 'exported.md').read_bytes(), b'# Save As draft')
                 self.assertEqual(window.windowTitle(), '🕵️ Private - exported.md — Markdown')
-                with patch('services.editor_resources.open_editor_choice') as linked:
+                with patch('services.documents.ui.editors.open_editor_choice') as linked:
                     window.viewer.storage.open_link(local_root / 'linked.md', 'anchor')
                     selected = linked.call_args.args[0]
                     self.assertIs(selected.provider, local)

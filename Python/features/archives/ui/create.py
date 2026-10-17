@@ -1,7 +1,7 @@
 """Source basket and format options for the archive workspace."""
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from services.password_prompt import confirmed_password
+from services.documents.ui.password_prompt import confirmed_password
 
 
 class NewArchiveDialog(qt.QDialog):

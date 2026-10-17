@@ -93,7 +93,7 @@ TypeError naming the feature and category rather than reaching folder discovery.
 `LocalFolderSourceContribution.get_sources()` returns named local source descriptors;
 `RemoteFolderSourceContribution.get_sources()` returns remote source descriptors
 with a names callback and opaque context. Folder discovery pairs local folders and
-remote names in `services.folder_sources`/`models.folder_entry`. Keep the selected
+remote names in `services.folders.sources`/`models.folder_entry`. Keep the selected
 credential in context; do not turn it into global mutable state.
 
 Private folder sources declare `private = True`; their paths identify backend-owned

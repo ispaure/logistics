@@ -62,7 +62,7 @@ class FileOperations:
         return document
 
     def open_dialog(self, force=False):
-        from services.editor_resources import choose_editor_resource, open_editor_choice
+        from services.documents.ui.editors import choose_editor_resource, open_editor_choice
         choice = choose_editor_resource(self, 'open')
         if choice is None:
             return
@@ -164,7 +164,7 @@ class FileOperations:
         overwrite = False
         destination_stamp = None
         if save_as or path is None:
-            from services.editor_resources import choose_editor_resource, publish_handoff
+            from services.documents.ui.editors import choose_editor_resource, publish_handoff
             choice = choose_editor_resource(self, 'save', name=path.name if path else 'Untitled.txt')
             if choice is None:
                 return False

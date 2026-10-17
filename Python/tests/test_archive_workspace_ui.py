@@ -13,7 +13,7 @@ from features.archives import register
 from commonUtils import archives
 from features.archives.ui.page import ArchivePage
 from features.archives.ui.create import NewArchiveDialog
-from services.zip_passwords import clear_passwords
+from services.documents.zip_passwords import clear_passwords
 
 
 class ArchiveWorkspaceUITests(QtTestCase):

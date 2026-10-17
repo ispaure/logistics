@@ -312,7 +312,7 @@ def compress_image(img_file_cls, *, always_keep_compressed, img_quality_color,
                    preserve_animated_and_multipage_originals):
     """Convert one inspected image; preserve staging/source checks and return its outcome."""
     source_path = img_file_cls.path
-    from services.folder_safety import require_safe_folder
+    from services.folders.safety import require_safe_folder
     require_safe_folder(source_path.parent, recursive=False)
     if source_path.is_symlink():
         raise ValueError(f'Image links are preserved: {source_path}')
@@ -385,7 +385,7 @@ def batch_compress_image(target_dir: Union[str, Path],
     if not validate_compression_options(always_keep_compressed, preserve_animated_and_multipage_originals):
         return False
 
-    from services.folder_safety import require_safe_folder
+    from services.folders.safety import require_safe_folder
     try:
         require_safe_folder(target_dir, recursive=recursive)
     except (OSError, ValueError) as error:

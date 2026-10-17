@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from features import registry
 from features.contributions import LocalFolderSource, RemoteFolderSource
 from models.local_folder import LocalFolder
-from services.folder_entries import get_folder_entries
+from services.folders.entries import get_folder_entries
 from commonUtils.runtime.operations import check_cancelled
 
 

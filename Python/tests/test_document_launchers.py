@@ -11,11 +11,11 @@ class TextLauncherTests(unittest.TestCase):
         service = Mock()
         from pathlib import Path
         choice = Mock(path='notes.txt', provider=Mock(root=Path('/work'), private=False))
-        with patch('services.editor_resources.choose_editor_resource', return_value=choice), patch.object(contributions, '_service', return_value=service):
+        with patch('services.documents.ui.editors.choose_editor_resource', return_value=choice), patch.object(contributions, '_service', return_value=service):
             self.assertIs(contributions.launch(parent), service.open.return_value)
             service.open.assert_called_once_with(Path('/work/notes.txt'))
             choice.close.assert_called_once_with()
-        with patch('services.editor_resources.choose_editor_resource', return_value=None), patch.object(contributions, '_service') as create:
+        with patch('services.documents.ui.editors.choose_editor_resource', return_value=None), patch.object(contributions, '_service') as create:
             self.assertIsNone(contributions.launch(parent))
             create.assert_not_called()
 

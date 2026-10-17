@@ -141,7 +141,7 @@ def _compress(context):
 
 
 def _can_encrypt(context):
-    from services.zip_passwords import has_password_configuration
+    from services.documents.zip_passwords import has_password_configuration
     return all(has_password_configuration(path) for path in context.paths)
 
 
@@ -200,5 +200,5 @@ def _edit_shared_metadata(context):
 
 
 def _launch_reader(parent):
-    from services.reader_resources import choose_reader_document
+    from services.documents.ui.readers import choose_reader_document
     return choose_reader_document(parent, 'comic')

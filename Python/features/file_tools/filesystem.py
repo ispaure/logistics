@@ -108,7 +108,7 @@ def scan_weird_characters(target_dir, recursive=True, *, cancelled=lambda: False
 def scan_pyc_files(target_dir, recursive=True, *, cancelled=lambda: False,
                    report=lambda done, total, message: None):
     """Return a read-only snapshot of regular bytecode files and their identities."""
-    from services.folder_safety import require_safe_folder
+    from services.folders.safety import require_safe_folder
     from commonUtils.runtime.operations import check_cancelled
     targets = (target_dir,) if isinstance(target_dir, (str, Path)) else target_dir
     roots = tuple(require_safe_folder(root, recursive=recursive) for root in targets)
@@ -131,7 +131,7 @@ def cleanup_pyc_files(target_dir, recursive=True, *, cancelled=lambda: False,
                       report=lambda done, total, message: None, candidates=None):
     """Delete only reviewed bytecode identities, preserving links and changed files."""
     from commonUtils.runtime.operations import run_batch
-    from services.folder_safety import require_safe_folder
+    from services.folders.safety import require_safe_folder
     targets = (target_dir,) if isinstance(target_dir, (str, Path)) else target_dir
     roots = tuple(require_safe_folder(root, recursive=recursive) for root in targets)
     if candidates is None:

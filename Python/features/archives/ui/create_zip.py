@@ -6,8 +6,8 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.archives.zip_access import create_archive, password_bytes
-from services.zip_passwords import configured_password
-from services.password_prompt import confirmed_password
+from services.documents.zip_passwords import configured_password
+from services.documents.ui.password_prompt import confirmed_password
 
 
 class CreateZipDialog(qt.QDialog):

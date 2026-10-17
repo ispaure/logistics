@@ -7,10 +7,10 @@ def _open_markdown(parent):
     from commonUtils.ui import pyside as qt
     from services.local_storage import install_local_storage_policy
     install_local_storage_policy()
-    from services.editor_resources import install_editor_dialogs
+    from services.documents.ui.editors import install_editor_dialogs
     install_editor_dialogs()
     from commonUtils.ui.markdown.window import open_markdown
-    from services.editor_resources import choose_editor_resource, open_editor_choice
+    from services.documents.ui.editors import choose_editor_resource, open_editor_choice
     choice = choose_editor_resource(parent, 'open', markdown=True)
     if choice is None:
         return None
@@ -24,7 +24,7 @@ def _open_markdown(parent):
 def _new_markdown(parent):
     from services.local_storage import install_local_storage_policy
     install_local_storage_policy()
-    from services.editor_resources import install_editor_dialogs
+    from services.documents.ui.editors import install_editor_dialogs
     install_editor_dialogs()
     from commonUtils.ui.markdown.window import open_markdown
     return open_markdown(None, allow_edit=True)

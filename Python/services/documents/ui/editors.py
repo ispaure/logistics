@@ -2,7 +2,7 @@
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.runtime.local_files import LocalFiles
-from commonUtils.runtime.resource_selection import ResourceChoice, ResourceTextSession
+from commonUtils.runtime.resource_selection import ResourceChoice
 from commonUtils.runtime.platform import get_os, OS
 from commonUtils.ui.resource_picker import choose_resource, ResourceTaskDialog
 
@@ -61,7 +61,7 @@ def make_private_editor(choice, session, *, markdown=False):
     else:
         from commonUtils.ui.resource_editor import ResourceTextWindow
         window = ResourceTextWindow(choice, session, choose_editor_resource, open_editor_choice)
-    from services.private_views import protect_private_view
+    from services.documents.ui.private_views import protect_private_view
     protect_private_view(window, choice.provider)
     return retain(window)
 
@@ -92,13 +92,7 @@ def open_editor_choice(choice, parent=None, *, markdown=False, fragment=''):
     return loading
 
 
-def prepare_editor(choice, *, markdown=False, cancelled=lambda: False):
-    session = ResourceTextSession.open(choice.provider, choice.path, max_bytes=8 * 1024 * 1024, cancelled=cancelled)
-    if markdown:
-        from features.rclone.localcrypt.ui.views import prepare_markdown
-        _, session.resources = prepare_markdown(choice.provider, choice.provider.root / choice.path,
-                                                data=session.text.data, cancelled=cancelled)
-    return session
+from services.documents.preparation import prepare_editor
 
 
 def markdown_action(viewer, mode):

@@ -123,7 +123,7 @@ class ImageCompressDialog(ToolDialog):
             if target is None:
                 return
             targets = (target,)
-        from services.folder_safety import require_safe_folder
+        from services.folders.safety import require_safe_folder
         try:
             targets = tuple(require_safe_folder(target, recursive=self.recursive.isChecked()) for target in targets)
         except (OSError, ValueError) as error:

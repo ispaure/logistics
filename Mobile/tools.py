@@ -12,12 +12,13 @@ APP_MODULES = ('ios_reader_chrome.py', 'ios_storage.py', 'keyboard.py', 'fold_la
                'hub_ui.py', 'control_icons.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'local_sources.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library_edits.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
                'chat_fixture.py', 'resource_imports.py', 'files_ui.py', 'editor_picker.py', 'host_services.py', 'feature_hosts.py', 'folder_controller.py', 'hub_controller.py', 'locations_controller.py', 'storage_controller.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
+    'services/documents/__init__.py', 'services/folders/__init__.py',
     'features/images/__init__.py',
     'features/books/mutations.py', 'features/comics/mutations.py',
     'features/rclone/localcrypt/__init__.py', 'features/rclone/localcrypt/mobile/__init__.py', 'features/rclone/transfers/__init__.py', 'features/rclone/transfers/mobile/__init__.py',
     'features/text_editor/__init__.py', 'features/text_editor/mobile/__init__.py', 'features/text_editor/mobile/ui.py', 'features/text_editor/resources.py', 'features/text_editor/names.py', 'services/mobile_presentation.py',
     'features/lm/mobile/controller.py', 'features/rclone/mobile/controller.py', 'features/rclone/transfers/mobile/controller.py', 'services/workflow_host.py',
-    'services/document_readers.py', 'services/archive_access.py', 'services/document_limits.py', 'features/rclone/mobile/host.py',
+    'services/documents/readers.py', 'services/documents/archive_access.py', 'services/documents/limits.py', 'features/rclone/mobile/host.py',
     'features/lm/mobile/storage.py', 'features/lm/mobile/transport.py', 'features/lm/mobile/ui.py', 'features/lm/mobile/presentation.py', 'features/lm/mobile/__init__.py',
     'features/rclone/mobile/storage_location.py',
     'features/rclone/mobile/session_privacy.py',
@@ -31,7 +32,7 @@ DOCUMENT_MODULES = (
     'features/comics/catalog_values.py', 'features/comics/mobile/collection.py', 'features/comics/mobile/private_batch.py', 'features/comics/mobile/index.py', 'features/comics/edit_state.py', 'features/comics/mobile/metadata.py', 'features/comics/reading.py', 'features/comics/mobile/navigation.py', 'features/comics/mobile/pages.py', 'features/comics/mobile/__init__.py', 'features/images/validation.py', 'features/comics/mobile/composite.py', 'features/comics/mobile/presentation.py',
     'features/comics/archive_io.py', 'features/comics/comicinfo.py',
     'features/comics/library.py', 'features/comics/pages.py', 'features/comics/library_config.py',
-    'configFile.ini', 'services/build_version.py', 'services/identifiers.py', 'services/folder_policy.py', 'services/__init__.py', 'services/zip_passwords.py', 'services/document_metadata.py',
+    'configFile.ini', 'services/build_version.py', 'services/identifiers.py', 'services/folders/policy.py', 'services/__init__.py', 'services/documents/zip_passwords.py', 'services/documents/metadata.py',
     'features/lm/__init__.py', 'features/lm/domain.py', 'features/lm/streaming.py', 'features/lm/screenshots.py',
 )
 

@@ -10,7 +10,7 @@ def ask_password(path, message, parent=None, *, source=None):
         cancelled = dialog.operation.cancelled.is_set
         if source is None:
             authenticate(path, password, cancelled=cancelled)
-            from services.zip_passwords import remember_verified_password
+            from services.documents.zip_passwords import remember_verified_password
             remember_verified_password(path, password)
         else:
             scope = getattr(source, 'operation', None)

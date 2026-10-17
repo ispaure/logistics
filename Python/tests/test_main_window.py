@@ -481,7 +481,7 @@ class MainWindowTests(QtTestCase):
         from tempfile import TemporaryDirectory
         from features import rclone
         from features.rclone import credentials
-        from services import folder_sources
+        from services.folders import sources as folder_sources
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root/'example.txt').write_text('fixture')

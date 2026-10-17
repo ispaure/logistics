@@ -13,7 +13,7 @@ from features.books.mobile.content import chapter_html, chapter_text
 from features.books.mobile.navigation import chapter_labels
 from features.books.epub import BookError
 from logisticsmobile.library import LibraryStore
-from services.document_readers import PrivateReader
+from services.documents.readers import PrivateReader
 from test_mobile_readers import png_page
 
 

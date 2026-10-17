@@ -33,7 +33,7 @@ class ImageFolderToolTests(QtTestCase):
         self.assertTrue(bad.exists())
 
     def test_blocked_folder_never_calls_encoder(self):
-        with patch('services.folder_safety.require_safe_folder', side_effect=ValueError('Protected')), patch.object(actions.processing.ImageFile, 'compress') as encode:
+        with patch('services.folders.safety.require_safe_folder', side_effect=ValueError('Protected')), patch.object(actions.processing.ImageFile, 'compress') as encode:
             with self.assertRaises(ValueError):
                 actions.compress_folders(self.root)
         encode.assert_not_called()

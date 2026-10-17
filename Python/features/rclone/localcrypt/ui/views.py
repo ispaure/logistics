@@ -1,7 +1,5 @@
 """Session unlock, provider-backed browsing and existing private document hosts."""
 from pathlib import Path
-import re
-from urllib.parse import unquote, urlsplit
 
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.resource_browser import ResourceBrowser
@@ -33,7 +31,7 @@ def ensure_session(config_path, *, package=None, parent=None):
 
 
 def choose_destination(parent, provider, name, action):
-    from services.editor_resources import choose_editor_resource
+    from services.documents.ui.editors import choose_editor_resource
     choice = choose_editor_resource(parent, 'save' if action == 'Save As' else 'destination', provider, name,
                                     markdown=action == 'Save As')
     return (choice.provider, choice.path, choice.close) if choice else None
@@ -49,7 +47,7 @@ class MarkdownStorage:
 
     def open_link(self, path, fragment=''):
         if Path(path).suffix.lower() in {'.md', '.markdown', '.txt'}:
-            from services.editor_resources import open_editor_choice
+            from services.documents.ui.editors import open_editor_choice
             from commonUtils.runtime.resource_selection import ResourceChoice
             choice = ResourceChoice(self.provider, self.provider.relative(path),
                                     self.provider.acquire() if hasattr(self.provider, 'acquire') else lambda: None)
@@ -102,7 +100,7 @@ class MarkdownStorage:
         self.data = data
 
     def open_dialog(self, viewer):
-        from services.editor_resources import choose_editor_resource, open_editor_choice
+        from services.documents.ui.editors import choose_editor_resource, open_editor_choice
         if self.operation.busy:
             return False
         choice = choose_editor_resource(self.window, 'open', self.provider, markdown=True)
@@ -159,40 +157,7 @@ class MarkdownStorage:
         return qt.QByteArray(data or b'')
 
 
-def prepare_markdown(provider, path, *, data=None, cancelled=lambda: False):
-    from commonUtils.runtime.operations import check_cancelled
-    from contextlib import nullcontext
-    def read(path, limit):
-        check_cancelled(cancelled)
-        scope = getattr(provider, 'operation', None)
-        with scope(cancelled) if scope else nullcontext():
-            with provider.open(path) as stream:
-                value = stream.read(limit + 1)
-        if len(value) > limit:
-            raise ValueError('Markdown resource exceeds the memory limit.')
-        return value
-    if data is None:
-        data = read(path, 8 * 1024 * 1024)
-    resources = {}
-    budget = 32 * 1024 * 1024
-    # Resource I/O stays in the opening worker; Qt rendering uses only RAM.
-    from commonUtils.persistence.text import decode_bytes
-    for match in re.finditer(r'!\[[^\]\n]*\]\(<?([^\s)>]+)>?(?:\s+[^)]*)?\)', decode_bytes(data).text):
-        check_cancelled(cancelled)
-        parts = urlsplit(unquote(match.group(1)))
-        if parts.scheme or parts.netloc:
-            continue
-        target = Path(qt.QUrl.fromLocalFile(str(path.parent) + '/').resolved(qt.QUrl(parts.path)).toLocalFile())
-        try:
-            provider.relative(target)
-            value = read(target, min(budget, getattr(provider, 'max_resource', 8 * 1024 * 1024)))
-            budget -= len(value)
-            resources[target] = value
-        except (ValueError, OSError):
-            continue
-        if budget <= 0:
-            break
-    return data, resources
+from features.rclone.localcrypt.markdown import prepare_markdown
 
 
 from commonUtils.ui.markdown.window import MarkdownWindow
@@ -204,7 +169,7 @@ class PrivateMarkdownWindow(MarkdownWindow):
         self.pending_close = False
         super().__init__(path, allow_edit=True, storage=storage)
         storage.bind_window(self)
-        from services.private_views import protect_private_view
+        from services.documents.ui.private_views import protect_private_view
         protect_private_view(self, storage.provider)
 
     def _update_title(self):
@@ -263,7 +228,7 @@ class CryptBrowserView(qt.QMainWindow):
                 qt.QMessageBox.warning(self, 'Encrypted copy', 'The local crypt view could not be opened.')
 
     def _install_browser(self, directory):
-        from services.private_views import protect_private_view
+        from services.documents.ui.private_views import protect_private_view
         protect_private_view(self, self.provider)
         self._release_provider = self.provider.acquire()
         self.destroyed.connect(self._release_provider)
@@ -411,7 +376,7 @@ class CryptBrowserView(qt.QMainWindow):
             release()
             raise
         window.destroyed.connect(release)
-        from services.private_views import protect_private_view
+        from services.documents.ui.private_views import protect_private_view
         protect_private_view(window, self.provider)
         _windows.append(window)
         window.destroyed.connect(lambda: _windows.remove(window) if window in _windows else None)
@@ -431,7 +396,7 @@ class CryptBrowserView(qt.QMainWindow):
             release()
             raise
         window.destroyed.connect(release)
-        from services.private_views import protect_private_view
+        from services.documents.ui.private_views import protect_private_view
         protect_private_view(window, self.provider)
         _windows.append(window)
         window.destroyed.connect(lambda: _windows.remove(window) if window in _windows else None)
@@ -456,12 +421,12 @@ class CryptBrowserView(qt.QMainWindow):
         path = Path(path)
         suffix = path.suffix.lower()
         if suffix in {'.epub', '.cbz', '.zip'}:
-            from services.reader_resources import open_reader_choice
+            from services.documents.ui.readers import open_reader_choice
             from commonUtils.runtime.resource_selection import ResourceChoice
             return open_reader_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()),
                                       self, 'epub' if suffix == '.epub' else 'comic', password=password)
         if suffix == '.txt':
-            from services.editor_resources import open_editor_choice
+            from services.documents.ui.editors import open_editor_choice
             from commonUtils.runtime.resource_selection import ResourceChoice
             open_editor_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()), self)
             return
@@ -482,7 +447,7 @@ class CryptBrowserView(qt.QMainWindow):
             return
         path, fragment, password = self.pending_document
         if error or result is None:
-            from services.zip_passwords import is_password_error
+            from services.documents.zip_passwords import is_password_error
             if is_password_error(error):
                 from ui_new.dialogs.archive_password import ask_password
                 password = ask_password(path, error, self, source=self.provider)

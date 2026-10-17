@@ -122,7 +122,7 @@ class CryptFiles(LocalFiles):
                 yield stream
 
     def archive_password(self, path, *, cancelled=lambda: False):
-        from services.zip_passwords import password_from_ini
+        from services.documents.zip_passwords import password_from_ini
         relative = PurePosixPath(self.relative(path))
         for folder in (relative.parent, *relative.parent.parents):
             check_cancelled(cancelled)

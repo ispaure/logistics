@@ -24,7 +24,7 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
         super().__init__()
         from services.local_storage import install_local_storage_policy
         install_local_storage_policy()
-        from services.editor_resources import install_editor_dialogs
+        from services.documents.ui.editors import install_editor_dialogs
         install_editor_dialogs()
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle("Text Editor — Logistics")

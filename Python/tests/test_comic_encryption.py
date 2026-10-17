@@ -182,7 +182,7 @@ class EncryptionDialogTests(ComicEncryptionTests):
 
     def test_prompt_requires_nonempty_matching_confirmation(self):
         from commonUtils.ui import pyside as qt
-        from services.password_prompt import confirmed_password
+        from services.documents.ui.password_prompt import confirmed_password
         def interact(dialog):
             fields = dialog.findChildren(qt.QLineEdit)
             buttons = dialog.findChild(qt.QDialogButtonBox)
