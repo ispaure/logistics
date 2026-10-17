@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "modules": [
+    "__init__.py",
+    "archive_io.py",
+    "catalog_values.py",
+    "comicinfo.py",
+    "edit_state.py",
+    "library.py",
+    "library_config.py",
+    "mobile/__init__.py",
+    "mobile/collection.py",
+    "mobile/composite.py",
+    "mobile/index.py",
+    "mobile/metadata.py",
+    "mobile/navigation.py",
+    "mobile/pages.py",
+    "mobile/presentation.py",
+    "mobile/private_batch.py",
+    "mutations.py",
+    "pages.py",
+    "reading.py"
+  ]
+}

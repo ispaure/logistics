@@ -176,3 +176,7 @@ Bounded PNG/JPEG/WebP validation lives in `features/images/validation.py`. Books
 ### 9. Host service domains and portable preparation
 
 Document adapters, limits, metadata dispatch and ZIP password policy live in `services/documents/`; Qt picker/window/privacy code lives in its `ui/`. Folder policy, sources, entries and safety live in `services/folders/`, with Qt index hosting under `ui/`. `documents/preparation.py` opens provider text/Markdown without Qt; rclone owns its bounded Markdown resource loader independently of presentation. Folder safety config remains rooted at `Python/maintenance.ini`.
+
+### 10. Owner-declared mobile sources
+
+Each supported feature, the mobile host and neutral services declare selected modules in `mobile_sources.json`. `Mobile/tools.py` aggregates these strict data-only allowlists, validates staged feature/service imports (including nested adapters), and copies manifests into the payload source hash. Stage reads the target checkout manifests; no feature discovery or desktop registration runs during packaging. Existing public APP_MODULES/DOCUMENT_MODULES inventories remain available to validation tools.

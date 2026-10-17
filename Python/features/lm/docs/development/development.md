@@ -174,3 +174,7 @@ records; arbitrary Markdown resources remain blocked.
 ## Mobile ownership
 
 `mobile/storage.py`, `mobile/transport.py`, `mobile/presentation.py` and `mobile/ui.py` own mobile chat. The mobile host composes the view and supplies application presentation utilities. `streaming.py` owns portable desktop SSE decoding; Qt networking stays in `transport.py`. Mobile transport retains its stricter bounded text-only protocol.
+
+## Mobile source manifest
+
+`../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.

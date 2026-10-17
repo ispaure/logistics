@@ -60,3 +60,7 @@ Use disposable copies when testing behavioral changes to these operations.
 ## Portable image validation
 
 `validation.py` validates bounded PNG/JPEG/WebP dimensions before native decoding. Books, Comics and provider readers share it without loading Qt, Toga or image-processing tools. The existing 8 MiB, 8192-pixel-axis and 16-megapixel limits are unchanged.
+
+## Mobile source manifest
+
+`../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.

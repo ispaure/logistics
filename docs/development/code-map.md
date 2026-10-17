@@ -48,13 +48,11 @@ not the source to edit. Root platform launchers remain desktop entry points.
 | Mobile text Open/Save As | `Python/logisticsmobile/editor_picker.py`; `app.editor_picker()` owns the instance | [Mobile host owners](mobile-runtime.md) |
 | Saved-import inventory/deletion | `Python/logisticsmobile/saved_files_ui.py`; `app.saved_files()` owns the instance | [Mobile host owners](mobile-runtime.md) |
 | Mobile reader sessions and host access | `Python/logisticsmobile/{reader_sessions,private_sessions,reader_host}.py` | [Mobile architecture](mobile-architecture-roadmap.md) |
-| Mobile format presentation or cloud integration | `Python/features/{books,comics,rclone}/mobile/` | [Mobile preparation](mobile-preparation.md) |
-| Which sources reach a mobile build | `Mobile/tools.py`: `APP_MODULES`, `DOCUMENT_MODULES`, `SHARED_REQUIRED_MODULES` | [Mobile preparation](mobile-preparation.md) |
+| Mobile format presentation or cloud integration | `Python/features/{books,comics}/mobile/`, rclone `mobile/` and workflow-owned `*/mobile/` | [Mobile preparation](mobile-preparation.md) |
+| Which sources reach a mobile build | Owning `mobile_sources.json`; `Mobile/tools.py` aggregates `APP_MODULES` and `DOCUMENT_MODULES` | [Mobile preparation](mobile-preparation.md) |
 | Defaults, private state or resource roots | Owning feature's `config.ini`, `Python/features/settings.py`, `Python/config.py` | [Configuration and data](configuration-and-data.md) |
 
-Feature UI placement is currently mixed: Git, LM and Blender use `ui/`, and
-Books/Comics have mobile subpackages. LM and Blender's old root presentation
-modules are compatibility imports. Follow the actual
+Feature desktop presentation is feature-owned: Git, LM, Blender, Books, IDE and Text Editor use `ui/`; substantial Blender/rclone workflows nest their own platform presentation. Books, Comics, LM and Text Editor have mobile adapters. Follow the actual
 registration factory to find the presentation; do not assume every feature has
 the same tree. Bulk Rename deliberately remains in `ui_new/bulk_rename`.
 
@@ -91,3 +89,7 @@ For a first contribution:
 Keep application policy in Logistics and reusable mechanisms in commonUtils;
 see [shared ownership](commonutils-integration.md). Optional externally supplied
 feature sources are separately owned and may be absent from a normal clone.
+
+## Mobile source ownership
+
+Supported features and host/services declare curated payload sources in `mobile_sources.json`. `Mobile/tools.py` validates staged imports and hashes manifests with the payload. Feature manifests never start desktop discovery. Host services are grouped under `services/documents/`, `services/folders/` and `services/editors/`; platform presentation lives under `ui/` or feature `mobile/`.

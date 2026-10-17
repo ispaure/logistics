@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "modules": [
+    "__init__.py",
+    "epub.py",
+    "locations.py",
+    "metadata.py",
+    "mobile/__init__.py",
+    "mobile/android/io/github/ispaure/logistics/books/BookSpeechListener.java",
+    "mobile/appearance.py",
+    "mobile/content.py",
+    "mobile/metadata.py",
+    "mobile/navigation.py",
+    "mobile/presentation.py",
+    "mobile/private_view.py",
+    "mobile/provider_reader.py",
+    "mobile/speech.py",
+    "mobile/speech_native.py",
+    "mobile/speech_view.py",
+    "mobile/text_reader.py",
+    "mobile/typography.py",
+    "mutations.py",
+    "themes.py",
+    "xhtml.py"
+  ]
+}

@@ -1184,3 +1184,7 @@ canvas. The shared native image component owns gesture arbitration, lens drawing
 and cleanup. EPUBs, ordinary image previews and comics with controls visible
 leave it disabled. The lens uses the current in-memory page/spread without
 creating files. Native touch/render validation remains a separate device check.
+
+## Owner-declared source selection
+
+Each supported feature and the mobile host/services own a `mobile_sources.json` file (`schema: 1`, explicit `modules` paths relative to that owner). Add a source there when introducing a dependency. `Mobile/tools.py` aggregates the allowlists without importing feature registration, validates selected application/feature/service imports, and packages the manifests as part of source identity. Type-checking-only dependencies and uncalled feature registration factories do not enter the runtime payload. Generated Briefcase projects and `Mobile/payload/` remain outputs.
