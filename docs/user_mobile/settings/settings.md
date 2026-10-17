@@ -151,3 +151,20 @@ external executable locations and desktop-only options need validation or
 platform-specific replacements. Document-provider access is a permission-bearing
 platform handle rather than an ordinary path stored in an INI. Preferences
 migration and general app-data backup/reset behavior remain separate work.
+
+## Speech while locked
+
+Started Markdown and EPUB read-aloud can continue with the screen locked. iOS
+shows Now Playing controls on the lock screen and in Control Center; Android
+shows media controls in the lock screen and notification shade. Use Play/Pause
+and the backward/forward 15-second controls. Skips remain approximate, using
+word count and playback speed. Stop or close the document to remove its controls.
+Only a generic **Read aloud** title is shown, without document or credential names.
+
+**Session-only speech while locked** defaults to off. With it off, speech from
+session-only credentials stops and its queued text clears when the app locks or
+goes into the background. Turn the setting on to permit already-started speech
+and system controls while locked; the choice is remembered on this device.
+Credentials still lock normally, and this setting does not permit new file reads
+or restore speech after an app restart. Clearing/replacing credentials or closing
+the document stops playback even with the setting enabled.

@@ -128,6 +128,8 @@ class ScreenPrivacy:
 
     def conceal(self):
         self.inactive = True
+        from features.books.mobile.media_controls import enforce_privacy
+        enforce_privacy(self.app)
         if self.lock_view is not None:
             self.lock_password.value = self.lock_confirmation.value = ''
         for gate in self.gates():
@@ -207,8 +209,8 @@ class ScreenPrivacy:
         """Replace the entire navigation root; routes may update safely behind it."""
         locked = any(gate.locked for gate in gates)
         if locked:
-            from .markdown_speech import stop_markdown_speech
-            stop_markdown_speech(self.app)
+            from features.books.mobile.media_controls import enforce_privacy
+            enforce_privacy(self.app)
             self.lock_gates = gates
             if self.lock_view is None:
                 import toga

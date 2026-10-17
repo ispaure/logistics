@@ -9,8 +9,9 @@ from .speech_native import NativeSpeech
 
 
 class ReadAloudPanel(toga.Box):
-    def __init__(self, *, loop, source, on_range, close, engine=None):
+    def __init__(self, *, loop, source, on_range, close, engine=None, app=None, privacy_gate=lambda: None, valid=lambda: True):
         from logisticsmobile.control_icons import icon_button
+        self.playback = None
         self.source, self.closed = source, False
         self.engine = engine or NativeSpeech(loop)
         self.status = toga.Label('Starting system speech engine…')
@@ -30,6 +31,10 @@ class ReadAloudPanel(toga.Box):
                 icon_button('stop', 'Stop read-aloud', on_press=lambda w: self.session.stop()),
                 icon_button('close', 'Close read-aloud', on_press=close)], style=Pack(direction=ROW))],
             style=Pack(direction=COLUMN))
+        if app is not None:
+            from .media_controls import SpeechPlayback
+            self.playback = SpeechPlayback(self, app, gate=privacy_gate, valid=valid)
+            self.session.can_speak = self.playback.can_start
         self.ready_task = loop.create_task(self.wait_ready())
 
     async def wait_ready(self):
@@ -53,6 +58,8 @@ class ReadAloudPanel(toga.Box):
 
     def state(self, state, message):
         if not self.closed:
+            if self.playback is not None:
+                self.playback.changed(state)
             self.status.text = textwrap.fill(message, 30)
             self.pause_button.enabled = state in ('speaking', 'paused')
             from logisticsmobile.control_icons import apply_icon
@@ -65,6 +72,10 @@ class ReadAloudPanel(toga.Box):
             return
         chapter, start, end = await self.source()
         if not self.closed:
+            if self.playback is not None and not self.playback.can_start():
+                self.session.stop()
+                self.status.text = 'Unlock the credential session before reading aloud.'
+                return
             self.session.play(chapter.text, start, end, voice=self.voice_choice.value,
                 speed=float(self.speed_choice.value), breaks=getattr(chapter, 'breaks', ()))
 
@@ -78,6 +89,8 @@ class ReadAloudPanel(toga.Box):
         if not self.closed:
             self.ready_task.cancel()
             self.session.dispose()
+            if self.playback is not None:
+                self.playback.dispose()
             self.closed = True
             self.voice_choice.items = []
             self.status.text = ''

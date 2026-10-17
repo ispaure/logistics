@@ -69,7 +69,11 @@ class VaultBrowser:
         self.web = toga.WebView(on_navigation_starting=self.follow_link, style=Pack(flex=1))
         self.article = toga.Box(children=[self.title, self.edit, self.web], style=Pack(direction=COLUMN, flex=1))
         from .markdown_speech import MarkdownSpeech
-        self.speech = MarkdownSpeech(app, self.web, self.article)
+        self.speech = MarkdownSpeech(app, self.web, self.article,
+            privacy_gate=lambda: getattr(app.cloud_client, "session_privacy", None) if self.provider.private else None,
+            valid=lambda: not self.cancelled.is_set() and app.active_host
+                and (not self.provider.private or (self.client is app.cloud_client
+                    and self.generation == getattr(self.client, "generation", None))))
         self.article.insert(2, self.speech.button)
         self.speech.button.enabled = False
         self.sidebar = AdaptiveSidebar(self.tree, self.article, label='Vault folders and Markdown notes')

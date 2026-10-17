@@ -80,6 +80,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if previous_host is not None:
             from .markdown_speech import stop_markdown_speech
             stop_markdown_speech(previous_host)
+            from features.books.mobile.media_controls import stop_media
+            stop_media(previous_host)
             vault = getattr(previous_host, 'vault_browser', None)
             if vault is not None:
                 vault.dispose()
@@ -531,6 +533,13 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 'Use black text on white, strong borders and simpler controls. Overrides dark mode and reader colors '
                 'without changing images or files. Saved immediately. No BOOX hardware refresh control.'))
             self.android_eink_choice.on_change = self.change_android_eink
+        self.session_speech_choice = toga.Switch('Session-only speech while locked',
+            value=self.preferences.values['session_speech_when_locked'] == 'true',
+            on_change=self.change_session_speech, style=Pack(height=48))
+        box.add(switch_row(self, 'Session-only speech while locked', self.session_speech_choice,
+            'Allow already-started read-aloud from session-only credentials to keep playing '
+            'and show system playback controls while locked. Off by default. This choice is saved. '
+            'It does not unlock credentials or permit new file reads while locked.'))
         box.add(heading('Text & Markdown'))
         box.add(toga.Label('Editor and preview font size'))
         box.add(self.font_choice)
@@ -609,6 +618,19 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         configure_android_eink(self)
         self.refresh_native_theme()
         self.settings_status.text = 'High contrast / E Ink saved on this device.'
+
+    def change_session_speech(self, widget, **kwargs):
+        try:
+            self.preferences.save(session_speech_when_locked='true' if widget.value else 'false')
+        except (OSError, ValueError) as error:
+            widget.on_change = None
+            widget.value = self.preferences.values['session_speech_when_locked'] == 'true'
+            widget.on_change = self.change_session_speech
+            self.settings_status.text = str(error)
+            return
+        from features.books.mobile.media_controls import settings_changed
+        settings_changed(self)
+        self.settings_status.text = 'Lock-screen speech preference saved on this device.'
 
     def save_preferences(self, widget=None, **kwargs):
         try:
@@ -901,6 +923,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if saved:
             from .markdown_speech import stop_markdown_speech
             stop_markdown_speech(self)
+            from features.books.mobile.media_controls import stop_media
+            stop_media(self)
             vault = getattr(self, 'vault_browser', None)
             if vault is not None:
                 vault.dispose()
@@ -919,15 +943,22 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if not self.active_host:
             return
         from .markdown_speech import stop_markdown_speech
-        stop_markdown_speech(self)
+        from features.books.mobile.media_controls import current_panel
+        playing = current_panel(self)
+        stop_markdown_speech(self, keep=playing)
         self.retire_private_comic_batch()
         private = getattr(self, 'private_sessions', None)
         if private is not None:
-            private.suspend()
+            keep = next((owner for owner in private.controllers.values()
+                if (getattr(getattr(owner, 'provider_epub_view', None), 'speech_panel', None) is playing
+                    or getattr(getattr(owner, 'markdown_speech', None), 'panel', None) is playing)
+                and playing is not None), None)
+            private.suspend(except_owner=keep)
         readers = getattr(self, 'readers', None)
         if readers is not None:
             for owner in readers.controllers.values():
-                owner.suspend()
+                if playing is None or getattr(owner, 'speech_panel', None) is not playing:
+                    owner.suspend()
         for name in ('file_browser', 'remote_browser', 'editor_browser'):
             browser = getattr(self, name, None)
             if browser is not None:

@@ -164,3 +164,24 @@ index. Fifteen-second skips use 180 words/minute multiplied by playback speed,
 including elapsed time in the current utterance; native synthesis supplies no
 seekable audio timeline. Skips invalidate old completion tokens, respect selected
 passage bounds and preserve pause state. Stop/disposal clear text and word offsets.
+
+## System speech controls and privacy
+
+`mobile/media_controls.py` arbitrates one active speech session per process.
+`media_ios.py` uses a playback/spoken-audio AVAudioSession, public MediaPlayer
+remote commands and generic Now Playing metadata; the host declares the audio
+background mode. `media_android.py` connects to the non-exported
+`SpeechMediaService`, which owns a media-playback foreground service, MediaSession,
+MediaStyle notification, audio focus and a bounded wake lock. No text, document
+path or credential label enters metadata, intents or notification storage.
+Commands are generation-bound; stopped/revoked sessions cannot resume through
+a stale notification. The service is not sticky and never reconstructs speech
+after process death.
+
+The host supplies the source credential gate and live credential-generation
+check to ReadAloudPanel. Default session-only playback stays foreground-only.
+ScreenPrivacy enforces denial synchronously on background/lock; late DOM reads
+are checked again before speech starts. A saved device preference permits only
+the existing in-memory speech passage while its gate remains locked. Credential
+revocation remains authoritative. UI-hidden memory trimming retains only that
+single authorized playback owner; navigation/close still disposes it.

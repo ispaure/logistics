@@ -19,8 +19,9 @@ class MarkdownSpeechPanel(ReadAloudPanel):
 
 
 class MarkdownSpeech:
-    def __init__(self, app, web, container):
+    def __init__(self, app, web, container, *, privacy_gate=lambda: None, valid=lambda: True):
         self.app, self.web, self.container = app, web, container
+        self.privacy_gate, self.valid = privacy_gate, valid
         self.panel = None
         self.generation = 0
         self.button = toga.Button('Read aloud', on_press=self.show, style=Pack(height=48))
@@ -31,7 +32,7 @@ class MarkdownSpeech:
     def show(self, widget=None, **kwargs):
         stop_markdown_speech(self.app)
         self.panel = MarkdownSpeechPanel(loop=self.app.loop, source=self.source,
-            on_range=lambda start, end: None, close=self.close)
+            on_range=lambda start, end: None, close=self.close, app=self.app, privacy_gate=self.privacy_gate, valid=self.valid)
         self.container.insert(0, self.panel)
 
     async def source(self):
@@ -53,6 +54,7 @@ class MarkdownSpeech:
             self.panel = None
 
 
-def stop_markdown_speech(app):
+def stop_markdown_speech(app, *, keep=None):
     for speech in tuple(getattr(app, '_markdown_speech', ())):
-        speech.close()
+        if speech.panel is not keep:
+            speech.close()

@@ -54,6 +54,9 @@ class NativeSpeech:
         self.listener, self.init_listener = Complete(), Init()
         self.progress_listener = BookSpeechListener(self.listener)
         self.native = TextToSpeech(MainActivity.singletonThis, self.init_listener)
+        from android.media import AudioAttributes
+        self.native.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
 
     def initialized(self, status):
         try:
@@ -103,6 +106,7 @@ class NativeSpeech:
                             engine.failure(engine.token)
             _delegate_class = LogisticsBookSpeechDelegate
         self.native = ObjCClass('AVSpeechSynthesizer').alloc().init()
+        self.native.usesApplicationAudioSession = True
         self.delegate = _delegate_class.alloc().init()
         self.delegate.owner = self
         self.native.delegate = self.delegate
