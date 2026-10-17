@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from features.rclone.mobile.localcrypt import LocalCryptCopies
+from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
 from services.document_readers import PrivateReader
 from books_fixture import make_book
 
@@ -230,7 +230,7 @@ class LocalAdapterTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), b'external')
 
     def test_transfer_adapter_rejects_consumed_or_closed_source(self):
-        from features.rclone.mobile.file_resources import CryptTransferStream
+        from features.rclone.localcrypt.mobile.resources import CryptTransferStream
         with TemporaryDirectory() as directory:
             path = Path(directory) / 'cipher'
             path.write_bytes(b'ciphertext')

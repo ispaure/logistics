@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch, AsyncMock
 from logisticsmobile.folder_hub import hub_entries, visible_remotes
 from logisticsmobile.preferences import Preferences
-from features.rclone.mobile.mirror_jobs import MirrorJobs
+from features.rclone.transfers.mobile.jobs import MirrorJobs
 from test_mirror_jobs import MirrorClient
 
 

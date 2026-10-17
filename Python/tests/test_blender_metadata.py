@@ -6,9 +6,9 @@ import unittest
 import warnings
 import zipfile
 
-from features.blender.addons import scan_preset
-from features.blender.library import inspect_package
-from features.blender.metadata import parse_addon_source
+from features.blender.addons.scanning import scan_preset
+from features.blender.addons.library import inspect_package
+from features.blender.addons.metadata import parse_addon_source
 
 
 class AddonMetadataTests(unittest.TestCase):

@@ -9,9 +9,9 @@ import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from features.blender import register
-from features.blender.manager import BlenderManager
+from features.blender.presets.manager import BlenderManager
 from features.blender.page import BlenderPage
-from features.blender.releases import load_releases
+from features.blender.installation.releases import load_releases
 
 
 class BlenderPageTests(QtTestCase):
@@ -23,10 +23,10 @@ class BlenderPageTests(QtTestCase):
         self.temporary = TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.manager = BlenderManager(Path(self.temporary.name))
-        from features.blender.library import AddonLibrary
+        from features.blender.addons.library import AddonLibrary
         library = patch('features.blender.ui.page.AddonLibrary', side_effect=lambda manager: AddonLibrary(manager, provided_root=Path(self.temporary.name) / 'provided'))
         library.start(); self.addCleanup(library.stop)
-        disabled = patch('features.blender.bluehole.DEFAULT', {'enabled': False, 'branch': 'main'})
+        disabled = patch('features.blender.addons.bluehole.DEFAULT', {'enabled': False, 'branch': 'main'})
         disabled.start()
         self.addCleanup(disabled.stop)
         self.builds = load_releases(platform='windows-x64')
@@ -72,7 +72,7 @@ class BlenderPageTests(QtTestCase):
     def test_settings_contains_versions_and_presets_with_default_optional_bluehole(self):
         from features.blender.settings import BlenderSettings
         self.manager.create_preset(self.builds[0], 'Art')
-        with patch('features.blender.bluehole.DEFAULT', {'enabled': True, 'branch': 'main'}):
+        with patch('features.blender.addons.bluehole.DEFAULT', {'enabled': True, 'branch': 'main'}):
             panel = BlenderSettings(manager=self.manager)
         self.assertEqual([panel.tabs.tabText(i) for i in range(panel.tabs.count())], ['Presets', 'Versions Definitions', 'Addon Library'])
         self.assertEqual(panel.presets.stack.currentWidget(), panel.presets.preset_splitter)
@@ -142,7 +142,7 @@ class BlenderPageTests(QtTestCase):
     def test_addon_rows_compare_installed_and_latest_and_keep_missing_selections(self):
         import json
         import zipfile
-        from features.blender.library import AddonLibrary
+        from features.blender.addons.library import AddonLibrary
         root = self.manager.create_preset(self.builds[0], 'Art')
         library = AddonLibrary(self.manager, provided_root=Path(self.temporary.name) / 'provided').for_preset(root)
         addons = []
@@ -180,7 +180,7 @@ class BlenderPageTests(QtTestCase):
         page.library.for_preset(art).add(package)
         (art / '.logistics-addons.json').write_text(json.dumps({'selected': ['legacy:tool'], 'installed': {}}))
         page.refresh()
-        with patch('features.blender.library.AddonLibrary.entries', side_effect=OSError('unavailable')):
+        with patch('features.blender.addons.library.AddonLibrary.entries', side_effect=OSError('unavailable')):
             page.preset_list.setCurrentRow(1)
             self.assertEqual(page.choices.rowCount(), 0)
             self.assertFalse(page.apply_button.isEnabled())
@@ -306,21 +306,21 @@ class BlenderPageTests(QtTestCase):
 
     def test_offline_bluehole_launches_installed_copy_and_displays_warning(self):
         import zipfile
-        from features.blender import bluehole
-        from features.blender.library import inspect_package
+        from features.blender.addons import bluehole
+        from features.blender.addons.library import inspect_package
         self.manager.create_preset(self.builds[0], 'Art')
         page = BlenderPage(manager=self.manager)
         package = Path(self.temporary.name) / 'bluehole.zip'
         with zipfile.ZipFile(package, 'w') as archive:
             archive.writestr('BlueHole/__init__.py', 'bl_info={"name":"Blue Hole","version":(1,0,0),"blender":(3,0,0)}')
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
-                patch('features.blender.addons.run_blender_script'), \
+                patch('features.blender.addons.scanning.run_blender_script'), \
                 patch.object(bluehole, 'update', return_value=(inspect_package(package), 'a' * 40)):
             page.library.apply(self.builds[0], 'Art', [], bluehole={'enabled': True, 'branch': 'main'})
         package.unlink()
         with patch.object(self.manager, 'ready', return_value=True), \
                 patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
-                patch('features.blender.addons.run_blender_script'), \
+                patch('features.blender.addons.scanning.run_blender_script'), \
                 patch.object(bluehole, 'resolve_branch', side_effect=ConnectionError('offline')), \
                 patch.object(self.manager, 'launch', return_value=42) as launch:
             page._launch()

@@ -222,3 +222,7 @@ remain mandatory after review, including explicit early approval.
 ## Mobile host boundary
 
 The feature imports no `logisticsmobile` modules. `mobile/host.py:MobileHostUI` declares injected presentation callbacks. The application supplies browser/menu/picker and visibility policy through its composition root. Document reader and native archive adapters live in neutral Logistics services; rclone owns storage and transfer adapters.
+
+## Workflow ownership
+
+`transfers/` owns review, scope, options and execution policy, with desktop `ui/` and mobile presentation/controllers. `localcrypt/` owns encrypted providers/connections with desktop `ui/` and `mobile/` adapters. Cloud credential/session composition stays at the feature root/mobile package.

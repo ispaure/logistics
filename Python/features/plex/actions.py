@@ -18,7 +18,7 @@ from commonUtils.runtime.platform import OS, get_os
 
 from features.plex import detection as plex_detection
 from features.plex import folders as plex_folders
-from features.rclone.workflow import reviewed_sync
+from features.rclone.transfers.workflow import reviewed_sync
 
 
 # ----------------------------------------------------------------------------------------------------------------------

@@ -7,8 +7,8 @@ import unittest
 from unittest.mock import patch
 from commonUtils.archives.zip_access import ArchivePasswordError
 from commonUtils.runtime.local_files import LocalFiles
-from features.rclone.mobile.file_resources import CryptFiles, ManagedCopies
-from features.rclone.mobile.localcrypt import LocalCryptCopies
+from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies
+from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
 
 
 class LocalCryptConfigurationTests(unittest.TestCase):

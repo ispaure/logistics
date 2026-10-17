@@ -73,11 +73,11 @@ class RemoteBrowserView(qt.QMainWindow):
         return f'Remote — {self.location.config.stem} / {self.location.remote}' + (f' / {directory}' if directory else '')
 
     def _thumbnail(self, relative, size, cancelled):
-        from features.rclone.ui.local_crypt import CryptBrowserView
+        from features.rclone.localcrypt.ui.views import CryptBrowserView
         return CryptBrowserView._thumbnail(self, relative, size, cancelled)
 
     def _details(self, row, cancelled):
-        from features.rclone.ui.local_crypt import CryptBrowserView
+        from features.rclone.localcrypt.ui.views import CryptBrowserView
         return CryptBrowserView._details(self, row, cancelled)
 
     def open_document(self, path):
@@ -152,7 +152,7 @@ def _workspace(parent):
 def open_remote(config, remote, parent=None, directory='', *, package=None):
     location = RemoteLocation(Path(config), remote, directory)
     parent = parent or qt.QApplication.activeWindow()
-    from features.rclone.ui.local_crypt import ensure_session
+    from features.rclone.localcrypt.ui.views import ensure_session
     if not ensure_session(config, package=package, parent=parent):
         return
     workspace = _workspace(parent)

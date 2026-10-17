@@ -9,7 +9,10 @@ import unittest
 from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from features.rclone import executable, local_crypt, actions, session
+from features.rclone import executable
+from features.rclone.localcrypt import backend as local_crypt
+from features.rclone import actions
+from features.rclone import session
 from features.comics.library import ComicDocument
 from features.comics.pages import ComicPages
 from local_crypt_fixture import crypt_fixture
@@ -118,7 +121,8 @@ class LocalCryptTests(QtTestCase):
             self.assertFalse(f.provider._sizes)
 
     def test_decrypted_pull_remembers_package_after_session_restart(self):
-        from features.rclone import local_connections, ui_contributions
+        from features.rclone.localcrypt import connections as local_connections
+        from features.rclone import ui_contributions
         from models.local_folder import LocalFolder
         from services.folder_entries import get_folder_entries
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
@@ -140,11 +144,11 @@ class LocalCryptTests(QtTestCase):
                 with patch.object(actions, 'pull_remote', return_value=True) as pull:
                     next(action for action in ui_contributions._get_actions(entry) if action.name == 'Pull').callback()
                 pull.assert_called_once_with('Secret', item.context, package=f.package, review=True)
-                with patch('features.rclone.ui.local_crypt.ensure_session', return_value=False) as unlock:
+                with patch('features.rclone.localcrypt.ui.views.ensure_session', return_value=False) as unlock:
                     self.assertFalse(actions.push_to_cloud(LocalFolder(item.data), f.context))
                     unlock.assert_called_once_with(item.context, package=f.package)
-                with patch('features.rclone.ui.local_crypt.ensure_session', return_value=True), \
-                     patch('features.rclone.sync.rclone_sync', return_value=True) as push:
+                with patch('features.rclone.localcrypt.ui.views.ensure_session', return_value=True), \
+                     patch('features.rclone.transfers.sync.rclone_sync', return_value=True) as push:
                     self.assertTrue(actions.push_to_cloud(LocalFolder(item.data), f.context))
                     self.assertEqual(push.call_args.args, (item.data, 'Secret:'))
                     self.assertEqual(push.call_args.kwargs['config_path'], item.context)
@@ -153,19 +157,19 @@ class LocalCryptTests(QtTestCase):
                 other.publish()
 
     def test_unaccepted_decrypted_pull_does_not_publish_association(self):
-        from features.rclone import local_connections
+        from features.rclone.localcrypt import connections as local_connections
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f, \
-             patch('features.rclone.sync.rclone_sync', return_value=False):
+             patch('features.rclone.transfers.sync.rclone_sync', return_value=False):
             self.assertFalse(actions.pull_remote('Secret', f.context))
             self.assertEqual(local_connections.connections(include_missing=True), [])
 
     def test_bulk_metadata_action_keeps_selected_encrypted_zip_comics(self):
         from io import BytesIO
-        from features.rclone.ui.local_crypt import CryptBrowserView
+        from features.rclone.localcrypt.ui.views import CryptBrowserView
         from features.comics.ui.metadata_editor import MetadataEditor
         from commonUtils.archives.zip_access import is_encrypted
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f, \
-             patch('features.rclone.ui.local_crypt.executable.get_rclone_path', return_value=self.binary):
+             patch('features.rclone.localcrypt.ui.views.executable.get_rclone_path', return_value=self.binary):
             f.provider.create_file('second.zip', BytesIO(f.provider.read_bytes('encrypted.cbz')))
             f.provider.rename('encrypted.cbz', 'first.zip')
             paths = [f.item.data / name for name in ('first.zip', 'second.zip')]
@@ -297,9 +301,9 @@ class LocalCryptTests(QtTestCase):
                 editor.close()
 
     def test_bulk_metadata_save_refreshes_localcrypt_browser_information(self):
-        from features.rclone.ui.local_crypt import CryptBrowserView
+        from features.rclone.localcrypt.ui.views import CryptBrowserView
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f, \
-             patch('features.rclone.ui.local_crypt.executable.get_rclone_path', return_value=self.binary):
+             patch('features.rclone.localcrypt.ui.views.executable.get_rclone_path', return_value=self.binary):
             view = CryptBrowserView(f.item)
             view.show()
             browser = view.file_browser
@@ -327,9 +331,9 @@ class LocalCryptTests(QtTestCase):
 
     def test_pulled_comic_metadata_is_fresh_after_browser_refresh_and_editor_reopen(self):
         from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
-        from features.rclone.ui.local_crypt import CryptBrowserView
+        from features.rclone.localcrypt.ui.views import CryptBrowserView
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f, \
-             patch('features.rclone.ui.local_crypt.executable.get_rclone_path', return_value=self.binary):
+             patch('features.rclone.localcrypt.ui.views.executable.get_rclone_path', return_value=self.binary):
             view = CryptBrowserView(f.item)
             view.show()
             browser = view.file_browser
@@ -447,10 +451,10 @@ class LocalCryptTests(QtTestCase):
 
     def test_regular_browser_routes_navigation_and_reuses_private_tab(self):
         from ui_new.file_browser import FileBrowserPage, _browser_view, _new_browser_tab
-        from features.rclone.ui.local_crypt import CryptBrowserView
+        from features.rclone.localcrypt.ui.views import CryptBrowserView
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f, \
              patch('features.registry.get_browser_extensions', return_value=[]), \
-             patch('features.rclone.ui.local_crypt.executable.get_rclone_path', return_value=self.binary):
+             patch('features.rclone.localcrypt.ui.views.executable.get_rclone_path', return_value=self.binary):
             page = FileBrowserPage(root_path=f.root)
             original = page.workspace.active_view
             browser = original.file_browser
@@ -593,11 +597,11 @@ class LocalCryptTests(QtTestCase):
                 provider.close()
 
     def test_private_browser_shared_views_render_comic_covers_in_memory(self):
-        from features.rclone.ui.local_crypt import CryptBrowserView
+        from features.rclone.localcrypt.ui.views import CryptBrowserView
         from commonUtils.ui.file_browser.views import BrowserViews
         from commonUtils.ui.readers.reader_menus import RecentFiles
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f, \
-             patch('features.rclone.ui.local_crypt.executable.get_rclone_path', return_value=self.binary), \
+             patch('features.rclone.localcrypt.ui.views.executable.get_rclone_path', return_value=self.binary), \
              patch.object(RecentFiles, 'add', side_effect=AssertionError('Private thumbnails wrote recents')):
             view = CryptBrowserView(f.item)
             view.resize(1100, 750)
@@ -672,18 +676,18 @@ class LocalCryptTests(QtTestCase):
                     timer.deleteLater()
 
     def test_browser_markdown_and_metadata_use_memory_only_hosts(self):
-        from features.rclone.ui.local_crypt import CryptBrowserView
+        from features.rclone.localcrypt.ui.views import CryptBrowserView
         from features.comics.ui.metadata_editor import MetadataEditor
         from commonUtils.ui.readers.reader_menus import RecentFiles
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
-            with patch('features.rclone.ui.local_crypt.executable.get_rclone_path', return_value=self.binary), \
+            with patch('features.rclone.localcrypt.ui.views.executable.get_rclone_path', return_value=self.binary), \
                  patch.object(RecentFiles, 'add', side_effect=AssertionError('Private reader must not persist a recent filename')):
                 view = CryptBrowserView(f.item)
                 self.wait(lambda: not view.file_browser.operation.busy)
                 self.assertFalse(view.file_browser.persistent_index)
                 self.assertEqual(view.file_browser.tree.topLevelItemCount(), 5)
                 self.assertFalse(hasattr(view.file_browser, 'index_search'))
-                with patch('features.rclone.ui.local_crypt.show_document') as present:
+                with patch('features.rclone.localcrypt.ui.views.show_document') as present:
                     view.open_document(f.item.data / 'note.md')
                     self.wait(lambda: not view.open_operation.busy)
                 window = present.call_args.args[0]
@@ -776,9 +780,9 @@ class LocalCryptTests(QtTestCase):
 
     def test_cancelled_open_never_presents_a_document(self):
         from threading import Event
-        from features.rclone.ui.local_crypt import CryptBrowserView
+        from features.rclone.localcrypt.ui.views import CryptBrowserView
         with self.temporary_directory() as directory, crypt_fixture(directory, self.binary) as f:
-            with patch('features.rclone.ui.local_crypt.executable.get_rclone_path', return_value=self.binary):
+            with patch('features.rclone.localcrypt.ui.views.executable.get_rclone_path', return_value=self.binary):
                 view = CryptBrowserView(f.item)
                 self.wait_until(lambda: not view.file_browser.operation.busy)
                 entered, finish = Event(), Event()
@@ -786,8 +790,8 @@ class LocalCryptTests(QtTestCase):
                     entered.set()
                     finish.wait(5)
                     return f.original, {}
-                with patch('features.rclone.ui.local_crypt.prepare_markdown', side_effect=prepare), \
-                     patch('features.rclone.ui.local_crypt.show_document') as show:
+                with patch('features.rclone.localcrypt.ui.views.prepare_markdown', side_effect=prepare), \
+                     patch('features.rclone.localcrypt.ui.views.show_document') as show:
                     view.open_document(f.item.data / 'note.md')
                     self.wait_until(entered.is_set)
                     view.open_operation.request_cancel()
@@ -800,7 +804,7 @@ class LocalCryptTests(QtTestCase):
 
     def test_specific_push_preview_matches_execution_and_reports_lost_mapping(self):
         from types import SimpleNamespace
-        from features.rclone.ui.push_dialog import RclonePushDialog
+        from features.rclone.transfers.ui.push_dialog import RclonePushDialog
         with self.temporary_directory() as directory, crypt_fixture(directory, self.binary) as f:
             entry = SimpleNamespace(name='Secret', local=SimpleNamespace(path=f.plain, name='Secret'),
                                     remote_source='rclone', remote_context=f.context, remote_name='Secret')
@@ -809,7 +813,7 @@ class LocalCryptTests(QtTestCase):
             dialog.specific_path.setText(str(f.item.data))
             self.assertEqual(dialog.result_destination.text(), 'Cloud:' + str(f.cloud))
             f.item.record.unlink()
-            with patch('features.rclone.ui.push_dialog.ui.display_msg_box_ok') as message, \
+            with patch('features.rclone.transfers.ui.push_dialog.ui.display_msg_box_ok') as message, \
                  patch('features.rclone.actions.rclone_sync.rclone_sync') as transfer:
                 dialog._push()
                 transfer.assert_not_called()
@@ -996,7 +1000,7 @@ class LocalCryptTests(QtTestCase):
                 window.close()
 
     def test_private_markdown_save_as_retargets_local_and_crypt_without_overwrite(self):
-        from features.rclone.ui.local_crypt import MarkdownStorage, PrivateMarkdownWindow
+        from features.rclone.localcrypt.ui.views import MarkdownStorage, PrivateMarkdownWindow
         from commonUtils.runtime.local_files import LocalFiles
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             path = f.item.data / 'note.md'
@@ -1010,7 +1014,7 @@ class LocalCryptTests(QtTestCase):
                 window.viewer.editor.setPlainText('# Save As draft')
                 window.viewer.editor.document().setModified(True)
                 self.assertTrue(window.viewer.save_as_action.isEnabled())
-                with patch('features.rclone.ui.local_crypt.choose_destination', return_value=(local, 'exported.md', lambda: None)):
+                with patch('features.rclone.localcrypt.ui.views.choose_destination', return_value=(local, 'exported.md', lambda: None)):
                     window.viewer.save_as_dialog()
                 self.wait(lambda: not storage.operation.busy)
                 self.assertEqual((local_root / 'exported.md').read_bytes(), b'# Save As draft')
@@ -1029,13 +1033,13 @@ class LocalCryptTests(QtTestCase):
                 window.viewer.save_document()
                 self.wait(lambda: not storage.operation.busy)
                 self.assertEqual((local_root / 'exported.md').read_bytes(), b'# Saved locally again')
-                with patch('features.rclone.ui.local_crypt.choose_destination', return_value=(f.provider, 'another.md', lambda: None)):
+                with patch('features.rclone.localcrypt.ui.views.choose_destination', return_value=(f.provider, 'another.md', lambda: None)):
                     window.viewer.save_as_dialog()
                 self.wait(lambda: not storage.operation.busy)
                 self.assertEqual(f.provider.read_bytes('another.md'), b'# Saved locally again')
                 window.viewer.editor.setPlainText('# Collision must retain draft')
                 window.viewer.editor.document().setModified(True)
-                with patch('features.rclone.ui.local_crypt.choose_destination', return_value=(f.provider, 'note.md', lambda: None)):
+                with patch('features.rclone.localcrypt.ui.views.choose_destination', return_value=(f.provider, 'note.md', lambda: None)):
                     window.viewer.save_as_dialog()
                 self.wait(lambda: not storage.operation.busy)
                 self.assertEqual(f.provider.read_bytes('note.md'), f.original)

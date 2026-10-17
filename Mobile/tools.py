@@ -12,15 +12,16 @@ APP_MODULES = ('ios_reader_chrome.py', 'ios_storage.py', 'keyboard.py', 'fold_la
                'hub_ui.py', 'control_icons.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'local_sources.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library_edits.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
                'chat_fixture.py', 'resource_imports.py', 'files_ui.py', 'editor_picker.py', 'host_services.py', 'feature_hosts.py', 'folder_controller.py', 'hub_controller.py', 'locations_controller.py', 'storage_controller.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
+    'features/rclone/localcrypt/__init__.py', 'features/rclone/localcrypt/mobile/__init__.py', 'features/rclone/transfers/__init__.py', 'features/rclone/transfers/mobile/__init__.py',
     'features/text_editor/__init__.py', 'features/text_editor/mobile/__init__.py', 'features/text_editor/mobile/ui.py', 'features/text_editor/resources.py', 'features/text_editor/names.py', 'services/mobile_presentation.py',
-    'features/lm/mobile/controller.py', 'features/rclone/mobile/controller.py', 'features/rclone/mobile/transfer_controller.py', 'services/workflow_host.py',
+    'features/lm/mobile/controller.py', 'features/rclone/mobile/controller.py', 'features/rclone/transfers/mobile/controller.py', 'services/workflow_host.py',
     'services/document_readers.py', 'services/archive_access.py', 'services/document_limits.py', 'features/rclone/mobile/host.py',
     'features/lm/mobile/storage.py', 'features/lm/mobile/transport.py', 'features/lm/mobile/ui.py', 'features/lm/mobile/presentation.py', 'features/lm/mobile/__init__.py',
     'features/rclone/mobile/storage_location.py',
     'features/rclone/mobile/session_privacy.py',
-    'features/rclone/mobile/cloud_ui.py', 'features/rclone/mobile/mirror_ui.py', 'features/rclone/mobile/transfer_review_ui.py', 'features/rclone/mobile/localcrypt_ui.py', 'features/rclone/mobile/messages.py',
-    'features/rclone/mobile/__init__.py', 'features/rclone/mobile/cloud.py', 'features/rclone/mobile/remote_readers.py', 'features/rclone/mobile/credential_vault.py', 'features/rclone/mobile/credential_packages.py', 'features/rclone/mobile/crypt_stream.py', 'features/rclone/mobile/previews.py', 'features/rclone/mobile/mirror_jobs.py', 'features/rclone/mobile/localcrypt.py', 'features/rclone/mobile/file_resources.py',
-    'features/rclone/__init__.py', 'features/rclone/transfer_options.py', 'features/rclone/review.py', 'features/rclone/remote_policy.py', 'features/rclone/local_policy.py', 'features/rclone/scope.py',
+    'features/rclone/mobile/cloud_ui.py', 'features/rclone/transfers/mobile/ui.py', 'features/rclone/transfers/mobile/review_ui.py', 'features/rclone/localcrypt/mobile/ui.py', 'features/rclone/mobile/messages.py',
+    'features/rclone/mobile/__init__.py', 'features/rclone/mobile/cloud.py', 'features/rclone/mobile/remote_readers.py', 'features/rclone/mobile/credential_vault.py', 'features/rclone/mobile/credential_packages.py', 'features/rclone/localcrypt/mobile/archive_source.py', 'features/rclone/mobile/previews.py', 'features/rclone/transfers/mobile/jobs.py', 'features/rclone/localcrypt/mobile/copies.py', 'features/rclone/localcrypt/mobile/resources.py',
+    'features/rclone/__init__.py', 'features/rclone/transfers/transfer_options.py', 'features/rclone/transfers/review.py', 'features/rclone/remote_policy.py', 'features/rclone/transfers/local_policy.py', 'features/rclone/transfers/scope.py',
     'features/__init__.py', 'features/books/__init__.py', 'features/books/epub.py',
     'features/books/locations.py', 'features/books/themes.py', 'features/books/metadata.py', 'features/books/xhtml.py', 'features/comics/__init__.py',
     'features/books/mobile/appearance.py', 'features/books/mobile/typography.py', 'features/books/mobile/speech.py', 'features/books/mobile/speech_native.py', 'features/books/mobile/android/io/github/ispaure/logistics/books/BookSpeechListener.java', 'features/books/mobile/speech_view.py',
@@ -58,7 +59,7 @@ def validate_app_modules(root, modules=APP_MODULES, feature_modules=None):
     included -= {name for name in DOCUMENT_MODULES if name.startswith('features/rclone/')}
     included.update(feature_modules)
     sources = [('logisticsmobile/' + name, root / name) for name in modules]
-    sources += [(name, root.parent / name) for name in feature_modules if name.startswith('features/rclone/mobile/')]
+    sources += [(name, root.parent / name) for name in feature_modules if name.startswith('features/rclone/') and '/mobile/' in name]
     for relative, path in sources:
         tree = ast.parse(path.read_text(encoding='utf-8'), filename=relative)
         package = relative.rsplit('/', 1)[0].replace('/', '.')

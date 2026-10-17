@@ -25,7 +25,7 @@ _active_hosts = weakref.WeakValueDictionary()
 
 from features.lm.mobile.controller import ChatController
 from features.rclone.mobile.controller import CloudController
-from features.rclone.mobile.transfer_controller import TransferController
+from features.rclone.transfers.mobile.controller import TransferController
 from logisticsmobile.folder_controller import FolderController
 from logisticsmobile.hub_controller import HubController
 from logisticsmobile.locations_controller import LocationsController

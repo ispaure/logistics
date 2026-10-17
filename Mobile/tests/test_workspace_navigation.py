@@ -157,7 +157,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         with patch.object(app, 'cloud_client', SimpleNamespace(generation=1)):
             drawer.provider_client = app.cloud_client
             drawer.provider_generation = 1
-            with patch('features.rclone.mobile.file_resources.ManagedCopies', return_value=object()),                     patch.object(app, 'open_crypt', new_callable=AsyncMock, return_value=False):
+            with patch('features.rclone.localcrypt.mobile.resources.ManagedCopies', return_value=object()),                     patch.object(app, 'open_crypt', new_callable=AsyncMock, return_value=False):
                 self.assertFalse(app.loop.run_until_complete(drawer.open_file({'path': 'comic.cbz'})))
         self.assertIn('archive is damaged', drawer.status.text)
 
@@ -257,7 +257,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         from threading import Event
         from unittest.mock import AsyncMock
         from test_library_catalog import CryptClient
-        from features.rclone.mobile.file_resources import CryptFiles
+        from features.rclone.localcrypt.mobile.resources import CryptFiles
         app = self.app
         app.show_cloud(present=False)
         client = app.cloud_client = CryptClient()

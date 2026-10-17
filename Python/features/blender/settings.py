@@ -2,7 +2,7 @@
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.settings.layered_settings import LayeredSettingsEditor
 from features.settings import settings_store
-from .releases import release_config_paths, version_from_path, releases_from_values
+from features.blender.installation.releases import release_config_paths, version_from_path, releases_from_values
 
 
 PLATFORM_LABELS = {
@@ -116,7 +116,7 @@ class BlenderSettings(qt.QWidget):
             self.presets = BlenderPage(self, manager=manager, settings_mode=True)
             self.presets.idle.connect(self._resume_close)
             self.tabs.insertTab(0, self.presets, 'Presets')
-            from .ui.library_page import AddonLibraryPage
+            from features.blender.addons.ui.page import AddonLibraryPage
             self.library = AddonLibraryPage(self.presets.library, self)
             self.tabs.addTab(self.library, 'Addon Library')
             self.tabs.setCurrentWidget(self.presets)

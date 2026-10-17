@@ -273,3 +273,7 @@ and installed_bluehole record the actual qualified branch, while preset intent
 remains a channel. Offline fallback accepts both legacy and versioned records and
 rejects a baseline newer than the preset's Blender version. GitHub's default branch
 is independent of Logistics resolution.
+
+## Workflow ownership
+
+`installation/` owns release discovery and installation. `presets/manager.py` owns preset/process policy. `addons/` owns scanning, metadata, library and embedded Blender scripts; `addons/ui/` owns catalog presentation. Feature-level `ui/` composes installation/preset controls.

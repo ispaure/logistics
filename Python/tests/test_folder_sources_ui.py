@@ -136,7 +136,7 @@ class FolderSourceTests(QtTestCase):
     def test_private_folder_keeps_rclone_tools_without_local_detectors(self):
         from types import SimpleNamespace
         from features.contributions import FolderFeatureContribution
-        from features.rclone.local_crypt import LocalCryptFolder
+        from features.rclone.localcrypt.backend import LocalCryptFolder
         from features.rclone.ui_contributions import get_contributions
         from models.folder_entry import FolderEntry
         from features.calibre import ui_contributions as calibre

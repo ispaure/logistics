@@ -4,7 +4,7 @@ from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from ui_new.dialogs.archive_password import ValidatedPasswordDialog
-from features.rclone.ui.local_crypt import ensure_session, open_browser
+from features.rclone.localcrypt.ui.views import ensure_session, open_browser
 
 
 class CredentialUnlockTests(QtTestCase):
@@ -43,9 +43,9 @@ class CredentialUnlockTests(QtTestCase):
     def test_cancelled_unlock_does_not_create_a_browser_or_replace_credentials(self):
         from types import SimpleNamespace
         item = SimpleNamespace(context=Path('/fixture/Fixture.session'), package=Path('/fixture/Fixture.zip'))
-        with patch('features.rclone.ui.local_crypt.executable.ensure_rclone', return_value=Path('/fixture/rclone')), \
-             patch('features.rclone.ui.local_crypt.ensure_session', return_value=False), \
-             patch('features.rclone.ui.local_crypt.CryptBrowserView') as window:
+        with patch('features.rclone.localcrypt.ui.views.executable.ensure_rclone', return_value=Path('/fixture/rclone')), \
+             patch('features.rclone.localcrypt.ui.views.ensure_session', return_value=False), \
+             patch('features.rclone.localcrypt.ui.views.CryptBrowserView') as window:
             self.assertIsNone(open_browser(item))
             window.assert_not_called()
         with patch('features.rclone.session.credentials', return_value=None), \

@@ -23,7 +23,7 @@ async def approve_transfer(app, *, timeout=30):
 
 
 async def exercise_reviews(app):
-    from features.rclone.mobile.file_resources import CryptFiles, ManagedCopies
+    from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies
     store, client = app.mirror_store(), app.cloud_client
     job = next(job for job in store.jobs.values() if job['crypt'])
     key = job['id']
@@ -135,7 +135,7 @@ async def exercise_reviews(app):
 
     # Save actual native settings controls, then infer an ordinary local folder
     # beneath the selected remote, including a followed file link and exclusions.
-    from features.rclone.transfer_options import TransferOptions, save_options
+    from features.rclone.transfers.transfer_options import TransferOptions, save_options
     app.show_transfer_options()
     pending = [app.body]
     settings = None

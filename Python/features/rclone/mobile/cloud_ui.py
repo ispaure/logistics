@@ -7,7 +7,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from features.rclone.mobile.cloud import CloudClient, Downloads, PACKAGE_LIMIT, download_name
-from features.rclone.mobile.localcrypt_ui import LocalCryptUI
+from features.rclone.localcrypt.mobile.ui import LocalCryptUI
 
 
 from features.rclone.mobile.messages import import_hint

@@ -5,9 +5,9 @@ from unittest.mock import patch
 import unittest
 import zipfile
 
-from features.blender import bluehole
-from features.blender.manager import BlenderManager
-from features.blender.releases import load_releases
+from features.blender.addons import bluehole
+from features.blender.presets.manager import BlenderManager
+from features.blender.installation.releases import load_releases
 
 
 class BlueHoleTests(unittest.TestCase):
@@ -73,7 +73,7 @@ class BlueHoleTests(unittest.TestCase):
 
     def test_deluxe_stamps_once_preserves_backup_and_rejects_symlink_escape(self):
         from dataclasses import replace
-        from features.blender.library import inspect_package
+        from features.blender.addons.library import inspect_package
         root = self.manager.create_preset(self.release, 'Deluxe')
         prefs = root / 'config/userpref.blend'
         prefs.write_bytes(b'original artist preferences')

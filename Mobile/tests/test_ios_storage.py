@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from features.rclone.mobile.storage_location import collection_path, CollectionFiles, _shared_local_roots
-from features.rclone.mobile.mirror_jobs import MirrorJobs
+from features.rclone.transfers.mobile.jobs import MirrorJobs
 from logisticsmobile.ios_storage import MIGRATION, prepare_storage, prepare_for_app
 from logisticsmobile.documents import DocumentStore
 from logisticsmobile.folder_hub import hub_entries

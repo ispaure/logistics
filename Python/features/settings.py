@@ -46,7 +46,7 @@ def initialize_settings():
     paths += [path for path in (root / 'features').glob('*/config.ini') if path.parent.name != 'emulation']
     for path in paths:
         settings_store(path)
-    from features.blender.releases import initialize_release_settings
+    from features.blender.installation.releases import initialize_release_settings
     initialize_release_settings()
 
 

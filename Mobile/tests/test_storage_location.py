@@ -8,7 +8,7 @@ from unittest.mock import patch
 from features.rclone.mobile.storage_location import (
     CONFIG, MARKER, CollectionFiles, collection_path, switch_location,
 )
-from features.rclone.mobile.mirror_jobs import MirrorJobs
+from features.rclone.transfers.mobile.jobs import MirrorJobs
 from test_mirror_jobs import MirrorClient
 from logisticsmobile.folder_hub import hub_entries
 

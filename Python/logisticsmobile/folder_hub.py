@@ -1,7 +1,7 @@
 """Discover logical mobile folders without creating crypt storage or copying files."""
 from features.rclone.mobile.storage_location import collection_path
 from pathlib import Path
-from features.rclone.mobile.mirror_jobs import copy_target
+from features.rclone.transfers.mobile.jobs import copy_target
 from services.folder_policy import read_exclusions, visible_name, folder_parts
 
 

@@ -31,9 +31,9 @@ def push_seasons(folder: LocalFolder, config_path: str | Path, *, cancelled=None
     directory = _config_directory(folder)
     if directory is None:
         return False
-    from features.rclone.sync import rclone_sync
+    from features.rclone.transfers.sync import rclone_sync
     if review:
-        from features.rclone.workflow import reviewed_sync
+        from features.rclone.transfers.workflow import reviewed_sync
         transfer = lambda source, destination, **kwargs: reviewed_sync(source, destination, operation='Push', **kwargs)
     else:
         transfer = rclone_sync
@@ -55,10 +55,10 @@ def push_config(folder: LocalFolder, config_path: str | Path, *, review=False):
     directory = _config_directory(folder)
     if directory is None:
         return False
-    from features.rclone.sync import rclone_sync
+    from features.rclone.transfers.sync import rclone_sync
 
     if review:
-        from features.rclone.workflow import reviewed_sync
+        from features.rclone.transfers.workflow import reviewed_sync
         return reviewed_sync(directory, f'{folder.name}:{detection.get_config_sub_path(folder)}',
                              config_path=config_path, operation='Push')
     return rclone_sync(directory, f'{folder.name}:{detection.get_config_sub_path(folder)}',
@@ -69,10 +69,10 @@ def pull_config(folder: LocalFolder, config_path: str | Path, *, review=False):
     directory = _config_directory(folder)
     if directory is None:
         return False
-    from features.rclone.sync import rclone_sync
+    from features.rclone.transfers.sync import rclone_sync
 
     if review:
-        from features.rclone.workflow import reviewed_sync
+        from features.rclone.transfers.workflow import reviewed_sync
         return reviewed_sync(f'{folder.name}:{detection.get_config_sub_path(folder)}', directory,
                              config_path=config_path, operation='Pull')
     return rclone_sync(f'{folder.name}:{detection.get_config_sub_path(folder)}', directory,

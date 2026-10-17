@@ -11,7 +11,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN
 from commonUtils.runtime.operations import MutationIncomplete
 from commonUtils.runtime.resource_selection import ResourceSelection
-from features.rclone.mobile.file_resources import encrypted_copies
+from features.rclone.localcrypt.mobile.resources import encrypted_copies
 from .control_icons import icon_button
 from .host_services import HostService
 

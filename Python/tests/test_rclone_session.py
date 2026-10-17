@@ -7,7 +7,10 @@ import unittest
 from unittest.mock import patch
 from commonUtils.archives.zip_access import open_archive
 from commonUtils.integrations.wrappers.cmdShellWrapper import CommandResult
-from features.rclone import configuration, credentials, session, sync
+from features.rclone import configuration
+from features.rclone import credentials
+from features.rclone import session
+from features.rclone.transfers import sync
 
 
 class RcloneSessionTests(unittest.TestCase):

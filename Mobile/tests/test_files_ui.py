@@ -7,7 +7,7 @@ from logisticsmobile.app import LogisticsMobile
 
 class FileUITests(unittest.TestCase):
     def test_encrypted_provider_reads_during_transfer_without_allowing_mutations(self):
-        from features.rclone.mobile.file_resources import CryptFiles
+        from features.rclone.localcrypt.mobile.resources import CryptFiles
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory).resolve()
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)

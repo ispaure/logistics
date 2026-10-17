@@ -8,7 +8,7 @@ from zipfile import ZipFile
 from features.rclone import executable, session
 from local_crypt_fixture import crypt_fixture
 from features.rclone.mobile.cloud import CloudClient
-from features.rclone.mobile.localcrypt import LocalCryptCopies
+from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
 
 import os
 import unittest
@@ -97,7 +97,7 @@ class MobileCryptNativeTests(unittest.TestCase):
                 raise AssertionError('Forgotten credentials still decrypt')
 
     def test_large_archive_streamed_move_preview_and_metadata(self):
-        from features.rclone.mobile.file_resources import CryptFiles, ManagedCopies, DownloadedCryptFile
+        from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies, DownloadedCryptFile
         from logisticsmobile.browser_preview import callbacks
         from commonUtils.runtime.local_files import LocalFiles
         from commonUtils.runtime.resource_mutations import move_resource

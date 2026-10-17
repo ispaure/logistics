@@ -6,14 +6,14 @@ from configparser import Error as ConfigError
 from commonUtils.ui import pyside as qt
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.ui.tasks.operation_progress import OperationProgress
-from ..addons import inspect_addons, scan_preset
-from ..library import AddonLibrary, version_tuple
-from .library_page import source_label
+from features.blender.addons.scanning import inspect_addons, scan_preset
+from features.blender.addons.library import AddonLibrary, version_tuple
+from features.blender.addons.ui.page import source_label
 from ui_new.landing import LaunchCard
 from .layout import build_layout
-from ..manager import get_manager
-from .. import bluehole
-from ..releases import load_releases, platform_key
+from features.blender.presets.manager import get_manager
+from features.blender.addons import bluehole
+from features.blender.installation.releases import load_releases, platform_key
 
 
 class BlenderPage(qt.QWidget):

@@ -6,8 +6,8 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
-from features.rclone.progress import RcloneProgressParser
-from features.rclone.sync import build_sync_arguments, rclone_sync
+from features.rclone.transfers.progress import RcloneProgressParser
+from features.rclone.transfers.sync import build_sync_arguments, rclone_sync
 from commonUtils.ui import pyside as qt
 
 
@@ -59,9 +59,9 @@ class RcloneProgressTests(QtTestCase):
         app = qt.QApplication.instance() or qt.QApplication([])
         with TemporaryDirectory() as temp:
             destination = Path(temp) / 'destination'
-            with patch('features.rclone.sync.executable.ensure_rclone', return_value=Path('/rclone')), \
+            with patch('features.rclone.transfers.sync.executable.ensure_rclone', return_value=Path('/rclone')), \
                     patch('commonUtils.ui.tasks.process_progress.open_process') as opened, \
-                    patch('features.rclone.sync.cmdShellWrapper.exec_cmd') as console:
+                    patch('features.rclone.transfers.sync.cmdShellWrapper.exec_cmd') as console:
                 self.assertTrue(rclone_sync('Remote:', destination, config_path='/selected.conf'))
                 console.assert_not_called()
                 self.assertEqual(Path(opened.call_args.args[1]), Path('/rclone'))
@@ -82,7 +82,7 @@ class RcloneProgressTests(QtTestCase):
             (source / 'file.txt').write_text('fixture')
             config = root / 'empty.conf'; config.touch()
             def run(src, dst):
-                with patch('features.rclone.sync.executable.ensure_rclone', return_value=executable):
+                with patch('features.rclone.transfers.sync.executable.ensure_rclone', return_value=executable):
                     self.assertTrue(rclone_sync(src, dst, config_path=config))
                 window = _windows[-1]
                 deadline = time.monotonic() + 10

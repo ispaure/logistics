@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from commonUtils.integrations.wrappers.cmdShellWrapper import CommandResult
-from features.rclone import sync
+from features.rclone.transfers import sync
 
 
 class RcloneOutcomeTests(unittest.TestCase):

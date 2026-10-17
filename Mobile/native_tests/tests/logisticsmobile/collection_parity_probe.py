@@ -12,7 +12,7 @@ from zipfile import ZipFile
 
 from commonUtils.runtime.document_access import LocalDocuments
 from features.comics.mobile.index import CollectionIndex
-from features.rclone.mobile.file_resources import CryptFiles, encrypted_document
+from features.rclone.localcrypt.mobile.resources import CryptFiles, encrypted_document
 from logisticsmobile.app import LogisticsMobile
 from .fixtures import capture_window
 

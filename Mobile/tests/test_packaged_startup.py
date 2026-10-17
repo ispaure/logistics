@@ -22,13 +22,13 @@ class PackagedStartupTests(unittest.TestCase):
             code = '''
 from pathlib import Path
 import logisticsmobile
-from features.rclone.transfer_options import TransferOptions
+from features.rclone.transfers.transfer_options import TransferOptions
 assert TransferOptions().copy_links
 from features.rclone.mobile.cloud import CloudClient
 from features.rclone.mobile.cloud_ui import CloudUI
 from logisticsmobile.provider_ui import ProviderUI
 from logisticsmobile.private_sessions import PrivateController
-from features.rclone.mobile.localcrypt_ui import LocalCryptUI
+from features.rclone.localcrypt.mobile.ui import LocalCryptUI
 from services.archive_access import NativeArchiveAccess
 assert CloudClient.__module__ == 'features.rclone.mobile.cloud'
 assert CloudUI.__module__ == 'features.rclone.mobile.cloud_ui'

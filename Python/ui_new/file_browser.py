@@ -40,13 +40,13 @@ BROWSER_POLICY = WorkspacePolicy(allow_last_tab_detach=False,
 def _crypt_copies(root, record_revision, interval):
     # Model callbacks are frequent. Refresh on publication and at least once a
     # second for external record edits; cache identities, never decoded names.
-    from features.rclone.local_crypt import connections
+    from features.rclone.localcrypt.backend import connections
     return tuple(connections(root))
 
 
 def _crypt_location(path, *, root=None):
     """Resolve raw paths/aliases only at the host's provider boundary."""
-    from features.rclone.local_crypt import storage_root
+    from features.rclone.localcrypt.backend import storage_root
     path = Path(path).absolute()
     configured_root = Path(root if root is not None else storage_root()).absolute()
     root = configured_root.resolve()
@@ -84,13 +84,13 @@ def _browser_view(path=None, *, root_path=None, filesystem_scope=False):
     if isinstance(initial, RemoteLocation):
         return RemoteBrowserView(initial)
     if isinstance(initial, _PrivateBrowserLocation):
-        from features.rclone.ui.local_crypt import CryptBrowserView, ensure_session
+        from features.rclone.localcrypt.ui.views import CryptBrowserView, ensure_session
         if not ensure_session(initial.item.context, package=initial.item.package, parent=qt.QApplication.activeWindow()):
             return None
         return CryptBrowserView(initial.item, directory=initial.directory)
     item, _managed = _crypt_location(initial)
     if item is not None:
-        from features.rclone.ui.local_crypt import CryptBrowserView, ensure_session
+        from features.rclone.localcrypt.ui.views import CryptBrowserView, ensure_session
         if not ensure_session(item.context, package=item.package, parent=qt.QApplication.activeWindow()):
             return None
         return CryptBrowserView(item, directory=item.data)
@@ -139,7 +139,7 @@ class _BrowserHost:
         # always uses the fresh resolver below.
         interval = int(time.monotonic())
         if getattr(self, '_boundary_interval', None) != interval:
-            from features.rclone.local_crypt import storage_root
+            from features.rclone.localcrypt.backend import storage_root
             self._boundary_interval = interval
             self._boundary_root = storage_root()
             self._boundary_paths = {}
@@ -162,7 +162,7 @@ class _BrowserHost:
                     return
                 if item is None:
                     raise ValueError('This LocalCrypt folder has no valid credential mapping. Open a mapped copy or pull it again.')
-                from features.rclone.ui.local_crypt import ensure_session
+                from features.rclone.localcrypt.ui.views import ensure_session
                 if not ensure_session(item.context, package=item.package, parent=self):
                     return
                 from commonUtils.ui.workspaces.workspace import WorkspaceDock
@@ -179,7 +179,7 @@ class _BrowserHost:
                             return
                     if workspace.add_view(item.data) is not None:
                         return
-                from features.rclone.ui.local_crypt import open_browser
+                from features.rclone.localcrypt.ui.views import open_browser
                 open_browser(item, self)
             except Exception as error:
                 qt.QMessageBox.warning(self, 'Cannot open LocalCrypt', str(error))
