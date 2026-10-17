@@ -4,7 +4,7 @@ import ast
 import importlib.util
 import json
 from hashlib import sha256
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
 
@@ -27,8 +27,8 @@ def load_source_modules(repo):
         selected = []
         for name in data['modules']:
             if (not isinstance(name, str) or not name or '\\' in name or ':' in name
-                    or Path(name).is_absolute() or '..' in Path(name).parts
-                    or Path(name).as_posix() != name or Path(name).suffix not in {'.py', '.java'}):
+                    or PurePosixPath(name).is_absolute() or '..' in PurePosixPath(name).parts
+                    or PurePosixPath(name).as_posix() != name or PurePosixPath(name).suffix not in {'.py', '.java'}):
                 raise ValueError('Invalid mobile source path in ' + owner)
             if name in selected:
                 raise ValueError('Duplicate mobile source path in ' + owner)
