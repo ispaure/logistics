@@ -24,6 +24,13 @@ async def exercise_browser_back(app):
     scroll = app.files_view._workspace_frame.main.children[-1]
     for filename in ('Comic.cbz', 'A Notes.md', 'Comic.cbz'):
         browser.search.value = ''
+        # Clearing search still schedules the 400 ms query render. Finish it
+        # before measuring the viewport; otherwise it can reset scroll while
+        # the reader is opening and make Back look like it lost the position.
+        async def settle_search():
+            while browser.tasks:
+                await asyncio.gather(*tuple(browser.tasks))
+        await asyncio.wait_for(settle_search(), timeout=30)
         await asyncio.sleep(.3)
         target = min(120, scroll.max_vertical_position)
         scroll.vertical_position = target
