@@ -6,6 +6,8 @@ from .appearance import accessible_name
 
 # Paths use a shared 24-point grid. Keep the fallback readable on desktop/test hosts.
 ICONS = {
+    'obsidian': ('diamond', '◈', (((13, 2), (20, 7), (18, 18), (10, 23), (4, 17), (5, 8), (13, 2)),
+                               ((13, 2), (10, 10), (4, 17)), ((20, 7), (10, 10), (18, 18)), ((10, 10), (10, 23)))),
     'storage_remote': ('cloud', '☁', (((6, 18), (3, 17), (2, 14), (3, 11), (6, 10), (7, 6), (11, 4), (15, 5), (17, 9), (20, 10), (22, 13), (21, 17), (18, 18), (6, 18)),)),
     'storage_local': ('internaldrive', '▣', (((5, 5), (19, 5), (22, 15), (22, 20), (2, 20), (2, 15), (5, 5)), ((2, 15), (22, 15)), ((16, 18), (19, 18)))),
     'storage_crypt': ('lock', '⚿', (((5, 10), (19, 10), (19, 21), (5, 21), (5, 10)), ((8, 10), (8, 6), (9, 3), (15, 3), (16, 6), (16, 10)), ((12, 14), (12, 17)))),
@@ -54,6 +56,21 @@ def apply_icon(button, name, label):
         from rubicon.objc import ObjCClass
         button.text = ''
         image = ObjCClass('UIImage').systemImageNamed(symbol)
+        if name == 'obsidian':
+            from rubicon.objc import Block, objc_id
+            from toga_iOS.libs import UIGraphicsImageRenderer, CGSize, CGPoint
+            renderer = UIGraphicsImageRenderer.alloc().initWithSize(CGSize(24, 24))
+            def draw(context):
+                ObjCClass('UIColor').blackColor.setStroke()
+                path = ObjCClass('UIBezierPath').bezierPath()
+                path.lineWidth = 1.8
+                path.lineJoinStyle = 1
+                for line in lines:
+                    path.moveToPoint(CGPoint(*line[0]))
+                    for point in line[1:]:
+                        path.addLineToPoint(CGPoint(*point))
+                path.stroke()
+            image = renderer.imageWithActions(Block(draw, None, objc_id)).imageWithRenderingMode(2)
         config = ObjCClass('UIImageSymbolConfiguration').configurationWithPointSize(22, weight=5)
         button._impl.native.setImage(image, forState=0)
         button._impl.native.setPreferredSymbolConfiguration(config, forImageInState=0)

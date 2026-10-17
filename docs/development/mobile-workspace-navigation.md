@@ -1,5 +1,27 @@
 # Mobile workspace drawers and paired documents
 
+## Obsidian vault browser
+
+`logisticsmobile.obsidian` owns mobile vault presentation over LocalFiles and
+CryptFiles. Both the Folder Hub file browser and the Documents workspace browser
+offer a crystal control only when the current listing contains a `.obsidian`
+directory. Remote providers and marker files do not opt in. Changing folder or
+retiring a browser removes its offer.
+
+The route reuses the Settings documentation's `AdaptiveSidebar`, with lazy
+provider folder enumeration, expandable Markdown-only rows, and a 2 MiB bounded
+note preview. Notes are read and rendered on a worker through the rooted provider;
+LocalCrypt previews never require a plaintext staging directory. Local Markdown
+links remain inside the vault, and Open in editor delegates to the existing
+provider session. Generation checks reject late private reads. Credential catalog
+cleanup clears private trees and previews; window resize reflows the retained
+sidebar using the native destination allocation.
+
+Host regressions live in `Mobile/tests/test_obsidian.py`. The native suite's
+`obsidian_checks.py` exercises the real crystal control, nested notes, adaptive
+layout and editor handoff for Local and native-bridge LocalCrypt, capturing the
+button, hierarchy and preview on both mobile platforms.
+
 Remote browsing mounts `cloud_up` beside `cloud_status` in the main browser,
 using the same 48-point up-arrow control as local browsing. It calls the existing
 `parent_cloud` handler and remains disabled during cloud operations. The advanced

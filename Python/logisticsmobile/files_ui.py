@@ -120,7 +120,7 @@ class FilesUI:
         self.file_location = toga.TextInput(placeholder='Folder path (empty for root)', style=Pack(height=48))
         self.file_selection = toga.Selection(style=Pack(height=48))
         from .browser_ui import FileBrowser as NativeBrowser
-        self.file_browser = NativeBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open, item_actions=self.show_file_actions)
+        self.file_browser = NativeBrowser(vault_app=self, folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open, item_actions=self.show_file_actions)
         self.file_browser.navigation_controls.remove(self.file_browser.back_button)
         self.file_password = PasswordInput(placeholder='Inner archive password, when needed', style=Pack(height=48))
         self.file_name = toga.TextInput(placeholder='New name / folder name', style=Pack(height=48))

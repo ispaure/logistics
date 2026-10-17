@@ -39,6 +39,7 @@
     "locations_controller.py",
     "locations_ui.py",
     "navigation.py",
+    "obsidian.py",
     "palette.py",
     "pickers.py",
     "preferences.py",
