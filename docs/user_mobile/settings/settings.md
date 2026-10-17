@@ -154,6 +154,11 @@ migration and general app-data backup/reset behavior remain separate work.
 
 ## Speech while locked
 
+In **Settings → Mobile documentation**, tap the speaker beside Back, Forward
+and Up, then Play to read the current page or selected text aloud. Changing
+documentation pages stops playback. The same voice, speed and desktop-style
+15-second skip controls are available in Markdown files and EPUB readers.
+
 Started Markdown and EPUB read-aloud can continue with the screen locked. iOS
 shows Now Playing controls on the lock screen and in Control Center; Android
 shows media controls in the lock screen and notification shade. Use Play/Pause
