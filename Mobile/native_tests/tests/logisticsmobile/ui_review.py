@@ -171,12 +171,22 @@ async def exercise_ui_review(app):
         assert 'All files' in app.folder_picker_choices
         if leave == app.show_settings:
             await capture('folder-picker')
+        assert not hasattr(app, 'folder_refresh_button')
+        for source, action in (('rclone', app.folder_transfers_button),
+                               ('Network shares', app.folder_add_share_button), ('Local', None)):
+            app.folder_source_buttons[source].on_press()
+            assert list(app.folder_source_actions.children) == ([action] if action is not None else [])
+            assert bool(app.folder_picker_header.children) == (source == 'rclone')
+            assert all(button.enabled for button in app.folder_source_buttons.values())
+            assert not app.folder_loading_box.children
         folder = app.folder_buttons['All files']
+        indicator = next(child for child in folder.parent.children
+                         if getattr(child, 'control_icon', '') == 'storage_local')
         if get_os() is OS.IOS:
-            assert app.folder_refresh_button._impl.native.imageForState(0) is not None
+            assert indicator._impl.native.imageForState(0) is not None
             folder._impl.native.sendActionsForControlEvents(UIControlEventTouchUpInside)
         else:
-            assert app.folder_refresh_button._impl.native.getCompoundDrawables()[0] is not None
+            assert indicator._impl.native.getCompoundDrawables()[0] is not None
             assert folder._impl.native.performClick()
         for _ in range(100):
             if getattr(app, 'files_view', None) in app.body.children:
