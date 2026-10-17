@@ -51,7 +51,7 @@ class MarkdownStorage:
             from commonUtils.runtime.resource_selection import ResourceChoice
             choice = ResourceChoice(self.provider, self.provider.relative(path),
                                     self.provider.acquire() if hasattr(self.provider, 'acquire') else lambda: None)
-            return open_editor_choice(choice, self.window, markdown=Path(path).suffix.lower() != '.txt', fragment=fragment)
+            return open_editor_choice(choice, self.window, markdown=Path(path).suffix.lower() != '.txt', fragment=fragment, edit=False)
         if self.provider is self._initial_provider:
             return self._initial_open_link(path, fragment)
         qt.QMessageBox.information(self.window, 'Open link', 'Open this file from its current storage browser.')
@@ -165,9 +165,11 @@ from commonUtils.ui.markdown.window import MarkdownWindow
 
 class PrivateMarkdownWindow(MarkdownWindow):
     idle = qt.Signal()
-    def __init__(self, path, storage):
+    def __init__(self, path, storage, *, edit=True):
         self.pending_close = False
         super().__init__(path, allow_edit=True, storage=storage)
+        if not edit:
+            self.viewer.set_editing(False)
         storage.bind_window(self)
         from services.documents.ui.private_views import protect_private_view
         protect_private_view(self, storage.provider)
@@ -420,17 +422,18 @@ class CryptBrowserView(qt.QMainWindow):
             return
         path = Path(path)
         suffix = path.suffix.lower()
-        if suffix in {'.epub', '.cbz', '.zip'}:
+        if suffix in {'.pdf', '.epub', '.cbz', '.zip'}:
             from services.documents.ui.readers import open_reader_choice
             from commonUtils.runtime.resource_selection import ResourceChoice
             return open_reader_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()),
-                                      self, 'epub' if suffix == '.epub' else 'comic', password=password)
+                                      self, 'pdf' if suffix == '.pdf' else 'epub' if suffix == '.epub' else 'comic', password=password)
         if suffix == '.txt':
             from services.documents.ui.editors import open_editor_choice
             from commonUtils.runtime.resource_selection import ResourceChoice
             open_editor_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()), self)
             return
         self.pending_document = (path, fragment, password)
+        self.pending_markdown_edit = bool(qt.QApplication.keyboardModifiers() & qt.Qt.KeyboardModifier.AltModifier)
         if suffix in {'.md', '.markdown'}:
             callback = lambda report, cancelled: ('markdown', prepare_markdown(self.provider, path))
         else:
@@ -460,7 +463,7 @@ class CryptBrowserView(qt.QMainWindow):
             storage = MarkdownStorage(self.provider, path, data, resources, self._open_link)
             release = self.provider.acquire()
             try:
-                window = PrivateMarkdownWindow(path, storage)
+                window = PrivateMarkdownWindow(path, storage, edit=self.pending_markdown_edit)
             except Exception:
                 release()
                 raise

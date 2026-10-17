@@ -159,8 +159,9 @@ Books saves reading positions separately. Save changes according to each editor.
 
 ## Read and edit Markdown
 
-Open a Markdown file from File Browser for rendered reading, formatted editing or
-exact source editing. Use **Source** for syntax the formatted editor cannot preserve;
+Open a Markdown file from File Browser for rendered reading by default. Hold
+Alt/Option while opening, or use the Markdown Editor launcher, to start editing
+in Formatted or Source mode. Use **Source** for syntax the formatted editor cannot preserve;
 formatted edits can normalize unsupported constructs. Saving is explicit, and
 external disk changes block overwriting. Use **Save As** to keep a separate version.
 In Formatted mode, click link labels to navigate. Syntax markers appear when the

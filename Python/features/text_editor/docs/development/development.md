@@ -130,11 +130,37 @@ Comparisons now refresh after each accepted hunk and use resizable, linked panes
 
 ## Mobile editor
 
-`mobile/ui.py` owns native editor widgets and per-document callbacks. `resources.py` owns provider text adapters, and `names.py` owns display-name validation. The mobile application supplies `services.mobile_presentation.MobilePresentation`; managed recovery records, picker workflows and scene ownership remain host concerns. Both platforms reuse commonUtils text persistence and conflict handling.
+`mobile/ui.py` owns native editor widgets and per-document callbacks.
+`mobile/markdown_editor.py` supplies the offline formatted Markdown surface used
+by managed and provider-backed documents. It preserves exact untouched block
+source, sends edits through a per-load navigation token, and updates the existing
+source buffer for persistence. Source remains available for unsupported syntax.
+Formatted and Source are mutually exclusive; legacy split preferences are retired
+on load. Complex syntax remains protected in formatted mode and editable in
+Source; images render as inert alt text, and arbitrary navigation is rejected.
+No-op mode switches preserve Markdown bytes through the existing text session.
+`markdown_editor` persists the per-session editing surface, independently
+of the reading/editing `markdown_mode`. Ordinary Markdown opening defaults to
+preview, while New and explicit edit commands enter editing. Each managed
+document owns its preview WebView too, so paired/resumed previews do not replace
+another session’s content; closing a document retires both WebViews.
+`resources.py` owns provider text adapters, and `names.py` owns display-name
+validation. The mobile application supplies
+`services.mobile_presentation.MobilePresentation`; managed recovery records,
+picker workflows and scene ownership remain host concerns. Both platforms reuse
+commonUtils text persistence and conflict handling.
 
 Closing an iOS editor stops its live WebView and detaches WebKit delegates before
 replacing preview content. Queued native navigation decisions must not outlive
 the Toga interface. Native close/discard checks explicitly collect closed editors.
+Regression coverage lives in `Mobile/tests/test_markdown_editor.py`,
+`test_source_editor.py` and the workspace/provider suites. The isolated native
+`editor_probe.py` checks default preview, formatted typing and toolbar edits,
+source fallback, table structure undo/redo and unchanged neighboring syntax in
+iPhone/iPad WebKit. Table replacements use paragraph caret boundaries around
+the enclosing editable block: WebKit otherwise inserts a replacement table
+inside its first cell. Replacing the block stays in the native undo history.
+
 The custom source input also disables available iOS scroll-edge overlays because
 it bypasses ordinary Toga text-input creation and its host appearance hook.
 

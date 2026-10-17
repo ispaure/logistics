@@ -6,7 +6,12 @@ The independent mobile app can import the same TXT-in-ZIP credential format into
 an in-memory embedded rclone session, browse supported remotes and preview supported files directly. Managed Local and LocalCrypt folders support repeatable Pull and reviewed
 Push with progress while ordinary writing or reading continues. Transfer details
 show the transfer's **From** and **To** folders during and after the transfer,
-alongside transferred and known totals in megabytes (MB) on both platforms. Both use rclone
+alongside a numeric percentage of known work and transferred/known totals in
+megabytes (MB) on both platforms. The transfer banner also shows the percentage.
+Progress uses bytes when available, or completed/known file counts otherwise;
+unknown totals show activity without a percentage. Totals can grow as rclone
+discovers files. Live progress stays below 100% until completion is verified,
+and reopening details keeps the current percentage. Both use rclone
 Sync: files at the destination can be replaced or deleted, with no retained
 backup or rollback. Mobile runs one transfer at a time with no queue; existing
 Local and LocalCrypt copies remain browsable and readable during folder transfers,

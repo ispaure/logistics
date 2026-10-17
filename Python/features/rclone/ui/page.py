@@ -2,6 +2,7 @@
 rclone management page for the Logistics feature UI.
 """
 
+from commonUtils.ui.pyside.passwords import password_field
 from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils import ui
 from commonUtils.ui import pyside
@@ -34,7 +35,7 @@ class RclonePage(pyside.QWidget):
         self.loaded_status = pyside.QLabel('Not loaded')
 
         self.password_input = pyside.QLineEdit()
-        self.password_input.setEchoMode(pyside.QLineEdit.EchoMode.Password)
+        password_field(self.password_input)
         self.password_input.setPlaceholderText('Credential archive password')
         self.password_input.setMinimumHeight(self.password_input.sizeHint().height())
 

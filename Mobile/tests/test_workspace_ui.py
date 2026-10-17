@@ -34,7 +34,7 @@ class WorkspaceUITests(unittest.TestCase):
             app.show_preview()
             self.assertEqual(a.session.view['markdown_mode'], 'preview')
             back = next(child.on_press for child in app.preview_box.children
-                        if getattr(child, 'text', '') == 'Back to editor')
+                        if getattr(child, 'text', '') == 'Edit Markdown')
             app.new_document()
             b = app.editor_view
             b.editor.value = '# B'
@@ -120,7 +120,7 @@ class WorkspaceUITests(unittest.TestCase):
             self.assertEqual(len(restored.workspace.sessions), 2)
 
 
-    def test_wide_preview_belongs_to_its_document_and_close_cancels_render(self):
+    def test_formatted_editor_belongs_to_its_document_and_close_retires_it(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
@@ -131,15 +131,11 @@ class WorkspaceUITests(unittest.TestCase):
                 owner.name.value = 'Preview.md'
                 owner.session.view['markdown_split'] = True
                 owner.apply_split(1200)
-                self.assertIn(owner.split_preview, owner.editor_area.children)
-                self.assertIsNotNone(owner.preview_pending)
-                owner.apply_split(800)
-                self.assertIn(owner.split_preview, owner.editor_area.children)
-                owner.apply_split(390)
-                self.assertIn(owner.split_preview, owner.editor_area.children)
-                self.assertTrue(owner.session.view['markdown_split'])
+                for width in (1200, 800, 390):
+                    owner.apply_split(width)
+                    self.assertEqual(owner.editor_area.children, [owner.formatted.view])
                 self.assertTrue(app.close_session(owner.session.id))
-                self.assertIsNone(owner.preview_pending)
+                self.assertTrue(owner.formatted.closed)
             finally:
                 app.main_window.close()
                 app.loop.close()

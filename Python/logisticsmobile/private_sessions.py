@@ -59,6 +59,12 @@ class PrivateController(ReaderHost, ProviderUI):
     def resume_crypt(self, widget=None, **kwargs):
         if self.manager.available(self.session.id) and self.crypt_reader is not None:
             self.show_view(self.crypt_view)
+            mode = getattr(self, 'crypt_markdown_mode', None)
+            if mode == 'preview' and getattr(self, 'crypt_preview', None) not in self.crypt_content.children:
+                self.toggle_private_preview()
+            elif (mode == 'edit' and getattr(self.crypt_edit_mode, 'value', '') == 'Formatted'
+                  and getattr(self, 'crypt_formatted', None) is None):
+                self.show_private_markdown_editor()
             if getattr(self, 'page_suspended', False):
                 self.page_suspended = False
                 self.app.loop.create_task(self.read_crypt_page())
@@ -182,7 +188,7 @@ class PrivateSessions:
                 source.cache.clear()
                 source.cache_bytes = 0
 
-    async def open(self, copies, key, *, prepared=None, destination='documents', privacy_gate=None):
+    async def open(self, copies, key, *, prepared=None, destination='documents', privacy_gate=None, edit=False):
         from .files_ui import local_read_available
         independent = self.app.cloud_busy and local_read_available(self.app, private=True) and getattr(copies, 'offline', False)
         if self.app.cloud_busy and not independent:
@@ -198,6 +204,9 @@ class PrivateSessions:
             self.app.crypt_password.value = ''
             self.bind(existing)
             existing.resume_crypt()
+            if edit and existing.crypt_reader.kind in {'.md', '.markdown'} and not getattr(existing.crypt_reader, 'read_only', False):
+                existing.clear_private_preview()
+                existing.show_private_markdown_editor()
             return True
         if len(self.controllers) >= MAX_PRIVATE_SESSIONS:
             self.app.cloud_status.value = 'Close a provider document before opening another (limit: 4). Unsaved edits were kept.'
@@ -231,7 +240,7 @@ class PrivateSessions:
             self.app.remote_read_busy = True
             self.app.set_cloud_busy(True)
         try:
-            opened = await ProviderUI.open_crypt(owner, copies=copies, key=key, prepared=prepared, independent=independent)
+            opened = await ProviderUI.open_crypt(owner, copies=copies, key=key, prepared=prepared, independent=independent, edit=edit)
             if not opened or not self.app.active_host or not self.app.workspace.accepts(token):
                 retire_open()
                 return False
@@ -242,7 +251,7 @@ class PrivateSessions:
                 retire_open()
                 self.app.cloud_status.value = 'Private content exceeds the 32 MiB memory budget. Close an item and retry; existing edits were kept.'
                 return False
-            session.kind = ('epub' if reader.kind == '.epub' else 'comic' if not reader.editable
+            session.kind = ('pdf' if reader.kind == '.pdf' else 'epub' if reader.kind == '.epub' else 'comic' if not reader.editable
                             else 'markdown' if reader.kind in {'.md', '.markdown'} else 'text')
             session.title = reader.name
             if owner._open_presented:

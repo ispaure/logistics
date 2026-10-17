@@ -6,7 +6,7 @@ from features.text_editor.names import document_name
 from commonUtils.ui.native.editor_search import EditorSearch
 from commonUtils.ui.native.code_input import CodeInput
 from commonUtils.formats.code_syntax import LANGUAGES
-from commonUtils.ui.native.adaptive import allocated_width
+from .markdown_editor import FormattedMarkdownInput
 
 FIELDS = ('selector', 'name', 'editor', 'status', 'recovery_notice', 'import_button',
           'save_button', 'export_button', 'document_view')
@@ -26,11 +26,12 @@ class TextEditorView:
         icon_button, apply_icon = app.presentation.icon_button, app.presentation.apply_icon
         action_button, ActionMenu = app.presentation.action_button, app.presentation.ActionMenu
         self.loading = True
-        self.preview_pending = None
-        self.split_preview = None
+        self.formatted = None
+        self.preview = self.preview_box = None
         self.selector = toga.Selection(on_change=self.selected, style=Pack(flex=1, height=48))
         self.name = toga.TextInput(placeholder='Document name', on_change=self.name_changed, style=Pack(flex=1, height=48))
         self.editor = CodeInput(loop=app.loop, on_change=self.text_changed,
+            highlighting=app.preferences.values.get('android_eink') != 'true',
             style=Pack(flex=1, font_size=int(app.preferences.values['font_size']), margin_top=4))
         if self.editor.backend_name.startswith('toga_iOS.'):
             # The source editor constructs its own native text view, bypassing
@@ -43,7 +44,8 @@ class TextEditorView:
         self.language_choice = toga.Selection(items=['Automatic', *[name for name, code in LANGUAGES]],
             on_change=self.language_changed, style=Pack(flex=1, height=48))
         self.line_count = toga.Label('1 line', style=Pack(margin=8))
-        self.live_button = toga.Button('Live preview', on_press=lambda widget, **kw: self.toggle_split(), style=Pack(height=48))
+        self.edit_mode = toga.Selection(items=['Formatted', 'Source'], on_change=self.mode_changed,
+            style=Pack(flex=1, height=48))
         self.status = toga.Label('', style=Pack(font_size=12, margin_top=4))
         self.recovery_notice = toga.Label('', style=Pack(font_size=12))
         self.import_button = toga.Button('Import…', on_press=app.import_document, style=Pack(flex=1, height=48))
@@ -60,12 +62,12 @@ class TextEditorView:
             ('Import…', lambda: app.import_document(origin=self)), ('Open from Files…', app.show_editor_open),
             ('Save', app.save_document), ('Save a copy', app.save_copy),
             ('Save As…', app.show_document_save_as), ('Export…', lambda: app.export_document(origin=self)),
-            ('Close document', lambda: app.request_close_session(self.session.id)),
-            ('Show/hide live preview', self.toggle_split)])
+            ('Close document', lambda: app.request_close_session(self.session.id))])
         # A visible left-hand editor still owns its toolbar commands.
         self.save_button.on_press = lambda widget, **kw: self.actions.invoke(app.save_document)
         box.add(toga.Box(children=[self.name, self.actions_button], style=Pack(direction=ROW, margin_bottom=8)))
-        box.add(toga.Box(children=[self.language_choice, self.line_count, self.live_button], style=Pack(direction=ROW)))
+        self.source_tools = toga.Box(children=[self.language_choice, self.line_count], style=Pack(direction=ROW))
+        box.add(self.source_tools)
         self.editor_area = toga.Box(children=[self.editor], style=Pack(direction=ROW, flex=1))
         box.add(self.editor_area)
         box.add(self.status)
@@ -82,6 +84,8 @@ class TextEditorView:
         app.register_transfer_status(box)
 
     def toggle_search(self, widget=None, **kwargs):
+        if self.session is not None and self.session.kind == 'markdown':
+            self.edit_mode.value = 'Source'
         self.search.toggle()
 
     def load(self, document, session):
@@ -89,8 +93,11 @@ class TextEditorView:
         self.loading = True
         self.name.value, self.editor.value = document.name, document.text
         self.editor.set_filename(document.name)
-        session.view.setdefault('markdown_split', session.kind == 'markdown')
+        session.view.setdefault('markdown_editor', 'formatted')
+        session.view.pop('markdown_split', None)
+        self.edit_mode.value = 'Source' if session.view['markdown_editor'] == 'source' else 'Formatted'
         self.update_source_info()
+        self.apply_split(0)
         self.refresh_status()
         self.loading = False
 
@@ -145,72 +152,77 @@ class TextEditorView:
         count = len(self.editor.line_starts)
         self.line_count.text = f'{count} line' + ('s' if count != 1 else '')
         if self.session is not None:
-            self.live_button.enabled = self.session.kind == 'markdown'
+            markdown = self.session.kind == 'markdown'
+            if markdown and self.edit_mode not in self.source_tools.children:
+                self.source_tools.insert(0, self.edit_mode)
+            elif not markdown and self.edit_mode in self.source_tools.children:
+                self.source_tools.remove(self.edit_mode)
+            source = not markdown or self.session.view.get('markdown_editor') == 'source'
+            for control in (self.language_choice, self.line_count):
+                if source and control not in self.source_tools.children:
+                    self.source_tools.add(control)
+                elif not source and control in self.source_tools.children:
+                    self.source_tools.remove(control)
 
     def language_changed(self, widget, **kwargs):
         if not hasattr(self, 'editor'):
             return
         self.editor.set_language(dict(LANGUAGES).get(widget.value))
 
-    def toggle_split(self):
-        if self.session is None:
+    def mode_changed(self, widget=None, **kwargs):
+        if self.loading or self.session is None:
             return
-        self.session.view['markdown_split'] = not self.session.view.get('markdown_split', False)
-        self.apply_split(self.app.main_window.size.width)
+        self.session.view['markdown_editor'] = 'source' if self.edit_mode.value == 'Source' else 'formatted'
+        self.apply_split(0)
+        self.update_source_info()
         self.app.save_workspace()
 
     def apply_split(self, width):
+        """Keep one editing surface at every width, including restored old splits."""
         if self.session is None:
             return
-        show = self.session.kind == 'markdown' and self.session.view.get('markdown_split', True)
-        usable_width = allocated_width(self.editor_area, width)
-        self.editor_area.style.direction = ROW if usable_width >= 720 else COLUMN
-        self.live_button.text = 'Hide preview' if show else 'Live preview'
-        if show and self.split_preview is None:
-            self.split_preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False, style=Pack(flex=1))
-        if show and self.split_preview not in self.editor_area.children:
-            self.editor_area.add(self.split_preview)
-            self.schedule_preview()
-        elif not show and self.split_preview in self.editor_area.children:
-            self.editor_area.remove(self.split_preview)
-            if self.preview_pending is not None:
-                self.preview_pending.cancel()
-                self.preview_pending = None
+        rich = self.session.kind == 'markdown' and self.session.view.get('markdown_editor', 'formatted') == 'formatted'
+        surface = self.editor
+        if rich:
+            if self.formatted is None:
+                self.formatted = FormattedMarkdownInput(self.formatted_changed,
+                    font_size=int(self.app.preferences.values['font_size']))
+            try:
+                self.formatted.load(self.document.text)
+                surface = self.formatted.view
+            except ValueError as error:
+                self.status.text = str(error)
+                self.session.view['markdown_editor'] = 'source'
+                self.edit_mode.value = 'Source'
+        if self.editor_area.children != [surface]:
+            self.editor_area.clear()
+            self.editor_area.add(surface)
+
+    def formatted_changed(self, text):
+        if (self.loading or not self.app.active_host or self.session is None
+                or self.session.id not in self.app.workspace.sessions
+                or self.formatted is None or self.formatted.view not in self.editor_area.children):
+            return
+        # Keep the native source input as the canonical buffer used by search,
+        # save, recovery and export. Do not reload the WebView during typing.
+        self.editor.value = text
 
     def schedule_preview(self):
-        if self.preview_pending is not None:
-            self.preview_pending.cancel()
-        if self.split_preview is None or self.split_preview not in self.editor_area.children:
-            return
-        token = self.app.workspace.token(self.session.id)
-        def render():
-            self.preview_pending = None
-            if self.app.active_host and self.app.workspace.accepts(token):
-                markdown_preview = self.app.presentation.markdown_preview
-                from uuid import uuid4
-                try:
-                    self.split_preview.set_content('https://logistics.invalid/' + uuid4().hex + '/',
-                        markdown_preview(self.document.text, int(self.app.preferences.values['font_size'])))
-                except ValueError as error:
-                    self.status.text = str(error)
-        self.preview_pending = self.app.loop.call_later(.25, render)
+        # Source callbacks may also come from find/replace or external reloads.
+        if self.formatted is not None and self.formatted.view in self.editor_area.children:
+            try:
+                self.formatted.load(self.document.text)
+            except ValueError as error:
+                self.status.text = str(error)
 
     def dispose(self):
         self.editor.dispose()
         self.actions.dispose()
-        if self.preview_pending is not None:
-            self.preview_pending.cancel()
-            self.preview_pending = None
-        if self.split_preview is not None:
-            if type(self.split_preview._impl).__module__.startswith('toga_iOS.'):
-                # WebKit can ask for a navigation decision after the closed
-                # Toga interface has been collected. Retire its weak delegates
-                # before replacing the document or releasing the widget.
-                native = self.split_preview._impl.native
-                native.stopLoading()
-                native.navigationDelegate = None
-                native.UIDelegate = None
-            self.split_preview.set_content('https://logistics.invalid/closed/', '<p>Document closed.</p>')
+        if self.formatted is not None:
+            self.formatted.dispose()
+        if self.preview is not None:
+            from .markdown_editor import retire_webview
+            retire_webview(self.preview)
 
     def preserve(self):
         if self.session.id not in self.app.workspace.sessions:

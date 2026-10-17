@@ -19,6 +19,25 @@ from local_crypt_fixture import crypt_fixture
 
 
 class LocalCryptTests(QtTestCase):
+    def test_recursive_search_uses_one_listing_and_opens_nested_results(self):
+        from commonUtils.runtime.resource_search import search_resources
+        from io import BytesIO
+        with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
+            f.provider.mkdir('nested')
+            f.provider.mkdir('nested/deep')
+            f.provider.create_file('nested/deep/Needle.txt', BytesIO(b'found'))
+            with patch.object(f.provider, 'command', wraps=f.provider.command) as command:
+                result = search_resources(f.provider, '', 'NEEDLE')
+            self.assertTrue(result.complete)
+            self.assertEqual([row['path'] for row in result.rows], ['nested/deep/Needle.txt'])
+            self.assertEqual(command.call_count, 1)
+            self.assertIn('--recursive', command.call_args.args)
+            with f.provider.open(result.rows[0]['path']) as stream:
+                self.assertEqual(stream.read(), b'found')
+            scoped = search_resources(f.provider, 'nested', 'needle')
+            self.assertEqual(scoped.rows[0]['name'], 'deep/Needle.txt')
+            self.assertTrue(scoped.complete)
+
     def test_open_stream_cached_bytes_reject_revocation_and_replacement(self):
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             f.provider.list()
@@ -693,6 +712,8 @@ class LocalCryptTests(QtTestCase):
                 window = present.call_args.args[0]
                 try:
                     self.assertEqual(window.viewer.editor.toPlainText(), f.original.decode())
+                    self.assertIs(window.viewer.pages.currentWidget(), window.viewer.browser)
+                    self.assertFalse(window.viewer.edit_button.isChecked())
                     self.assertTrue(window.viewer.save_as_action.isEnabled())
                     self.assertTrue(window.viewer.open_action.isEnabled())
                     image = window.viewer.browser.loadResource(qt.QTextDocument.ResourceType.ImageResource,

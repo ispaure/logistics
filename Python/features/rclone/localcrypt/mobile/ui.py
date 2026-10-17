@@ -1,4 +1,5 @@
 """Existing encrypted-copy catalog and reading controls for the mobile rclone feature."""
+from commonUtils.ui.native.password_input import PasswordInput
 import asyncio
 import toga
 from toga.style import Pack
@@ -14,7 +15,7 @@ class LocalCryptUI:
         self.crypt_selector = toga.Selection(style=Pack(height=44))
         self.crypt_refresh = toga.Button('Refresh encrypted copies', on_press=self.refresh_crypt, style=Pack(height=44))
         self.crypt_open = toga.Button('Read encrypted copy', on_press=self.open_crypt, style=Pack(height=44))
-        self.crypt_password = toga.PasswordInput(placeholder='Inner ZIP password (if needed)', style=Pack(height=44))
+        self.crypt_password = PasswordInput(placeholder='Inner ZIP password (if needed)', style=Pack(height=44))
         self.crypt_resume = toga.Button('Return to private reader/editor', on_press=self.resume_crypt, style=Pack(height=44))
         return [toga.Label('LocalCrypt · encrypted offline copies'),
                 self.crypt_selector, self.crypt_refresh, self.crypt_password, self.crypt_open, self.crypt_resume, self.build_file_manager()]

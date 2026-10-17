@@ -4,8 +4,9 @@ import json
 from pathlib import Path
 
 from commonUtils.persistence import atomic_write_bytes
-from features.lm.domain import (base_url, conversation, identity, now, validate_conversation,
+from features.lm.domain import (conversation, identity, now, validate_conversation,
                                 validate_settings)
+from features.lm.mobile.transport import mobile_api_url
 
 MAX_RECORD = 2 * 1024 * 1024
 DEFAULT_SETTINGS = dict(context_tokens=8192, max_tokens=1024, temperature=None, top_p=None,
@@ -108,7 +109,7 @@ class ChatStore:
                 or not isinstance(data['base_url'], str) or not isinstance(data['model'], str)
                 or len(data['model']) > 200 or any(ord(c) < 32 for c in data['model'])):
             raise ValueError('Invalid mobile chat profile; original was preserved.')
-        url = base_url(data['base_url']) if data['base_url'] else ''
+        url = mobile_api_url(data['base_url']) if data['base_url'] else ''
         return dict(schema=1, base_url=url, model=data['model'], settings=validate_settings(data['settings']))
 
     def save_profile(self, data, original):

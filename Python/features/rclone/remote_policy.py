@@ -23,6 +23,8 @@ def direct_kind(path, size):
         return 'text'
     if suffix in IMAGES and size <= IMAGE_LIMIT:
         return 'image'
+    if suffix == '.pdf' and size <= 32 * 1024 * 1024:
+        return 'pdf'
     if suffix in ARCHIVES:
         return 'archive'
     raise LocalCopyRequired()

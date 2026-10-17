@@ -47,16 +47,16 @@ def retain(window):
     return window
 
 
-def make_private_editor(choice, session, *, markdown=False):
+def make_private_editor(choice, session, *, markdown=False, edit=True):
     if markdown:
         from features.rclone.localcrypt.ui.views import MarkdownStorage, PrivateMarkdownWindow
         def open_link(path, fragment=''):
             linked = ResourceChoice(choice.provider, choice.provider.relative(path),
                                     choice.provider.acquire() if hasattr(choice.provider, 'acquire') else lambda: None)
-            open_editor_choice(linked, window, markdown=True)
+            open_editor_choice(linked, window, markdown=True, edit=False)
         storage = MarkdownStorage(choice.provider, choice.provider.root / choice.path, session.text.data,
                                   getattr(session, 'resources', {}), open_link)
-        window = PrivateMarkdownWindow(storage.path, storage)
+        window = PrivateMarkdownWindow(storage.path, storage, edit=edit)
         window.destroyed.connect(choice.close)
     else:
         from commonUtils.ui.resource_editor import ResourceTextWindow
@@ -66,8 +66,9 @@ def make_private_editor(choice, session, *, markdown=False):
     return retain(window)
 
 
-def open_editor_choice(choice, parent=None, *, markdown=False, fragment=''):
+def open_editor_choice(choice, parent=None, *, markdown=False, fragment='', edit=True):
     """Load on a worker without putting a decrypted buffer in a persistent editor."""
+    edit = bool(edit or qt.QApplication.keyboardModifiers() & qt.Qt.KeyboardModifier.AltModifier)
     loading = ResourceTaskDialog(parent, 'Opening document')
     progress = loading.operation
     def completed(session, error):
@@ -76,7 +77,7 @@ def open_editor_choice(choice, parent=None, *, markdown=False, fragment=''):
                 choice.close()
                 qt.QMessageBox.warning(parent, 'Open', error)
             else:
-                window = make_private_editor(choice, session, markdown=markdown)
+                window = make_private_editor(choice, session, markdown=markdown, edit=edit)
                 if markdown and fragment:
                     window.viewer.browser.scrollToAnchor(fragment)
         except Exception as error:

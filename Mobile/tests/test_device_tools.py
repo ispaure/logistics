@@ -15,6 +15,25 @@ from Mobile.device_tools import BUNDLE, normal_launcher, select_device, signing_
 
 
 class DeviceDeploymentTests(unittest.TestCase):
+    def test_refresh_updates_dependencies_in_existing_projects(self):
+        for existing in (False, True):
+            with self.subTest(existing=existing), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / 'build').mkdir()
+                pbx = root / 'project.pbxproj'
+                if existing:
+                    pbx.touch()
+                def stage_payload(repo, replacement, **kwargs):
+                    replacement.mkdir()
+                with (patch.object(device_tools, 'ROOT', root),
+                      patch.object(device_tools, 'PBX', pbx),
+                      patch.object(device_tools, 'stage', side_effect=stage_payload),
+                      patch.object(device_tools, 'run') as run):
+                    device_tools.refresh_sources({})
+                command = run.call_args_list[1].args[0]
+                self.assertEqual(command[3:5], ['update' if existing else 'create', 'iOS'])
+                self.assertEqual('--update-requirements' in command, existing)
+
     def test_existing_project_receives_new_ios_sharing_settings(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

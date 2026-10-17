@@ -44,6 +44,11 @@ On Android it browses the ordinary collection folder. **Network shares** contain
 SMB/Mac connections added through **Add share…**, including their managed offline
 copies. SMB remotes imported inside credential ZIPs stay with their package under
 **rclone**. Local and Network shares hide the credential selector.
+Each folder row shows icons beside its name for the available copies: a drive
+for **Local**, a lock for **LocalCrypt**, and a cloud for **Remote**. Multiple
+icons mean multiple copies are available. LocalCrypt means the device copy is
+encrypted. Screen readers announce the copy types. Group-only headings have no
+storage icons.
 Dash-separated names form expanded levels (for example Server → Lib → ComicRack);
 triangles collapse or expand parent levels. Its action page reflects the copies available. **Browse Local** opens readable files on this device, **Browse LocalCrypt** opens
 the encrypted device copy, and **Browse Remote** opens the online folder. Only

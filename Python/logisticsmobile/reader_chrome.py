@@ -47,14 +47,15 @@ class ReaderChrome:
                 ('Find in chapter…', self.show_epub_search)]
         self.reader_actions = FeatureCommands(self.reader_actions_button, self, actions, self.show_reader_tools)
         from .workspace_navigation import menu_button
-        browser = menu_button(lambda widget, **kw: self.app.adaptive.show_browser(self.presentation_destination))
+        browser = (menu_button(lambda widget, **kw: self.app.adaptive.show_browser(self.presentation_destination))
+                   if comic else menu_button(self.show_reader_tools, label=tools_title))
         if comic:
             self.comic_header = ComicHeader(browser, self.reader_actions_button,
                 previous=self.previous_comic_file, following=self.next_comic_file)
             self.reader_header = self.comic_header.widget
         else:
             self.reader_header = toga.Box(children=[browser,
-                icon_button('contents', tools_title, on_press=self.show_reader_tools),
+                toga.Box(style=Pack(flex=1)),
                 icon_button('appearance', 'Reading appearance', on_press=self.show_reader_appearance),
                 self.reader_actions_button], style=Pack(direction=ROW))
         self.chapter_selector.style.flex = 1
@@ -64,7 +65,8 @@ class ReaderChrome:
         self.book_status.style.font_size = 12
         self.reader_immersive = False
         self.reading_frame = ReadingFrame(self.book_content,
-            [self.reader_header, self.reader_footer, self.book_status], restore=self.reader_restore)
+            [self.reader_header, self.reader_footer, self.book_status],
+            margin=16 if comic else 0, restore=self.reader_restore)
         self.library_view = self.reading_frame.widget
         self.library_view._workspace_menu_button = self.reader_header.children[0]
         if comic:

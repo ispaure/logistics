@@ -124,7 +124,7 @@ class ProjectBrowser(qt.QWidget):
         self.tree.collapsed.connect(self.collapsed)
         self.model.directoryLoaded.connect(self.restore_expansion)
         layout.addWidget(self.tree)
-        self.filter.textChanged.connect(self.filter_changed)
+        qt.connect_search(self.filter, self.filter_changed, pass_text=True)
         self.reset_root()
         from features.ide.ui.git_status import ProjectGitStatus
         self.git_status = ProjectGitStatus(self)

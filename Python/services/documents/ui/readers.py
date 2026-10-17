@@ -13,7 +13,7 @@ def choose_reader_document(parent, kind, *, current=None, open_local=None):
         source = LocalFiles(Path(current.path).anchor)
     directory = source.relative(current.path.parent) if current is not None else None
     choice = choose_editor_resource(parent, 'open', source, directory=directory,
-        extensions=('.epub',) if kind == 'epub' else ('.cbz',))
+        extensions=('.pdf',) if kind == 'pdf' else ('.epub',) if kind == 'epub' else ('.cbz',))
     if choice is None:
         return None
     if not getattr(choice.provider, 'private', False):
@@ -21,6 +21,9 @@ def choose_reader_document(parent, kind, *, current=None, open_local=None):
         choice.close()
         if open_local is not None:
             return open_local(path)
+        if kind == 'pdf':
+            from features.pdf.ui.reader import open_pdf
+            return open_pdf(path)
         if kind == 'epub':
             from features.books.ui.controller import BooksController
             owner = getattr(parent, 'document_service_owner', parent)
@@ -42,6 +45,10 @@ def open_reader_choice(choice, parent, kind, *, password=None):
     def read(report, cancelled):
         scope = getattr(choice.provider, 'operation', None)
         with scope(cancelled) if scope else nullcontext():
+            if kind == 'pdf':
+                from features.pdf.document import read_pdf
+                with choice.provider.open(path) as stream:
+                    return read_pdf(stream)
             if kind == 'epub':
                 from features.books.epub import EPUBBook
                 return EPUBBook(path, source=choice.provider, password=password)
@@ -71,7 +78,16 @@ def open_reader_choice(choice, parent, kind, *, password=None):
                         error = error + '\n\n' + LOCAL_COPY_MESSAGE
                     qt.QMessageBox.warning(parent, 'Open', error)
                 return
-            if kind == 'epub':
+            if kind == 'pdf':
+                from features.pdf.ui.reader import PDFWindow
+                from services.documents.ui.private_views import protect_private_view
+                window = PDFWindow(str(path), document)
+                protect_private_view(window, choice.provider)
+                window.destroyed.connect(lambda: choice.close())
+                retain(window)
+                transferred = True
+                opened.append(window)
+            elif kind == 'epub':
                 from features.books.ui.reader import BookWindow
                 window = BookWindow(document)
                 from services.documents.ui.private_views import protect_private_view

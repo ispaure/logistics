@@ -30,7 +30,8 @@ Back action that would leave the screen.
 Choose a document from **Open documents** in Documents or **Recent** in its menu,
 or use **Actions → New document**. Edit its name in the name field and
 its contents in the text area. **Save** publishes the edited file inside the app.
-Text and Markdown use the same plain-text editor.
+Text, source files and Markdown share the native source editor. Markdown can
+show a live formatted preview while you edit. See [Text and Markdown](documents.md#text-and-markdown).
 
 Each open text/Markdown document owns its editor and draft. **New**, opening a
 stored document, and successful imports add it to **Documents → Open documents**;

@@ -44,6 +44,10 @@ private download similarly with **Use selected private download**. Existing copi
 are preserved until their transfer succeeds. Managed crypt files can be read and
 edited directly, including their comic/EPUB metadata.
 
+Markdown opened from the file browser starts in preview. **Edit Markdown** uses
+one formatted editing surface, with **Source** for exact syntax. **Open** from
+inside the editor starts editing directly. No source/preview split is added.
+
 Text/Markdown editors offer **Open** and **Save As** through one storage browser
 for app-managed Local files and unlocked LocalCrypt folders. Choose storage, browse
 a folder and select a decoded filename, or enter a new name for Save As. Use

@@ -46,7 +46,7 @@ class ChangesPanel(qt.QWidget):
         layout.setSpacing(0)
         self.filter = qt.QLineEdit()
         self.filter.setPlaceholderText('Filter pending files by path')
-        self.filter.textChanged.connect(self._filter)
+        qt.connect_search(self.filter, self._filter, pass_text=True)
         layout.addWidget(self.filter)
         self.file_split = qt.QSplitter(qt.Qt.Orientation.Vertical)
         self.staged_files = self._file_list('Staged files', True)

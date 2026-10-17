@@ -7,6 +7,7 @@ from .content import chapter_html
 from .presentation import chapter_view
 from .private_view import PrivateWebView, private_webview_supported
 from .text_reader import TextBookView
+from .navigation import ChapterTools
 
 
 class RichBookView(toga.Box):
@@ -26,9 +27,10 @@ class RichBookView(toga.Box):
         self.status = toga.Label('Private reader · position and\nbookmarks stay in this session')
         self.webview = chapter_view(content, PrivateWebView(style=Pack(flex=1)), offset=self.offset,
             on_event=self.event, on_link=self.link)
-        super().__init__(children=[self.toc,
+        self.tools = ChapterTools([self.toc,
             toga.Box(children=[self.query, toga.Button('Find next', on_press=self.find, style=Pack(height=44))],
-                     style=Pack(direction=ROW)), self.status, self.webview], style=Pack(direction=COLUMN, flex=1))
+                     style=Pack(direction=ROW)), self.status])
+        super().__init__(children=[self.tools.widget, self.webview], style=Pack(direction=COLUMN, flex=1))
         self.loading = False
 
     def event(self, action, offset):
@@ -44,6 +46,7 @@ class RichBookView(toga.Box):
     def choose(self, widget, **kwargs):
         if not self.loading and not self.disposed and widget.value in self.choices:
             entry = self.choices[widget.value]
+            self.tools.close()
             self.on_chapter(entry.index, entry.fragment)
 
     def link(self, href):
@@ -74,6 +77,7 @@ class RichBookView(toga.Box):
         self.offset = start
         self.webview._chapter_bridge.seek(start, end)
         self.on_position(start)
+        self.tools.close()
 
     def dispose(self):
         if self.disposed:

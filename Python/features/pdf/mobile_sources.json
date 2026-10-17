@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "modules": [
+    "__init__.py",
+    "document.py",
+    "mobile/__init__.py",
+    "mobile/canvas.py",
+    "mobile/copies.py",
+    "search.py",
+    "mobile/search.py"
+  ]
+}

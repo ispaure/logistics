@@ -64,6 +64,13 @@ def folder_tree(choices):
     return tree
 
 
+def folder_storage_label(entry):
+    """Describe available copies, without implying that a mapping is up to date."""
+    copies = entry.get('copies') or [entry]
+    sources = {copy['source'] for copy in copies}
+    return ' · '.join(source for source in ('Local', 'LocalCrypt', 'Remote') if source in sources)
+
+
 def credential_choices(choices, remotes):
     """Keep all available copies of a folder owned by this credential."""
     return {name: entry for name, entry in choices.items()

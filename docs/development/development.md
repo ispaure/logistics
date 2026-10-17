@@ -27,6 +27,7 @@ separates the current layout from proposed migrations.
 | Add settings, a page, folder integration or a document launcher | [Extension points](extension-points.md) |
 | Register a format, preview, action or activation | [Browser extensions](file-browser.md) |
 | Decide whether behavior belongs in Logistics or commonUtils | [Shared ownership](commonutils-integration.md) |
+| Develop PDF readers and vertical page navigation | [PDF Reader](../../Python/features/pdf/docs/development/development.md) |
 | Develop encrypted local copies and private readers | [LocalCrypt](../../Python/features/rclone/docs/development/localcrypt.md) |
 | Develop read-only remote browser tabs and direct readers | [Remote browsing](../../Python/features/rclone/docs/development/remote-browsing.md) |
 | Consolidate desktop/mobile rclone behavior and ownership | [rclone parity plan](../../Python/features/rclone/docs/development/rclone-parity.md) |
@@ -88,3 +89,5 @@ framework is needed.
 - [Documentation ownership and hierarchy](documentation-hierarchy.md)
 
 - [Mobile verification evidence](mobile-evidence/mobile-evidence.md)
+
+- [Documentation viewer verification](documentation-viewer-verification.md)

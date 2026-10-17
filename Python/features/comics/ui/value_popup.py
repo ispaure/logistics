@@ -27,7 +27,7 @@ class ValuePopup(qt.QFrame):
             layout.addWidget(hint)
         self.search = qt.QLineEdit()
         self.search.setPlaceholderText('Filter suggestions…')
-        self.search.textChanged.connect(self._filter)
+        qt.connect_search(self.search, self._filter)
         layout.addWidget(self.search)
         self.tabs = qt.QTabWidget()
         layout.addWidget(self.tabs, 1)

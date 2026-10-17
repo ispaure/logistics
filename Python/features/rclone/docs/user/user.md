@@ -257,6 +257,9 @@ thumbnails survive folder navigation. File changes invalidate cached reads;
 closing the last browser or reader releases its cache. Decrypted cache data stays
 in memory.
 
+Private Markdown opens in preview. **Edit** switches to formatted/source editing;
+holding Alt/Option while opening starts editing directly.
+
 Private Markdown **Save As** uses the same Local/LocalCrypt destination choice and
 switches the editor to the newly saved file. The original remains unchanged.
 Save As and moves reject existing destination names; rename or remove the conflict

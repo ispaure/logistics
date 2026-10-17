@@ -338,6 +338,43 @@ class CryptResources(LocalFiles):
                                directory=bool(row['IsDir']), size=int(row['Size']), modified=row.get('ModTime', '')))
         return sorted(result, key=lambda row: (not row['directory'], row['name'].casefold()))
 
+    def search_entries(self, path='', *, cancelled=lambda: False):
+        """List descendants with one rclone process, retaining names only in RAM."""
+        prefix = self.relative(path)
+        physical = self._physical(prefix, directory=True)
+        # A recursive rclone listing must not traverse a link under our root.
+        def unreadable(error):
+            raise error
+        for folder, directories, files in os.walk(physical, followlinks=False, onerror=unreadable):
+            check_cancelled(cancelled)
+            for name in (*directories, *files):
+                check_cancelled(cancelled)
+                target = Path(folder) / name
+                _guard_path(target, self.root)
+                info = target.lstat()
+                if not stat.S_ISDIR(info.st_mode) and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
+                    raise ValueError(f'Encrypted copies require independent regular files: {target}')
+        rows = json.loads(self.command('lsjson', prefix, '--encrypted', '--recursive',
+                                       limit=64 * 1024 * 1024, cancelled=cancelled))
+        if not isinstance(rows, list):
+            raise ValueError('Invalid recursive encrypted listing.')
+        for row in rows:
+            check_cancelled(cancelled)
+            child = self.relative(row['Path'])
+            if not child:
+                raise ValueError('Invalid decrypted filename.')
+            relative = '/'.join(part for part in (prefix, child) if part)
+            target = physical / self.relative(row['EncryptedPath'])
+            _guard_path(target, self.root)
+            self._encoded_paths[relative] = target
+            if row['IsDir']:
+                self._directories[relative] = target
+                revision = None
+            else:
+                revision = self.version(relative)
+            yield dict(name=PurePosixPath(child).name, path=relative, revision=revision,
+                       directory=bool(row['IsDir']), size=int(row['Size']), modified=row.get('ModTime', ''))
+
     def encrypted_path(self, path):
         self._check_active()
         relative = self.relative(path)

@@ -1,6 +1,6 @@
 # Reading and editing on mobile
 
-## Reader and editor presentation (Phase 3 Part 1)
+## Reading and editing
 
 Open EPUB and comic sessions now give content the main area, with compact page
 navigation and a format-specific Actions menu. EPUB offers contents, bookmarks,
@@ -17,28 +17,24 @@ Fullscreen reclaims the navigation area on both platforms, including Android's
 title bar. Transfer banners appear with reading controls and stay hidden during
 immersive comic reading; this does not pause transfers in the background.
 
-In fullscreen comics on iOS and Android, hold a thumb on the page for about
-400 ms to show a 2× magnifying bubble. The bubble enlarges the page beneath
-its center and grows larger on tablet screens. The bubble sits close
-to the thumb with a slight overlap. Keep holding and drag to move
-the bubble. Near a screen edge, keep dragging toward the edge to inspect the
-outermost pixels even after the bubble stops moving. Release to dismiss. The page stays still while the bubble is open. A second
-finger cancels the bubble so pinch zoom remains available. The bubble is disabled
-when reading controls are visible and is cleared on page changes or leaving the
-reader. It works on single pages and spreads, including Local/LocalCrypt comics.
+See [Comic gestures on mobile](../../../Python/features/comics/docs/user_mobile/gestures.md)
+for magnification, pinch zoom, panning and swipe navigation.
 
-Comic pages use native pinch zoom and panning on iOS and Android. Fit page resets
-zoom; swipe left for the next page and right for the previous page at fit size.
-Manga reverses those directions. Swipes stop at the first/last page without an
-error. While zoomed, dragging pans the page and does not change pages. Swipes
-leave the outer edge available for system navigation. Private comic pages
-use the same presentation while their content and position remain session-only.
+Markdown files open in preview. Tap **Edit Markdown** to edit in a single
+**Formatted** surface on phones and tablets. **Source** switches to the exact
+Markdown text; it never adds a second pane. New Markdown documents start editing.
+Formatted mode offers Bold, Italic, Undo and Redo icon buttons matching desktop. **Format** adds
+strikeout, heading levels, lists, quotes, inline/code blocks, links and table
+insertion or row/column changes. Table cells and code blocks are editable. YAML properties, reference links, wiki
+aliases and unsupported syntax remain available through Source. Untouched blocks
+retain their original Markdown; editing a block can normalize its spelling.
+**Preview** shows the current draft, and saving remains explicit. Provider-backed
+Markdown uses the same single-surface editor and retains its existing save rules.
+See [Text and Markdown](documents.md#text-and-markdown) for saving and private drafts.
 
-Text actions offer Preview beside editor in wide windows. The preview stays beside
-the editor at widths of at least 1100 points and collapses in narrower windows;
-the preference belongs to that document session. Compact Edit/Preview remains
-available. Both previews retain the existing offline renderer restrictions.
+## PDF documents
 
-Simulator/emulator checks exercise zoom, fit, page direction, reading-mode restore,
-appearance and session ownership. Physical pinch/Back gestures, screen-reader
-interaction and large-text usability still require device evidence.
+Open local, remote or LocalCrypt PDFs directly in a read-only session. Enter a
+page number and tap Go, or swipe up/down to turn pages. See the
+[mobile PDF guide](../../../Python/features/pdf/docs/user_mobile/user_mobile.md)
+for limits and private-session behavior.

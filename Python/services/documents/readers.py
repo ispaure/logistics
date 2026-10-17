@@ -42,6 +42,12 @@ class PrivateReader:
             self.text_snapshot = self.session.text_snapshot
             self.text = self.session.text
             self.labels = [name]
+        elif self.kind == '.pdf':
+            from features.pdf.document import PDFDocument
+            self.pdf = PDFDocument.from_source(name, self.source) if self.streaming else PDFDocument(data)
+            self.data = self.pdf.data
+            self.read_only = True
+            self.labels = [f'Page {i + 1}' for i in range(self.pdf.count)]
         elif self.kind in {'.epub', '.cbz', '.zip'}:
             from services.documents.limits import MAX_BOOK, MAX_MEMBER
             with self.source.open_archive(name) if self.streaming else ZipFile(BytesIO(data)) as archive:
@@ -65,7 +71,7 @@ class PrivateReader:
                 from features.books.mobile.navigation import chapter_labels
                 self.labels = chapter_labels(self.book)
         else:
-            raise ValueError('Private reading supports text/Markdown/INI, EPUB and PNG/JPEG/WebP CBZ/ZIP comics.')
+            raise ValueError('Private reading supports PDF, text/Markdown/INI, EPUB and PNG/JPEG/WebP CBZ/ZIP comics.')
 
     @property
     def comic(self):
@@ -83,6 +89,8 @@ class PrivateReader:
             return 'text', chapter_text(self.book, index)
         if self.kind in SOURCE_EXTENSIONS:
             return 'text', self.text
+        if self.kind == '.pdf':
+            return 'image', self.pdf.page(index)
         from features.images.validation import image_dimensions, MAX_IMAGE
         with self.source.open_archive(self.name) if self.streaming else ZipFile(BytesIO(self.data)) as archive:
             member = archive.getinfo(self.pages[index])

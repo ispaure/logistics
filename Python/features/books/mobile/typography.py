@@ -54,10 +54,16 @@ def css(size, margin, theme, *, font_family='system', line_spacing=150, reading_
     from features.books.themes import THEMES as colors
     background, foreground = colors.get(theme, colors['light'])
     width = 'none' if reading_width == 'auto' else str(reading_width) + 'px'
-    result = (f'html{{color-scheme:{"light dark" if theme == "system" else "dark" if theme in ("dark", "slate") else "light"}}}'
+    result = (f'html{{background:{background};color-scheme:{"light dark" if theme == "system" else "dark" if theme in ("dark", "slate") else "light"};'
+        '-webkit-text-size-adjust:100%;text-size-adjust:100%}'
         f'body{{background:{background};color:{foreground};font-family:{family};font-size:{size}px;'
         f'line-height:{line_spacing / 100};margin:0 auto;padding:{margin}px;max-width:{width};'
-        'box-sizing:border-box;overflow-wrap:anywhere}')
+        'box-sizing:border-box;overflow-wrap:anywhere}'
+        'p{margin:0 0 1em}h1,h2,h3,h4,h5,h6{line-height:1.25;margin:1.25em 0 .65em;overflow-wrap:break-word}'
+        'body>:first-child{margin-top:0}blockquote{margin:1em;padding-left:1em;border-left:3px solid currentColor}'
+        'img{display:block;margin:1em auto}a{color:inherit;text-decoration:underline;text-underline-offset:.15em}'
+        'table{display:block;overflow-x:auto}pre{overflow-wrap:anywhere}'
+        '::selection{background:#b4d5fe;color:#202124}')
     if theme == 'system':
-        result += '@media(prefers-color-scheme:dark){body{background:#111111;color:#eeeeee}}'
+        result += '@media(prefers-color-scheme:dark){html,body{background:#111111;color:#eeeeee}}'
     return result

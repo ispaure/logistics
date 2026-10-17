@@ -1,4 +1,5 @@
 """Construct LM page widgets; session state and lifecycle stay outside this builder."""
+from commonUtils.ui.pyside.passwords import password_field
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.status_line import StatusLine
 from .composer import Composer, SamplingSpin
@@ -75,7 +76,7 @@ def build_layout(page):
     page.profiles_button = page.icon_button('Manage server profiles', page.edit_profiles, 'settings', row)
     connection.addRow('Server', row)
     page.token = qt.QLineEdit()
-    page.token.setEchoMode(qt.QLineEdit.EchoMode.Password)
+    password_field(page.token)
     page.token.setPlaceholderText('Optional API token — session only')
     connection.addRow('Token', page.token)
     connection.setRowVisible(page.token, False)

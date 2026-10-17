@@ -5,6 +5,7 @@ from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from commonUtils.ui.native.password_input import PasswordInput
 from unittest.mock import AsyncMock, patch
 from zipfile import ZipFile
 
@@ -347,7 +348,7 @@ class RemoteReaderTests(unittest.TestCase):
                         patch.object(app.main_window, 'dialog', new=AsyncMock()) as dialog:
                     self.assertFalse(await app.open_remote_document(dict(path='locked.cbz', directory=False, size=100)))
                     dialog.assert_not_awaited()
-                password = next(child for child in app.remote_item_view.children if isinstance(child, toga.PasswordInput))
+                password = next(child for child in app.remote_item_view.children if isinstance(child, PasswordInput))
                 password.value = 'synthetic-inner-password'
                 open_button = next(child for child in app.remote_item_view.children
                                    if getattr(child, 'text', '') == 'Open preview')

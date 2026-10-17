@@ -1,4 +1,5 @@
 """Logistics-owned password entry; passwords are never written to configuration."""
+from commonUtils.ui.pyside.passwords import password_field
 from commonUtils.ui import pyside as qt
 
 
@@ -14,7 +15,7 @@ def confirmed_password(parent, description):
     password = qt.QLineEdit()
     confirmation = qt.QLineEdit()
     for field in (password, confirmation):
-        field.setEchoMode(qt.QLineEdit.EchoMode.Password)
+        password_field(field)
     form.addRow('Password', password)
     form.addRow('Confirm password', confirmation)
     layout.addLayout(form)

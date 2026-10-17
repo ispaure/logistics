@@ -98,6 +98,41 @@ static classification (no loaded model, unavailable model, context limit). Raw
 server text is never displayed or persisted; unknown errors retain the generic
 message. Authentication error bodies remain ignored.
 
+## Mobile server setup
+
+Android and iOS share `mobile/ui.py` and `mobile/transport.py`. Setup labels the
+server address, optional session key and model separately. **Connect & load
+models** needs no model ID; it retains the current model when listed, otherwise
+selects the first result, and persists the selection. Manual IDs remain available
+for servers without model discovery. Invalid saves stay in setup with feedback.
+Selection-list replacement suppresses change callbacks until the intended model
+is restored, so refreshing does not silently replace it with the first model.
+
+`mobile_api_url` adds `/v1` only to addresses with no API path; profile validation
+and the HTTP client use the same normalization. Explicit paths remain unchanged.
+Connections/model discovery retain a 15-second timeout. After connecting, chat
+requests use a 120-second socket idle timeout, including waiting for response
+headers, to accommodate model loading. Diagnostics distinguish connection,
+first-response and stream idle timeouts without exposing credentials or server
+response bodies. Cancellation still interrupts the socket and worker queue.
+The ten-minute generation deadline is checked between event reads; a pending
+read remains bounded by the socket idle timeout.
+
+Focused verification: `Python/tests/test_mobile_chat.py` checks URL normalization,
+request paths, timeout stages and cancellation; `Mobile/tests/test_chat_ui.py`
+checks discovery without a model, selection persistence and validation feedback
+through Toga's dummy backend. Native device layout and real-server behavior need
+separate Android/iOS verification.
+
+Android keyboard layout uses the shared navigation adapter's removal of
+Material's automatic IME padding from bottom navigation. The scrolling transcript
+has a zero minimum height, and the composer caps growth at one quarter of the
+native container height (52–120 logical units), so the keyboard-reduced viewport
+does not clip Send or overlap navigation. `chat_keyboard_probe.py` in the native
+test owner exercises an isolated app with no server, long header/model labels,
+multiline drafts and repeated keyboard opening/closing. It checks actual native
+rectangles, keyboard visibility, bar height and retained draft text.
+
 ## Pasted screenshots
 
 Composer accepts clipboard image MIME data, converts it to bounded PNG records,

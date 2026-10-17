@@ -1,4 +1,5 @@
 """Native library controls with archive work off the UI thread."""
+from commonUtils.ui.native.password_input import PasswordInput
 import asyncio
 from uuid import uuid4
 import toga
@@ -30,7 +31,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.book_status = toga.Label('Import an EPUB or PNG/JPEG/WebP CBZ comic.', style=Pack(margin_top=8))
             self.book_import = toga.Button('Import book/comic…', on_press=self.import_book, style=Pack(height=44))
             self.book_pending_key = None
-            self.book_password = toga.PasswordInput(placeholder='Comic ZIP password', on_confirm=self.unlock_book, style=Pack(height=44))
+            self.book_password = PasswordInput(placeholder='Comic ZIP password', on_confirm=self.unlock_book, style=Pack(height=44))
             self.book_unlock = toga.Button('Unlock comic', on_press=self.unlock_book, style=Pack(flex=1, height=44))
             self.book_unlock_cancel = toga.Button('Cancel', on_press=self.cancel_book_unlock, style=Pack(flex=1, height=44))
             self.book_unlock_panel = toga.Box(children=[self.book_password,
@@ -334,6 +335,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         if hasattr(self, 'page_footer'):
             self.page_footer.sync(comic=record['kind'] == 'comic', count=count, index=index,
                                   right_to_left=getattr(reader, 'right_to_left', False))
+            if record['kind'] == 'epub':
+                self.page_footer.chapter_progress(index, count, self.epub_offset, self.epub_text.length)
         self.previous_page.enabled = index > 0 or (record['kind'] == 'epub' and self.epub_offset > 0)
         self.next_page.enabled = index + 1 < count if record['kind'] == 'epub' else self.comic_navigation.next(index) is not None
         self.book_loading = False
@@ -363,9 +366,15 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         if value in getattr(self, 'contents_choices', {}):
             entry = self.contents_choices[value]
             self._epub_target = entry.fragment
-            self.loop.create_task(self.move_book_page(entry.index))
+            self.loop.create_task(self.open_reader_destination(entry.index))
         elif value in getattr(self, 'chapter_labels', ()):
-            self.loop.create_task(self.move_book_page(self.chapter_labels.index(value)))
+            self.loop.create_task(self.open_reader_destination(self.chapter_labels.index(value)))
+
+    async def open_reader_destination(self, index):
+        await self.move_book_page(index)
+        if (self.active_host and self.book_reader is not None and self.manager.active is self
+                and self.book_record['position'] == index):
+            self.show_library()
 
     def select_bookmark(self, widget, **kwargs):
         try:
@@ -375,7 +384,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         location = getattr(self, 'epub_bookmark_choices', {}).get(value)
         if location is not None and not self.book_busy and self.book_reader is not None:
             self._epub_target = location['offset']
-            self.loop.create_task(self.move_book_page(self.book_reader.spine.index(location['path'])))
+            self.loop.create_task(self.open_reader_destination(self.book_reader.spine.index(location['path'])))
         else:
             self.select_chapter(widget, **kwargs)
 
@@ -420,6 +429,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                 or self.session.id not in self.workspace.sessions):
             return
         self.epub_offset = min(offset, self.epub_text.length)
+        if hasattr(self, 'page_footer'):
+            self.page_footer.chapter_progress(index, len(reader.spine), self.epub_offset, self.epub_text.length)
         self._epub_pending = (reader, epoch, index, self.epub_offset)
         task = getattr(self, '_epub_location_task', None)
         if task is None or task.done():

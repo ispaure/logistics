@@ -8,7 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
-SOURCE_OWNERS = ('logisticsmobile', 'services', 'features/books', 'features/comics', 'features/images', 'features/lm', 'features/rclone', 'features/text_editor')
+SOURCE_OWNERS = ('logisticsmobile', 'services', 'features/books', 'features/pdf', 'features/comics', 'features/images', 'features/lm', 'features/rclone', 'features/text_editor')
 BASE_DOCUMENT_MODULES = ('features/__init__.py', 'configFile.ini')
 
 
@@ -54,7 +54,9 @@ SHARED_REQUIRED_MODULES += ('runtime/document_access.py', 'runtime/protected_key
                             'filesystem/snapshots.py', 'archives/rebuilding.py',
                             'ui/native/event_loop.py', 'ui/native/memory.py',
                             'ui/native/documents.py', 'ui/native/menus.py',
-                            'ui/native/presentation.py', 'ui/native/editor_search.py')
+                            'ui/native/presentation.py', 'ui/native/editor_search.py',
+                            'ui/native/password_input.py')
+SHARED_REQUIRED_MODULES += ('ui/appearance/formatting_glyphs.py',)
 SHARED_REQUIRED_MODULES += ('formats/code_syntax.py', 'formats/code_spans.py', 'formats/code_blade.py',
                             'ui/native/code_input.py',
                             'ui/native/android/io/github/ispaure/commonutils/CodeEditorSupport.java')

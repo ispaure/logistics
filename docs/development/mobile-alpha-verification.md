@@ -101,3 +101,9 @@ and latest progress text, distinguishing a pending recheck from active I/O.
 The iOS native gate also exercises Foundation backup exclusion and exclusive
 moves against a disposable legacy-storage fixture, checking that ordinary files
 become shared Local files while credentials remain under private support storage.
+
+## Reader and editor validation scope
+
+Simulator/emulator checks exercise zoom, fit, page direction, reading-mode restore,
+appearance and session ownership. Physical pinch/Back gestures, screen-reader
+interaction and large-text usability still require device evidence.

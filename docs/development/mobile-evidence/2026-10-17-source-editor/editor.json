@@ -1,0 +1,30 @@
+{
+  "success": true,
+  "layout": "column",
+  "source_and_live_preview": true,
+  "line_starts": [
+    0,
+    15,
+    16,
+    36,
+    50,
+    75,
+    76,
+    85,
+    95,
+    96
+  ],
+  "gutter_inset": 48.0,
+  "composition": "None",
+  "composing": false,
+  "backend": "commonUtils.ui.native.code_input",
+  "worker": "<Task finished name='Task-5' coro=<CodeInput.highlight() done, defined at /Users/marca/Library/Developer/CoreSimulator/Devices/405A32BF-2DAB-4BC6-AF70-E90CA5047DEF/data/Containers/Bundle/Application/837E29D2-C1A7-438C-BCA7-8E9E4AF89C5E/Editor Probe.app/app/commonUtils/ui/native/code_input.py:220> result=None>",
+  "pending": "None",
+  "python_colour": "UIExtendedSRGBColorSpace 0 0.501961 0 1",
+  "gutter_error": "",
+  "gutter_frame": "44.0 x 463.0 @ (0.0, 0.0)",
+  "selection_preserved": true,
+  "scope": "Isolated iOS simulator app; synthetic files. Android bridge compiled; Android runtime not tested.",
+  "source_input_sha256": "767bb8b2b88763b5759282634f72607d48537bf116de3c1dde83dea2014d6e41",
+  "packaged_pygments": "2.19.2"
+}
