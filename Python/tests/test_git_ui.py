@@ -503,13 +503,14 @@ class GitUITests(QtTestCase):
         self.assertIn(parent, history.metadata.toHtml())
         selected = history.selected_commit().oid
         history.file_search.setText('PREVIEW')
-        self.assertTrue(history.tree.topLevelItem(0).isHidden())
+        self.wait_until(lambda: history.tree.topLevelItem(0).isHidden())
         self.assertFalse(history.tree.topLevelItem(1).isHidden())
         self.assertEqual(history.selected_commit().oid, selected)
         self.assertFalse(self.page.busy)
         history.tree.setCurrentItem(history.tree.topLevelItem(1)); self.wait()
         self.assertIn('+preview', self.page.preview.editor.toPlainText())
         history.file_search.clear()
+        self.wait_until(lambda: not history.tree.topLevelItem(0).isHidden())
         history.search.setText('Review')
         history.metadata.anchorClicked.emit(qt.QUrl(parent)); self.wait()
         self.assertEqual(history.selected_commit().oid, parent)
@@ -666,9 +667,9 @@ class GitUITests(QtTestCase):
     def test_history_search_hides_graph_to_avoid_false_edges(self):
         self.commit_fixture(); self.open()
         self.page.history.search.setText('First')
-        self.assertTrue(self.page.history.table.isColumnHidden(0))
+        self.wait_until(lambda: self.page.history.table.isColumnHidden(0))
         self.page.history.search.clear()
-        self.assertFalse(self.page.history.table.isColumnHidden(0))
+        self.wait_until(lambda: not self.page.history.table.isColumnHidden(0))
 
     def test_sidebar_workspace_order_with_optional_sync(self):
         documents = qt.QWidget(); documents.count = 0

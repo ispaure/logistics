@@ -4,6 +4,8 @@ Use the following pages for this documentation scope.
 
 ## Further reading
 
+- [Source editor evidence — 2026-10-17](2026-10-17-source-editor/2026-10-17-source-editor.md)
+
 - [Refactor native verification](../restructuring.md#native-verification-follow-up--october-17-2026)
 - [Refactor iPhone native report](2026-10-17-refactor-iphone-native-ui-local.json)
 - [Refactor iPad native report](2026-10-17-refactor-ipad-native-ui-local.json)
