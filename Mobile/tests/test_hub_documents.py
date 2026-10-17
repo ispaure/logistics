@@ -52,7 +52,8 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual(view.transfer_banner.notice.text, 'Transfer in progress · Details')
         self.assertFalse(view.transfer_banner.dismiss.enabled)
         credential_row = app.folder_credential.parent
-        self.assertIs(frame.main.children[0], credential_row)
+        self.assertIs(frame.main.children[0], app.folder_source_tabs)
+        self.assertIs(frame.main.children[1].children[0], credential_row)
         actions = app.folder_transfers_button.parent
         self.assertEqual(list(actions.children), [app.folder_transfers_button, app.folder_refresh_button, app.folder_add_share_button])
         app.transfer_busy = False
@@ -102,6 +103,7 @@ class HubDocumentTests(unittest.TestCase):
                 await result
             self.assertEqual(app.native_host.state.destination, 'files')
             self.assertIn('All files', app.folder_picker_choices)
+            app.change_folder_source('Local')
             await app.folder_buttons['All files'].on_press()
             self.assertIn(app.files_view, app.body.children)
             self.assertEqual(app.file_storage.value, 'Local files')

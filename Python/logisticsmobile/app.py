@@ -1,4 +1,4 @@
-"""Small native mobile text/Markdown prototype with app-private recovery."""
+"""Mobile composition root, host navigation and managed document lifecycle."""
 import asyncio
 from pathlib import Path
 from uuid import uuid4
@@ -23,12 +23,12 @@ from .locations_ui import LocationsUI
 from .folder_hub_ui import FolderHubUI
 from .hub_ui import HubUI, text_document_kind
 from .storage_ui import StorageUI
-from .saved_files_ui import SavedFilesUI
+from .host_services import OwnedAttribute
 
 _active_hosts = weakref.WeakValueDictionary()
 
 
-class LogisticsMobile(SavedFilesUI, StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, ReaderWorkspace, ChatUI, CloudUI, toga.App):
+class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, ReaderWorkspace, ChatUI, CloudUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def __init__(self, *args, **kwargs):
@@ -60,6 +60,9 @@ class LogisticsMobile(SavedFilesUI, StorageUI, HubUI, FolderHubUI, LocationsUI, 
             if privacy is not None:
                 privacy.dispose()
             previous_host.active_host = False
+            picker = getattr(previous_host, '_editor_picker', None)
+            if picker is not None:
+                picker.clear()
             for session in previous_host.workspace.sessions.values():
                 previous_host.workspace.invalidate(session.id)
             cancelled = getattr(previous_host, '_crypt_cancel', None)
@@ -219,6 +222,8 @@ class LogisticsMobile(SavedFilesUI, StorageUI, HubUI, FolderHubUI, LocationsUI, 
             self.document_launchers.reflow(self.main_window.size.width)
         for grid in getattr(self, 'document_grids', []):
             grid.reflow(self.main_window.size.width)
+        if hasattr(self, 'documentation'):
+            self.documentation.reflow(self.adaptive.content_width('settings', margin=0))
         for owner in self.text_views.values():
             owner.apply_split(self.main_window.size.width)
 
@@ -504,6 +509,9 @@ class LogisticsMobile(SavedFilesUI, StorageUI, HubUI, FolderHubUI, LocationsUI, 
                     self.scene_manager.close_window(self), style=Pack(height=48)))
         if type(self._impl).__module__.startswith('toga_android.'):
             box.add(toga.Button('Developer settings…', on_press=self.open_android_developer_settings, style=Pack(height=48)))
+        from .documentation_ui import show_documentation
+        box.add(toga.Button('Mobile documentation', on_press=lambda widget, **kw: show_documentation(self),
+                            style=Pack(height=48)))
         box.add(heading('About'))
         self.build_version_label = toga.Label(build_information(self.version),
             style=Pack(font_size=12, color='#808080'))
@@ -836,6 +844,9 @@ class LogisticsMobile(SavedFilesUI, StorageUI, HubUI, FolderHubUI, LocationsUI, 
             return False
         saved = self.checkpoint()
         if saved:
+            picker = getattr(self, '_editor_picker', None)
+            if picker is not None:
+                picker.clear()
             self.memory_pressure.dispose()
             self.screen_privacy.dispose()
         return saved
@@ -859,6 +870,47 @@ class LogisticsMobile(SavedFilesUI, StorageUI, HubUI, FolderHubUI, LocationsUI, 
             browser = getattr(self, name, None)
             if browser is not None:
                 browser.icons.clear()
+
+    def cancel_cloud(self, widget=None, **kwargs):
+        picker = getattr(self, '_editor_picker', None)
+        if picker is not None:
+            picker.cancel()
+        return super().cancel_cloud(widget, **kwargs)
+
+    saved_files_message = OwnedAttribute('saved_files', 'saved_files_message')
+    saved_files_status = OwnedAttribute('saved_files', 'saved_files_status')
+    saved_files_summary = OwnedAttribute('saved_files', 'saved_files_summary')
+
+    def saved_files(self):
+        from .saved_files_ui import SavedFilesController
+        if not hasattr(self, '_saved_files'):
+            self._saved_files = SavedFilesController(self)
+        return self._saved_files
+
+    def show_saved_files(self, widget=None, **kwargs):
+        return self.saved_files().show_saved_files(widget, **kwargs)
+
+    async def delete_saved_file(self, key):
+        return await self.saved_files().delete_saved_file(key)
+
+    async def delete_all_saved_files(self, widget=None, **kwargs):
+        return await self.saved_files().delete_all_saved_files(widget, **kwargs)
+
+    def editor_picker(self):
+        from .editor_picker import EditorPicker
+        if not hasattr(self, '_editor_picker'):
+            self._editor_picker = EditorPicker(self)
+        return self._editor_picker
+
+    def finish_save_as_source(self, source_document):
+        if self.current is source_document:
+            self.loading = True
+            try:
+                self.editor.value = source_document.text
+            finally:
+                self.loading = False
+        source_document.private = False
+        self.store.checkpoint(source_document)
 
     def provider_sessions(self):
         from .private_sessions import PrivateSessions

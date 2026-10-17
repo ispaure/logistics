@@ -8,9 +8,9 @@ from pathlib import Path
 import shutil
 import subprocess
 
-APP_MODULES = ('ios_reader_chrome.py', 'ios_storage.py', 'keyboard.py', 'fold_layout.py', 'storage_ui.py', 'settings_ui.py', 'saved_files_ui.py', 'screen_privacy.py', 'palette.py', 'workspace_navigation.py', 'document_choices.py', 'comic_layout_check.py', 'appearance.py', 'native_archives.py', 'provider_ui.py', 'provider_readers.py', 'text_resources.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'recent_documents.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
-               'hub_ui.py', 'control_icons.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library_edits.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
-               'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_presentation.py', 'chat_fixture.py', 'resource_imports.py', 'files_ui.py', 'browser_preview.py', 'comic_source.py')
+APP_MODULES = ('ios_reader_chrome.py', 'ios_storage.py', 'keyboard.py', 'fold_layout.py', 'storage_ui.py', 'settings_ui.py', 'documentation_ui.py', 'saved_files_ui.py', 'screen_privacy.py', 'palette.py', 'workspace_navigation.py', 'document_choices.py', 'comic_layout_check.py', 'appearance.py', 'native_archives.py', 'provider_ui.py', 'provider_readers.py', 'text_resources.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'recent_documents.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
+               'hub_ui.py', 'control_icons.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'local_sources.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library_edits.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
+               'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_presentation.py', 'chat_fixture.py', 'resource_imports.py', 'files_ui.py', 'editor_picker.py', 'host_services.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
     'features/rclone/mobile/storage_location.py',
     'features/rclone/mobile/session_privacy.py',
@@ -29,7 +29,7 @@ DOCUMENT_MODULES = (
 )
 
 
-SHARED_REQUIRED_MODULES = ('runtime/resource_provider.py', 'runtime/local_files.py', 'runtime/resource_mutations.py', 'persistence/publication.py', 'filesystem/local_access.py', 'runtime/resource_selection.py', 'runtime/browsing.py', 'runtime/range_reader.py', 'runtime/archive_source.py', 'runtime/resource_search.py', 'ui/native_browser/__init__.py', 'ui/native/__init__.py', 'ui/native/image_canvas.py')
+SHARED_REQUIRED_MODULES = ('formats/markdown_wiki.py', 'ui/native/markdown.py', 'ui/native/adaptive.py', 'ui/native/markdown_preview.py', 'runtime/resource_provider.py', 'runtime/local_files.py', 'runtime/resource_mutations.py', 'persistence/publication.py', 'filesystem/local_access.py', 'runtime/resource_selection.py', 'runtime/browsing.py', 'runtime/range_reader.py', 'runtime/archive_source.py', 'runtime/resource_search.py', 'ui/native_browser/__init__.py', 'ui/native/__init__.py', 'ui/native/image_canvas.py')
 
 SHARED_REQUIRED_MODULES += ('ui/native/navigation_state.py', 'ui/native/navigation.py',
                             'ui/native/routes.py', 'ui/native/chrome.py',
@@ -41,6 +41,9 @@ SHARED_REQUIRED_MODULES += ('runtime/document_access.py', 'runtime/protected_key
                             'ui/native/event_loop.py', 'ui/native/memory.py',
                             'ui/native/documents.py', 'ui/native/menus.py',
                             'ui/native/presentation.py', 'ui/native/editor_search.py')
+SHARED_REQUIRED_MODULES += ('formats/code_syntax.py', 'formats/code_spans.py', 'formats/code_blade.py',
+                            'ui/native/code_input.py',
+                            'ui/native/android/io/github/ispaure/commonutils/CodeEditorSupport.java')
 
 
 def validate_app_modules(root, modules=APP_MODULES, feature_modules=None):
@@ -108,6 +111,14 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
             new_shared = True
     for name in APP_MODULES:
         copy(repo / 'Python/logisticsmobile' / name, Path('logisticsmobile') / name)
+    # Preserve repository-relative documentation links inside the app package.
+    doc_roots = [repo / 'docs', repo / 'Python/ui_new/bulk_rename/docs']
+    doc_roots += [owner / 'docs' for owner in (repo / 'Python/features').iterdir()
+                  if owner.is_dir() and not owner.is_symlink() and (owner / 'docs').is_dir()]
+    for doc_root in doc_roots:
+        for page in sorted(doc_root.rglob('*.md')):
+            copy(page, Path('logisticsmobile/help') / page.relative_to(repo))
+    copy(repo / 'README.md', Path('logisticsmobile/help/README.md'))
     copy(repo / 'LICENSE.md', Path('logisticsmobile/LICENSE.md'))
     copy(shared / 'LICENSE.md', Path('commonUtils/LICENSE.md'))
     for name in DOCUMENT_MODULES:

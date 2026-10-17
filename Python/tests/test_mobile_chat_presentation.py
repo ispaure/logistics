@@ -47,9 +47,9 @@ class MobileChatPresentationTests(unittest.TestCase):
 
     def test_assistant_lists_and_unclosed_code_fences_render_as_readable_blocks(self):
         entries = transcript_entries([message('assistant', '1. **First**\n2. Second\n\n```python\nprint("hello")')])
-        self.assertIn('<ol><li><strong>First</strong></li><li>Second</li></ol>', entries[0]['html'])
+        self.assertIn('<ol>\n<li><strong>First</strong></li>\n<li>Second</li>\n</ol>', entries[0]['html'])
         self.assertIn('&quot;hello&quot;', entries[0]['html'])
-        self.assertTrue(entries[0]['html'].endswith('</code></pre>'))
+        self.assertTrue(entries[0]['html'].rstrip().endswith('</code></pre>'))
 
 
 class NavigationClearanceTests(unittest.TestCase):

@@ -128,12 +128,15 @@ class WorkspaceUITests(unittest.TestCase):
             try:
                 app.show_documents()
                 owner = app.editor_view
+                owner.name.value = 'Preview.md'
                 owner.session.view['markdown_split'] = True
                 owner.apply_split(1200)
                 self.assertIn(owner.split_preview, owner.editor_area.children)
                 self.assertIsNotNone(owner.preview_pending)
                 owner.apply_split(800)
-                self.assertNotIn(owner.split_preview, owner.editor_area.children)
+                self.assertIn(owner.split_preview, owner.editor_area.children)
+                owner.apply_split(390)
+                self.assertIn(owner.split_preview, owner.editor_area.children)
                 self.assertTrue(owner.session.view['markdown_split'])
                 self.assertTrue(app.close_session(owner.session.id))
                 self.assertIsNone(owner.preview_pending)

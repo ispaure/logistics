@@ -291,8 +291,25 @@ class SettingsPageTests(QtTestCase):
                 self.assertLess(panel.guide_button.y(), 60)
                 with patch('ui_new.pages.settings.open_markdown') as opened:
                     panel.guide_button.click()
-                opened.assert_called_once_with(guide, parent=panel.window(), detached=True, allow_new_tabs=False)
+                opened.assert_called_once_with(guide, directory=guide.parent, parent=panel.window(), detached=True, allow_new_tabs=False)
                 self.assertIn('Alt', panel.guide_button.toolTip())
+                panel.close()
+
+    def test_feature_guide_opens_owned_wiki_scope(self):
+        from ui_new.pages.settings import FeatureSettingsPanel
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            guide = root / 'test/docs/user/user.md'
+            guide.parent.mkdir(parents=True)
+            guide.write_text('# Usage')
+            with patch.object(registry, '__file__', str(root / 'registry.py')), \
+                    patch.object(registry, 'get_settings', return_value=[]):
+                panel = FeatureSettingsPanel(self.state())
+                self.addCleanup(panel.deleteLater)
+                with patch('ui_new.pages.settings.open_markdown') as opened:
+                    panel.guide_button.click()
+                opened.assert_called_once_with(guide, directory=root / 'test/docs',
+                                              parent=panel.window(), detached=True, allow_new_tabs=False)
                 panel.close()
 
     def test_tabbed_settings_retain_custom_state_and_unsaved_ini_edits(self):

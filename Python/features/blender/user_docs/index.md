@@ -1,3 +1,5 @@
 # Blender
 
-See the [Blender installations and presets guide](README.md).
+[Open the user guide](../docs/user/user.md).
+
+Compatibility entry for in-app help; the linked guide is canonical.

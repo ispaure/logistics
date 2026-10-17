@@ -97,7 +97,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         window = getattr(self.app, '_main_window', None)
         return window.size.width if window is not None else 0
 
-    def content_width(self, destination):
+    def content_width(self, destination, *, margin=24):
         """Measure the native allocation, never a child-driven minimum width."""
         available = self.width()
         adapter = self.app.native_host.adapter
@@ -111,7 +111,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
               and adapter.impl.native_navigationview.getVisibility() != 8):
             density = self.app._impl.native.getResources().getDisplayMetrics().density
             available -= float(adapter.impl.native_navigationview.getWidth()) / density
-        return max(1, int(available) - 24)
+        return max(1, int(available) - margin)
 
     def prepare(self, view, destination, route=None, root=False):
         if destination not in self.menu_open:

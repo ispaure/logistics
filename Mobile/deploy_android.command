@@ -7,7 +7,7 @@ if [ -x "$MOBILE_DIR/.tools/go/bin/go" ]; then
     export PATH
 fi
 if [ ! -x "$MOBILE_DIR/.venv/bin/python" ]; then
-    echo 'Create Mobile/.venv with Python 3.12 and install briefcase==0.4.5; see Mobile/README.md.' >&2
+    echo 'Create Mobile/.venv with Python 3.12 and install briefcase==0.4.5; see docs/development/mobile-launchers.md.' >&2
     exit 1
 fi
 exec "$MOBILE_DIR/.venv/bin/python" "$MOBILE_DIR/android_deploy.py" "$@"

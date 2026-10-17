@@ -1,12 +1,7 @@
 """Enumerated host services; document attributes remain controller-owned."""
 
 
-class HostService:
-    def __init__(self, name):
-        self.name = name
-
-    def __get__(self, owner, cls=None):
-        return self if owner is None else getattr(owner.app, self.name)
+from .host_services import HostService
 
 
 class ReaderHost:

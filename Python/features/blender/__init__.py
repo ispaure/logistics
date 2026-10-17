@@ -4,7 +4,7 @@ FEATURE_DESCRIPTION = 'Manage Blender versions and isolated user presets.'
 
 
 def _create_page(parent=None):
-    from .page import BlenderPage
+    from .ui.page import BlenderPage
     return BlenderPage(parent)
 
 

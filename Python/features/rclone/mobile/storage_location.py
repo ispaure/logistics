@@ -23,6 +23,12 @@ def use_shared_local(private_root, documents):
     _shared_local_roots[private_root] = _unlinked(documents / 'Local')
 
 
+def shared_documents_path(private_root):
+    """Return iOS public Documents when registered; private roots are never exposed."""
+    local = _shared_local_roots.get(Path(private_root))
+    return _unlinked(local.parent) if local is not None else None
+
+
 def _unlinked(path):
     path = Path(path)
     if not path.is_absolute() or '..' in path.parts:

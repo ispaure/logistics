@@ -1,4 +1,6 @@
 """Native local file management; shared operations own transfer correctness."""
+from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
+
 from features.rclone.mobile.storage_location import collection_path, CollectionFiles
 import asyncio
 import threading
@@ -6,13 +8,13 @@ from pathlib import Path
 from commonUtils.runtime.operations import MutationIncomplete
 import toga
 from .control_icons import icon_button
+from .host_services import OwnedAttribute
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.local_files import LocalFiles
 from commonUtils.runtime.resource_provider import resource_path
-from commonUtils.runtime.resource_selection import ResourceSelection
 from commonUtils.runtime.resource_mutations import move_resource, delete_resource, create_resource_folder, rename_resource
-from features.rclone.mobile.file_resources import encrypted_storage, encrypted_document, encrypted_copies
+from features.rclone.mobile.file_resources import encrypted_storage, encrypted_document
 
 
 def local_read_available(app, *, private=True):
@@ -36,7 +38,9 @@ class FilesUI:
         return toga.Button('Manage local files and folders…', on_press=self.show_files, style=Pack(height=48))
 
     def can_browse_local(self, label='Local files'):
-        return (self.cloud_busy and local_read_available(self, private=label != 'Local files')
+        provider = getattr(self, 'file_roots', {}).get(label)
+        ordinary = label == 'Local files' or (isinstance(provider, LocalFiles) and not provider.private)
+        return (self.cloud_busy and local_read_available(self, private=not ordinary)
                 and (label == 'Local files' or label in getattr(self, 'file_roots', {})))
 
     async def browse_local_during_transfer(self, folder):
@@ -78,7 +82,7 @@ class FilesUI:
         if (hasattr(self, 'files_view') and self.file_provider is not None
                 and not self.file_browser.closed):
             if local_read_available(self, private=True):
-                roots = {'Local files': None, **self.existing_crypt_locations(), **self.linked_crypt_locations()}
+                roots = {**self.ordinary_file_roots(), **self.existing_crypt_locations(), **self.linked_crypt_locations()}
                 storage, destination = self.file_storage.value, self.file_destination.value
                 local_root = local_root or storage not in roots
                 self.file_changing_location = True
@@ -106,7 +110,7 @@ class FilesUI:
             return
         if hasattr(self, 'file_browser'):
             await self.file_browser.close()
-        self.file_roots = {'Local files': None}
+        self.file_roots = self.ordinary_file_roots()
         if local_read_available(self, private=True):
             self.file_roots.update(self.existing_crypt_locations())
             self.file_roots.update(self.linked_crypt_locations())
@@ -312,6 +316,14 @@ class FilesUI:
         if not self.cloud_busy:
             self.show_cloud()
 
+    def ordinary_file_roots(self):
+        from .local_sources import shared_files
+        roots = {'Local files': None}
+        shared = shared_files(self.private_root)
+        if shared is not None:
+            roots['Shared files'] = shared
+        return roots
+
     def file_provider_for(self, label):
         return self.storage_provider(label, self.file_roots)
 
@@ -486,7 +498,7 @@ class FilesUI:
                 self.crypt_password.value = self.file_password.value
                 copies, key = source
                 await self.open_crypt(copies=copies, key=key, destination='files')
-            elif Path(path).suffix.lower() in {'.txt', '.md', '.markdown'}:
+            elif Path(path).suffix.lower() in SOURCE_EXTENSIONS:
                 from logisticsmobile.text_resources import LocalTextCopies
                 await self.open_crypt(copies=LocalTextCopies(provider), key=path, destination='files')
             else:
@@ -509,243 +521,68 @@ class FilesUI:
         self.populate_file_browser([row])
         self.file_status.value = 'Choose a Local or LocalCrypt destination for this downloaded file.'
 
+    # Existing native probes and callbacks retain their app-facing entry points.
+    editor_browser = OwnedAttribute('editor_picker', 'editor_browser')
+    editor_linked_roots = OwnedAttribute('editor_picker', 'editor_linked_roots')
+    editor_picker_location = OwnedAttribute('editor_picker', 'editor_picker_location')
+    editor_picker_mode = OwnedAttribute('editor_picker', 'editor_picker_mode')
+    editor_picker_rows = OwnedAttribute('editor_picker', 'editor_picker_rows')
+    editor_storage_roots = OwnedAttribute('editor_picker', 'editor_storage_roots')
+    picker_entries = OwnedAttribute('editor_picker', 'picker_entries')
+    picker_folder = OwnedAttribute('editor_picker', 'picker_folder')
+    save_as_data = OwnedAttribute('editor_picker', 'save_as_data')
+    save_as_name = OwnedAttribute('editor_picker', 'save_as_name')
+    save_as_privacy_gate = OwnedAttribute('editor_picker', 'save_as_privacy_gate')
+    save_as_source_document = OwnedAttribute('editor_picker', 'save_as_source_document')
+    save_as_status = OwnedAttribute('editor_picker', 'save_as_status')
+    save_as_storage = OwnedAttribute('editor_picker', 'save_as_storage')
+    save_as_view = OwnedAttribute('editor_picker', 'save_as_view')
+
     async def show_crypt_save_as(self, widget=None, *, owner=None, **kwargs):
-        owner = owner or self.provider_sessions().active
-        if getattr(getattr(owner, 'crypt_reader', None), 'read_only', False):
-            return
-        if self.cloud_busy or owner is None or owner.crypt_reader is None or not owner.crypt_reader.editable:
-            return
-        self.save_as_source_document = None
-        await self.show_text_destination(owner.crypt_reader.name, owner.crypt_reader.text_snapshot.encode(owner.crypt_text.value),
-                                         privacy_gate=getattr(owner, 'privacy_gate', None))
+        return await self.editor_picker().show_crypt_save_as(widget, owner=owner, **kwargs)
 
     async def show_document_save_as(self, widget=None, **kwargs):
-        if self.current is None:
-            return
-        name, data = self.current.name, self.current.snapshot.encode(self.current.text)
-        if not hasattr(self, 'cloud_view'):
-            self.show_cloud()
-            if getattr(self, 'cloud_restore_task', None):
-                await self.cloud_restore_task
-        if self.cloud_busy:
-            return
-        self.save_as_source_document = self.current
-        await self.show_text_destination(name, data)
+        return await self.editor_picker().show_document_save_as(widget, **kwargs)
 
     async def show_editor_open(self, widget=None, **kwargs):
-        if not hasattr(self, 'cloud_view'):
-            self.show_cloud()
-            if getattr(self, 'cloud_restore_task', None):
-                await self.cloud_restore_task
-        if self.cloud_busy:
-            return
-        await self.show_editor_browser('open')
+        return await self.editor_picker().show_editor_open(widget, **kwargs)
 
     async def show_text_destination(self, name, data, *, privacy_gate=None):
-        self.save_as_privacy_gate = privacy_gate
-        await self.show_editor_browser('save', name, data)
+        return await self.editor_picker().show_text_destination(name, data, privacy_gate=privacy_gate)
 
     async def show_editor_browser(self, mode, name='', data=None):
-        if hasattr(self, 'editor_browser'):
-            await self.editor_browser.close()
-        self.editor_picker_mode = mode
-        self.save_as_data = data
-        self.editor_storage_roots = {'Local files': None, **self.existing_crypt_locations()}
-        self.editor_linked_roots = self.linked_crypt_locations()
-        self.editor_storage_roots.update(self.editor_linked_roots)
-        roots = list(self.editor_storage_roots)
-        self.editor_picker_rows = {}
-        self.save_as_storage = toga.Selection(items=roots, style=Pack(height=48))
-        self.picker_folder = toga.TextInput(placeholder='Folder within storage', style=Pack(height=48))
-        self.picker_entries = toga.Selection(style=Pack(height=48))
-        from .browser_ui import FileBrowser as NativeBrowser
-        self.editor_browser = NativeBrowser(folder_visible=self.folder_path_visible, selected=self.browser_editor_selected, open_folder=self.browser_editor_folder, navigate=self.browser_editor_location, preview=False)
-        self.save_as_name = toga.TextInput(value=name, placeholder='File name', style=Pack(height=48))
-        self.save_as_status = toga.MultilineTextInput(readonly=True, style=Pack(height=75))
-        self.save_as_view = toga.Box(children=[toga.Label('Open' if mode == 'open' else 'Save As'),
-            self.save_as_storage, self.picker_folder,
-            toga.Button('Browse folder', on_press=self.refresh_editor_browser, style=Pack(height=48)),
-            icon_button('up', 'Parent folder', on_press=self.parent_editor_folder),
-            self.editor_browser.widget, toga.Button('Choose selected item', on_press=self.select_editor_item, style=Pack(height=48)),
-            self.save_as_name, toga.Label('Local files are plaintext. LocalCrypt stays encrypted. Drafts opened here stay in memory.'),
-            toga.Button('Open file' if mode == 'open' else 'Save new file', on_press=self.confirm_editor_file, style=Pack(height=48)),
-            toga.Button('Cancel', on_press=self.cancel_text_destination, style=Pack(height=48)), self.save_as_status],
-            style=Pack(direction=COLUMN, margin=12))
-        self.show_view(toga.ScrollContainer(horizontal=False, content=self.save_as_view, style=Pack(flex=1)))
-        await self.refresh_editor_browser()
+        return await self.editor_picker().show_editor_browser(mode, name, data)
 
     def browser_editor_selected(self, row):
-        if row is None:
-            self.picker_entries.items = ['Select an item…', *self.editor_picker_rows]
-            picker = getattr(self.picker_entries._impl, 'native_picker', None)
-            if picker is not None:
-                picker.reloadAllComponents()
-            self.picker_entries.value = 'Select an item…'
-            return
-        label = next((label for label, value in self.editor_picker_rows.items() if value['path'] == row['path']), None)
-        if label is None:
-            label = 'Search: ' + row['path']
-            self.editor_picker_rows[label] = row
-            self.browser_editor_selected(None)
-        self.picker_entries.value = label
-        if not row['directory']:
-            self.save_as_name.value = row['name']
+        return self.editor_picker().browser_editor_selected(row)
 
     async def browser_editor_folder(self, row):
-        if self.cloud_busy:
-            return False
-        return await self.browser_editor_location((self.save_as_storage.value, row['path']))
+        return await self.editor_picker().browser_editor_folder(row)
 
     async def browser_editor_location(self, location):
-        if self.cloud_busy:
-            return False
-        self.save_as_storage.value, self.picker_folder.value = location
-        return await self.refresh_editor_browser()
+        return await self.editor_picker().browser_editor_location(location)
 
     def editor_provider(self, label):
-        return self.storage_provider(label, self.editor_storage_roots)
+        return self.editor_picker().editor_provider(label)
 
     async def refresh_editor_browser(self, widget=None, **kwargs):
-        if self.cloud_busy:
-            return
-        label, folder = self.save_as_storage.value, self.picker_folder.value
-        self.set_cloud_busy(True)
-        self._crypt_cancel = threading.Event()
-        try:
-            def read():
-                model = ResourceSelection(self.editor_provider(label), mode=self.editor_picker_mode,
-                                          extensions=('.txt', '.md', '.markdown', '.ini'))
-                return model.list(folder, cancelled=self._crypt_cancel.is_set)
-            rows = await asyncio.to_thread(read)
-            self.editor_picker_rows = {f'{i+1}. {"Folder" if row["directory"] else "File"}: {row["name"]}': row for i,row in enumerate(rows)}
-            self.editor_picker_location = label, folder
-            self.picker_entries.items = list(self.editor_picker_rows)
-            picker = getattr(self.picker_entries._impl, 'native_picker', None)
-            if picker is not None:
-                picker.reloadAllComponents()
-            if self.editor_picker_rows:
-                self.picker_entries.value = next(iter(self.editor_picker_rows))
-            self.editor_browser.set_entries(ResourceSelection(self.editor_provider(label), mode=self.editor_picker_mode, extensions=('.txt', '.md', '.markdown', '.ini')), folder, rows, location=(label, folder))
-            self.save_as_status.value = f'{len(rows)} entries. Choose a folder or file.'
-            return True
-        except Exception as error:
-            if self.editor_browser.tree is not None:
-                self.save_as_storage.value, self.picker_folder.value = self.editor_picker_location
-            else:
-                self.editor_picker_rows = {}
-                self.picker_entries.items = []
-                self.editor_browser.stop()
-            self.save_as_status.value = str(error)
-            return False
-        finally:
-            self._crypt_cancel = None
-            self.set_cloud_busy(False)
+        return await self.editor_picker().refresh_editor_browser(widget, **kwargs)
 
     async def parent_editor_folder(self, widget=None, **kwargs):
-        if not self.cloud_busy:
-            self.picker_folder.value = self.picker_folder.value.rpartition('/')[0]
-            await self.refresh_editor_browser()
+        return await self.editor_picker().parent_editor_folder(widget, **kwargs)
 
     async def select_editor_item(self, widget=None, **kwargs):
-        if self.cloud_busy:
-            return
-        if getattr(self, 'editor_picker_location', None) != (self.save_as_storage.value, self.picker_folder.value):
-            await self.refresh_editor_browser()
-            return
-        row = self.editor_picker_rows.get(self.picker_entries.value)
-        if row:
-            if row['directory']:
-                self.picker_folder.value = row['path']
-                await self.refresh_editor_browser()
-            else:
-                self.save_as_name.value = row['name']
+        return await self.editor_picker().select_editor_item(widget, **kwargs)
 
     async def confirm_editor_file(self, widget=None, **kwargs):
-        if self.editor_picker_mode == 'save':
-            return await self.save_text_destination()
-        if self.cloud_busy:
-            return
-        from logisticsmobile.text_resources import LocalTextCopies
-        label, folder, name = self.save_as_storage.value, self.picker_folder.value, self.save_as_name.value
-        self.set_cloud_busy(True)
-        self._crypt_cancel = threading.Event()
-        try:
-            def resolve():
-                provider = self.editor_provider(label)
-                path = ResourceSelection(provider, extensions=('.txt', '.md', '.markdown', '.ini')).resolve(folder, name, cancelled=self._crypt_cancel.is_set)
-                return provider, path
-            provider, path = await asyncio.to_thread(resolve)
-        except Exception as error:
-            self.save_as_status.value = str(error)
-            return
-        finally:
-            self._crypt_cancel = None
-            self.set_cloud_busy(False)
-        await self.open_crypt(copies=encrypted_copies(provider) if provider.private else LocalTextCopies(provider), key=path)
+        return await self.editor_picker().confirm_editor_file(widget, **kwargs)
 
     def cancel_text_destination(self, widget=None, **kwargs):
-        if not self.cloud_busy:
-            self.save_as_data = None
-            self.save_as_privacy_gate = None
-            self.resume_crypt() if self.provider_sessions().active is not None else self.show_documents()
+        return self.editor_picker().cancel_text_destination(widget, **kwargs)
 
     async def save_text_destination(self, widget=None, **kwargs):
-        from commonUtils.runtime.resource_mutations import save_resource_and_reopen
-        from logisticsmobile.text_resources import LocalTextCopies
-        if self.cloud_busy or self.save_as_data is None:
-            return
-        target, label, data = self.save_as_name.value, self.save_as_storage.value, self.save_as_data
-        folder = self.picker_folder.value
-        self.set_cloud_busy(True)
-        self._crypt_cancel = threading.Event()
-        try:
-            if Path(target).suffix.lower() not in {'.txt', '.md', '.markdown'} or len(data) > 1024 * 1024:
-                raise ValueError('Choose a text or Markdown filename; saves are limited to 1 MiB.')
-            def save():
-                provider = self.editor_provider(label)
-                destination = ResourceSelection(provider, mode='save', extensions=('.txt', '.md', '.markdown', '.ini')).resolve(folder, target, cancelled=self._crypt_cancel.is_set)
-                source_document = getattr(self, 'save_as_source_document', None)
-                if provider.private and source_document is not None:
-                    self.store.privatize(source_document)
-                copies = encrypted_copies(provider) if provider.private else LocalTextCopies(provider)
-                def reopen():
-                    reader = copies.open(destination)
-                    if reader.data != data:
-                        raise ValueError('The saved file changed after publication.')
-                    kind, content = reader.page(0)
-                    return copies, destination, (reader, kind, content)
-                return save_resource_and_reopen(provider, destination, data, reopen=reopen, cancelled=self._crypt_cancel.is_set)
-            copies, destination, prepared = await asyncio.to_thread(save)
-            if not self.active_host:
-                return
-            self._crypt_cancel = None
-            self.set_cloud_busy(False)
-            if await self.open_crypt(copies=copies, key=destination, prepared=prepared,
-                                    privacy_gate=getattr(self, 'save_as_privacy_gate', None)):
-                self.save_as_data = None
-                self.save_as_privacy_gate = None
-                source_document = getattr(self, 'save_as_source_document', None)
-                if source_document is not None and getattr(source_document, 'private', False):
-                    source_document.text = source_document.snapshot.text
-                    if self.current is source_document:
-                        self.loading = True
-                        try:
-                            self.editor.value = source_document.text
-                        finally:
-                            self.loading = False
-                    source_document.private = False
-                    self.store.checkpoint(source_document)
-                self.save_as_source_document = None
-            else:
-                self.save_as_status.value = 'The file was saved, but its editor could not be opened. The Save As draft is retained.'
-                self.show_view(self.save_as_view)
-        except MutationIncomplete as error:
-            self.save_as_status.value = str(error) + '\nRefresh before retrying; your draft remains available.'
-        except Exception as error:
-            self.save_as_status.value = 'Save As failed; draft retained: ' + str(error)[:200]
-        finally:
-            self._crypt_cancel = None
-            self.set_cloud_busy(False)
+        return await self.editor_picker().save_text_destination(widget, **kwargs)
+
 
 
     async def edit_local_comic_folder(self, widget=None, **kwargs):

@@ -158,8 +158,8 @@ class LMUITests(QtTestCase):
         from features.ide.projects import Project
         project = Project('Project fixture', self.temp.name, id='project-fixture')
         (Path(self.temp.name) / 'main.py').write_text('disk value\nsecond line\n')
-        registered = patch('features.lm.page.registered_projects', return_value={project.id: project})
-        snapshots = patch('features.lm.page.editor_context', return_value=({'main.py': 'unsaved value\nsecond line\n'},
+        registered = patch('features.lm.ui.page.registered_projects', return_value={project.id: project})
+        snapshots = patch('features.lm.ui.page.editor_context', return_value=({'main.py': 'unsaved value\nsecond line\n'},
                                                                          [('main.py', 1, 'unsaved value')]))
         registered.start()
         snapshots.start()
@@ -218,7 +218,7 @@ class LMUITests(QtTestCase):
         self.configure_code()
         self.page.attach_selection()
         self.assertIn('IDE selection: main.py', self.page.composer.toPlainText())
-        with patch('features.lm.page.qt.QFileDialog.getOpenFileNames', return_value=([str(Path(self.temp.name) / 'main.py')], '')):
+        with patch('features.lm.ui.page.qt.QFileDialog.getOpenFileNames', return_value=([str(Path(self.temp.name) / 'main.py')], '')):
             self.page.attach_files()
         self.assertIn('Project file: main.py (editor snapshot)', self.page.composer.toPlainText())
         self.assertTrue(self.page.persist())

@@ -47,7 +47,7 @@ class MobileHubTests(unittest.TestCase):
     def test_mobile_markdown_preview_is_offline_and_escapes_active_content(self):
         html = markdown_preview('# Title\n- **bold**\n```\n<script>alert(1)</script>\n```\n'
                                 '<img src="https://example.invalid/x">\n[link](https://example.invalid)')
-        self.assertIn('<h1>Title</h1>', html)
+        self.assertIn('<h1 id="title">Title</h1>', html)
         self.assertIn('<strong>bold</strong>', html)
         self.assertNotIn('<script>', html)
         self.assertNotIn('<img ', html)

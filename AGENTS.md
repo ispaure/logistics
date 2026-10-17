@@ -27,11 +27,14 @@ explicitly asks for its removal.
 
 ## Documentation ownership and maintenance
 
-Read [the developer index](docs/developer/README.md) before structural changes.
-Update `Python/features/<owner>/user_docs/README.md` for user-facing behavior and
-`docs/developer/` for architecture/contracts. Update the root README for setup or
+Read [the developer index](docs/development/development.md) before structural changes.
+Update `Python/features/<owner>/docs/user/` for desktop workflows,
+`docs/user_mobile/` within mobile feature owners for mobile workflows, and their
+`docs/development/` for feature architecture/contracts. Systemic guides belong in
+root `docs/user/`, `docs/user_mobile/` and `docs/development/`. Update the root README for setup or
 major capabilities. Preserve `user_docs/index.md` as an in-app compatibility link.
-Core UI and Bulk Rename guides remain alongside their existing `ui_new` owners.
+Systemic Core UI and Folder Hub guides belong in the Logistics wiki; Bulk Rename
+keeps its documentation beside its existing `ui_new` owner.
 Describe implemented behavior and verify consequential operations against source/tests.
 Shared commonUtils APIs are documented in their own repository, not copied here.
 
@@ -42,3 +45,8 @@ those files in Logistics, replace the link with a directory, or include them in
 public documentation navigation/releases. Logistics documentation may explain only
 its host integration, configuration and workflow boundary. Emulator capabilities,
 setup and implementation belong to the linked project's own guides.
+
+Documentation wikis use `docs/docs.md` as their scope landing. Each nested folder
+has a same-named landing page (`banana/banana.md`), with explicit links to every
+child page. Every Markdown page begins with an H1, after optional YAML properties.
+Keep package README and `user_docs/index.md` compatibility entries as short links.

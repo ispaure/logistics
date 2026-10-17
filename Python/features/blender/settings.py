@@ -112,11 +112,11 @@ class BlenderSettings(qt.QWidget):
         self.library = None
         self._close_pending = False
         if scope == 'personal':
-            from .page import BlenderPage
+            from .ui.page import BlenderPage
             self.presets = BlenderPage(self, manager=manager, settings_mode=True)
             self.presets.idle.connect(self._resume_close)
             self.tabs.insertTab(0, self.presets, 'Presets')
-            from .library_page import AddonLibraryPage
+            from .ui.library_page import AddonLibraryPage
             self.library = AddonLibraryPage(self.presets.library, self)
             self.tabs.addTab(self.library, 'Addon Library')
             self.tabs.setCurrentWidget(self.presets)

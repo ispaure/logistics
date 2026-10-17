@@ -35,8 +35,8 @@ def build_menus(window, renamer, close=None):
         rules.setChecked(renamer.rules_toggle.isChecked())
     for menu in menus.values():
         menu.aboutToShow.connect(update)
-    from commonUtils.ui.markdown import open_markdown
-    menus['Help'].addAction('Bulk Rename Guide', lambda: open_markdown(
-        Path(__file__).with_name('user_docs') / 'README.md', parent=window.window(), detached=True, allow_new_tabs=False))
+    from services.documentation import open_guide
+    menus['Help'].addAction('Bulk Rename Guide', lambda: open_guide(
+        Path(__file__).with_name('docs') / 'user/user.md', parent=window.window(), detached=True, allow_new_tabs=False))
     update()
     return menus
