@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "modules": [
+    "__init__.py",
+    "build_version.py",
+    "documents/__init__.py",
+    "documents/archive_access.py",
+    "documents/limits.py",
+    "documents/metadata.py",
+    "documents/readers.py",
+    "documents/zip_passwords.py",
+    "folders/__init__.py",
+    "folders/policy.py",
+    "identifiers.py",
+    "mobile_presentation.py",
+    "workflow_host.py"
+  ]
+}

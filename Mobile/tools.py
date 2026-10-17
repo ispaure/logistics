@@ -8,34 +8,40 @@ from pathlib import Path
 import shutil
 import subprocess
 
-APP_MODULES = ('ios_reader_chrome.py', 'ios_storage.py', 'keyboard.py', 'fold_layout.py', 'storage_ui.py', 'settings_ui.py', 'documentation_ui.py', 'saved_files_ui.py', 'screen_privacy.py', 'palette.py', 'workspace_navigation.py', 'document_choices.py', 'comic_layout_check.py', 'appearance.py', 'provider_ui.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'recent_documents.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
-               'hub_ui.py', 'control_icons.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'local_sources.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library_edits.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
-               'chat_fixture.py', 'resource_imports.py', 'files_ui.py', 'editor_picker.py', 'host_services.py', 'feature_hosts.py', 'folder_controller.py', 'hub_controller.py', 'locations_controller.py', 'storage_controller.py', 'browser_preview.py', 'comic_source.py')
-DOCUMENT_MODULES = (
-    'services/documents/__init__.py', 'services/folders/__init__.py',
-    'features/images/__init__.py',
-    'features/books/mutations.py', 'features/comics/mutations.py',
-    'features/rclone/localcrypt/__init__.py', 'features/rclone/localcrypt/mobile/__init__.py', 'features/rclone/transfers/__init__.py', 'features/rclone/transfers/mobile/__init__.py',
-    'features/text_editor/__init__.py', 'features/text_editor/mobile/__init__.py', 'features/text_editor/mobile/ui.py', 'features/text_editor/resources.py', 'features/text_editor/names.py', 'services/mobile_presentation.py',
-    'features/lm/mobile/controller.py', 'features/rclone/mobile/controller.py', 'features/rclone/transfers/mobile/controller.py', 'services/workflow_host.py',
-    'services/documents/readers.py', 'services/documents/archive_access.py', 'services/documents/limits.py', 'features/rclone/mobile/host.py',
-    'features/lm/mobile/storage.py', 'features/lm/mobile/transport.py', 'features/lm/mobile/ui.py', 'features/lm/mobile/presentation.py', 'features/lm/mobile/__init__.py',
-    'features/rclone/mobile/storage_location.py',
-    'features/rclone/mobile/session_privacy.py',
-    'features/rclone/mobile/cloud_ui.py', 'features/rclone/transfers/mobile/ui.py', 'features/rclone/transfers/mobile/review_ui.py', 'features/rclone/localcrypt/mobile/ui.py', 'features/rclone/mobile/messages.py',
-    'features/rclone/mobile/__init__.py', 'features/rclone/mobile/cloud.py', 'features/rclone/mobile/remote_readers.py', 'features/rclone/mobile/credential_vault.py', 'features/rclone/mobile/credential_packages.py', 'features/rclone/localcrypt/mobile/archive_source.py', 'features/rclone/mobile/previews.py', 'features/rclone/transfers/mobile/jobs.py', 'features/rclone/localcrypt/mobile/copies.py', 'features/rclone/localcrypt/mobile/resources.py',
-    'features/rclone/__init__.py', 'features/rclone/transfers/transfer_options.py', 'features/rclone/transfers/review.py', 'features/rclone/remote_policy.py', 'features/rclone/transfers/local_policy.py', 'features/rclone/transfers/scope.py',
-    'features/__init__.py', 'features/books/__init__.py', 'features/books/epub.py',
-    'features/books/locations.py', 'features/books/themes.py', 'features/books/metadata.py', 'features/books/xhtml.py', 'features/comics/__init__.py',
-    'features/books/mobile/appearance.py', 'features/books/mobile/typography.py', 'features/books/mobile/speech.py', 'features/books/mobile/speech_native.py', 'features/books/mobile/android/io/github/ispaure/logistics/books/BookSpeechListener.java', 'features/books/mobile/speech_view.py',
-    'features/books/mobile/provider_reader.py', 'features/books/mobile/private_view.py', 'features/books/mobile/metadata.py', 'features/books/mobile/text_reader.py', 'features/books/mobile/navigation.py', 'features/books/mobile/__init__.py', 'features/books/mobile/content.py', 'features/books/mobile/presentation.py',
-    'features/comics/catalog_values.py', 'features/comics/mobile/collection.py', 'features/comics/mobile/private_batch.py', 'features/comics/mobile/index.py', 'features/comics/edit_state.py', 'features/comics/mobile/metadata.py', 'features/comics/reading.py', 'features/comics/mobile/navigation.py', 'features/comics/mobile/pages.py', 'features/comics/mobile/__init__.py', 'features/images/validation.py', 'features/comics/mobile/composite.py', 'features/comics/mobile/presentation.py',
-    'features/comics/archive_io.py', 'features/comics/comicinfo.py',
-    'features/comics/library.py', 'features/comics/pages.py', 'features/comics/library_config.py',
-    'configFile.ini', 'services/build_version.py', 'services/identifiers.py', 'services/folders/policy.py', 'services/__init__.py', 'services/documents/zip_passwords.py', 'services/documents/metadata.py',
-    'features/lm/__init__.py', 'features/lm/domain.py', 'features/lm/streaming.py', 'features/lm/screenshots.py',
-)
+SOURCE_OWNERS = ('logisticsmobile', 'services', 'features/books', 'features/comics', 'features/images', 'features/lm', 'features/rclone', 'features/text_editor')
+BASE_DOCUMENT_MODULES = ('features/__init__.py', 'configFile.ini')
 
+
+def load_source_modules(repo):
+    """Aggregate strict, feature-owned allowlists without importing feature code."""
+    inventories = {}
+    for owner in SOURCE_OWNERS:
+        manifest = Path(repo) / 'Python' / owner / 'mobile_sources.json'
+        if manifest.is_symlink():
+            raise ValueError('Refusing linked mobile source manifest: ' + owner)
+        data = json.loads(manifest.read_text())
+        if (not isinstance(data, dict) or set(data) != {'schema', 'modules'}
+                or type(data['schema']) is not int or data['schema'] != 1
+                or not isinstance(data['modules'], list)):
+            raise ValueError('Invalid mobile source manifest: ' + owner)
+        selected = []
+        for name in data['modules']:
+            if (not isinstance(name, str) or not name or '\\' in name
+                    or Path(name).is_absolute() or '..' in Path(name).parts
+                    or Path(name).as_posix() != name or Path(name).suffix not in {'.py', '.java'}):
+                raise ValueError('Invalid mobile source path in ' + owner)
+            if name in selected:
+                raise ValueError('Duplicate mobile source path in ' + owner)
+            selected.append(name)
+        inventories[owner] = tuple(selected)
+    documents = list(BASE_DOCUMENT_MODULES)
+    for owner in SOURCE_OWNERS:
+        if owner != 'logisticsmobile':
+            documents.extend(owner + '/' + name for name in inventories[owner])
+    return inventories['logisticsmobile'], tuple(documents)
+
+
+APP_MODULES, DOCUMENT_MODULES = load_source_modules(Path(__file__).resolve().parents[1])
 
 SHARED_REQUIRED_MODULES = ('formats/markdown_wiki.py', 'ui/native/markdown.py', 'ui/native/adaptive.py', 'ui/native/markdown_preview.py', 'runtime/resource_provider.py', 'runtime/local_files.py', 'runtime/resource_mutations.py', 'persistence/publication.py', 'filesystem/local_access.py', 'runtime/resource_selection.py', 'runtime/browsing.py', 'runtime/range_reader.py', 'runtime/archive_source.py', 'runtime/resource_search.py', 'ui/native_browser/__init__.py', 'ui/native/__init__.py', 'ui/native/image_canvas.py')
 
@@ -54,47 +60,69 @@ SHARED_REQUIRED_MODULES += ('formats/code_syntax.py', 'formats/code_spans.py', '
                             'ui/native/android/io/github/ispaure/commonutils/CodeEditorSupport.java')
 
 
-def validate_app_modules(root, modules=APP_MODULES, feature_modules=None):
-    """Validate host and rclone-adapter imports against the isolated payload."""
+def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, document_modules=DOCUMENT_MODULES):
+    """Check staged application/feature/service imports before a native build."""
     root = Path(root)
-    feature_modules = tuple(name for name in DOCUMENT_MODULES if name.startswith('features/rclone/')) if feature_modules is None else feature_modules
-    included = {'logisticsmobile/' + name for name in modules} | set(DOCUMENT_MODULES)
-    included -= {name for name in DOCUMENT_MODULES if name.startswith('features/rclone/')}
-    included.update(feature_modules)
-    sources = [('logisticsmobile/' + name, root / name) for name in modules]
-    sources += [(name, root.parent / name) for name in feature_modules if name.startswith('features/rclone/') and '/mobile/' in name]
-    for relative, path in sources:
+    included = {'logisticsmobile/' + name for name in modules} | set(document_modules)
+    if feature_modules is not None:
+        included = {name for name in included if not name.startswith('features/rclone/')}
+        included.update(feature_modules)
+    for relative in sorted(included):
+        if not relative.endswith('.py'):
+            continue
+        path = root.parent / relative
         tree = ast.parse(path.read_text(encoding='utf-8'), filename=relative)
+        if relative.startswith('features/') and relative.endswith('/__init__.py'):
+            # Desktop registration factories remain lazy in portable packages.
+            tree.body = [node for node in tree.body if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
         package = relative.rsplit('/', 1)[0].replace('/', '.')
+        if relative.endswith('/__init__.py'):
+            package = relative[:-len('/__init__.py')].replace('/', '.')
+        class RuntimeImports(ast.NodeTransformer):
+            def visit_If(self, node):
+                if (isinstance(node.test, ast.Name) and node.test.id == 'TYPE_CHECKING'
+                        or isinstance(node.test, ast.Attribute) and node.test.attr == 'TYPE_CHECKING'
+                        and isinstance(node.test.value, ast.Name) and node.test.value.id == 'typing'):
+                    return [self.visit(child) for child in node.orelse]
+                return self.generic_visit(node)
+        tree = RuntimeImports().visit(tree)
         for node in ast.walk(tree):
             dependencies = []
             if isinstance(node, ast.ImportFrom):
                 module = importlib.util.resolve_name('.' * node.level + (node.module or ''), package) if node.level else node.module or ''
                 dependencies = [module] if node.module else [module + '.' + alias.name for alias in node.names]
+                # "from package import module" also requires that selected child
+                # when it is a source module rather than a public class/function.
+                for alias in node.names:
+                    child = module.replace('.', '/') + '/' + alias.name
+                    if (root.parent / (child + '.py')).is_file():
+                        dependencies.append(module + '.' + alias.name)
             elif isinstance(node, ast.Import):
                 dependencies = [alias.name for alias in node.names]
             for dependency in dependencies:
-                if not dependency.startswith(('logisticsmobile.', 'features.rclone.')):
+                if not dependency.startswith(('logisticsmobile.', 'features.', 'services.')):
                     continue
                 target = dependency.replace('.', '/')
                 if target + '.py' not in included and target + '/__init__.py' not in included:
                     raise ValueError(f'{path.name} imports unstaged {dependency}; '
-                                     'add its module to the mobile payload before building.')
+                                     'add its module to the owning mobile source manifest before building.')
 
 
 def stage(repo, destination, *, testbed=False, allow_dirty=False):
     repo, destination = Path(repo).resolve(), Path(destination).resolve()
+    app_modules, document_modules = load_source_modules(repo)
     if destination.exists():
         raise ValueError('Stage into a new directory; existing payloads are preserved.')
     paths = ['Python/logisticsmobile', 'Mobile', 'Python/tests/test_mobile_documents.py', 'Python/tests/test_mobile_hub.py',
              'Python/tests/test_mobile_readers.py', 'Python/tests/test_mobile_localcrypt.py',
              'Python/tests/test_mobile_chat.py', 'Python/tests/test_mobile_cloud.py', 'Python/tests/test_mobile_vault.py',
              'Python/tests/portable_documents.py', 'Python/tests/books_fixture.py']
-    paths.extend('Python/' + name for name in DOCUMENT_MODULES)
+    paths.extend('Python/' + name for name in document_modules)
+    paths.extend('Python/' + owner + '/mobile_sources.json' for owner in SOURCE_OWNERS)
     dirty = bool(subprocess.check_output(['git', '-C', str(repo), 'status', '--porcelain', '--', *paths]))
     if dirty and not allow_dirty:
         raise ValueError('Commit mobile sources before creating a release/testbed payload.')
-    validate_app_modules(repo / 'Python/logisticsmobile')
+    validate_app_modules(repo / 'Python/logisticsmobile', app_modules, document_modules=document_modules)
     destination.mkdir(parents=True)
     shared = repo / 'Python/commonUtils'
     spec = importlib.util.spec_from_file_location('shared_mobile_tools', shared / 'tools/mobile_ci.py')
@@ -117,8 +145,10 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
                 raise ValueError('Commit required shared resource APIs before release staging.')
             copy(shared / name, relative)
             new_shared = True
-    for name in APP_MODULES:
+    for name in app_modules:
         copy(repo / 'Python/logisticsmobile' / name, Path('logisticsmobile') / name)
+    for owner in SOURCE_OWNERS:
+        copy(repo / 'Python' / owner / 'mobile_sources.json', Path(owner) / 'mobile_sources.json')
     # Preserve repository-relative documentation links inside the app package.
     doc_roots = [repo / 'docs', repo / 'Python/ui_new/bulk_rename/docs']
     doc_roots += [owner / 'docs' for owner in (repo / 'Python/features').iterdir()
@@ -129,7 +159,7 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     copy(repo / 'README.md', Path('logisticsmobile/help/README.md'))
     copy(repo / 'LICENSE.md', Path('logisticsmobile/LICENSE.md'))
     copy(shared / 'LICENSE.md', Path('commonUtils/LICENSE.md'))
-    for name in DOCUMENT_MODULES:
+    for name in document_modules:
         copy(repo / 'Python' / name, Path(name))
     # Briefcase copies package sources, not payload-root configuration files.
     copy(repo / 'Python/configFile.ini', Path('services/configFile.ini'))

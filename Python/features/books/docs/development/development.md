@@ -144,3 +144,7 @@ Desktop widgets and controllers live in feature-owned `ui/`. Registration stays 
 ## Format mutations
 
 `mutations.py` owns metadata plans, content-preserving archive rewrites and post-write format validation for desktop/mobile consumers. Storage adapters retain conflict detection, encryption and atomic publication; the mobile managed library retains recovery journals and checksum records.
+
+## Mobile source manifest
+
+`../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.

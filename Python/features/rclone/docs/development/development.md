@@ -226,3 +226,7 @@ The feature imports no `logisticsmobile` modules. `mobile/host.py:MobileHostUI` 
 ## Workflow ownership
 
 `transfers/` owns review, scope, options and execution policy, with desktop `ui/` and mobile presentation/controllers. `localcrypt/` owns encrypted providers/connections with desktop `ui/` and `mobile/` adapters. Cloud credential/session composition stays at the feature root/mobile package.
+
+## Mobile source manifest
+
+`../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.

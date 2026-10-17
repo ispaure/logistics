@@ -74,6 +74,10 @@ assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile', 'config')) 
                 target = repo / 'Python' / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(REPO / 'Python' / name, target)
+            for owner in mobile_tools.SOURCE_OWNERS:
+                target = repo / 'Python' / owner / 'mobile_sources.json'
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(REPO / 'Python' / owner / 'mobile_sources.json', target)
             (repo / 'LICENSE.md').write_text('Application license fixture')
             (repo / 'README.md').write_text('# Application fixture\n')
             git(repo, 'init')
@@ -105,6 +109,29 @@ assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile', 'config')) 
             (app / 'documents.py').write_text('# uncommitted change')
             with self.assertRaises(ValueError):
                 mobile_tools.stage(repo, base / 'dirty')
+
+    def test_owner_manifests_reject_escaping_duplicate_and_invalid_paths(self):
+        with TemporaryDirectory() as directory:
+            repo = Path(directory)
+            for owner in mobile_tools.SOURCE_OWNERS:
+                target = repo / 'Python' / owner / 'mobile_sources.json'
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(json.dumps(dict(schema=1, modules=[])))
+            target = repo / 'Python/features/books/mobile_sources.json'
+            for modules in (['../outside.py'], ['/outside.py'], ['a.py', 'a.py'], ['a\\b.py'], ['a.txt']):
+                target.write_text(json.dumps(dict(schema=1, modules=modules)))
+                with self.subTest(modules=modules), self.assertRaises(ValueError):
+                    mobile_tools.load_source_modules(repo)
+            target.write_text(json.dumps(dict(schema=1, modules=['epub.py'])))
+            _, sources = mobile_tools.load_source_modules(repo)
+            self.assertIn('features/books/epub.py', sources)
+            self.assertNotIn('features/books/ui/reader.py', sources)
+
+    def test_service_dependencies_are_checked_as_well_as_feature_adapters(self):
+        selected = tuple(name for name in mobile_tools.DOCUMENT_MODULES
+                         if name != 'services/documents/readers.py')
+        with self.assertRaisesRegex(ValueError, 'imports unstaged services.documents.readers'):
+            mobile_tools.validate_app_modules(REPO / 'Python/logisticsmobile', document_modules=selected)
 
     def test_verifier_requires_complete_clean_mobile_evidence(self):
         spec = importlib.util.spec_from_file_location('smoke_contract', REPO / 'Python/logisticsmobile/smoke.py')

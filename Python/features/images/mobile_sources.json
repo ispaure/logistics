@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "modules": [
+    "__init__.py",
+    "validation.py"
+  ]
+}

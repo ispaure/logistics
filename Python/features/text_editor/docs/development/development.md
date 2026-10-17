@@ -135,3 +135,7 @@ Comparisons now refresh after each accepted hunk and use resizable, linked panes
 ## Desktop presentation
 
 Desktop widgets and controllers live in feature-owned `ui/`. Registration stays lazy; portable domain modules do not import this package. IDE/Text Editor change-marker and hunk integration is shared through `services/editors/ui/`.
+
+## Mobile source manifest
+
+`../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.

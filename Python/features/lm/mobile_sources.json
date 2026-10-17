@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "modules": [
+    "__init__.py",
+    "domain.py",
+    "mobile/__init__.py",
+    "mobile/controller.py",
+    "mobile/presentation.py",
+    "mobile/storage.py",
+    "mobile/transport.py",
+    "mobile/ui.py",
+    "screenshots.py",
+    "streaming.py"
+  ]
+}
