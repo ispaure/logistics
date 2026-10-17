@@ -205,7 +205,7 @@ class LocalAdapterTests(unittest.TestCase):
         from unittest.mock import patch
         from commonUtils.runtime.local_files import LocalFiles
         from commonUtils.runtime.operations import MutationIncomplete
-        from logisticsmobile.text_resources import LocalTextCopies
+        from features.text_editor.resources import LocalTextCopies
         with TemporaryDirectory() as directory:
             provider = LocalFiles(directory)
             path = Path(directory) / 'note.txt'

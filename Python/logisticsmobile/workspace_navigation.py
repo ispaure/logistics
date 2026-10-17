@@ -665,7 +665,7 @@ class FileDrawer:
         return await self.refresh()
 
     async def open_file(self, row):
-        from logisticsmobile.text_resources import LocalTextCopies
+        from features.text_editor.resources import LocalTextCopies
         from features.rclone.mobile.file_resources import encrypted_document
         provider = self.provider
         if provider is None or not self.app.checkpoint():

@@ -4,12 +4,10 @@ from copy import deepcopy
 import inspect
 import time
 import toga
-from logisticsmobile.control_icons import icon_button, apply_icon
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, END
 
 from features.lm.domain import build_request, message, validate_settings
-from logisticsmobile.appearance import surface, action_button
 from features.lm.mobile.storage import ChatStore, DEFAULT_SETTINGS, export_chat
 from features.lm.mobile.transport import ChatClient, ChatCancelled
 from features.lm.mobile.presentation import composer_height, transcript_document, transcript_entries, transcript_update
@@ -37,7 +35,7 @@ class ChatUI:
             self.chat_models = toga.Selection(on_change=self.select_chat_model, style=Pack(height=48))
             self.chat_refresh = toga.Button('Refresh models', on_press=self.refresh_chat_models, style=Pack(height=48))
             self.chat_selector = toga.Selection(on_change=self.select_chat, style=Pack(height=48))
-            self.chat_new = surface(toga.Button('New chat', on_press=self.new_chat,
+            self.chat_new = self.presentation.surface(toga.Button('New chat', on_press=self.new_chat,
                 style=Pack(height=52, width=148, font_size=17, font_weight='bold')),
                 radius=26, background='chat_primary', foreground='chat_on_primary', outlined=False)
             self.chat_render_ready = False
@@ -49,10 +47,10 @@ class ChatUI:
             self.chat_force_latest = False
             self.chat_transcript = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
                 on_webview_load=self.chat_transcript_loaded, style=Pack(flex=1))
-            surface(self.chat_transcript, radius=0, background='chat_background', outlined=False)
+            self.presentation.surface(self.chat_transcript, radius=0, background='chat_background', outlined=False)
             self.chat_prompt = toga.MultilineTextInput(on_change=self.chat_draft_changed,
                 placeholder='Message…', style=Pack(flex=1, height=52, margin=4, margin_left=12, font_size=int(self.preferences.values['font_size'])))
-            self.chat_send = icon_button('up', 'Send', on_press=self.chat_primary_action)
+            self.chat_send = self.presentation.icon_button('up', 'Send', on_press=self.chat_primary_action)
             self.chat_send.style.margin = 6
             self.chat_export = toga.Button('Export conversation…', on_press=self.export_chat, style=Pack(height=48))
             contexts = sorted({'2048', '4096', '8192', '16384', '32768', str(self.chat_profile['settings']['context_tokens'])}, key=int)
@@ -72,7 +70,6 @@ class ChatUI:
                 self.chat_refresh, self.chat_models, self.chat_config_status_box,
                 toga.Button('Save configuration', on_press=self.save_chat_configuration, style=Pack(height=48))],
                 style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
-            from logisticsmobile.workspace_navigation import menu_button
             self.chat_title = toga.Label('New conversation', style=Pack(font_weight='bold', font_size=16))
             self.chat_model_label = toga.Label('', style=Pack(font_size=12))
             for label in (self.chat_title, self.chat_model_label):
@@ -84,9 +81,9 @@ class ChatUI:
                     from android.text import TextUtils
                     label._impl.native.setSingleLine(True)
                     label._impl.native.setEllipsize(TextUtils.TruncateAt.END)
-            self.chat_menu_button = menu_button(self.toggle_chat_conversations, 'Conversations')
-            self.chat_header_new = icon_button('compose', 'New conversation', on_press=self.new_chat)
-            self.chat_actions_button = icon_button('more', 'Conversation actions')
+            self.chat_menu_button = self.presentation.menu_button(self.toggle_chat_conversations, 'Conversations')
+            self.chat_header_new = self.presentation.icon_button('compose', 'New conversation', on_press=self.new_chat)
+            self.chat_actions_button = self.presentation.icon_button('more', 'Conversation actions')
             from commonUtils.ui.native.menus import NativeMenu
             self.chat_actions = NativeMenu(self.chat_actions_button, [
                 ('New conversation', self.new_chat), ('Export conversation…', self.export_chat),
@@ -98,7 +95,7 @@ class ChatUI:
             elif backend.startswith('toga_android.'):
                 self.chat_actions_button._impl.native.setContentDescription('Conversation actions')
             self.chat_conversation_list = toga.Box(style=Pack(direction=COLUMN))
-            self.chat_drawer_settings = icon_button('more', 'Chat settings', on_press=self.show_chat_configuration)
+            self.chat_drawer_settings = self.presentation.icon_button('more', 'Chat settings', on_press=self.show_chat_configuration)
             self.chat_sidebar_title = toga.Label('Conversations',
                 style=Pack(font_size=22, font_weight='bold', margin_bottom=20))
             self.chat_sidebar_content = sidebar = toga.Box(children=[self.chat_sidebar_title,
@@ -106,26 +103,26 @@ class ChatUI:
                 toga.Box(children=[self.chat_new, toga.Box(style=Pack(flex=1)), self.chat_drawer_settings],
                          style=Pack(direction=ROW, margin_top=16))],
                 style=Pack(direction=COLUMN, flex=1, margin=16))
-            self.chat_sidebar = surface(toga.Box(children=[sidebar], style=Pack(direction=COLUMN, flex=1)),
+            self.chat_sidebar = self.presentation.surface(toga.Box(children=[sidebar], style=Pack(direction=COLUMN, flex=1)),
                                         radius=0, background='chat_background', outlined=False)
             self.chat_status_box = toga.Box(style=Pack(direction=COLUMN))
             self.chat_composer = toga.Box(children=[self.chat_prompt, self.chat_send],
                 style=Pack(direction=ROW, align_items=END, margin_top=12, margin_bottom=4))
-            surface(self.chat_composer, radius=30, background='chat_input', outlined=False)
-            self.chat_setup = action_button(toga.Button('Set up chat', on_press=self.show_chat_configuration,
+            self.presentation.surface(self.chat_composer, radius=30, background='chat_input', outlined=False)
+            self.chat_setup = self.presentation.action_button(toga.Button('Set up chat', on_press=self.show_chat_configuration,
                                                         style=Pack(height=48, margin_bottom=8)))
             self.chat_setup_box = toga.Box(style=Pack(direction=COLUMN))
             self.chat_transcript_card = toga.Box(children=[self.chat_transcript], style=Pack(direction=COLUMN, flex=1))
-            surface(self.chat_prompt, radius=22, background='chat_input', foreground='text', outlined=False)
-            surface(self.chat_send, radius=24, background='chat_primary', foreground='chat_on_primary', outlined=False)
-            surface(self.chat_status, radius=0, background='chat_background', foreground='muted', outlined=False)
+            self.presentation.surface(self.chat_prompt, radius=22, background='chat_input', foreground='text', outlined=False)
+            self.presentation.surface(self.chat_send, radius=24, background='chat_primary', foreground='chat_on_primary', outlined=False)
+            self.presentation.surface(self.chat_status, radius=0, background='chat_background', foreground='muted', outlined=False)
             self.chat_messages = toga.Box(children=[self.chat_transcript_card, self.chat_status_box, self.chat_composer],
                 style=Pack(direction=COLUMN, flex=1))
             self.chat_workspace = toga.Box(style=Pack(direction=ROW, flex=1))
             self.chat_drawer_open = self.adaptive.width() >= 640
             for control in (self.chat_header_new, self.chat_actions_button):
-                surface(control, radius=24, background='chat_input', foreground='text', outlined=False)
-            self.chat_header_actions = surface(toga.Box(children=[self.chat_header_new, self.chat_actions_button],
+                self.presentation.surface(control, radius=24, background='chat_input', foreground='text', outlined=False)
+            self.chat_header_actions = self.presentation.surface(toga.Box(children=[self.chat_header_new, self.chat_actions_button],
                 style=Pack(direction=ROW)), radius=24, background='chat_input', outlined=False)
             self.chat_header = toga.Box(children=[self.chat_menu_button,
                 toga.Box(children=[self.chat_title, self.chat_model_label], style=Pack(direction=COLUMN, flex=1, margin_left=4)),
@@ -133,7 +130,7 @@ class ChatUI:
                 style=Pack(direction=ROW, margin_bottom=12))
             self.chat_view = toga.Box(children=[self.chat_header, self.chat_setup_box, self.chat_workspace],
                 style=Pack(direction=COLUMN, margin=12, flex=1))
-            surface(self.chat_view, radius=0, background='chat_background', outlined=False)
+            self.presentation.surface(self.chat_view, radius=0, background='chat_background', outlined=False)
             self.refresh_chats()
             if self.chat_labels:
                 self.open_chat(next(iter(self.chat_labels.values())))
@@ -141,7 +138,7 @@ class ChatUI:
                 self.new_chat()
             if error:
                 self.set_chat_status(error)
-            self.chat_transcript.set_content('https://logistics.invalid/chat/', transcript_document())
+            self.chat_transcript.set_content('https://logistics.invalid/chat/', transcript_document(theme_css=self.presentation.css_variables()))
         self.chat_prompt.style.font_size = int(self.preferences.values['font_size'])
         self.update_chat_transcript()
         if present:
@@ -169,7 +166,7 @@ class ChatUI:
             self.chat_sidebar_content.remove(self.chat_sidebar_title)
         elif not compact_drawer and self.chat_sidebar_title not in sidebar_children:
             self.chat_sidebar_content.insert(0, self.chat_sidebar_title)
-        surface(self.chat_view, radius=0,
+        self.presentation.surface(self.chat_view, radius=0,
                 background='chat_background', outlined=False)
         children = []
         if self.chat_drawer_open:
@@ -214,7 +211,7 @@ class ChatUI:
         from rubicon.objc import ObjCClass, SEL
         if self.chat_menu_button in self.chat_header.children:
             self.chat_header.remove(self.chat_menu_button)
-        self.chat_menu_button.app, self.chat_menu_button.window = self, self.main_window
+        self.chat_menu_button.app, self.chat_menu_button.window = self.app, self.main_window
         if not hasattr(self, 'chat_native_menu'):
             self.chat_native_menu = ObjCClass('UIBarButtonItem').alloc().initWithImage(
                 ObjCClass('UIImage').systemImageNamed('line.3.horizontal'), style=0,
@@ -274,11 +271,10 @@ class ChatUI:
         """Match the navigation/status area to Chat without moving its menu."""
         if not self.routes.apple:
             return
-        from logisticsmobile.appearance import apple_color
         from rubicon.objc import ObjCClass
-        surface(self.routes.roots['chat'], radius=0, background='chat_background', outlined=False)
+        self.presentation.surface(self.routes.roots['chat'], radius=0, background='chat_background', outlined=False)
         navigation = self.native_host.adapter.navigation[self.native_host.destinations.index('chat')]
-        color = apple_color('chat_background')
+        color = self.presentation.apple_color('chat_background')
         navigation.view.backgroundColor = color
         bar = navigation.navigationBar
         if not hasattr(self, 'chat_bar_appearance'):
@@ -289,7 +285,7 @@ class ChatUI:
         bar.standardAppearance = self.chat_bar_appearance
         bar.scrollEdgeAppearance = self.chat_bar_appearance
         bar.compactAppearance = self.chat_bar_appearance
-        bar.tintColor = apple_color('text')
+        bar.tintColor = self.presentation.apple_color('text')
 
     def set_chat_status(self, value):
         for status, box in ((self.chat_status, self.chat_status_box),
@@ -365,7 +361,7 @@ class ChatUI:
             current = self.chat_current is not None and self.chat_current['id'] == key
             button = list_button(toga.Button(label, on_press=select,
                 enabled=not self.chat_busy, style=Pack(height=56, margin_bottom=8, font_size=17)))
-            surface(button, radius=16, background='chat_selected' if current else 'chat_background',
+            self.presentation.surface(button, radius=16, background='chat_selected' if current else 'chat_background',
                     foreground='text', outlined=False)
             backend = type(button._impl).__module__
             if backend.startswith('toga_iOS.'):
@@ -491,9 +487,9 @@ class ChatUI:
                         self.chat_new, self.chat_header_new, self.chat_refresh, self.chat_export, self.chat_actions_button,
                         self.chat_context, self.chat_max_tokens):
             control.enabled = not busy
-        apply_icon(self.chat_send, 'stop' if self.chat_generating else 'up',
+        self.presentation.apply_icon(self.chat_send, 'stop' if self.chat_generating else 'up',
                    'Stop' if self.chat_generating else 'Send')
-        surface(self.chat_send, radius=24, background='chat_primary', foreground='chat_on_primary', outlined=False)
+        self.presentation.surface(self.chat_send, radius=24, background='chat_primary', foreground='chat_on_primary', outlined=False)
         self.update_chat_readiness()
         for control in self.chat_conversation_buttons:
             control.enabled = not busy
@@ -625,12 +621,11 @@ class ChatUI:
         self.set_chat_status('Stopping…')
 
     async def export_chat(self, widget=None, **kwargs):
-        from logisticsmobile.pickers import export_document
         if self.chat_busy or self.chat_current is None:
             return
         try:
             content = export_chat(self.chat_current).encode('utf-8')
-            done = await export_document(self, 'Conversation.md', content)
+            done = await self.presentation.export_document(self, 'Conversation.md', content)
             self.set_chat_status('Conversation exported.' if done else 'Export cancelled.')
         except Exception as error:
             self.set_chat_status('Export failed: ' + str(error)[:400])

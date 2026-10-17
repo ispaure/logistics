@@ -14,3 +14,18 @@ def rclone_host_ui(app):
     from logisticsmobile.appearance import accessible_name
     from logisticsmobile.files_ui import local_read_available
     return MobileHostUI(icon_button=icon_button, NativeBrowser=NativeBrowser, FeatureCommands=lambda button, owner, *args, **kwargs: FeatureCommands(button, app, *args, **kwargs), private_label=private_label, visible_remotes=visible_remotes, exclusions=exclusions, pick_document=lambda owner: pickers.pick_document(app), ResourceImports=ResourceImports, export_file=lambda owner, selected: pickers.export_file(app, selected), accessible_name=accessible_name, local_read_available=lambda owner, **kwargs: local_read_available(app, **kwargs))
+
+
+def mobile_presentation(app):
+    from services.mobile_presentation import MobilePresentation
+    from logisticsmobile.control_icons import icon_button
+    from logisticsmobile.control_icons import apply_icon
+    from logisticsmobile.appearance import action_button
+    from logisticsmobile.action_menu import ActionMenu
+    from logisticsmobile.appearance import surface
+    from logisticsmobile.appearance import apple_color
+    from logisticsmobile.workspace_navigation import menu_button
+    from logisticsmobile.pickers import export_document
+    from logisticsmobile.preview import markdown_preview
+    from logisticsmobile.palette import css_variables
+    return MobilePresentation(icon_button=icon_button, apply_icon=apply_icon, action_button=action_button, ActionMenu=ActionMenu, surface=surface, apple_color=apple_color, menu_button=menu_button, export_document=lambda owner, *args, **kwargs: export_document(app, *args, **kwargs), markdown_preview=markdown_preview, css_variables=css_variables)

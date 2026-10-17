@@ -1,7 +1,7 @@
 """Palette readability and matching offline document surfaces."""
 import unittest
 from logisticsmobile.appearance import contrast_ratio
-from logisticsmobile.palette import LIGHT, DARK, argb, themed_chapter
+from logisticsmobile.palette import LIGHT, DARK, argb, themed_chapter, css_variables
 from logisticsmobile.preview import markdown_preview
 from features.lm.mobile.presentation import transcript_document
 
@@ -84,7 +84,7 @@ class AppearanceTests(unittest.TestCase):
             self.assertGreaterEqual(contrast_ratio(argb(palette['accent']), argb(palette['surface'])), 4.5)
 
     def test_preview_and_chat_follow_the_same_system_palette(self):
-        for html, background in ((markdown_preview('# Notes'), 'surface'), (transcript_document(), 'chat_background')):
+        for html, background in ((markdown_preview('# Notes'), 'surface'), (transcript_document(theme_css=css_variables()), 'chat_background')):
             self.assertIn('@media(prefers-color-scheme:dark)', html)
             for palette in (LIGHT, DARK):
                 for role, color in palette.items():
@@ -92,7 +92,7 @@ class AppearanceTests(unittest.TestCase):
             self.assertIn(f'background:var(--{background})', html)
 
     def test_chat_canvas_tracks_system_light_and_dark_themes(self):
-        html = transcript_document()
+        html = transcript_document(theme_css=css_variables())
         self.assertEqual(LIGHT['chat_background'], '#ffffff')
         self.assertEqual(DARK['chat_background'], '#000000')
         self.assertIn('html { min-height:100%; background:var(--chat_background) }', html)

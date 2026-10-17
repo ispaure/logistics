@@ -20,3 +20,4 @@ class ChatController(ChatUI):
     private_root = HostAttribute('private_root')
     routes = HostAttribute('routes')
     show_view = HostAttribute('show_view')
+    presentation = HostAttribute('presentation')

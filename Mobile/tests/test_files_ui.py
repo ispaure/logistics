@@ -131,7 +131,7 @@ class FileUITests(unittest.TestCase):
                 previous = (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None)
                 app.loop.run_until_complete(app.show_crypt_save_as())
                 app.save_as_name.value = 'published-but-not-reopened.md'
-                with patch('logisticsmobile.text_resources.LocalTextCopies.open', side_effect=OSError('injected reopen failure')):
+                with patch('features.text_editor.resources.LocalTextCopies.open', side_effect=OSError('injected reopen failure')):
                     app.loop.run_until_complete(app.save_text_destination())
                 self.assertEqual((root / 'published-but-not-reopened.md').read_text(), 'keep this draft when reopening fails')
                 self.assertIs((app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None), previous)
@@ -139,7 +139,7 @@ class FileUITests(unittest.TestCase):
                 self.assertIsNotNone(app.save_as_data)
                 self.assertIn('was saved', app.save_as_status.value)
                 app.save_as_name.value = 'changed-before-reopen.md'
-                from logisticsmobile.text_resources import LocalTextCopies
+                from features.text_editor.resources import LocalTextCopies
                 original_open = LocalTextCopies.open
                 def changed_open(copies, key, **kwargs):
                     (copies.provider.root / key).write_text('external replacement')

@@ -4,8 +4,7 @@ import json
 import math
 import unicodedata
 
-from logisticsmobile.preview import markdown_body
-from logisticsmobile.palette import css_variables
+from commonUtils.ui.native.markdown_preview import markdown_body
 
 
 def composer_height(text, width, font_size=16):
@@ -36,13 +35,13 @@ def transcript_entries(messages, previous=()):
     return entries
 
 
-def transcript_document():
+def transcript_document(*, theme_css=""):
     """Only trusted app code is evaluated later; message HTML is always inert."""
     return '''<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <style>
-''' + css_variables() + '''
+''' + theme_css + '''
 :root { --ink:var(--text); --user:var(--chat_bubble); --line:var(--border) }
 html { min-height:100%; background:var(--chat_background) }
 body::before { content:""; position:fixed; top:0; left:0; right:0; height:40px; z-index:10;

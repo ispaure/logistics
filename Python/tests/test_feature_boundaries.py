@@ -11,7 +11,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class FeatureBoundaryTests(unittest.TestCase):
     def test_rclone_mobile_does_not_import_the_application_host(self):
-        for path in (ROOT / 'Python/features/rclone/mobile').rglob('*.py'):
+        paths = [path for owner in ('rclone', 'lm', 'text_editor')
+                 for path in (ROOT / 'Python/features' / owner / 'mobile').rglob('*.py')]
+        for path in paths:
             tree = ast.parse(path.read_text())
             for node in ast.walk(tree):
                 names = ([node.module or ''] if isinstance(node, ast.ImportFrom) else

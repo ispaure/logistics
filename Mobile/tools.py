@@ -8,10 +8,11 @@ from pathlib import Path
 import shutil
 import subprocess
 
-APP_MODULES = ('ios_reader_chrome.py', 'ios_storage.py', 'keyboard.py', 'fold_layout.py', 'storage_ui.py', 'settings_ui.py', 'documentation_ui.py', 'saved_files_ui.py', 'screen_privacy.py', 'palette.py', 'workspace_navigation.py', 'document_choices.py', 'comic_layout_check.py', 'appearance.py', 'provider_ui.py', 'text_resources.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'recent_documents.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
+APP_MODULES = ('ios_reader_chrome.py', 'ios_storage.py', 'keyboard.py', 'fold_layout.py', 'storage_ui.py', 'settings_ui.py', 'documentation_ui.py', 'saved_files_ui.py', 'screen_privacy.py', 'palette.py', 'workspace_navigation.py', 'document_choices.py', 'comic_layout_check.py', 'appearance.py', 'provider_ui.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'recent_documents.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
                'hub_ui.py', 'control_icons.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'local_sources.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library_edits.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
                'chat_fixture.py', 'resource_imports.py', 'files_ui.py', 'editor_picker.py', 'host_services.py', 'feature_hosts.py', 'folder_controller.py', 'hub_controller.py', 'locations_controller.py', 'storage_controller.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
+    'features/text_editor/__init__.py', 'features/text_editor/mobile/__init__.py', 'features/text_editor/mobile/ui.py', 'features/text_editor/resources.py', 'features/text_editor/names.py', 'services/mobile_presentation.py',
     'features/lm/mobile/controller.py', 'features/rclone/mobile/controller.py', 'features/rclone/mobile/transfer_controller.py', 'services/workflow_host.py',
     'services/document_readers.py', 'services/archive_access.py', 'services/document_limits.py', 'features/rclone/mobile/host.py',
     'features/lm/mobile/storage.py', 'features/lm/mobile/transport.py', 'features/lm/mobile/ui.py', 'features/lm/mobile/presentation.py', 'features/lm/mobile/__init__.py',
