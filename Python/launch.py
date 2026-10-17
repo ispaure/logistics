@@ -7,7 +7,7 @@ from commonUtils.ui.appearance.styling import apply_styling
 from features.settings import initialize_settings
 from features import registry
 from ui_new.main_window import MainWindow
-from services.indexing import IndexService
+from services.folders.ui.indexing import IndexService
 
 
 def main() -> int:

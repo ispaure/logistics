@@ -26,7 +26,7 @@ def load_source_modules(repo):
             raise ValueError('Invalid mobile source manifest: ' + owner)
         selected = []
         for name in data['modules']:
-            if (not isinstance(name, str) or not name or '\\' in name
+            if (not isinstance(name, str) or not name or '\\' in name or ':' in name
                     or Path(name).is_absolute() or '..' in Path(name).parts
                     or Path(name).as_posix() != name or Path(name).suffix not in {'.py', '.java'}):
                 raise ValueError('Invalid mobile source path in ' + owner)
@@ -83,7 +83,8 @@ def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, doc
                 if (isinstance(node.test, ast.Name) and node.test.id == 'TYPE_CHECKING'
                         or isinstance(node.test, ast.Attribute) and node.test.attr == 'TYPE_CHECKING'
                         and isinstance(node.test.value, ast.Name) and node.test.value.id == 'typing'):
-                    return [self.visit(child) for child in node.orelse]
+                    alternative = ast.Module(body=node.orelse, type_ignores=[])
+                    return self.generic_visit(alternative).body
                 return self.generic_visit(node)
         tree = RuntimeImports().visit(tree)
         for node in ast.walk(tree):

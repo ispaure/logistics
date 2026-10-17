@@ -270,7 +270,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
             b'[LogisticsComics]\nlibraries=Comics\n'[::-1])
         logical = 'Collection/Comics/note.md'
         provider._physical(logical).write_bytes(b'# Offline note'[::-1])
-        cancel = app._crypt_cancel = Event()
+        cancel = app.transfer_controller()._transfer_cancel = Event()
         app.cloud_busy = app.transfer_busy = True
         drawer = self.navigation.browser('documents')
         async def exercise():
@@ -292,7 +292,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.assertEqual(drawer.folder, 'Collection/Comics')
             self.assertTrue(drawer.provider.private)
             self.assertTrue(app.cloud_busy and app.transfer_busy)
-            self.assertIs(app._crypt_cancel, cancel)
+            self.assertIs(app.transfer_controller()._transfer_cancel, cancel)
             self.assertFalse(cancel.is_set())
             client.generation += 1
             with patch.object(app, 'open_crypt', new=AsyncMock()) as opened:
@@ -305,7 +305,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
             app.loop.run_until_complete(exercise())
         finally:
             app.cloud_busy = app.transfer_busy = False
-            app._crypt_cancel = None
+            app.transfer_controller()._transfer_cancel = None
 
     def test_documents_menu_recent_reopens_closed_file_and_browse_uses_main_area(self):
         app = self.app

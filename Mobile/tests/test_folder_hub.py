@@ -408,7 +408,7 @@ class FolderHubTests(unittest.TestCase):
                 self.assertTrue(all(not button.enabled for button, idle in app.folder_action_controls if idle))
                 app.loop.run_until_complete(app.folder_browse_button.on_press())
                 self.assertEqual(app.file_path, local['target'])
-                cancel = app._crypt_cancel
+                cancel = app.transfer_controller()._transfer_cancel
                 app.show_locations()
                 app.choose_folder('Secret')
                 self.assertTrue(app.folder_browse_button.enabled)
@@ -419,7 +419,7 @@ class FolderHubTests(unittest.TestCase):
                 app.loop.run_until_complete(app.read_managed_file())
                 self.assertEqual(app.private_sessions.active.crypt_text.value, '# Read while pulling')
                 self.assertTrue(app.cloud_busy and app.transfer_busy)
-                self.assertIs(app._crypt_cancel, cancel)
+                self.assertIs(app.transfer_controller()._transfer_cancel, cancel)
                 app.transfer_busy = False
                 app.set_cloud_busy(False)
                 self.assertTrue(app.folder_browse_button.enabled)

@@ -32,7 +32,7 @@ async def exercise_mirrors(app, comic_key):
             local = app.private_root / 'LocalFiles' / 'Browse during pull'
             local.mkdir(parents=True, exist_ok=True)
             (local / 'Local note.txt').write_text('Unrelated local file')
-            cancel = app._crypt_cancel
+            cancel = app.transfer_controller()._transfer_cancel
             app.show_locations()
             assert 'Browse during pull' in app.folder_picker_choices
             assert 'Fixture' in app.folder_picker_choices
@@ -42,12 +42,12 @@ async def exercise_mirrors(app, comic_key):
             app.show_locations()
             await app.folder_buttons['Browse during pull'].on_press()
             assert app.file_path == 'Browse during pull'
-            assert app._crypt_cancel is cancel
+            assert app.transfer_controller()._transfer_cancel is cancel
             assert await app.browser_file_location(('Local files', 'Browse during pull'))
             assert any(item.label == 'Local note.txt' for item in app.file_browser.entries)
             await app.parent_file_folder()
             assert app.file_path == ''
-            assert app.cloud_busy and app.transfer_busy and app._crypt_cancel is cancel
+            assert app.cloud_busy and app.transfer_busy and app.transfer_controller()._transfer_cancel is cancel
             assert not cancel.is_set()
             import base64
             from zipfile import ZipFile
@@ -63,7 +63,7 @@ async def exercise_mirrors(app, comic_key):
                 browser = app.file_browser
                 entry = next(item for item in browser.entries if item.label == name)
                 await browser._select_pressed(entry, browser.buttons[entry.identity])
-                assert app.cloud_busy and app.transfer_busy and app._crypt_cancel is cancel, app.transfer_message
+                assert app.cloud_busy and app.transfer_busy and app.transfer_controller()._transfer_cancel is cancel, app.transfer_message
                 assert not cancel.is_set()
             await tap('Local note.txt')
             local_editor = app.private_sessions.active
@@ -86,7 +86,7 @@ async def exercise_mirrors(app, comic_key):
             assert (local / 'Local note.txt').read_text() == 'Unrelated local file'
             # Close the synthetic draft to keep later crypt fixtures isolated.
             assert app.private_sessions.close(local_editor.session.id, discard=True)
-            assert app._crypt_cancel is cancel
+            assert app.transfer_controller()._transfer_cancel is cancel
             app.show_documents()
             app.editor.value = 'Ordinary draft during a native pull\n'
             assert app.checkpoint()
@@ -244,14 +244,14 @@ async def exercise_crypt_mirror(app, fixture):
                         break
                 else:
                     raise AssertionError('Throttled native download did not report live progress')
-                cancel = app._crypt_cancel
+                cancel = app.transfer_controller()._transfer_cancel
                 started_at = monotonic()
                 print('LOGISTICS_NATIVE_TRANSFER_ROUTE=' + route.__name__, flush=True)
                 await route()
                 print('LOGISTICS_NATIVE_TRANSFER_ROUTE_SECONDS=' + str(round(monotonic() - started_at, 3)), flush=True)
                 assert app.private_sessions.active.crypt_reader.text == expected
                 assert not task.done(), route.__name__ + ' waited for the download'
-                assert app.cloud_busy and app.transfer_busy and app._crypt_cancel is cancel
+                assert app.cloud_busy and app.transfer_busy and app.transfer_controller()._transfer_cancel is cancel
                 assert not cancel.is_set()
                 assert not await app.run_mirror_work(lambda *args: (_ for _ in ()).throw(
                     AssertionError('A second transfer was started')), 'pull')

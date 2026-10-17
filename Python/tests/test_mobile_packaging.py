@@ -118,7 +118,7 @@ assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile', 'config')) 
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(json.dumps(dict(schema=1, modules=[])))
             target = repo / 'Python/features/books/mobile_sources.json'
-            for modules in (['../outside.py'], ['/outside.py'], ['a.py', 'a.py'], ['a\\b.py'], ['a.txt']):
+            for modules in (['../outside.py'], ['/outside.py'], ['C:/outside.py'], ['C:outside.py'], ['a.py', 'a.py'], ['a\\b.py'], ['a.txt']):
                 target.write_text(json.dumps(dict(schema=1, modules=modules)))
                 with self.subTest(modules=modules), self.assertRaises(ValueError):
                     mobile_tools.load_source_modules(repo)

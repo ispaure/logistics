@@ -157,7 +157,8 @@ class MobileWorkflowTests(unittest.TestCase):
                     if started.is_set(): break
                     await asyncio.sleep(.01)
                 self.assertTrue(started.is_set())
-                cancel = app._crypt_cancel
+                cancel = app.transfer_controller()._transfer_cancel
+                file_cancel = app._crypt_cancel
                 self.assertTrue(app.cloud_busy and app.transfer_busy)
                 await app.show_local_location()
                 self.assertEqual(app.native_host.state.destination, 'files')
@@ -168,7 +169,7 @@ class MobileWorkflowTests(unittest.TestCase):
                 # Re-enter through the existing view, not just first creation.
                 await app.show_local_location()
                 self.assertTrue(await app.browser_file_location(('Local files', 'Reference')))
-                self.assertIs(app._crypt_cancel, cancel)
+                self.assertIs(app.transfer_controller()._transfer_cancel, cancel)
                 self.assertFalse(cancel.is_set())
                 self.assertTrue(app.cloud_busy and app.transfer_busy)
                 self.assertFalse(app.cloud_remote.enabled)
@@ -180,8 +181,9 @@ class MobileWorkflowTests(unittest.TestCase):
                     browser = app.file_browser
                     entry = next(item for item in browser.entries if item.label == name)
                     await browser._select_pressed(entry, browser.buttons[entry.identity])
-                    self.assertIs(app._crypt_cancel, cancel, app.transfer_message)
+                    self.assertIs(app.transfer_controller()._transfer_cancel, cancel, app.transfer_message)
                     self.assertFalse(cancel.is_set())
+                    self.assertIs(app._crypt_cancel, file_cancel)
                     self.assertTrue(app.cloud_busy and app.transfer_busy)
                 await tap('Notes.md')
                 text_owner = app.private_sessions.active

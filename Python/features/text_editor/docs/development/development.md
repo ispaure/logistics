@@ -13,14 +13,14 @@ contributions while retaining open documents for re-enablement.
 
 | Module | Responsibility |
 | --- | --- |
-| `contributions.py`, `page.py` | Lazy feature registration, entry point and browser integration |
-| `service.py` | Per-document window ownership and browser save notifications |
-| `window.py` | Single-document presentation, menus, status and close lifecycle |
-| `document.py` | Per-document snapshot, encoding and editing metadata |
-| `file_operations.py` | Queued background loads/saves, conflicts and disk notifications |
-| `editing.py` | Application commands, nonmodal search integration and status controls |
-| `session.py`, `commands.py` | Private recovery checkpoints, safe session restore, command discovery and shortcuts |
-| `syntax_settings.py`, `preferences.py` | Language selection and existing INI-based preferences |
+| `contributions.py`, `ui/page.py` | Lazy feature registration, entry point and browser integration |
+| `ui/service.py` | Per-document window ownership and browser save notifications |
+| `ui/window.py` | Single-document presentation, menus, status and close lifecycle |
+| `ui/document.py` | Per-document snapshot, encoding and editing metadata |
+| `ui/file_operations.py` | Queued background loads/saves, conflicts and disk notifications |
+| `ui/editing.py` | Application commands, nonmodal search integration and status controls |
+| `ui/session.py`, `ui/commands.py` | Private recovery checkpoints, safe session restore, command discovery and shortcuts |
+| `ui/syntax_settings.py`, `preferences.py` | Language selection and existing INI-based preferences |
 
 The shared dock workspace owns document tabs, splitting and detachment. Editors
 have no nested tab bar. File → New opens another document pane; opening a file

@@ -59,7 +59,7 @@ DocumentStore UUIDs, recovery records, encodings and conflict checks remain the
 owners of text bytes; legacy last-document selection migrates when no workspace
 selection exists.
 
-`editors.py` owns a native editor per text session. Change callbacks capture that
+`features/text_editor/mobile/ui.py` owns a native editor per text session. Change callbacks capture that
 owner rather than the app's current selection. The app retains compatibility
 aliases for existing feature controllers. Asynchronous import/export captures its
 origin and rejects UI completion after that session closes; a background import
@@ -299,18 +299,18 @@ waiting for that separate pipeline.
 
 ## Phase 3 chat contracts
 
-`chat.py` uses the existing `features.lm.domain` conversation schema, validation and
+`features/lm/mobile/storage.py` uses the existing `features.lm.domain` conversation schema, validation and
 whole-turn request budgeting, with a mobile-owned bounded private store. Desktop
 QLockFile/Qt storage and transport are not imported. Optimistic revision/snapshot
 checks reject stale saves; valid recovered streaming messages become interrupted.
-The profile schema deliberately excludes API keys. `chat_transport.py` uses
+The profile schema deliberately excludes API keys. `features/lm/mobile/transport.py` uses
 HTTPConnection/HTTPSConnection with default certificate verification, no redirects,
 bounded JSON/SSE, explicit socket cancellation and no model tool execution.
 An owned background reader isolates file-backed HTTP reads. Cancellation is
 checked every 100 ms by the consumer even when Windows does not wake a blocked
 read after socket shutdown. The reader closes its own response and retains the
 15-second socket timeout; it cannot publish further fragments after cancellation.
-`chat_ui.py` owns native controls, explicit connection/model actions, draft and
+`features/lm/mobile/ui.py` owns native controls, explicit connection/model actions, draft and
 partial-response checkpoints, and retained failure/cancelled states. HTTP remains
 available for existing LAN servers and is labelled as unencrypted in the guide.
 No external server is contacted in tests: `chat_fixture.py` binds loopback only

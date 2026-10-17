@@ -46,3 +46,14 @@ class WorkflowOwnershipTests(unittest.TestCase):
         self.assertFalse(file_cancel.is_set())
         app.cancel_cloud()
         self.assertTrue(file_cancel.is_set())
+
+    def test_global_cancel_closes_an_active_transfer_review(self):
+        app = self.app
+        app.cloud_client = None
+        owner = app.transfer_controller()
+        owner._transfer_cancel = Event()
+        retired = []
+        owner._cancel_transfer_review = lambda: retired.append(True)
+        app.cancel_cloud()
+        self.assertEqual(retired, [True])
+        self.assertTrue(owner._transfer_cancel.is_set())

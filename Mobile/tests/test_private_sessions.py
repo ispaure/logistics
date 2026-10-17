@@ -227,7 +227,7 @@ class PrivateSessionTests(unittest.TestCase):
         from threading import Event
         owner = self.open('Local.md')
         transfer = Event()
-        self.app._crypt_cancel = transfer
+        self.app.transfer_controller()._transfer_cancel = transfer
         owner._crypt_cancel = Event()
         owner.set_cloud_busy(True)
         self.assertTrue(owner.cloud_busy)
@@ -236,7 +236,7 @@ class PrivateSessionTests(unittest.TestCase):
         owner.cancel_cloud()
         self.assertTrue(owner._crypt_cancel.is_set())
         self.assertFalse(transfer.is_set())
-        self.assertIs(self.app._crypt_cancel, transfer)
+        self.assertIs(self.app.transfer_controller()._transfer_cancel, transfer)
         self.assertFalse(hasattr(self.app, 'crypt_text'))
         self.assertFalse(hasattr(owner, 'undefined_host_service'))
         owner._crypt_cancel = None

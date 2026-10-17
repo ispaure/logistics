@@ -904,6 +904,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             picker.cancel()
         transfer = getattr(self, '_transfer_controller', None)
         if transfer is not None:
+            review = getattr(transfer, '_cancel_transfer_review', None)
+            if review is not None:
+                review()
             cancelled = getattr(transfer, '_transfer_cancel', None)
             if cancelled is not None:
                 cancelled.set()

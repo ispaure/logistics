@@ -2,12 +2,12 @@
 
 [User guide](../user/user.md) · [Architecture](ide.md)
 
-`projects.py` owns the versioned registration store. `page.py` manages project
-settings and retained tabs. `workspace.py` owns canonical document paths, groups,
-workers, close decisions and restoration. `browser.py` wraps the shared lazy
-filesystem model. `documents.py` owns shared text buffers and independent CodeEdit views;
-`navigation.py` presents `analysis.py`'s background Jedi and bounded scan results.
-No IDE import depends on the standalone Text Editor. `git_status.py` optionally
+`projects.py` owns the versioned registration store. `ui/page.py` manages project
+settings and retained tabs. `ui/workspace.py` owns canonical document paths, groups,
+workers, close decisions and restoration. `ui/browser.py` wraps the shared lazy
+filesystem model. `ui/documents.py` owns shared text buffers and independent CodeEdit views;
+`ui/navigation.py` presents `analysis.py`'s background Jedi and bounded scan results.
+No IDE import depends on the standalone Text Editor. `ui/git_status.py` optionally
 uses the Git backend for read-only project-tree colors independently of Git UI
 activation or repository registration.
 
