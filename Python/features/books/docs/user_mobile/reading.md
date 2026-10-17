@@ -55,7 +55,8 @@ is read on its own; with no selection, reading starts at the current passage and
 continues through this chapter. The current sentence or bounded passage is
 highlighted and brought into view. **Pause** stops at the current utterance;
 **Resume** repeats that sentence/passage. **Stop** ends reading. Playback uses icon buttons with accessible names. The
-back/forward **15** controls jump approximately 15 seconds within the current
+back/forward **15** controls use the same circular-arrow design as desktop and
+jump approximately 15 seconds within the current
 passage, accounting for the selected speed. System speech has no recorded
 timeline, so skips estimate distance at 180 words per minute at normal speed.
 Skipping while paused keeps playback paused. Closing the speech
