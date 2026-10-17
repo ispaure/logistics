@@ -7,12 +7,12 @@ See the [user guide](../user/user.md) for controls and recovery.
 
 ## Owners and contracts
 
-- `releases.py` discovers layered `config-<major.minor.patch>.ini` files and selects
+- `installation/releases.py` discovers layered `config-<major.minor.patch>.ini` files and selects
   exact version/platform builds. The filename owns the version and platform sections
   own the build identity. Explicit legacy-file callers remain supported. `Release` validates paths and delegates HTTPS/digest
   validation to the shared `DownloadSpec`. SHA-256 values are pinned from Blender's
   official release checksum files, independently for each package.
-- `install.py` uses commonUtils `provision()` to download and verify the entire
+- `installation/install.py` uses commonUtils `provision()` to download and verify the entire
   archive (`installed_sha256` equals its package hash). Feature adapters extract
   ZIP/TAR bundles or mount/copy/detach DMGs. The existing commonUtils DMG helper
   informed the mount/copy lifecycle; this adapter uses plist mount discovery,
@@ -27,13 +27,13 @@ See the [user guide](../user/user.md) for controls and recovery.
   Python 3.12's data filter to preserve safe internal links and reject escapes/devices.
   Cancellation checks surround download, extraction members and final publication.
   Native DMG operations have finite timeouts and cleanup runs before retirement.
-- `manager.py` derives the per-user root from Logistics' existing preference path
+- `presets/manager.py` derives the per-user root from Logistics' existing preference path
   helper, without changing global resource defaults. Installations and presets are
   version-separated. Preset duplication stages independent copies; environment
   overrides explicitly select config, scripts, extensions and datafiles in the child.
   Launched instances are tracked for local mutation guards and continue independently
   after Logistics closes. Instances started elsewhere are not tracked.
-- `addons.py` reads legacy AST metadata and modern TOML manifests without imports.
+- `addons/scanning.py` reads legacy AST metadata and modern TOML manifests without imports.
   Inventory, ZIP inspection and installed Blue Hole fallback share the metadata
   parser. It silences only invalid-escape SyntaxWarnings from third-party source
   during AST parsing; syntax errors retain the source filename and application
@@ -43,7 +43,7 @@ See the [user guide](../user/user.md) for controls and recovery.
   The subprocess runs offline with blend-file autoexecution disabled, but normal
   enabled-addon startup still occurs. It never saves preferences. Cancellation or
   timeout kills/reaps the child; failures retain filesystem rows with unknown state.
-- `library.py` owns the versioned private ZIP library and preset selection JSON.
+- `addons/library.py` owns the versioned private ZIP library and preset selection JSON.
   Legacy module names and extension IDs are distinct identities. Literal AST/TOML
   metadata supplies release versions, inclusive minima, exclusive extension maxima
   and platform limits. Resolution selects the highest numeric compatible version.
@@ -63,7 +63,7 @@ See the [user guide](../user/user.md) for controls and recovery.
   `idle` fires only after the worker retires. Preset selection uses filesystem metadata;
   the explicit Refresh action queries Blender. The core rail owns its Blender glyph.
 - `ui/layout.py` builds management widgets; the page retains operation and close
-  ownership. `ui/library_page.py` owns the read-only addon catalog. Registration
+  ownership. `addons/ui/page.py` owns the read-only addon catalog. Registration
   and personal settings import these owners lazily. Root `page.py` and
   `library_page.py` remain compatibility imports. Backend managers, installation,
   addon resolution and saved configuration paths are unchanged.
@@ -172,7 +172,7 @@ The navigation page retains launch cards and Settings shortcuts. Both surfaces s
 and name to the retained settings panel. Selection saves persist intent without
 provisioning; launch preparation applies it through the existing worker/rollback path.
 
-`bluehole.py` is deliberately specific to ispaure/BlueHole: allowlisted main/beta/alpha
+`addons/bluehole.py` is deliberately specific to ispaure/BlueHole: allowlisted main/beta/alpha
 channels resolve to versioned branches through GitHub's branch API, and commit-pinned codeload ZIPs are
 normalized to the stable BlueHole module. The private cache is
 `addons/bluehole/<branch>/<commit>/addon.zip`; regular numeric library resolution
@@ -234,7 +234,7 @@ refused; nested user links are retained without copying their targets.
 ### Grouped addon library settings
 
 Personal feature settings have three tabs: Presets, Versions Definitions, and
-Addon Library. `ui/library_page.py` owns a read-only catalog of shared packages,
+Addon Library. `addons/ui/page.py` owns a read-only catalog of shared packages,
 grouped by stable identity, collapsed initially, with versions and dated revisions
 newest first. ZIP import is a preset-page operation, using its cancellable worker
 and close lifecycle. Import completion refreshes choices without changing saved

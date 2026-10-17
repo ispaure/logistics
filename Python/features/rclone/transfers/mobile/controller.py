@@ -9,6 +9,8 @@ class TransferController(MirrorUI):
 
     def __init__(self, app):
         self.app = app
+        self._transfer_cancel = None
+        self._cancel_transfer_review = None
 
     active_host = HostAttribute('active_host')
     browser_file_location = HostAttribute('browser_file_location')

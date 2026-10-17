@@ -173,7 +173,7 @@ records; arbitrary Markdown resources remain blocked.
 
 ## Mobile ownership
 
-`mobile/storage.py`, `mobile/transport.py`, `mobile/presentation.py` and `mobile/ui.py` own mobile chat. The mobile host composes the view and supplies application presentation utilities. `streaming.py` owns portable desktop SSE decoding; Qt networking stays in `transport.py`. Mobile transport retains its stricter bounded text-only protocol.
+`mobile/storage.py`, `mobile/transport.py`, `mobile/presentation.py` and `mobile/ui.py` own mobile chat. The mobile host composes the view and supplies application presentation utilities. `streaming.py` owns SSE decoding shared by both transports; Qt networking stays in `transport.py`. Mobile retains its one-choice, text-only, 64 KiB event, 256 KiB response and timeout/cancellation limits.
 
 ## Mobile source manifest
 

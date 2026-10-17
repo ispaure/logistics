@@ -5,8 +5,9 @@ from .domain import MAX_TEXT
 
 class StreamDecoder:
     """SSE framing accepts arbitrary UTF-8/network boundaries and CRLF lines."""
-    def __init__(self, *, allow_tools=False):
+    def __init__(self, *, allow_tools=False, max_choices=None):
         self.allow_tools = allow_tools
+        self.max_choices = max_choices
         self.tool_calls = {}
         self.buffer = b''
         self.lines = []
@@ -43,13 +44,17 @@ class StreamDecoder:
                 choices = event.get('choices', [])
                 if not isinstance(choices, list):
                     raise ValueError('Invalid response choices.')
+                if self.max_choices is not None and len(choices) > self.max_choices:
+                    raise ValueError('Only one text response is supported.')
                 if not choices:
                     continue
                 choice = choices[0]
+                if not isinstance(choice, dict):
+                    raise ValueError('Invalid response choice.')
                 delta = choice.get('delta', {})
                 if not isinstance(delta, dict):
                     raise ValueError('Invalid response delta.')
-                if delta.get('tool_calls') or choice.get('finish_reason') in ('tool_calls', 'function_call'):
+                if delta.get('tool_calls') or delta.get('function_call') or choice.get('finish_reason') in ('tool_calls', 'function_call'):
                     if not self.allow_tools:
                         raise ValueError('This chat client does not execute model tools.')
                     for fragment in delta.get('tool_calls', []):

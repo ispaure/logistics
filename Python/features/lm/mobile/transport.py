@@ -8,6 +8,7 @@ import time
 from urllib.parse import quote, urlsplit
 
 from features.lm.domain import base_url
+from features.lm.streaming import StreamDecoder
 
 MAX_REPLY = 256 * 1024
 
@@ -151,7 +152,7 @@ class ChatClient:
 
     def _stream(self, payload, fragment):
         connection, response = self.request('chat/completions', payload)
-        text, finished, reason = '', False, ''
+        decoder = StreamDecoder(max_choices=1)
         deadline = time.monotonic() + 600
         try:
             while True:
@@ -167,40 +168,18 @@ class ChatClient:
                 line = line.decode('utf-8').strip()
                 if not line.startswith('data:'):
                     continue
-                value = line[5:].strip()
-                if value == '[DONE]':
-                    finished = True
-                    break
-                packet = json.loads(value)
-                if not isinstance(packet, dict) or 'error' in packet:
-                    raise ValueError('Server returned an invalid/error event.')
-                choices = packet.get('choices', [])
-                if not isinstance(choices, list) or len(choices) > 1:
-                    raise ValueError('Only one text response is supported.')
-                if not choices:
-                    continue  # Optional usage-only event.
-                choice = choices[0]
-                if not isinstance(choice, dict):
-                    raise ValueError('Invalid response choice.')
-                delta = choice.get('delta', {})
-                if not isinstance(delta, dict) or delta.get('tool_calls') or delta.get('function_call'):
-                    raise ValueError('Mobile chat does not execute model tools.')
-                content = delta.get('content') or ''
-                if not isinstance(content, str):
-                    raise ValueError('Only text model replies are supported.')
-                text += content
-                if len(text.encode('utf-8')) > MAX_REPLY:
+                # Preserve the mobile line-event contract while sharing event
+                # validation and response state with desktop SSE decoding.
+                content = decoder.feed((line + '\n\n').encode('utf-8'))
+                if len(decoder.text.encode('utf-8')) > MAX_REPLY:
                     raise ValueError('Reply exceeds the mobile 256 KiB limit.')
                 if content:
                     fragment(content)
-                if choice.get('finish_reason') is not None:
-                    reason = choice['finish_reason']
-                    if reason == 'tool_calls':
-                        raise ValueError('Mobile chat does not execute model tools.')
-                    finished = True
-            if not finished:
+                if decoder.done:
+                    break
+            if not (decoder.done or decoder.finished):
                 raise ValueError('Connection ended before a complete reply; partial text was preserved.')
-            return reason
+            return decoder.finish_reason or ''
         except Exception:
             self.check()
             raise

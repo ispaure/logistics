@@ -3,14 +3,14 @@
 For workflows, settings and troubleshooting, see the [user guide](../user/user.md).
 
 rclone owns credential loading, remote folder sources and explicit-config push/pull.
-`transfer_options.py` owns portable option validation and CLI/embedded option
+`transfers/transfer_options.py` owns portable option validation and CLI/embedded option
 encoding. Desktop and mobile both consume it; importing portable modules does not
 initialize either UI, desktop configuration or credential state.
-`review.py` owns the shared memory-only review state, partial/completed results,
-comparison cancellation and stale-review comparison. `review_cli.py` is the
-desktop read-only rclone adapter; `ui/review.py` presents it, and `workflow.py`
+`transfers/review.py` owns the shared memory-only review state, partial/completed results,
+comparison cancellation and stale-review comparison. `transfers/review_cli.py` is the
+desktop read-only rclone adapter; `ui/review.py` presents it, and `transfers/workflow.py`
 keeps approved execution routed through the existing mandatory sync preflight.
-Mobile uses the same review state with `mobile/transfer_review_ui.py`
+Mobile uses the same review state with `transfers/mobile/review_ui.py`
 and the embedded `mirror_review` adapter. Programmatic synchronization APIs retain
 their explicit low-level execution behavior; user-facing Push/Pull always reviews.
 It has no hard feature dependencies; FUSE and Plex depend on it, while YouTube
@@ -118,15 +118,15 @@ private document hosts. These providers declare no remote mutation capabilities.
 See [remote browsing](remote-browsing.md) for lifecycle,
 identity, cancellation and validation boundaries.
 
-Portable `scope.py` owns folder-name inference; `local_policy.py` owns ciphertext
+Portable `transfers/scope.py` owns folder-name inference; `transfers/local_policy.py` owns ciphertext
 inventory, generated-file cleanup classification and local file-link policy.
 Mobile captures `TransferOptions` once for native review and execution; its
 settings storage stays in the app container. CLI/embedded runners and crypt I/O
 remain platform adapters. Mobile rclone controllers and providers now live in
 `mobile/`; generic provider document hosting remains in `logisticsmobile`.
 
-`local_crypt.py` owns ciphertext mappings, explicit backing-target routing, private
-reader providers and verified encrypted replacements. `ui/local_crypt.py` owns
+`localcrypt/backend.py` owns ciphertext mappings, explicit backing-target routing, private
+reader providers and verified encrypted replacements. `localcrypt/ui/views.py` owns
 unlock prompts and private document presentation. See the [LocalCrypt architecture](localcrypt.md)
 for ownership, cancellation, provider lifetime, desktop/mobile differences and
 validation. Generic resource contracts are documented in commonUtils.
@@ -135,13 +135,13 @@ validation. Generic resource contracts are documented in commonUtils.
 ## Mobile ownership
 
 `mobile/__init__.py` has no initialization side effects. Mobile-specific adapters
-live under this feature; portable policy remains at the feature root.
+live under this feature; portable policy lives in its owning workflow.
 
 | Owner | Modules / responsibility |
 | --- | --- |
 | Feature bridge and credentials | `mobile/cloud.py`, `credential_vault.py`, `credential_packages.py` |
-| Feature transfer operations | `mobile/mirror_jobs.py` |
-| Feature ciphertext storage | `mobile/localcrypt.py`, `file_resources.py`, `crypt_stream.py`, `previews.py` |
+| Feature transfer operations | `transfers/mobile/jobs.py` |
+| Feature ciphertext storage | `localcrypt/mobile/copies.py`, `file_resources.py`, `crypt_stream.py`, `previews.py` |
 | Feature native presentation | `mobile/cloud_ui.py`, `mirror_ui.py`, `transfer_review_ui.py`, `localcrypt_ui.py`, `messages.py` |
 | Generic app document hosting | `logisticsmobile/provider_ui.py`, `provider_readers.py`, `text_resources.py`, `native_archives.py`, `private_sessions.py` |
 | Generic app integration | Folder Hub, Files, navigation/scenes, document persistence, screen privacy and OS picker access stay in `logisticsmobile` |
@@ -173,8 +173,8 @@ its file/tree versions before Sync. Directory names are checked against the
 crypt mapping as well. The current review covers directory membership/type,
 including decoded crypt folder names, without unstable directory timestamps.
 
-`mobile/file_resources.py` contributes encrypted collection roots and reader
-stores to generic library/navigation hosts. `mobile/mirror_jobs.py` resolves
+`localcrypt/mobile/resources.py` contributes encrypted collection roots and reader
+stores to generic library/navigation hosts. `transfers/mobile/jobs.py` resolves
 managed local targets and decoded remote locations. Host code does not construct
 crypt providers or reconstruct their physical layout for those routes.
 

@@ -17,7 +17,7 @@ User behavior belongs in [the mobile user guide](../user_mobile/user_mobile.md).
 | Text Open/Save As, picker widgets and pending bytes | `editor_picker.py` |
 | Saved-import inventory and confirmed deletion | `saved_files_ui.py`: composed `SavedFilesController` |
 | Explicit host dependencies and legacy state access | `host_services.py` |
-| Managed text bytes, checkpoints and editing widgets | `documents.py`, `editors.py` |
+| Managed text bytes, checkpoints and editing widgets | `documents.py` (host recovery), `features/text_editor/mobile/ui.py` (widgets) |
 | Ordinary and provider reader ownership | `reader_sessions.py`, `private_sessions.py` |
 | Reader-facing host services and shared controls | `reader_host.py`, `reader_controls.py`, `reader_chrome.py` |
 | Device screen locking and sensitive-content protection | `screen_privacy.py` |
@@ -69,7 +69,7 @@ are outside this workflow. Chat, Cloud, Transfers, Folder Hub, Home/Documents, L
 
 ## Packaging and verification
 
-Add host modules to `Mobile/tools.py:APP_MODULES` in the same change as imports.
+Add host modules to `Python/logisticsmobile/mobile_sources.json` and feature/service modules to their owning manifests in the same change as imports. `Mobile/tools.py` aggregates and validates these declarations.
 `editor_picker.py` and `host_services.py` are explicitly staged. Do not edit
 generated `Mobile/payload/` or Briefcase projects as application source.
 

@@ -9,6 +9,8 @@ the existing feature and platform boundaries.
 
 ## Local implementation status
 
+The subsequent ten-item ownership pass is implemented. The [sequential feature refactors](#sequential-feature-refactors) and integration audit below describe the current layout; the original assessment and baseline candidates remain historical context.
+
 The first LM pass is implemented locally: desktop presentation lives in `ui/`,
 widget/layout/profile responsibilities have separate modules, and `session.py`
 owns conversation records, leases, saving and streaming response transitions.
@@ -180,3 +182,18 @@ Document adapters, limits, metadata dispatch and ZIP password policy live in `se
 ### 10. Owner-declared mobile sources
 
 Each supported feature, the mobile host and neutral services declare selected modules in `mobile_sources.json`. `Mobile/tools.py` aggregates these strict data-only allowlists, validates staged feature/service imports (including nested adapters), and copies manifests into the payload source hash. Stage reads the target checkout manifests; no feature discovery or desktop registration runs during packaging. Existing public APP_MODULES/DOCUMENT_MODULES inventories remain available to validation tools.
+
+### Integration audit follow-up
+
+Desktop/mobile LM transports share portable SSE event decoding while retaining platform networking and mobile bounds. Global Cancel invokes an active transfer-review close callback as well as cancelling its scan. Focused decoder parity, controller cancellation, chat and transfer checks cover these final integration gaps.
+
+The broad audit also migrated native/host transfer assertions to their explicit cancellation owner and corrected the desktop launcher's index-service import. New transfer controllers initialize cancellation/review state before any workflow begins.
+
+## Verification of the completed pass
+
+- Audited 146 desktop/portable test files with module isolation. The first run passed 144; the missing launcher service import was corrected and all seven launcher tests passed. The portability subprocess required the mobile Markdown dependency; its rerun passed using a temporary runtime combining the existing desktop/mobile environments, without changing either project environment.
+- The complete mobile host rerun passed all 378 tests. Focused LM checks passed across seven isolated files, including shared decoding, response limits, streaming, cancellation and desktop UI behavior.
+- Payload manifest validation, staged startup, headless feature/document imports, relative Markdown resource containment, documentation hierarchy and correctness lint passed.
+- Canonical native transfer scenarios now inspect the transfer controller's cancellation token. Native iOS/Android builds and physical-device interactions were not rerun; host success does not certify those surfaces.
+
+All ten ownership items have individual commits, followed by an integration-audit correction. Unrelated edits arriving concurrently in documentation, licensing and commonUtils were excluded from the final refactor commits.

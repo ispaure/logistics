@@ -15,11 +15,11 @@ See the [user guide](../user/user.md) for reading controls, settings and backups
 - `metadata.py`: targeted Dublin Core updates, namespace preservation, backup
   creation and atomic replacement. Writes serialize within Logistics and reject
   changed-on-disk sources. ZIP resources are streamed without extraction.
-- `content.py` / `text_view.py`: inert XHTML conversion and bounded archive-local
+- `ui/content.py` / `ui/text_view.py`: inert XHTML conversion and bounded archive-local
   image loading. Script execution, filesystem reads and network resources are
   not delegated to Qt's default resource loader.
 - `preferences.py`: shared settings access plus atomic, per-book reading state.
-- `reader_controls.py`: compact toolbar, appearance popup, contents/bookmarks
+- `ui/reader_controls.py`: compact toolbar, appearance popup, contents/bookmarks
   sidebar and on-demand search. Both readers use `commonUtils.ui.readers.reader_menus`
   for shared menus and bounded recent-file history.
   The EPUB reader opens only EPUBs; the comic reader opens only CBZs. The unified
@@ -29,22 +29,22 @@ See the [user guide](../user/user.md) for reading controls, settings and backups
   and format-specific controls remain in their own reader modules.
   Shared read-aloud controls start at the top of the visible EPUB page, highlight
   the current word and provide approximate 15-second backward/forward jumps.
-- `text_view.py`: screen-height QTextDocument pagination with discrete arrow-key
+- `ui/text_view.py`: screen-height QTextDocument pagination with discrete arrow-key
   turns. The hidden scrollbar represents page offsets, including a short final
   page. Saved locations use a UTF-16 document offset within the spine chapter;
   legacy proportional positions remain a fallback. Font/viewport changes map
   the saved text offset into the new page layout; no whole-book pagination scan
   is required. Search and chapter anchors snap to their containing page.
-- `preview.py`: bounded cover decoding for file-browser metadata panels and tile
+- `ui/preview.py`: bounded cover decoding for file-browser metadata panels and tile
   thumbnails. Covers resolve via EPUB 3 manifest properties, EPUB 2 metadata,
   or a cover guide/first-page image; images retain their aspect ratio.
-- `metadata_actions.py`: dispatches the shared browser metadata action to the
+- `ui/metadata_actions.py`: dispatches the shared browser metadata action to the
   EPUB or comic editor, including mixed selections, without opening readers.
-- `reader.py` / `metadata_editor.py` / `metadata_window.py`: page, reader window,
+- `ui/reader.py` / `ui/metadata_editor.py` / `ui/metadata_window.py`: page, reader window,
   reusable metadata form and independent metadata window for browser edit actions.
   Opening and saving use owned `BookTask` workers; close waits for
   worker completion before allowing destruction.
-- `contributions.py` / `controller.py` / `file_type.py`: lazy feature declaration,
+- `contributions.py` / `ui/controller.py` / `file_type.py`: lazy feature declaration,
   feature-owned EPUB type and browser-window lifetime management.
 
 The `books` and `comics` runtime IDs, module paths and existing comic APIs remain
