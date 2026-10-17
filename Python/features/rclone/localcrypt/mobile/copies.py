@@ -144,7 +144,8 @@ class LocalCryptCopies:
         return self._save_staged(reader, stage, verify, cancelled)
 
     def save_metadata(self, reader, changes, *, cancelled=lambda: False):
-        from services.document_metadata import comic_metadata, epub_metadata
+        from features.comics.mutations import metadata_plan as comic_metadata
+        from features.books.mutations import metadata_plan as epub_metadata
         from commonUtils.archives.rebuilding import patched_manifest, content_manifest
         if reader.kind == '.epub':
             member, data = epub_metadata(reader.book, changes)

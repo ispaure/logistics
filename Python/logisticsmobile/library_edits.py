@@ -54,10 +54,9 @@ class LibraryEdits:
             journal.unlink()
 
     def save_metadata(self, record, reader, changes, *, cancelled=lambda: False):
-        from services.document_metadata import epub_metadata, comic_metadata, rewrite_metadata
+        from features.books import mutations as book_edits
+        from features.comics import mutations as comic_edits
         from commonUtils.archives.zip_access import archive_manifest
-        from features.books.epub import EPUBBook
-        from features.comics.library import ComicDocument
         key, temporary = record['id'], None
         with mutation_lock:
             current, opened = self.open(key)
@@ -66,11 +65,12 @@ class LibraryEdits:
             if not changes:
                 return current, opened
             epub = record['kind'] == 'epub'
+            format_edits = book_edits if epub else comic_edits
             path = self.path(key, '.epub' if epub else '.cbz')
             with ZipFile(path) as archive:
                 if any(info.flag_bits & 1 for info in archive.infolist()):
                     raise ValueError('Editing standalone encrypted imports requires a native archive writer.')
-            member, data = epub_metadata(opened, changes) if epub else comic_metadata(opened.document, changes)
+            member, data = format_edits.metadata_plan(opened if epub else opened.document, changes)
             if not epub and data == opened.document.info.to_bytes():
                 return current, opened
             try:
@@ -78,10 +78,10 @@ class LibraryEdits:
                 with NamedTemporaryFile(dir=self.root, prefix='.metadata-', delete=False) as stream:
                     temporary = Path(stream.name)
                 with ZipFile(path) as original, ZipFile(temporary, 'w') as output:
-                    expected = rewrite_metadata(original, output, member, data, epub=epub, cancelled=cancelled)
+                    expected = format_edits.rewrite_metadata(original, output, member, data, cancelled=cancelled)
                 if archive_manifest(temporary) != expected:
                     raise ValueError('Metadata verification failed; original preserved.')
-                EPUBBook(temporary) if epub else ComicDocument(temporary)
+                format_edits.validate_metadata(temporary)
                 with temporary.open('r+b') as stream:
                     os.fsync(stream.fileno())
                 updated = dict(record, digest=file_sha256(temporary), revision=record['revision'] + 1)

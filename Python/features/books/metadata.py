@@ -102,8 +102,8 @@ def _save_metadata(book, changes, cancelled):
         with NamedTemporaryFile(dir=book.path.parent, prefix=f'.{book.path.name}.', suffix='.epub', delete=False) as temporary:
             staged = Path(temporary.name)
         with ZipFile(book.path) as original, ZipFile(staged, 'w') as output:
-            from services.document_metadata import rewrite_metadata
-            expected.update(rewrite_metadata(original, output, book.package_path, updated, epub=True, cancelled=cancelled))
+            from .mutations import rewrite_metadata
+            expected.update(rewrite_metadata(original, output, book.package_path, updated, cancelled=cancelled))
     def verify():
         from commonUtils.archives.zip_access import archive_manifest
         if archive_manifest(staged) != expected:
@@ -147,13 +147,13 @@ def _save_metadata(book, changes, cancelled):
 def _save_private_metadata(book, changes, cancelled):
     from commonUtils.archives.zip_access import open_archive, archive_manifest
     from commonUtils.runtime.operations import check_cancelled
-    from services.document_metadata import epub_metadata, rewrite_metadata
-    member, data = epub_metadata(book, changes)
+    from .mutations import metadata_plan, rewrite_metadata
+    member, data = metadata_plan(book, changes)
     expected = {}
     def write(stream):
         check_cancelled(cancelled)
         with book.open_archive() as original, open_archive(stream, 'w', password=book.password) as output:
-            expected.update(rewrite_metadata(original, output, member, data, epub=True, cancelled=cancelled))
+            expected.update(rewrite_metadata(original, output, member, data, cancelled=cancelled))
     def verify(path):
         check_cancelled(cancelled)
         with book.source.open(path) as stream:

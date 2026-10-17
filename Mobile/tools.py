@@ -12,6 +12,7 @@ APP_MODULES = ('ios_reader_chrome.py', 'ios_storage.py', 'keyboard.py', 'fold_la
                'hub_ui.py', 'control_icons.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'local_sources.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library_edits.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
                'chat_fixture.py', 'resource_imports.py', 'files_ui.py', 'editor_picker.py', 'host_services.py', 'feature_hosts.py', 'folder_controller.py', 'hub_controller.py', 'locations_controller.py', 'storage_controller.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
+    'features/books/mutations.py', 'features/comics/mutations.py',
     'features/rclone/localcrypt/__init__.py', 'features/rclone/localcrypt/mobile/__init__.py', 'features/rclone/transfers/__init__.py', 'features/rclone/transfers/mobile/__init__.py',
     'features/text_editor/__init__.py', 'features/text_editor/mobile/__init__.py', 'features/text_editor/mobile/ui.py', 'features/text_editor/resources.py', 'features/text_editor/names.py', 'services/mobile_presentation.py',
     'features/lm/mobile/controller.py', 'features/rclone/mobile/controller.py', 'features/rclone/transfers/mobile/controller.py', 'services/workflow_host.py',
