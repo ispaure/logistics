@@ -426,13 +426,18 @@ async def exercise_localcrypt(app, passed):
     browser.search_button.on_press()
     assert browser.search_panel in browser.widget.children
     browser.search.value = 'nested-search'
-    await asyncio.gather(*tuple(browser.tasks))
+    while browser.tasks:
+        await asyncio.gather(*tuple(browser.tasks))
     assert [item.label for item in browser.entries] == ['navigation/nested-search.md']
     await browser.buttons[browser.entries[0].identity].on_press()
     assert app.selected_file()[1] == 'navigation/nested-search.md'
     browser.search.value = 'LARGE-BROWSER'
+    while browser.tasks:
+        await asyncio.gather(*tuple(browser.tasks))
     assert [item.label for item in browser.entries] == ['large-browser.cbz']
     browser.search.value = 'nothing-matches'
+    while browser.tasks:
+        await asyncio.gather(*tuple(browser.tasks))
     assert browser.entries == []
     try:
         app.selected_file()
@@ -441,7 +446,9 @@ async def exercise_localcrypt(app, passed):
     else:
         raise AssertionError('Hidden filtered selection remained actionable')
     browser.close_search_button.on_press()
-    assert browser.search.value == '' and browser.search_panel in browser.widget.children
+    while browser.tasks:
+        await asyncio.gather(*tuple(browser.tasks))
+    assert browser.search.value == '' and browser.search_panel not in browser.widget.children
     folder = next(item for item in browser.entries if item.label == 'navigation')
     await browser.buttons[folder.identity].on_press()
     assert app.file_path == 'navigation' and browser.back_button.enabled
