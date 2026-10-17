@@ -1,5 +1,6 @@
 """Native Back, persisted preferences, document drafts and Markdown ownership."""
 import asyncio
+import gc
 from commonUtils.runtime.platform import get_os, OS
 from logisticsmobile.preferences import Preferences
 from .web_checks import wait_for_text
@@ -73,6 +74,10 @@ async def exercise_documents(app, passed):
     assert app.close_session(b_session, choice='save') is False
     assert app.editor.value == 'B draft\n'
     assert app.close_session(b_session, choice='discard')
+    # Closing must remain safe after Python releases the editor while native
+    # preview replacement callbacks are still queued.
+    gc.collect()
+    await asyncio.sleep(.1)
     assert app.store.open(b).text == 'External saved bytes\n'
     app.open_document(a)
     app.show_documents()

@@ -27,6 +27,11 @@ Format behavior and presentation remain with `features/books/mobile` and
 remain with `features/rclone/mobile`. The host owns navigation, session policy and
 workflow composition. Shared toolkit mechanisms remain in commonUtils.
 
+The pinned Toga iOS backend queues scroll-view refreshes during layout. The
+host's `appearance.py` adapter ignores refresh/scroll callbacks after their weak
+Python interface has been released. Editor preview shutdown remains with the
+Text Editor feature, which retires WebKit delegates before releasing its view.
+
 ## Open/Save As lifecycle
 
 `app.editor_picker()` lazily creates one `EditorPicker` per host. It owns picker

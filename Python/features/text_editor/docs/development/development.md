@@ -132,6 +132,12 @@ Comparisons now refresh after each accepted hunk and use resizable, linked panes
 
 `mobile/ui.py` owns native editor widgets and per-document callbacks. `resources.py` owns provider text adapters, and `names.py` owns display-name validation. The mobile application supplies `services.mobile_presentation.MobilePresentation`; managed recovery records, picker workflows and scene ownership remain host concerns. Both platforms reuse commonUtils text persistence and conflict handling.
 
+Closing an iOS editor stops its live WebView and detaches WebKit delegates before
+replacing preview content. Queued native navigation decisions must not outlive
+the Toga interface. Native close/discard checks explicitly collect closed editors.
+The custom source input also disables available iOS scroll-edge overlays because
+it bypasses ordinary Toga text-input creation and its host appearance hook.
+
 ## Desktop presentation
 
 Desktop widgets and controllers live in feature-owned `ui/`. Registration stays lazy; portable domain modules do not import this package. IDE/Text Editor change-marker and hunk integration is shared through `services/editors/ui/`.

@@ -2,7 +2,9 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from logisticsmobile.app import LogisticsMobile
 from features.lm.mobile.ui import ChatUI
@@ -46,6 +48,22 @@ class WorkflowOwnershipTests(unittest.TestCase):
         self.assertFalse(file_cancel.is_set())
         app.cancel_cloud()
         self.assertTrue(file_cancel.is_set())
+
+    def test_native_credential_vaults_receive_the_application_host(self):
+        app = self.app
+        client = SimpleNamespace(vault=None, generation=0, cancel=lambda: None)
+        vault = SimpleNamespace(root=Path(self.directory.name) / 'packages')
+        with patch('features.rclone.mobile.credential_vault.ProtectedVault.for_app', return_value=vault) as factory, patch(
+                'features.rclone.mobile.cloud_ui.CloudClient', return_value=client) as engine:
+            app.show_cloud(present=False)
+            factory.assert_called_once_with(app)
+            engine.assert_called_once_with(vault=vault)
+            client.vault = vault
+            factory.reset_mock()
+            cache = app.retained_packages()
+            factory.assert_called_once_with(app, packages=True)
+            self.assertIs(cache.client, client)
+            self.assertIs(cache.vault, vault)
 
     def test_global_cancel_closes_an_active_transfer_review(self):
         app = self.app

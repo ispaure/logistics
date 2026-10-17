@@ -31,10 +31,13 @@ def assert_cold_iphone_tab_labels(app):
     tab = app.native_host.adapter.controller.tabBar
     tab.layoutIfNeeded()
     expected, seen = set(app.native_host.labels), set()
+    content_views = [navigation.view for navigation in app.native_host.adapter.navigation]
     def value(obj, name):
         result = getattr(obj, name)
         return result() if callable(result) else result
     def inspect(view):
+        if view in content_views:
+            return  # Document/page labels must not satisfy navigation checks.
         if view.isKindOfClass(ObjCClass('UILabel')):
             text = str(value(view, 'text'))
             if text in expected:
@@ -44,7 +47,9 @@ def assert_cold_iphone_tab_labels(app):
                 assert view.bounds.size.height >= value(value(view, 'font'), 'pointSize'), ('Clipped tab', text)
         for child in value(view, 'subviews'):
             inspect(child)
-    inspect(tab)
+    # Newer UIKit versions render floating/vertical tab labels beside the
+    # UITabBar placeholder. Inspect the owning controller's complete hierarchy.
+    inspect(app.native_host.adapter.controller.view)
     assert seen == expected, ('Missing cold-start tab labels', seen)
 
 
