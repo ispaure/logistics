@@ -302,8 +302,8 @@ class MirrorUI(TransferReviewUI):
         self.transfer_notification = True
         self.transfer_complete = False
         self.set_cloud_busy(True)
-        self._crypt_cancel = Event()
-        cancel = self._crypt_cancel
+        self._transfer_cancel = Event()
+        cancel = self._transfer_cancel
         self.transfer_message = 'Preparing transfer…'
         self.show_transfers(present=self.native_host.state.destination == 'files')
         self.refresh_transfer_status()
@@ -326,7 +326,7 @@ class MirrorUI(TransferReviewUI):
             return False
         finally:
             self.transfer_epoch += 1
-            self._crypt_cancel = None
+            self._transfer_cancel = None
             self.transfer_busy = False
             self.set_cloud_busy(False)
             if self.active_host:
@@ -398,7 +398,10 @@ class MirrorUI(TransferReviewUI):
             review()
             return
         if getattr(self, 'transfer_busy', False):
-            self.cancel_cloud()
+            if self._transfer_cancel is not None:
+                self._transfer_cancel.set()
+            if self.cloud_client is not None:
+                self.cloud_client.cancel()
             self.transfer_message = 'Cancelling sync; completed destination changes remain.'
             self.transfer_notice.text = import_hint(self.transfer_message)
 

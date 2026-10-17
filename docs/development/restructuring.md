@@ -148,3 +148,7 @@ Mobile chat storage, transport and presentation now live in `features/lm/mobile/
 ### 2. rclone host boundary
 
 rclone mobile adapters no longer import `logisticsmobile`. Provider readers, document limits and native archive facades have neutral service owners. `MobileHostUI` declares presentation hooks; `logisticsmobile/feature_hosts.py` supplies them. The app composes provider presentation rather than inheriting it through the rclone feature.
+
+### 3. Mobile workflow composition
+
+The app now composes Chat, Cloud, Transfers, Folder Hub, Home/Documents, Locations and Storage controllers. Each controller enumerates its host dependencies and owned fields; compatibility accessors delegate to that owner without broad attribute forwarding. Transfer/review cancellation is separate from file/cloud cancellation and global Cancel dispatches to both. Reader/session managers and host/provider document lifecycle retain their existing composition.

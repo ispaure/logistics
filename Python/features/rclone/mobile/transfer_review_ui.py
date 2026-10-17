@@ -177,7 +177,7 @@ class TransferReviewUI:
         scan = ReviewScan(scanner)
         self.transfer_busy, self.transfer_notification = True, True
         self.set_cloud_busy(True)
-        self._crypt_cancel = scan.cancelled
+        self._transfer_cancel = scan.cancelled
         self.transfer_message = 'Reviewing ' + request.operation + '…'
         self.refresh_transfer_status()
         decision, expected = None, None
@@ -205,7 +205,7 @@ class TransferReviewUI:
                 else:
                     expected = scan.snapshot()
                     scan = ReviewScan(scanner)
-                    self._crypt_cancel = scan.cancelled
+                    self._transfer_cancel = scan.cancelled
                     status.text = 'Checking that the completed review is still current…'
             finally:
                 early.enabled = decision is None
@@ -266,7 +266,7 @@ class TransferReviewUI:
             details.value = ''
             status.text = 'Review closed.'
             confirm.enabled = early.enabled = False
-            self._crypt_cancel = None
+            self._transfer_cancel = None
             self.transfer_busy = False
             self.set_cloud_busy(False)
             self.refresh_transfer_status()

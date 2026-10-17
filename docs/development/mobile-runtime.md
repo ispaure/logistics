@@ -65,8 +65,7 @@ mixin. The controller owns inventory presentation/message state and explicitly
 uses host reader/workspace services. Deletion still checks other windows and busy
 readers before and after confirmation, retires affected sessions, and forgets
 Recent/import mappings. Original sources and managed Local/LocalCrypt folders
-are outside this workflow. Other existing host mixins remain migration candidates;
-move one workflow only after its state, services and cleanup are explicit.
+are outside this workflow. Chat, Cloud, Transfers, Folder Hub, Home/Documents, Locations and Storage are now composed controllers. Their `METHODS` and `FIELDS` enumerate compatibility accessors; explicit host descriptors supply other dependencies. No catch-all attribute forwarding is used. The app retains document/provider lifecycle and reader manager integration.
 
 ## Packaging and verification
 
@@ -87,3 +86,7 @@ Use the [host validation commands](mobile-launchers.md#host-validation).
 These are host contracts. Apple/Android picker layout, native Back and real
 LocalCrypt transfer behavior still need the existing native acceptance scenarios
 in `Mobile/native_tests/tests/logisticsmobile/localcrypt_checks.py`.
+
+## Workflow controllers
+
+`features/lm/mobile/controller.py` owns chat state; rclone owns cloud and transfer controllers. Host navigation workflows have dedicated `*_controller.py` modules. `services/workflow_host.py` supplies explicit read/write host attributes. `host_services.composed_workflow` installs only declared compatibility names. Transfer/review cancellation is independent from file/cloud cancellation; global Cancel dispatches to both. Ownership and cancellation are exercised by `Mobile/tests/test_workflow_ownership.py`.

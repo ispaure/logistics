@@ -10,26 +10,36 @@ from .documents import DocumentStore, document_name
 from .preferences import Preferences
 from .preview import markdown_preview
 from .reader_sessions import ReaderWorkspace
-from features.lm.mobile.ui import ChatUI
-from features.rclone.mobile.cloud_ui import CloudUI
 from commonUtils.ui.native.navigation import NativeNavigationHost
 from commonUtils.ui.native.routes import Routes
 from .navigation import DESTINATION_ITEMS
 from .workspace import Workspace, MAX_SESSIONS
-from features.rclone.mobile.mirror_ui import MirrorUI
 from .editors import TextEditorView
 from .workspace_navigation import WorkspaceNavigation as AdaptiveWorkspace
-from .locations_ui import LocationsUI
-from .folder_hub_ui import FolderHubUI
-from .hub_ui import HubUI, text_document_kind
-from .storage_ui import StorageUI
-from .host_services import OwnedAttribute
+from .hub_ui import text_document_kind
+from .host_services import OwnedAttribute, composed_workflow
 from .provider_ui import ProviderUI
 
 _active_hosts = weakref.WeakValueDictionary()
 
 
-class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, ReaderWorkspace, ChatUI, CloudUI, ProviderUI, toga.App):
+from features.lm.mobile.controller import ChatController
+from features.rclone.mobile.controller import CloudController
+from features.rclone.mobile.transfer_controller import TransferController
+from logisticsmobile.folder_controller import FolderController
+from logisticsmobile.hub_controller import HubController
+from logisticsmobile.locations_controller import LocationsController
+from logisticsmobile.storage_controller import StorageController
+
+
+@composed_workflow('chat_controller', ChatController)
+@composed_workflow('cloud_controller', CloudController)
+@composed_workflow('transfer_controller', TransferController)
+@composed_workflow('folder_controller', FolderController)
+@composed_workflow('hub_controller', HubController)
+@composed_workflow('locations_controller', LocationsController)
+@composed_workflow('storage_controller', StorageController)
+class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def __init__(self, *args, **kwargs):
@@ -47,7 +57,7 @@ class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, Read
     def rclone_ui(self):
         if not hasattr(self, '_rclone_ui'):
             from .feature_hosts import rclone_host_ui
-            self._rclone_ui = rclone_host_ui()
+            self._rclone_ui = rclone_host_ui(self)
         return self._rclone_ui
 
     def startup(self):
@@ -68,6 +78,8 @@ class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, Read
             if privacy is not None:
                 privacy.dispose()
             previous_host.active_host = False
+            if hasattr(previous_host, 'cloud_client'):
+                previous_host.cancel_cloud()
             picker = getattr(previous_host, '_editor_picker', None)
             if picker is not None:
                 picker.clear()
@@ -883,7 +895,12 @@ class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, Read
         picker = getattr(self, '_editor_picker', None)
         if picker is not None:
             picker.cancel()
-        return super().cancel_cloud(widget, **kwargs)
+        transfer = getattr(self, '_transfer_controller', None)
+        if transfer is not None:
+            cancelled = getattr(transfer, '_transfer_cancel', None)
+            if cancelled is not None:
+                cancelled.set()
+        return self.cloud_controller().cancel_cloud(widget, **kwargs)
 
     saved_files_message = OwnedAttribute('saved_files', 'saved_files_message')
     saved_files_status = OwnedAttribute('saved_files', 'saved_files_status')
