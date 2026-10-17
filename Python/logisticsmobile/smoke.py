@@ -28,6 +28,8 @@ EXPECTED_TESTS = (
     'test_mobile_markdown_preview_is_offline_and_escapes_active_content',
     'test_mobile_preferences_preserve_invalid_and_concurrent_files',
     'test_mobile_preferences_survive_restart_without_hard_links',
+    'test_legacy_visibility_never_survives_restart_or_save',
+    'test_preference_writes_filter_session_only_credential_associations',
     'test_mobile_comic_reads_native_page_bytes_in_natural_order',
     'test_large_comic_streaming_keeps_unrelated_members_and_bounds_page_reads',
     'test_mobile_epub_import_navigation_progress_and_bookmarks_preserve_source',
@@ -123,7 +125,11 @@ def main(argv=None):
         for case in (MobileDocumentsTests, PortableDocuments, MobileHubTests, MobileReaderTests, MobileChatTests, MobileCloudTests, MobileVaultTests, MobileLocalCryptTests, RuntimeChecks):
             suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(case))
         if sorted(test._testMethodName for test in suite) != sorted(EXPECTED_TESTS):
-            raise RuntimeError('Mobile fixture discovery differs from the declared evidence contract.')
+            discovered = {test._testMethodName for test in suite}
+            missing = sorted(set(EXPECTED_TESTS) - discovered)
+            undeclared = sorted(discovered - set(EXPECTED_TESTS))
+            raise RuntimeError(f'Mobile fixture discovery differs from the declared evidence contract: '
+                               f'missing={missing}, undeclared={undeclared}.')
         result = unittest.TextTestRunner(verbosity=2).run(suite)
         report = dict(schema=1, suite='logistics-mobile-documents', target=args.target,
                       sys_platform=sys.platform, environment=environment(),
