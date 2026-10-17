@@ -194,6 +194,8 @@ class FileUITests(unittest.TestCase):
                 first = browser.entries[0]
                 await browser.buttons[first.identity].on_press()
                 browser.search.value = 'PAGE2'
+                while browser.tasks:
+                    await __import__('asyncio').gather(*tuple(browser.tasks))
                 self.assertEqual([entry.label for entry in browser.entries], ['page2.md'])
                 with self.assertRaises(ValueError):
                     app.selected_file()
@@ -206,7 +208,8 @@ class FileUITests(unittest.TestCase):
                 (root / 'books/sub/nested.md').write_text('nested')
                 browser.search_button.on_press()
                 browser.search.value = 'nested'
-                await __import__('asyncio').gather(*tuple(browser.tasks))
+                while browser.tasks:
+                    await __import__('asyncio').gather(*tuple(browser.tasks))
                 self.assertEqual([entry.label for entry in browser.entries], ['sub/nested.md'])
                 await browser.buttons[browser.entries[0].identity].on_press()
                 self.assertEqual(app.selected_file()[1], 'books/sub/nested.md')
