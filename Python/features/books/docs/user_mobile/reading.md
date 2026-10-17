@@ -48,7 +48,8 @@ with disk caching and browser storage disabled. Closing or suspending disposes t
 view; HTML over 2 MiB is refused before the toolkit can create a disk-backed page.
 Other backends use bounded native text passages.
 
-Choose **Read aloud…** from an EPUB reader menu. Select an installed offline voice
+Tap the **speaker** icon in the EPUB reader toolbar to open **Read aloud** (also
+available in the reader actions menu). Select an installed offline voice
 (the label includes its language), choose speed, and press **Play**. Selected text
 is read on its own; with no selection, reading starts at the current passage and
 continues through this chapter. The current sentence or bounded passage is

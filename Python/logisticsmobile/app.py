@@ -686,7 +686,10 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         speech = getattr(owner, 'markdown_speech', None)
         if speech is None:
             owner.markdown_speech = speech = MarkdownSpeech(self, owner.preview, owner.preview_box)
-            owner.preview_box.insert(1, speech.button)
+            edit_button = owner.preview_box.children[0]
+            owner.preview_box.remove(edit_button)
+            owner.preview_box.insert(0, toga.Box(children=[edit_button,
+                toga.Box(style=Pack(flex=1)), speech.button], style=Pack(direction=ROW)))
         speech.close()
         self.preview_box = owner.preview_box
         self.show_view(self.preview_box, route='preview', title=owner.document.name)

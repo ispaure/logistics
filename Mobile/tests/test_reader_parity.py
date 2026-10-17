@@ -104,6 +104,14 @@ class ReaderParityUITests(unittest.TestCase):
             async def exercise():
                 await app.open_book(record["id"])
                 owner = app.readers.active
+                from test_markdown_speech import Engine
+                speaker = next(button for button in owner.reader_header.children
+                    if getattr(button, 'control_icon', None) == 'speaker')
+                with patch('features.books.mobile.speech_view.NativeSpeech', Engine):
+                    speaker.on_press()
+                    await owner.speech_panel.ready_task
+                    self.assertTrue(owner.speech_panel.play_button.enabled)
+                    owner.close_read_aloud()
                 bridge = owner.epub_view._chapter_bridge
                 self.assertFalse(bridge.navigation(None, "https://example.invalid/"))
                 bridge.navigation(None, bridge.root + "position?offset=7")
@@ -138,6 +146,10 @@ class ReaderParityUITests(unittest.TestCase):
             app.loop.run_until_complete(exercise())
 
     def test_provider_epub_passage_search_bookmarks_and_close_cleanup(self):
+        import toga
+        class MemoryWebView(toga.WebView):
+            def clear_private_content(self):
+                self.set_content('about:blank', '')
         with TemporaryDirectory() as directory:
             root = Path(directory)
             app = self.host(root)
@@ -148,13 +160,23 @@ class ReaderParityUITests(unittest.TestCase):
             private = PrivateReader("Private.epub", epub.read_bytes())
 
             async def exercise():
-                with patch.object(app.crypt_copies, "open", return_value=private):
+                with patch.object(app.crypt_copies, "open", return_value=private), patch(
+                    'features.books.mobile.provider_reader.private_webview_supported', return_value=True
+                ), patch('features.books.mobile.provider_reader.PrivateWebView', MemoryWebView):
                     self.assertTrue(
                         await app.open_crypt(copies=app.crypt_copies, key="a" * 32),
                         app.cloud_status.value,
                     )
                 owner = app.private_sessions.active
                 panel = owner.provider_epub_view
+                from test_markdown_speech import Engine
+                speaker = next(button for button in owner.reader_toolbar.children
+                    if getattr(button, 'control_icon', None) == 'speaker')
+                with patch('features.books.mobile.speech_view.NativeSpeech', Engine):
+                    speaker.on_press()
+                    await panel.speech_panel.ready_task
+                    self.assertTrue(panel.speech_panel.play_button.enabled)
+                    panel.close_read_aloud()
                 panel.query.value = "chapter"
                 panel.find()
                 panel.seek(7)

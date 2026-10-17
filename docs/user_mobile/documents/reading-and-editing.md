@@ -35,7 +35,8 @@ See [Text and Markdown](documents.md#text-and-markdown) for saving and private d
 
 ## Markdown read-aloud
 
-Tap **Read aloud** in a Markdown preview or vault note. Choose an installed
+Tap the **speaker** icon in the Markdown preview or vault reader toolbar to open
+**Read aloud**. Choose an installed
 offline system voice and speed, then **Play**. Selected text is read when present;
 otherwise the rendered note is read from the beginning. **Pause** and **Resume**
 repeat the current sentence; **Stop** ends playback and **Close** hides controls.
