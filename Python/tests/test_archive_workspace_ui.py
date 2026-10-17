@@ -55,6 +55,7 @@ class ArchiveWorkspaceUITests(QtTestCase):
         self.page.contents._activate(self.page.contents.files.topLevelItem(0))
         self.assertEqual(self.page.contents.folder, 'source/')
         self.page.contents.search.setText('notes')
+        self.wait_until(lambda: self.page.contents.files.topLevelItemCount() == 1)
         self.assertEqual(self.page.contents.files.topLevelItemCount(), 1)
         item = self.page.contents.files.topLevelItem(0)
         self.assertEqual(item.text(0), 'source/nested/notes.txt')

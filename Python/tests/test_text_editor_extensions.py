@@ -188,6 +188,7 @@ class EditorExtensionTests(QtTestCase):
         editor.setPlainText("value  ")
         palette = CommandPalette(self.window.actions, self.window)
         palette.query.setText("trim whitespace")
+        self.wait_until(lambda: palette.results.count() == 1)
         self.assertEqual(palette.results.count(), 1)
         palette.run_current()
         self.assertEqual(editor.toPlainText(), "value")
