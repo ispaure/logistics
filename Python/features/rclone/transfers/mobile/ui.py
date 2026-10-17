@@ -94,7 +94,7 @@ class MirrorUI(TransferReviewUI):
                 parent.remove(bar)
         self.transfer_banners = live
 
-    def existing_crypt_locations(self):
+    def existing_crypt_locations(self, *, roots=None):
         result = {}
         client = getattr(self, 'cloud_client', None)
         if client is None or not hasattr(client, 'request'):
@@ -103,6 +103,8 @@ class MirrorUI(TransferReviewUI):
         for remote in visible_remotes(getattr(self, 'cloud_crypt_remotes', ())):
             try:
                 identity = client.request('crypt_path', remote=remote, path='', directory=True)['identity']
+                if roots is not None:
+                    roots['LocalCrypt: ' + remote] = (remote, identity)
                 path = collection_path(self.private_root, True) / identity
                 if path.is_dir() and not path.is_symlink() and any(path.iterdir()):
                     result['LocalCrypt: ' + remote] = remote

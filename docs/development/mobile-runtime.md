@@ -12,7 +12,7 @@ User behavior belongs in [the mobile user guide](../user_mobile/user_mobile.md).
 | Startup, navigation composition and managed text-document lifetime | `app.py` |
 | Workspace identities, generations and sessions | `workspace.py`, `window_owners.py`, `window_scenes.py` |
 | Adaptive panes and destination drawers | `workspace_navigation.py`, `adaptive_workspace.py` |
-| Folder Hub sources and presentation | `folder_hub.py`, `local_sources.py`, `folder_hub_ui.py` |
+| Folder Hub sources and presentation | `folder_hub.py`, `local_sources.py`, `folder_hub_ui.py`, `folder_hub_style.py` |
 | Local file management and comic batch entry points | `files_ui.py` |
 | Text Open/Save As, picker widgets and pending bytes | `editor_picker.py` |
 | Saved-import inventory and confirmed deletion | `saved_files_ui.py`: composed `SavedFilesController` |
@@ -121,3 +121,56 @@ and [live preview screenshot](mobile-evidence/2026-10-17-source-editor/markdown-
 use synthetic files and a separate simulator app identity. Android bridge compilation
 and host editor regressions passed; this evidence does not certify physical-device
 keyboards, IME/undo gestures or Android runtime editor appearance.
+
+## Settings persistence and folder search
+
+Mobile Settings saves font size, restore behavior and restart clearing on change,
+alongside the existing immediate overview and Android appearance handlers.
+`show_legacy_session` belongs to the running host; preference loading ignores
+older persisted `show_legacy` values and saving writes its compatibility value
+as false. Reloading preferences preserves the session visibility choice.
+
+Online folder search filters the complete native bridge listing in memory;
+ordinary and crypt remote listings have no entry count cap. Local providers use
+the cancellable recursive search with no scan or result count cap. Native rows
+remain paginated at 500 per page. Regression coverage lives in
+`Mobile/tests/test_native_browser.py`, `Mobile/tests/test_settings_ui.py`,
+`Python/tests/test_mobile_hub.py` and `Mobile/rclone_bridge/list_test.go`.
+
+Session-only imports retain password-protected source ZIPs using the separate
+device-encrypted `CredentialPackages` store for future password-only unlocking.
+Decoded credentials and ZIP passwords stay in memory. Preference writes filter
+session-only associations; retained-package metadata belongs to its own index.
+Settings autosave cannot persist decoded session credentials.
+
+Resume-password gates carry a memory-only credential name supplied when importing
+a session package or adding a connection. The lock form lists only remaining
+locked gates, updating after each accepted password. Unnamed private-document
+gates use a generic private-session label. The scrollable form preserves the
+existing root replacement, safe-area handling and lifecycle race checks.
+
+## Folder Hub refresh
+
+Folder Hub has no routine Refresh button; returning to the hub and credential/
+transfer state changes update its list automatically. The error page offers
+**Try again** through `refresh_folder_hub`. Refresh uses loaded remote names, the credential-load crypt location
+snapshot and local transfer mappings. Credential loading also retains crypt
+account identities, so refresh checks their local directories for newly present
+or removed copies without resolving identities through rclone again. It rereads
+local directory names without
+calling native crypt discovery or waiting for cloud/transfer work. Unchanged
+choices retain their existing widgets; changed choices update the list in place
+without replacing the page or navigation. Credential loading owns
+`refresh_hub_crypt_locations`, including its client/generation guard.
+
+Folder Hub uses a source-owned action row: rclone shows Transfers, Network
+shares shows Add share, and Local has no toolbar or reserved toolbar spacing.
+Switching sources moves the existing native controls; the credential selector
+appears only for rclone. Empty Network shares keeps one Add share control in
+the toolbar rather than duplicating it in the folder listing.
+
+Folder Hub styling lives in `folder_hub_style.py`: dynamic semantic surfaces,
+selected tab styling, compact native symbols and clipped rounded row backgrounds.
+The shared native destination bar remains platform-owned. Idle loading controls
+are detached from `folder_loading_box`; folder opening temporarily attaches the
+status and progress controls, and removes them on completion.

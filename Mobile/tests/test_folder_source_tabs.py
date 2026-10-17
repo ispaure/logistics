@@ -34,6 +34,8 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(set(app.folder_credentials), {'All', 'Personal', 'Work'})
         app.folder_credential.value = 'Personal'
         self.assertEqual(set(app.folder_buttons), {'Personal drive'})
+        app.folder_source_buttons['rclone'].on_press()
+        self.assertEqual(app.folder_credential.value, 'Personal')
         app.folder_source_buttons['Local'].on_press()
         self.assertEqual(set(app.folder_buttons), {'All files', 'Notes'})
         self.assertFalse(app.folder_picker_header.children)
@@ -46,6 +48,30 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(app.folder_credential.value, 'All')
         self.assertEqual(set(app.folder_buttons), {'Personal drive', 'Work drive'})
         self.assertIs(app.folder_picker_header.children[0], app.folder_credential_row)
+
+    def test_source_actions_follow_tab_without_leaving_empty_toolbar_or_duplicate_share(self):
+        app = self.app
+        app.show_locations()
+        self.assertEqual(list(app.folder_source_actions.children), [app.folder_transfers_button])
+        self.assertIsNone(app.folder_add_share_button.parent)
+        self.assertEqual(app.folder_source_actions.style.margin_bottom, 12)
+        app.change_folder_source('Local')
+        self.assertEqual(list(app.folder_source_actions.children), [])
+        self.assertEqual(app.folder_source_actions.style.margin_bottom, 0)
+        self.assertIsNone(app.folder_transfers_button.parent)
+        self.assertIsNone(app.folder_add_share_button.parent)
+        app.change_folder_source('Network shares')
+        self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_share_button])
+        self.assertIsNone(app.folder_transfers_button.parent)
+        self.assertFalse(app.folder_picker_header.children)
+        self.assertFalse(any(getattr(child, 'text', '') == 'Add share…'
+                             for child in app.folder_list.children))
+        app.show_locations()
+        self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_share_button])
+        app.change_folder_source('rclone')
+        self.assertEqual(list(app.folder_source_actions.children), [app.folder_transfers_button])
+        self.assertIsNone(app.folder_add_share_button.parent)
+        self.assertIn(app.folder_credential_row, app.folder_picker_header.children)
 
     def test_ios_local_tab_opens_files_beside_local_and_other_subfolders(self):
         app = self.app

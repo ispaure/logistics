@@ -531,14 +531,13 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if type(self._impl).__module__.startswith('toga_android.'):
             box.add(toga.Button('Local / LocalCrypt location…', on_press=self.show_collection_storage, style=Pack(height=48)))
         self.show_legacy_choice = toga.Switch('Show Legacy',
-            value=getattr(self, 'show_legacy_session', self.preferences.values['show_legacy'] == 'true'),
+            value=getattr(self, 'show_legacy_session', False),
             on_change=self.change_show_legacy, style=Pack(height=48))
         box.add(switch_row(self, 'Show Legacy', self.show_legacy_choice,
             'Show Legacy- folders in Folder Hub, file browsers and library shortcuts, '
-            'and credential choices whose names start with Legacy. Save preferences to keep this choice after restarting.'))
+            'and credential choices whose names start with Legacy. This choice lasts only until the app closes.'))
         box.add(toga.Button('rclone / Remote connections…', on_press=self.show_cloud_connections, style=Pack(height=48)))
-        box.add(heading('Apply preferences'))
-        box.add(toga.Button('Save preferences', on_press=self.save_preferences, style=Pack(height=48)))
+        box.add(toga.Label('Preferences save automatically on this device.', style=Pack(font_size=12)))
         box.add(toga.Button('Reload preferences', on_press=self.reload_preferences, style=Pack(height=48)))
         box.add(self.settings_status)
         if self.scene_manager.supported:
@@ -556,6 +555,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             style=Pack(font_size=12, color='#808080'))
         box.add(self.build_version_label)
         self.document_cards_choice.on_change = self.change_document_overview
+        self.font_choice.on_change = self.save_preferences
+        self.restore_choice.on_change = self.save_preferences
+        self.clear_documents_choice.on_change = self.save_preferences
         self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), destination='settings', root=True)
 
     def refresh_document_overview(self):
@@ -599,7 +601,6 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
     def save_preferences(self, widget=None, **kwargs):
         try:
             self.preferences.save(font_size=self.font_choice.value,
-                show_legacy='true' if self.show_legacy_choice.value else 'false',
                 document_card_overview='true' if self.document_cards_choice.value else 'false',
                 clear_unmodified_documents_on_restart='true' if self.clear_documents_choice.value else 'false',
                 restore_last_document='true' if self.restore_choice.value else 'false')
@@ -615,7 +616,6 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         configure_android_eink(self)
         if type(self._impl).__module__.startswith('toga_android.'):
             self.refresh_native_theme()
-        self.show_legacy_session = self.preferences.values['show_legacy'] == 'true'
         self.refresh_folder_visibility()
         self.editor.style.font_size = int(self.preferences.values['font_size'])
         self.refresh_document_overview()

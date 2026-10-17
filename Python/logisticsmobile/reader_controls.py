@@ -85,11 +85,12 @@ class ReadingFrame:
         self.widget._reading_frame_owner = self
         self.immersive = False
 
-    def set_immersive(self, immersive, *, comic):
+    def set_immersive(self, immersive, *, comic, image=False):
         self.immersive = immersive
+        full_page = comic or image
         for child in self.content.children:
             if hasattr(child, 'magnifier_enabled'):
-                child.magnifier_enabled = bool(immersive and comic)
+                child.magnifier_enabled = bool(immersive and full_page)
         for control in self.controls:
             if control in self.widget.children:
                 self.widget.remove(control)
@@ -100,10 +101,10 @@ class ReadingFrame:
         if self.restore is not None:
             if self.restore in self.widget.children:
                 self.widget.remove(self.restore)
-            if immersive and not comic:
+            if immersive and not full_page:
                 self.widget.add(self.restore)
-        self.widget.style.margin = 0 if immersive and comic else self.margin
-        self.widget._comic_fullscreen = immersive and comic
+        self.widget.style.margin = 0 if immersive and full_page else self.margin
+        self.widget._comic_fullscreen = immersive and full_page
         self.widget._reader_fullscreen = immersive
 
 

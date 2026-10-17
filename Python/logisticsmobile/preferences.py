@@ -39,7 +39,7 @@ class Preferences:
                 self.text = self.original.decode('utf-8-sig')
                 parser = INIFile.parse(self.text)
                 for key in DEFAULTS:
-                    if parser.has_option('Mobile', key):
+                    if key != 'show_legacy' and parser.has_option('Mobile', key):
                         self.values[key] = parser['Mobile'][key]
                 self.validate(self.values)
                 # Older session-only imports persisted package/remote labels.
@@ -89,8 +89,15 @@ class Preferences:
     def save(self, **changes):
         if self.error:
             raise ValueError('Repair or move the preserved preferences file before saving settings.')
+        # Retain the old key for INI compatibility, but never persist a session toggle.
+        changes = dict(changes, show_legacy='false')
         values = dict(self.values, **changes)
         self.validate(values)
+        # Session-only associations must never reach disk, including through autosave.
+        packages = json.loads(values['remote_packages'])
+        retained = [item for item in packages if not item['session_only']]
+        if retained != packages:
+            values['remote_packages'] = changes['remote_packages'] = json.dumps(retained)
         text = INIFile.updated_text(self.text, {('Mobile', key): value for key, value in changes.items()})
         def check():
             if self.path.is_symlink():

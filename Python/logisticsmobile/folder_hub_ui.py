@@ -9,29 +9,16 @@ from .folder_hub import hub_entries, folder_tree, credential_choices, source_cho
 from features.rclone.mobile.messages import import_hint
 from textwrap import fill
 from commonUtils.ui.native.presentation import list_button
-from .appearance import action_button, accessible_name
+from .appearance import action_button, accessible_name, surface
+from .folder_hub_style import source_tab, compact_icon, toolbar_button, folder_row
 
-
-def refresh_button(action):
-    button = toga.Button('↻ Refresh', on_press=action, style=Pack(height=48, flex=1))
-    backend = type(button._impl).__module__
-    if backend.startswith('toga_iOS.'):
-        from rubicon.objc import ObjCClass
-        button.text = 'Refresh'
-        button._impl.native.setImage(ObjCClass('UIImage').systemImageNamed('arrow.clockwise'), forState=0)
-    elif backend.startswith('toga_android.'):
-        from android import R
-        native = button._impl.native
-        button.text = 'Refresh'
-        native.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_popup_sync, 0, 0, 0)
-    return button
 
 
 class FolderHubUI:
     def legacy_name_visible(self, name, *, prefix='legacy-'):
         if not type(self._impl).__module__.startswith(('toga_iOS.', 'toga_android.')):
             return True
-        show = getattr(self, 'show_legacy_session', self.preferences.values['show_legacy'] == 'true')
+        show = getattr(self, 'show_legacy_session', False)
         return show or not str(name).casefold().startswith(prefix)
 
     def folder_path_visible(self, path, *, directory=True):
@@ -63,44 +50,41 @@ class FolderHubUI:
             readers.catalog.filter_library()
 
     async def refresh_folder_hub(self, widget=None, **kwargs):
-        if getattr(self, '_hub_refreshing', False):
-            return False
+        # Credentials already supply the remote/crypt snapshot. Refresh only
+        # rereads local folder names and mappings; it must not wait on rclone,
+        # including while a transfer or credential operation owns the bridge.
         self.show_cloud(present=False)
-        origin = self.navigation_generation
-        if not self.cloud_busy:
-            self._hub_refreshing = True
-            status, progress = self.folder_loading_status, self.folder_loading_progress
-            self.folder_refresh_button.enabled = False
-            self.folder_loading_status.text = 'Refreshing local and encrypted folders…'
-            self.folder_loading_progress.max = None
-            self.folder_loading_progress.start()
-            try:
-                await self.refresh_hub_crypt_locations()
-            except (OSError, ValueError) as error:
-                self.folder_hub_error = str(error)[:300]
-                self.folder_loading_status.text = 'Refresh failed: ' + self.folder_hub_error
-                return False
-            finally:
-                self._hub_refreshing = False
-                self.folder_refresh_button.enabled = True
-                progress.stop()
-                progress.max, progress.value = 100, 0
-                if not getattr(self, 'folder_hub_error', ''):
-                    status.text = ''
-        if self.active_host and self.navigation_generation == origin:
-            self.show_locations()
+        recovering = bool(getattr(self, 'folder_hub_error', ''))
+        try:
+            choices = self.folder_choices()
+            if recovering or not hasattr(self, 'folder_list'):
+                box = self.build_folder_picker(choices=choices)
+                self.show_view(box, destination='files', root=True)
+            elif choices != self.folder_picker_choices:
+                self.update_folder_list(choices)
+        except (OSError, ValueError, IndexError, KeyError) as error:
+            self.folder_hub_error = str(error)[:300]
+            if hasattr(self, 'folder_loading_status'):
+                self.set_folder_loading('Refresh failed: ' + self.folder_hub_error)
+            return False
+        self.folder_hub_error = ''
+        if hasattr(self, 'folder_loading_status'):
+            self.set_folder_loading()
+        return True
 
     async def refresh_hub_crypt_locations(self):
-        """Native discovery belongs to credential loading or explicit Refresh."""
+        """Resolve native crypt locations once when credentials load."""
         client = getattr(self, 'cloud_client', None)
         generation = getattr(client, 'generation', None)
         def discover():
-            locations = dict(self.existing_crypt_locations())
-            return locations
-        locations = await asyncio.to_thread(discover)
+            roots = {}
+            locations = dict(self.existing_crypt_locations(roots=roots))
+            return locations, roots
+        locations, roots = await asyncio.to_thread(discover)
         if (self.active_host and client is getattr(self, 'cloud_client', None)
                 and generation == getattr(client, 'generation', None)):
             self.hub_crypt_locations = list(locations.items())
+            self.hub_crypt_roots = roots
             self.folder_hub_error = ''
 
     def folder_choices(self):
@@ -111,8 +95,19 @@ class FolderHubUI:
         # must not advertise remote-only folders before those credentials unlock.
         remotes = self.loaded_remote_names()
         crypt = dict(getattr(self, 'hub_crypt_locations', ()))
+        roots = getattr(self, 'hub_crypt_roots', {})
+        if roots:
+            # The account identities were resolved at credential load. Recheck
+            # just their local directories, including copies created since then.
+            base = collection_path(self.private_root, True)
+            crypt = {}
+            for label, (remote, identity) in roots.items():
+                path = base / identity
+                if path.is_dir() and not path.is_symlink() and any(path.iterdir()):
+                    crypt[label] = remote
+            self.hub_crypt_locations = list(crypt.items())
         # Rendering and menu opening must never enter the native bridge. A
-        # credential load or explicit Refresh updates this discovery snapshot.
+        # credential load updates this discovery snapshot.
         choices = {'All files': dict(source='Local', kind='local', value='', name='All files', copies=[])}
         for name, parts, copies in hub_entries(self.private_root, jobs, remotes, crypt.items()):
             for source, (kind, value) in copies:
@@ -175,10 +170,22 @@ class FolderHubUI:
             return toga.Box(children=[
                 toga.Label('Folder Hub could not refresh.', style=Pack(font_size=18)),
                 toga.Label(fill(self.folder_hub_error, 40), style=Pack(font_size=12)),
-                refresh_button(self.refresh_folder_hub),
+                toga.Button('Try again', on_press=self.refresh_folder_hub, style=Pack(height=48)),
                 toga.Button('Browse local files', on_press=local, style=Pack(height=48)),
                 toga.Button('Connections…', on_press=self.show_cloud_connections, style=Pack(height=48))],
                 style=Pack(direction=COLUMN, margin=12, flex=1))
+
+    def set_folder_loading(self, message='', *, busy=False):
+        """Idle loading controls have no native view or reserved layout space."""
+        self.folder_loading_status.text = message
+        children = [self.folder_loading_status] if message else []
+        if busy:
+            children.append(self.folder_loading_progress)
+        if list(self.folder_loading_box.children) != children:
+            for child in list(self.folder_loading_box.children):
+                self.folder_loading_box.remove(child)
+            for child in children:
+                self.folder_loading_box.add(child)
 
     def selected_folder_credential(self):
         try:
@@ -193,11 +200,15 @@ class FolderHubUI:
         choices = self.folder_choices() if choices is None else choices
         self.folder_source = getattr(self, 'folder_source', 'rclone')
         self.folder_source_buttons = {}
-        self.folder_source_tabs = toga.Box(style=Pack(direction=ROW, margin_bottom=12))
+        self.folder_source_tabs = surface(toga.Box(
+            style=Pack(direction=ROW, margin_bottom=12)),
+            radius=11, background='alternate', outlined=False)
         for source in ('rclone', 'Local', 'Network shares'):
             def select_source(widget=None, selected=source, **kwargs):
-                self.change_folder_source(selected)
-            button = toga.Button(source, on_press=select_source, style=Pack(flex=1, height=48))
+                if self.folder_source != selected:
+                    self.change_folder_source(selected)
+            button = toga.Button(source, on_press=select_source,
+                                 style=Pack(flex=1.5 if source == 'Network shares' else 1, height=44, font_size=13, margin=2))
             self.folder_source_buttons[source] = button
             self.folder_source_tabs.add(button)
         self.folder_list = toga.Box(style=Pack(direction=COLUMN))
@@ -205,28 +216,31 @@ class FolderHubUI:
         self.folder_credentials = self.credential_groups(source_choices(choices, 'rclone', self.network_share_remotes()))
         selected = getattr(self, 'folder_credential_name', 'All')
         self.folder_credential = toga.Selection(items=list(self.folder_credentials),
-            value=selected if selected in self.folder_credentials else 'All', style=Pack(flex=1, height=48))
+            value=selected if selected in self.folder_credentials else 'All', style=Pack(flex=1, height=44, font_size=14))
         self.folder_credential.on_change = self.change_folder_credential
-        self.folder_refresh_button = refresh_button(self.refresh_folder_hub)
-        self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=48, flex=1))
+        self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=44, font_size=13, flex=1))
+        toolbar_button(self.folder_transfers_button, 'arrow.up.arrow.down')
         self.folder_add_share_button = toga.Button('Add share…', on_press=self.show_smb_connection,
-                                                  style=Pack(height=48, flex=1))
-        self.folder_loading_status = toga.Label('', style=Pack(font_size=12))
-        self.folder_loading_progress = toga.ProgressBar(max=100, value=0, style=Pack(height=8))
+                                                  style=Pack(height=44, font_size=13, flex=1))
+        toolbar_button(self.folder_add_share_button, 'plus')
+        self.folder_loading_status = toga.Label('', style=Pack(font_size=12, margin_bottom=4))
+        self.folder_loading_progress = toga.ProgressBar(max=100, value=0, style=Pack(height=4, margin_bottom=8))
         backend = type(self.folder_add_share_button._impl).__module__
         if backend.startswith('toga_iOS.'):
             self.folder_add_share_button._impl.native.accessibilityLabel = 'Add SMB / Mac share'
         elif backend.startswith('toga_android.'):
             self.folder_add_share_button._impl.native.setContentDescription('Add SMB / Mac share')
-        self.folder_credential_row = toga.Box(children=[toga.Label('Credential', style=Pack(font_size=13, width=100, margin_right=12)),
+        self.folder_credential_row = toga.Box(children=[surface(toga.Label('Credential',
+                style=Pack(font_size=13, width=80, margin_right=12)),
+                background='window', foreground='muted', outlined=False),
                 self.folder_credential], style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
         self.folder_picker_header = toga.Box(style=Pack(direction=COLUMN))
-        box = toga.Box(children=[self.folder_source_tabs, self.folder_picker_header, toga.Box(children=[self.folder_transfers_button, self.folder_refresh_button, self.folder_add_share_button],
-                style=Pack(direction=ROW, margin_bottom=12)),
-            toga.Label(import_hint('Tap a folder to browse. Use its menu for copies, Pull and Push.'), style=Pack(font_size=12, margin_bottom=8)),
-            self.folder_loading_status, self.folder_loading_progress,
+        self.folder_source_actions = toga.Box(style=Pack(direction=ROW))
+        self.folder_loading_box = toga.Box(style=Pack(direction=COLUMN))
+        box = toga.Box(children=[self.folder_source_tabs, self.folder_picker_header, self.folder_source_actions,
+            self.folder_loading_box,
             toga.ScrollContainer(horizontal=False, content=self.folder_list, style=Pack(flex=1))],
-            style=Pack(direction=COLUMN, margin=12, flex=1))
+            style=Pack(direction=COLUMN, margin=(8, 16, 12, 16), flex=1))
         self.update_folder_list(choices)
         self.register_transfer_status(box)
         return box
@@ -247,13 +261,21 @@ class FolderHubUI:
         if self.folder_source == 'rclone' and selected is not None:
             visible = credential_choices(visible, selected)
         for source, button in self.folder_source_buttons.items():
-            button.enabled = source != self.folder_source
-            button.style.font_weight = 'bold' if source == self.folder_source else 'normal'
+            source_tab(button, source == self.folder_source)
             accessible_name(button, source + (' selected' if source == self.folder_source else ''))
         if self.folder_source == 'rclone' and not self.folder_picker_header.children:
             self.folder_picker_header.add(self.folder_credential_row)
         elif self.folder_source != 'rclone' and self.folder_picker_header.children:
             self.folder_picker_header.remove(self.folder_credential_row)
+        action = {'rclone': self.folder_transfers_button,
+                  'Network shares': self.folder_add_share_button}.get(self.folder_source)
+        actions = [action] if action is not None else []
+        if list(self.folder_source_actions.children) != actions:
+            for child in list(self.folder_source_actions.children):
+                self.folder_source_actions.remove(child)
+            for child in actions:
+                self.folder_source_actions.add(child)
+        self.folder_source_actions.style.margin_bottom = 12 if actions else 0
         visible = {name: entry for name, entry in visible.items()
                    if self.folder_path_visible(name) and self.folder_path_visible(entry.get('remote') or '')}
         for child in list(self.folder_list.children):
@@ -265,7 +287,11 @@ class FolderHubUI:
             for title, node in sorted(branch.items(), key=lambda item: item[0].casefold()):
                 path = (*ancestors, title)
                 children = node['children']
-                row = toga.Box(style=Pack(direction=ROW, margin_left=18 * len(ancestors)))
+                row = toga.Box(style=Pack(direction=ROW, align_items=CENTER,
+                    margin_left=12 * max(0, len(ancestors) - (1 if node['names'] else 0)),
+                    margin_bottom=1 if node['names'] else 0))
+                if node['names']:
+                    folder_row(row)
                 if children:
                     def toggle(widget=None, selected=path, **kwargs):
                         if selected in self.folder_collapsed:
@@ -274,16 +300,15 @@ class FolderHubUI:
                             self.folder_collapsed.add(selected)
                         self.update_folder_list(self.folder_picker_choices)
                     arrow = toga.Button('▸' if path in self.folder_collapsed else '▾', on_press=toggle,
-                                        style=Pack(width=48, height=48))
+                                        style=Pack(width=44, height=36, font_size=12))
+                    surface(arrow, radius=0, background='window', foreground='muted', outlined=False)
                     self.folder_tree_buttons[path] = arrow
                     row.add(arrow)
-                else:
-                    row.add(toga.Box(style=Pack(width=48)))
                 if node['names']:
                     name = node['names'][0]
                     async def select(widget=None, selected=name, **kwargs):
                         return await self.browse_hub_folder(selected)
-                    button = list_button(toga.Button(title, on_press=select, style=Pack(height=48, flex=1)))
+                    button = list_button(toga.Button(title, on_press=select, style=Pack(height=56, font_size=15, flex=1, margin_left=8)))
                     self.folder_buttons[name] = button
                     storage = folder_storage_label(visible[name])
                     accessible_name(button, name + ', ' + storage)
@@ -291,23 +316,37 @@ class FolderHubUI:
                         icon = {'Local': 'storage_local', 'LocalCrypt': 'storage_crypt',
                                 'Remote': 'storage_remote'}[source]
                         indicator = icon_button(icon, source + ' copy of ' + name, on_press=select)
-                        indicator.style.width = 32
+                        compact_icon(indicator)
+                        if not row.children:
+                            indicator.style.margin_left = 8
                         row.add(indicator)
                     row.add(button)
                     def options(widget=None, selected=name, **kwargs):
                         self.choose_folder(selected)
                     menu = icon_button('more', 'Folder actions for ' + name, on_press=options)
+                    compact_icon(menu, width=44, size=18)
+                    menu.style.margin_right = 4
                     row.add(menu)
                 else:
-                    row.add(list_button(toga.Button(title, on_press=toggle, style=Pack(height=48, flex=1))))
+                    group = list_button(toga.Button(title, on_press=toggle,
+                        style=Pack(height=36, font_size=13, flex=1)))
+                    surface(group, radius=0, background='window', foreground='muted', outlined=False)
+                    row.add(group)
                 self.folder_list.add(row)
                 if children and path not in self.folder_collapsed:
                     add_branch(children, path)
         add_branch(folder_tree(visible))
         if not visible:
             self.folder_list.add(toga.Label('No folders available for this source.'))
-            if self.folder_source == 'Network shares':
-                self.folder_list.add(toga.Button('Add share…', on_press=self.show_smb_connection, style=Pack(height=48)))
+        legend = toga.Box(style=Pack(direction=ROW, align_items=CENTER, margin_top=14))
+        for label, icon in (('Local', 'storage_local'), ('LocalCrypt', 'storage_crypt'), ('Remote', 'storage_remote')):
+            mark = icon_button(icon, label + ' copy')
+            compact_icon(mark, width=20, height=24, size=13, background='window')
+            mark.enabled = False
+            legend.add(mark)
+            legend.add(surface(toga.Label(label, style=Pack(font_size=11, margin_right=10)),
+                               background='window', foreground='muted', outlined=False))
+        self.folder_list.add(legend)
 
     def network_share_remotes(self):
         import json
@@ -356,7 +395,7 @@ class FolderHubUI:
         page = self.show_picker_folder(entry, present=False)
         origin = self.navigation_generation
         self.folder_picker_status.text = 'Opening ' + entry['source'] + ' folder…'
-        self.folder_loading_status.text = self.folder_picker_status.text
+        self.set_folder_loading(self.folder_picker_status.text, busy=True)
         self.folder_loading_progress.max = None
         self.folder_loading_progress.start()
         loading_status, loading_progress = self.folder_loading_status, self.folder_loading_progress
@@ -373,7 +412,7 @@ class FolderHubUI:
             if self._folder_opening is token:
                 self._folder_opening = False
                 self._folder_opening_name = None
-                self.folder_loading_status.text = ''
+                self.set_folder_loading()
                 self.folder_loading_progress.stop()
                 self.folder_loading_progress.max, self.folder_loading_progress.value = 100, 0
             if not self._folder_opening or loading_progress is not self.folder_loading_progress:

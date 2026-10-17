@@ -6,7 +6,8 @@ from threading import Lock
 
 
 class ResumePassword:
-    def __init__(self, password=''):
+    def __init__(self, password='', *, credential_name=''):
+        self.credential_name = credential_name
         self.salt = token_bytes(16)
         self.proof = self.derive(password) if password else None
         self.locked = self.proof is None

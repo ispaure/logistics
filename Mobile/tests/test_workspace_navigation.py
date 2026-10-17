@@ -56,9 +56,12 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.assertTrue(app.folder_path_visible('Legacy-old'))
             self.assertEqual(Preferences(app.preferences.path.parent).values['show_legacy'], 'false')
             app.save_preferences()
-            self.assertEqual(Preferences(app.preferences.path.parent).values['show_legacy'], 'true')
+            self.assertEqual(Preferences(app.preferences.path.parent).values['show_legacy'], 'false')
             app.show_legacy_choice.value = False
             self.assertFalse(app.folder_path_visible('Legacy-old'))
+            app.reload_preferences()
+            self.assertFalse(app.folder_path_visible('Legacy-old'))
+            app.show_legacy_choice.value = True
             app.reload_preferences()
             self.assertTrue(app.folder_path_visible('Legacy-old'))
         app.show_legacy_session = False
@@ -87,8 +90,9 @@ class WorkspaceNavigationTests(unittest.TestCase):
         packages = [dict(zip=name, remotes=[remote], session_only=True) for name, remote in
                     [('Personal.zip', 'Main'), ('LegacyArchive.zip', 'Old'),
                      ('legacy.zip', 'Old2'), ('MyLegacy.zip', 'Other')]]
-        app.preferences.save(remote_packages=json.dumps(packages))
         app.show_cloud(present=False)
+        for package in packages:
+            app.remember_credential_association(package['zip'], package['remotes'], session_only=True)
         app.set_loaded_remote_names(['Main', 'Old', 'Old2', 'Other'])
         app.show_locations()
         with patch.object(type(app._impl), '__module__', 'toga_iOS.app'):
@@ -101,7 +105,8 @@ class WorkspaceNavigationTests(unittest.TestCase):
             app.change_show_legacy(SimpleNamespace(value=False))
             self.assertEqual(app.folder_credential.value, 'All')
             self.assertEqual(app.folder_credential_name, 'All')
-            self.assertEqual(json.loads(app.preferences.values['remote_packages']), packages)
+            self.assertEqual(app.session_credential_packages, packages)
+            self.assertEqual(json.loads(app.preferences.values['remote_packages']), [])
         self.assertIn('LegacyArchive', app.credential_groups())
 
     def test_retained_zip_unlock_chooser_skips_legacy_prefix(self):

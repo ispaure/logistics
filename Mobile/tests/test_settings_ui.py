@@ -39,9 +39,13 @@ class SettingsUITests(unittest.TestCase):
             self.assertIs(box.children[-1], app.build_version_label)
             self.assertIn('0.1.5', app.build_version_label.text)
             self.assertIsNotNone(app.build_version_label.style.color)
-            app.restore_choice.value = False
-            app.clear_documents_choice.value = False
-            app.save_preferences()
+            from logisticsmobile.preferences import Preferences
+            for control, key, value, saved in (
+                    (app.restore_choice, 'restore_last_document', False, 'false'),
+                    (app.clear_documents_choice, 'clear_unmodified_documents_on_restart', False, 'false'),
+                    (app.font_choice, 'font_size', '23', '23')):
+                control.value = value
+                self.assertEqual(Preferences(app.private_root).values[key], saved)
             self.assertEqual(app.preferences.values['restore_last_document'], 'false')
             self.assertEqual(app.preferences.values['clear_unmodified_documents_on_restart'], 'false')
 

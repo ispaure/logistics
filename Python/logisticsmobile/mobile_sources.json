@@ -23,6 +23,7 @@
     "folder_controller.py",
     "folder_hub.py",
     "folder_hub_ui.py",
+    "folder_hub_style.py",
     "host_services.py",
     "hub_controller.py",
     "hub_icons.py",

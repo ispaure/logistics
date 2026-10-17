@@ -24,7 +24,9 @@ modified time, plus available comic/EPUB metadata below the entries.
 The storage picker and **Parent folder** are visible directly in the local browser.
 Changing storage opens its root. Navigation supports tapping folder entries, **Parent folder** and **Back** through
 successful folder/storage visits. **Search** opens a full-width field and searches this folder and its subfolders
-in the background; scans stop after 10,000 entries and report incomplete results; sorting supports natural name order, size and modified time in either
+in the background after you stop typing for 0.4 seconds. Search visits the full
+subtree and reports unreadable folders as incomplete results; sorting supports
+natural name order, size and modified time in either
 direction, with folders first. A failed folder load preserves the previous
 listing and history. Searching reads folder listings, without reading file contents. Closing search
 restores the current folder listing. Use **Inner

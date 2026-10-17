@@ -80,6 +80,32 @@ class MarkdownEditorTests(unittest.TestCase):
         self.assertIs(self.app.editor_view, b)
         self.assertEqual(b.document.text, '# Second')
 
+    def test_provider_markdown_displays_sibling_images_in_preview_and_formatted_edit(self):
+        from io import BytesIO
+        from PIL import Image
+        from unittest.mock import patch
+        from commonUtils.runtime.local_files import LocalFiles
+        from features.text_editor.resources import LocalTextCopies
+        self.app.show_cloud()
+        local = Path(self.temporary.name) / 'images'
+        local.mkdir()
+        data = BytesIO()
+        Image.new('RGB', (12, 12), 'blue').save(data, 'WEBP')
+        (local / 'photo.webp').write_bytes(data.getvalue())
+        (local / 'Note.md').write_text('![Picture](photo.webp)')
+        copies = LocalTextCopies(LocalFiles(local))
+        with patch('toga.WebView.set_content', autospec=True) as content:
+            self.assertTrue(self.app.loop.run_until_complete(self.app.open_crypt(copies=copies, key='Note.md')))
+            owner = self.app.private_sessions.active
+            self.assertTrue(any('<img src="data:image/webp;base64,' in call.args[2]
+                                for call in content.call_args_list))
+            content.reset_mock()
+            owner.toggle_private_preview()
+            self.assertTrue(any('data:image/webp;base64,' in call.args[2]
+                                for call in content.call_args_list))
+            self.assertEqual(owner.crypt_text.value, '![Picture](photo.webp)')
+            self.assertFalse(owner.private_dirty())
+
     def test_provider_preview_edit_source_resume_and_explicit_editor_open(self):
         from commonUtils.runtime.local_files import LocalFiles
         from features.text_editor.resources import LocalTextCopies

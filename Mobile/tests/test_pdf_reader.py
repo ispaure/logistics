@@ -7,7 +7,6 @@ import unittest
 from unittest.mock import patch
 
 from logisticsmobile.app import LogisticsMobile
-from features.pdf.mobile.canvas import swipe_direction
 from features.rclone.mobile.remote_readers import RemoteReaders
 from Mobile.tests.test_remote_readers import RemoteClient
 from Mobile.tests.test_localcrypt_ui import seed_offline_copy
@@ -47,11 +46,24 @@ def native_pdf(document):
 
 
 class PDFMobileTests(unittest.TestCase):
-    def test_vertical_gestures(self):
-        self.assertEqual(swipe_direction(0, -100), 1)
-        self.assertEqual(swipe_direction(0, 100), -1)
-        self.assertEqual(swipe_direction(-100, 0), 0)
-        self.assertEqual(swipe_direction(10, 20), 0)
+    def test_cold_local_pdf_open_initializes_provider_controls(self):
+        with TemporaryDirectory() as directory, patch('features.pdf.document.PDFDocument.open', native_pdf):
+            root = Path(directory)
+            LogisticsMobile.storage_root = root
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            local = root / 'cold.pdf'
+            local.write_bytes(PDF)
+            self.assertFalse(hasattr(app, 'cloud_view'))
+            async def check():
+                self.assertTrue(await app.open_download(path=local), app.cloud_status.value)
+                owner = app.private_sessions.active
+                self.assertEqual(owner.crypt_reader.pdf.count, 3)
+                self.assertIsNotNone(owner.crypt_image.image)
+                self.assertTrue(owner.clear_private_reader())
+            app.loop.run_until_complete(check())
 
     def test_local_remote_and_localcrypt_sessions(self):
         class Client(RemoteClient):
@@ -86,11 +98,31 @@ class PDFMobileTests(unittest.TestCase):
                     self.assertNotIn(owner.pdf_tools.panel, owner.pdf_tools.widget.children)
                     owner.pdf_tools.toggle()
                     self.assertIn(owner.pdf_tools.panel, owner.pdf_tools.widget.children)
-                    owner.toggle_private_reading_mode()
+                    canvas = owner.crypt_image
+                    self.assertEqual(canvas.page_axis, 'vertical')
+                    self.assertFalse(canvas.magnifier_enabled)
+                    canvas.toggle_controls()
                     self.assertTrue(owner.reading_frame.immersive)
-                    self.assertIn(owner.reader_restore, owner.reading_frame.widget.children)
-                    owner.toggle_private_reading_mode()
+                    self.assertTrue(owner.crypt_view._reader_fullscreen)
+                    self.assertTrue(canvas.magnifier_enabled)
+                    self.assertNotIn(owner.reader_restore, owner.reading_frame.widget.children)
+                    self.assertEqual(owner.crypt_view.style.margin_top, 0)
+                    canvas.page(1)
+                    await owner._comic_swipe_task
+                    self.assertEqual(owner.crypt_page.value, 'Page 2')
+                    self.assertTrue(canvas.magnifier_enabled)
+                    canvas.page(-1)
+                    await owner._comic_swipe_task
+                    self.assertEqual(owner.crypt_page.value, 'Page 1')
+                    canvas.toggle_controls()
                     self.assertFalse(owner.reading_frame.immersive)
+                    self.assertFalse(canvas.magnifier_enabled)
+                    canvas.page(1)
+                    await owner._comic_swipe_task
+                    self.assertEqual(owner.crypt_page.value, 'Page 2')
+                    canvas.page(-1)
+                    await owner._comic_swipe_task
+                    self.assertEqual(owner.crypt_page.value, 'Page 1')
                     owner.pdf_number.value = '3'
                     await owner.pdf_number.on_confirm()
                     self.assertEqual(owner.crypt_page.value, 'Page 3')
@@ -147,6 +179,8 @@ class PDFMobileTests(unittest.TestCase):
                     self.assertEqual(reader.data, b'')
                     self.assertIsNone(owner.crypt_image.image)
                     self.assertIsNone(owner.crypt_image.on_page)
+                    self.assertIsNone(owner.crypt_image.on_toggle)
+                    self.assertFalse(owner.crypt_image.magnifier_enabled)
                 self.assertTrue(await app.open_download(path=local), app.cloud_status.value)
                 await verify()
                 self.assertTrue(await app.open_crypt(copies=RemoteReaders(client, 'Files'), key='remote.pdf'), app.cloud_status.value)

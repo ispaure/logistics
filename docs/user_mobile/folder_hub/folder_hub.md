@@ -43,7 +43,12 @@ folder and other subfolders beside `Local`, excluding the managed `Local` folder
 On Android it browses the ordinary collection folder. **Network shares** contains
 SMB/Mac connections added through **Add share…**, including their managed offline
 copies. SMB remotes imported inside credential ZIPs stay with their package under
-**rclone**. Local and Network shares hide the credential selector.
+**rclone**. Local and Network shares hide the credential selector. **Transfers** appears only
+on **rclone**; **Add share…** appears only on **Network shares**. **Local** has
+no action toolbar. The source tabs use a rounded strip with a highlighted
+selection. Compact folder rows have separate copy icons and an overflow menu;
+a legend below the tree names Local, LocalCrypt and Remote. Loading status and
+progress appear only while a folder is opening or an error needs attention.
 Each folder row shows icons beside its name for the available copies: a drive
 for **Local**, a lock for **LocalCrypt**, and a cloud for **Remote**. Multiple
 icons mean multiple copies are available. LocalCrypt means the device copy is
@@ -59,8 +64,12 @@ returns to the mapped online subfolder. Remote
 browsing opens the read-only online file browser, with direct previews and existing offline-copy
 actions. Choose folders and start Push/Pull from their Folder Hub action pages.
 Existing managed copies remember their storage type and transfer association.
-The first pull chooses storage; later transfers reuse it. **Refresh** updates
-folder discovery without downloading remote contents.
+The first pull chooses storage; later transfers reuse it. Folder Hub updates
+when you return to it and when transfers or loaded credentials change. It uses
+already loaded connections and local folder checks, without repeating native
+connection checks or downloading remote contents. There is no manual Refresh
+button. Loading or unlocking credentials updates remote names and discovers
+existing encrypted copies. If the hub cannot load, **Try again** retries it.
 
 Mobile bundles the existing `Python/configFile.ini`; its `[Folders]` exclusions
 control both the remote picker and Folder Hub. Hidden backing remotes remain
@@ -110,12 +119,12 @@ Deletion creates no backup and has no app recovery or undo. The app no longer ru
 deletes its old backup trees. Those old files remain untouched. Removing a mapping keeps its local files. A missing or changed
 connection blocks transfers until you load the matching credential ZIP.
 
-For session-only connections, `preferences.ini` remembers the ZIP filename and
-remote names, without its password or credentials. After restart those remotes
-remain discoverable in the Hub; opening one tells you which ZIP to select and
-unlock. The ZIP itself must be available through the device picker. Forgetting
-credentials also clears these associations. Saved credentials retain the existing
-protected-vault behavior.
+Session-only decoded credentials and ZIP passwords stay in memory. The original
+password-protected ZIP is retained with device encryption in private app storage,
+with its package/remote associations, so future sessions can ask for its ZIP
+password without selecting the file again. Settings autosave never saves decoded
+session credentials. Unencrypted ZIPs must be selected again next time.
+**Forget saved credentials** removes retained ZIPs and device keys.
 
 Transfers show completed and active file counts, discovered entries, checks and
 transferred megabytes (MB, 1 MB = 1,000,000 bytes), shown to two decimal places on

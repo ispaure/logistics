@@ -150,15 +150,13 @@ preserves the selected destination and does not open other workspaces.
 
 Folder Hub's Credential selector includes All and the names of imported credential
 ZIPs (for example, Personal). All combines known local and remote folder trees.
-For session-only imports, password-protected source ZIPs are retained under device
-encryption with their remote names and crypt-setting fingerprints. LocalCrypt can
-therefore find the matching ZIP after restarting and ask only for its password.
-The ZIP password and decoded credentials remain in memory for the current app
-session; the retained ZIP does not restore an unlocked session. Unencrypted ZIPs
-are not retained in session mode: select them again next time. **Forget saved
-credentials** removes retained ZIPs and their device key. Association metadata
-includes ZIP labels and remote names, not decrypted document names or contents.
-Previously saved credentials remain saved until explicitly forgotten.
+Session-only imports retain their original password-protected ZIP under device
+encryption in private app storage, along with its remote associations. Future
+sessions can unlock that ZIP using its password without selecting it again.
+Decoded credentials and ZIP passwords stay in memory and Settings autosave never
+saves them. Unencrypted ZIPs must be selected again next time. **Forget saved
+credentials** removes retained ZIPs and their device key. Previously saved
+credentials remain saved until explicitly forgotten.
 
 Documents lists open files in type groups below its compact New/Open toolbar. The menu opens immediately using cached shortcuts, then refreshes
 available folders in the background. Chat opens on its first tab selection.
@@ -233,8 +231,8 @@ Resolved values stay in memory for the reader session and are cleared on close.
 On Android and iOS, folders whose names start with `Legacy-` are hidden in Folder Hub,
 file browsers and library shortcuts by default, including Local, Remote and
 LocalCrypt folders. Settings → Folder Hub → **Show Legacy** changes visibility
-for the current session. Press **Save preferences** to keep the choice after
-restarting; **Reload preferences** restores the saved choice. Files with that
+for the current session only and resets to off when the app starts.
+**Reload preferences** keeps the current session choice. Files with that
 prefix remain visible when their parent folders are visible.
 
 The same **Show Legacy** switch also hides credential/ZIP choices whose
@@ -306,7 +304,7 @@ platform's native presentation. iPad supports additional app windows; Android
 currently keeps one app workspace/window. Android alone offers **High contrast /
 E Ink**. Both platforms offer **Show Legacy** to control the visibility of
 folders beginning with `legacy-` and credential package names beginning with
-`legacy`. Save preferences to keep that choice after restarting.
+`legacy`. This choice lasts only for the current session.
 
 Android protects sensitive windows with its secure-window flag. iOS hides content
 for inactive app snapshots and detected recording/mirroring, but cannot prevent

@@ -345,9 +345,6 @@ func list(ctx context.Context, name, dir string) ([]entry, error) {
 	if err != nil {
 		return nil, errors.New("remote folder could not be listed")
 	}
-	if len(rows) > 1000 {
-		return nil, errors.New("folder exceeds 1000 entries")
-	}
 	result := []entry{}
 	for _, row := range rows {
 		p := row.Remote()

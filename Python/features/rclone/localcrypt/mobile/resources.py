@@ -2,6 +2,7 @@
 from features.rclone.mobile.storage_location import collection_path
 from contextlib import contextmanager
 from io import BytesIO
+from datetime import datetime
 import base64
 import re
 from pathlib import Path, PurePosixPath
@@ -99,10 +100,19 @@ class CryptFiles(LocalFiles):
             if re.fullmatch(r'.+\.[0-9a-f]{8}\.partial', child.name):
                 continue
             try:
-                plain = self.mapping(child.relative_to(self.root).as_posix(), child.is_dir(), decode=True)
+                plain = self.relative(self.mapping(child.relative_to(self.root).as_posix(), child.is_dir(), decode=True))
                 if plain.rpartition('/')[0] != path:
                     raise ValueError('Invalid encrypted folder entry.')
-                rows.append(self.entry(plain))
+                # The physical entry is already known. Re-encoding its plain
+                # name through entry() used three additional native requests
+                # per child, making recursive offline searches unnecessarily slow.
+                info = child.stat()
+                directory = child.is_dir()
+                revision = ((info.st_dev, info.st_ino) if directory else
+                    (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns))
+                rows.append(dict(name=PurePosixPath(plain).name, path=plain, directory=directory,
+                    size=info.st_size, revision=revision,
+                    modified=datetime.fromtimestamp(info.st_mtime).astimezone().isoformat(sep=' ', timespec='seconds')))
             except FileNotFoundError:
                 # A concurrent Pull can remove or atomically replace this entry.
                 continue

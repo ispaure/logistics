@@ -49,3 +49,11 @@ you want an offline Local or LocalCrypt folder.
 
 - [Reading and editing on mobile](reading-and-editing.md)
 - [Document workflows](workflows.md)
+
+## Markdown images from Local and LocalCrypt
+
+Folder-backed Markdown displays WebP, PNG and JPEG images in preview and formatted
+editing. Both `![Photo](images/photo.webp)` and `![[images/photo.webp]]` resolve
+relative to the Markdown file. LocalCrypt image bytes remain in memory.
+See the [Text Editor mobile guide](../../../Python/features/text_editor/docs/user_mobile/user_mobile.md#images-in-folder-backed-markdown)
+for supported paths and image limits.

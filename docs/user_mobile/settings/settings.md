@@ -51,8 +51,9 @@ On iPhone and iPad, choosing a dropdown option closes its picker immediately.
 Settings switches use one compact row: label, **ⓘ** help, then the on/off switch.
 Tap **ⓘ** for an explanation without changing the setting. This includes
 **Document card overview**, **Restore last document**, **Close saved documents on restart** and,
-on Android and iOS, **Show Legacy**. Save/reload preferences continue to work as before;
-document overview and Show Legacy still apply immediately.
+on Android and iOS, **Show Legacy**. Preferences save automatically when changed.
+**Show Legacy** applies immediately for the current session only and resets to off
+when the app starts. Reloading preferences keeps the current session choice.
 
 **About** at the bottom of Settings shows muted build information: the app version,
 short source revision and commit time when available, plus the platform and
