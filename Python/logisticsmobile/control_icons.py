@@ -27,8 +27,10 @@ ICONS = {
                                       ((16, 8), (18, 10), (18, 14), (16, 16)), ((19, 4), (22, 8), (23, 12), (22, 16), (19, 20)))),
     'play': ('play.fill', '▶', (((7, 4), (20, 12), (7, 20), (7, 4)),)),
     'pause': ('pause.fill', 'Ⅱ', (((8, 4), (8, 20)), ((16, 4), (16, 20)))),
-    'skip_back': ('gobackward.15', '↶15', (((8, 3), (3, 7), (8, 11)), ((3, 7), (14, 7), (20, 12), (18, 20), (9, 22)))),
-    'skip_forward': ('goforward.15', '15↷', (((16, 3), (21, 7), (16, 11)), ((21, 7), (10, 7), (4, 12), (6, 20), (15, 22)))),
+    # Match commonUtils.ui.readers.reader_chrome.ReaderIcon's back15/forward15:
+    # 18-point circular arc, direction arrow, and a centred 10-point "15".
+    'skip_back': ('gobackward.15', '↶15', (((8, 2), (3, 5), (7, 8)),)),
+    'skip_forward': ('goforward.15', '15↷', (((16, 2), (21, 5), (17, 8)),)),
     'stop': ('stop.fill', '■', (((6, 6), (18, 6), (18, 18), (6, 18), (6, 6)),)),
     'close': ('xmark', '×', (((6, 6), (18, 18)), ((18, 6), (6, 18)))),
 }
@@ -64,20 +66,35 @@ def apply_icon(button, name, label):
         from rubicon.objc import ObjCClass
         button.text = ''
         image = ObjCClass('UIImage').systemImageNamed(symbol)
-        if name == 'obsidian':
+        if name in {'obsidian', 'skip_back', 'skip_forward'}:
+            from math import radians
             from rubicon.objc import Block, objc_id
-            from toga_iOS.libs import UIGraphicsImageRenderer, CGSize, CGPoint
+            from toga_iOS.libs import UIGraphicsImageRenderer, CGSize, CGPoint, CGRect
             renderer = UIGraphicsImageRenderer.alloc().initWithSize(CGSize(24, 24))
             def draw(context):
                 ObjCClass('UIColor').blackColor.setStroke()
                 path = ObjCClass('UIBezierPath').bezierPath()
-                path.lineWidth = 1.8
+                skip = name.startswith('skip_')
+                path.lineWidth = 1.7 if skip else 1.8
+                path.lineCapStyle = 1
                 path.lineJoinStyle = 1
+                if skip:
+                    path.addArcWithCenter(CGPoint(12, 12), radius=9,
+                        startAngle=radians(-50), endAngle=radians(-330), clockwise=False)
                 for line in lines:
                     path.moveToPoint(CGPoint(*line[0]))
                     for point in line[1:]:
                         path.addLineToPoint(CGPoint(*point))
                 path.stroke()
+                if skip:
+                    from rubicon.objc import ns_from_py
+                    paragraph = ObjCClass('NSMutableParagraphStyle').alloc().init()
+                    paragraph.alignment = 1
+                    font = ObjCClass('UIFont').systemFontOfSize(10)
+                    text = ObjCClass('NSString').stringWithString('15')
+                    text.drawInRect(CGRect((3, (25 - float(font.lineHeight)) / 2), (18, float(font.lineHeight))),
+                        withAttributes=ns_from_py({'NSFont': font,
+                            'NSColor': ObjCClass('UIColor').blackColor, 'NSParagraphStyle': paragraph}))
             image = renderer.imageWithActions(Block(draw, None, objc_id)).imageWithRenderingMode(2)
         config = ObjCClass('UIImageSymbolConfiguration').configurationWithPointSize(22, weight=5)
         button._impl.native.setImage(image, forState=0)
@@ -97,8 +114,7 @@ def apply_icon(button, name, label):
             for y in (6, 12, 18):
                 path.addCircle(3, y, .6, Path.Direction.CW)
         elif name in {'skip_back', 'skip_forward'}:
-            path.moveTo(9, 13);path.lineTo(10, 12);path.lineTo(10, 18)
-            path.moveTo(16, 12);path.lineTo(13, 12);path.lineTo(13, 15);path.lineTo(16, 15);path.lineTo(16, 18);path.lineTo(13, 18)
+            path.addArc(3, 3, 21, 21, -50, -280)
         elif name == 'more':
             for x in (5, 12, 19):
                 path.addCircle(x, 12, 1, Path.Direction.CW)
@@ -117,6 +133,20 @@ def apply_icon(button, name, label):
         native.setMinimumWidth(0)
         native.setMinimumHeight(0)
         native.setPadding(padding, padding, padding, padding)
+        if name in {'skip_back', 'skip_forward'}:
+            from android.graphics import Bitmap, Canvas
+            from android.graphics.drawable import BitmapDrawable
+            bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            canvas = Canvas(bitmap)
+            canvas.scale(size / 24, size / 24)
+            paint.setStrokeWidth(1.7)
+            canvas.drawPath(path, paint)
+            paint.setStyle(Paint.Style.FILL)
+            paint.setTextSize(10)
+            paint.setTextAlign(Paint.Align.CENTER)
+            canvas.drawText('15', 12, 12.5 - (paint.ascent() + paint.descent()) / 2, paint)
+            drawable = BitmapDrawable(native.getResources(), bitmap)
+            drawable.setBounds(0, 0, size, size)
         native.setCompoundDrawablesRelative(drawable, None, None, None)
         button._impl._control_drawable = drawable
         _android_controls.add(button._impl)
