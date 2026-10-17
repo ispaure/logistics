@@ -10,7 +10,7 @@ from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_
 
 DEFAULTS = {'android_eink': 'false', 'font_size': '16', 'restore_last_document': 'true', 'last_document': '',
             'document_card_overview': 'true', 'show_legacy': 'false',
-            'clear_unmodified_documents_on_restart': 'true',
+            'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false',
             'comic_layout': 'auto', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS}
 
 
@@ -57,6 +57,8 @@ class Preferences:
     def validate(values):
         if values.keys() != DEFAULTS.keys():
             raise ValueError('Unknown mobile preference.')
+        if values['session_speech_when_locked'] not in {'true', 'false'}:
+            raise ValueError('Invalid session speech lock-screen preference.')
         if values['android_eink'] not in {'true', 'false'}:
             raise ValueError('Invalid Android E Ink preference.')
         if values['font_size'] not in FONT_SIZES:

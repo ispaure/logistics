@@ -49,6 +49,15 @@ def configure_android_appearance(project):
     permission = 'android.permission.MANAGE_EXTERNAL_STORAGE'
     if not any(item.get('{' + namespace + '}name') == permission for item in root.findall('uses-permission')):
         ET.SubElement(root, 'uses-permission', {'{' + namespace + '}name': permission})
+    for permission in ('android.permission.FOREGROUND_SERVICE', 'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
+                       'android.permission.WAKE_LOCK'):
+        if not any(item.get('{' + namespace + '}name') == permission for item in root.findall('uses-permission')):
+            ET.SubElement(root, 'uses-permission', {'{' + namespace + '}name': permission})
+    application = root.find('application')
+    service = 'io.github.ispaure.logistics.books.SpeechMediaService'
+    if not any(item.get('{' + namespace + '}name') == service for item in application.findall('service')):
+        ET.SubElement(application, 'service', {'{' + namespace + '}name': service,
+            '{' + namespace + '}exported': 'false', '{' + namespace + '}foregroundServiceType': 'mediaPlayback'})
     speech_queries = ET.parse(ROOT.parent / 'Python/features/books/mobile/android_speech_queries.xml').getroot()
     query = root.find('queries')
     if query is None:

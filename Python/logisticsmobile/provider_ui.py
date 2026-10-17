@@ -8,6 +8,15 @@ from .control_icons import icon_button
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 
+def speech_session_valid(owner):
+    if not owner.active_host or owner.crypt_reader is None:
+        return False
+    store = owner._crypt_reader_store
+    if getattr(store, 'encrypted', True) or getattr(store, 'remote_storage', False):
+        return owner.credential_generation == getattr(owner.credential_client, 'generation', None)
+    return True
+
+
 def private_label(value):
     # Native labels use their longest line as a minimum width. Bound messages
     # and virtual filenames so they cannot widen a phone's entire reader.
@@ -785,7 +794,8 @@ class ProviderUI(FilesUI):
         from .markdown_speech import MarkdownSpeech
         speech = getattr(self, "markdown_speech", None)
         if speech is None:
-            self.markdown_speech = speech = MarkdownSpeech(getattr(self, "app", self), preview, self.crypt_content)
+            self.markdown_speech = speech = MarkdownSpeech(getattr(self, "app", self), preview, self.crypt_content,
+                privacy_gate=lambda: getattr(self, "privacy_gate", None), valid=lambda: speech_session_valid(self))
         speech.close()
         speech.web = preview
         self.crypt_content.insert(0, speech.button)
@@ -1036,4 +1046,5 @@ class ProviderUI(FilesUI):
     def show_provider_read_aloud(self, widget=None, **kwargs):
         panel = getattr(self, 'provider_epub_view', None)
         if panel is not None and hasattr(panel, 'show_read_aloud') and not self.cloud_busy:
-            panel.show_read_aloud(self.loop)
+            panel.show_read_aloud(self.loop, app=self.app, privacy_gate=lambda: self.privacy_gate,
+                valid=lambda: speech_session_valid(self))

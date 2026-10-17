@@ -31,4 +31,10 @@ class ReaderBuildTests(unittest.TestCase):
 
             permissions = ET.parse(manifest).getroot().findall("uses-permission")
             self.assertEqual([item.get("{http://schemas.android.com/apk/res/android}name") for item in permissions],
-                             ["android.permission.MANAGE_EXTERNAL_STORAGE"])
+                             ["android.permission.MANAGE_EXTERNAL_STORAGE", "android.permission.FOREGROUND_SERVICE",
+                              "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK", "android.permission.WAKE_LOCK"])
+            services = ET.parse(manifest).getroot().findall("application/service")
+            self.assertEqual(len(services), 1)
+            namespace = "{http://schemas.android.com/apk/res/android}"
+            self.assertEqual(services[0].get(namespace + "exported"), "false")
+            self.assertEqual(services[0].get(namespace + "foregroundServiceType"), "mediaPlayback")

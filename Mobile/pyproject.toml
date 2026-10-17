@@ -42,3 +42,5 @@ CFBundleName = "Logisticks"
 UIFileSharingEnabled = true
 LSSupportsOpeningDocumentsInPlace = true
 NSLocalNetworkUsageDescription = "Connect to SMB file shares and the LM server you configure on your local network."
+
+UIBackgroundModes = ["audio"]

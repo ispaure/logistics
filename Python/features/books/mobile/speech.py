@@ -34,6 +34,7 @@ def utterances(text, start=0, end=None, *, limit=1000, breaks=()):
 class SpeechSession:
     def __init__(self, engine, *, on_range, on_state):
         self.engine, self.on_range, self.on_state = engine, on_range, on_state
+        self.can_speak = lambda: True
         self.closed, self.state, self.generation = False, 'stopped', 0
         self.ranges, self.index = [], 0
         self.text, self.words, self.breaks = "", [], ()
@@ -66,6 +67,9 @@ class SpeechSession:
     def next(self):
         if self.closed or self.state != 'speaking':
             return
+        if not self.can_speak():
+            self.stop()
+            return
         if self.index >= len(self.ranges):
             self.stop()
             self.on_state('stopped', 'Finished the selected passage or current chapter.')
@@ -77,8 +81,8 @@ class SpeechSession:
         try:
             self.started_at = monotonic()
             self.elapsed = 0
-            self.engine.speak(text, self.voice, self.speed, self.token)
             self.on_state('speaking', 'Reading aloud · current sentence highlighted')
+            self.engine.speak(text, self.voice, self.speed, self.token)
         except Exception:
             self.stop()
             self.on_state('unavailable', 'Speech failed. Check the installed offline voice.')
@@ -144,3 +148,4 @@ class SpeechSession:
             self.engine.close()
             self.engine.completed = self.engine.failed = lambda *args: None
             self.on_range = self.on_state = lambda *args: None
+            self.can_speak = lambda: False

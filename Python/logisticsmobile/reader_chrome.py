@@ -189,9 +189,10 @@ class ReaderChrome:
             return await speech_source(self.epub_view, self.epub_text, self.epub_offset)
         def follow(start, end):
             self.epub_offset = start
-            self.epub_view._chapter_bridge.seek(start, end)
+            if not self.app.screen_privacy.inactive:
+                self.epub_view._chapter_bridge.seek(start, end)
             self.epub_event(self.book_reader, self.book_epoch, self.book_record['position'], 'position', start)
-        self.speech_panel = ReadAloudPanel(loop=self.loop, source=source, on_range=follow, close=self.close_read_aloud)
+        self.speech_panel = ReadAloudPanel(loop=self.loop, source=source, on_range=follow, close=self.close_read_aloud, app=self.app)
         self.book_content.insert(0, self.speech_panel)
 
     def close_read_aloud(self, widget=None, **kwargs):

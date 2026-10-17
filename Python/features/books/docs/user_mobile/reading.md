@@ -104,3 +104,13 @@ collection suggestions. Ordinary local and unlocked LocalCrypt folders have recu
 metadata batches through **Files → Actions → Edit comics in this folder…**. See the
 [Comics guide](../../../comics/docs/user_mobile/reading.md#mobile-collection-search-and-folder-batches)
 for scan limits, explicit-field saves and private-session cleanup.
+
+### Lock-screen read-aloud
+
+Started read-aloud uses system media controls on iOS and Android, with Play/Pause
+and approximate backward/forward 15-second skips. Playback and controls end when
+the passage finishes, the document closes or its credentials are revoked. For
+session-only credentials, background speech is disabled unless **Settings →
+Session-only speech while locked** is enabled. The saved opt-in does not unlock
+credentials or allow another chapter/file to be read while locked. See
+[the speech setting](../../../../../docs/user_mobile/settings/settings.md#speech-while-locked).

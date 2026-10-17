@@ -31,3 +31,10 @@ with a 16 MiB image-data budget per render. Animated WebP is unsupported.
 Network URLs and paths outside the current provider root are not loaded.
 Standalone imported Markdown without its original folder cannot resolve sibling
 images; open the file through Local or LocalCrypt to retain folder access.
+
+## Lock-screen speech
+
+Markdown read-aloud shares the system playback controls used by EPUBs, including
+Play/Pause and approximate 15-second skips. Session-only credentials require an
+explicit saved opt-in for background speech; it defaults to off. See
+[Speech while locked](../../../../../docs/user_mobile/settings/settings.md#speech-while-locked).
