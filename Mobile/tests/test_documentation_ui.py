@@ -95,6 +95,47 @@ class DocumentationTests(unittest.TestCase):
         self.assertTrue(self.app.routes.back())
         self.assertIs(self.app.body.children[0].content, box)
 
+    def test_documentation_speaker_opens_current_page_and_stops_on_navigation(self):
+        import json
+        from unittest.mock import AsyncMock
+        from test_markdown_speech import Engine
+        from logisticsmobile.documentation_ui import show_documentation
+        root = Path(self.temporary.name).resolve() / 'help'
+        root.mkdir()
+        first, second = root / 'README.md', root / 'next.md'
+        first.write_text('# Home\n\nRead this page.')
+        second.write_text('# Next\n\nAnother page.')
+        owner = show_documentation(self.app, root, first)
+        self.assertEqual(list(owner.navigation.children)[-4:],
+            [owner.back_button, owner.forward_button, owner.up_button, owner.speech.button])
+        self.assertEqual(owner.speech.button.control_icon, 'speaker')
+
+        async def exercise():
+            with patch('features.books.mobile.speech_view.NativeSpeech', Engine):
+                owner.show_browse()
+                owner.speech.button.on_press()
+                self.assertTrue(owner.reading)
+                panel = owner.speech.panel
+                await panel.ready_task
+                with patch.object(owner.web, 'evaluate_javascript', AsyncMock(return_value=json.dumps('Home selected passage'))):
+                    await panel.play()
+                self.assertEqual(panel.engine.calls[0][0], 'Home selected passage')
+                owner.open_page(second)
+                self.assertTrue(panel.closed and panel.engine.closed)
+                self.assertEqual(panel.session.ranges, [])
+                owner.speech.button.on_press()
+                panel = owner.speech.panel
+                await panel.ready_task
+                owner.back_button.on_press()
+                self.assertEqual(owner.path, first)
+                self.assertTrue(panel.closed)
+                owner.speech.button.on_press()
+                panel = owner.speech.panel
+                await panel.ready_task
+                self.app.show_settings()
+                self.assertTrue(panel.closed)
+        self.app.loop.run_until_complete(exercise())
+
     def test_phone_tablet_search_and_contained_links(self):
         root = Path(self.temporary.name).resolve() / 'docs'
         root.mkdir()
