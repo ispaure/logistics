@@ -10,8 +10,8 @@ _windows = []
 
 
 def choose_editor_resource(parent, mode, provider=None, name='', *, markdown=False, extensions=None, directory=None):
-    from features.rclone.local_crypt import connections, CryptResources
-    from features.rclone.ui.local_crypt import ensure_session
+    from features.rclone.localcrypt.backend import connections, CryptResources
+    from features.rclone.localcrypt.ui.views import ensure_session
     from services.local_storage import install_local_storage_policy
     install_local_storage_policy()
     locations = []
@@ -49,7 +49,7 @@ def retain(window):
 
 def make_private_editor(choice, session, *, markdown=False):
     if markdown:
-        from features.rclone.ui.local_crypt import MarkdownStorage, PrivateMarkdownWindow
+        from features.rclone.localcrypt.ui.views import MarkdownStorage, PrivateMarkdownWindow
         def open_link(path, fragment=''):
             linked = ResourceChoice(choice.provider, choice.provider.relative(path),
                                     choice.provider.acquire() if hasattr(choice.provider, 'acquire') else lambda: None)
@@ -95,7 +95,7 @@ def open_editor_choice(choice, parent=None, *, markdown=False, fragment=''):
 def prepare_editor(choice, *, markdown=False, cancelled=lambda: False):
     session = ResourceTextSession.open(choice.provider, choice.path, max_bytes=8 * 1024 * 1024, cancelled=cancelled)
     if markdown:
-        from features.rclone.ui.local_crypt import prepare_markdown
+        from features.rclone.localcrypt.ui.views import prepare_markdown
         _, session.resources = prepare_markdown(choice.provider, choice.provider.root / choice.path,
                                                 data=session.text.data, cancelled=cancelled)
     return session

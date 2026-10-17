@@ -5,9 +5,9 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-from features.blender.library import AddonLibrary, inspect_package
-from features.blender.manager import BlenderManager
-from features.blender.releases import load_releases
+from features.blender.addons.library import AddonLibrary, inspect_package
+from features.blender.presets.manager import BlenderManager
+from features.blender.installation.releases import load_releases
 
 
 class BlenderLibraryTests(unittest.TestCase):
@@ -48,7 +48,7 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual(len(scoped.entries()), 1)
         self.assertEqual(self.library.for_preset(other).entries(), [])
         self.assertEqual(self.library.entries(shared_only=True), [])
-        with patch.object(self.manager, 'executable', return_value=Path('/unused/blender')), patch('features.blender.addons.run_blender_script'):
+        with patch.object(self.manager, 'executable', return_value=Path('/unused/blender')), patch('features.blender.addons.scanning.run_blender_script'):
             self.library.apply(self.release, 'Art', [addon.identity], bluehole={'enabled': False, 'branch': 'main'})
         self.assertTrue((self.preset / 'scripts/addons/tool/__init__.py').exists())
         copied = self.manager.duplicate_preset(self.release, 'Art', 'Copy')
@@ -115,7 +115,7 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual(self.library.errors, [])
 
     def test_metadata_cache_invalidates_modified_zip_and_accepts_legacy_nickname(self):
-        from features.blender import library
+        from features.blender.addons import library
         path = self.package('named.zip', version=(1, 13, 2, 'DeusEx'))
         with patch.object(library, '_inspect_package', wraps=library._inspect_package) as inspect:
             first = inspect_package(path)
@@ -153,7 +153,7 @@ class BlenderLibraryTests(unittest.TestCase):
     def test_apply_update_remove_and_independent_presets(self):
         self.library.add(self.package('old.zip'))
         other = self.manager.create_preset(self.release, 'Other')
-        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.run_blender_script') as run:
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.scanning.run_blender_script') as run:
             self.library.apply(self.release, 'Art', ['legacy:tool'])
             run.assert_called_once()
             self.assertTrue((self.preset / 'scripts/addons/tool/helper.py').exists())
@@ -167,7 +167,7 @@ class BlenderLibraryTests(unittest.TestCase):
 
     def test_unchanged_launch_preserves_addon_local_files_and_repairs_missing_package(self):
         self.library.add(self.package('tool.zip'))
-        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.run_blender_script'):
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.scanning.run_blender_script'):
             self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={'enabled': False, 'branch': 'main'})
             folder = self.preset / 'scripts/addons/tool'
             settings = folder / 'artist-settings.json'
@@ -185,7 +185,7 @@ class BlenderLibraryTests(unittest.TestCase):
 
     def test_failed_enable_restores_files_preferences_and_selection(self):
         self.library.add(self.package('old.zip'))
-        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.run_blender_script'):
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.scanning.run_blender_script'):
             self.library.apply(self.release, 'Art', ['legacy:tool'])
         prefs = self.preset / 'config/userpref.blend'
         prefs.write_bytes(b'original preferences')
@@ -194,7 +194,7 @@ class BlenderLibraryTests(unittest.TestCase):
         def fail(*args, **kwargs):
             prefs.write_bytes(b'failed preferences')
             raise ValueError('enable failed')
-        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.run_blender_script', side_effect=fail):
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.scanning.run_blender_script', side_effect=fail):
             with self.assertRaisesRegex(ValueError, 'enable failed'):
                 self.library.apply(self.release, 'Art', ['legacy:tool'])
         self.assertEqual(prefs.read_bytes(), b'original preferences')
@@ -215,7 +215,7 @@ class BlenderLibraryTests(unittest.TestCase):
             return addon
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
                 patch.object(self.library, 'resolve', side_effect=race), \
-                patch('features.blender.addons.run_blender_script') as run:
+                patch('features.blender.addons.scanning.run_blender_script') as run:
             with self.assertRaisesRegex(ValueError, 'ZIP changed before installation'):
                 self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={'enabled': False, 'branch': 'main'})
         run.assert_not_called()
@@ -224,7 +224,7 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertFalse((self.preset / '.logistics-addons.json').exists())
 
     def test_extraction_uses_verified_snapshot_when_source_changes_later(self):
-        from features.blender import library as module
+        from features.blender.addons import library as module
         addon = self.library.for_preset(self.preset).add(self.package('tool.zip'))
         inspect = module.inspect_package
         def race(path):
@@ -235,7 +235,7 @@ class BlenderLibraryTests(unittest.TestCase):
             return parsed
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
                 patch.object(module, 'inspect_package', side_effect=race), \
-                patch('features.blender.addons.run_blender_script'):
+                patch('features.blender.addons.scanning.run_blender_script'):
             self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={'enabled': False, 'branch': 'main'})
         self.assertEqual(inspect(addon.package).version, '9.0.0')
         self.assertIn('(1, 0, 0)', (self.preset / 'scripts/addons/tool/__init__.py').read_text())
@@ -251,7 +251,7 @@ class BlenderLibraryTests(unittest.TestCase):
             archive.writestr(engine, b'engine fixture')
         self.library.add(path)
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
-                patch('features.blender.addons.run_blender_script'):
+                patch('features.blender.addons.scanning.run_blender_script'):
             self.library.apply(self.release, 'Art', ['legacy:tool'])
         installed = self.preset / 'scripts/addons/tool/bin/engine'
         self.assertEqual(installed.read_bytes(), b'engine fixture')
@@ -259,7 +259,7 @@ class BlenderLibraryTests(unittest.TestCase):
             self.assertEqual(installed.stat().st_mode & 0o777, 0o755)
 
     def test_bluehole_update_preserves_custom_environments_and_failed_apply_rolls_back(self):
-        from features.blender import bluehole
+        from features.blender.addons import bluehole
         config = {'enabled': True, 'branch': 'main', 'deluxe': False}
         packages = []
         for index in (1, 2):
@@ -270,14 +270,14 @@ class BlenderLibraryTests(unittest.TestCase):
             packages.append(inspect_package(path))
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
                 patch.object(bluehole, 'update', return_value=(packages[0], 'a' * 40)), \
-                patch('features.blender.addons.run_blender_script'):
+                patch('features.blender.addons.scanning.run_blender_script'):
             self.library.apply(self.release, 'Art', [], bluehole=config)
         addon = self.preset / 'scripts/addons/BlueHole'
         (addon / 'envFiles/artist/settings.ini').write_text('artist customization')
         before = (self.preset / '.logistics-addons.json').read_bytes()
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
                 patch.object(bluehole, 'update', return_value=(packages[1], 'b' * 40)), \
-                patch('features.blender.addons.run_blender_script', side_effect=OSError('enable failed')):
+                patch('features.blender.addons.scanning.run_blender_script', side_effect=OSError('enable failed')):
             with self.assertRaises(OSError):
                 self.library.apply(self.release, 'Art', [], bluehole=config)
         self.assertEqual((self.preset / '.logistics-addons.json').read_bytes(), before)
@@ -285,21 +285,21 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual((addon / 'envFiles/artist/settings.ini').read_text(), 'artist customization')
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
                 patch.object(bluehole, 'update', return_value=(packages[1], 'b' * 40)), \
-                patch('features.blender.addons.run_blender_script'):
+                patch('features.blender.addons.scanning.run_blender_script'):
             self.library.apply(self.release, 'Art', [], bluehole=config)
         self.assertEqual((addon / 'envFiles/default/settings.ini').read_text(), 'default 2')
         self.assertEqual((addon / 'envFiles/artist/settings.ini').read_text(), 'artist customization')
         self.assertEqual(self.library.selection(self.preset)['installed_bluehole']['commit'], 'b' * 40)
 
     def test_bluehole_disable_reenable_preserves_environments_and_failed_disable_rolls_back(self):
-        from features.blender import bluehole
+        from features.blender.addons import bluehole
         enabled = {'enabled': True, 'branch': 'main', 'deluxe': False}
         path = self.package('bluehole.zip', module='BlueHole')
         with zipfile.ZipFile(path, 'a') as archive:
             archive.writestr('BlueHole/envFiles/default/settings.ini', 'publisher default')
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
                 patch.object(bluehole, 'update', return_value=(inspect_package(path), 'a' * 40)), \
-                patch('features.blender.addons.run_blender_script') as run:
+                patch('features.blender.addons.scanning.run_blender_script') as run:
             self.library.apply(self.release, 'Art', [], bluehole=enabled)
             addon = self.preset / 'scripts/addons/BlueHole'
             artist = addon / 'envFiles/artist/settings.ini'
@@ -323,11 +323,11 @@ class BlenderLibraryTests(unittest.TestCase):
             self.assertEqual((addon / 'envFiles/default/settings.ini').read_text(), 'publisher default')
 
     def test_offline_bluehole_retains_installed_copy_without_cached_zip(self):
-        from features.blender import bluehole
+        from features.blender.addons import bluehole
         path = self.package('bluehole.zip', module='BlueHole')
         config = {'enabled': True, 'branch': 'main', 'deluxe': False}
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
-                patch('features.blender.addons.run_blender_script'), \
+                patch('features.blender.addons.scanning.run_blender_script'), \
                 patch.object(bluehole, 'update', return_value=(inspect_package(path), 'a' * 40)):
             self.library.apply(self.release, 'Art', [], bluehole=config)
         path.unlink()
@@ -335,7 +335,7 @@ class BlenderLibraryTests(unittest.TestCase):
         artist = self.preset / 'scripts/addons/BlueHole/artist.json'; artist.write_text('preserve me')
         self.library.for_preset(self.preset).add(self.package('tool.zip'))
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
-                patch('features.blender.addons.run_blender_script'), \
+                patch('features.blender.addons.scanning.run_blender_script'), \
                 patch.object(bluehole, 'resolve_branch', side_effect=ConnectionError('offline')):
             self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={**config, 'branch': 'beta', 'deluxe': True})
         state = self.library.selection(self.preset)
@@ -354,7 +354,7 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual(self.library.selection(self.preset), state)
 
     def test_offline_bluehole_first_install_still_reports_failure(self):
-        from features.blender import bluehole
+        from features.blender.addons import bluehole
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
                 patch.object(bluehole, 'resolve_branch', side_effect=ConnectionError('offline')):
             with self.assertRaisesRegex(ValueError, 'No recorded installed Blue Hole'):
@@ -399,7 +399,7 @@ class BlenderLibraryTests(unittest.TestCase):
         def check(executable, env, script, request, **kwargs):
             value = json.loads(request.read_text())
             self.assertEqual(value['enable'], ['z_module', 'bl_ext.logistics.a_extension'])
-        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.run_blender_script', side_effect=check):
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.addons.scanning.run_blender_script', side_effect=check):
             self.library.apply(self.release, 'Art', ['extension:a_extension', 'legacy:z_module'])
 
     def test_launch_command_passes_alphabetical_modules_and_controlled_startup(self):
@@ -408,7 +408,7 @@ class BlenderLibraryTests(unittest.TestCase):
             'extension:a_extension': {'module': 'bl_ext.logistics.a_extension', 'name': 'Zebra', 'path': 'extensions/logistics/a_extension', 'digest': 'fixture'},
             'legacy:z_module': {'module': 'z_module', 'name': 'Artist', 'path': 'scripts/addons/z_module', 'digest': 'fixture'}}}
         (self.preset / '.logistics-addons.json').write_text(json.dumps(state))
-        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.manager.subprocess.Popen') as popen:
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), patch('features.blender.presets.manager.subprocess.Popen') as popen:
             self.manager.launch(self.release, 'Art')
         args, kwargs = popen.call_args
         self.assertEqual(args[0][:3], [str(Path('/fixture/blender')), '--addons', 'z_module,bl_ext.logistics.a_extension'])
@@ -427,7 +427,7 @@ class BlenderLibraryTests(unittest.TestCase):
             enable=lambda module, **kwargs: calls.append(('enable', module, kwargs)),
             check=lambda module: (True, True))
         with patch.dict('sys.modules', {'addon_utils': addon_utils}), patch.dict(os.environ, {'LOGISTICS_BLENDER_ADDONS': json.dumps(['z_module', 'a_module'])}):
-            runpy.run_module('features.blender.launch_addons', run_name='__main__')
+            runpy.run_module('features.blender.addons.launch_addons', run_name='__main__')
         self.assertEqual([(op, module) for op, module, kwargs in calls],
                          [('disable', 'a_module'), ('disable', 'z_module'), ('enable', 'z_module'), ('enable', 'a_module')])
         self.assertTrue(all(not kwargs['default_set'] for op, module, kwargs in calls))

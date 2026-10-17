@@ -13,7 +13,7 @@ class ProgressDeliveryTests(unittest.TestCase):
         from threading import Thread
         from types import SimpleNamespace
         from unittest.mock import Mock
-        from features.rclone.mobile.mirror_ui import coalesced_progress
+        from features.rclone.transfers.mobile.ui import coalesced_progress
         queued, published = [], Mock()
         loop = SimpleNamespace(call_soon_threadsafe=lambda callback: queued.append(callback))
         progress = coalesced_progress(loop, published)
@@ -34,7 +34,7 @@ class ProgressDeliveryTests(unittest.TestCase):
     def test_arrivals_during_render_queue_one_successor_without_blocking_worker(self):
         from threading import Thread
         from types import SimpleNamespace
-        from features.rclone.mobile.mirror_ui import coalesced_progress
+        from features.rclone.transfers.mobile.ui import coalesced_progress
         queued, published = [], []
         loop = SimpleNamespace(call_soon_threadsafe=lambda callback: queued.append(callback))
         def publish(values):
@@ -59,7 +59,7 @@ class ProgressDeliveryTests(unittest.TestCase):
     def test_old_queued_progress_cannot_overwrite_terminal_or_new_transfer(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
-        from features.rclone.mobile.mirror_ui import MirrorUI, coalesced_progress
+        from features.rclone.transfers.mobile.ui import MirrorUI, coalesced_progress
         queued = []
         loop = SimpleNamespace(call_soon_threadsafe=lambda callback: queued.append(callback))
         bar = SimpleNamespace(max=100, value=100, start=Mock(), stop=Mock())
@@ -148,8 +148,8 @@ class MirrorUITests(unittest.TestCase):
                     LogisticsMobile.storage_root = None
 
     def test_native_review_replaces_partial_snapshots_and_publishes_final_cleanup(self):
-        from features.rclone.review import ReviewScan
-        from features.rclone.mobile.transfer_review_ui import native_scanner
+        from features.rclone.transfers.review import ReviewScan
+        from features.rclone.transfers.mobile.review_ui import native_scanner
         polled, release, retrying = Event(), Event(), Event()
         class Client:
             def request(self, action, **values):
@@ -204,7 +204,7 @@ class MirrorUITests(unittest.TestCase):
             app.show_cloud(present=False)
             store = app.mirror_store()
             job, _ = store.create(client, 'Remote', 'folder')
-            from features.rclone.transfer_options import TransferOptions, save_options
+            from features.rclone.transfers.transfer_options import TransferOptions, save_options
             path = app.private_root / 'transfer-options.json'
             save_options(path, TransferOptions(track_renames=True, bw_limit=3, excludes=('*.skip',)))
             app.show_transfer_options()
@@ -340,7 +340,7 @@ class MirrorUITests(unittest.TestCase):
     def test_unchanged_progress_does_not_repeat_native_layout_updates(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
-        from features.rclone.mobile.mirror_ui import MirrorUI
+        from features.rclone.transfers.mobile.ui import MirrorUI
         bar = SimpleNamespace(max=100, value=0, start=Mock(), stop=Mock())
         app = SimpleNamespace(active_host=True, transfer_epoch=1, transfer_busy=True,
             transfer_message='', transfer_notice=SimpleNamespace(text=''),

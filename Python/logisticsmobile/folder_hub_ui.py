@@ -104,7 +104,7 @@ class FolderHubUI:
             self.folder_hub_error = ''
 
     def folder_choices(self):
-        from features.rclone.mobile.mirror_jobs import resolved_job
+        from features.rclone.transfers.mobile.jobs import resolved_job
         client = getattr(self, 'cloud_client', None)
         jobs = {key: resolved_job(client, job) for key, job in self.mirror_store().jobs.items()}
         # Retained ZIP metadata associates local copies with credentials; it
@@ -497,7 +497,7 @@ class FolderHubUI:
                 self.folder_picker_status.text = 'This folder mapping is no longer available. Choose another folder.'
                 return False
             try:
-                from features.rclone.mobile.mirror_jobs import remote_location
+                from features.rclone.transfers.mobile.jobs import remote_location
                 origin = self.navigation_generation
                 client, generation = self.cloud_client, getattr(self.cloud_client, 'generation', None)
                 async with self.remote_activity('Opening mapped online folder'):

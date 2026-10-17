@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from features.rclone.mobile.mirror_jobs import MirrorJobs
+from features.rclone.transfers.mobile.jobs import MirrorJobs
 
 
 class MirrorClient:
@@ -452,7 +452,7 @@ class MirrorProgressDisplayTests(unittest.TestCase):
     def test_discovery_does_not_restart_animation_and_transfer_shows_real_work(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
-        from features.rclone.mobile.mirror_ui import MirrorUI
+        from features.rclone.transfers.mobile.ui import MirrorUI
         bar = SimpleNamespace(max=None, value=0, start=Mock(), stop=Mock())
         origin = SimpleNamespace(max=None, value=0, start=Mock(), stop=Mock())
         app = SimpleNamespace(active_host=True, transfer_epoch=1, transfer_busy=True,

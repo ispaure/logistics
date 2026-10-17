@@ -9,7 +9,7 @@ from commonUtils.configuration.layered import register_settings
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from features.blender import register
-from features.blender.releases import (
+from features.blender.installation.releases import (
     initialize_release_settings, load_releases, release_config_paths, version_from_path,
 )
 from features.blender.settings import BlenderReleaseSettings

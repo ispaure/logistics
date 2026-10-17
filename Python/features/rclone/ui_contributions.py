@@ -65,7 +65,7 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
             callback=lambda: open_remote(config_path, entry.remote_name,
                 package=association.package if association else None)))
         from . import session
-        from .local_crypt import LocalCryptFolder
+        from features.rclone.localcrypt.backend import LocalCryptFolder
         values = session.credentials(config_path)
         is_crypt = bool(values and values.get(entry.remote_name, {}).get('type') == 'crypt')
         encrypted = isinstance(entry.local, LocalCryptFolder)
@@ -104,12 +104,12 @@ def _matching_local_folders(config_path, *, local_folders=None, copies=None, loc
     Match package identity as well as remote names; session paths alone can collide.
     """
     from models.folder_discovery import get_local_folders
-    from .local_crypt import connections, LocalCryptFolder
+    from features.rclone.localcrypt.backend import connections, LocalCryptFolder
     from . import session
     folders = list(get_local_folders() if local_folders is None else local_folders)
     names = {folder.name for folder in folders}
     package = session.package_path(config_path)
-    from .local_connections import connections as local_connections
+    from features.rclone.localcrypt.connections import connections as local_connections
     linked = {item.data: item for item in (local_connections() if local_links is None else local_links)}
     folders = [folder for folder in folders if getattr(folder, 'path', None) not in linked
                or linked[folder.path].package == package]
@@ -125,12 +125,12 @@ def _get_remote_sources() -> list[RemoteFolderSource]:
     """Return one Folders source for every loaded credential config."""
 
     from models.folder_discovery import get_local_folders
-    from .local_crypt import connections, LocalCryptFolder
+    from features.rclone.localcrypt.backend import connections, LocalCryptFolder
     sources = []
     represented_copies = set()
     configs = credentials.get_loaded_credential_config_paths()
     copies = connections()
-    from .local_connections import connections as local_connections
+    from features.rclone.localcrypt.connections import connections as local_connections
     links = local_connections()
     ordinary = get_local_folders() if configs else []
     for config_path in configs:
@@ -161,8 +161,8 @@ def _get_remote_sources() -> list[RemoteFolderSource]:
 
 
 def _open_push_workflow(data=None, parent=None):
-    from features.rclone.ui.push_dialog import RclonePushDialog
-    from .ui.local_crypt import ensure_session
+    from features.rclone.transfers.ui.push_dialog import RclonePushDialog
+    from features.rclone.localcrypt.ui.views import ensure_session
     package = getattr(data.remote_context, "item", None)
     if not ensure_session(Path(data.remote_context), package=package.package if package else None, parent=parent):
         return False
@@ -177,7 +177,7 @@ def _create_page(parent=None):
 
 
 def _push_settings(parent=None):
-    from .ui.push_settings import PushSettings
+    from features.rclone.transfers.ui.push_settings import PushSettings
     return PushSettings(parent)
 
 

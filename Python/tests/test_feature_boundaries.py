@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parents[2]
 class FeatureBoundaryTests(unittest.TestCase):
     def test_rclone_mobile_does_not_import_the_application_host(self):
         paths = [path for owner in ('rclone', 'lm', 'text_editor')
-                 for path in (ROOT / 'Python/features' / owner / 'mobile').rglob('*.py')]
+                 for path in (ROOT / 'Python/features' / owner).rglob('*.py')
+                 if 'mobile' in path.parts]
         for path in paths:
             tree = ast.parse(path.read_text())
             for node in ast.walk(tree):
@@ -26,7 +27,7 @@ class FeatureBoundaryTests(unittest.TestCase):
 import sys
 from services.document_readers import PrivateReader
 from services.archive_access import NativeArchiveAccess
-from features.rclone.mobile.localcrypt import LocalCryptCopies
+from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
 assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile')) for name in sys.modules)
 reader = PrivateReader('hello.txt', b'hello')
 assert reader.page(0) == ('text', 'hello')

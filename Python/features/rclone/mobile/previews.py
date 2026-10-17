@@ -3,7 +3,7 @@ import base64
 from pathlib import Path
 
 from commonUtils.runtime.operations import check_cancelled
-from .crypt_stream import NativeSource
+from features.rclone.localcrypt.mobile.archive_source import NativeSource
 
 
 def preview_source(provider, client, row, *, password='', cancelled=lambda: False):

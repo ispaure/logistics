@@ -4,7 +4,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import unittest
-from features.rclone import executable, push_policy, sync
+from features.rclone import executable
+from features.rclone.transfers import push_policy
+from features.rclone.transfers import sync
 from local_crypt_fixture import crypt_fixture
 
 
@@ -53,7 +55,8 @@ class PushPolicyTests(unittest.TestCase):
 
     def test_raw_and_decoded_junk_cleanup_preserves_folders_and_other_files(self):
         from io import BytesIO
-        from features.rclone import actions, local_crypt
+        from features.rclone import actions
+        from features.rclone.localcrypt import backend as local_crypt
         binary = executable.get_rclone_path()
         if not binary.is_file(): self.skipTest('Pinned rclone unavailable')
         with TemporaryDirectory() as directory, crypt_fixture(directory, binary) as f:
@@ -139,7 +142,7 @@ class PushPolicyTests(unittest.TestCase):
         binary = executable.get_rclone_path()
         if not binary.is_file(): self.skipTest('Pinned rclone unavailable')
         with TemporaryDirectory() as directory, crypt_fixture(directory, binary) as f:
-            from features.rclone import local_crypt
+            from features.rclone.localcrypt import backend as local_crypt
             values = local_crypt.unlock(f.item)
             values = {name: dict(settings) for name, settings in values.items()}
             values[f.item.remote]['no_data_encryption'] = 'true'
@@ -193,7 +196,7 @@ class PushPolicyUITests(QtTestCase):
                 transfer.assert_not_called()
 
     def test_settings_widget_saves_filters_without_changing_cleanup_names(self):
-        from features.rclone.ui.push_settings import PushSettings
+        from features.rclone.transfers.ui.push_settings import PushSettings
         with self.temporary_directory() as directory, patch.object(push_policy, 'settings_path', return_value=Path(directory) / 'rules.json'):
             widget = PushSettings()
             widget.patterns.setPlainText('*.pdf\ncustom.tmp')

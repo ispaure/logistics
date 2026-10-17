@@ -9,13 +9,13 @@ import config
 from commonUtils.filesystem import directories as dirUtils
 from commonUtils.runtime.diagnostics import Severity, log
 
-from features.rclone import sync as rclone_sync
+from features.rclone.transfers import sync as rclone_sync
 from models.local_folder import LocalFolder
 
 
 def _transfer(source, destination, *, review=False, operation='Push', **kwargs):
     if review:
-        from .workflow import reviewed_sync
+        from features.rclone.transfers.workflow import reviewed_sync
         return reviewed_sync(source, destination, operation=operation, **kwargs)
     return rclone_sync.rclone_sync(source, destination, **kwargs)
 
@@ -23,7 +23,7 @@ def _transfer(source, destination, *, review=False, operation='Push', **kwargs):
 def pull_remote(remote_name: str, config_path: str | Path, *, package=None, review=False) -> bool:
     """Pull an rclone remote to its matching local Logistics folder."""
 
-    from .ui.local_crypt import ensure_session
+    from features.rclone.localcrypt.ui.views import ensure_session
     if not ensure_session(config_path, package=package):
         return False
     source_path = remote_name + ':'
@@ -33,7 +33,7 @@ def pull_remote(remote_name: str, config_path: str | Path, *, package=None, revi
     )
 
     from . import session
-    from .local_connections import LocalConnection
+    from features.rclone.localcrypt.connections import LocalConnection
     credential_package = session.package_path(config_path)
     association = (LocalConnection(Path(credential_package).absolute(), remote_name, destination_path.parent.absolute())
                    if credential_package and session.credentials(config_path) is not None else None)
@@ -57,14 +57,14 @@ def push_to_cloud(
 ) -> bool:
     """Push a local Logistics folder to its rclone remote."""
 
-    from .ui.local_crypt import ensure_session
-    from .local_connections import for_path as local_connection
+    from features.rclone.localcrypt.ui.views import ensure_session
+    from features.rclone.localcrypt.connections import for_path as local_connection
     association = local_connection(folder.path) if getattr(folder, 'path', None) is not None else None
     if association:
         config_path = association.context
     if not ensure_session(config_path, package=association.package if association else None):
         return False
-    from .local_crypt import push_target, for_path
+    from features.rclone.localcrypt.backend import push_target, for_path
     source_path = folder.path
     destination_path = push_target(source_path, config_path, folder.name)
 
@@ -99,14 +99,14 @@ def push_specific_directory(
     if bandwidth_limit == '':
         bandwidth_limit = None
 
-    from .ui.local_crypt import ensure_session
-    from .local_connections import for_path as local_connection
+    from features.rclone.localcrypt.ui.views import ensure_session
+    from features.rclone.localcrypt.connections import for_path as local_connection
     association = local_connection(folder.path) if getattr(folder, 'path', None) is not None else None
     if association:
         config_path = association.context
     if not ensure_session(config_path, package=association.package if association else None):
         return False
-    from .local_crypt import for_path, push_target
+    from features.rclone.localcrypt.backend import for_path, push_target
     item = for_path(directory.path)
     destination_path = push_target(directory.path, config_path, folder.name, specific=True)
 
@@ -120,16 +120,16 @@ def push_specific_directory(
 
 
 def pull_encrypted_copy(remote_name, config_path, *, item=None, review=False):
-    from .local_crypt import connection, backing_target, unlock
-    from .ui.local_crypt import ensure_session
+    from features.rclone.localcrypt.backend import connection, backing_target, unlock
+    from features.rclone.localcrypt.ui.views import ensure_session
     if not ensure_session(config_path, package=item.package if item else None):
         return False
     item = item or connection(config_path, remote_name)
     values = unlock(item)
-    from .local_crypt import validate_ciphertext_tree
+    from features.rclone.localcrypt.backend import validate_ciphertext_tree
     validate_ciphertext_tree(item)
     if review:
-        from .workflow import reviewed_sync
+        from features.rclone.transfers.workflow import reviewed_sync
         return reviewed_sync(backing_target(values, remote_name), item.data, operation='Pull',
             config_path=config_path, copy_links=False, crypt_item=item, before_start=item.publish)
     item.publish()

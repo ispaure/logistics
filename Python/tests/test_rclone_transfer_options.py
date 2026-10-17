@@ -5,7 +5,7 @@ import subprocess
 import sys
 import unittest
 
-from features.rclone.transfer_options import TransferOptions, validate_excludes
+from features.rclone.transfers.transfer_options import TransferOptions, validate_excludes
 
 
 class TransferOptionTests(unittest.TestCase):
@@ -13,9 +13,9 @@ class TransferOptionTests(unittest.TestCase):
         code = '''
 import sys
 from features.rclone.mobile.cloud import CloudClient
-from features.rclone.mobile.localcrypt import LocalCryptCopies
-from features.rclone.mobile.file_resources import CryptFiles
-from features.rclone.mobile.mirror_jobs import MirrorJobs
+from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
+from features.rclone.localcrypt.mobile.resources import CryptFiles
+from features.rclone.transfers.mobile.jobs import MirrorJobs
 from features.rclone.mobile.credential_vault import ProtectedVault
 assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile.app',
     'logisticsmobile.provider_ui', 'features.rclone.configuration', 'config')) for name in sys.modules)
@@ -26,7 +26,7 @@ assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile.app',
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_scope_uses_desktop_folder_inference(self):
-        from features.rclone.scope import push_scope, pull_name
+        from features.rclone.transfers.scope import push_scope, pull_name
         self.assertEqual(push_scope('Books'), ('Books', ''))
         self.assertEqual(push_scope('Comics', 'Books', specific=True), ('Books', 'Comics'))
         self.assertEqual(pull_name('Books'), 'Books')
@@ -36,7 +36,7 @@ assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile.app',
     def test_import_does_not_load_desktop_configuration_or_ui(self):
         code = '''
 import sys
-from features.rclone.transfer_options import TransferOptions
+from features.rclone.transfers.transfer_options import TransferOptions
 assert TransferOptions().copy_links
 assert not any(name.startswith(('PySide', 'toga', 'rubicon', 'features.rclone.configuration', 'config'))
                for name in sys.modules)

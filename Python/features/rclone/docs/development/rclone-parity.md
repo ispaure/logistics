@@ -172,7 +172,7 @@ reads finishing before transfer completion, and independent cancellation checks.
 First increment:
 
 - Extracted immutable transfer options, exclusion validation and generated-junk
-  constants to `features/rclone/transfer_options.py`. Desktop consumes them;
+  constants to `features/rclone/transfers/transfer_options.py`. Desktop consumes them;
   mobile packages the portable module. Mobile option controls and execution
   wiring are still pending, alongside shared review semantics.
 - Made the rclone package initializer defer desktop API imports so portable
@@ -270,7 +270,7 @@ or new `Books-<id>` naming path remains.
 - Plex transfers and YouTube config/season GUI actions use detailed reviews.
   Low-level/background APIs retain explicit noninteractive execution semantics.
 - Shared portable scope inference and local inventory/cleanup policy live in
-  `features/rclone/scope.py` and `local_policy.py`. Desktop and mobile consume them.
+  `features/rclone/transfers/scope.py` and `local_policy.py`. Desktop and mobile consume them.
   Ordinary mobile file links follow regular-file targets; crypt links still fail.
 - Mobile Transfer settings exposes rename tracking, positive integer bandwidth
   and Push-only exclusions with desktop defaults. One immutable option snapshot

@@ -10,7 +10,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.tasks.process_progress import ProcessProgressWindow
 from commonUtils.ui.tasks.process_runner import ProcessRunner
-from features.rclone.progress import RcloneProgressParser
+from features.rclone.transfers.progress import RcloneProgressParser
 from features.rclone.executable import get_rclone_path
 
 

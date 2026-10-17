@@ -52,7 +52,7 @@ async def exercise_localcrypt(app, passed):
     # A fresh iOS picker must select a newly inserted private location before
     # opening its CBZ; the old backend displayed that label but still read row 0.
     from tempfile import TemporaryDirectory
-    from features.rclone.mobile.file_resources import CryptFiles
+    from features.rclone.localcrypt.mobile.resources import CryptFiles
     with TemporaryDirectory(dir=app.private_root) as directory:
         provider = CryptFiles(Path(directory), app.cloud_client, 'Secret')
         provider._physical('plain.cbz').write_bytes(base64.b64decode(fixture['copies']['plain.cbz']['ciphertext']))
@@ -279,7 +279,7 @@ async def exercise_localcrypt(app, passed):
     await app._load_crypt_remote_names()
     # A loaded remote alone is no longer a local storage location. Seed an
     # actual encrypted fixture folder before exercising destination mutations.
-    from features.rclone.mobile.file_resources import CryptFiles
+    from features.rclone.localcrypt.mobile.resources import CryptFiles
     remote = fixture['copies']['note.md']['record']['remote']
     provider = CryptFiles(app.private_root / 'LocalCryptFolders', app.cloud_client, remote)
     provider.mkdir('fixture-seed')
@@ -384,7 +384,7 @@ async def exercise_localcrypt(app, passed):
     await app._load_crypt_remote_names()
     await app.show_files()
     from zipfile import ZipFile
-    from features.rclone.mobile.file_resources import ManagedCopies
+    from features.rclone.localcrypt.mobile.resources import ManagedCopies
     from commonUtils.runtime.resource_mutations import move_resource
     from commonUtils.runtime.local_files import LocalFiles
     plain_copy = app.crypt_copies.open(fixture['copies']['plain.cbz']['key'])

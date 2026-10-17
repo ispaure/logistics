@@ -83,7 +83,7 @@ class SoftwareTests(QtTestCase):
                 self.assertEqual(cfg.path_logistics_remote_cred, root / 'Credentials/rclone')
 
     def test_declining_rclone_does_not_launch_sync_or_create_destination(self):
-        from features.rclone import sync
+        from features.rclone.transfers import sync
         with TemporaryDirectory() as root:
             destination = Path(root) / 'not-created'
             with patch.object(sync.executable, 'ensure_rclone', return_value=None), patch.object(sync.cmdShellWrapper, 'exec_cmd') as command:

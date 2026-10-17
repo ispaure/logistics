@@ -149,7 +149,7 @@ async def exercise_crypt_mirror(app, fixture):
     assert b'Edited in LocalCrypt' not in target.read_bytes()
     # A real throttled embedded download must not monopolize local decryption.
     # Inject only its production bandwidth option; do not replace native I/O.
-    from features.rclone.mobile.file_resources import CryptFiles
+    from features.rclone.localcrypt.mobile.resources import CryptFiles
     provider = CryptFiles(app.private_root / 'LocalCryptFolders', client, remote, namespace=job['identity'])
     from io import BytesIO
     library_folder = 'mobile-mirror-fixture/Concurrent library'

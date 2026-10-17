@@ -8,7 +8,11 @@ from unittest.mock import patch
 from PIL import Image
 from commonUtils.archives.zip_access import open_archive
 from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
-from features.rclone import session, local_crypt, actions, sync, storage
+from features.rclone import session
+from features.rclone.localcrypt import backend as local_crypt
+from features.rclone import actions
+from features.rclone.transfers import sync
+from features.rclone import storage
 
 
 @contextmanager

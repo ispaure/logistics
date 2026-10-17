@@ -6,7 +6,9 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from features.rclone import storage, local_crypt, local_connections
+from features.rclone import storage
+from features.rclone.localcrypt import backend as local_crypt
+from features.rclone.localcrypt import connections as local_connections
 
 
 class RcloneStorageTests(unittest.TestCase):

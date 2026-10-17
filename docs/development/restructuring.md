@@ -156,3 +156,7 @@ The app now composes Chat, Cloud, Transfers, Folder Hub, Home/Documents, Locatio
 ### 4. Text Editor mobile ownership
 
 `features/text_editor/mobile/ui.py` owns native editor presentation; `resources.py` owns provider text adapters and `names.py` owns portable name validation. Managed recovery storage, picker orchestration and scene/workspace identity remain host-owned. Shared persistence primitives continue to supply text encoding/conflict behavior. Editor and LM presentation receive host appearance/menu/export hooks explicitly and no longer import the mobile application package.
+
+### 5. Nest substantial workflows in each feature
+
+Blender now owns `installation/`, `presets/` and `addons/`, with addon-library UI under `addons/ui/`. Main Blender presentation remains its feature-level composition UI. rclone owns `transfers/` and `localcrypt/`, each with desktop `ui/` and mobile adapters beside its domain behavior. Imports, Blender script/config resource paths and curated mobile sources are migrated together. Feature IDs, persisted settings and application navigation stay unchanged.

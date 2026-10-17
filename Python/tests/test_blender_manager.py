@@ -13,11 +13,11 @@ from unittest.mock import Mock, patch
 import zipfile
 
 from commonUtils.runtime.operations import OperationCancelled
-from features.blender import addons
-from features.blender.install import (MARKER, extract_dmg, extract_tar, install_release,
+from features.blender.addons import scanning as addons
+from features.blender.installation.install import (MARKER, extract_dmg, extract_tar, install_release,
                                      installed, installation_lock, remove_installation)
-from features.blender.manager import BlenderManager, preset_name
-from features.blender.releases import Release, load_releases
+from features.blender.presets.manager import BlenderManager, preset_name
+from features.blender.installation.releases import Release, load_releases
 
 
 def release(version='4.5.1', format='zip', digest='0' * 64):
@@ -153,7 +153,7 @@ class BlenderManagerTests(unittest.TestCase):
         mount = self.root / 'mounted'
         (mount / 'Blender.app').mkdir(parents=True)
         attach = Mock(stdout=plistlib.dumps({'system-entities': [{'mount-point': str(mount)}]}))
-        with patch('features.blender.install.subprocess.run', side_effect=[attach,
+        with patch('features.blender.installation.install.subprocess.run', side_effect=[attach,
                    subprocess.CalledProcessError(1, 'ditto'), Mock()]) as run:
             with self.assertRaises(subprocess.CalledProcessError):
                 extract_dmg(self.root / 'test.dmg', self.root / 'output', lambda: False)
@@ -198,7 +198,7 @@ class BlenderManagerTests(unittest.TestCase):
         self.manager.create_preset(self.release, 'Default')
         destination = self._mark_installed()
         with patch.dict('os.environ', {'BLENDER_USER_CONFIG': '/external/preferences'}):
-            with patch('features.blender.manager.subprocess.Popen') as popen:
+            with patch('features.blender.presets.manager.subprocess.Popen') as popen:
                 self.manager.launch(self.release, 'Default')
             kwargs = popen.call_args.kwargs
             self.assertEqual(popen.call_args.args[0], [str(destination / 'blender.exe')])
@@ -243,7 +243,7 @@ class BlenderManagerTests(unittest.TestCase):
         self._mark_installed()
         process = Mock(returncode=1)
         process.poll.return_value = 1
-        with patch('features.blender.addons.subprocess.Popen', return_value=process):
+        with patch('features.blender.addons.scanning.subprocess.Popen', return_value=process):
             rows, message = addons.inspect_addons(self.manager, self.release, 'Default')
         self.assertEqual(rows[0]['name'], 'Example')
         self.assertIsNone(rows[0]['enabled'])
@@ -254,7 +254,7 @@ class BlenderManagerTests(unittest.TestCase):
         self._mark_installed()
         process = Mock()
         process.poll.side_effect = [None, None]
-        with patch('features.blender.addons.subprocess.Popen', return_value=process):
+        with patch('features.blender.addons.scanning.subprocess.Popen', return_value=process):
             rows, message = addons.inspect_addons(self.manager, self.release, 'Default', timeout=-1)
         process.kill.assert_called_once()
         process.wait.assert_called_once()

@@ -5,8 +5,8 @@ from tempfile import TemporaryDirectory
 from threading import Event
 import unittest
 
-from features.rclone.review import ReviewRequest, ReviewScan, unchanged
-from features.rclone.review_cli import scanner
+from features.rclone.transfers.review import ReviewRequest, ReviewScan, unchanged
+from features.rclone.transfers.review_cli import scanner
 from features.rclone.session import NULL_CONFIG
 
 
@@ -30,7 +30,7 @@ class ReviewTests(unittest.TestCase):
     def test_cli_retry_discards_failed_attempt_and_retains_cleanup(self):
         import json
         from unittest.mock import patch
-        from features.rclone import review_cli
+        from features.rclone.transfers import review_cli
         def lines(arguments, environment, cancelled, consume):
             if arguments[1] == 'sync':
                 for message in ('Sync Logger: source: - stale.txt',
@@ -47,7 +47,7 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(set(result.changes), {('add', 'current.txt'), ('cleanup', 'generated junk')})
 
     def test_invalid_replacement_is_atomic_and_failed_scan_is_incomplete(self):
-        from features.rclone.review import replace_changes
+        from features.rclone.transfers.review import replace_changes
         def scan(emit, cancelled):
             emit('add', 'valid.txt')
             replace_changes(emit, [('delete', 'other.txt'), ('invalid', 'bad.txt')])
@@ -105,7 +105,7 @@ class ReviewTests(unittest.TestCase):
     def test_real_sync_preserves_empty_folders_for_push_and_pull(self):
         import subprocess
         from features.rclone.executable import get_rclone_path
-        from features.rclone.sync import build_sync_arguments
+        from features.rclone.transfers.sync import build_sync_arguments
         binary = get_rclone_path()
         if not binary.is_file():
             self.skipTest('Pinned rclone is not installed')
@@ -177,7 +177,7 @@ class ReviewTests(unittest.TestCase):
 
     def test_excluded_files_do_not_appear_or_invalidate_a_completed_review(self):
         from features.rclone.executable import get_rclone_path
-        from features.rclone.transfer_options import TransferOptions
+        from features.rclone.transfers.transfer_options import TransferOptions
         binary = get_rclone_path()
         if not binary.is_file():
             self.skipTest('Pinned rclone is not installed')
@@ -206,7 +206,10 @@ class ReviewDialogTests(QtTestCase):
 
     def test_crypt_directory_review_decodes_each_supported_name_mode(self):
         from unittest.mock import patch
-        from features.rclone import executable, local_crypt, session, workflow
+        from features.rclone import executable
+        from features.rclone.localcrypt import backend as local_crypt
+        from features.rclone import session
+        from features.rclone.transfers import workflow
         from local_crypt_fixture import crypt_fixture
         binary = executable.get_rclone_path()
         for settings in ({}, {'filename_encryption': 'off'},
@@ -223,7 +226,7 @@ class ReviewDialogTests(QtTestCase):
                     self.assertTrue(valid())
                     return False
                 with patch.object(executable, 'ensure_rclone', return_value=binary), patch(
-                        'features.rclone.ui.review.confirm_review', side_effect=confirm):
+                        'features.rclone.transfers.ui.review.confirm_review', side_effect=confirm):
                     self.assertFalse(workflow.reviewed_sync(f.item.data,
                         local_crypt.backing_target(session.credentials(f.context), 'Secret'),
                         operation='Push', config_path=f.context, copy_links=False))
@@ -231,7 +234,7 @@ class ReviewDialogTests(QtTestCase):
 
     def test_early_proceed_retires_scan_and_requires_confirmation(self):
         from unittest.mock import patch
-        from features.rclone.ui.review import ReviewDialog
+        from features.rclone.transfers.ui.review import ReviewDialog
         retired = Event()
         def slow(emit, cancelled):
             emit('delete', 'existing.txt')
@@ -249,7 +252,10 @@ class ReviewDialogTests(QtTestCase):
 
     def test_early_review_approval_cannot_bypass_crypt_integrity(self):
         from unittest.mock import patch
-        from features.rclone import executable, local_crypt, sync, workflow
+        from features.rclone import executable
+        from features.rclone.localcrypt import backend as local_crypt
+        from features.rclone.transfers import sync
+        from features.rclone.transfers import workflow
         from local_crypt_fixture import crypt_fixture
         binary = executable.get_rclone_path()
         if not binary.is_file():
@@ -261,7 +267,7 @@ class ReviewDialogTests(QtTestCase):
         with self.temporary_directory() as directory, crypt_fixture(directory, binary) as f:
             (f.item.data / 'rogue.txt').write_bytes(b'plaintext must never push')
             with patch.object(executable, 'ensure_rclone', return_value=binary), patch(
-                    'features.rclone.ui.review.confirm_review', return_value=True), patch.object(
+                    'features.rclone.transfers.ui.review.confirm_review', return_value=True), patch.object(
                     sync, 'rclone_sync', side_effect=execute), patch.object(sync, '_run_sync') as run:
                 with self.assertRaisesRegex(ValueError, 'push refused'):
                     workflow.reviewed_sync(f.item.data, local_crypt.backing_target(local_crypt.unlock(f.item), 'Secret'),
@@ -271,7 +277,10 @@ class ReviewDialogTests(QtTestCase):
     def test_crypt_push_review_includes_cleanup_and_its_remote_deletion(self):
         from io import BytesIO
         from unittest.mock import patch
-        from features.rclone import executable, local_crypt, session, workflow
+        from features.rclone import executable
+        from features.rclone.localcrypt import backend as local_crypt
+        from features.rclone import session
+        from features.rclone.transfers import workflow
         from local_crypt_fixture import crypt_fixture
         binary = executable.get_rclone_path()
         with self.temporary_directory() as directory, crypt_fixture(directory, binary) as f:
@@ -287,7 +296,7 @@ class ReviewDialogTests(QtTestCase):
                 self.assertTrue((f.cloud / raw.name).exists())
                 return False
             with patch.object(executable, 'ensure_rclone', return_value=binary), patch(
-                    'features.rclone.ui.review.confirm_review', side_effect=confirm):
+                    'features.rclone.transfers.ui.review.confirm_review', side_effect=confirm):
                 self.assertFalse(workflow.reviewed_sync(f.item.data,
                     local_crypt.backing_target(session.credentials(f.context), 'Secret'),
                     operation='Push', config_path=f.context, copy_links=False))
@@ -295,7 +304,10 @@ class ReviewDialogTests(QtTestCase):
 
     def test_competing_local_account_claim_blocks_pull_before_execution(self):
         from unittest.mock import patch
-        from features.rclone import actions, executable, local_connections, sync
+        from features.rclone import actions
+        from features.rclone import executable
+        from features.rclone.localcrypt import connections as local_connections
+        from features.rclone.transfers import sync
         from local_crypt_fixture import crypt_fixture
         binary = executable.get_rclone_path()
         with self.temporary_directory() as directory, crypt_fixture(directory, binary) as f:
@@ -303,9 +315,9 @@ class ReviewDialogTests(QtTestCase):
             def confirm(*args):
                 local_connections.LocalConnection(Path(directory) / 'Other.zip', 'Cloud', root).publish()
                 return True
-            with patch('features.rclone.ui.local_crypt.ensure_session', return_value=True), patch.object(
+            with patch('features.rclone.localcrypt.ui.views.ensure_session', return_value=True), patch.object(
                     executable, 'ensure_rclone', return_value=binary), patch(
-                    'features.rclone.ui.review.confirm_review', side_effect=confirm), patch.object(sync, '_run_sync') as run:
+                    'features.rclone.transfers.ui.review.confirm_review', side_effect=confirm), patch.object(sync, '_run_sync') as run:
                 with self.assertRaisesRegex(ValueError, 'belongs to another credential package'):
                     actions.pull_remote('Cloud', f.context, review=True)
                 run.assert_not_called()
@@ -320,7 +332,10 @@ class ReviewDialogTests(QtTestCase):
     def test_new_crypt_pull_reviews_without_creating_its_local_folder(self):
         import shutil
         from unittest.mock import patch
-        from features.rclone import executable, local_crypt, sync, workflow
+        from features.rclone import executable
+        from features.rclone.localcrypt import backend as local_crypt
+        from features.rclone.transfers import sync
+        from features.rclone.transfers import workflow
         from local_crypt_fixture import crypt_fixture
         binary = executable.get_rclone_path()
         if not binary.is_file():
@@ -340,7 +355,7 @@ class ReviewDialogTests(QtTestCase):
                 self.assertTrue(valid())
                 return True
             with patch.object(executable, 'ensure_rclone', return_value=binary), patch(
-                    'features.rclone.ui.review.confirm_review', side_effect=confirm), patch.object(
+                    'features.rclone.transfers.ui.review.confirm_review', side_effect=confirm), patch.object(
                     sync, 'rclone_sync', side_effect=execute):
                 self.assertTrue(workflow.reviewed_sync(
                     local_crypt.backing_target(local_crypt.unlock(f.item), 'Secret'), f.item.data,
@@ -351,7 +366,7 @@ class ReviewDialogTests(QtTestCase):
 
     def test_changed_review_does_not_execute_without_another_confirmation(self):
         from unittest.mock import patch
-        from features.rclone.ui.review import ReviewDialog
+        from features.rclone.transfers.ui.review import ReviewDialog
         count = 0
         def changing(emit, cancelled):
             nonlocal count
@@ -375,7 +390,7 @@ class ReviewDialogTests(QtTestCase):
         dialog.deleteLater()
 
     def test_revocation_clears_displayed_paths(self):
-        from features.rclone.ui.review import ReviewDialog
+        from features.rclone.transfers.ui.review import ReviewDialog
         active = [True]
         def scan(emit, cancelled):
             emit('replace', 'private-name.md')

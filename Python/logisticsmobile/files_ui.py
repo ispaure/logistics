@@ -14,7 +14,7 @@ from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.local_files import LocalFiles
 from commonUtils.runtime.resource_provider import resource_path
 from commonUtils.runtime.resource_mutations import move_resource, delete_resource, create_resource_folder, rename_resource
-from features.rclone.mobile.file_resources import encrypted_storage, encrypted_document
+from features.rclone.localcrypt.mobile.resources import encrypted_storage, encrypted_document
 
 
 def local_read_available(app, *, private=True):
@@ -242,7 +242,7 @@ class FilesUI:
                              ('Rename…', lambda: self.show_file_actions(operation='rename')),
                              ('Move…', lambda: self.show_file_actions(operation='move')),
                              ('Details', self.show_file_details), ('Delete…', self.delete_file)]
-            from features.rclone.mobile.file_resources import CryptFiles
+            from features.rclone.localcrypt.mobile.resources import CryptFiles
             if isinstance(self.file_provider, LocalFiles) and (not self.file_provider.private or isinstance(self.file_provider, CryptFiles)):
                 commands += [('Edit comics in this folder…', self.edit_local_comic_folder)]
             commands += [('Archive password…', lambda: self.show_file_actions(operation='password'))]
@@ -652,7 +652,7 @@ class FilesUI:
 
     async def edit_private_comic_folder(self):
         from contextlib import contextmanager
-        from features.rclone.mobile.file_resources import CryptFiles, encrypted_document
+        from features.rclone.localcrypt.mobile.resources import CryptFiles, encrypted_document
         from features.comics.mobile.private_batch import PrivateCollectionBatch
         from features.comics.mobile.collection import metadata_fields, suggestions
         from features.comics.mobile.metadata import batch_form

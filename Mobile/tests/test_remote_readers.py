@@ -571,7 +571,7 @@ class RemoteReaderTests(unittest.TestCase):
                              'copy_current_folder', 'download_current_folder_crypt', 'confirm_cloud_copy'):
                     self.assertFalse(hasattr(app, name), name)
                 from features.rclone.mobile.cloud import CloudClient
-                from features.rclone.mobile.localcrypt import LocalCryptCopies
+                from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
                 for name in ('download', 'download_into', 'download_decrypted_into'):
                     self.assertFalse(hasattr(CloudClient, name), name)
                 self.assertFalse(hasattr(app.downloads, 'save'))

@@ -666,7 +666,7 @@ class FileDrawer:
 
     async def open_file(self, row):
         from features.text_editor.resources import LocalTextCopies
-        from features.rclone.mobile.file_resources import encrypted_document
+        from features.rclone.localcrypt.mobile.resources import encrypted_document
         provider = self.provider
         if provider is None or not self.app.checkpoint():
             return

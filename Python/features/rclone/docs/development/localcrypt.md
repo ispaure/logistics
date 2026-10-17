@@ -8,7 +8,7 @@ and documented in that repository.
 
 ## Desktop
 
-`features/rclone/local_crypt.py` maps an absolute credential ZIP path and remote
+`features/rclone/localcrypt/backend.py` maps an absolute credential ZIP path and remote
 name to a stable directory under the Logistics per-user application support root's
 `LocalCrypt`. `.connections` records contain
 only schema, package path and remote name. Schema 2 stores new copies directly at
@@ -23,7 +23,7 @@ moves change identity; missing mappings block transfers inside the LocalCrypt
 boundary. Roots may be relocated through links, while inner links and hard links
 are rejected.
 
-`features/rclone/local_connections.py` separately associates decrypted copies in
+`features/rclone/localcrypt/connections.py` separately associates decrypted copies in
 `Server/Local` with their credential package and remote. Its schema-1 records live
 in the application support root's `Connections/Local`, outside the sync destination. An accepted Pull
 publishes the nonsecret association; rejected transfers do not. GUI acceptance
@@ -139,7 +139,7 @@ filesystem or nested wrapper configurations. Validation runs on import and vault
 restore before replacing active credentials.
 
 `crypt_fetch` downloads original ciphertext through a caller-owned descriptor.
-`features/rclone/mobile/localcrypt.py` stores completed UUID copies under app-private
+`features/rclone/localcrypt/mobile/copies.py` stores completed UUID copies under app-private
 `LocalCrypt`, with an encrypted relative path, remote and crypt-settings fingerprint.
 No decoded filename or key is added to those records. The rclone settings determine
 whether original filename encryption is enabled. Incomplete/invalid copies are
@@ -317,7 +317,7 @@ they are not UI shortcuts around provider operations.
 
 ## Push preflight
 
-`features.rclone.sync.rclone_sync` routes existing local-to-remote sources through
+`features.rclone.transfers.sync.rclone_sync` routes existing local-to-remote sources through
 `push_policy` before launch, including secondary feature callers. Personal push
 exclusions are separate from the fixed generated-junk deletion allowlist. LocalCrypt
 preflight holds the shared mutation lock, rejects links/special/hard-linked entries,

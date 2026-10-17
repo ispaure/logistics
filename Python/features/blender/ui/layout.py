@@ -3,7 +3,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils.ui.appearance.status_line import StatusLine
 from ui_new.landing import LaunchCard
-from .. import bluehole
+from features.blender.addons import bluehole
 
 
 def build_layout(page):

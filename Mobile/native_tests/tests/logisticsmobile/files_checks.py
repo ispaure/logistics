@@ -33,7 +33,7 @@ async def exercise_files(app, passed):
     app.start_mirror_pull(job['id'])
     await approve_transfer(app)
     assert (target / 'fixture.txt').read_bytes() == b'Native rclone fixture\n'
-    from features.rclone.mobile.mirror_jobs import MirrorJobs
+    from features.rclone.transfers.mobile.jobs import MirrorJobs
     from logisticsmobile.locations import Locations
     assert job['id'] in MirrorJobs(app.private_root).jobs
     assert Locations(app.private_root).items == app.pinned_locations().items

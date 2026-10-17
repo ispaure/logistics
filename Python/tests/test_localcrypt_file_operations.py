@@ -99,7 +99,7 @@ class DesktopFileOperationsTests(unittest.TestCase):
             token = 'collision'
             for name in ('.create-' + token, '.save-' + token + '.md'):
                 crypt.encrypted_path(name).write_bytes(b'preexisting staging bytes')
-            with patch('features.rclone.local_crypt.uuid4', return_value=SimpleNamespace(hex=token)):
+            with patch('features.rclone.localcrypt.backend.uuid4', return_value=SimpleNamespace(hex=token)):
                 with self.assertRaises(FileExistsError):
                     crypt.create_file('new.md', BytesIO(b'new'))
                 with self.assertRaises(FileExistsError):
@@ -113,8 +113,8 @@ class DesktopFileOperationsTests(unittest.TestCase):
 class MobileFileOperationsTests(unittest.TestCase):
     def test_existing_copy_managed_tree_and_plain_round_trip(self):
         from features.rclone.mobile.cloud import CloudClient
-        from features.rclone.mobile.localcrypt import LocalCryptCopies
-        from features.rclone.mobile.file_resources import CryptFiles, DownloadedCryptFile, ManagedCopies
+        from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
+        from features.rclone.localcrypt.mobile.resources import CryptFiles, DownloadedCryptFile, ManagedCopies
         fixture = json.loads(Path('Mobile/native_tests/tests/logisticsmobile/localcrypt_fixture.json').read_text())
         client = CloudClient(library=os.environ['LOGISTICS_MOBILE_BRIDGE'])
         client.request('import', package=fixture['package'], password='', package_name='Synthetic.zip', session_only=True)
