@@ -32,7 +32,7 @@ class ReaderAppearance(toga.ScrollContainer):
         content = toga.Box(children=[toga.Label('Reading font'), self.family_choice,
             toga.Label('Reading font size'), self.font_choice,
             toga.Label('Line spacing (%)'), self.spacing_choice, toga.Label('Maximum width (0 = automatic)'), self.width_choice,
-            toga.Label('Page margins'), self.margin_choice, toga.Label('Theme'), self.theme_choice,
+            toga.Label('Page margins'), self.margin_choice, toga.Label('Theme (system follows device)'), self.theme_choice,
             self.status,
             toga.Button('Apply and return', on_press=on_apply, style=Pack(height=44))],
             style=Pack(direction=COLUMN, margin=12))

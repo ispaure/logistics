@@ -21,6 +21,7 @@ DESTINATION_LABELS = {key: label for key, label, *_ in DESTINATION_ITEMS}
 
 def menu_button(callback, label='Browse files'):
     button = toga.Button('☰', on_press=callback, style=Pack(width=52, height=52))
+    button._workspace_menu_label = label
     if type(button._impl).__module__.startswith('toga_iOS.'):
         from rubicon.objc import ObjCClass, SEL
         button.text = ''
@@ -60,7 +61,7 @@ def mount_native_menu(app, menu, destination):
         menu._native_workspace_item = ObjCClass('UIBarButtonItem').alloc().initWithImage(
             ObjCClass('UIImage').systemImageNamed('line.3.horizontal'), style=0,
             target=menu._impl.native, action=SEL('onPress:'))
-        menu._native_workspace_item.accessibilityLabel = 'Browse files'
+        menu._native_workspace_item.accessibilityLabel = getattr(menu, '_workspace_menu_label', 'Browse files')
     item = controller.navigationItem
     item.leftItemsSupplementBackButton = True
     item.leftBarButtonItem = menu._native_workspace_item
@@ -182,6 +183,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             return None
         owner = self.app.text_views.get(key)
         if owner is not None:
+            if owner.session.view.get('markdown_mode') == 'preview' and owner.preview_box is not None:
+                return owner.preview_box
             return owner.document_view
         private = getattr(self.app, 'private_sessions', None)
         owner = private.controllers.get(key) if private else None

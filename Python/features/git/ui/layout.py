@@ -108,7 +108,7 @@ class RepositoryLayout:
         sidebar_layout.addWidget(self.refs, 1)
         self.ref_filter = qt.QLineEdit()
         self.ref_filter.setPlaceholderText('Filter references')
-        self.ref_filter.textChanged.connect(self._filter_refs)
+        qt.connect_search(self.ref_filter, self._filter_refs, pass_text=True)
         sidebar_layout.addWidget(self.ref_filter)
         self.content.addWidget(sidebar)
         self.views = qt.QTabWidget()

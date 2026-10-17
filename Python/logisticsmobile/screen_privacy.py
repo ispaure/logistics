@@ -3,6 +3,7 @@
 iOS public APIs cannot prevent still screenshots. Never claim otherwise or
 reparent UIKit views into undocumented secure-text-field internals.
 """
+from commonUtils.ui.native.password_input import PasswordInput
 
 
 def native_value(owner, name):
@@ -213,9 +214,9 @@ class ScreenPrivacy:
                 from toga.style.pack import COLUMN
                 self.lock_title = toga.Label('Session locked', style=Pack(font_size=22))
                 self.lock_hint = toga.Label('Enter the session password to resume.')
-                self.lock_password = toga.PasswordInput(placeholder='Session password',
+                self.lock_password = PasswordInput(placeholder='Session password',
                     on_confirm=self.unlock, style=Pack(height=48))
-                self.lock_confirmation = toga.PasswordInput(placeholder='Confirm new lock password',
+                self.lock_confirmation = PasswordInput(placeholder='Confirm new lock password',
                     style=Pack(height=48))
                 self.lock_status = toga.Label('')
                 self.lock_button = toga.Button('Unlock', on_press=self.unlock, style=Pack(height=48))

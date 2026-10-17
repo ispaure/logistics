@@ -114,6 +114,32 @@ class ChatUITests(unittest.TestCase):
         self.assertFalse(app.chat_send.enabled)
         app.set_chat_busy(False)
 
+    def test_connect_discovers_and_saves_model_without_manual_id(self):
+        app = self.app
+        app.chat_url.value = 'http://192.168.1.10:1234'
+        with patch('features.lm.mobile.ui.ChatClient') as client:
+            client.return_value.models.return_value = ['first-model', 'second-model']
+            app.loop.run_until_complete(app.refresh_chat_models())
+            self.assertEqual(app.chat_model.value, 'first-model')
+            self.assertEqual(app.chat_models.value, 'first-model')
+            self.assertEqual(app.chat_store.profile()[0]['model'], 'first-model')
+            self.assertEqual(app.chat_url.value, 'http://192.168.1.10:1234/v1')
+            self.assertIn('Connected.', app.chat_config_status.value)
+            app.chat_models.value = 'second-model'
+            app.loop.run_until_complete(app.refresh_chat_models())
+            self.assertEqual(app.chat_model.value, 'second-model')
+            self.assertEqual(app.chat_models.value, 'second-model')
+            self.assertEqual(app.chat_store.profile()[0]['model'], 'second-model')
+
+    def test_save_without_model_keeps_setup_open_and_makes_no_request(self):
+        app = self.app
+        app.show_chat_configuration()
+        with patch('features.lm.mobile.ui.ChatClient') as client, patch.object(app, 'show_chat') as show_chat:
+            app.save_chat_configuration()
+            client.assert_not_called()
+            show_chat.assert_not_called()
+        self.assertIn('Connect & load models', app.chat_config_status.value)
+
     def test_conversation_actions_remain_available_during_background_transfers(self):
         app = self.app
         app.cloud_busy = True

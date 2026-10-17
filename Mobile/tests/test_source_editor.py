@@ -1,4 +1,4 @@
-"""Phone live preview, shared syntax controls and retained source ownership."""
+"""Single-surface Markdown editing and retained native source ownership."""
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -31,31 +31,27 @@ class SourceEditorTests(unittest.TestCase):
         self.app.show_documents()
         return self.app.editor_view
 
-    def test_markdown_live_preview_at_phone_and_wide_widths(self):
+    def test_markdown_uses_one_formatted_surface_at_phone_and_wide_widths(self):
         owner = self.open('Live.md')
         self.assertIsInstance(owner.editor, CodeInput)
-        owner.apply_split(390)
-        self.assertIn(owner.split_preview, owner.editor_area.children)
-        self.assertEqual(owner.editor_area.style.direction, COLUMN)
-        with patch.object(owner.split_preview, 'set_content') as render:
-            source = '# Title\n\n| A | B |\n| --- | --- |\n| 1 | 2 |'
-            owner.editor.value = source
-            self.app.loop.run_until_complete(asyncio.sleep(.4))
-            self.assertIn('<table>', render.call_args.args[1])
-            self.assertEqual(owner.document.text, source)
-            self.assertEqual(owner.editor.value, source)
-        with patch('features.text_editor.mobile.ui.allocated_width', return_value=1000):
-            owner.apply_split(1000)
-        self.assertEqual(owner.editor_area.style.direction, ROW)
-        owner.toggle_split()
-        self.assertNotIn(owner.split_preview, owner.editor_area.children)
-        self.assertIsNone(owner.preview_pending)
-        owner.toggle_split()
-        self.assertIn(owner.split_preview, owner.editor_area.children)
+        self.assertIsNotNone(owner.formatted)
+        for width in (390, 800, 1200):
+            owner.session.view['markdown_split'] = True  # Old versions' preference.
+            owner.apply_split(width)
+            self.assertEqual(owner.editor_area.children, [owner.formatted.view])
+        source = '# Title\n\n| A | B |\n| --- | --- |\n| 1 | 2 |'
+        owner.formatted_changed(source)
+        self.assertEqual(owner.document.text, source)
+        self.assertEqual(owner.editor.value, source)
+        owner.edit_mode.value = 'Source'
+        self.assertEqual(owner.editor_area.children, [owner.editor])
+        owner.edit_mode.value = 'Formatted'
+        self.assertEqual(owner.editor_area.children, [owner.formatted.view])
+        self.assertEqual(owner.document.text, source)
 
     def test_source_language_and_line_count_do_not_modify_text(self):
         owner = self.open('sample.py')
-        self.assertIsNone(owner.split_preview)
+        self.assertIsNone(owner.formatted)
         source = 'def hello():\n    return "😀"\n'
         owner.editor.value = source
         self.assertEqual(owner.editor.language, 'python')
@@ -84,6 +80,6 @@ class SourceEditorTests(unittest.TestCase):
             self.assertIsNone(native.UIDelegate)
             events.append('clear')
         preview = SimpleNamespace(_impl=impl, set_content=clear)
-        with patch.object(owner, 'split_preview', preview):
+        with patch.object(owner.formatted, 'view', preview):
             owner.dispose()
         self.assertEqual(events, ['stop', 'clear'])

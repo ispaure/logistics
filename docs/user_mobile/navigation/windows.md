@@ -1,6 +1,6 @@
 # iPad windows
 
-## Independent iPad windows (Phase 4 Part 1)
+## Using iPad windows
 
 On an iPad that supports multiple scenes, Settings offers **New window**.
 Each window has its own open documents, active selection, routes and presentation.

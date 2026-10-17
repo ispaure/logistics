@@ -84,11 +84,11 @@ class RemoteBrowserView(qt.QMainWindow):
         if self.closing or self.operation.busy:
             return
         suffix = Path(path).suffix.lower()
-        if suffix in {'.epub', '.cbz', '.zip'}:
+        if suffix in {'.pdf', '.epub', '.cbz', '.zip'}:
             from commonUtils.runtime.resource_selection import ResourceChoice
             from services.documents.ui.readers import open_reader_choice
             open_reader_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()),
-                               self, 'epub' if suffix == '.epub' else 'comic')
+                               self, 'pdf' if suffix == '.pdf' else 'epub' if suffix == '.epub' else 'comic')
             return
         def read(report, cancelled):
             with self.provider.operation(cancelled):

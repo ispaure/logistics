@@ -180,7 +180,7 @@ class FindFiles(qt.QFrame):
         self.preview.clear(); self.preview_title.setText('Select a result to preview its source')
         self.preview.search_selections = []
         self.summary.setText('Searching…' if self.pending_search else 'Enter text to search')
-        self.debounce.start(250)
+        self.debounce.start(400)
 
     def start_search(self):
         if self.closing or not self.pending_search or self.search_future is not None:

@@ -146,7 +146,11 @@ def refresh_sources(env):
                 previous.rename(payload)
             raise
     action = 'update' if PBX.exists() else 'create'
-    run([sys.executable, '-m', 'briefcase', action, 'iOS', '--no-input'], env=env,
+    command = [sys.executable, '-m', 'briefcase', action, 'iOS', '--no-input']
+    if action == 'update':
+        # Briefcase otherwise refreshes sources but retains stale app_packages.
+        command.append('--update-requirements')
+    run(command, env=env,
         log=ROOT / 'logs/device-update.log')
     run([sys.executable, 'cloud_build.py', 'ios'], env=env, log=ROOT / 'logs/device-bridge.log')
 

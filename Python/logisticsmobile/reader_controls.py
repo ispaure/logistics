@@ -120,7 +120,7 @@ class PageFooter:
         self.slider = toga.Slider(min=0, max=1, value=0, on_release=self.release,
                                   style=Pack(flex=1, height=48))
         accessible_name(self.slider, 'Comic page')
-        self.spacer = toga.Box(style=Pack(flex=1))
+        self.spacer = toga.Label('', style=Pack(flex=1, text_align='center', font_size=12, margin_top=14))
         self.widget = toga.Box(style=Pack(direction=ROW))
         self.sync(comic=False, count=0, index=0)
 
@@ -138,6 +138,11 @@ class PageFooter:
         self.slider.max = max(1, count - 1)
         self.slider.value = count - 1 - index if self.rtl else index
         self.slider.enabled = comic and count > 1
+        self.spacer.text = f'{index + 1} / {count}' if count else ''
+
+    def chapter_progress(self, index, count, offset, length):
+        percent = round(100 * min(max(0, offset), length) / length) if length else 0
+        self.spacer.text = f'Chapter {index + 1}/{count} · {percent}%'
 
     async def release(self, widget, **kwargs):
         if not self.slider.enabled:

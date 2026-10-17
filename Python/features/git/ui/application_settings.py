@@ -1,4 +1,5 @@
 """Application Git preferences with feature-owned pages and explicit scope."""
+from commonUtils.ui.pyside.passwords import password_field
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -110,7 +111,7 @@ class GitPreferencesForm(qt.QWidget):
         protocol = dialog.choice('Protocol', ['https', 'ssh']); protocol.setCurrentText(old.get('protocol', 'https'))
         helper = dialog.choice('HTTPS authentication', ['Existing Git helper', 'Git Credential Manager (browser sign-in)'])
         if old.get('helper') == 'manager': helper.setCurrentIndex(1)
-        token = dialog.text('Personal access token'); token.setEchoMode(qt.QLineEdit.EchoMode.Password)
+        token = dialog.text('Personal access token'); password_field(token)
         if not dialog.submitted(): token.clear(); return
         account = {'host': host.text().strip().lower(), 'username': user.text().strip(), 'protocol': protocol.currentText(), 'default': old.get('default', not self.options['accounts'])}
         if old.get('helper'): account['helper'] = old['helper']

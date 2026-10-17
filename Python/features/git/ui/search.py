@@ -32,7 +32,7 @@ class SearchPanel(HistoryPanel):
         self.more.setText('Load 200 more results')
         self.timer = qt.QTimer(self)
         self.timer.setSingleShot(True)
-        self.timer.setInterval(300)
+        self.timer.setInterval(400)
         self.timer.timeout.connect(self.search_requested)
         self.search.textChanged.connect(self._schedule)
         self.search.returnPressed.connect(self._request)

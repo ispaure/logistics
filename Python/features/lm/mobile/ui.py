@@ -1,4 +1,5 @@
 """Native text chat controls; only explicit user actions contact a server."""
+from commonUtils.ui.native.password_input import PasswordInput
 import asyncio
 from copy import deepcopy
 import inspect
@@ -11,6 +12,12 @@ from features.lm.domain import build_request, message, validate_settings
 from features.lm.mobile.storage import ChatStore, DEFAULT_SETTINGS, export_chat
 from features.lm.mobile.transport import ChatClient, ChatCancelled
 from features.lm.mobile.presentation import composer_height, transcript_document, transcript_entries, transcript_update
+
+
+class ChatTranscript(toga.WebView):
+    # The transcript scrolls internally. Its default 100dp minimum must not
+    # push the composer outside the smaller viewport above a phone keyboard.
+    _MIN_HEIGHT = 0
 
 
 class ChatUI:
@@ -29,11 +36,11 @@ class ChatUI:
                 self.chat_profile_original = None
                 error = str(problem)
             self.chat_url = toga.TextInput(value=self.chat_profile['base_url'],
-                placeholder='Server API URL, e.g. https://host/v1', style=Pack(height=48))
-            self.chat_key = toga.PasswordInput(placeholder='API key (session only)', style=Pack(height=48))
-            self.chat_model = toga.TextInput(value=self.chat_profile['model'], placeholder='Model ID', style=Pack(height=48))
+                placeholder='e.g. http://192.168.1.10:1234', style=Pack(height=48))
+            self.chat_key = PasswordInput(placeholder='API key (session only)', style=Pack(height=48))
+            self.chat_model = toga.TextInput(value=self.chat_profile['model'], placeholder='Filled after connecting, or enter a model ID', style=Pack(height=48))
             self.chat_models = toga.Selection(on_change=self.select_chat_model, style=Pack(height=48))
-            self.chat_refresh = toga.Button('Refresh models', on_press=self.refresh_chat_models, style=Pack(height=48))
+            self.chat_refresh = toga.Button('Connect & load models', on_press=self.refresh_chat_models, style=Pack(height=48))
             self.chat_selector = toga.Selection(on_change=self.select_chat, style=Pack(height=48))
             self.chat_new = self.presentation.surface(toga.Button('New chat', on_press=self.new_chat,
                 style=Pack(height=52, width=148, font_size=17, font_weight='bold')),
@@ -45,7 +52,7 @@ class ChatUI:
             self.chat_render_key = None
             self.chat_render_entries = []
             self.chat_force_latest = False
-            self.chat_transcript = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
+            self.chat_transcript = ChatTranscript(on_navigation_starting=lambda widget, url, **kw: False,
                 on_webview_load=self.chat_transcript_loaded, style=Pack(flex=1))
             self.presentation.surface(self.chat_transcript, radius=0, background='chat_background', outlined=False)
             self.chat_prompt = toga.MultilineTextInput(on_change=self.chat_draft_changed,
@@ -64,11 +71,16 @@ class ChatUI:
             self.chat_config_status_box = toga.Box(style=Pack(direction=COLUMN))
             self.chat_config_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
                 toga.Button('Back to conversation', on_press=self.show_chat, style=Pack(height=48)),
-                toga.Label('Server & generation settings'), self.chat_url, self.chat_key, self.chat_model,
+                toga.Label('Server API URL'), self.chat_url,
+                toga.Label('A plain address uses /v1 automatically.\nFor a computer server, use its LAN address.', style=Pack(font_size=12)),
+                toga.Label('API key (optional; session only)'), self.chat_key,
+                self.chat_refresh, self.chat_config_status_box,
+                toga.Label('Model'), self.chat_models,
+                toga.Label('Choose a model above, or enter its exact ID below.', style=Pack(font_size=12)), self.chat_model,
+                toga.Label('Generation settings (defaults work for most servers)'),
                 toga.Label('Context tokens / maximum\nreply tokens'),
                 toga.Box(children=[self.chat_context, self.chat_max_tokens], style=Pack(direction=ROW)),
-                self.chat_refresh, self.chat_models, self.chat_config_status_box,
-                toga.Button('Save configuration', on_press=self.save_chat_configuration, style=Pack(height=48))],
+                toga.Button('Save & return to chat', on_press=self.save_chat_configuration, style=Pack(height=48))],
                 style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
             self.chat_title = toga.Label('New conversation', style=Pack(font_weight='bold', font_size=16))
             self.chat_model_label = toga.Label('', style=Pack(font_size=12))
@@ -264,8 +276,10 @@ class ChatUI:
         inset = max(0, int((width - 780) / 2))
         self.chat_composer.style.margin_left = self.chat_composer.style.margin_right = inset
         self.chat_status_box.style.margin_left = self.chat_status_box.style.margin_right = inset
+        container = self.chat_view._impl.container
+        available_height = container.height if container is not None else 0
         self.chat_prompt.style.height = composer_height(self.chat_prompt.value, min(width, 780) - 84,
-                                                       int(self.preferences.values['font_size']))
+            int(self.preferences.values['font_size']), available_height=available_height or None)
 
     def sync_chat_appearance(self):
         """Match the navigation/status area to Chat without moving its menu."""
@@ -330,12 +344,13 @@ class ChatUI:
         if self.chat_busy:
             return
         try:
+            if not self.chat_model.value.strip():
+                raise ValueError('Connect & load models, then choose a model, or enter its exact ID.')
             self.chat_fields()
             self.set_chat_status('Configuration saved. The API key stays in this session only.')
             self.show_chat()
         except (OSError, ValueError) as error:
             self.set_chat_status(str(error))
-            self.show_chat()
 
     def refresh_chats(self):
         records, warnings = self.chat_store.items()
@@ -500,7 +515,8 @@ class ChatUI:
         validate_settings(settings)
         profile = dict(schema=1, base_url=self.chat_url.value.strip(), model=self.chat_model.value.strip(), settings=settings)
         self.chat_profile, self.chat_profile_original = self.chat_store.save_profile(profile, self.chat_profile_original)
-        return profile
+        self.chat_url.value = self.chat_profile['base_url']
+        return self.chat_profile
 
     def select_chat_model(self, widget, **kwargs):
         if not self.chat_loading and widget.value:
@@ -510,14 +526,26 @@ class ChatUI:
         if self.chat_busy:
             return
         self.set_chat_busy(True)
+        self.set_chat_status('Connecting to server…')
         try:
             profile = self.chat_fields()
             self.chat_client = ChatClient(profile['base_url'], self.chat_key.value)
             models = await asyncio.to_thread(self.chat_client.models)
-            self.chat_models.items = models
+            # Replacing Selection.items can fire on_change for its first item.
+            # Retain the configured/manual model if the server still offers it.
+            selected = profile['model'] if profile['model'] in models else (models[0] if models else '')
+            self.chat_loading = True
+            try:
+                self.chat_models.items = models
+                if selected:
+                    self.chat_models.value = selected
+            finally:
+                self.chat_loading = False
             if models:
-                self.chat_model.value = self.chat_profile['model'] if self.chat_profile['model'] in models else models[0]
-            self.set_chat_status(f'{len(models)} model(s) available.' if models else 'No models are loaded on the server.')
+                self.chat_model.value = selected
+                self.chat_fields()
+            self.set_chat_status(f'Connected. {len(models)} model(s) available. Save & return to chat.' if models
+                                 else 'Connected, but no models were listed. Load a model on the server or enter its exact ID below.')
         except Exception as error:
             self.set_chat_status('Models unavailable: ' + str(error)[:400])
         finally:

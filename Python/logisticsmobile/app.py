@@ -257,6 +257,15 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
     def refresh_native_theme(self):
         from .appearance import refresh_appearance
         refresh_appearance(self)
+        enabled = self.preferences.values.get('android_eink') != 'true'
+        editors = [owner.editor for owner in self.text_views.values()]
+        private = getattr(self, 'private_sessions', None)
+        if private is not None:
+            editors.extend(owner.crypt_text for owner in private.controllers.values() if hasattr(owner, 'crypt_text'))
+        for editor in editors:
+            if hasattr(editor, 'highlighting'):
+                editor.highlighting = enabled
+                editor.changed(notify=False)
 
     def show_view(self, view, *, checkpoint=True, destination=None, route=None, title='', root=False):
         self.retire_private_comic_batch(view=view)
@@ -456,14 +465,17 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         except (OSError, ValueError) as error:
             self.recovery_notice.text = str(error)
 
-    def show_documents(self, widget=None, *, resume=False, destination='documents', **kwargs):
+    def show_documents(self, widget=None, *, resume=False, edit=False, destination='documents', **kwargs):
         if self.current is None:
             self.new_document()
         if self.current is None:
             return False
         self.pending_reader_restore = None
         self.workspace.activate(self.editor_view.session.id)
-        preview = resume and self.editor_view.session.view.get('markdown_mode') == 'preview'
+        mode = self.editor_view.session.view.get('markdown_mode',
+            'preview' if self.editor_view.session.kind == 'markdown' else 'edit')
+        preview = not edit and ((resume and mode == 'preview')
+            or (self.editor_view.session.kind == 'markdown' and not resume))
         self.editor_view.session.view['markdown_mode'] = 'edit'
         self.show_view(self.document_view, destination=destination, route='editor', title=self.current.name if self.current else 'New document')
         if preview:
@@ -617,18 +629,13 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         except ValueError as error:
             self.status.text = str(error)
             return
-        if not hasattr(self, 'preview'):
-            self.preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
-                                       style=Pack(flex=1))
-        # A fresh WebView may still be navigating to its initial about:blank.
-        # Give the HTML load a distinct local-document origin so that blank
-        # navigation cannot consume Toga's one approved content navigation.
-        self.preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
-        self.editor_view.session.view['markdown_mode'] = 'preview'
-        previous = getattr(self, 'preview_box', None)
-        if previous is not None:
-            previous.remove(self.preview)
         owner = self.editor_view
+        if owner.preview is None:
+            owner.preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
+                                         style=Pack(flex=1))
+        self.preview = owner.preview
+        self.preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
+        owner.session.view['markdown_mode'] = 'preview'
         token = self.workspace.token(owner.session.id)
         def back_to_editor(widget=None, **kwargs):
             if self.active_host and self.workspace.accepts(token):
@@ -636,11 +643,13 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                     return
                 owner.bind()
                 self.workspace.activate(owner.session.id)
-                self.show_documents()
-        self.preview_box = toga.Box(children=[
-            toga.Button('Back to editor', on_press=back_to_editor, style=Pack(height=48)),
-            self.preview], style=Pack(direction=COLUMN, flex=1))
-        self.show_view(self.preview_box, route='preview', title='Markdown preview')
+                self.show_documents(edit=True)
+        if owner.preview_box is None:
+            owner.preview_box = toga.Box(children=[
+                toga.Button('Edit Markdown', on_press=back_to_editor, style=Pack(height=48)),
+                owner.preview], style=Pack(direction=COLUMN, flex=1))
+        self.preview_box = owner.preview_box
+        self.show_view(self.preview_box, route='preview', title=owner.document.name)
         self.save_workspace()
 
     def refresh_documents(self):
@@ -728,7 +737,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         previous = self.current
         self.new_document(extension=extension)
         if self.current is not previous:
-            self.show_documents()
+            self.show_documents(edit=True)
 
     def new_document(self, widget=None, *, extension='txt', **kwargs):
         if not self.checkpoint():
@@ -741,6 +750,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             created = self.store.create('Untitled.' + extension)
             self.refresh_documents()
             self.open_document(created.id)
+            self.editor_view.session.view['markdown_mode'] = 'edit'
         except (OSError, ValueError) as error:
             self.status.text = str(error)
 
@@ -953,12 +963,12 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.private_sessions = PrivateSessions(self)
         return self.private_sessions
 
-    async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, destination='documents', privacy_gate=None, **kwargs):
+    async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, destination='documents', privacy_gate=None, edit=False, **kwargs):
         copies = copies or self.crypt_copies
         key = key if key is not None else self.crypt_labels.get(self.crypt_selector.value)
         if key is None:
             return False
-        return await self.provider_sessions().open(copies, key, prepared=prepared, destination=destination, privacy_gate=privacy_gate)
+        return await self.provider_sessions().open(copies, key, prepared=prepared, destination=destination, privacy_gate=privacy_gate, edit=edit)
 
     def private_dirty(self):
         return self.provider_sessions().dirty()

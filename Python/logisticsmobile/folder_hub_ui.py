@@ -5,7 +5,7 @@ import toga
 from .control_icons import icon_button
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
-from .folder_hub import hub_entries, folder_tree, credential_choices, source_choices
+from .folder_hub import hub_entries, folder_tree, credential_choices, source_choices, folder_storage_label
 from features.rclone.mobile.messages import import_hint
 from textwrap import fill
 from commonUtils.ui.native.presentation import list_button
@@ -285,6 +285,14 @@ class FolderHubUI:
                         return await self.browse_hub_folder(selected)
                     button = list_button(toga.Button(title, on_press=select, style=Pack(height=48, flex=1)))
                     self.folder_buttons[name] = button
+                    storage = folder_storage_label(visible[name])
+                    accessible_name(button, name + ', ' + storage)
+                    for source in storage.split(' · '):
+                        icon = {'Local': 'storage_local', 'LocalCrypt': 'storage_crypt',
+                                'Remote': 'storage_remote'}[source]
+                        indicator = icon_button(icon, source + ' copy of ' + name, on_press=select)
+                        indicator.style.width = 32
+                        row.add(indicator)
                     row.add(button)
                     def options(widget=None, selected=name, **kwargs):
                         self.choose_folder(selected)

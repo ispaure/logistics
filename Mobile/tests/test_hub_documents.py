@@ -60,7 +60,7 @@ class HubDocumentTests(unittest.TestCase):
         app.transfer_notification = True
         app.transfer_complete = True
         app.refresh_transfer_status()
-        self.assertEqual(view.transfer_banner.notice.text, 'Transfer finished · Details')
+        self.assertEqual(view.transfer_banner.notice.text, 'Transfer finished · 100% · Details')
         app.dismiss_transfer_status()
         self.assertNotIn(view.transfer_banner, view.children)
 

@@ -49,7 +49,13 @@ class DocumentationLayoutTests(unittest.TestCase):
                     if parsed.scheme or parsed.netloc or not parsed.path:
                         continue
                     with self.subTest(page=page.relative_to(ROOT), url=url):
-                        self.assertTrue((page.parent / unquote(parsed.path)).exists())
+                        target = page.parent / unquote(parsed.path)
+                        self.assertTrue(target.exists())
+                        if parsed.fragment and target.suffix == '.md':
+                            headings = re.findall(r'^#{1,6} (.+)', target.read_text(), re.M)
+                            anchors = {re.sub(r'[^\w\- ]', '', h.lower()).replace(' ', '-')
+                                       for h in headings}
+                            self.assertIn(unquote(parsed.fragment), anchors)
 
     def test_feature_guide_scope_and_compatibility_links(self):
         for scope in SCOPES[1:]:

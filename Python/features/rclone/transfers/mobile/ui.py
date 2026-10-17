@@ -72,7 +72,10 @@ class MirrorUI(TransferReviewUI):
                                 or getattr(parent, '_reader_fullscreen', False)):
                 if bar not in parent.children:
                     parent.insert(0, bar)
-                bar.notice.text = 'Transfer in progress · Details' if busy else 'Transfer finished · Details'
+                bar.notice.text = 'Transfer in progress · Details' if busy else 'Transfer finished · 100% · Details'
+                percentage = getattr(self, 'transfer_percentage', None)
+                if busy and percentage is not None:
+                    bar.notice.text = f'Transfer · {percentage:.0f}% of known work · Details'
                 if not busy and not getattr(self, 'transfer_complete', False):
                     bar.notice.text = 'Transfer stopped · Details'
                 bar.dismiss.enabled = not busy
@@ -162,8 +165,12 @@ class MirrorUI(TransferReviewUI):
         if present:
             self.show_view(self.transfer_view, destination='files', route='transfers', title='Transfer details')
         if getattr(self, 'transfer_busy', False):
-            self.transfer_progress.max = None
-            self.transfer_progress.start()
+            percentage = getattr(self, 'transfer_percentage', None)
+            if percentage is None:
+                self.transfer_progress.max = None
+                self.transfer_progress.start()
+            else:
+                self.transfer_progress.value = percentage
 
     def choose_transfer_copy(self, jobs, *, push=False):
         """Resolve an ambiguous transfer without turning details into a folder list."""
@@ -301,6 +308,7 @@ class MirrorUI(TransferReviewUI):
         self.transfer_busy = True
         self.transfer_notification = True
         self.transfer_complete = False
+        self.transfer_percentage = None
         self.set_cloud_busy(True)
         self._transfer_cancel = Event()
         cancel = self._transfer_cancel
@@ -320,6 +328,7 @@ class MirrorUI(TransferReviewUI):
                 status, _ = result[1] if operation == 'create' else result
                 self.transfer_message = ('Files changed during the operation; inspect the local destination.'
                                          if status == 'conflict' else 'Pull sync complete. The local folder now matches the remote.')
+            self.transfer_message = '100% · ' + self.transfer_message
             return True
         except Exception as error:
             self.transfer_message = 'Sync stopped; completed destination changes remain. ' + str(error)[:350]
@@ -352,12 +361,20 @@ class MirrorUI(TransferReviewUI):
         previous = getattr(self, 'transfer_message', None)
         phase, files = values['phase'], values['files']
         done, total = values['done'], values['total']
+        total_files = values.get('total_files', 0)
+        # Rclone discovers work while syncing. Prefer bytes; zero-byte files
+        # can still supply a useful file-based total. Completion is verified
+        # separately, so keep live progress below 100%.
+        numerator, denominator = (done, total) if total > 0 else (files, total_files)
+        self.transfer_percentage = min(99, max(0, 100 * numerator / denominator)) if denominator > 0 else None
         self.transfer_message = f'{phase} · {files:,} file(s) completed'
+        if total_files > 0:
+            self.transfer_message += f' / {total_files:,} known'
+        if self.transfer_percentage is not None:
+            self.transfer_message += f' · {self.transfer_percentage:.0f}% of known work'
         if values.get('attempt', 0) > 1 or values.get('retrying'):
             state = 'Retrying' if values.get('retrying') else 'Attempt'
             self.transfer_message += f' · {state} {values["attempt"]}/{values["max_attempts"]}'
-        if values.get('total_files', 0):
-            self.transfer_message += f' / {values["total_files"]:,} known'
         if values.get('active', 0):
             self.transfer_message += f' · {values["active"]:,} transferring'
         if values.get('listed', 0) or values.get('checks', 0):
@@ -381,11 +398,11 @@ class MirrorUI(TransferReviewUI):
         for bar in (self.transfer_progress, origin):
             if bar is None:
                 continue
-            if total > 0:
+            if self.transfer_percentage is not None:
                 if bar.max is None:
                     bar.stop()
                     bar.max = 100
-                bar.value = min(99, 100 * done / total)
+                bar.value = self.transfer_percentage
             elif bar.max is not None:
                 bar.max = None
                 bar.start()

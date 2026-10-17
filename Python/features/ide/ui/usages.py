@@ -73,7 +73,7 @@ class UsagePopup(qt.QFrame):
         self.filter = qt.QLineEdit()
         self.filter.setPlaceholderText('Filter usages by file or code…')
         self.filter.setAccessibleName('Filter usages')
-        self.filter.textChanged.connect(self.filter_rows)
+        qt.connect_search(self.filter, self.filter_rows, pass_text=True)
         self.filter.installEventFilter(self)
         layout.addWidget(self.filter)
         self.scope = qt.QLabel('Project files')

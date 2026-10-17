@@ -69,8 +69,8 @@ credentials and settings. External services need their own accounts/software.
 ## What can it do?
 
 An independent [Android/iOS document prototype](docs/development/mobile-launchers.md) is available for
-development builds, with a native hub, private preferences, text/Markdown editing
-and EPUB/comic reading, LM text chat, managed rclone Local/LocalCrypt copies and encrypted
+development builds, with a native hub, private preferences, text editing and single-pane formatted/Source
+Markdown editing (preview by default), EPUB/comic reading, LM text chat, managed rclone Local/LocalCrypt copies and encrypted
 LocalCrypt offline reading, side-by-side saved and session-only credential packages,
 text and comic/EPUB metadata editing, local file/folder
 management with shared list/tile views, thumbnails and file information, and text
@@ -108,6 +108,7 @@ with the [mobile build and release handbook](docs/development/mobile-handbook.md
 | [IDE](Python/features/ide/docs/user/user.md) | Keep dockable projects, arrange shared file views in up to three internal groups, navigate Python definitions, search project files, and autosave with Git change markers |
 | [LM Chat](Python/features/lm/docs/user/user.md) | Chat with an existing LM server, paste screenshots, discuss IDE projects with read-only file tools, and save conversations locally |
 | [Books](Python/features/books/docs/user/user.md) and [Comics](Python/features/comics/docs/user/user.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
+| [PDF Reader](Python/features/pdf/docs/user/user.md) | Read and search local, remote and LocalCrypt PDFs on desktop and mobile, jump to page numbers, and swipe vertically |
 | [Archives](Python/features/archives/docs/user/user.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
 | [Images](Python/features/images/docs/user/user.md) | Compress images and work with photo metadata |
 | [rclone](Python/features/rclone/docs/user/user.md) | Browse remotes in read-only tabs, open supported files in memory, and use managed Pull/Push for local or encrypted folders |

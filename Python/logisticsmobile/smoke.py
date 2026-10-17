@@ -37,6 +37,8 @@ EXPECTED_TESTS = (
     'test_mobile_chat_profile_never_accepts_stored_api_keys',
     'test_mobile_chat_records_recover_drafts_interruptions_and_reject_conflicts',
     'test_mobile_chat_refresh_and_stream_use_only_configured_endpoint',
+    'test_mobile_api_urls_default_to_v1_and_preserve_custom_paths',
+    'test_mobile_timeouts_distinguish_connect_and_generation',
     'test_mobile_cloud_bridge_frees_success_and_invalid_responses',
     'test_mobile_cloud_downloads_recover_only_complete_private_copies',
     'test_mobile_cloud_package_uses_scoped_read_without_saving_credentials',

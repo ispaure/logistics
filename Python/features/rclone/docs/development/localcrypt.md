@@ -487,7 +487,10 @@ The desktop adapter resets rows at CLI failed-attempt boundaries too. Failed or
 cancelled comparisons remain incomplete and never authorize execution. Python forwards those counters without
 substituting zero file counts. The UI distinguishes discovery, transfer and final
 checking, shows activity when totals are unknown, and changes animation mode only
-when a known byte total appears or disappears. Percentages describe known work;
+when a known byte or fallback file total appears or disappears. Details and the
+banner display a numeric percentage of known work, preferring bytes over file
+counts. The controller retains `transfer_percentage` when details are reopened
+and resets it for each new run. Live values are capped at 99%;
 only the sync result and subsequent local verification establish completion.
 
 New managed copy targets keep the remote's spelling, or the selected plaintext
@@ -710,3 +713,12 @@ an otherwise unchanged review. `mobile/previews.py` now owns native crypt source
 construction and encrypted thumbnails; the app keeps generic preview orchestration.
 Crypt authentication, staged-save verification, link/hard-link rejection and
 independent regular-file descriptor requirements remain in place.
+
+## Markdown opening modes
+
+Private desktop browser activation captures Alt/Option before asynchronous loading
+and defaults to preview. Explicit editor choices retain editing through the
+`edit` argument; following Markdown links requests preview. Mobile provider sessions
+use the feature-owned formatted Markdown input and the existing source buffer,
+with one visible surface in preview, Formatted or Source mode. Suspending a private
+session retires its formatted WebView and restores its selected mode on resume.

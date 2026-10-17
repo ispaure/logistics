@@ -12,7 +12,7 @@ from commonUtils.persistence import atomic_write_json
 
 MAX_SESSIONS = 32
 MAX_MANIFEST = 64 * 1024
-KINDS = {'text', 'markdown', 'epub', 'comic'}
+KINDS = {'text', 'markdown', 'epub', 'comic', 'pdf'}
 PROVIDERS = {'managed-text', 'library'}
 VIEW_NUMBERS = {'cursor', 'selection_length', 'scroll_x', 'scroll_y', 'position'}
 
@@ -28,6 +28,9 @@ def view_state(value):
         elif key == 'markdown_mode':
             if item not in ('edit', 'preview'):
                 raise ValueError('Invalid Markdown mode.')
+        elif key == 'markdown_editor':
+            if item not in ('formatted', 'source'):
+                raise ValueError('Invalid Markdown editor mode.')
         elif key == 'markdown_split':
             if type(item) is not bool:
                 raise ValueError('Invalid Markdown split preference.')

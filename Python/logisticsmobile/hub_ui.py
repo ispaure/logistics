@@ -8,7 +8,7 @@ from commonUtils.ui.native.presentation import list_button
 from .appearance import template_icon
 from .appearance import surface, action_button
 
-DOCUMENT_TYPES = {'text': 'Text', 'markdown': 'Markdown', 'epub': 'EPUB books', 'comic': 'Comics'}
+DOCUMENT_TYPES = {'text': 'Text', 'markdown': 'Markdown', 'epub': 'EPUB books', 'comic': 'Comics', 'pdf': 'PDF documents'}
 
 
 def text_document_kind(name):

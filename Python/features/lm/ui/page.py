@@ -81,7 +81,7 @@ class LMPage(qt.QWidget):
         self.render_timer.timeout.connect(self.render)
         self.search_timer = qt.QTimer(self)
         self.search_timer.setSingleShot(True)
-        self.search_timer.setInterval(250)
+        self.search_timer.setInterval(400)
         self.search_timer.timeout.connect(self.refresh)
         self.search.textChanged.connect(lambda: self.search_timer.start())
         self.list.currentItemChanged.connect(self.select)

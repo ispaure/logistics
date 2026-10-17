@@ -472,11 +472,55 @@ class MirrorProgressDisplayTests(unittest.TestCase):
         bar.stop.assert_called_once()
         origin.stop.assert_called_once()
         self.assertEqual(bar.value, 50)
+        self.assertIn('50% of known work', app.transfer_message)
         self.assertIn('2 file(s) completed / 4 known', app.transfer_message)
         self.assertIn('1 transferring', app.transfer_message)
         self.assertIn('12.50 / 25.00 MB (known so far)', app.transfer_message)
+        MirrorUI.publish_mirror_progress(app, 1, dict(live, done=6_250_000))
+        self.assertEqual(bar.value, 25)  # Byte progress takes precedence over files.
+        self.assertIn('25% of known work', app.transfer_message)
         MirrorUI.publish_mirror_progress(app, 1, dict(phase='Transferring', files=0, done=32_250_000, total=0))
         self.assertIn('32.25 MB transferred', app.transfer_message)
         bar.start.assert_called_once()
         MirrorUI.publish_mirror_progress(app, 0, live)
         self.assertIsNone(bar.max)
+
+    def test_file_total_fallback_and_unknown_totals(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from features.rclone.transfers.mobile.ui import MirrorUI
+        bar = SimpleNamespace(max=None, value=0, start=Mock(), stop=Mock())
+        app = SimpleNamespace(active_host=True, transfer_epoch=1, transfer_busy=True,
+                              transfer_progress=bar, refresh_transfer_status=Mock(),
+                              transfer_notice=SimpleNamespace(text=''), cloud_status=SimpleNamespace(value=''))
+        for files, total_files, expected in ((1, 4, 25), (4, 4, 99), (5, 4, 99)):
+            MirrorUI.publish_mirror_progress(app, 1, dict(phase='Checking', files=files,
+                                                        total_files=total_files, done=0, total=0))
+            self.assertEqual(bar.value, expected)
+            self.assertIn(f'{expected}% of known work', app.transfer_message)
+        MirrorUI.publish_mirror_progress(app, 1, dict(phase='Discovering', files=0, done=0, total=0))
+        self.assertIsNone(app.transfer_percentage)
+        self.assertNotIn('%', app.transfer_message)
+        self.assertIsNone(bar.max)
+
+    def test_reopening_details_and_banner_keep_known_percentage(self):
+        import weakref
+        import toga
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from features.rclone.transfers.mobile.ui import MirrorUI
+        parent, banner = toga.Box(), toga.Box()
+        banner.notice = toga.Button('Details')
+        banner.dismiss = toga.Button('Dismiss')
+        banner.progress = toga.ProgressBar(max=100, value=0)
+        app = SimpleNamespace(transfer_busy=True, transfer_percentage=42,
+                              transfer_message='Transferring · 42% of known work',
+                              mirror_store=lambda: SimpleNamespace(error=''),
+                              show_view=Mock(), cancel_mirror_transfer=Mock(),
+                              transfer_banners=[(weakref.ref(parent), weakref.ref(banner))])
+        MirrorUI.show_transfers(app, present=False)
+        self.assertEqual(app.transfer_progress.max, 100)
+        self.assertEqual(app.transfer_progress.value, 42)
+        MirrorUI.refresh_transfer_status(app)
+        self.assertIn('42% of known work', banner.notice.text)
+        self.assertEqual(banner.progress.value, 42)

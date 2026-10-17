@@ -5,11 +5,12 @@ conversations. Switching to another part of the app keeps these sessions availab
 
 ## Text and Markdown
 
-Markdown opens with source and a live formatted preview together. On phones the
-preview is below the editor; wider editor panes show it beside the source. It
-updates after a short typing pause. Hide preview expands the editor; Live preview
-restores it. Preview still opens a separate reading page, and Back to editor
-returns to the same session. Preview has a 1 MiB source limit.
+Markdown files open in preview. **Edit Markdown** enters a single formatted
+editing surface; **Source** shows the exact Markdown instead. Phones and tablets
+use the same mode switch, without a second preview pane. **Preview** returns to
+reading the current draft. New Markdown documents start editing. Preview and
+formatted editing have a 1 MiB source limit; larger documents use Source.
+See [Reading and editing](reading-and-editing.md) for supported formatting.
 
 Text and source files have logical line numbers, monospace text and syntax colours.
 Automatic detects the filename, or choose a language from the selector. Wrapped
@@ -20,8 +21,9 @@ editing and line numbers remain available. The mobile editor retains native
 keyboard, selection and undo; desktop folding and multiple cursors are not
 provided by this control.
 
-Local/private Markdown preview keeps the source visible while editing too. Remote
-previews remain read-only. Save changes before closing a private draft.
+Local/private Markdown uses the same Formatted/Source switch and opens in
+preview. Remote previews remain read-only. Save changes before closing a private
+draft.
 
 ## Books and comics
 

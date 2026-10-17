@@ -33,6 +33,11 @@ class MobileChatPresentationTests(unittest.TestCase):
         self.assertGreaterEqual(composer_height('A' * 100, 160), composer_height('A' * 100, 390))
         self.assertGreaterEqual(composer_height('漢' * 50, 220), composer_height('a' * 50, 220))
         self.assertEqual(composer_height('Long\n' * 1000, 220, 24), 120)
+        # Keyboard-reduced phone viewports retain room for header/navigation;
+        # long drafts scroll inside the composer instead of covering Send.
+        self.assertEqual(composer_height('Long\n' * 1000, 220, available_height=260), 65)
+        self.assertEqual(composer_height('Long\n' * 1000, 220, available_height=160), 52)
+        self.assertEqual(composer_height('Long\n' * 1000, 220, available_height=800), 120)
 
     def test_streaming_reuses_completed_blocks_and_sends_only_the_changed_tail(self):
         messages = [message('user', 'A completed turn'), message('assistant', 'Partial', 'streaming')]

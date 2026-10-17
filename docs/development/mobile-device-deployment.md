@@ -44,6 +44,17 @@ Each build validates app-owned imports against `APP_MODULES`, then stages the
 explicit public mobile source allowlist with local dirty sources allowed, refreshes the generated Briefcase application and native
 license notices, rebuilds both native bridge variants, restores the plist's
 `MainModule` to `logisticsmobile`, and runs a Debug arm64 device build.
+Existing projects also refresh Briefcase requirements on every deployment;
+source-only updates retain stale `app_packages` and can crash during startup
+when newly imported dependencies such as `markdown_it` are absent. The deployment
+regression test covers the requirement refresh for existing projects and the
+initial creation path.
+On 2026-10-17, the physical iPhone console confirmed a startup
+`ModuleNotFoundError: No module named 'markdown_it'` in the stale bundle.
+After refreshing requirements and installing in place over Wi-Fi, the app
+remained running and a physical-device screenshot showed Folder Hub with its
+existing configured folders. All 11 deployment tests passed; the screenshot is
+retained locally at `Mobile/logs/iphone-startup-dependencies-fixed.png`.
 The toolchain selector requires SDK 27.1 or newer and supplies `DEVELOPER_DIR`
 to child processes without changing the global `xcode-select` setting.
 `cloud_build.ios_compiler` quotes the SDK path in Go's `CC` argument string so

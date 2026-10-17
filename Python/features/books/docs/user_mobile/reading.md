@@ -14,6 +14,14 @@ Imported EPUBs support nested contents, archive-local chapter/section links and
 current chapter. Previous/Next move by a visible screen and continue into adjacent
 chapters at the ends. External links and book scripts remain blocked.
 
+Open the top-left hamburger menu for **Contents and bookmarks**, in the same
+position as the menu on other mobile pages. Choosing an imported chapter or
+bookmark returns directly to reading. The footer
+shows the current chapter and percentage through its text. Page margins come
+from **Appearance…**, without an extra frame narrowing the text. Chapter headings,
+paragraphs and quotations use consistent spacing; wide tables scroll sideways
+inside the page.
+
 Imported resume and bookmarks now store a chapter path and text offset. Reopening
 or changing appearance restores that passage. Existing chapter-only bookmarks
 remain available at chapter starts. Position saves are debounced while scrolling;
@@ -25,6 +33,10 @@ highlighted chapter search as imported books. **Appearance…** offers the same 
 spacing, width, margins and themes described below. Changing appearance or leaving and
 returning to the reader keeps the passage. Provider positions/bookmarks stay in
 the session and clear on close; they are not saved as ordinary imported records.
+For provider-backed books, the top-left hamburger expands contents, chapter
+search and session bookmarks. They start collapsed and close after a successful
+search or contents selection. An unsuccessful search keeps the controls and
+feedback open.
 
 Private EPUB rendering uses a nonpersistent iOS browser store or an Android view
 with disk caching and browser storage disabled. Closing or suspending disposes the
@@ -49,6 +61,8 @@ from 12–32, line spacing from 100–220%, maximum reading width from 480–140
 theme colours are shared with desktop. On a narrow screen, reading width stays
 inside the available pane. These settings are global mobile preferences, do not
 rewrite books, and retain the current logical text anchor when layout changes.
+The default theme is **system**, which follows the device's light/dark mode and
+updates as that mode changes. Explicit Light/Dark/Sepia/Slate choices override it.
 These text controls appear only for EPUBs. Comic appearance shows its page-layout
 choice separately, and applying a comic layout does not rewrite EPUB preferences.
 

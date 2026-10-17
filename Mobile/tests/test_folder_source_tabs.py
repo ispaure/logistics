@@ -76,3 +76,31 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(set(source_choices(choices, 'rclone', {'Mac'})), {'Offline'})
         self.assertEqual(set(source_choices(choices, 'Network shares', {'Mac'})), {'Share copy'})
         self.assertEqual(source_choices(choices, 'Local', {'Mac'}), {})
+
+    def test_rows_show_icons_for_each_available_storage_copy(self):
+        from test_mirror_jobs import MirrorClient
+        class Client(MirrorClient):
+            def cancel(self): pass
+        app = self.app
+        app.cloud_client = Client()
+        app.cloud_remote.items = ['Remote', 'Secret', 'Online']
+        store = app.mirror_store()
+        local, _ = store.create(app.cloud_client, 'Remote', 'folder', storage='Local')
+        crypt, _ = store.create(app.cloud_client, 'Secret', 'folder', storage='LocalCrypt')
+        (app.private_root / 'LocalFiles' / 'Notes').mkdir(parents=True)
+        app.show_locations()
+
+        def icons(name):
+            return [child.control_icon for child in app.folder_buttons[name].parent.children
+                    if getattr(child, 'control_icon', '').startswith('storage_')]
+
+        self.assertEqual(icons('Online'), ['storage_remote'])
+        self.assertEqual(icons(local['target']), ['storage_local', 'storage_remote'])
+        self.assertEqual(icons(crypt['target']), ['storage_crypt', 'storage_remote'])
+        app.change_folder_source('Local')
+        self.assertEqual(icons('Notes'), ['storage_local'])
+        self.assertEqual(icons('All files'), ['storage_local'])
+        app.change_folder_source('rclone')
+        store.target(crypt).rename(store.target(crypt).with_name('unmapped'))
+        app.show_locations()
+        self.assertEqual(icons('Secret'), ['storage_remote'])

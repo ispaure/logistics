@@ -1,5 +1,6 @@
 """Password dialogs run only from explicit GUI actions, never archive workers."""
 
+from commonUtils.ui.pyside.passwords import password_field
 from commonUtils.ui import pyside as qt
 
 
@@ -42,7 +43,7 @@ class ValidatedPasswordDialog(qt.QDialog):
         label.setWordWrap(True)
         layout.addWidget(label)
         self.password = qt.QLineEdit(self)
-        self.password.setEchoMode(qt.QLineEdit.EchoMode.Password)
+        password_field(self.password)
         self.password.setPlaceholderText('Password')
         self.password.setAccessibleName('Archive password' if title == 'Unlock archive' else 'Credential ZIP password')
         self.password.installEventFilter(self)

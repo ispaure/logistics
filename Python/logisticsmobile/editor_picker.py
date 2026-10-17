@@ -288,7 +288,7 @@ class EditorPicker:
             return
         finally:
             self._finish_work(work)
-        await self.open_crypt(copies=encrypted_copies(provider) if provider.private else LocalTextCopies(provider), key=path)
+        await self.open_crypt(copies=encrypted_copies(provider) if provider.private else LocalTextCopies(provider), key=path, edit=True)
 
     def cancel_text_destination(self, widget=None, **kwargs):
         if self._work is not None:

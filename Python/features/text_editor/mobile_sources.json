@@ -4,6 +4,7 @@
     "__init__.py",
     "mobile/__init__.py",
     "mobile/ui.py",
+    "mobile/markdown_editor.py",
     "names.py",
     "resources.py"
   ]

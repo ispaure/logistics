@@ -95,3 +95,29 @@ in `Mobile/native_tests/tests/logisticsmobile/localcrypt_checks.py`.
 ## Workflow controllers
 
 `features/lm/mobile/controller.py` owns chat state; rclone owns cloud and transfer controllers. Host navigation workflows have dedicated `*_controller.py` modules. `services/workflow_host.py` supplies explicit read/write host attributes. `host_services.composed_workflow` installs only declared compatibility names. Transfer/review cancellation is independent from file/cloud cancellation; global Cancel dispatches to both. Ownership and cancellation are exercised by `Mobile/tests/test_workflow_ownership.py`.
+
+## Native source editor and live Markdown
+
+The Text Editor mobile owner uses `commonUtils.ui.native.code_input.CodeInput`
+for source editing and the existing offline renderer for live Markdown. Preview
+is enabled by default for Markdown, stacked in compact editor allocations and
+beside the source at 720 logical units of usable width. The session's existing
+`markdown_split` field stores the visible/hidden choice. The separate full-page
+preview remains available. Local/private editable Markdown retains its source
+while previewing; remote text stays read-only.
+
+Desktop and mobile share language detection and Pygments grammars through
+`formats.code_syntax`, `formats.code_blade` and `formats.code_spans`. The mobile
+manifest pins Pygments 2.19.2. Native attributes/spans preserve source, selection
+and keyboard ownership. CodeInput skips expensive colouring above 128 Ki
+characters while retaining editing and logical line numbers. Android's
+CodeEditorSupport Java bridge draws the gutter against native wrapped lines;
+iOS uses a UITextView overlay with native line-fragment geometry.
+
+The isolated [iOS editor evidence](mobile-evidence/2026-10-17-source-editor/editor.json)
+covers native typing into Markdown, a rendered table, live updates, syntax
+colouring and preserved selection. The [source screenshot](mobile-evidence/2026-10-17-source-editor/source-python.png)
+and [live preview screenshot](mobile-evidence/2026-10-17-source-editor/markdown-live.png)
+use synthetic files and a separate simulator app identity. Android bridge compilation
+and host editor regressions passed; this evidence does not certify physical-device
+keyboards, IME/undo gestures or Android runtime editor appearance.

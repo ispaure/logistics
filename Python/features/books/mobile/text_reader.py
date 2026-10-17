@@ -6,6 +6,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from features.books.locations import ChapterText, contents, utf16_length, link_destination
 from .content import chapter_html
+from .navigation import ChapterTools
 
 
 class TextBookView(toga.Box):
@@ -28,13 +29,14 @@ class TextBookView(toga.Box):
         self.link_selector = toga.Selection(items=['Links…'] + list(self.link_choices),
             on_change=self.choose_link, style=Pack(height=44))
         self.query = toga.TextInput(placeholder='Find in chapter…', on_confirm=self.find,
-                                    style=Pack(height=44))
+                                    style=Pack(height=44, flex=1))
         self.status = toga.Label('')
         self.text = toga.MultilineTextInput(readonly=True, style=Pack(flex=1, font_size=font_size))
         self.loading = False
-        super().__init__(children=[self.toc, self.link_selector,
+        self.tools = ChapterTools([self.toc, self.link_selector,
             toga.Box(children=[self.query, toga.Button('Find next', on_press=self.find, style=Pack(height=44))],
-                     style=Pack(direction=ROW)), self.status, self.text], style=Pack(direction=COLUMN, flex=1))
+                     style=Pack(direction=ROW)), self.status])
+        super().__init__(children=[self.tools.widget, self.text], style=Pack(direction=COLUMN, flex=1))
         self.seek(offset)
 
     def seek(self, offset):
@@ -61,6 +63,7 @@ class TextBookView(toga.Box):
     def choose(self, widget, **kwargs):
         if not self.loading and widget.value in self.choices:
             entry = self.choices[widget.value]
+            self.tools.close()
             self.on_chapter(entry.index, entry.fragment)
 
     def find(self, widget=None, **kwargs):
@@ -69,6 +72,7 @@ class TextBookView(toga.Box):
             self.status.text = 'No matching text in this chapter.'
         else:
             self.seek(result[0])
+            self.tools.close()
 
     def dispose(self):
         self.text.value = self.query.value = self.status.text = ''
@@ -82,4 +86,5 @@ class TextBookView(toga.Box):
     def choose_link(self, widget, **kwargs):
         if not self.loading and widget.value in self.link_choices:
             index, fragment = link_destination(self.book, self.index, self.link_choices[widget.value])
+            self.tools.close()
             self.on_chapter(index, fragment)

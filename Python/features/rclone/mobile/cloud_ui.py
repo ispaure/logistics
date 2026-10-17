@@ -1,8 +1,10 @@
 """Native read-only remote browser and access to existing offline copies."""
+from commonUtils.ui.native.password_input import PasswordInput
 from features.rclone.mobile.storage_location import collection_path
 import asyncio
 from contextlib import asynccontextmanager, contextmanager
 from io import BytesIO
+from pathlib import Path
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
@@ -107,7 +109,7 @@ class CloudUI(LocalCryptUI):
             self.cloud_choose = toga.Button('Choose credential ZIP…', on_press=self.choose_cloud_package, style=Pack(height=44))
             self.cloud_selected_zip = toga.Label('No ZIP selected', style=Pack(font_size=14))
             self.cloud_import_message = toga.Label(import_hint('Choose a ZIP, then enter its password and tap Load remotes.'), style=Pack(font_size=14))
-            self.cloud_password = toga.PasswordInput(placeholder='ZIP password (if encrypted)', on_confirm=self.import_cloud_package, style=Pack(flex=1, height=44))
+            self.cloud_password = PasswordInput(placeholder='ZIP password (if encrypted)', on_confirm=self.import_cloud_package, style=Pack(flex=1, height=44))
             self.cloud_import = toga.Button('Load remotes', on_press=self.import_cloud_package, style=Pack(height=44, font_weight='bold'))
             self.cloud_probe = toga.Button('Check rclone engine', on_press=self.probe_cloud, style=Pack(height=44))
             self.cloud_remember = toga.Switch('Save credentials on this device', value=True, style=Pack(height=44))
@@ -218,7 +220,7 @@ class CloudUI(LocalCryptUI):
         from pathlib import Path
         private_label = self.rclone_ui.private_label
         remote, generation = self.cloud_open_remote, self.cloud_client.generation
-        password = toga.PasswordInput(placeholder='Inner ZIP password', style=Pack(height=48))
+        password = PasswordInput(placeholder='Inner ZIP password', style=Pack(height=48))
         status = toga.Label('Enter the comic ZIP password.' if password_required else '', style=Pack(font_size=12))
         async def open_item(widget=None, **kw):
             if self.cloud_client.generation != generation or self.cloud_open_remote != remote:
@@ -320,7 +322,7 @@ class CloudUI(LocalCryptUI):
             self.smb_name = toga.TextInput(placeholder='Connection name (e.g. Home Mac)', style=Pack(height=44))
             self.smb_host = toga.TextInput(placeholder='Server IP or hostname (e.g. 192.168.1.10)', style=Pack(height=44))
             self.smb_user = toga.TextInput(placeholder='Username (or guest)', style=Pack(height=44))
-            self.smb_password = toga.PasswordInput(placeholder='Share password', style=Pack(height=44))
+            self.smb_password = PasswordInput(placeholder='Share password', style=Pack(height=44))
             self.smb_domain = toga.TextInput(value='WORKGROUP', style=Pack(height=44))
             self.smb_port = toga.TextInput(value='445', style=Pack(height=44))
             self.smb_remember = toga.Switch('Save credentials on this device', value=True, style=Pack(height=44))
@@ -560,7 +562,7 @@ class CloudUI(LocalCryptUI):
 
     def show_retained_unlock(self, key, remote=None, *, identity=None, resume=None, destination='files'):
         cache = self.retained_packages()
-        password = self.credential_unlock_password = toga.PasswordInput(placeholder='ZIP password', style=Pack(height=44))
+        password = self.credential_unlock_password = PasswordInput(placeholder='ZIP password', style=Pack(height=44))
         status = self.credential_unlock_status = toga.Label('')
         async def unlock(widget=None, **kwargs):
             if self.cloud_busy or getattr(self, 'transfer_busy', False):
@@ -914,6 +916,12 @@ class CloudUI(LocalCryptUI):
     async def open_download(self, widget=None, *, path=None, destination=None, **kwargs):
         from commonUtils.runtime.document_access import LocalDocuments
         selected = path if path is not None else self.download_labels.get(self.download_selector.value)
+        if selected is not None and Path(selected).suffix.lower() == '.pdf':
+            from features.pdf.mobile.copies import PDFCopies
+            from commonUtils.runtime.local_files import LocalFiles
+            selected = Path(selected)
+            destination = destination or ('files' if self.native_host.state.destination == 'files' else 'documents')
+            return await self.open_crypt(copies=PDFCopies(LocalFiles(selected.parent)), key=selected.name, destination=destination)
         independent = (self.cloud_busy and getattr(self, 'transfer_busy', False) and path is not None
                        and selected.resolve().is_relative_to((collection_path(self.private_root)).resolve()))
         if (self.cloud_busy and not independent) or selected is None:

@@ -5,6 +5,9 @@ and folder-specific configuration. Start with defaults, then configure only the
 integrations you intend to use. See the [feature index](../../README.md#what-can-it-do) for
 individual workflows and platform limitations.
 
+Password and token fields start hidden. Use the eye button beside a field to
+show or hide its value. Clearing the field hides it again.
+
 ## Configuration layers
 
 | Location | Owns | Path base |

@@ -1,6 +1,6 @@
 # Mobile panels
 
-## Mobile UI refresh (local development)
+## Using the mobile panels
 
 Home offers Continue and compact shortcuts to Folder Hub, writing and the library.
 Documents groups open sessions by type and shows preview cards by default. Tap
@@ -132,7 +132,7 @@ On iOS, hamburger controls open after you release inside the button, allowing a
 scroll that starts on the control to be cancelled by dragging away. Workspace
 menus use the native navigation bar's own touch target.
 
-## Mobile spacing follow-up
+## Panel layout
 
 Home hides its redundant top navigation title while retaining its bottom tab.
 Documents and Folder Hub use their existing navigation titles without a second
@@ -304,8 +304,9 @@ Both platforms share the main file, editor, EPUB/comic, chat, and transfer
 workflows. Navigation bars, pickers, menus and installed speech voices use each
 platform's native presentation. iPad supports additional app windows; Android
 currently keeps one app workspace/window. Android alone offers **High contrast /
-E Ink**. iOS alone offers **Show Legacy**, which controls visibility of names
-beginning with `legacy-` and credential package names beginning with `legacy`; Android shows them without that filter.
+E Ink**. Both platforms offer **Show Legacy** to control the visibility of
+folders beginning with `legacy-` and credential package names beginning with
+`legacy`. Save preferences to keep that choice after restarting.
 
 Android protects sensitive windows with its secure-window flag. iOS hides content
 for inactive app snapshots and detected recording/mirroring, but cannot prevent

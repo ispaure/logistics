@@ -9,6 +9,9 @@ in narrow windows; wider windows show the tree and article together.
 - [Remote and offline files](documents/remote.md)
 - [Using documentation](documentation/documentation.md)
 
+Password and token fields start hidden. Use the eye button beside a field to
+show or hide its value. Clearing the field hides it again.
+
 ## Installing Android test builds
 
 Invited Android testers can accept a Firebase App Distribution invitation using
@@ -102,25 +105,25 @@ See [LocalCrypt on mobile](../../Python/features/rclone/docs/user_mobile/localcr
 
 See [Folder Hub on mobile](folder_hub/folder_hub.md#file-browser-locations-and-actions).
 
-## Reader and editor presentation (Phase 3 Part 1)
+## Reading and editing
 
-See [Reading and editing on mobile](documents/reading-and-editing.md#reader-and-editor-presentation-phase-3-part-1).
+See [Reading and editing on mobile](documents/reading-and-editing.md#reading-and-editing).
 
-## Independent iPad windows (Phase 4 Part 1)
+## Using iPad windows
 
-See [iPad windows](navigation/windows.md#independent-ipad-windows-phase-4-part-1).
+See [iPad windows](navigation/windows.md#using-ipad-windows).
 
 ## Folder Hub and Local / LocalCrypt sync
 
 See [Folder Hub on mobile](folder_hub/folder_hub.md#folder-hub-and-local--localcrypt-sync).
 
-## Mobile UI refresh (local development)
+## Using the mobile panels
 
-See [Mobile panels](navigation/panels.md#mobile-ui-refresh-local-development).
+See [Mobile panels](navigation/panels.md#using-the-mobile-panels).
 
-## Mobile spacing follow-up
+## Panel layout
 
-See [Mobile panels](navigation/panels.md#mobile-spacing-follow-up).
+See [Mobile panels](navigation/panels.md#panel-layout).
 
 ## Credential groups, open documents and privacy
 

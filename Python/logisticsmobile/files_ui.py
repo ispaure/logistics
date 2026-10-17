@@ -1,4 +1,5 @@
 """Native local file management; shared operations own transfer correctness."""
+from commonUtils.ui.native.password_input import PasswordInput
 from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
 
 from features.rclone.mobile.storage_location import collection_path, CollectionFiles
@@ -121,7 +122,7 @@ class FilesUI:
         from .browser_ui import FileBrowser as NativeBrowser
         self.file_browser = NativeBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open, item_actions=self.show_file_actions)
         self.file_browser.navigation_controls.remove(self.file_browser.back_button)
-        self.file_password = toga.PasswordInput(placeholder='Inner archive password, when needed', style=Pack(height=48))
+        self.file_password = PasswordInput(placeholder='Inner archive password, when needed', style=Pack(height=48))
         self.file_name = toga.TextInput(placeholder='New name / folder name', style=Pack(height=48))
         self.file_destination = toga.Selection(items=list(self.file_roots), style=Pack(height=48))
         self.file_target = toga.TextInput(placeholder='Destination path including name', style=Pack(height=48))

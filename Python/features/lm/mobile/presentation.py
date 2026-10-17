@@ -7,12 +7,13 @@ import unicodedata
 from commonUtils.ui.native.markdown_preview import markdown_body
 
 
-def composer_height(text, width, font_size=16):
+def composer_height(text, width, font_size=16, *, available_height=None):
     """Conservative wrapped-line estimate, bounded so replies retain space."""
     columns = max(8, int(max(1, width - 24) / (font_size * .65)))
     lines = sum(max(1, math.ceil(sum(2 if unicodedata.east_asian_width(c) in 'WF' else 1
                                     for c in line) / columns)) for line in text.split('\n'))
-    return min(120, max(52, int(lines * font_size * 1.4 + 20)))
+    ceiling = 120 if available_height is None else max(52, min(120, int(available_height / 4)))
+    return min(ceiling, max(52, int(lines * font_size * 1.4 + 20)))
 
 
 def transcript_entries(messages, previous=()):
