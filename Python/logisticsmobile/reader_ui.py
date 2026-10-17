@@ -275,7 +275,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             from commonUtils.ui.native.image_canvas import ImageCanvas
             from .fold_layout import seam_fraction
             seam = seam_fraction(self, self.book_content)
-            from features.comics.mobile.validation import image_dimensions
+            from features.images.validation import image_dimensions
             page_width, page_height = image_dimensions(data[0])
             portrait = page_width < page_height
             if len(data) == 1 and (seam is None or not portrait):

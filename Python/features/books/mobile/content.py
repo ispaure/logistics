@@ -4,7 +4,7 @@ from html import escape
 from urllib.parse import quote
 from features.books.xhtml import chapter_document
 from features.books.epub import resolve_href
-from features.comics.mobile.validation import image_dimensions
+from features.images.validation import image_dimensions
 
 
 def chapter_html(book, index, font_size=16, *, margin=16, theme='system', links=False, font_family='system', line_spacing=150, reading_width='800'):

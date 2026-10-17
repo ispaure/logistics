@@ -1,6 +1,6 @@
 """Portable native-reader spread loading and spread-aware page commands."""
 from features.comics.reading import visible_pages
-from .validation import image_dimensions
+from features.images.validation import image_dimensions
 
 
 class ComicNavigation:

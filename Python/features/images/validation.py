@@ -1,4 +1,4 @@
-"""Bounded mobile comic image validation before native decoding."""
+"""Bounded PNG/JPEG/WebP image validation before native decoding."""
 import struct
 
 MAX_IMAGE = 8 * 1024 * 1024
@@ -14,7 +14,7 @@ def webp_dimensions(data):
     chunk = data[20:20 + size]
     if kind == b'VP8X' and size == 10:
         if chunk[0] & 2:
-            raise ValueError('Animated WebP comic pages are not supported.')
+            raise ValueError('Animated WebP images are not supported.')
         return 1 + int.from_bytes(chunk[4:7], 'little'), 1 + int.from_bytes(chunk[7:10], 'little')
     if kind == b'VP8L' and size >= 5 and chunk[0] == 0x2f:
         bits = int.from_bytes(chunk[1:5], 'little')
@@ -28,7 +28,7 @@ def webp_dimensions(data):
 
 def image_dimensions(data):
     if not isinstance(data, bytes) or len(data) > MAX_IMAGE:
-        raise ValueError('Comic pages are limited to 8 MiB.')
+        raise ValueError('Images are limited to 8 MiB.')
     if len(data) >= 33 and data[:8] == b'\x89PNG\r\n\x1a\n' and data[12:16] == b'IHDR':
         width, height = struct.unpack('>II', data[16:24])
     elif data.startswith(b'\xff\xd8'):
@@ -60,7 +60,7 @@ def image_dimensions(data):
     elif data[:4] == b'RIFF' and data[8:12] == b'WEBP':
         width, height = webp_dimensions(data)
     else:
-        raise ValueError('Use PNG, JPEG or WebP comic pages.')
+        raise ValueError('Use PNG, JPEG or WebP images.')
     if not 0 < width <= 8192 or not 0 < height <= 8192 or width * height > 16_000_000:
         raise ValueError('Page dimensions exceed the mobile 16-megapixel limit.')
     return width, height

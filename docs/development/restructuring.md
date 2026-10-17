@@ -168,3 +168,7 @@ Books, IDE and Text Editor now keep desktop widgets/controllers under their own 
 ### 7. Feature-owned format mutations
 
 Books and Comics own metadata plans, archive rewrite requirements and structural validation in `mutations.py`. Desktop mutation paths, mobile library transactions and LocalCrypt adapters use those owners. The mobile library retains UUID/checksum records, conflict checks, durable journals and atomic publication. `services/document_metadata.py` remains a thin compatibility dispatcher; it contains no format implementation.
+
+### 8. Shared portable image validation
+
+Bounded PNG/JPEG/WebP validation lives in `features/images/validation.py`. Books, Comics and provider readers use that owner; EPUB rendering no longer imports Comics mobile implementation. Existing byte/dimension/animation limits are preserved. Only the portable image helper and lazy package entry point enter the mobile payload.

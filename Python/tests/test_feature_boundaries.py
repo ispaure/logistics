@@ -27,6 +27,8 @@ class FeatureBoundaryTests(unittest.TestCase):
 import sys
 from services.document_readers import PrivateReader
 from services.archive_access import NativeArchiveAccess
+from features.images.validation import image_dimensions
+from features.books.mobile.content import chapter_html
 from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
 assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile')) for name in sys.modules)
 reader = PrivateReader('hello.txt', b'hello')

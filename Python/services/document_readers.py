@@ -83,7 +83,7 @@ class PrivateReader:
             return 'text', chapter_text(self.book, index)
         if self.kind in SOURCE_EXTENSIONS:
             return 'text', self.text
-        from features.comics.mobile.validation import image_dimensions, MAX_IMAGE
+        from features.images.validation import image_dimensions, MAX_IMAGE
         with self.source.open_archive(self.name) if self.streaming else ZipFile(BytesIO(self.data)) as archive:
             member = archive.getinfo(self.pages[index])
             if member.file_size > MAX_IMAGE:

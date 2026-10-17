@@ -22,7 +22,7 @@ def callbacks(provider, client, password=''):
         else:
             # Ordinary ZIP/EPUB cover bytes also stay in memory.
             from zipfile import ZipFile
-            from features.comics.mobile.validation import image_dimensions
+            from features.images.validation import image_dimensions
             member_data = None
             if suffix in {'.zip', '.cbz'}:
                 from features.comics.mobile.pages import page_names
