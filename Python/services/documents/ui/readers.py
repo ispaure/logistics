@@ -3,7 +3,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.resource_picker import ResourceTaskDialog
-from services.editor_resources import choose_editor_resource, retain
+from services.documents.ui.editors import choose_editor_resource, retain
 
 
 def choose_reader_document(parent, kind, *, current=None, open_local=None):
@@ -56,7 +56,7 @@ def open_reader_choice(choice, parent, kind, *, password=None):
             if operation.cancelled.is_set() or getattr(owner, 'closing', False):
                 return
             if error:
-                from services.zip_passwords import is_password_error
+                from services.documents.zip_passwords import is_password_error
                 if is_password_error(error):
                     from ui_new.dialogs.archive_password import ask_password
                     retry = ask_password(path, error, parent, source=choice.provider)
@@ -74,7 +74,7 @@ def open_reader_choice(choice, parent, kind, *, password=None):
             if kind == 'epub':
                 from features.books.ui.reader import BookWindow
                 window = BookWindow(document)
-                from services.private_views import protect_private_view
+                from services.documents.ui.private_views import protect_private_view
                 protect_private_view(window, choice.provider)
                 window.destroyed.connect(lambda: choice.close())
                 retain(window)
@@ -83,7 +83,7 @@ def open_reader_choice(choice, parent, kind, *, password=None):
             else:
                 from features.comics.reader import open_reader
                 window = open_reader(document)
-                from services.private_views import protect_private_view
+                from services.documents.ui.private_views import protect_private_view
                 protect_private_view(window, choice.provider)
                 opened.append(window)
                 if window.pages is document:

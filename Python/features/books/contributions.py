@@ -44,5 +44,5 @@ def register():
 
 
 def launch(parent):
-    from services.reader_resources import choose_reader_document
+    from services.documents.ui.readers import choose_reader_document
     return choose_reader_document(parent, 'epub')

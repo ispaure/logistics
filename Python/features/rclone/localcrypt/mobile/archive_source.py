@@ -13,7 +13,7 @@ def revision(path):
     return file_revision(path)
 
 
-from services.archive_access import NativeArchiveAccess
+from services.documents.archive_access import NativeArchiveAccess
 
 
 class NativeSource(NativeArchiveAccess):

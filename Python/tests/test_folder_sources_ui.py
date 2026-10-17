@@ -16,7 +16,7 @@ from features.contributions import (
 from models.local_folder import LocalFolder
 from ui_new.main_window import MainWindow
 from ui_new.pages.folders import FoldersPage
-from services.folder_sources import discover_folder_sources
+from services.folders.sources import discover_folder_sources
 
 
 class FolderSourceTests(QtTestCase):
@@ -81,8 +81,8 @@ class FolderSourceTests(QtTestCase):
         self.remotes = []
         self.settings = {}
         for target, options in (
-            ('services.folder_entries.folder_discovery.get_local_folders', {'side_effect': lambda: self.local_folders}),
-            ('services.folder_entries._get_configured_name_values', {'side_effect': lambda key: self.settings.get(key, [])}),
+            ('services.folders.entries.folder_discovery.get_local_folders', {'side_effect': lambda: self.local_folders}),
+            ('services.folders.entries._get_configured_name_values', {'side_effect': lambda key: self.settings.get(key, [])}),
             ('features.registry.get_local_folder_sources', {'side_effect': lambda: self.locals}),
             ('features.registry.get_remote_folder_sources', {'side_effect': lambda: self.remotes}),
             ('features.registry.get_folder_features', {'return_value': []}),

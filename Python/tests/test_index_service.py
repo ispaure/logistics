@@ -7,7 +7,7 @@ from unittest.mock import patch
 from commonUtils.filesystem.index import DirectoryCache
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from services.indexing import IndexService
+from services.folders.ui.indexing import IndexService
 
 
 class IndexServiceTests(QtTestCase):
@@ -19,7 +19,7 @@ class IndexServiceTests(QtTestCase):
             root.mkdir()
             (root/'example.txt').write_text('example')
             with DirectoryCache(database=base/'cache'/'index.sqlite3') as cache:
-                with patch('services.indexing.directory_cache', cache):
+                with patch('services.folders.ui.indexing.directory_cache', cache):
                     service = IndexService()
                     identity = service.coordinator.submit(root, background_priority=False)
                     activity = []

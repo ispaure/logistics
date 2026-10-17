@@ -131,7 +131,7 @@ physical keyboard or layout behavior.
 
 ## Local mobile Folder Hub and embedded sync changes (2026-10-14)
 
-The mobile payload includes `configFile.ini` and portable `services.folder_policy`;
+The mobile payload includes `configFile.ini` and portable `services.folders.policy`;
 desktop and mobile share the exclusion parser and dash naming helper. No desktop
 configuration singleton or Qt dependency is admitted to the payload. INI bytes are
 included in the source digest. Folder Hub aggregates actual private folders,

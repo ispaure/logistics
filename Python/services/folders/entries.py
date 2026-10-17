@@ -5,7 +5,7 @@ Merged logical-folder construction for Logistics.
 from collections.abc import Iterable
 
 import config
-from services.folder_policy import configured_values
+from services.folders.policy import configured_values
 
 from models import folder_discovery
 from models.folder_entry import FolderEntry

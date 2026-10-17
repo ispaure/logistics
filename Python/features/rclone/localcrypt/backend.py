@@ -518,7 +518,7 @@ class CryptResources(LocalFiles):
                          cleanup=cleanup, cancelled=cancelled)
 
     def archive_password(self, path):
-        from services.zip_passwords import password_from_ini
+        from services.documents.zip_passwords import password_from_ini
         relative = PurePosixPath(self.relative(path))
         for folder in (relative.parent, *relative.parent.parents):
             candidate = str(folder / 'remoteConfig.ini')

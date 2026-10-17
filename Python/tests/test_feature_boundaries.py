@@ -25,8 +25,9 @@ class FeatureBoundaryTests(unittest.TestCase):
     def test_provider_adapters_import_without_ui_or_application_host(self):
         script = '''
 import sys
-from services.document_readers import PrivateReader
-from services.archive_access import NativeArchiveAccess
+from services.documents.readers import PrivateReader
+from services.documents.archive_access import NativeArchiveAccess
+from services.documents.preparation import prepare_editor
 from features.images.validation import image_dimensions
 from features.books.mobile.content import chapter_html
 from features.rclone.localcrypt.mobile.copies import LocalCryptCopies

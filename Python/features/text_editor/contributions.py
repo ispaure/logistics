@@ -85,7 +85,7 @@ def _service(parent):
 
 
 def launch(parent):
-    from services.editor_resources import choose_editor_resource, open_editor_choice
+    from services.documents.ui.editors import choose_editor_resource, open_editor_choice
     choice = choose_editor_resource(parent, 'open')
     if choice:
         if getattr(choice.provider, 'private', False):

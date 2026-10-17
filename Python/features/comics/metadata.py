@@ -11,7 +11,7 @@ from commonUtils.archives import legacy as zipUtils
 from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.formats import txtType
 from .archive_io import replace_archive, validate_archive_members
-from services.zip_passwords import resolve_password
+from services.documents.zip_passwords import resolve_password
 from commonUtils.archives.zip_access import authenticate
 from commonUtils.runtime.operations import BatchResult, run_batch
 

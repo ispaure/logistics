@@ -7,7 +7,7 @@ import zipfile
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.runtime.operations import OperationCancelled
-from services.zip_passwords import resolve_password, is_password_error, remember_verified_password
+from services.documents.zip_passwords import resolve_password, is_password_error, remember_verified_password
 from ui_new.dialogs.archive_password import ask_password
 
 

@@ -64,7 +64,7 @@ class MainWindow(pyside.Window):
         super().__init__('Logistics', main_window=True)
         from services.local_storage import install_local_storage_policy
         install_local_storage_policy()
-        from services.editor_resources import install_editor_dialogs
+        from services.documents.ui.editors import install_editor_dialogs
         install_editor_dialogs()
 
         self.updates = None

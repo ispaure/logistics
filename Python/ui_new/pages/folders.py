@@ -10,9 +10,9 @@ from commonUtils.ui.tasks.operation_progress import OperationProgress
 
 from features import registry
 from features.contributions import UIAction
-from services.folder_policy import folder_parts
-from services.folder_entries import get_folder_entries
-from services.folder_sources import discover_folder_sources
+from services.folders.policy import folder_parts
+from services.folders.entries import get_folder_entries
+from services.folders.sources import discover_folder_sources
 from ui_new.actions import execute_action
 
 

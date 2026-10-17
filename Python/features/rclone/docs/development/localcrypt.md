@@ -182,7 +182,7 @@ private content and decrypted copy labels. OS memory/backup policies are outside
 
 ## Shared metadata editing
 
-`services/document_metadata.py` owns comic/EPUB metadata plans, resource manifests
+`services/documents/metadata.py` owns comic/EPUB metadata plans, resource manifests
 and the streamed rewrite shared by ordinary and private desktop saves. Existing
 ComicInfo and EPUB package serializers preserve unknown XML and page/resource
 metadata. Storage adapters own publication: desktop uses `CryptResources`;
@@ -294,7 +294,7 @@ third-party filesystem calls are not sandboxed by it.
 
 Desktop text and Markdown Open/Save As now use the shared resource browser
 selection model. Logistics supplies local roots, configured crypt connections,
-unlock prompts and provider leases through `services.editor_resources`.
+unlock prompts and provider leases through `services.documents.ui.editors`.
 Private text windows own only memory buffers; private Markdown retains its
 memory-only resource loader. Worker completion precedes provider release and
 window retirement. The native mobile chooser uses the same selection validation
@@ -414,7 +414,7 @@ Folder Hub filters private folder contributions before running availability dete
 
 ### Reader picker handoff
 
-`services.reader_resources` reuses the editor resource catalog with EPUB/CBZ filters and the current folder. Ordinary selections preserve local reader navigation; private selections prepare a source-backed EPUBBook or ComicPages on a cancellable worker before presentation. The modal loading dialog preserves the document launcher’s creation scope and waits for worker retirement before returning. Cancellation and failed opens release the choice; successful readers retain it until destruction, including inner-archive password retries. Reused comic readers release the redundant choice. Private EPUB readers skip ReadingState construction and recents, retain bookmarks only in RAM, and use the existing encrypted metadata adapter. Main-window shutdown also cancels and waits for its registered resource jobs.
+`services.documents.ui.readers` reuses the editor resource catalog with EPUB/CBZ filters and the current folder. Ordinary selections preserve local reader navigation; private selections prepare a source-backed EPUBBook or ComicPages on a cancellable worker before presentation. The modal loading dialog preserves the document launcher’s creation scope and waits for worker retirement before returning. Cancellation and failed opens release the choice; successful readers retain it until destruction, including inner-archive password retries. Reused comic readers release the redundant choice. Private EPUB readers skip ReadingState construction and recents, retain bookmarks only in RAM, and use the existing encrypted metadata adapter. Main-window shutdown also cancels and waits for its registered resource jobs.
 
 
 ## Shared mobile browsing and streaming

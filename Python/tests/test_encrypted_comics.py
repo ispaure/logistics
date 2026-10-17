@@ -17,7 +17,7 @@ from features.comics.pages import ComicPages
 from features.comics.catalog import LibraryCatalog
 from features.comics.metadata import comic_info_xml_replace_author
 from features.comics.compression_stats import CompressionLog
-from services.zip_passwords import clear_passwords, configured_password, resolve_password
+from services.documents.zip_passwords import clear_passwords, configured_password, resolve_password
 
 
 class EncryptedComicTests(unittest.TestCase):

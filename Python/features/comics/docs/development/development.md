@@ -102,7 +102,7 @@ pending edits. Encrypted metadata must never enter this persistent cache.
 
 ## Password-protected CBZs
 
-Use `services.zip_passwords` for ancestor `[LogisticsZIP] archive_password` policy;
+Use `services.documents.zip_passwords` for ancestor `[LogisticsZIP] archive_password` policy;
 see [Archives](../../../archives/docs/development/development.md#password-configuration). Ordinary CBZs remain
 ordinary unless explicitly encrypted. Reader/single-file editor workflows prompt
 for missing/incorrect passwords and cache successful unlocks per archive in memory,

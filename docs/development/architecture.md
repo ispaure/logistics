@@ -86,7 +86,7 @@ creating the first tab. Contributed page IDs must be unique; the main window
 validates them before invoking any page factories.
 
 The Folders page resolves declarations on the GUI thread, then uses
-`services.folder_sources.discover_folder_sources()` in a worker to read each source
+`services.folders.sources.discover_folder_sources()` in a worker to read each source
 provider and its folder list once per refresh. Availability detectors and action
 descriptors also run in a worker; widget factories run on the GUI thread. Providers
 and detectors must be noninteractive and must not create or access Qt widgets.
@@ -239,7 +239,7 @@ workspace guide for the native visibility lifecycle.
 
 ## Multiple application instances and shared indexing
 
-`launch.main()` initializes Qt and starts `services.indexing.IndexService` before
+`launch.main()` initializes Qt and starts `services.folders.ui.indexing.IndexService` before
 feature initialization. Every process runs a low-priority participant in the shared
 commonUtils index coordinator. There is no application-wide launch lock. The
 service also runs when no browser subscribes, so another open process can finish

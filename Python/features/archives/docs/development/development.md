@@ -85,7 +85,7 @@ Place this in `remoteConfig.ini` beside a file or inside a selected folder:
 archive_password = change-me
 ```
 
-`services.zip_passwords.configured_password` walks ancestors. The nearest INI
+`services.documents.zip_passwords.configured_password` walks ancestors. The nearest INI
 containing `[LogisticsZIP]` wins. Other sections do not stop the search; an empty
 or missing `archive_password` in that section stops inheritance. Interpolation is
 disabled, so percent signs work. `[DEFAULT]` passwords are ignored; the password

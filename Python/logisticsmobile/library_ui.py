@@ -20,7 +20,7 @@ def discover_libraries(root, jobs, client=None, crypt_remotes=()):
     """Inspect collection-root INIs, without recursively scanning book files."""
     from features.rclone.localcrypt.mobile.resources import encrypted_library_sources
     from .folder_hub import exclusions, visible_remotes
-    from services.folder_policy import visible_name
+    from services.folders.policy import visible_name
     root = Path(root)
     sources, records, failures, seen = [], [], 0, set()
     try:

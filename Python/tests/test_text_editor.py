@@ -188,7 +188,7 @@ class TextEditorTests(QtTestCase):
                 "question",
                 return_value=qt.QMessageBox.StandardButton.Save,
             ),
-            patch('services.editor_resources.choose_editor_resource',
+            patch('services.documents.ui.editors.choose_editor_resource',
                   return_value=__import__('commonUtils.runtime.resource_selection', fromlist=['ResourceChoice']).ResourceChoice(
                       __import__('commonUtils.runtime.local_files', fromlist=['LocalFiles']).LocalFiles(path.parent), path.name)),
         ):

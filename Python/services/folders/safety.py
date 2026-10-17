@@ -6,7 +6,7 @@ import sys
 
 
 def get_policy_path():
-    return Path(__file__).resolve().parents[1] / 'maintenance.ini'
+    return Path(__file__).resolve().parents[2] / 'maintenance.ini'
 
 
 def protected_roots(platform=None, environ=None, home=None):

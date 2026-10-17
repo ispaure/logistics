@@ -50,7 +50,7 @@ class BooksPage(Bookmarks, qt.QWidget):
             self.open_book(initial_path)
 
     def choose_book(self):
-        from services.reader_resources import choose_reader_document
+        from services.documents.ui.readers import choose_reader_document
         return choose_reader_document(self.reader_window() or self, 'epub', current=self.book,
                                       open_local=None if self.private else self.open_book)
 

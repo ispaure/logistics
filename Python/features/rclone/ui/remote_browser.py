@@ -64,7 +64,7 @@ class RemoteBrowserView(qt.QMainWindow):
         self.menuBar().setNativeMenuBar(False)
         menu = self.menuBar().addMenu('File')
         menu.addAction('Open Remote…', lambda: choose_remote(self))
-        from services.private_views import protect_private_view
+        from services.documents.ui.private_views import protect_private_view
         protect_private_view(self, self.provider)
 
     @property
@@ -86,7 +86,7 @@ class RemoteBrowserView(qt.QMainWindow):
         suffix = Path(path).suffix.lower()
         if suffix in {'.epub', '.cbz', '.zip'}:
             from commonUtils.runtime.resource_selection import ResourceChoice
-            from services.reader_resources import open_reader_choice
+            from services.documents.ui.readers import open_reader_choice
             open_reader_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()),
                                self, 'epub' if suffix == '.epub' else 'comic')
             return
@@ -124,8 +124,8 @@ class RemoteBrowserView(qt.QMainWindow):
                 window.setCentralWidget(view)
                 release = self.provider.acquire()
                 window.destroyed.connect(release)
-                from services.private_views import protect_private_view
-                from services.editor_resources import retain
+                from services.documents.ui.private_views import protect_private_view
+                from services.documents.ui.editors import retain
                 protect_private_view(window, self.provider)
                 retain(window)
                 window.show()
