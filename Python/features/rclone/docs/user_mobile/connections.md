@@ -36,7 +36,7 @@ settings are required. It accepts a deliberately limited set of backend settings
 local paths, scripts, service-account files, mounts, alias wrappers and
 other backends are not currently supported. WebDAV URLs and custom S3 endpoints
 must use HTTPS. Certificate verification stays enabled. A single crypt layer over
-one supported backing remote is available for [LocalCrypt reading](#localcrypt-encrypted-offline-reading).
+one supported backing remote is available for [LocalCrypt reading](localcrypt.md#localcrypt-encrypted-offline-reading).
 
 Choose a connection and tap **Open remote**. **Connections…** opens credential
 setup. Tap folders to open them; **Back** returns through successful visits.

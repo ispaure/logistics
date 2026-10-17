@@ -105,7 +105,7 @@ Rclone download metadata is editable in this feature's `config.ini`, with
 platform-section overrides read by `services.software`. Missing fields fall back
 to the pinned root manifest; other tools still use that manifest. Both download
 and installed hashes remain required. See
-[configuration](../../../../../docs/user/configuration.md#rclone-download-versions).
+[configuration](../user/download-versions.md#rclone-download-versions).
 
 
 ## LocalCrypt

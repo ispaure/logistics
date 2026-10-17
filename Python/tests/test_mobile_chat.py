@@ -7,9 +7,9 @@ import unittest
 from unittest.mock import patch
 
 from features.lm.domain import build_request, message
-from logisticsmobile.chat import ChatStore, DEFAULT_SETTINGS, export_chat
+from features.lm.mobile.storage import ChatStore, DEFAULT_SETTINGS, export_chat
 from logisticsmobile.chat_fixture import fixture_server
-from logisticsmobile.chat_transport import ChatClient, ChatCancelled
+from features.lm.mobile.transport import ChatClient, ChatCancelled
 
 
 class MobileChatTests(unittest.TestCase):

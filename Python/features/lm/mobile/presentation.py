@@ -4,8 +4,8 @@ import json
 import math
 import unicodedata
 
-from .preview import markdown_body
-from .palette import css_variables
+from logisticsmobile.preview import markdown_body
+from logisticsmobile.palette import css_variables
 
 
 def composer_height(text, width, font_size=16):

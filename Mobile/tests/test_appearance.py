@@ -3,7 +3,7 @@ import unittest
 from logisticsmobile.appearance import contrast_ratio
 from logisticsmobile.palette import LIGHT, DARK, argb, themed_chapter
 from logisticsmobile.preview import markdown_preview
-from logisticsmobile.chat_presentation import transcript_document
+from features.lm.mobile.presentation import transcript_document
 
 
 class AppearanceTests(unittest.TestCase):

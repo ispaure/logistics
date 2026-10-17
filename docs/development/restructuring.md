@@ -136,3 +136,11 @@ The initial assessment involved source/documentation inspection. Subsequent
 implementation is verified with relevant host regressions, packaging checks and
 correctness lint. Native-device acceptance is separate; source moves and host
 tests do not certify device appearance or native interactions.
+
+## Sequential feature refactors
+
+Each item is validated and committed separately. Feature IDs and stored formats remain stable.
+
+### 1. LM mobile ownership
+
+Mobile chat storage, transport and presentation now live in `features/lm/mobile/`. Desktop SSE framing lives in portable `features/lm/streaming.py`; desktop transport retains its public import. The host retains only navigation/composition and its synthetic server fixture. Mobile limits, data locations and persisted formats are unchanged.

@@ -10,8 +10,9 @@ import subprocess
 
 APP_MODULES = ('ios_reader_chrome.py', 'ios_storage.py', 'keyboard.py', 'fold_layout.py', 'storage_ui.py', 'settings_ui.py', 'documentation_ui.py', 'saved_files_ui.py', 'screen_privacy.py', 'palette.py', 'workspace_navigation.py', 'document_choices.py', 'comic_layout_check.py', 'appearance.py', 'native_archives.py', 'provider_ui.py', 'provider_readers.py', 'text_resources.py', '__init__.py', '__main__.py', 'documents.py', 'pickers.py', 'app.py', 'smoke.py', 'navigation.py', 'workspace.py', 'recent_documents.py', 'editors.py', 'adaptive_workspace.py', 'action_menu.py', 'reader_sessions.py', 'private_sessions.py', 'window_owners.py', 'window_scenes.py',
                'hub_ui.py', 'control_icons.py', 'hub_icons.py', 'browser_ui.py', 'folder_hub.py', 'local_sources.py', 'folder_hub_ui.py', 'preferences.py', 'locations.py', 'locations_ui.py', 'preview.py', 'library_edits.py', 'library.py', 'library_ui.py', 'reader_ui.py', 'reader_host.py', 'reader_controls.py', 'reader_chrome.py',
-               'chat.py', 'chat_transport.py', 'chat_ui.py', 'chat_presentation.py', 'chat_fixture.py', 'resource_imports.py', 'files_ui.py', 'editor_picker.py', 'host_services.py', 'browser_preview.py', 'comic_source.py')
+               'chat_fixture.py', 'resource_imports.py', 'files_ui.py', 'editor_picker.py', 'host_services.py', 'browser_preview.py', 'comic_source.py')
 DOCUMENT_MODULES = (
+    'features/lm/mobile/storage.py', 'features/lm/mobile/transport.py', 'features/lm/mobile/ui.py', 'features/lm/mobile/presentation.py', 'features/lm/mobile/__init__.py',
     'features/rclone/mobile/storage_location.py',
     'features/rclone/mobile/session_privacy.py',
     'features/rclone/mobile/cloud_ui.py', 'features/rclone/mobile/mirror_ui.py', 'features/rclone/mobile/transfer_review_ui.py', 'features/rclone/mobile/localcrypt_ui.py', 'features/rclone/mobile/messages.py',
@@ -25,7 +26,7 @@ DOCUMENT_MODULES = (
     'features/comics/archive_io.py', 'features/comics/comicinfo.py',
     'features/comics/library.py', 'features/comics/pages.py', 'features/comics/library_config.py',
     'configFile.ini', 'services/build_version.py', 'services/identifiers.py', 'services/folder_policy.py', 'services/__init__.py', 'services/zip_passwords.py', 'services/document_metadata.py',
-    'features/lm/__init__.py', 'features/lm/domain.py', 'features/lm/screenshots.py',
+    'features/lm/__init__.py', 'features/lm/domain.py', 'features/lm/streaming.py', 'features/lm/screenshots.py',
 )
 
 

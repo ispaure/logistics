@@ -63,11 +63,9 @@ existing values remain visible so they can be corrected. Unsuffixed legacy keys
 are displayed as text and are not automatically renamed. Links and Smart Home
 prefer their new `_str` keys and still accept their old unsuffixed keys.
 
-The [shared configuration guide](https://github.com/ispaure/commonUtils/blob/main/configuration/README.md)
-covers schema APIs, editor embedding and gradual migration. Logistics keeps its
-`ui_new.settings` imports as compatibility wrappers; its editor opts into typed
-keys by default. Ordinary users can
-edit these settings in Logistics without writing code.
+You can edit these settings in Logistics without writing code.
+See [configuration development](../development/configuration-and-data.md) for
+schema integration and compatibility details.
 
 ## Managed data paths
 
@@ -226,31 +224,11 @@ existing controls rather than the general INI editor.
 
 ## Rclone download versions
 
-**Settings → rclone** exposes `Python/features/rclone/config.ini`, with one section
-per supported operating system and architecture. These values override rclone's
-entries in `Python/software_manifest.json`; missing override fields use the manifest.
-Other software continues to use the manifest directly.
-
-To select another release, update its version, HTTPS URL, ZIP member, destination
-path and both hashes together. `sha256_str` checks the downloaded ZIP;
-`installed_sha256_str` checks the executable inside it. Hash verification remains
-mandatory. Destination paths must stay inside the configured Software folder.
-Saving changes edits configuration only; provisioning still happens through the
-existing confirmed download flow when the tool is needed. Invalid metadata is
-rejected before it is used.
+See [Choose rclone download versions](../../Python/features/rclone/docs/user/download-versions.md#rclone-download-versions).
 
 ## Text Editor preferences
 
-`Python/features/text_editor/config.ini` supplies typed editor defaults. Font,
-indentation, wrap, gutter, whitespace, syntax and automatic editing choices made
-in the window are persisted in `commonUtils/Cache/TextEditor/preferences.ini`,
-using the same shared INI APIs. Private overrides take precedence over feature
-defaults. **Reset Editor Preferences** removes the overrides. Recent paths use
-`recent.json` in the same cache folder; window geometry is stored in the private
-INI. Unsaved document content is not stored in preferences or recent history, but is
-stored separately in private session checkpoints. See
-[editor recovery](../../Python/features/text_editor/docs/user/user.md#appearance-and-preferences)
-for recovery limits and shutdown behavior.
+See [Text Editor preferences](../../Python/features/text_editor/docs/user/preferences.md#text-editor-preferences).
 
 ## Software defaults and personal settings
 
