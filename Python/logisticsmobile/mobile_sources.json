@@ -38,6 +38,7 @@
     "locations.py",
     "locations_controller.py",
     "locations_ui.py",
+    "markdown_speech.py",
     "navigation.py",
     "obsidian.py",
     "palette.py",

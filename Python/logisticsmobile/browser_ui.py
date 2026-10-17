@@ -1,11 +1,11 @@
 """Compact Logistics presentation over the shared, bounded native browser."""
 import inspect
+from pathlib import PurePosixPath
 import toga
 from .control_icons import apply_icon, icon_button
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from commonUtils.ui.native_browser import NativeBrowser
-from commonUtils.filesystem import format_size
 from commonUtils.ui.native.presentation import list_button
 from .appearance import surface
 
@@ -117,7 +117,7 @@ class FileBrowser(NativeBrowser):
         if not self.bounded_pages or self.closed:
             return self._render()
         # Build a bounded page offscreen. Mutating a live UIKit stack for every
-        # button, menu and size label repeatedly relays out the entire screen.
+        # button and menu repeatedly relays out the entire screen.
         previous = self.items
         self.items = toga.Box(style=Pack(direction=COLUMN))
         try:
@@ -133,11 +133,14 @@ class FileBrowser(NativeBrowser):
         super().render()
         if self.closed:
             return
-        for button in self.buttons.values():
-            button.text = button.text.removeprefix('✓ ')
+        entries = self.entries[self.page * self.page_size:(self.page + 1) * self.page_size]
+        for entry in entries:
+            button = self.buttons[entry.identity]
+            # Recursive results retain their full path as identity/payload.
+            # Only the visible caption uses the final path component.
+            button.text = ('📁 ' if entry.container else '') + PurePosixPath(entry.label).name
             list_button(button)
             middle_filename(button)
-        entries = self.entries[self.page * self.page_size:(self.page + 1) * self.page_size]
         entries_by_button = {self.buttons[entry.identity]: entry for entry in entries}
         for row in self.items.children:
             if not isinstance(row, toga.Box):
@@ -164,28 +167,17 @@ class FileBrowser(NativeBrowser):
             for row, entry in zip(self.items.children, entries):
                 if not isinstance(row, toga.Box):
                     continue
-                size = entry.properties.get('size')
-                if entry.container:
-                    detail = ''
-                elif isinstance(size, (int, float)):
-                    detail = format_size(size, binary_units=True)
-                else:
-                    detail = entry.suffix.lstrip('.').upper() or 'File'
                 controls = toga.Box(style=Pack(direction=ROW))
                 for child in list(row.children):
                     row.remove(child)
                     controls.add(child)
                 row.style.direction = COLUMN
-                # A single row per entry: folder icon/name, or file name/size.
-                # Containers do not need a second 'Folder' line.
+                # Keep metadata in the selected item's information panel.
                 if entry.container:
                     for child in list(controls.children):
                         if isinstance(child, toga.ImageView):
                             controls.remove(child)
                     controls.add(toga.Label('›', style=Pack(width=18, font_size=18, margin_top=12)))
-                elif detail:
-                    controls.insert(len(controls.children) - (1 if self.on_item_actions else 0),
-                        toga.Label(detail, style=Pack(width=64, font_size=11, margin_top=17)))
                 row.add(controls)
                 surface(row)
 

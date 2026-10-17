@@ -408,7 +408,8 @@ class ProviderUI(FilesUI):
                 on_chapter=controller.open_provider_epub_chapter,
                 on_position=lambda value: locations.update({book.spine[index]: value}))
             tools = view.provider_epub_view.tools
-            tools.widget.remove(tools.button)
+            if tools.button in tools.widget.children:
+                tools.widget.remove(tools.button)
             for control in (view.crypt_bookmark_button, view.crypt_bookmark_selector):
                 if control.parent is not None:
                     control.parent.remove(control)
@@ -581,17 +582,19 @@ class ProviderUI(FilesUI):
         elif getattr(view.crypt_reader, 'read_only', False):
             actions = [('Reader tools…', self.show_private_tools)]
             if view.crypt_reader.book is not None:
-                actions.extend([('Read aloud…', self.show_provider_read_aloud), ('Appearance…', self.show_provider_layout)])
+                actions.extend([('Read aloud…', self.show_provider_read_aloud), ('Find in chapter…', self.show_provider_epub_find),
+                    ('Appearance…', self.show_provider_layout)])
             elif getattr(view.crypt_reader, 'image_document', False):
                 actions.append(('Fit image', self.fit_private_page))
             actions.append(('Close private document', self.close_crypt))
         else:
             actions = [('Open / Save As…' if view.crypt_reader.editable else 'Open / Metadata…', self.show_private_tools)]
             if view.crypt_reader.book is not None:
-                actions.extend([('Read aloud…', self.show_provider_read_aloud), ('Appearance…', self.show_provider_layout)])
+                actions.extend([('Read aloud…', self.show_provider_read_aloud), ('Find in chapter…', self.show_provider_epub_find),
+                    ('Appearance…', self.show_provider_layout)])
             actions.append(('Close private document', self.close_crypt))
         if view.crypt_reader.book is not None or view.crypt_reader.kind == '.pdf':
-            actions.append(('Reading mode', self.toggle_private_reading_mode))
+            actions.append(('Fullscreen', self.toggle_private_reading_mode))
         view.crypt_actions_menu = FeatureCommands(view.crypt_actions, self, actions, self.show_private_tools)
         view.crypt_title.style.flex = 1
         view.crypt_page.style.flex = 1
@@ -693,6 +696,11 @@ class ProviderUI(FilesUI):
         self.resume_crypt()
 
     def clear_private_preview(self):
+        speech = getattr(self, "markdown_speech", None)
+        if speech is not None:
+            speech.close()
+            if speech.button in self.crypt_content.children:
+                self.crypt_content.remove(speech.button)
         formatted = getattr(self, 'crypt_formatted', None)
         if formatted is not None:
             formatted.dispose()
@@ -726,6 +734,9 @@ class ProviderUI(FilesUI):
                 formatted.load(widget.value)
             except ValueError as error:
                 self.crypt_title.text = private_label(str(error))
+        speech = getattr(self, 'markdown_speech', None)
+        if speech is not None:
+            speech.close()
         preview = getattr(self, 'crypt_preview', None)
         if preview is None or preview not in self.crypt_content.children:
             return
@@ -771,6 +782,13 @@ class ProviderUI(FilesUI):
         self.crypt_markdown_mode = 'preview'
         self.crypt_content.clear()
         self.crypt_content.add(preview)
+        from .markdown_speech import MarkdownSpeech
+        speech = getattr(self, "markdown_speech", None)
+        if speech is None:
+            self.markdown_speech = speech = MarkdownSpeech(getattr(self, "app", self), preview, self.crypt_content)
+        speech.close()
+        speech.web = preview
+        self.crypt_content.insert(0, speech.button)
         self.crypt_preview_button.text = 'Text' if getattr(self.crypt_reader, 'read_only', False) else 'Edit Markdown'
 
     def private_edit_mode_changed(self, widget=None, **kwargs):
@@ -825,6 +843,14 @@ class ProviderUI(FilesUI):
         if not self.cloud_busy and self.clear_private_reader():
             self.show_cloud()
 
+
+    def show_provider_epub_find(self, widget=None, **kwargs):
+        panel = getattr(self, 'provider_epub_view', None)
+        if panel is not None and not self.cloud_busy:
+            if hasattr(panel, 'show_find'):
+                panel.show_find()
+            else:
+                panel.tools.toggle()
 
     def toggle_provider_epub_tools(self, widget=None, **kwargs):
         panel = getattr(self, 'provider_epub_view', None)
@@ -891,9 +917,14 @@ class ProviderUI(FilesUI):
             task.cancel()
         self._provider_width_panel = panel
         from features.books.mobile.presentation import watch_width, pane_width
+        def width():
+            available = pane_width(self.crypt_content, self.main_window.size.width, 0)
+            if hasattr(panel, 'reflow'):
+                panel.reflow(available, immersive=self.crypt_immersive)
+            return available
         self._provider_width_task = self.loop.create_task(watch_width(
             alive=lambda: getattr(self, 'provider_epub_view', None) is panel,
-            width=lambda: pane_width(self.crypt_content, self.main_window.size.width, 24), view=lambda: panel))
+            width=width, view=lambda: panel))
 
     def private_comic_seam(self, view=None):
         from .fold_layout import seam_fraction

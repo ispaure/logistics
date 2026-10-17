@@ -68,6 +68,10 @@ class VaultBrowser:
         self.edit = toga.Button('Open in editor', on_press=self.open_editor, enabled=False, style=Pack(height=48))
         self.web = toga.WebView(on_navigation_starting=self.follow_link, style=Pack(flex=1))
         self.article = toga.Box(children=[self.title, self.edit, self.web], style=Pack(direction=COLUMN, flex=1))
+        from .markdown_speech import MarkdownSpeech
+        self.speech = MarkdownSpeech(app, self.web, self.article)
+        self.article.insert(2, self.speech.button)
+        self.speech.button.enabled = False
         self.sidebar = AdaptiveSidebar(self.tree, self.article, label='Vault folders and Markdown notes')
         self.menu = icon_button('obsidian', 'Browse Obsidian vault notes', on_press=self.sidebar.toggle)
         self.view = toga.Box(children=[toga.Box(children=[self.menu, self.notice], style=Pack(direction=ROW)),
@@ -171,6 +175,7 @@ class VaultBrowser:
     async def open_note(self, path):
         if not self.valid():
             return False
+        self.speech.close()
         self.epoch += 1
         epoch = self.epoch
         try:
@@ -197,6 +202,7 @@ class VaultBrowser:
                           + quote(unescape(match[1]), safe='') + '"', html)
             self.web.set_content(self.base, html)
             self.edit.enabled = True
+            self.speech.button.enabled = True
             self.notice.text = ''
             self.sidebar.show_detail()
             return True
@@ -235,6 +241,8 @@ class VaultBrowser:
         return await self.app.open_crypt(copies=copies, key=key, destination=self.destination)
 
     def dispose(self):
+        self.speech.close()
+        self.speech.button.enabled = False
         self.cancelled.set()
         self.epoch += 1
         self.folders.clear()

@@ -10,19 +10,25 @@ from .speech_native import NativeSpeech
 
 class ReadAloudPanel(toga.Box):
     def __init__(self, *, loop, source, on_range, close, engine=None):
+        from logisticsmobile.control_icons import icon_button
         self.source, self.closed = source, False
         self.engine = engine or NativeSpeech(loop)
         self.status = toga.Label('Starting system speech engine…')
         self.voice_choice = toga.Selection(items=[], style=Pack(height=44, width=250))
         self.speed_choice = toga.Selection(items=['0.5', '0.75', '1', '1.25', '1.5', '2'], value='1', style=Pack(height=44, width=80))
-        self.play_button = toga.Button('Play', on_press=self.play, enabled=False, style=Pack(height=44, flex=1))
-        self.pause_button = toga.Button('Pause', on_press=self.pause, enabled=False, style=Pack(height=44, flex=1))
+        self.play_button = icon_button('play', 'Play read-aloud', on_press=self.play)
+        self.play_button.enabled = False
+        self.pause_button = icon_button('pause', 'Pause read-aloud', on_press=self.pause)
+        self.pause_button.enabled = False
+        self.skip_back = icon_button('skip_back', 'Skip back about 15 seconds', on_press=lambda w: self.session.skip(-15))
+        self.skip_forward = icon_button('skip_forward', 'Skip forward about 15 seconds', on_press=lambda w: self.session.skip(15))
+        self.skip_back.enabled = self.skip_forward.enabled = False
         self.session = SpeechSession(self.engine, on_range=on_range, on_state=self.state)
         super().__init__(children=[self.status,
             toga.Box(children=[self.voice_choice, self.speed_choice], style=Pack(direction=ROW)),
-            toga.Box(children=[self.play_button, self.pause_button,
-                toga.Button('Stop', on_press=lambda w: self.session.stop(), style=Pack(height=44, flex=1)),
-                toga.Button('Close', on_press=close, style=Pack(height=44, flex=1))], style=Pack(direction=ROW))],
+            toga.Box(children=[self.skip_back, self.play_button, self.pause_button, self.skip_forward,
+                icon_button('stop', 'Stop read-aloud', on_press=lambda w: self.session.stop()),
+                icon_button('close', 'Close read-aloud', on_press=close)], style=Pack(direction=ROW))],
             style=Pack(direction=COLUMN))
         self.ready_task = loop.create_task(self.wait_ready())
 
@@ -49,7 +55,10 @@ class ReadAloudPanel(toga.Box):
         if not self.closed:
             self.status.text = textwrap.fill(message, 30)
             self.pause_button.enabled = state in ('speaking', 'paused')
-            self.pause_button.text = 'Resume' if state == 'paused' else 'Pause'
+            from logisticsmobile.control_icons import apply_icon
+            self.skip_back.enabled = self.skip_forward.enabled = state in ('speaking', 'paused')
+            apply_icon(self.pause_button, 'play' if state == 'paused' else 'pause',
+                'Resume read-aloud' if state == 'paused' else 'Pause read-aloud')
 
     async def play(self, widget=None, **kwargs):
         if self.closed:

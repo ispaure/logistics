@@ -1,5 +1,7 @@
 """Bounded utterances, UTF-16 ranges and session-owned native read-aloud."""
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
+import re
+from time import monotonic
 from features.books.locations import utf16_length
 
 
@@ -34,6 +36,8 @@ class SpeechSession:
         self.engine, self.on_range, self.on_state = engine, on_range, on_state
         self.closed, self.state, self.generation = False, 'stopped', 0
         self.ranges, self.index = [], 0
+        self.text, self.words, self.breaks = "", [], ()
+        self.elapsed = 0
         engine.completed = self.completed
         engine.failed = self.failed
 
@@ -44,6 +48,13 @@ class SpeechSession:
         if not self.engine.ready:
             self.on_state('unavailable', self.engine.error or 'Speech engine is starting.')
             return
+        self.text, self.start, self.end, self.breaks = text, start, end, breaks
+        self.words = []
+        units = 0
+        for match in re.finditer(r'\s+|\S+', text):
+            if not match[0].isspace() and units >= start and (end is None or units < end):
+                self.words.append(units)
+            units += utf16_length(match[0])
         self.ranges = list(utterances(text, start, end, breaks=breaks))
         self.voice, self.speed, self.index = voice, speed, 0
         if self.ranges:
@@ -64,6 +75,8 @@ class SpeechSession:
         self.generation += 1
         self.token = str(self.generation)
         try:
+            self.started_at = monotonic()
+            self.elapsed = 0
             self.engine.speak(text, self.voice, self.speed, self.token)
             self.on_state('speaking', 'Reading aloud · current sentence highlighted')
         except Exception:
@@ -82,6 +95,7 @@ class SpeechSession:
 
     def pause(self):
         if self.state == 'speaking':
+            self.elapsed = max(0, monotonic() - self.started_at)
             self.state = 'paused'
             self.engine.stop()
             self.generation += 1
@@ -93,12 +107,34 @@ class SpeechSession:
             self.state = 'speaking'
             self.next()
 
+    def skip(self, seconds):
+        """Estimate a time jump from word rate; system synthesis has no seek API."""
+        if self.closed or self.state not in {'speaking', 'paused'} or not self.words or not self.ranges:
+            return
+        paused = self.state == 'paused'
+        elapsed = self.elapsed if paused else max(0, monotonic() - self.started_at)
+        current = bisect_right(self.words, self.ranges[self.index][1]) - 1
+        target = max(0, min(len(self.words) - 1,
+            current + round((elapsed + seconds) * 3 * self.speed)))
+        self.engine.stop()
+        self.generation += 1
+        self.token = str(self.generation)
+        self.ranges = list(utterances(self.text, self.words[target], self.end, breaks=self.breaks))
+        self.index, self.elapsed = 0, 0
+        if paused:
+            self.on_range(self.ranges[0][1], self.ranges[0][2])
+            self.on_state('paused', 'Paused · Resume reads from the new position.')
+        else:
+            self.next()
+
     def stop(self):
         self.generation += 1
         self.token = str(self.generation)
         self.state = 'stopped'
         self.engine.stop()
         self.ranges, self.index = [], 0
+        self.text, self.words, self.breaks = "", [], ()
+        self.elapsed = 0
         self.on_state('stopped', 'Stopped')
 
     def dispose(self):

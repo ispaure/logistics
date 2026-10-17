@@ -207,6 +207,8 @@ class ScreenPrivacy:
         """Replace the entire navigation root; routes may update safely behind it."""
         locked = any(gate.locked for gate in gates)
         if locked:
+            from .markdown_speech import stop_markdown_speech
+            stop_markdown_speech(self.app)
             self.lock_gates = gates
             if self.lock_view is None:
                 import toga

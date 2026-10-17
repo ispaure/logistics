@@ -21,6 +21,8 @@ The file browser keeps your current folder, selection, list/tile mode, search, s
 history when you visit Documents or Settings. Local and remote browsers give most
 of the screen to the listing. Tap a local file to open it, or a folder to browse
 it. Search stays visible; **Sort** reveals sorting and list/tile options. The
+rows show filenames rather than full paths, shortening long names in the middle.
+File sizes remain available in **Details** instead of beside every filename. The
 **↑ Parent folder** control beside the folder status goes up one level in local
 and remote browsing on iOS and Android, stopping at the current storage root.
 **•••** beside an item selects that item and opens its commands without opening

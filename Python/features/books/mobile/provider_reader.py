@@ -7,7 +7,7 @@ from .content import chapter_html
 from .presentation import chapter_view
 from .private_view import PrivateWebView, private_webview_supported
 from .text_reader import TextBookView
-from .navigation import ChapterTools
+from .navigation import ChapterList
 
 
 class RichBookView(toga.Box):
@@ -27,11 +27,46 @@ class RichBookView(toga.Box):
         self.status = toga.Label('Private reader · position and\nbookmarks stay in this session')
         self.webview = chapter_view(content, PrivateWebView(style=Pack(flex=1)), offset=self.offset,
             on_event=self.event, on_link=self.link)
-        self.tools = ChapterTools([self.toc,
-            toga.Box(children=[self.query, toga.Button('Find next', on_press=self.find, style=Pack(height=44))],
-                     style=Pack(direction=ROW)), self.status])
-        super().__init__(children=[self.tools.widget, self.webview], style=Pack(direction=COLUMN, flex=1))
+        from commonUtils.ui.native.adaptive import AdaptiveSidebar
+        self.chapters = ChapterList(self.choices.values(), self.open_chapter)
+        tree = toga.Box(children=[toga.Label('Chapters', style=Pack(font_size=20)),
+            toga.ScrollContainer(content=self.chapters.rows, horizontal=False, style=Pack(flex=1))],
+            style=Pack(direction=COLUMN, flex=1, margin=8))
+        self.sidebar = AdaptiveSidebar(tree, self.webview, label='Browse book chapters')
+        # Keep the host's existing hamburger contract, with no search field in
+        # the chapter hierarchy. Find remains an explicit action.
+        self.tools = self.sidebar
+        self.tools.button = self.sidebar.menu_button
+        self.tools.widget = self.sidebar.view
+        self.tools.panel = tree
+        self.tools.close = self.sidebar.show_detail
+        super().__init__(children=[self.sidebar.view], style=Pack(direction=COLUMN, flex=1))
+        self.find_box = toga.Box(children=[
+            toga.Box(children=[self.query, toga.Button('Find next', on_press=self.find, style=Pack(height=48)),
+                toga.Button('Close', on_press=self.close_find, style=Pack(height=48))], style=Pack(direction=ROW)),
+            self.status], style=Pack(direction=COLUMN))
         self.loading = False
+
+    def show_find(self):
+        if not self.disposed and self.find_box not in self.children:
+            self.sidebar.show_detail()
+            self.insert(0, self.find_box)
+
+    def close_find(self, widget=None, **kwargs):
+        if self.find_box in self.children:
+            self.remove(self.find_box)
+
+    def open_chapter(self, entry):
+        if not self.disposed:
+            self.sidebar.show_detail()
+            self.on_chapter(entry.index, entry.fragment)
+
+    def reflow(self, width, *, immersive=False):
+        if not self.disposed:
+            self.sidebar.reflow(0 if immersive else width)
+            if immersive:
+                self.sidebar.show_detail()
+            self.webview.style.width = max(1, width - (272 if self.sidebar.expanded else 0))
 
     def event(self, action, offset):
         if self.disposed:
@@ -78,11 +113,13 @@ class RichBookView(toga.Box):
         self.webview._chapter_bridge.seek(start, end)
         self.on_position(start)
         self.tools.close()
+        self.close_find()
 
     def dispose(self):
         if self.disposed:
             return
         self.close_read_aloud()
+        self.close_find()
         self.disposed = True
         self.webview._chapter_bridge.dispose()
         if self.webview in self.children:
@@ -91,6 +128,8 @@ class RichBookView(toga.Box):
         self.query.value = self.status.text = ''
         self.toc.items = []
         self.choices = {}
+        self.chapters.entries.clear()
+        self.chapters.rows.clear()
         self.book = self.chapter = None
         self.on_chapter = self.on_position = lambda *args: None
 

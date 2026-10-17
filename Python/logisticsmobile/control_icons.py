@@ -21,6 +21,12 @@ ICONS = {
     'appearance': ('textformat.size', 'Aa', (((3, 19), (9, 5), (15, 19)), ((5, 14), (13, 14)), ((16, 19), (19, 12), (22, 19)), ((17, 17), (21, 17)))),
     'more': ('ellipsis', '•••', ()),
     'compose': ('square.and.pencil', '✎', (((14, 4), (4, 4), (4, 20), (20, 20), (20, 10)), ((10, 14), (11, 10), (19, 2), (22, 5), (14, 13), (10, 14)))),
+    'down': ('chevron.down', '⌄', (((5, 8), (12, 15), (19, 8)),)),
+    'fullscreen': ('arrow.up.left.and.arrow.down.right', '⤢', (((10, 3), (3, 3), (3, 10)), ((3, 3), (10, 10)), ((14, 21), (21, 21), (21, 14)), ((21, 21), (14, 14)))),
+    'play': ('play.fill', '▶', (((7, 4), (20, 12), (7, 20), (7, 4)),)),
+    'pause': ('pause.fill', 'Ⅱ', (((8, 4), (8, 20)), ((16, 4), (16, 20)))),
+    'skip_back': ('gobackward.15', '↶15', (((8, 3), (3, 7), (8, 11)), ((3, 7), (14, 7), (20, 12), (18, 20), (9, 22)))),
+    'skip_forward': ('goforward.15', '15↷', (((16, 3), (21, 7), (16, 11)), ((21, 7), (10, 7), (4, 12), (6, 20), (15, 22)))),
     'stop': ('stop.fill', '■', (((6, 6), (18, 6), (18, 18), (6, 18), (6, 6)),)),
     'close': ('xmark', '×', (((6, 6), (18, 18)), ((18, 6), (6, 18)))),
 }
@@ -88,12 +94,15 @@ def apply_icon(button, name, label):
         elif name == 'contents':
             for y in (6, 12, 18):
                 path.addCircle(3, y, .6, Path.Direction.CW)
+        elif name in {'skip_back', 'skip_forward'}:
+            path.moveTo(9, 13);path.lineTo(10, 12);path.lineTo(10, 18)
+            path.moveTo(16, 12);path.lineTo(13, 12);path.lineTo(13, 15);path.lineTo(16, 15);path.lineTo(16, 18);path.lineTo(13, 18)
         elif name == 'more':
             for x in (5, 12, 19):
                 path.addCircle(x, 12, 1, Path.Direction.CW)
         drawable = ShapeDrawable(PathShape(path, 24, 24))
         paint = drawable.getPaint()
-        paint.setStyle(Paint.Style.FILL if name == 'stop' else Paint.Style.STROKE)
+        paint.setStyle(Paint.Style.FILL if name in {'stop', 'play'} else Paint.Style.STROKE)
         paint.setStrokeWidth(1.8)
         paint.setStrokeCap(Paint.Cap.ROUND)
         paint.setStrokeJoin(Paint.Join.ROUND)

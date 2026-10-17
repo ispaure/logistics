@@ -117,7 +117,7 @@ class MarkdownEditorTests(unittest.TestCase):
         run = self.app.loop.run_until_complete
         self.assertTrue(run(self.app.open_crypt(copies=copies, key='Note.md')))
         owner = self.app.private_sessions.active
-        self.assertEqual(owner.crypt_content.children, [owner.crypt_preview])
+        self.assertEqual(owner.crypt_content.children, [owner.markdown_speech.button, owner.crypt_preview])
         owner.toggle_private_preview()
         self.assertEqual(owner.crypt_content.children, [owner.crypt_formatted.view])
         bridge = owner.crypt_formatted
@@ -130,7 +130,7 @@ class MarkdownEditorTests(unittest.TestCase):
         owner.crypt_edit_mode.value = 'Source'
         self.assertEqual(owner.crypt_content.children, [owner.crypt_text])
         owner.toggle_private_preview()
-        self.assertEqual(owner.crypt_content.children, [owner.crypt_preview])
+        self.assertEqual(owner.crypt_content.children, [owner.markdown_speech.button, owner.crypt_preview])
         self.assertTrue(run(self.app.open_crypt(copies=copies, key='Note.md', edit=True)))
         self.assertEqual(owner.crypt_content.children, [owner.crypt_text])
         owner.crypt_edit_mode.value = 'Formatted'

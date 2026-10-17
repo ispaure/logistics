@@ -11,32 +11,37 @@ for imports, limits and current validation status.
 
 Imported EPUBs support nested contents, archive-local chapter/section links and
 **Find in chapter…** in the reader menu. Search ignores case and wraps within the
-current chapter. Previous/Next move by a visible screen and continue into adjacent
-chapters at the ends. External links and book scripts remain blocked.
+current chapter. Previous/Next and horizontal swipes turn discrete pages and continue into adjacent
+chapters at the ends. EPUB text does not scroll vertically. External links and book scripts remain blocked.
 
-Open the top-left hamburger menu for **Contents and bookmarks**, in the same
-position as the menu on other mobile pages. Choosing an imported chapter or
+Open the top-left hamburger for a nested **Chapters** sidebar. Expand or collapse
+sections with the disclosure button, or tap a chapter title to read it. There is
+no search field in this list. On wide panes the list stays beside the book; on
+phones choosing a chapter returns to the page. Bookmarks remain below the list. Choosing an imported chapter or
 bookmark returns directly to reading. The footer
 shows the current chapter and percentage through its text. Page margins come
 from **Appearance…**, without an extra frame narrowing the text. Chapter headings,
-paragraphs and quotations use consistent spacing; wide tables scroll sideways
-inside the page.
+paragraphs and quotations use consistent spacing within the page.
 
 Imported resume and bookmarks now store a chapter path and text offset. Reopening
 or changing appearance restores that passage. Existing chapter-only bookmarks
-remain available at chapter starts. Position saves are debounced while scrolling;
-a sudden process kill can lose the most recent unsaved scroll movement.
+remain available at chapter starts. Position saves follow page turns; a sudden process kill can lose the latest
+unsaved movement.
 
 On Android and iPad/iPhone, provider-backed EPUBs, including LocalCrypt, use the
-same safe rich rendering, nested contents, internal links, screen-sized turns and
+same safe rich rendering, nested contents, internal links, discrete page turns and
 highlighted chapter search as imported books. **Appearance…** offers the same fonts,
 spacing, width, margins and themes described below. Changing appearance or leaving and
 returning to the reader keeps the passage. Provider positions/bookmarks stay in
 the session and clear on close; they are not saved as ordinary imported records.
-For provider-backed books, the top-left hamburger expands contents, chapter
-search and session bookmarks. They start collapsed and close after a successful
-search or contents selection. An unsuccessful search keeps the controls and
-feedback open.
+Provider-backed books use the same nested chapter sidebar. **Find in chapter…**
+is a separate reader action. A successful search returns to the passage; an
+unsuccessful search keeps its feedback open.
+
+Tap the fullscreen icon or choose **Fullscreen** in the reader menu to hide
+navigation and reading controls. Pages continue to turn by horizontal swipe.
+**Show reading controls** exits fullscreen. Changing the available space reflows
+pages around the same text anchor.
 
 Private EPUB rendering uses a nonpersistent iOS browser store or an Android view
 with disk caching and browser storage disabled. Closing or suspending disposes the
@@ -48,7 +53,11 @@ Choose **Read aloud…** from an EPUB reader menu. Select an installed offline v
 is read on its own; with no selection, reading starts at the current passage and
 continues through this chapter. The current sentence or bounded passage is
 highlighted and brought into view. **Pause** stops at the current utterance;
-**Resume** repeats that sentence/passage. **Stop** ends reading. Closing the speech
+**Resume** repeats that sentence/passage. **Stop** ends reading. Playback uses icon buttons with accessible names. The
+back/forward **15** controls jump approximately 15 seconds within the current
+passage, accounting for the selected speed. System speech has no recorded
+timeline, so skips estimate distance at 180 words per minute at normal speed.
+Skipping while paused keeps playback paused. Closing the speech
 panel, changing chapters, leaving a private reader or closing its session stops
 the engine and clears queued text. The app does not download voices or send text
 to a speech service. If no offline voice is available, use the operating system's
@@ -73,7 +82,7 @@ publication when reopening the edited copy.
 
 ### Mobile fullscreen reading
 
-On iPhone, iPad and Android, choose **Reading mode** from an EPUB reader menu
+On iPhone, iPad and Android, choose **Fullscreen** from an EPUB reader menu
 to hide app navigation and system bars. Text retains its reading margins and safe
 areas. **Show reading controls** remains available below the text so you can restore
 Contents, Appearance, bookmarks and navigation without a gesture that interferes

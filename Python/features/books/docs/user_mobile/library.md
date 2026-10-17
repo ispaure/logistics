@@ -17,9 +17,9 @@ changed. Imports open directly and remain available through document sessions.
 The Books and Comics library shows configured library folders only; it has no
 separate imported-items section, selection switches or imported-results paging.
 There is no folder search field; the available configured folders appear directly.
-Previous/Next and the
-chapter/page selector navigate the book's reading order. EPUB pages scroll in the
-native web view; comic images fit the native image area. The EPUB view follows
+Previous/Next and horizontal swipes turn EPUB pages without vertical scrolling.
+The hamburger opens nested chapters; fullscreen hides navigation and reading
+controls. Comic images fit the native image area. The EPUB view follows
 system light/dark appearance and uses the configured font size.
 
 Standalone password-protected CBZ/ZIP comics support AES and legacy ZipCrypto
@@ -34,8 +34,7 @@ configured INI archive password when available. The library keeps the
 original encrypted archive bytes and never writes an extracted/decrypted archive.
 ZIP member names remain visible, as they do in ordinary password-protected ZIPs.
 
-Progress remembers the current EPUB chapter or comic page, rather than an exact
-scroll position inside a chapter. EPUB **Bookmark** / **Unbookmark** and its
+Progress remembers the EPUB chapter and text anchor, or the current comic page. EPUB **Bookmark** / **Unbookmark** and its
 bookmark selector return to saved passages. Comics have page navigation without
 bookmark controls. Comic pages use
 natural filename order. Right-to-left manga metadata is identified; single-page
@@ -95,7 +94,7 @@ records rather than overwriting another change.
 ### Reader navigation and imported metadata
 
 Imported EPUBs now provide nested contents/internal links, current-chapter search,
-screen-step navigation and passage-based resume/bookmarks. Android and iOS provider
+page-turn navigation, fullscreen and passage-based resume/bookmarks. Android and iOS provider
 EPUBs share rich rendering, nested contents, internal links, highlighted search and
 appearance controls through a private browser view. Their positions and bookmarks
 remain session-only; other backends retain bounded native text passages. See the [Books guide](reading.md#native-mobile-reading)
