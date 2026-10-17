@@ -2,6 +2,7 @@
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from logisticsmobile.app import LogisticsMobile
@@ -67,3 +68,22 @@ class SourceEditorTests(unittest.TestCase):
         owner.dispose()
         self.assertIsNone(owner.editor.pending)
         self.assertTrue(owner.editor.closed)
+
+    def test_closing_ios_preview_retires_delegates_before_loading_closed_content(self):
+        owner = self.open('Closed.md')
+        events = []
+        native = SimpleNamespace(navigationDelegate=object(), UIDelegate=object(),
+                                 stopLoading=lambda: events.append('stop'))
+        class IOSWebView:
+            __module__ = 'toga_iOS.widgets.webview'
+        impl = IOSWebView()
+        impl.native = native
+        def clear(*args):
+            self.assertEqual(events, ['stop'])
+            self.assertIsNone(native.navigationDelegate)
+            self.assertIsNone(native.UIDelegate)
+            events.append('clear')
+        preview = SimpleNamespace(_impl=impl, set_content=clear)
+        with patch.object(owner, 'split_preview', preview):
+            owner.dispose()
+        self.assertEqual(events, ['stop', 'clear'])

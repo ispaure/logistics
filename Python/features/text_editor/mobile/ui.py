@@ -32,6 +32,14 @@ class TextEditorView:
         self.name = toga.TextInput(placeholder='Document name', on_change=self.name_changed, style=Pack(flex=1, height=48))
         self.editor = CodeInput(loop=app.loop, on_change=self.text_changed,
             style=Pack(flex=1, font_size=int(app.preferences.values['font_size']), margin_top=4))
+        if self.editor.backend_name.startswith('toga_iOS.'):
+            # The source editor constructs its own native text view, bypassing
+            # the ordinary Toga input creation hook used by host appearance.
+            from rubicon.objc import SEL
+            native = self.editor._impl.native
+            for edge in ('topEdgeEffect', 'bottomEdgeEffect'):
+                if native.respondsToSelector(SEL(edge)):
+                    getattr(native, edge).hidden = True
         self.language_choice = toga.Selection(items=['Automatic', *[name for name, code in LANGUAGES]],
             on_change=self.language_changed, style=Pack(flex=1, height=48))
         self.line_count = toga.Label('1 line', style=Pack(margin=8))
@@ -194,6 +202,14 @@ class TextEditorView:
             self.preview_pending.cancel()
             self.preview_pending = None
         if self.split_preview is not None:
+            if type(self.split_preview._impl).__module__.startswith('toga_iOS.'):
+                # WebKit can ask for a navigation decision after the closed
+                # Toga interface has been collected. Retire its weak delegates
+                # before replacing the document or releasing the widget.
+                native = self.split_preview._impl.native
+                native.stopLoading()
+                native.navigationDelegate = None
+                native.UIDelegate = None
             self.split_preview.set_content('https://logistics.invalid/closed/', '<p>Document closed.</p>')
 
     def preserve(self):

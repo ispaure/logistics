@@ -40,6 +40,7 @@ async def exercise_mirrors(app, comic_key):
             assert not app.folder_browse_button.enabled
             assert not await app.open_picker_folder(app.folder_picker_selected)
             app.show_locations()
+            app.folder_source_buttons['Local'].on_press()
             await app.folder_buttons['Browse during pull'].on_press()
             assert app.file_path == 'Browse during pull'
             assert app.transfer_controller()._transfer_cancel is cancel

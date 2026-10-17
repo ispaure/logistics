@@ -99,7 +99,7 @@ class CloudUI(LocalCryptUI):
             if self.cloud_client is None:
                 try:
                     from features.rclone.mobile.credential_vault import ProtectedVault
-                    self.cloud_client = CloudClient(vault=ProtectedVault.for_app(self))
+                    self.cloud_client = CloudClient(vault=ProtectedVault.for_app(self.app))
                 except Exception:
                     error = 'The native remote engine or device credential protection is unavailable.'
             self.cloud_pending_zip = None
@@ -435,7 +435,7 @@ class CloudUI(LocalCryptUI):
         if not hasattr(self, 'credential_packages'):
             from features.rclone.mobile.credential_packages import CredentialPackages
             from features.rclone.mobile.credential_vault import ProtectedVault
-            self.credential_packages = CredentialPackages(ProtectedVault.for_app(self, packages=True), self.cloud_client)
+            self.credential_packages = CredentialPackages(ProtectedVault.for_app(self.app, packages=True), self.cloud_client)
         return self.credential_packages
 
     def remember_credential_association(self, name, remotes, *, session_only):

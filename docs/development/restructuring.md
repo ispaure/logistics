@@ -194,6 +194,48 @@ The broad audit also migrated native/host transfer assertions to their explicit 
 - Audited 146 desktop/portable test files with module isolation. The first run passed 144; the missing launcher service import was corrected and all seven launcher tests passed. The portability subprocess required the mobile Markdown dependency; its rerun passed using a temporary runtime combining the existing desktop/mobile environments, without changing either project environment.
 - The complete mobile host rerun passed all 378 tests. Focused LM checks passed across seven isolated files, including shared decoding, response limits, streaming, cancellation and desktop UI behavior.
 - Payload manifest validation, staged startup, headless feature/document imports, relative Markdown resource containment, documentation hierarchy and correctness lint passed.
-- Canonical native transfer scenarios now inspect the transfer controller's cancellation token. Native iOS/Android builds and physical-device interactions were not rerun; host success does not certify those surfaces.
+- Canonical native transfer scenarios now inspect the transfer controller's cancellation token. Native builds and simulator/emulator checks were subsequently completed as recorded below; physical-device interactions remain outside that verification.
 
 All ten ownership items have individual commits, followed by an integration-audit correction. Unrelated edits arriving concurrently in documentation, licensing and commonUtils were excluded from the final refactor commits.
+
+## Native verification follow-up — October 17, 2026
+
+Native build and acceptance checks exposed a controller boundary error: the cloud
+controller passed itself to credential-vault creation. Both ordinary credentials
+and retained ZIP storage now receive the application host, including Android's
+native activity and storage policy. A host regression covers both paths.
+
+The native audit also corrected editor shutdown on iOS: stop WebKit loading and
+detach delegates before clearing a closed live preview. Native close/discard
+checks force garbage collection before allowing pending callbacks to run. The
+host ignores delayed Toga scroll callbacks whose Python interface has retired.
+The custom source input disables scroll-edge overlays that otherwise bypassed
+the ordinary input appearance hook. Native probes select the Local source before
+browsing local folders and find newer UIKit floating tab labels outside the
+`UITabBar` placeholder, excluding page content from navigation assertions.
+
+- iOS: normal simulator build and arm64 device-target build passed with Xcode
+  27.1. Embedded Python frameworks used local ad-hoc signing; no distribution
+  signing or physical-device deployment was performed.
+- Android: normal debug APK build passed, including arm64/x86_64 Go bridges and
+  the build helper's 16 KiB ELF alignment checks. Both bridge builds also passed
+  their Go tests.
+- All 31 workflow cases plus presentation/browser Back checks passed on iPhone
+  Duo (iOS 27.1), iPad Pro 13-inch M5 (iOS 27.0), and an Android API 35 arm64
+  emulator. The iPad report verifies independent system windows.
+- All 380 mobile host tests passed: 377 in the full sandboxed run and the three
+  loopback-server tests on a rerun with local socket access. Focused ownership,
+  editor, credential and report checks, correctness lint and diff checks passed.
+- Normal iOS and Android launchers were restored and rebuilt after test mode.
+
+Exact-source local reports: [iPhone](mobile-evidence/2026-10-17-refactor-iphone-native-ui-local.json),
+[iPad](mobile-evidence/2026-10-17-refactor-ipad-native-ui-local.json), and
+[Android](mobile-evidence/2026-10-17-refactor-android-native-ui-local.json).
+All three identify snapshot
+`cb846c0089e5a930c39a4f2223e763b731e9555bda464691562e0b673e6f4277`,
+staged from refactor commit `05fb5861` with these fixes. Reports retain
+`dirty: true`, including the concurrently edited commonUtils source snapshot;
+they are local acceptance evidence, not clean release certification. Validation
+used an isolated Briefcase project so concurrent application/documentation edits
+and existing generated builds were preserved. The separate CPython 3.14 testbed
+workflow was not run by this native Toga app acceptance pass.

@@ -228,6 +228,24 @@ def install_appearance(app):
                 if impl in _surfaces:
                     paint_surface(impl, _surfaces[impl])
         box_module.TogaView = LogisticsSurfaceView
+        import toga_iOS.widgets.scrollcontainer as scroll_module
+
+        class LogisticsScrollView(scroll_module.TogaScrollView):
+            @objc_method
+            def refreshContent(self) -> None:
+                # Toga queues this selector during layout. UIKit may retain
+                # the view after its weak Python interface has been collected.
+                interface = self.interface
+                if interface is not None and interface.content is not None:
+                    interface.content.refresh()
+
+            @objc_method
+            def scrollViewDidScroll_(self, scroll_view) -> None:
+                interface = self.interface
+                if interface is not None:
+                    interface.on_scroll()
+
+        scroll_module.TogaScrollView = LogisticsScrollView
         from ctypes import c_bool
         from rubicon.objc.types import CGPoint
         import toga_iOS.widgets.button as button_module

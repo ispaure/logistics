@@ -125,6 +125,10 @@ settings storage stays in the app container. CLI/embedded runners and crypt I/O
 remain platform adapters. Mobile rclone controllers and providers now live in
 `mobile/`; generic provider document hosting remains in `logisticsmobile`.
 
+The cloud controller passes its application host to native credential-vault
+creation, including retained ZIP storage. Android requires the real native
+activity and application storage policy; workflow controllers do not supply them.
+
 `localcrypt/backend.py` owns ciphertext mappings, explicit backing-target routing, private
 reader providers and verified encrypted replacements. `localcrypt/ui/views.py` owns
 unlock prompts and private document presentation. See the [LocalCrypt architecture](localcrypt.md)
