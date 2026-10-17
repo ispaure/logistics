@@ -6,7 +6,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from shiboken6 import isValid
 from features.ide.projects import Project
-from features.ide.workspace import ProjectWorkspace
+from features.ide.ui.workspace import ProjectWorkspace
 
 
 class IDEDragTests(QtTestCase):

@@ -935,7 +935,7 @@ class LocalCryptTests(QtTestCase):
                 lease()
             choice = ResourceChoice(f.provider, 'book.epub', release)
             with patch.object(RecentFiles, 'add', side_effect=AssertionError('Private reader wrote recents')), \
-                 patch('features.books.reader.ReadingState', side_effect=AssertionError('Private reader created state')):
+                 patch('features.books.ui.reader.ReadingState', side_effect=AssertionError('Private reader created state')):
                 window = open_reader_choice(choice, None, 'epub')
                 self.assertIsNotNone(window)
                 try:
@@ -946,8 +946,8 @@ class LocalCryptTests(QtTestCase):
                     self.assertFalse(window.reader.menus.recent.isEnabled())
                     self.assertTrue(window.reader.text.toPlainText())
                     self.assertEqual(released, [])
-                    with patch('features.books.reader.MetadataEditor.exec', return_value=qt.QDialog.DialogCode.Accepted), \
-                         patch('features.books.reader.MetadataEditor.changes', return_value={'title': ['Private reader metadata']}):
+                    with patch('features.books.ui.reader.MetadataEditor.exec', return_value=qt.QDialog.DialogCode.Accepted), \
+                         patch('features.books.ui.reader.MetadataEditor.changes', return_value={'title': ['Private reader metadata']}):
                         window.reader.edit_metadata()
                     self.wait(lambda: window.reader.worker is None)
                     self.assertEqual(EPUBBook(f.item.data / 'book.epub', source=f.provider).title, 'Private reader metadata')
@@ -963,7 +963,7 @@ class LocalCryptTests(QtTestCase):
     def test_private_epub_metadata_window_uses_provider(self):
         from io import BytesIO
         from books_fixture import make_book
-        from features.books.metadata_window import MetadataWindow
+        from features.books.ui.metadata_window import MetadataWindow
         from features.books.epub import EPUBBook
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             data = BytesIO(); make_book(data)
@@ -984,7 +984,7 @@ class LocalCryptTests(QtTestCase):
         from zipfile import ZipFile
         from books_fixture import make_book
         from commonUtils.archives.zip_access import open_archive
-        from features.books.metadata_window import MetadataWindow
+        from features.books.ui.metadata_window import MetadataWindow
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             data = BytesIO(); make_book(data)
             protected = BytesIO()

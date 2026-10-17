@@ -1,6 +1,6 @@
 """Bounded, aspect-preserving cover previews; browser workers call this lazily."""
 from commonUtils.ui import pyside as qt
-from .epub import BookError
+from features.books.epub import BookError
 
 
 def cover_thumbnail(book, size):

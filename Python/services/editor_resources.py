@@ -170,7 +170,7 @@ def publish_handoff(choice, data, parent, *, markdown=False, completed=lambda: N
 
 
 def open_linked_text(path, parent=None):
-    from features.text_editor.service import editor_service
+    from features.text_editor.ui.service import editor_service
     return editor_service().open(path)
 
 

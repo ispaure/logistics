@@ -195,7 +195,7 @@ def register() -> Feature:
 
 
 def _edit_shared_metadata(context):
-    from features.books.metadata_actions import edit_metadata
+    from features.books.ui.metadata_actions import edit_metadata
     return edit_metadata(context)
 
 

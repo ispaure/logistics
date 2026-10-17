@@ -412,7 +412,7 @@ unverified.
 
 ## Editor markers and IDE autosave
 
-Logistics `features.editor_changes.ChangeMarkers` owns immutable background diff
+Logistics `services.editors.ui.changes.ChangeMarkers` owns immutable background diff
 requests, revision/snapshot validation and two-second baseline refresh for IDE and
 Text Editor. It lazily uses Git's read-only `editor_baseline` provider, independent
 of page activation and repository registrations, and falls back to the document's

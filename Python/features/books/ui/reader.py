@@ -2,15 +2,15 @@
 from commonUtils.ui.appearance.typography import point_size
 from commonUtils.ui import pyside as qt
 from math import isfinite
-from .content import chapter_html
-from .epub import EPUBBook, BookError, resolve_href
-from .metadata import save_metadata
-from .metadata_editor import MetadataEditor
-from .preferences import THEMES, ReadingState, defaults
-from .bookmarks import Bookmarks
-from .tasks import BookTask
-from .reader_controls import build_controls
-from .navigation import BookNavigation
+from features.books.ui.content import chapter_html
+from features.books.epub import EPUBBook, BookError, resolve_href
+from features.books.metadata import save_metadata
+from features.books.ui.metadata_editor import MetadataEditor
+from features.books.preferences import THEMES, ReadingState, defaults
+from features.books.ui.bookmarks import Bookmarks
+from features.books.ui.tasks import BookTask
+from features.books.ui.reader_controls import build_controls
+from features.books.ui.navigation import BookNavigation
 from pathlib import Path
 
 
@@ -42,7 +42,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         styling().changed.connect(self._settings_changed)
         from commonUtils.ui.settings.monitor import subscribe_settings
         from features.settings import settings_store
-        store = settings_store(Path(__file__).with_name('config.ini'))
+        store = settings_store(Path(__file__).parents[1] / 'config.ini')
         self._settings_subscription = subscribe_settings((store.defaults, store.personal), self._check_settings, self)
         if isinstance(initial_path, EPUBBook):
             self._loaded(initial_path)
@@ -107,7 +107,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         return font
 
     def _save_appearance(self, key, value):
-        from .preferences import appearance_store, APPEARANCE_KEYS
+        from features.books.preferences import appearance_store, APPEARANCE_KEYS
         section, field = APPEARANCE_KEYS[key]
         try:
             appearance_store(key).save({(section, field): str(value)}, scope='personal')

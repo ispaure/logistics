@@ -12,7 +12,7 @@ def create_settings(parent=None):
 
 
 def create_controller(binding):
-    from .controller import BooksController
+    from features.books.ui.controller import BooksController
     return BooksController(binding)
 
 
@@ -21,7 +21,7 @@ def read(context):
 
 
 def edit(context):
-    from .metadata_actions import edit_metadata
+    from features.books.ui.metadata_actions import edit_metadata
     return edit_metadata(context)
 
 

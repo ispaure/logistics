@@ -9,9 +9,9 @@ from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.persistence.text import read_text_file
-from features.editor_changes import compare
+from services.editors.ui.changes import compare
 from features.ide.projects import Project
-from features.ide.workspace import ProjectWorkspace
+from features.ide.ui.workspace import ProjectWorkspace
 
 
 class BaselineTests(unittest.TestCase):
@@ -140,14 +140,14 @@ class AutoSaveTests(QtTestCase):
         self.assertFalse(self.view.autosave_notice.isHidden())
 
     def test_edit_during_save_stays_dirty_and_close_save_reload_are_guarded(self):
-        from features.ide.autosave import write_snapshot
+        from features.ide.ui.autosave import write_snapshot
         started, release = Event(), Event()
         def delayed(snapshot, text):
             started.set()
             if not release.wait(5):
                 raise RuntimeError('Test worker timed out')
             return write_snapshot(snapshot, text)
-        with patch('features.ide.autosave.write_snapshot', side_effect=delayed):
+        with patch('features.ide.ui.autosave.write_snapshot', side_effect=delayed):
             self.doc.insertPlainText('first ')
             self.doc.buffer.autosave.save()
             self.until(started.is_set)
@@ -176,7 +176,7 @@ class AutoSaveTests(QtTestCase):
             Project.from_dict(dict(legacy, autosave='invalid'))
 
     def test_format_only_revision_during_save_does_not_leave_text_dirty(self):
-        from features.ide.autosave import write_snapshot
+        from features.ide.ui.autosave import write_snapshot
         started, release = Event(), Event()
         def delayed(snapshot, text):
             started.set()
@@ -184,7 +184,7 @@ class AutoSaveTests(QtTestCase):
                 raise RuntimeError('Test worker timed out')
             return write_snapshot(snapshot, text)
         self.addCleanup(release.set)
-        with patch('features.ide.autosave.write_snapshot', side_effect=delayed):
+        with patch('features.ide.ui.autosave.write_snapshot', side_effect=delayed):
             self.doc.insertPlainText('edit ')
             self.doc.buffer.autosave.save()
             self.until(started.is_set)

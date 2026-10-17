@@ -159,7 +159,7 @@ subordinate dialogs and cancellation boundaries remain the owner's responsibilit
   owner-facing finish-safe progress API.
 
 Git job lifecycle is in `features/git/ui/jobs.py`; EPUB bookmark commands are in
-`features/books/bookmarks.py`. Their containing pages retain presentation and
+`features/books/ui/bookmarks.py`. Their containing pages retain presentation and
 public command compatibility.
 
 ## Application notifications

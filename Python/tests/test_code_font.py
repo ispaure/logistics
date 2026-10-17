@@ -42,9 +42,9 @@ class CodeFontTests(QtTestCase):
     def test_feature_views_and_review_panes_share_size(self):
         from commonUtils.persistence.text import read_text_file
         from commonUtils.ui.code_editor.diff import DiffDialog, compare_text
-        from features.ide.documents import EditorDocument
+        from features.ide.ui.documents import EditorDocument
         from features.git.ui.preview import Preview
-        from features.text_editor.window import EditorWindow
+        from features.text_editor.ui.window import EditorWindow
         from features.code_font import bind_code_views
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -70,7 +70,7 @@ class CodeFontTests(QtTestCase):
                 window.close()
 
     def test_production_split_views_bind_shared_styling_controller(self):
-        from features.text_editor.window import EditorWindow
+        from features.text_editor.ui.window import EditorWindow
         from commonUtils.ui.appearance.styling import styling
         with TemporaryDirectory() as directory:
             root = Path(directory)

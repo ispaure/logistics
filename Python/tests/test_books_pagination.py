@@ -10,7 +10,7 @@ from PySide6.QtTest import QTest
 from commonUtils.ui import pyside as qt
 from features.books.epub import EPUBBook
 from features.books.file_type import EPUBFile
-from features.books.reader import BooksPage
+from features.books.ui.reader import BooksPage
 from books_fixture import make_book, isolate_appearance
 
 

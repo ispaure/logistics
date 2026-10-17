@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.persistence.text import read_text_file, FileConflictError
-from features.ide.documents import EditorDocument
+from features.ide.ui.documents import EditorDocument
 
 
 class IDEQtTests(QtTestCase):
@@ -120,7 +120,7 @@ class WorkspaceTests(WorkspaceFixture):
     def test_file_tabs_keep_type_icons_and_neutral_close_on_right_after_reorder(self):
         from commonUtils.ui import pyside as qt
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             first, second = root / 'file.py', root / 'notes.txt'
@@ -150,7 +150,7 @@ class WorkspaceTests(WorkspaceFixture):
         import subprocess
         from commonUtils.ui import pyside as qt
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             path = root / 'tracked.py'
@@ -208,7 +208,7 @@ class WorkspaceTests(WorkspaceFixture):
     def test_unsaved_filename_color_undo_and_save_in_non_git_project(self):
         from commonUtils.ui import pyside as qt
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             path = root / 'file.py'
@@ -234,7 +234,7 @@ class WorkspaceTests(WorkspaceFixture):
     def test_project_settings_updates_guide_in_existing_and_split_editors(self):
         from unittest.mock import patch
         from commonUtils.ui import pyside as qt
-        from features.ide.page import IDEPage
+        from features.ide.ui.page import IDEPage
         from features.ide.projects import Project
         with self.temporary_directory() as directory:
             root = Path(directory).resolve()
@@ -262,7 +262,7 @@ class WorkspaceTests(WorkspaceFixture):
 
     def test_navigation_applies_unicode_location_to_requested_view(self):
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             a, b = root / 'a.py', root / 'b.py'
@@ -287,7 +287,7 @@ class WorkspaceTests(WorkspaceFixture):
 
     def test_history_and_analysis_use_the_selected_shared_view(self):
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         from unittest.mock import patch
         with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
@@ -323,7 +323,7 @@ class WorkspaceTests(WorkspaceFixture):
 
     def test_split_views_share_edits_undo_save_and_survive_original_close(self):
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         from unittest.mock import patch
         from commonUtils.ui import pyside as qt
         with self.temporary_directory() as directory:
@@ -371,7 +371,7 @@ class WorkspaceTests(WorkspaceFixture):
 
     def test_shared_save_as_reload_merge_and_single_close_prompt(self):
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         from unittest.mock import patch
         from commonUtils.ui import pyside as qt
         with self.temporary_directory() as directory:
@@ -423,7 +423,7 @@ class WorkspaceTests(WorkspaceFixture):
 
     def test_same_file_views_restore_independent_positions(self):
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_text('value = 1\n' * 300)
@@ -462,7 +462,7 @@ class WorkspaceTests(WorkspaceFixture):
 
     def test_pending_open_blocks_browser_mutation_and_callback_failure_drains_queue(self):
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         from unittest.mock import patch
         from commonUtils.ui import pyside as qt
         with self.temporary_directory() as directory:
@@ -492,7 +492,7 @@ class WorkspaceTests(WorkspaceFixture):
 
     def test_navigation_branch_replaces_forward_history(self):
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             paths = [root / f'{name}.py' for name in 'abcd']
@@ -523,7 +523,7 @@ class WorkspaceTests(WorkspaceFixture):
 
     def test_missing_files_retain_group_cursor_and_browser_state(self):
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         from unittest.mock import patch
         with self.temporary_directory() as directory:
             root = Path(directory).resolve()
@@ -547,7 +547,7 @@ class WorkspaceTests(WorkspaceFixture):
             self.wait(restored)
             self.assertEqual(restored.groups[1].widget(0).path, path)
             self.assertEqual(restored.groups[1].widget(0).textCursor().position(), 5)
-            with patch('features.ide.browser.desktop_actions.reveal') as reveal:
+            with patch('features.ide.ui.browser.desktop_actions.reveal') as reveal:
                 restored.browser.reveal(path)
                 reveal.assert_called_once_with(path)
             restored.prepare_close()
@@ -555,7 +555,7 @@ class WorkspaceTests(WorkspaceFixture):
 
     def test_canonical_buffer_moves_and_group_close_preserves_unsaved_text(self):
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         from unittest.mock import patch
         from commonUtils.ui import pyside as qt
         with self.temporary_directory() as directory:
@@ -629,14 +629,14 @@ class NavigationTests(unittest.TestCase):
 class RestoreTests(WorkspaceFixture):
     def test_failed_restore_read_keeps_file_record(self):
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         from unittest.mock import patch
         with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_text('value = 1\n')
             project = Project('test', directory, layout={'groups': [
                 {'files': [{'path': str(path), 'cursor': 4, 'scroll': 2}]}]})
-            with patch('features.ide.workspace.read_text_file', side_effect=OSError('temporarily unreadable')):
+            with patch('features.ide.ui.workspace.read_text_file', side_effect=OSError('temporarily unreadable')):
                 view = ProjectWorkspace(project)
                 self.wait(view)
             record = view.state()['unavailable'][0]
@@ -646,7 +646,7 @@ class RestoreTests(WorkspaceFixture):
             view.close()
 
     def test_independent_projects_layout_and_missing_files_survive_restart(self):
-        from features.ide.page import IDEPage
+        from features.ide.ui.page import IDEPage
         from features.ide.projects import Project
         with self.temporary_directory() as directory:
             root = Path(directory).resolve()
@@ -681,7 +681,7 @@ class RestoreTests(WorkspaceFixture):
             restored.close()
 
     def test_stale_analysis_result_does_not_navigate(self):
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         from features.ide.projects import Project
         from unittest.mock import patch
         with self.temporary_directory() as directory:
@@ -712,7 +712,7 @@ class RestoreTests(WorkspaceFixture):
 
 
     def test_modifier_click_definition_and_history(self):
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         from features.ide.projects import Project
         from commonUtils.ui import pyside as qt
         from PySide6.QtTest import QTest
@@ -747,7 +747,7 @@ class RestoreTests(WorkspaceFixture):
 
 
     def test_watcher_distinguishes_own_save_from_external_write(self):
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         from features.ide.projects import Project
         with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'

@@ -15,7 +15,7 @@ optional tools:
 | `settings.py` | Application and feature configuration registration/store composition |
 | `preferences.py` | Feature preference paths, loading and migration |
 | `code_font.py` | Application policy for binding code view fonts |
-| `editor_changes.py`, `editor_hunks.py` | Host editor baseline discovery, asynchronous markers and hunk review |
+
 
 The infrastructure keeps its existing import paths. Moving it into a new package
 now would change discovery/import contracts across desktop, curated mobile sources
@@ -32,3 +32,5 @@ Start feature-infrastructure validation with `Python/tests/test_feature_registry
 `test_feature_preferences.py` and `test_settings_page.py`. The isolated regression
 runner requires flat test directories; group ownership in documentation before
 changing discovery or CI.
+
+Desktop editor baseline discovery, markers and hunk review live in `Python/services/editors/ui/`; Text Editor and IDE consume that neutral host integration.

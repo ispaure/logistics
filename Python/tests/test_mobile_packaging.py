@@ -101,7 +101,7 @@ assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile', 'config')) 
             local_manifest = mobile_tools.stage(repo, base / 'dirty-native-local', allow_dirty=True)
             self.assertTrue(local_manifest['commonUtils_dirty'])
             self.assertNotEqual(manifest['source_sha256'], local_manifest['source_sha256'])
-            self.assertFalse((payload / 'features/books/reader.py').exists())
+            self.assertFalse((payload / 'features/books/ui/reader.py').exists())
             (app / 'documents.py').write_text('# uncommitted change')
             with self.assertRaises(ValueError):
                 mobile_tools.stage(repo, base / 'dirty')

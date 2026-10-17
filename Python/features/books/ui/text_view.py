@@ -1,6 +1,6 @@
 """Restricted archive-local resource loading for Qt EPUB rich text."""
 from commonUtils.ui import pyside as qt
-from .epub import BookError, resolve_href
+from features.books.epub import BookError, resolve_href
 from commonUtils.ui.readers.page_wheel import PageWheel
 
 

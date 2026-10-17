@@ -3,9 +3,9 @@ from pathlib import Path
 from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from features.ide.page import IDEPage
+from features.ide.ui.page import IDEPage
 from features.ide.projects import Project
-from features.ide.workspace import ProjectWorkspace
+from features.ide.ui.workspace import ProjectWorkspace
 
 
 class IDELayoutTests(QtTestCase):

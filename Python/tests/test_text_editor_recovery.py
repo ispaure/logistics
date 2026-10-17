@@ -6,9 +6,9 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.persistence.session import SessionStore
 from commonUtils.persistence.text import decode_bytes
-from features.text_editor.document import Document
-from features.text_editor.service import EditorService
-from features.text_editor.session import document_record, load_document_record
+from features.text_editor.ui.document import Document
+from features.text_editor.ui.service import EditorService
+from features.text_editor.ui.session import document_record, load_document_record
 
 
 class EditorRecoveryTests(QtTestCase):

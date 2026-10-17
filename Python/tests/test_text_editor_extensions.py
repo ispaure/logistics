@@ -5,7 +5,7 @@ from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.code_editor.diff import DiffDialog
-from features.text_editor.window import EditorWindow
+from features.text_editor.ui.window import EditorWindow
 
 
 class EditorExtensionTests(QtTestCase):

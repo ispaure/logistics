@@ -11,8 +11,8 @@ from books_fixture import make_book, isolate_appearance
 from commonUtils.ui import pyside as qt
 from features.books import register
 from features.books.epub import EPUBBook
-from features.books.reader import BooksPage, BookWindow
-from features.books.metadata_editor import MetadataEditor
+from features.books.ui.reader import BooksPage, BookWindow
+from features.books.ui.metadata_editor import MetadataEditor
 from features.books.preferences import ReadingState
 
 
@@ -67,7 +67,7 @@ class ReaderTests(QtTestCase):
 
 
     def test_book_progress_knob_is_visible_above_track_and_minor_markers_are_shorter(self):
-        from features.books.progress import BookProgress
+        from features.books.ui.progress import BookProgress
         track = BookProgress(); track.resize(212, 20)
         palette = track.palette()
         palette.setColor(qt.QPalette.ColorRole.Window, qt.QColor('white'))
@@ -355,9 +355,9 @@ class ReaderTests(QtTestCase):
         self.assertEqual(controller.windows, [])
 
     def test_browser_metadata_action_opens_only_editor_and_saves(self):
-        from features.books.metadata_window import MetadataWindow
+        from features.books.ui.metadata_window import MetadataWindow
         controller = register().browser.create_controller(self.page)
-        with patch('features.books.controller.BookWindow', side_effect=AssertionError('Reader should not open')), \
+        with patch('features.books.ui.controller.BookWindow', side_effect=AssertionError('Reader should not open')), \
                 patch('commonUtils.ui.document_host.show_document', side_effect=AssertionError('Metadata must stay a popup')):
             window = controller.open(self.path, edit=True)
             self.wait_idle(window)
@@ -378,7 +378,7 @@ class ReaderTests(QtTestCase):
         window = controller.open(self.path, edit=True)
         self.wait_idle(window)
         window.editor.fields['title'].setText('Keep my edit')
-        with patch('features.books.metadata_window.save_metadata', side_effect=OSError('Cannot save here')):
+        with patch('features.books.ui.metadata_window.save_metadata', side_effect=OSError('Cannot save here')):
             window.editor._accept()
             self.wait_idle(window)
         self.assertTrue(window.isVisible())

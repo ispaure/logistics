@@ -160,3 +160,7 @@ The app now composes Chat, Cloud, Transfers, Folder Hub, Home/Documents, Locatio
 ### 5. Nest substantial workflows in each feature
 
 Blender now owns `installation/`, `presets/` and `addons/`, with addon-library UI under `addons/ui/`. Main Blender presentation remains its feature-level composition UI. rclone owns `transfers/` and `localcrypt/`, each with desktop `ui/` and mobile adapters beside its domain behavior. Imports, Blender script/config resource paths and curated mobile sources are migrated together. Feature IDs, persisted settings and application navigation stay unchanged.
+
+### 6. Desktop presentation ownership
+
+Books, IDE and Text Editor now keep desktop widgets/controllers under their own `ui/` packages. Portable EPUB, metadata, project/analysis and preference modules stay outside presentation. Books Qt chapter conversion stays separate from mobile WebView conversion. Shared IDE/Text Editor change-marker integration lives in neutral `services/editors/ui/`, outside feature discovery infrastructure. Lazy registrations and configuration resource paths are updated.

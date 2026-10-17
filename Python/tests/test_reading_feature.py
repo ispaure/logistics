@@ -67,7 +67,7 @@ class ReadingFeatureTests(QtTestCase):
 
     def test_mixed_selection_has_one_metadata_key_and_routes_to_both_editors(self):
         from commonUtils.ui.file_browser.extensions import InstalledFeature
-        from features.books.controller import BooksController
+        from features.books.ui.controller import BooksController
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             epub = EPUBFile(make_book(root / 'book.epub'))
@@ -84,7 +84,7 @@ class ReadingFeatureTests(QtTestCase):
                        for action in binding._actions_for(item, context)}
             metadata = [action for action in actions.values() if action.title == 'Edit metadata…']
             self.assertEqual(len(metadata), 1)
-            from features.books.metadata_actions import edit_metadata
+            from features.books.ui.metadata_actions import edit_metadata
             with patch.object(book_controller, 'open') as open_epub, \
                  patch('features.registry.get_feature_definition', return_value=SimpleNamespace(
                      install_browser=lambda *a, **k: SimpleNamespace(controller=comic_controller))):

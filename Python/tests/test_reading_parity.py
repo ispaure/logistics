@@ -8,7 +8,7 @@ from zipfile import ZipFile
 
 from books_fixture import make_book
 from commonUtils.runtime.document_access import LocalDocuments
-from features.books.content import chapter_html as desktop_html
+from features.books.ui.content import chapter_html as desktop_html
 from features.books.mobile.content import chapter_html, chapter_text
 from features.books.mobile.navigation import chapter_labels
 from features.books.epub import BookError

@@ -303,7 +303,7 @@ class CryptBrowserView(qt.QMainWindow):
             return ComicPages(path, ComicDocument(path, source=self.provider)).cover(size)
         if suffix == '.epub':
             from features.books.epub import EPUBBook
-            from features.books.preview import cover_thumbnail
+            from features.books.ui.preview import cover_thumbnail
             return cover_thumbnail(EPUBBook(path, source=self.provider), size)[0]
         if suffix in {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'}:
             from commonUtils.ui.file_browser.thumbnails import image_thumbnail
@@ -338,7 +338,7 @@ class CryptBrowserView(qt.QMainWindow):
                 return [('Comic Metadata', BrowserDetails(tuple(fields), cover))]
             if path.suffix.lower() == '.epub':
                 from features.books.epub import EPUBBook
-                from features.books.preview import cover_thumbnail
+                from features.books.ui.preview import cover_thumbnail
                 book = EPUBBook(path, source=self.provider)
                 fields = [('Title', book.title)]
                 for key, label in (('creator', 'Author'), ('language', 'Language'), ('publisher', 'Publisher'),
@@ -403,7 +403,7 @@ class CryptBrowserView(qt.QMainWindow):
         return f'🕵️ Private - {self.item.remote} · {directory.name if directory != self.item.data else "LocalCrypt"}'
 
     def edit_epub_metadata(self, path):
-        from features.books.metadata_window import MetadataWindow
+        from features.books.ui.metadata_window import MetadataWindow
         release = self.provider.acquire()
         try:
             window = MetadataWindow(path, source=self.provider)

@@ -16,7 +16,7 @@ class EPUBFile(File):
 
     def _book_details(self):
         from commonUtils.filesystem import BrowserDetails
-        from .preview import cover_thumbnail
+        from features.books.ui.preview import cover_thumbnail
         book = self.open_book()
         fields = [('Title', book.title)]
         for key, label in (('creator', 'Author'), ('language', 'Language'), ('publisher', 'Publisher'),
@@ -28,7 +28,7 @@ class EPUBFile(File):
         return BrowserDetails(tuple(fields), cover, message)
 
     def browser_thumbnail(self, size):
-        from .preview import cover_thumbnail
+        from features.books.ui.preview import cover_thumbnail
         book = self.open_book()
         self._reading_spine = tuple(book.spine)
         return cover_thumbnail(book, size)[0]

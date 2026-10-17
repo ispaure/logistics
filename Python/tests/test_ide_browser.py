@@ -4,7 +4,7 @@ import subprocess
 
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from features.ide.browser import ProjectBrowser
+from features.ide.ui.browser import ProjectBrowser
 from features.ide.projects import Project
 
 
@@ -186,7 +186,7 @@ class ProjectBrowserTests(QtTestCase):
             self.assertTrue(browser.model.isReadOnly())
 
     def test_dirty_submodule_reports_its_individual_files(self):
-        from features.ide.git_status import read_status
+        from features.ide.ui.git_status import read_status
         from threading import Event
         with self.temporary_directory() as directory:
             base = Path(directory).resolve()

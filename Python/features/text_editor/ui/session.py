@@ -228,8 +228,8 @@ class EditorSession(qt.QObject):
             with document_creation_scope(window):
                 restore_documents(result)
         def restore_documents(result):
-            from .document import Document
-            from .window import EditorWindow
+            from features.text_editor.ui.document import Document
+            from features.text_editor.ui.window import EditorWindow
             from commonUtils.ui.document_host import show_document
             payload, records = result
             restored = []
@@ -349,7 +349,7 @@ class EditorSession(qt.QObject):
             window.show_error("This session is in use by another editor instance.")
             return
         # Existing documents remain owned by their panes; restoration gets its own window.
-        from .window import EditorWindow
+        from features.text_editor.ui.window import EditorWindow
         owner = EditorWindow(service=self.service, create_blank=False,
                              history_path=self.service.history_path, preferences_path=self.service.preferences_path)
         self.claim = Path(path), lock

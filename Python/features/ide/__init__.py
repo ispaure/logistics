@@ -3,7 +3,7 @@
 FEATURE_DESCRIPTION = 'Work on code projects with editing, search and code analysis.'
 
 def create_page(parent=None):
-    from .page import IDEPage
+    from features.ide.ui.page import IDEPage
     return IDEPage(parent)
 
 

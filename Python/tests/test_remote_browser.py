@@ -165,7 +165,7 @@ class RemoteBrowserTests(QtTestCase):
     def test_real_reader_menus_corrupt_files_and_recovery(self):
         from ui_new.file_browser import FileBrowserWindow
         from features.rclone.ui.remote_browser import RemoteLocation
-        from features.books.reader import BookWindow
+        from features.books.ui.reader import BookWindow
         from features.comics.ui.reader import ComicReaderWindow
         from books_fixture import make_book
         from io import BytesIO

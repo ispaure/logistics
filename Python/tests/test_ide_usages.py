@@ -35,7 +35,7 @@ class UsageAnalysisTests(unittest.TestCase):
             self.assertEqual({(Path(p).resolve(), line) for p, line, _, _ in refs}, locations)
 
     def test_previews_use_current_buffer_and_bound_external_reads(self):
-        from features.ide.usages import usage_previews
+        from features.ide.ui.usages import usage_previews
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             source = root / 'source.py'
@@ -60,7 +60,7 @@ class UsageAnalysisTests(unittest.TestCase):
 
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from features.ide.workspace import ProjectWorkspace
+from features.ide.ui.workspace import ProjectWorkspace
 
 
 class UsageNavigationTests(QtTestCase):

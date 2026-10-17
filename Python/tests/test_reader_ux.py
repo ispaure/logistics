@@ -13,7 +13,7 @@ from PIL import Image
 from PySide6.QtTest import QTest
 from commonUtils.ui import pyside as qt
 from features.books.epub import EPUBBook
-from features.books.reader import BooksPage
+from features.books.ui.reader import BooksPage
 from features.comics.pages import ComicPages
 from features.comics.ui.reader import ComicReaderWindow
 from books_fixture import make_book

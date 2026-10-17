@@ -22,7 +22,7 @@ def choose_reader_document(parent, kind, *, current=None, open_local=None):
         if open_local is not None:
             return open_local(path)
         if kind == 'epub':
-            from features.books.controller import BooksController
+            from features.books.ui.controller import BooksController
             owner = getattr(parent, 'document_service_owner', parent)
             controller = getattr(owner, '_books_controller', None)
             if controller is None:
@@ -72,7 +72,7 @@ def open_reader_choice(choice, parent, kind, *, password=None):
                     qt.QMessageBox.warning(parent, 'Open', error)
                 return
             if kind == 'epub':
-                from features.books.reader import BookWindow
+                from features.books.ui.reader import BookWindow
                 window = BookWindow(document)
                 from services.private_views import protect_private_view
                 protect_private_view(window, choice.provider)
