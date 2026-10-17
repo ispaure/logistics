@@ -235,3 +235,7 @@ partial scans and retries errors. Protected archives retain filename search only
 the host rejects them before any password lookup or metadata parsing. Private
 providers are never fed to this index. Corrupt cache files can be recreated from
 imports; archive files and recovery journals are never used as cache storage.
+
+## Format mutations
+
+`mutations.py` owns metadata plans, content-preserving archive rewrites and post-write format validation for desktop/mobile consumers. Storage adapters retain conflict detection, encryption and atomic publication; the mobile managed library retains recovery journals and checksum records.

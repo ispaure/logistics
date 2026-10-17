@@ -107,7 +107,7 @@ class ComicDocument:
             def stage():
                 with open_archive(self.path, password=self.password) as source, open_archive(
                         staged, 'w', password=self.password) as target:
-                    from services.document_metadata import rewrite_metadata
+                    from .mutations import rewrite_metadata
                     expected.update(rewrite_metadata(source, target, self.member, data))
             def verify():
                 if archive_manifest(staged, password=self.password) != expected:
@@ -138,7 +138,7 @@ class ComicDocument:
         expected = {}
         def write(output):
             with self.open_archive() as incoming, open_archive(output, 'w', password=self.password) as outgoing:
-                from services.document_metadata import rewrite_metadata
+                from .mutations import rewrite_metadata
                 expected.update(rewrite_metadata(incoming, outgoing, self.member, data))
         def verify(path):
             with self.source.open(path) as stream:

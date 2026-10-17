@@ -164,3 +164,7 @@ Blender now owns `installation/`, `presets/` and `addons/`, with addon-library U
 ### 6. Desktop presentation ownership
 
 Books, IDE and Text Editor now keep desktop widgets/controllers under their own `ui/` packages. Portable EPUB, metadata, project/analysis and preference modules stay outside presentation. Books Qt chapter conversion stays separate from mobile WebView conversion. Shared IDE/Text Editor change-marker integration lives in neutral `services/editors/ui/`, outside feature discovery infrastructure. Lazy registrations and configuration resource paths are updated.
+
+### 7. Feature-owned format mutations
+
+Books and Comics own metadata plans, archive rewrite requirements and structural validation in `mutations.py`. Desktop mutation paths, mobile library transactions and LocalCrypt adapters use those owners. The mobile library retains UUID/checksum records, conflict checks, durable journals and atomic publication. `services/document_metadata.py` remains a thin compatibility dispatcher; it contains no format implementation.
