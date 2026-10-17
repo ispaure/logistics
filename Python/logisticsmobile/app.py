@@ -24,11 +24,12 @@ from .folder_hub_ui import FolderHubUI
 from .hub_ui import HubUI, text_document_kind
 from .storage_ui import StorageUI
 from .host_services import OwnedAttribute
+from .provider_ui import ProviderUI
 
 _active_hosts = weakref.WeakValueDictionary()
 
 
-class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, ReaderWorkspace, ChatUI, CloudUI, toga.App):
+class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, ReaderWorkspace, ChatUI, CloudUI, ProviderUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def __init__(self, *args, **kwargs):
@@ -41,6 +42,13 @@ class LogisticsMobile(StorageUI, HubUI, FolderHubUI, LocationsUI, MirrorUI, Read
         # wake-up callbacks. Desktop/iOS loops lack this method and are unchanged.
         from commonUtils.ui.native.event_loop import bind_cooperative_loop
         bind_cooperative_loop(self.loop)
+
+    @property
+    def rclone_ui(self):
+        if not hasattr(self, '_rclone_ui'):
+            from .feature_hosts import rclone_host_ui
+            self._rclone_ui = rclone_host_ui()
+        return self._rclone_ui
 
     def startup(self):
         from .appearance import install_appearance

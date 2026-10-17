@@ -11,7 +11,7 @@ from zipfile import ZipFile
 
 from commonUtils.filesystem.snapshots import verified_file_snapshot
 from features.rclone.mobile.cloud import download_name
-from logisticsmobile.provider_readers import PrivateReader
+from services.document_readers import PrivateReader
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.persistence.publication import mutation_lock
 

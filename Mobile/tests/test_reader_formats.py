@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 from commonUtils.runtime.document_access import LocalDocuments
 from logisticsmobile.app import LogisticsMobile
-from logisticsmobile.provider_readers import PrivateReader
+from services.document_readers import PrivateReader
 from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
 
 

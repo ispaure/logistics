@@ -8,8 +8,8 @@ from uuid import uuid4
 
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.range_reader import RangeReader
-from logisticsmobile.native_archives import NativeArchiveAccess
-from logisticsmobile.provider_readers import PrivateReader
+from services.archive_access import NativeArchiveAccess
+from services.document_readers import PrivateReader
 from features.rclone.remote_policy import direct_kind, TEXT_LIMIT, LocalCopyRequired
 
 
