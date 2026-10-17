@@ -170,6 +170,10 @@ class RemoteReaderTests(unittest.TestCase):
                 browser.show_tiles()
                 self.assertEqual(len(browser.buttons), 200)
                 browser.search.value = 'series-199'
+                for _ in range(100):
+                    if len(browser.buttons) == 1:
+                        break
+                    await asyncio.sleep(.01)
                 self.assertEqual(len(browser.buttons), 1)
                 self.assertEqual(client.calls, [('list', 'mangas')])
                 self.assertEqual(app.folder_picker_selected['remote'], 'Other')
