@@ -58,3 +58,5 @@ credential selector. Returning to rclone selects All again. Directly added SMB/M
 connections and their copies appear under Network shares; SMB remotes imported
 from a credential ZIP remain under rclone with that package. On iOS, Local browses
 files directly in `Logisticks` and subfolders beside the managed `Local` folder.
+
+Cancelling a sync stops that transfer or its comparison. It does not cancel an independent local file operation. Changes already published remain in place.
