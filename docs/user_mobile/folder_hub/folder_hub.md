@@ -1,5 +1,20 @@
 # Folder Hub on mobile
 
+## Obsidian vault notes
+
+When the file browser opens a Local or LocalCrypt folder containing a
+`.obsidian` directory, a crystal-shaped **Browse Obsidian vault notes** button
+appears beside the browser controls. Tap it to browse folders and Markdown notes.
+Expand folders, then tap a `.md` or `.markdown` file to preview it. The crystal
+button toggles the note hierarchy on a phone; a sufficiently wide window shows
+the hierarchy beside the note, like Settings documentation.
+
+**Open in editor** opens the selected note through its existing Local or
+LocalCrypt editor. The preview does not change files. LocalCrypt previews stay
+in memory and close when their credentials are cleared. Configuration and hidden
+folders are omitted, and note links remain within the selected vault. This view
+browses Markdown files; it does not run Obsidian plugins.
+
 ## File browser locations and actions
 
 The file browser keeps your current folder, selection, list/tile mode, search, sort and browse

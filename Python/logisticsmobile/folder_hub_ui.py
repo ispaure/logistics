@@ -35,6 +35,9 @@ class FolderHubUI:
         self.refresh_folder_visibility()
 
     def refresh_folder_visibility(self):
+        vault = getattr(self.app, 'vault_browser', None)
+        if vault is not None:
+            vault.render_tree()
         if hasattr(self, 'folder_list'):
             self.update_folder_list(self.folder_picker_choices)
         for name in ('file_browser', 'remote_browser', 'editor_browser'):

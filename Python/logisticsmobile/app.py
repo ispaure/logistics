@@ -78,6 +78,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         host_identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
         previous_host = _active_hosts.get(host_identity)
         if previous_host is not None:
+            vault = getattr(previous_host, 'vault_browser', None)
+            if vault is not None:
+                vault.dispose()
             memory = getattr(previous_host, 'memory_pressure', None)
             if memory is not None:
                 memory.dispose()
@@ -251,6 +254,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             grid.reflow(self.main_window.size.width)
         if hasattr(self, 'documentation'):
             self.documentation.reflow(self.adaptive.content_width('settings', margin=0))
+        if hasattr(self, 'vault_browser'):
+            owner = self.vault_browser
+            owner.reflow(self.adaptive.content_width(owner.destination, margin=0))
         for owner in self.text_views.values():
             owner.apply_split(self.main_window.size.width)
 
@@ -881,6 +887,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             return False
         saved = self.checkpoint()
         if saved:
+            vault = getattr(self, 'vault_browser', None)
+            if vault is not None:
+                vault.dispose()
             picker = getattr(self, '_editor_picker', None)
             if picker is not None:
                 picker.clear()

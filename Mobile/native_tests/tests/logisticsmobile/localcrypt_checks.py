@@ -75,6 +75,10 @@ async def exercise_localcrypt(app, passed):
         assert owner is not None and canvas(owner).image.width == 24
         app.close_crypt()
 
+        from .obsidian_checks import exercise_obsidian
+        await exercise_obsidian(app, provider)
+        passed.append('native_obsidian_vault')
+
     for name in ('note.md', 'text.txt'):
         await open_copy(name)
         assert app.provider_sessions().active.crypt_text.value
