@@ -499,7 +499,7 @@ class FilesUI:
                 copies, key = source
                 await self.open_crypt(copies=copies, key=key, destination='files')
             elif Path(path).suffix.lower() in SOURCE_EXTENSIONS:
-                from logisticsmobile.text_resources import LocalTextCopies
+                from features.text_editor.resources import LocalTextCopies
                 await self.open_crypt(copies=LocalTextCopies(provider), key=path, destination='files')
             else:
                 await self.open_download(path=provider._locate(path), destination='files')

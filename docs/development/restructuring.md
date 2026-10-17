@@ -152,3 +152,7 @@ rclone mobile adapters no longer import `logisticsmobile`. Provider readers, doc
 ### 3. Mobile workflow composition
 
 The app now composes Chat, Cloud, Transfers, Folder Hub, Home/Documents, Locations and Storage controllers. Each controller enumerates its host dependencies and owned fields; compatibility accessors delegate to that owner without broad attribute forwarding. Transfer/review cancellation is separate from file/cloud cancellation and global Cancel dispatches to both. Reader/session managers and host/provider document lifecycle retain their existing composition.
+
+### 4. Text Editor mobile ownership
+
+`features/text_editor/mobile/ui.py` owns native editor presentation; `resources.py` owns provider text adapters and `names.py` owns portable name validation. Managed recovery storage, picker orchestration and scene/workspace identity remain host-owned. Shared persistence primitives continue to supply text encoding/conflict behavior. Editor and LM presentation receive host appearance/menu/export hooks explicitly and no longer import the mobile application package.

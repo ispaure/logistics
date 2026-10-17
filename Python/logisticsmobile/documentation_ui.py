@@ -14,7 +14,7 @@ def show_documentation(app, directory=None, path=None):
             path = directory / 'user_mobile/user_mobile.md' 
     def open_file(path):
         from commonUtils.runtime.local_files import LocalFiles
-        from .text_resources import LocalTextCopies
+        from features.text_editor.resources import LocalTextCopies
         if not hasattr(app, 'cloud_client'):
             app.show_cloud(present=False)
         app.loop.create_task(app.open_crypt(copies=LocalTextCopies(LocalFiles(path.parent)), key=path.name))

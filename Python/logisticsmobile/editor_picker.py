@@ -273,7 +273,7 @@ class EditorPicker:
             return await self.save_text_destination()
         if self.cloud_busy:
             return
-        from logisticsmobile.text_resources import LocalTextCopies
+        from features.text_editor.resources import LocalTextCopies
         label, folder, name = self.save_as_storage.value, self.picker_folder.value, self.save_as_name.value
         work = self._begin_work()
         try:
@@ -301,7 +301,7 @@ class EditorPicker:
 
     async def save_text_destination(self, widget=None, **kwargs):
         from commonUtils.runtime.resource_mutations import save_resource_and_reopen
-        from logisticsmobile.text_resources import LocalTextCopies
+        from features.text_editor.resources import LocalTextCopies
         if self.cloud_busy or self.save_as_data is None:
             return
         target, label, data = self.save_as_name.value, self.save_as_storage.value, self.save_as_data

@@ -1,11 +1,8 @@
 """One native editor and callback owner per open text/Markdown session."""
 import toga
-from .control_icons import icon_button, apply_icon
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
-from .documents import document_name
-from .action_menu import ActionMenu
-from .appearance import action_button
+from features.text_editor.names import document_name
 from commonUtils.ui.native.editor_search import EditorSearch
 from commonUtils.ui.native.code_input import CodeInput
 from commonUtils.formats.code_syntax import LANGUAGES
@@ -26,6 +23,8 @@ def document_status(document):
 class TextEditorView:
     def __init__(self, app):
         self.app, self.document, self.session = app, None, None
+        icon_button, apply_icon = app.presentation.icon_button, app.presentation.apply_icon
+        action_button, ActionMenu = app.presentation.action_button, app.presentation.ActionMenu
         self.loading = True
         self.preview_pending = None
         self.split_preview = None
@@ -179,7 +178,7 @@ class TextEditorView:
         def render():
             self.preview_pending = None
             if self.app.active_host and self.app.workspace.accepts(token):
-                from .preview import markdown_preview
+                markdown_preview = self.app.presentation.markdown_preview
                 from uuid import uuid4
                 try:
                     self.split_preview.set_content('https://logistics.invalid/' + uuid4().hex + '/',

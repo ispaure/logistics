@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 from commonUtils.runtime.local_files import LocalFiles
 from logisticsmobile.app import LogisticsMobile
-from logisticsmobile.text_resources import LocalTextCopies
+from features.text_editor.resources import LocalTextCopies
 
 
 class PrivateSessionTests(unittest.TestCase):

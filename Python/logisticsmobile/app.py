@@ -14,7 +14,7 @@ from commonUtils.ui.native.navigation import NativeNavigationHost
 from commonUtils.ui.native.routes import Routes
 from .navigation import DESTINATION_ITEMS
 from .workspace import Workspace, MAX_SESSIONS
-from .editors import TextEditorView
+from features.text_editor.mobile.ui import TextEditorView
 from .workspace_navigation import WorkspaceNavigation as AdaptiveWorkspace
 from .hub_ui import text_document_kind
 from .host_services import OwnedAttribute, composed_workflow
@@ -52,6 +52,13 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         # wake-up callbacks. Desktop/iOS loops lack this method and are unchanged.
         from commonUtils.ui.native.event_loop import bind_cooperative_loop
         bind_cooperative_loop(self.loop)
+
+    @property
+    def presentation(self):
+        if not hasattr(self, '_presentation'):
+            from .feature_hosts import mobile_presentation
+            self._presentation = mobile_presentation(self)
+        return self._presentation
 
     @property
     def rclone_ui(self):

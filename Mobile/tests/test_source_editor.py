@@ -43,7 +43,7 @@ class SourceEditorTests(unittest.TestCase):
             self.assertIn('<table>', render.call_args.args[1])
             self.assertEqual(owner.document.text, source)
             self.assertEqual(owner.editor.value, source)
-        with patch('logisticsmobile.editors.allocated_width', return_value=1000):
+        with patch('features.text_editor.mobile.ui.allocated_width', return_value=1000):
             owner.apply_split(1000)
         self.assertEqual(owner.editor_area.style.direction, ROW)
         owner.toggle_split()

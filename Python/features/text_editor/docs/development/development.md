@@ -127,3 +127,7 @@ choices and manual result edits with undo/redo. Applying checks that both the
 buffer and disk snapshot are still current, replaces the buffer in one undo block,
 and updates its disk baseline. Save remains explicit; Cancel changes neither.
 Comparisons now refresh after each accepted hunk and use resizable, linked panes.
+
+## Mobile editor
+
+`mobile/ui.py` owns native editor widgets and per-document callbacks. `resources.py` owns provider text adapters, and `names.py` owns display-name validation. The mobile application supplies `services.mobile_presentation.MobilePresentation`; managed recovery records, picker workflows and scene ownership remain host concerns. Both platforms reuse commonUtils text persistence and conflict handling.
