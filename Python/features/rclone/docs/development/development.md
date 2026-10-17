@@ -218,3 +218,7 @@ saves in production and must not be removed as a fixture-only helper. These APIs
 are separate from the removed per-file mirror transfer operations. Crypt Push
 validation, link rejection, descriptor guards, identity and destination binding
 remain mandatory after review, including explicit early approval.
+
+## Mobile host boundary
+
+The feature imports no `logisticsmobile` modules. `mobile/host.py:MobileHostUI` declares injected presentation callbacks. The application supplies browser/menu/picker and visibility policy through its composition root. Document reader and native archive adapters live in neutral Logistics services; rclone owns storage and transfer adapters.

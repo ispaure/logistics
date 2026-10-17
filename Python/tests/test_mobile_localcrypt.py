@@ -8,7 +8,7 @@ from unittest.mock import patch
 from zipfile import ZipFile
 
 from features.rclone.mobile.localcrypt import LocalCryptCopies
-from logisticsmobile.provider_readers import PrivateReader
+from services.document_readers import PrivateReader
 from books_fixture import make_book
 
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=')

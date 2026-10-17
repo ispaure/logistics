@@ -2,7 +2,7 @@
 from collections import OrderedDict
 from contextlib import contextmanager
 from commonUtils.runtime.archive_source import LocalArchiveSource
-from .native_archives import NativeArchiveAccess
+from services.archive_access import NativeArchiveAccess
 
 
 class LocalComicSource(NativeArchiveAccess, LocalArchiveSource):

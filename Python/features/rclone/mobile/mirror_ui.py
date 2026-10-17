@@ -39,7 +39,7 @@ class MirrorUI(TransferReviewUI):
     def register_transfer_status(self, view):
         import weakref
         button = toga.Button('Transfer details', on_press=self.show_transfers, style=Pack(height=48, flex=1))
-        from logisticsmobile.appearance import accessible_name
+        accessible_name = self.rclone_ui.accessible_name
         dismiss = accessible_name(toga.Button('×', on_press=self.dismiss_transfer_status, style=Pack(width=48, height=48)),
                                   'Dismiss transfer notification')
         progress = toga.ProgressBar(max=100, value=0, style=Pack(height=4))
@@ -96,7 +96,7 @@ class MirrorUI(TransferReviewUI):
         client = getattr(self, 'cloud_client', None)
         if client is None or not hasattr(client, 'request'):
             return result
-        from logisticsmobile.folder_hub import visible_remotes
+        visible_remotes = self.rclone_ui.visible_remotes
         for remote in visible_remotes(getattr(self, 'cloud_crypt_remotes', ())):
             try:
                 identity = client.request('crypt_path', remote=remote, path='', directory=True)['identity']
@@ -405,7 +405,7 @@ class MirrorUI(TransferReviewUI):
 
 
     async def open_mirror_copy(self, key):
-        from logisticsmobile.files_ui import local_read_available
+        local_read_available = self.rclone_ui.local_read_available
         if self.cloud_busy and not local_read_available(self, private=True):
             return False
         store = self.mirror_store()

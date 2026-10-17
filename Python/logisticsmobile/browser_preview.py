@@ -50,7 +50,7 @@ def callbacks(provider, client, password=''):
         fields = []
         if suffix in {'.zip', '.cbz', '.epub'}:
             if getattr(provider, 'private', False):
-                from logisticsmobile.provider_readers import PrivateReader
+                from services.document_readers import PrivateReader
                 reader = PrivateReader(Path(row['path']).name, source=source(row, cancelled))
                 if reader.book:
                     fields = [('Title', reader.book.title), ('Author', ', '.join(reader.book.values('creator')))]

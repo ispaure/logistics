@@ -8,7 +8,6 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from features.rclone.mobile.cloud import CloudClient, Downloads, PACKAGE_LIMIT, download_name
 from features.rclone.mobile.localcrypt_ui import LocalCryptUI
-from logisticsmobile.control_icons import icon_button
 
 
 from features.rclone.mobile.messages import import_hint
@@ -119,9 +118,9 @@ class CloudUI(LocalCryptUI):
             self.cloud_remote_help = toga.Label('Load a credential ZIP to see its remotes.', style=Pack(font_size=14))
             self.cloud_location = toga.TextInput(placeholder='Folder within remote', style=Pack(height=44))
             self.cloud_browse = toga.Button('Browse folder', on_press=self.browse_cloud, style=Pack(flex=1, height=44))
-            self.cloud_up = icon_button('up', 'Parent folder', on_press=self.parent_cloud)
+            self.cloud_up = self.rclone_ui.icon_button('up', 'Parent folder', on_press=self.parent_cloud)
             self.cloud_entries = toga.Selection(style=Pack(height=44))
-            from logisticsmobile.browser_ui import FileBrowser as NativeBrowser
+            NativeBrowser = self.rclone_ui.NativeBrowser
             self.remote_browser = NativeBrowser(bounded_pages=True, folder_visible=self.folder_path_visible, selected=self.browser_cloud_selected, open_folder=self.browser_cloud_folder, navigate=self.browser_cloud_location, open_file=self.open_remote_document, item_actions=self.show_remote_item_actions)
             self.remote_browser.navigation_controls.remove(self.remote_browser.back_button)
             self.remote_browser.search.placeholder = 'Search this folder'
@@ -163,7 +162,7 @@ class CloudUI(LocalCryptUI):
                 advanced.remove(control)
             self.cloud_up.parent.remove(self.cloud_up)
             from commonUtils.ui.native.presentation import scroll_content
-            from logisticsmobile.action_menu import FeatureCommands
+            FeatureCommands = self.rclone_ui.FeatureCommands
             self.cloud_actions_button = toga.Button('•••', style=Pack(width=44, height=44))
             self.cloud_actions = FeatureCommands(self.cloud_actions_button, self, [
                 ('Browse path…', self.show_cloud_actions),
@@ -217,7 +216,7 @@ class CloudUI(LocalCryptUI):
         if not row:
             return
         from pathlib import Path
-        from logisticsmobile.provider_ui import private_label
+        private_label = self.rclone_ui.private_label
         remote, generation = self.cloud_open_remote, self.cloud_client.generation
         password = toga.PasswordInput(placeholder='Inner ZIP password', style=Pack(height=48))
         status = toga.Label('Enter the comic ZIP password.' if password_required else '', style=Pack(font_size=12))
@@ -354,7 +353,7 @@ class CloudUI(LocalCryptUI):
                                            domain, port or '445', remember=remember)
             if not self.active_host:
                 return
-            from logisticsmobile.folder_hub import visible_remotes
+            visible_remotes = self.rclone_ui.visible_remotes
             self.set_loaded_remote_names(self.visible_remote_names(names))
             await self._load_crypt_remote_names()
             self.cloud_remote.value = name
@@ -451,7 +450,7 @@ class CloudUI(LocalCryptUI):
         self.preferences.save(remote_packages=json.dumps(packages[-32:]))
 
     def visible_remote_names(self, names):
-        from logisticsmobile.folder_hub import exclusions
+        exclusions = self.rclone_ui.exclusions
         from services.folder_policy import visible_name
         original = {alias: name for item in getattr(self.cloud_client, 'package_records', ())
                     for name, alias in item.get('aliases', {}).items()}
@@ -463,7 +462,7 @@ class CloudUI(LocalCryptUI):
         return method(label, fallback) if method else fallback
 
     def remember_loaded_packages(self, label, names, *, session_only):
-        from logisticsmobile.folder_hub import visible_remotes
+        visible_remotes = self.rclone_ui.visible_remotes
         records = getattr(self.cloud_client, 'package_records', ())
         if records:
             for item in records:
@@ -597,7 +596,7 @@ class CloudUI(LocalCryptUI):
                     result = resume()
                     if inspect.isawaitable(result):
                         await result
-        from logisticsmobile.folder_hub import visible_remotes
+        visible_remotes = self.rclone_ui.visible_remotes
         password.on_confirm = unlock
         self.credential_unlock_button = toga.Button('Unlock', on_press=unlock, style=Pack(height=44))
         box = toga.Box(children=[toga.Label(import_hint('Unlock ' + cache.items[key]['zip']), style=Pack(font_size=18)),
@@ -617,7 +616,7 @@ class CloudUI(LocalCryptUI):
             self.clear_private_catalog()
             names = await asyncio.to_thread(self.cloud_client.restore)
             await self._load_crypt_remote_names()
-            from logisticsmobile.folder_hub import visible_remotes
+            visible_remotes = self.rclone_ui.visible_remotes
             self.set_loaded_remote_names(self.visible_remote_names(names))
             if names and self.cloud_client.package_name:
                 self.remember_loaded_packages(self.cloud_client.package_name, names, session_only=False)
@@ -650,7 +649,7 @@ class CloudUI(LocalCryptUI):
             self.set_cloud_busy(False)
 
     async def choose_cloud_package(self, widget=None, **kwargs):
-        from logisticsmobile.pickers import pick_document
+        pick_document = self.rclone_ui.pick_document
         if self.cloud_busy or self.cloud_client is None:
             return
         self.set_cloud_busy(True)
@@ -692,7 +691,7 @@ class CloudUI(LocalCryptUI):
             self.clear_private_catalog()
             names = await asyncio.to_thread(self.cloud_client.import_package, selected, None, password, remember=self.cloud_remember.value)
             await self._load_crypt_remote_names()
-            from logisticsmobile.folder_hub import visible_remotes
+            visible_remotes = self.rclone_ui.visible_remotes
             self.remember_loaded_packages(selected.name, names, session_only=not self.cloud_remember.value)
             cache_error = ''
             if not self.cloud_remember.value:
@@ -923,7 +922,7 @@ class CloudUI(LocalCryptUI):
         if not independent:
             self.set_cloud_busy(True)
         try:
-            from logisticsmobile.resource_imports import ResourceImports
+            ResourceImports = self.rclone_ui.ResourceImports
             if not hasattr(self, 'resource_imports'):
                 self.resource_imports = ResourceImports(self.private_root)
             imported = self.resource_imports.find(selected)
@@ -964,7 +963,7 @@ class CloudUI(LocalCryptUI):
                 self.set_cloud_busy(False)
 
     async def export_download(self, widget=None, **kwargs):
-        from logisticsmobile.pickers import export_file
+        export_file = self.rclone_ui.export_file
         selected = self.download_labels.get(self.download_selector.value)
         if self.cloud_busy or selected is None:
             return

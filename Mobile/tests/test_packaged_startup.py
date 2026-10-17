@@ -29,11 +29,11 @@ from features.rclone.mobile.cloud_ui import CloudUI
 from logisticsmobile.provider_ui import ProviderUI
 from logisticsmobile.private_sessions import PrivateController
 from features.rclone.mobile.localcrypt_ui import LocalCryptUI
-from logisticsmobile.native_archives import NativeArchiveAccess
+from services.archive_access import NativeArchiveAccess
 assert CloudClient.__module__ == 'features.rclone.mobile.cloud'
 assert CloudUI.__module__ == 'features.rclone.mobile.cloud_ui'
 assert ProviderUI.__module__ == 'logisticsmobile.provider_ui'
-assert NativeArchiveAccess.__module__ == 'logisticsmobile.native_archives'
+assert NativeArchiveAccess.__module__ == 'services.archive_access'
 assert issubclass(PrivateController, ProviderUI)
 assert not issubclass(PrivateController, LocalCryptUI)
 assert not Path('payload/logisticsmobile/cloud.py').exists()

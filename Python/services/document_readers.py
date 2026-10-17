@@ -43,7 +43,7 @@ class PrivateReader:
             self.text = self.session.text
             self.labels = [name]
         elif self.kind in {'.epub', '.cbz', '.zip'}:
-            from .library import MAX_BOOK, MAX_MEMBER
+            from services.document_limits import MAX_BOOK, MAX_MEMBER
             with self.source.open_archive(name) if self.streaming else ZipFile(BytesIO(data)) as archive:
                 validate_members(archive)
                 members = archive.infolist()

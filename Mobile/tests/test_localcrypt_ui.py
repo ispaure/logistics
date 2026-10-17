@@ -139,7 +139,7 @@ class LocalCryptUITests(unittest.TestCase):
         from io import BytesIO
         from zipfile import ZipFile
         from unittest.mock import patch
-        from logisticsmobile.provider_readers import PrivateReader
+        from services.document_readers import PrivateReader
         png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=')
         def reader(title):
             data = BytesIO()

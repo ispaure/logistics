@@ -2,12 +2,11 @@
 import asyncio
 import toga
 from toga.style import Pack
-from logisticsmobile.provider_ui import ProviderUI
 from features.rclone.mobile.localcrypt import LocalCryptCopies
 from features.rclone.mobile.file_resources import DownloadedCryptFile
 
 
-class LocalCryptUI(ProviderUI):
+class LocalCryptUI:
     def build_localcrypt(self):
         self.crypt_copies = LocalCryptCopies(self.private_root / 'LocalCrypt', self.cloud_client)
         self._crypt_cancel = None

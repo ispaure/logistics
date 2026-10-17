@@ -15,8 +15,7 @@ from commonUtils.persistence import atomic_write_bytes, atomic_write_json
 from .documents import document_name
 from .library_edits import LibraryEdits
 
-MAX_BOOK = 256 * 1024 * 1024
-MAX_MEMBER = 8 * 1024 * 1024
+from services.document_limits import MAX_BOOK, MAX_MEMBER
 MAX_RECORD = 128 * 1024
 
 

@@ -13,7 +13,7 @@ def revision(path):
     return file_revision(path)
 
 
-from logisticsmobile.native_archives import NativeArchiveAccess
+from services.archive_access import NativeArchiveAccess
 
 
 class NativeSource(NativeArchiveAccess):
