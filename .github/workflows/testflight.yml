@@ -55,7 +55,7 @@ jobs:
         run: echo "BRIEFCASE_HOME=$RUNNER_TEMP/briefcase-testflight" >> "$GITHUB_ENV"
       - name: Check configuration and identity before reading signing assets
         run: |
-          python -m pip install briefcase==0.4.5 toga-dummy==0.5.7 -r Mobile/requirements-testflight.txt
+          python -m pip install briefcase==0.4.5 toga-dummy==0.5.7 markdown-it-py==4.2.0 pygments==2.19.2 pypdf==6.21.0 -r Mobile/requirements-testflight.txt
           python Mobile/select_ios_sdk.py --github-env "$GITHUB_ENV"
           python Mobile/testflight_tools.py plan --build-number "$BUILD_NUMBER" --team "$IOS_TEAM_ID" --expected-app-identifier "$IOS_APP_IDENTIFIER"
           PYTHONPATH=Python TOGA_BACKEND=toga_dummy python -m unittest Mobile.tests.test_testflight_tools Mobile.tests.test_testflight_external Mobile.tests.test_privacy_build Mobile.tests.test_device_tools Mobile.tests.test_cloud_import_ui -v

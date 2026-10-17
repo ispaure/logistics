@@ -31,7 +31,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12.2'
-      - run: python -m pip install ruff==0.14.0 toga-dummy==0.5.7 -r Mobile/requirements-testflight.txt
+      - run: python -m pip install ruff==0.14.0 toga-dummy==0.5.7 markdown-it-py==4.2.0 pygments==2.19.2 pypdf==6.21.0 -r Mobile/requirements-testflight.txt
       - run: ruff check --config Python/pyproject.toml Python Mobile .github/scripts
       - name: Check native mobile widget and picker contracts
         env:
