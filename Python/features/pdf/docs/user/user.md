@@ -28,3 +28,7 @@ text index. Search text and results clear when the reader closes or its private
 session is revoked. Scanned pages require an existing searchable text layer;
 OCR is not included. Results are capped at 1,000 (shown with a `+` when there are
 more); documents with more than 8 MiB of extracted text report a search limit.
+
+Use **Find in PDF** or the standard Find shortcut to reveal search. The search
+panel starts collapsed. Page arrows, the numeric page selector and the full-screen
+button stay in the compact reader toolbar; F11 toggles full screen.

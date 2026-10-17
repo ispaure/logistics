@@ -211,24 +211,42 @@ class ScreenPrivacy:
             if self.lock_view is None:
                 import toga
                 from toga.style import Pack
-                from toga.style.pack import COLUMN
-                self.lock_title = toga.Label('Session locked', style=Pack(font_size=22))
+                from toga.style.pack import COLUMN, CENTER
+                from .appearance import action_button, surface
+                self.lock_icon = toga.Label('🔒', style=Pack(font_size=40, text_align=CENTER, margin_bottom=12))
+                self.lock_title = toga.Label('Welcome back', style=Pack(font_size=24, font_weight='bold', margin_bottom=8))
+                self.lock_credential = toga.Label('', style=Pack(font_size=16, font_weight='bold', margin_top=16, margin_bottom=12))
                 self.lock_hint = toga.Label('Enter the session password to resume.')
                 self.lock_password = PasswordInput(placeholder='Session password',
                     on_confirm=self.unlock, style=Pack(height=48))
                 self.lock_confirmation = PasswordInput(placeholder='Confirm new lock password',
                     style=Pack(height=48))
-                self.lock_status = toga.Label('')
-                self.lock_button = toga.Button('Unlock', on_press=self.unlock, style=Pack(height=48))
-                self.lock_view = toga.Box(children=[self.lock_title, self.lock_hint, self.lock_password,
-                    self.lock_button, self.lock_status], style=Pack(direction=COLUMN, flex=1, margin=24))
-            setup = any(gate.proof is None for gate in gates)
-            self.lock_hint.text = ('Set a temporary lock password for this passwordless session.' if setup
-                                   else 'Enter the session password to resume.')
-            if setup and self.lock_confirmation not in self.lock_view.children:
-                self.lock_view.insert(3, self.lock_confirmation)
-            elif not setup and self.lock_confirmation in self.lock_view.children:
-                self.lock_view.remove(self.lock_confirmation)
+                self.lock_status = toga.Label('', style=Pack(margin_top=12))
+                self.lock_button = action_button(toga.Button('Unlock', on_press=self.unlock, style=Pack(height=48, margin_top=16)))
+                self.lock_fields = toga.Box(children=[self.lock_icon, self.lock_title, self.lock_hint,
+                    self.lock_credential, self.lock_password, self.lock_button, self.lock_status],
+                    style=Pack(direction=COLUMN, margin=24))
+                self.lock_card = surface(toga.Box(children=[self.lock_fields],
+                    style=Pack(direction=COLUMN, margin=4)), radius=20)
+                self.lock_view = toga.Box(children=[toga.Box(style=Pack(flex=1)),
+                    toga.ScrollContainer(horizontal=False, content=self.lock_card, style=Pack(flex=4)),
+                    toga.Box(style=Pack(flex=1))], style=Pack(direction=COLUMN, flex=1, margin=20))
+            pending = tuple(gate for gate in gates if gate.locked)
+            names = list(dict.fromkeys(getattr(gate, 'credential_name', '') for gate in pending
+                                       if getattr(gate, 'credential_name', '')))
+            labels = names + (['Private session'] if any(not getattr(gate, 'credential_name', '') for gate in pending) else [])
+            self.lock_credential.text = '\n'.join(labels)
+            setup = any(gate.proof is None for gate in pending)
+            self.lock_title.text = 'Set session password' if setup else 'Session locked'
+            self.lock_hint.text = ('Create a temporary password to protect this session.' if setup
+                else ('Enter the password for this credential file.' if len(labels) == 1 and names and names[0].lower().endswith('.zip')
+                      else 'Enter a listed credential’s password to continue.' if names
+                      else 'Enter your private session password to continue.'))
+            self.lock_password.placeholder = 'New session password' if setup else 'Credential password' if names else 'Session password'
+            if setup and self.lock_confirmation not in self.lock_fields.children:
+                self.lock_fields.insert(self.lock_fields.children.index(self.lock_password) + 1, self.lock_confirmation)
+            elif not setup and self.lock_confirmation in self.lock_fields.children:
+                self.lock_fields.remove(self.lock_confirmation)
             self.lock_button.text = 'Set lock password' if setup else 'Unlock'
             if self.app.main_window.content is not self.lock_view:
                 self.saved_content = self.app.main_window.content

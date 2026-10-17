@@ -172,7 +172,7 @@ class AndroidPDF:
         self.document.close()
 
     def render(self, index):
-        from java import jclass
+        from java import jclass, jint
         page = self.document.openPage(index)
         bitmap = None
         try:
@@ -180,7 +180,9 @@ class AndroidPDF:
             Bitmap = jclass('android.graphics.Bitmap')
             bitmap = Bitmap.createBitmap(max(1, round(page.getWidth() * scale)),
                 max(1, round(page.getHeight() * scale)), Bitmap.Config.ARGB_8888)
-            bitmap.eraseColor(-1)
+            # Chaquopy otherwise selects eraseColor(long), interpreting -1
+            # as a packed ColorSpace value rather than an ARGB int.
+            bitmap.eraseColor(jint(-1))
             page.render(bitmap, None, None, 1)
             output = jclass('java.io.ByteArrayOutputStream')()
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)

@@ -13,3 +13,5 @@ Use the following pages for this documentation scope.
 
 - [2026-10-14-Qt-Proof-Ipad](2026-10-14-qt-proof-ipad/2026-10-14-qt-proof-ipad.md)
 - [2026-10-14-Qt-Proof-Phone](2026-10-14-qt-proof-phone/2026-10-14-qt-proof-phone.md)
+
+- [PDF reader and search verification](2026-10-17-pdf-search/2026-10-17-pdf-search.md)

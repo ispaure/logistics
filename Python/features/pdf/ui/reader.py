@@ -38,8 +38,9 @@ class PDFWindow(qt.QMainWindow):
         root = qt.QWidget(self)
         layout = qt.QVBoxLayout(root)
         controls = qt.QHBoxLayout()
-        self.previous = qt.QPushButton('Previous page')
-        self.following = qt.QPushButton('Next page')
+        from commonUtils.ui.readers.reader_chrome import reader_button, ReaderFullscreen
+        self.previous = reader_button(self, 'Previous page', icon='previous')
+        self.following = reader_button(self, 'Next page', icon='next')
         self.number = qt.QSpinBox()
         self.number.setRange(1, self.document.pageCount())
         self.number.setPrefix('Page ')
@@ -50,18 +51,36 @@ class PDFWindow(qt.QMainWindow):
         self.following.clicked.connect(lambda: self.go(self.index + 1))
         for widget in (self.previous, self.number, self.following):
             controls.addWidget(widget)
+        controls.addStretch(1)
+        self.find_button = reader_button(self, 'Find in PDF', text='Find in PDF')
+        self.find_button.setCheckable(True)
+        controls.addWidget(self.find_button)
+        self.fullscreen_action = qt.QAction('Full screen', self)
+        self.fullscreen_action.setCheckable(True)
+        self.fullscreen_action.setShortcut('F11')
+        self.addAction(self.fullscreen_action)
+        self.fullscreen = ReaderFullscreen(self, self.fullscreen_action)
+        self.fullscreen_action.triggered.connect(self.fullscreen.toggle)
+        controls.addWidget(reader_button(self, 'Full screen', action=self.fullscreen_action, icon='fullscreen'))
         layout.addLayout(controls)
         from .search import PDFSearchBar
         self.search = PDFSearchBar(data, self.go, self)
         layout.addWidget(self.search)
+        self.search.hide()
+        self.find_button.toggled.connect(self.search.setVisible)
         from PySide6.QtGui import QShortcut, QKeySequence
         self.find_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Find), self)
-        self.find_shortcut.activated.connect(self.search.input.setFocus)
+        self.find_shortcut.activated.connect(self.show_find)
         layout.addWidget(self.view)
         self.setCentralWidget(root)
         self.document.pageCountChanged.connect(lambda count: self.number.setMaximum(max(1, count)))
         self.view.pageNavigator().currentPageChanged.connect(self.sync_page)
         self.go(0)
+
+    def show_find(self):
+        self.find_button.setChecked(True)
+        self.search.input.setFocus()
+        self.search.input.selectAll()
 
     def go(self, index):
         if not 0 <= index < self.document.pageCount():

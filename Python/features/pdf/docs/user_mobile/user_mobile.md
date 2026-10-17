@@ -4,7 +4,7 @@ Open a `.pdf` from local files, a remote file browser, or an unlocked LocalCrypt
 copy. The PDF opens directly in a document session without importing into Books.
 
 Swipe **up** for the next page and **down** for the previous page. You can also
-use the previous/next buttons. Enter a page number in the **Page** field and tap
+use the previous/next buttons. Open **Pages & search** to enter a page number in the **Page** field and tap
 **Go** or submit the field. Page numbers start at 1; invalid values show an error
 and keep the displayed page. The first and last pages stop navigation at the
 ends of the document.
@@ -16,9 +16,20 @@ LocalCrypt sessions also retire when credentials change. Password-protected and
 damaged PDFs cannot be opened. PDF password entry and PDF annotation editing
 are not supported.
 
+Tap the PDF page to enter fullscreen; tap it again to restore the controls.
+Fullscreen fits the whole page to the largest size the screen allows while
+keeping its aspect ratio, for both portrait and landscape pages. Space remains
+above/below or beside the page only when its proportions differ from the screen.
+**Reading mode** in the reader actions also enters fullscreen. Swiping up/down
+changes pages in both modes at fit size. In fullscreen, hold the page for about
+400 ms to show the comic reader’s 2× magnifying bubble, drag to move it, and
+release to dismiss it. A magnifier hold does not turn pages or toggle controls.
+Pinch to zoom and pan; return to fit size to swipe between pages.
+Pages & search starts collapsed.
+
 ## Search
 
-Enter text in **Find in PDF** and submit it or choose **Next match**. Search
+Open **Pages & search**. Enter text in **Find in PDF** and submit it or choose **Next match**. Search
 ignores case and covers the whole document. Next match and Previous match wrap
 around the results and jump to the matching page. A result count and text snippet
 identify each match, including multiple matches on the same page. Clear the

@@ -11,7 +11,7 @@ from markdown_it import MarkdownIt
 from commonUtils.ui.appearance.formatting_glyphs import formatting_svg
 
 
-def editor_blocks(text):
+def editor_blocks(text, *, image_source=None):
     """Map top-level CommonMark blocks to source, including invisible syntax.
 
     Complex syntax remains read-only in formatted mode. Source mode always owns
@@ -24,12 +24,15 @@ def editor_blocks(text):
     if lines and not lines[-1]:
         lines.pop()
     parser = MarkdownIt('commonmark', {'html': False}).enable(['table', 'strikethrough'])
+    from commonUtils.ui.native.markdown_preview import embedded_image, wiki_image
+    if image_source is not None:
+        parser.inline.ruler.before('image', 'wiki_image', wiki_image)
     def image(renderer, items, index, options, env):
         token = items[index]
         title = token.attrGet('title')
         suffix = (' \"' + title.replace('\"', '\\\"') + '\"') if title else ''
         original = '![' + token.content + '](' + (token.attrGet('src') or '') + suffix + ')'
-        return '<span contenteditable="false" data-markdown="' + escape(original, quote=True) + '">' + escape(token.content or 'Image') + '</span>'
+        return '<span contenteditable="false" data-markdown="' + escape(original, quote=True) + '">' + embedded_image(token.attrGet('src') or '', token.content or 'Image', image_source) + '</span>'
     parser.add_render_rule('image', image)
     ranges = []
     frontmatter = 0
@@ -321,9 +324,9 @@ document.querySelectorAll('[data-table]').forEach(button => {
 '''
 
 
-def editor_html(text, bridge, font_size=16):
+def editor_html(text, bridge, font_size=16, *, image_source=None):
     nonce = uuid4().hex
-    data = json.dumps(editor_blocks(text), ensure_ascii=True).replace('<', '\\u003c')
+    data = json.dumps(editor_blocks(text, image_source=image_source), ensure_ascii=True).replace('<', '\\u003c')
     script = _SCRIPT.replace('location.href = BRIDGE', 'location.href = ' + json.dumps(bridge)).replace('const blocks = DATA;', 'const blocks = ' + data + ';')
     common = [('Bold', 'bold', ''), ('Italic', 'italic', ''), ('Undo', 'undo', ''), ('Redo', 'redo', '')]
     more = [('Strike', 'strikeThrough', ''), ('Bullets', 'insertUnorderedList', ''),
@@ -353,7 +356,7 @@ def editor_html(text, bridge, font_size=16):
     return (f'<!doctype html><html><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; '
-            f'script-src \'nonce-{nonce}\'; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">'
+            f'script-src \'nonce-{nonce}\'; style-src \'unsafe-inline\'; img-src data:; base-uri \'none\'; form-action \'none\'">'
             f'<style>:root{{color-scheme:light dark}}body{{font:{int(font_size)}px/1.6 system-ui;'
             'margin:12px;background:Canvas;color:CanvasText;overflow-wrap:anywhere}'
             'nav{position:sticky;top:0;background:Canvas;z-index:1;display:flex;flex-wrap:wrap;gap:4px}'
@@ -369,8 +372,9 @@ def editor_html(text, bridge, font_size=16):
 
 
 class FormattedMarkdownInput:
-    def __init__(self, changed, *, font_size=16):
+    def __init__(self, changed, *, font_size=16, image_source=None):
         self.changed, self.font_size = changed, font_size
+        self.image_source = image_source
         self.closed = False
         self.text = None
         self.bridge = 'logistics-editor://' + uuid4().hex + '/'
@@ -380,7 +384,8 @@ class FormattedMarkdownInput:
         if self.closed or self.text == text:
             return
         bridge = 'logistics-editor://' + uuid4().hex + '/'
-        content = editor_html(text, bridge, self.font_size)
+        content = editor_html(text, bridge, self.font_size,
+            image_source=self.image_source() if self.image_source else None)
         self.bridge = bridge
         self.text = text
         self.view.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
@@ -398,6 +403,7 @@ class FormattedMarkdownInput:
     def dispose(self):
         self.closed = True
         self.changed = None
+        self.image_source = None
         retire_webview(self.view)
 
 

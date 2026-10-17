@@ -76,3 +76,6 @@ Desktop.ini
 .env
 .env.*
 /.app-install.json
+
+# Firebase CLI diagnostic output is local to this checkout.
+/firepit-log.txt

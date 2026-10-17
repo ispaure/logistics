@@ -94,7 +94,7 @@ class CredentialPackageTests(unittest.TestCase):
                 app.loop.close()
                 LogisticsMobile.storage_root = None
 
-    def test_session_import_keeps_zip_association_for_password_only_reopen(self):
+    def test_session_import_retains_encrypted_zip_but_never_saves_decoded_credentials(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             LogisticsMobile.storage_root = root
@@ -110,16 +110,26 @@ class CredentialPackageTests(unittest.TestCase):
                 vault = SimpleNamespace(root=root / 'Retained', unlock=lambda **kw: dict(key='fixture'))
                 vault.root.mkdir()
                 cache = CredentialPackages(vault, app.cloud_client)
-                with patch.object(app, 'retained_packages', return_value=cache):
+                with patch.object(app, 'retained_packages', return_value=cache) as retained, \
+                        patch.object(cache, 'remember', wraps=cache.remember) as remember, \
+                        patch.object(app.preferences, 'save', wraps=app.preferences.save) as save:
                     app.loop.run_until_complete(app.import_cloud_package())
+                    save.assert_not_called()
                     self.assertEqual(app.cloud_password.value, '')
-                    self.assertEqual(len(cache.matching('Secret', 'a' * 64)), 1, app.cloud_import_message.text)
-                restored = CredentialPackages(vault, CacheClient())
-                app.preferences.reload()
-                app.session_credential_packages = []
-                with patch.object(app, 'retained_packages', return_value=restored):
+                    remember.assert_called_once()
+                    self.assertEqual(len(cache.matching('Secret', 'a' * 64)), 1)
                     self.assertIn('Personal', app.credential_groups())
-                self.assertNotIn('correct', restored.index.read_text())
+                    app.show_settings()
+                    app.font_choice.value = '23'
+                    app.preferences.reload()
+                    self.assertNotIn('Personal.zip', app.preferences.path.read_text())
+                    self.assertNotIn('Secret', app.preferences.path.read_text())
+                    self.assertNotIn('correct', cache.index.read_text())
+                    app.session_credential_packages = []
+                    restored = CredentialPackages(vault, CacheClient())
+                    self.assertEqual(len(restored.matching('Secret', 'a' * 64)), 1)
+                    retained.return_value = restored
+                    self.assertIn('Personal', app.credential_groups())
             finally:
                 app.main_window.close()
                 app.loop.close()

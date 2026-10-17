@@ -49,6 +49,37 @@ class NativeBrowserTests(unittest.TestCase):
                 app.main_window.close()
                 app.loop.close()
 
+    def test_recursive_search_keeps_all_matches_beyond_ten_thousand(self):
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            calls = []
+            matches = [dict(path=f'sub/match-{i:05d}.txt', name=f'match-{i:05d}.txt', directory=False, size=1)
+                       for i in range(10005)]
+            def listing(folder, *, cancelled):
+                calls.append(folder)
+                return matches if folder == 'sub' else [dict(path='sub', name='sub', directory=True)]
+            provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path, list=listing)
+            browser = FileBrowser()
+            async def check():
+                browser.set_entries(provider, '', listing('', cancelled=lambda: False))
+                browser.search.value = 'match'
+                await browser._search_subfolders(browser.search_epoch, browser.search_cancelled)
+                self.assertEqual(len(browser.entries), 10005)
+                self.assertIn('sub', calls)
+                browser.page = 20
+                browser.render()
+                self.assertEqual(len(browser.buttons), 5)
+                self.assertIn('/virtual/sub/match-10004.txt', [str(key) for key in browser.buttons])
+                self.assertFalse(browser.next.enabled)
+            try:
+                app.loop.run_until_complete(check())
+            finally:
+                app.loop.run_until_complete(browser.close())
+                app.main_window.close()
+                app.loop.close()
+
     def test_views_pagination_info_and_stale_thumbnail(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)

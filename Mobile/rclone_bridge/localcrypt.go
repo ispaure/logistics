@@ -117,9 +117,6 @@ func cryptList(ctx context.Context, name, dir string) ([]entry, error) {
 	if err != nil {
 		return nil, errors.New("encrypted folder could not be listed")
 	}
-	if len(rows) > 1000 {
-		return nil, errors.New("folder exceeds 1000 entries")
-	}
 	result := []entry{}
 	for _, row := range rows {
 		encrypted := row.Remote()

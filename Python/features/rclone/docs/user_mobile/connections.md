@@ -83,7 +83,10 @@ to copies created by older versions. Open or export existing private copies;
 new standalone copies cannot be downloaded from the browser.
 
 **Save credentials on this device** is enabled by default. Turn it off before
-importing to keep credentials only in memory for this app session. A session-only
+importing to keep decoded credentials and the ZIP password only in memory for
+this app session. Settings autosave never saves them. The original password-protected
+ZIP is retained under device encryption for future password-only unlocking.
+Unencrypted ZIPs must be selected again next time. A session-only
 import leaves saved packages unchanged; **Reload saved credentials** reloads
 saved packages while keeping currently loaded session-only packages active. Multiple
 saved and session-only packages are supported together. Each ZIP filename
@@ -107,8 +110,8 @@ providers that rotate refresh tokens may require a fresh credential package.
 ### Locked credentials and Folder Hub
 
 Mobile now follows desktop Folder Hub visibility. Before a session-only credential
-is unlocked, only its existing mapped Local/LocalCrypt copies appear. Retaining
-a ZIP remembers which password can unlock a local copy; it does not expose the
+is unlocked, only its existing mapped Local/LocalCrypt copies appear. A
+retained ZIP remembers which password can unlock a local copy; it does not expose the
 ZIP's entire remote list in Folder Hub. Credential groups with no visible copies
 are omitted there while locked. After unlocking, all normally visible remotes in
 that credential appear, including remotes without a local copy.
@@ -141,9 +144,11 @@ to resolve the matching loaded context.
 
 Saved packages are encrypted in the private device vault and return after
 restart. Session-only decoded credentials and resume-password verifiers remain
-in memory. Their original password-protected ZIPs can be retained in additionally
-device-encrypted form for password-only unlocking after restart; each retained
-ZIP contains only its own package. Reloading saved credentials does not discard
+in memory. Session-only imports retain their original password-protected ZIP under device
+encryption for password-only unlocking after restart. The ZIP and its remote
+associations live in private app storage: `CredentialPackages` on iOS, and
+`LogisticsCredentialPackages` in Android’s no-backup storage. Decoded credentials
+and ZIP passwords are never written there. Reloading saved credentials does not discard
 active session packages. Adding or refreshing a saved package never serializes
 session-only contexts. Existing saved vaults migrate using their current device
 key; package vaults use a new header which older builds refuse to load.
@@ -152,3 +157,18 @@ Loading a previously saved filename as session-only does not erase its older
 saved copy; use Forget saved credentials if you want to remove saved secrets.
 **Lock credential session** unloads all active contexts. **Forget saved credentials**
 retains its existing explicit all-credentials removal behavior.
+
+## Folder search scope
+
+Remote and PC-server search filters every entry in the active folder listing.
+It does not descend into subfolders. Local and LocalCrypt search includes
+subfolders recursively. Neither search has an entry or result count limit.
+The browser shows up to 500 results per page; use the page arrows for more.
+
+## Resuming a locked session
+
+When the app locks a session after leaving the foreground, its unlock screen
+shows the credential ZIP filename whose password is required. If several
+credentials are locked, enter their passwords in turn; unlocked filenames
+disappear from the list. A passwordless connection asks you to create a temporary
+session password. These labels and password checks stay in memory.

@@ -143,7 +143,7 @@ class CloudUI(LocalCryptUI):
                 self.cloud_add_smb,
                 self.cloud_choose, self.cloud_selected_zip, self.cloud_import_message,
                 toga.Box(children=[self.cloud_password, self.cloud_import], style=Pack(direction=ROW)),
-                self.cloud_remember, toga.Label('Off: use credentials only for this app session.'),
+                self.cloud_remember, toga.Label(import_hint('Off: decoded credentials stay in memory. Password-protected ZIPs are kept encrypted for future unlocking.')),
                 self.cloud_package, self.cloud_lock, self.cloud_reload, self.cloud_probe, self.cloud_clear,
                 toga.Button('Browse remote files', on_press=self.show_cloud, style=Pack(height=44))],
                 style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
@@ -447,8 +447,9 @@ class CloudUI(LocalCryptUI):
         association = dict(zip=name, remotes=list(remotes), session_only=session_only)
         sessions = [item for item in getattr(self, 'session_credential_packages', ()) if item['zip'] != name]
         self.session_credential_packages = [*sessions, association] if session_only else sessions
-        if not session_only:
-            packages.append(association)
+        if session_only:
+            return
+        packages.append(association)
         self.preferences.save(remote_packages=json.dumps(packages[-32:]))
 
     def visible_remote_names(self, names):
@@ -557,7 +558,7 @@ class CloudUI(LocalCryptUI):
             self.show_view(box, destination='files', route='choose-credential', title='Unlock connection')
         else:
             self.show_cloud_connections()
-            self.cloud_import_message.text = import_hint('Load the credential ZIP for ' + remote + '. Password-protected ZIPs are retained encrypted for password-only unlocking next time.')
+            self.cloud_import_message.text = import_hint('Load the credential ZIP for ' + remote + '. Retained password-protected ZIPs need their ZIP password to unlock again.')
         return False
 
     def show_retained_unlock(self, key, remote=None, *, identity=None, resume=None, destination='files'):

@@ -532,14 +532,11 @@ Confirmed issues corrected:
   parent closes its providers and clears their decrypted caches. Desktop private
   browser, editor, reader and metadata windows retire on revocation, replace their
   titles and refuse to become visible again. These windows must be reopened.
-- Mobile session-only import retains only password-protected original ZIPs under
-  device encryption, with package/remote association metadata and settings
-  fingerprints for password-only reopening after restart. ZIP passwords and
-  decoded credentials are not retained. Unencrypted ZIP retention is rejected so
-  a device key alone cannot recover session-only decoded credentials. Association
-  metadata is intentionally persistent for easy access; duplicate session-only
-  preference associations are removed on reload. No decrypted document names are
-  added to these associations.
+- Mobile session-only imports retain original password-protected ZIPs through
+  `CredentialPackages` under device encryption. Package/remote associations stay
+  in its index, while ZIP passwords and decoded credentials remain in memory.
+  Preferences filter session-only associations before every write and on reload.
+  Unencrypted ZIP retention is rejected.
 - Mobile credential generations now cover the whole process, matching the native
   bridge's shared store. Replacement through another client invalidates native
   source caches and retires stale reader views. Ordinary local provider sessions
@@ -657,14 +654,12 @@ is a platform capture control, not a defense against a compromised device.
 
 ### Easy-access follow-up
 
-The initial audit temporarily disabled new ZIP retention. The user's requested
-easy-access workflow is restored: original password-protected ZIPs remain
-device-encrypted and mapped by remote/settings identity; each new app session
-still needs the ZIP password. New unencrypted ZIPs are not retained in session
-mode. Credential-package tests cover retained association recovery, wrong-password
-retry, password-only unlock, automatic session-import retention and rejection of
-unencrypted ZIP persistence. The native report above predates this follow-up;
-its screen and revocation protections are unchanged.
+Session-only imports retain original password-protected ZIPs under device
+encryption for future password-only unlocking. Decoded credentials and passwords
+remain in memory. Credential-package tests cover retained ZIP recovery, Settings
+autosave isolation, wrong-password retry and unencrypted ZIP rejection.
+Existing saved vaults remain until explicitly forgotten. The native report above
+predates this follow-up; its screen and revocation protections are unchanged.
 
 ## Mobile Folder Hub visibility and Settings unlocking
 
@@ -722,3 +717,14 @@ and defaults to preview. Explicit editor choices retain editing through the
 use the feature-owned formatted Markdown input and the existing source buffer,
 with one visible surface in preview, Formatted or Source mode. Suspending a private
 session retires its formatted WebView and restores its selected mode on resume.
+
+## Recursive filename search
+
+Desktop CryptResources supplies search_entries using one recursive encrypted
+lsjson listing per query, with cancellation and a 64 MiB output bound. It checks
+the physical subtree for links and special files before listing and retains
+decrypted mappings in RAM. Output overflow fails visibly. Mobile CryptFiles
+decodes each listed child once and constructs metadata from its known physical
+entry, avoiding repeated native re-encoding calls. Shared browser search waits
+400 ms after the last edit and visits the full subtree by default; the former
+10,000-entry scan cutoff no longer hides matches in large collections.

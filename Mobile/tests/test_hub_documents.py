@@ -55,7 +55,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIs(frame.main.children[0], app.folder_source_tabs)
         self.assertIs(frame.main.children[1].children[0], credential_row)
         actions = app.folder_transfers_button.parent
-        self.assertEqual(list(actions.children), [app.folder_transfers_button, app.folder_refresh_button, app.folder_add_share_button])
+        self.assertEqual(list(actions.children), [app.folder_transfers_button])
         app.transfer_busy = False
         app.transfer_notification = True
         app.transfer_complete = True

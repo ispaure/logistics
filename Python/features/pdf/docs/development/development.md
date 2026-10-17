@@ -58,3 +58,26 @@ text extraction APIs or additional native mobile wheels.
 PDF tests cover real embedded text, repeated matches, case handling, no matches,
 result limits, next/previous wrapping, desktop navigation, and mobile search over
 local, remote and offline LocalCrypt sessions.
+
+## Mobile opening and compact controls
+
+PrivateSessions initializes the cloud/provider controls without presenting them
+before opening its first document. This allows local PDFs to open from a cold
+Documents session. Page jump and PDF search share a collapsible Pages & search
+panel. PDFCanvas specializes the shared ImageCanvas with vertical paging.
+Tapping toggles fullscreen; the ReadingFrame hides header/footer/navigation and
+enables the shared hold magnifier only while fullscreen. Page replacement keeps
+that eligibility, and disposal clears both callbacks and the lens. Swipes at fit
+scale work in both modes; pinch/pan and hold/tap arbitration use the same native
+backends as comics. Fullscreen removes reader margins and fits the entire page
+using the smaller viewport-to-image scale factor, preserving aspect ratio. The
+native PDF probe checks actual rendered bounds and centering for portrait and
+landscape pages on both platforms, alongside fullscreen gestures and the lens.
+`Mobile/native_tests/tests/logisticsmobile/pdf_probe.py` exercises actual platform
+rasterization, navigation, search and memory release in an isolated test app.
+
+Native verification on 2026-10-17 passed PDFKit and Android PdfRenderer opening,
+rasterization, page jumps, embedded-text search, reading mode and memory release.
+Android bitmap background fill explicitly uses Chaquopy jint(-1), preventing the
+long color-space overload from raising Invalid ID: 63. Reports and screenshots
+are in the root development mobile-evidence/2026-10-17-pdf-search folder.

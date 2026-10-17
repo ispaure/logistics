@@ -189,6 +189,25 @@ class ResumeLockTests(unittest.TestCase):
         self.privacy.lock_password.value = password
         self.app.loop.run_until_complete(self.privacy.unlock())
 
+    def test_lock_names_credential_files_and_updates_remaining_password_prompt(self):
+        self.gate.credential_name = 'Personal.zip'
+        other = ResumePassword('work-password', credential_name='Work.zip')
+        self.app.private_sessions = SimpleNamespace(controllers={
+            'other': SimpleNamespace(privacy_gate=other)})
+        self.privacy.conceal()
+        self.privacy.reveal()
+        self.assertEqual(self.privacy.lock_credential.text, 'Personal.zip\nWork.zip')
+        self.assertEqual(self.privacy.lock_icon.text, '🔒')
+        self.assertEqual(self.privacy.lock_button.action_role, 'primary')
+        self.unlock('wrong')
+        self.assertEqual(self.privacy.lock_credential.text, 'Personal.zip\nWork.zip')
+        self.unlock('session-password')
+        self.assertEqual(self.privacy.lock_credential.text, 'Work.zip')
+        self.assertEqual(self.privacy.lock_hint.text, 'Enter the password for this credential file.')
+        self.assertIs(self.app.main_window.content, self.privacy.lock_view)
+        self.unlock('work-password')
+        self.assertIs(self.app.main_window.content, self.original)
+
     def test_ios_lock_root_tracks_safe_area_and_restores_navigation_layout(self):
         impl = self.app.main_window._impl
         insets = SimpleNamespace(top=62, bottom=34, left=0, right=0)

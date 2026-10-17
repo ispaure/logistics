@@ -158,6 +158,10 @@ class PDFReaderTests(QtTestCase):
     def test_desktop_search_navigates_wraps_and_clears(self):
         from features.pdf.ui.reader import PDFWindow
         window = PDFWindow('search.pdf', pdf_bytes())
+        self.assertTrue(window.search.isHidden())
+        window.show_find()
+        self.assertFalse(window.search.isHidden())
+        self.assertTrue(window.find_button.isChecked())
         search = window.search
         search.input.setText('needle')
         search.find(1)

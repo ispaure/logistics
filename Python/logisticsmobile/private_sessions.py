@@ -190,6 +190,11 @@ class PrivateSessions:
 
     async def open(self, copies, key, *, prepared=None, destination='documents', privacy_gate=None, edit=False):
         from .files_ui import local_read_available
+        if not hasattr(self.app, 'cloud_view'):
+            self.app.show_cloud(present=False)
+            restore = getattr(self.app, 'cloud_restore_task', None)
+            if restore is not None:
+                await restore
         independent = self.app.cloud_busy and local_read_available(self.app, private=True) and getattr(copies, 'offline', False)
         if self.app.cloud_busy and not independent:
             return False

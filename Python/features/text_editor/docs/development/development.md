@@ -171,3 +171,19 @@ Desktop widgets and controllers live in feature-owned `ui/`. Registration stays 
 ## Mobile source manifest
 
 `../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.
+
+## Mobile Markdown image resolution
+
+Folder-backed reader stores expose their rooted `provider` and the reader's
+relative `key`. The mobile host builds a per-render image source from this pair
+for both preview and formatted editing. Path normalization permits parent paths
+within the provider root, rejects external/absolute paths and delegates all I/O
+to the provider. Images are validated before embedding; cached entries recheck
+provider revisions and credential access. LocalCrypt uses the provider's native
+range/decryption stream without creating plaintext files.
+
+The formatted editor renders images inside protected inline spans while retaining
+Markdown syntax for serialization. Wiki embeds retain their exact block source.
+Missing images fall back to alt text. Tests in `Mobile/tests/test_markdown_images.py`
+and `test_markdown_editor.py` cover rooted paths, WebP/PNG/JPEG, encrypted-provider
+reads, revoked access and source preservation.

@@ -96,6 +96,7 @@ class ProviderUI(FilesUI):
 
     def clear_private_catalog(self):
         self.hub_crypt_locations = []
+        self.hub_crypt_roots = {}
         if hasattr(self, 'remote_item_view'):
             self.remote_item_password.value = ''
             for child in list(self.remote_item_view.children):
@@ -179,7 +180,8 @@ class ProviderUI(FilesUI):
             from commonUtils.ui.native.image_canvas import ImageCanvas
             if reader.kind == '.pdf':
                 from features.pdf.mobile.canvas import PDFCanvas
-                view.crypt_image = PDFCanvas(on_page=self.swipe_crypt_page, style=Pack(flex=1))
+                view.crypt_image = PDFCanvas(on_page=self.swipe_crypt_page,
+                    on_toggle=self.toggle_private_reading_mode, style=Pack(flex=1))
             else:
                 view.crypt_image = ImageCanvas(on_page=self.swipe_crypt_page,
                     page_swipes_at_edges=reader.kind in {'.cbz', '.zip'},
@@ -423,7 +425,7 @@ class ProviderUI(FilesUI):
         comic = view.crypt_reader.kind in {'.cbz', '.zip'}
         for child in view.crypt_content.children:
             if hasattr(child, 'magnifier_enabled'):
-                child.magnifier_enabled = comic and getattr(view, 'crypt_immersive', True)
+                child.magnifier_enabled = (comic or view.crypt_reader.kind == '.pdf') and getattr(view, 'crypt_immersive', False)
         view._provider_displayed_index = view.crypt_reader.labels.index(view.crypt_page.value)
         if view.crypt_reader.kind == '.pdf' and hasattr(view, 'pdf_number'):
             view.pdf_number.value = str(view._provider_displayed_index + 1)
@@ -683,7 +685,7 @@ class ProviderUI(FilesUI):
         if pdf_tools is not None:
             pdf_tools.close()
         comic = self.crypt_reader.kind in {'.cbz', '.zip'}
-        self.reading_frame.set_immersive(self.crypt_immersive, comic=comic)
+        self.reading_frame.set_immersive(self.crypt_immersive, comic=comic, image=self.crypt_reader.kind == '.pdf')
         self.refresh_transfer_status()
         self.resume_crypt()
 
@@ -732,10 +734,11 @@ class ProviderUI(FilesUI):
             self._private_preview_pending = None
             if self.crypt_reader is not reader or reader is None:
                 return
-            from .preview import markdown_preview
+            from .preview import markdown_preview, reader_image_source
             try:
                 preview.set_content('https://logistics.invalid/live/',
-                    markdown_preview(widget.value, int(self.preferences.values['font_size'])))
+                    markdown_preview(widget.value, int(self.preferences.values['font_size']),
+                        image_source=reader_image_source(self._crypt_reader_store, reader)))
             except ValueError as error:
                 self.crypt_title.text = private_label(str(error))
         self._private_preview_pending = self.loop.call_later(.25, render)
@@ -750,10 +753,11 @@ class ProviderUI(FilesUI):
             if not getattr(self.crypt_reader, 'read_only', False):
                 self.show_private_markdown_editor()
             return
-        from .preview import markdown_preview
+        from .preview import markdown_preview, reader_image_source
         from uuid import uuid4
         try:
-            content = markdown_preview(self.crypt_text.value, int(self.preferences.values['font_size']))
+            content = markdown_preview(self.crypt_text.value, int(self.preferences.values['font_size']),
+                image_source=reader_image_source(self._crypt_reader_store, self.crypt_reader))
         except ValueError as error:
             self.crypt_title.text = private_label(str(error))
             return
@@ -784,7 +788,9 @@ class ProviderUI(FilesUI):
             if (self.crypt_reader is reader and reader is not None and self.active_host
                     and formatted.view in self.crypt_content.children):
                 self.crypt_text.value = text
-        formatted = FormattedMarkdownInput(changed, font_size=int(self.preferences.values['font_size']))
+        from .preview import reader_image_source
+        formatted = FormattedMarkdownInput(changed, font_size=int(self.preferences.values['font_size']),
+            image_source=lambda: reader_image_source(self._crypt_reader_store, reader))
         try:
             formatted.load(self.crypt_text.value)
         except ValueError as error:

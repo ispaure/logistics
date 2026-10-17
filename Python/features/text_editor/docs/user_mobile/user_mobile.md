@@ -11,3 +11,19 @@ for supported formatting and syntax that uses Source mode.
 
 Formatting controls use the same icons as desktop, including Bold, Italic, Undo,
 Redo and the Format menu. Buttons keep accessible names and tooltips.
+
+## Images in folder-backed Markdown
+
+Markdown opened from Local or LocalCrypt displays static WebP, PNG and JPEG
+images in preview and formatted editing. Use a path relative to the Markdown
+file, for example `![Photo](images/photo.webp)` or `![[images/photo.webp]]`.
+Parent-folder paths work within the same storage root. Bare filenames refer to
+the Markdown file's folder; there is no vault-wide filename search.
+
+LocalCrypt images are decrypted into memory for display; no decrypted image file
+or separate import is created. Missing, locked, unsupported or oversized images
+show their alternative text. Images are limited to 8 MiB and 16 megapixels each,
+with a 16 MiB image-data budget per render. Animated WebP is unsupported.
+Network URLs and paths outside the current provider root are not loaded.
+Standalone imported Markdown without its original folder cannot resolve sibling
+images; open the file through Local or LocalCrypt to retain folder access.

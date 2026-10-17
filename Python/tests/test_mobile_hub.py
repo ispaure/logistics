@@ -1,5 +1,6 @@
 """Mobile preferences and offline preview contracts, runnable on real devices."""
 from pathlib import Path
+import json
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -24,6 +25,29 @@ class MobileHubTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 loaded.save(font_size='200')
             self.assertEqual(store.path.read_bytes(), data)
+
+    def test_legacy_visibility_never_survives_restart_or_save(self):
+        with TemporaryDirectory() as directory:
+            store = Preferences(Path(directory).resolve())
+            store.path.write_text('[Mobile]\nshow_legacy=true\nfont_size=20\n')
+            store.reload()
+            self.assertEqual(store.values['show_legacy'], 'false')
+            self.assertEqual(store.values['font_size'], '20')
+            store.save(show_legacy='true', font_size='22')
+            self.assertIn('show_legacy=false', store.path.read_text().replace(' ', ''))
+            self.assertEqual(Preferences(store.path.parent).values['show_legacy'], 'false')
+
+    def test_preference_writes_filter_session_only_credential_associations(self):
+        with TemporaryDirectory() as directory:
+            store = Preferences(Path(directory).resolve())
+            saved = dict(zip='Saved.zip', remotes=['Saved remote'], session_only=False)
+            transient = dict(zip='Session.zip', remotes=['Private remote'], session_only=True)
+            store.save(remote_packages=json.dumps([saved, transient]))
+            self.assertEqual(json.loads(store.values['remote_packages']), [saved])
+            self.assertNotIn('Session.zip', store.path.read_text())
+            self.assertNotIn('Private remote', store.path.read_text())
+            store.save(font_size='23')
+            self.assertEqual(json.loads(Preferences(store.path.parent).values['remote_packages']), [saved])
 
     def test_mobile_preferences_preserve_invalid_and_concurrent_files(self):
         with TemporaryDirectory() as directory:

@@ -131,7 +131,7 @@ class CloudClient:
         gate = None
         if action in {'import', 'add_smb'} and values.get('session_only'):
             from .session_privacy import ResumePassword
-            gate = ResumePassword(values.get('password', ''))
+            gate = ResumePassword(values.get('password', ''), credential_name=label)
         with CloudClient._state_lock:
             epoch = info.get('epoch') if isinstance(info, dict) else None
             if epoch is not None and epoch <= CloudClient._state_epoch:

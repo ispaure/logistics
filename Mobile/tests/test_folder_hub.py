@@ -97,7 +97,7 @@ class FolderHubTests(unittest.TestCase):
             self.addCleanup(app.loop.close)
             self.addCleanup(app.main_window.close)
             app.show_locations()
-            def discover():
+            def discover(**kwargs):
                 self.assertNotEqual(get_ident(), ui_thread)
                 started.set()
                 if not release.wait(3):
@@ -105,14 +105,13 @@ class FolderHubTests(unittest.TestCase):
                 return {}
             async def check():
                 with patch.object(app, 'existing_crypt_locations', side_effect=discover) as query:
-                    task = asyncio.create_task(app.refresh_folder_hub())
+                    task = asyncio.create_task(app.refresh_hub_crypt_locations())
                     try:
                         for _ in range(100):
                             if started.is_set():
                                 break
                             await asyncio.sleep(.01)
                         self.assertTrue(started.is_set())
-                        self.assertIn('Refreshing', app.folder_loading_status.text)
                         app.choose_folder('All files')
                         self.assertEqual(app.routes.screens['files'][-1][0], 'folder-options')
                         self.assertFalse(task.done())
@@ -122,6 +121,65 @@ class FolderHubTests(unittest.TestCase):
                         await task
                     self.assertEqual(app.routes.screens['files'][-1][0], 'folder-options')
             app.loop.run_until_complete(check())
+
+    def test_refresh_uses_loaded_sources_during_transfer_and_updates_only_changed_rows(self):
+        from logisticsmobile.app import LogisticsMobile
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            app.show_cloud(present=False)
+            app.cloud_remote.items = ['Server-Books']
+            app.show_locations()
+            app.change_folder_source('Local')
+            app.folder_collapsed.add(('Server',))
+            listing = app.folder_list
+            rows = list(listing.children)
+            generation = app.navigation_generation
+            app.cloud_busy = app.transfer_busy = True
+            with patch.object(app, 'existing_crypt_locations', side_effect=AssertionError('Refresh entered bridge')), \
+                    patch.object(app, 'refresh_hub_crypt_locations', new=AsyncMock(side_effect=AssertionError('Refresh rediscovered credentials'))), \
+                    patch.object(app, 'show_locations', side_effect=AssertionError('Refresh rebuilt page')):
+                self.assertTrue(app.loop.run_until_complete(app.refresh_folder_hub()))
+                self.assertEqual(list(listing.children), rows)
+                local = app.private_root / 'LocalFiles' / 'New folder'
+                local.mkdir(parents=True)
+                self.assertTrue(app.loop.run_until_complete(app.refresh_folder_hub()))
+                self.assertIn('New folder', app.folder_buttons)
+                local.rmdir()
+                self.assertTrue(app.loop.run_until_complete(app.refresh_folder_hub()))
+                self.assertNotIn('New folder', app.folder_buttons)
+            self.assertIs(app.folder_list, listing)
+            self.assertEqual(app.navigation_generation, generation)
+            self.assertEqual(app.folder_source, 'Local')
+            self.assertIn(('Server',), app.folder_collapsed)
+            self.assertIn('Server-Books', app.folder_picker_choices)
+
+    def test_refresh_checks_cached_crypt_identity_locally_without_native_requests(self):
+        from logisticsmobile.app import LogisticsMobile
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            app.show_locations()
+            app.hub_crypt_roots = {'LocalCrypt: Secret': ('Secret', 'a' * 64)}
+            path = app.private_root / 'LocalCryptFolders' / ('a' * 64)
+            with patch.object(app, 'existing_crypt_locations', side_effect=AssertionError('Native discovery')):
+                self.assertTrue(app.loop.run_until_complete(app.refresh_folder_hub()))
+                self.assertNotIn('Secret', app.folder_picker_choices)
+                path.mkdir(parents=True)
+                (path / 'encrypted-file').write_bytes(b'ciphertext')
+                self.assertTrue(app.loop.run_until_complete(app.refresh_folder_hub()))
+                self.assertEqual(app.folder_picker_choices['Secret']['source'], 'LocalCrypt')
+                (path / 'encrypted-file').unlink()
+                self.assertTrue(app.loop.run_until_complete(app.refresh_folder_hub()))
+                self.assertNotIn('Secret', app.folder_picker_choices)
+            app.clear_private_catalog()
+            self.assertEqual(app.hub_crypt_roots, {})
 
     def test_busy_online_tap_has_feedback_without_credential_lookup_and_local_stays_available(self):
         from logisticsmobile.app import LogisticsMobile
@@ -217,6 +275,7 @@ class FolderHubTests(unittest.TestCase):
             self.addCleanup(app.main_window.close)
             app.show_locations()
             started, release = asyncio.Event(), asyncio.Event()
+            self.assertFalse(app.folder_loading_box.children)
             unlock_view = toga.Box(children=[toga.Label('Unlock matching credentials')])
             async def open_folder(entry):
                 started.set()
@@ -228,12 +287,15 @@ class FolderHubTests(unittest.TestCase):
                     task = asyncio.create_task(app.browse_hub_folder('All files'))
                     await started.wait()
                     self.assertIn('Opening Local folder', app.folder_picker_status.text)
+                    self.assertEqual(list(app.folder_loading_box.children),
+                                     [app.folder_loading_status, app.folder_loading_progress])
                     self.assertFalse(await app.browse_hub_folder('All files'))
                     self.assertEqual(opened.call_count, 1)
                     release.set()
                     self.assertFalse(await task)
                     self.assertIn(unlock_view, app.body.children)
                     self.assertFalse(app._folder_opening)
+                    self.assertFalse(app.folder_loading_box.children)
             app.loop.run_until_complete(check())
 
     def test_remote_browsing_does_not_add_contents_to_hub_groups(self):
@@ -331,20 +393,21 @@ class FolderHubTests(unittest.TestCase):
                 self.assertEqual(app.folder_credential.value, 'All')
                 self.assertEqual(app.native_host.labels[app.native_host.destinations.index('files')], 'Folder Hub')
                 self.assertEqual(view.children[2].children,
-                                 [app.folder_transfers_button, app.folder_refresh_button, app.folder_add_share_button])
+                                 [app.folder_transfers_button])
                 self.assertIsInstance(view.children[-1], toga.ScrollContainer)
                 self.assertIs(view.children[-1].content, app.folder_list)
                 self.assertEqual(set(app.folder_buttons), {'Loaded drive'})
                 self.assertFalse(any(isinstance(child, toga.Selection) for child in view.children))
-                self.assertIn('↻', app.folder_refresh_button.text)
+                self.assertFalse(hasattr(app, 'folder_refresh_button'))
                 self.assertIn('Loaded drive', app.folder_picker_choices)
                 app.cloud_remote.items = ['Loaded drive', 'Restored later']
                 app.set_cloud_busy(False)
                 self.assertIn('Restored later', app.folder_picker_choices)
                 self.assertIn('Restored later', app.folder_buttons)
-                # Refresh discovers new local folders in the visible list.
+                # Returning to Folder Hub discovers local changes automatically.
                 (root.parent / 'Added later').mkdir()
-                app.loop.run_until_complete(app.folder_refresh_button.on_press())
+                app.show_home()
+                app.show_locations()
                 self.assertNotIn('Added later', app.folder_buttons)
                 app.change_folder_source('Local')
                 self.assertIn('Added later', app.folder_buttons)
@@ -352,8 +415,7 @@ class FolderHubTests(unittest.TestCase):
                 self.assertFalse(app.routes.screens['files'])
                 self.assertIn('Comics', app.folder_picker_choices)
                 # A newly imported credential is reflected without rebuilding the root.
-                app.preferences.save(remote_packages=json.dumps([dict(zip='Loaded.zip',
-                    remotes=['Loaded drive'], session_only=True)]))
+                app.remember_credential_association('Loaded.zip', ['Loaded drive'], session_only=True)
                 app.set_cloud_busy(False)
                 self.assertIn('Loaded', app.folder_credentials)
                 app.folder_credential.value = 'Loaded'
@@ -660,6 +722,7 @@ class FolderHubTests(unittest.TestCase):
             self.assertEqual([kind for kind, _ in hub_entries(root, store.jobs, ['Secret'])[0][2]], ['Remote'])
             preferences = Preferences(root)
             preferences.save(remote_packages=json.dumps([dict(zip='credentials.zip', remotes=['Secret'], session_only=True)]))
+            self.assertNotIn('credentials.zip', preferences.path.read_text())
             restored = Preferences(root)
             self.assertEqual(json.loads(restored.values['remote_packages']), [])
             self.assertNotIn('credentials.zip', restored.path.read_text())

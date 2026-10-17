@@ -169,16 +169,19 @@ class MultiPackagePrivacyTests(unittest.TestCase):
         client.publish_credentials('import', dict(package_name='Legacy.zip', session_only=True, password='one'),
                                    dict(epoch=1, packages=[saved, first]))
         gate = client.session_privacy
+        self.assertEqual(gate.credential_name, 'Legacy.zip')
         client.publish_credentials('vault_open', {}, dict(epoch=2, packages=[saved, first]))
         self.assertIs(client.session_privacy, gate)
         client.publish_credentials('import', dict(package_name='Work.zip', session_only=True, password='two'),
                                    dict(epoch=3, packages=[saved, first, second]))
         self.assertEqual(len(client.session_privacies), 2)
+        self.assertEqual([gate.credential_name for gate in client.session_privacies], ['Legacy.zip', 'Work.zip'])
         self.assertTrue(client.session_privacies[0].verify('one'))
         self.assertTrue(client.session_privacies[1].verify('two'))
         client.publish_credentials('import', dict(package_name='Third.zip', session_only=False),
                                    dict(epoch=4, packages=[saved, first, second, dict(package_name='Third.zip', saved=True, remotes=['Third'])]))
         self.assertEqual(len(client.session_privacies), 2)
+        self.assertEqual([gate.credential_name for gate in client.session_privacies], ['Legacy.zip', 'Work.zip'])
         client.publish_credentials('clear', {}, dict(epoch=5, packages=[]))
         self.assertFalse(client.session_privacies)
         self.assertFalse(client.package_records)

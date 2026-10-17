@@ -20,6 +20,11 @@ class RemoteBrowser(ResourceBrowser):
         # Only filter entries already listed; never start the recursive scanner.
         self.search_timer.stop()
         self.search_pending = False
+        self.search_timer.start()
+
+    def _start_search(self):
+        if self.closing:
+            return
         self.model.set_filter(self.filter.text().strip(), self.navigation.directory)
         self.views.set_root(self.navigation.directory)
 
