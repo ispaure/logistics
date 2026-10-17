@@ -448,7 +448,7 @@ async def exercise_localcrypt(app, passed):
     browser.close_search_button.on_press()
     while browser.tasks:
         await asyncio.gather(*tuple(browser.tasks))
-    assert browser.search.value == '' and browser.search_panel not in browser.widget.children
+    assert browser.search.value == '' and browser.search_panel in browser.widget.children
     folder = next(item for item in browser.entries if item.label == 'navigation')
     await browser.buttons[folder.identity].on_press()
     assert app.file_path == 'navigation' and browser.back_button.enabled
