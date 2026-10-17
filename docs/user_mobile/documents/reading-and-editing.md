@@ -5,9 +5,10 @@
 Open EPUB and comic sessions now give content the main area, with compact page
 navigation and a format-specific Actions menu. EPUB offers contents, bookmarks,
 text appearance, chapter search and read-aloud; comics offer page navigation,
-page layout, fit and neighboring-comic actions where supported. EPUB reading
-mode hides those controls and keeps a visible Restore controls
-button. Comics open with controls hidden and zero page margins; tap the page to
+page layout, fit and neighboring-comic actions where supported. EPUB pages turn using Previous/Next or horizontal swipes, with no vertical
+scrolling. Its hamburger opens a nested chapter sidebar without a search field.
+Fullscreen hides navigation and reading controls and keeps a visible
+**Show reading controls** button. Comics open with controls hidden and zero page margins; tap the page to
 show or hide reading controls. Native navigation bars hide with comic controls
 and return when controls are shown or when leaving the reader. EPUB appearance offers supported font sizes, margins and system/light/dark
 colors without changing the current chapter. Progress remains chapter/page based.
@@ -31,6 +32,18 @@ retain their original Markdown; editing a block can normalize its spelling.
 **Preview** shows the current draft, and saving remains explicit. Provider-backed
 Markdown uses the same single-surface editor and retains its existing save rules.
 See [Text and Markdown](documents.md#text-and-markdown) for saving and private drafts.
+
+## Markdown read-aloud
+
+Tap **Read aloud** in a Markdown preview or vault note. Choose an installed
+offline system voice and speed, then **Play**. Selected text is read when present;
+otherwise the rendered note is read from the beginning. **Pause** and **Resume**
+repeat the current sentence; **Stop** ends playback and **Close** hides controls.
+Playback has accessible icons, including back/forward **15** controls. These
+estimate 15 seconds from word count and the chosen speed; skipping while paused
+keeps it paused. Speech stops when leaving the viewer, switching notes, closing the document or
+locking private content. Install an offline voice in system settings if needed.
+Private text stays in memory and is passed only to the system speech engine.
 
 ## PDF documents
 

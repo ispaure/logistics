@@ -61,7 +61,8 @@ class NativeBrowserTests(unittest.TestCase):
                 calls.append(folder)
                 return matches if folder == 'sub' else [dict(path='sub', name='sub', directory=True)]
             provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path, list=listing)
-            browser = FileBrowser()
+            opened = []
+            browser = FileBrowser(open_file=opened.append)
             async def check():
                 browser.set_entries(provider, '', listing('', cancelled=lambda: False))
                 browser.search.value = 'match'
@@ -73,6 +74,16 @@ class NativeBrowserTests(unittest.TestCase):
                 self.assertEqual(len(browser.buttons), 5)
                 self.assertIn('/virtual/sub/match-10004.txt', [str(key) for key in browser.buttons])
                 self.assertFalse(browser.next.enabled)
+                for mode in ('List', 'Tiles'):
+                    browser.mode = mode
+                    browser.render()
+                    button = browser.buttons[Path('/virtual/sub/match-10004.txt')]
+                    self.assertEqual(button.text, 'match-10004.txt')
+                    await button.on_press()
+                    self.assertEqual(opened[-1]['path'], 'sub/match-10004.txt')
+                    if mode == 'List':
+                        self.assertFalse(any(isinstance(child, toga.Label)
+                            for row in browser.items.children for child in row.children[0].children))
             try:
                 app.loop.run_until_complete(check())
             finally:

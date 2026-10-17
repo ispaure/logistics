@@ -42,8 +42,8 @@ class ReaderChrome:
                 close=lambda: self.app.request_close_session(self.session.id))
         else:
             actions = [('Edit metadata…', self.show_book_metadata),
-                ('Contents and bookmarks…', self.show_reader_tools), ('Appearance…', self.show_reader_appearance),
-                ('Reading mode', self.toggle_reading_mode), ('Read aloud…', self.show_read_aloud),
+                ('Chapters and bookmarks…', self.show_reader_tools), ('Appearance…', self.show_reader_appearance),
+                ('Fullscreen', self.toggle_reading_mode), ('Read aloud…', self.show_read_aloud),
                 ('Find in chapter…', self.show_epub_search)]
         self.reader_actions = FeatureCommands(self.reader_actions_button, self, actions, self.show_reader_tools)
         from .workspace_navigation import menu_button
@@ -56,6 +56,7 @@ class ReaderChrome:
         else:
             self.reader_header = toga.Box(children=[browser,
                 toga.Box(style=Pack(flex=1)),
+                icon_button('fullscreen', 'Enter fullscreen', on_press=self.toggle_reading_mode),
                 icon_button('appearance', 'Reading appearance', on_press=self.show_reader_appearance),
                 self.reader_actions_button], style=Pack(direction=ROW))
         self.chapter_selector.style.flex = 1
@@ -64,7 +65,17 @@ class ReaderChrome:
         self.reader_restore = toga.Button('Show reading controls', on_press=self.toggle_reading_mode, style=Pack(height=48))
         self.book_status.style.font_size = 12
         self.reader_immersive = False
-        self.reading_frame = ReadingFrame(self.book_content,
+        content = self.book_content
+        if not comic:
+            from commonUtils.ui.native.adaptive import AdaptiveSidebar
+            self.chapter_rows = toga.Box(style=Pack(direction=COLUMN))
+            tree = toga.Box(children=[toga.Label('Chapters', style=Pack(font_size=20)),
+                toga.ScrollContainer(content=self.chapter_rows, horizontal=False, style=Pack(flex=1)),
+                self.bookmark_button, self.bookmark_selector], style=Pack(direction=COLUMN, flex=1, margin=8))
+            self.chapter_sidebar = AdaptiveSidebar(tree, self.book_content, label='Browse book chapters')
+            self.chapter_collapsed = set()
+            content = self.chapter_sidebar.view
+        self.reading_frame = ReadingFrame(content,
             [self.reader_header, self.reader_footer, self.book_status],
             margin=16 if comic else 0, restore=self.reader_restore)
         self.library_view = self.reading_frame.widget
@@ -72,15 +83,42 @@ class ReaderChrome:
         if comic:
             self.reader_tools_view = comic_pages(self.chapter_selector, self.show_library)
         else:
-            self.reader_tools_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
-                toga.Label(tools_title, style=Pack(font_size=20, margin_bottom=8)),
-                self.chapter_selector, self.bookmark_button, self.bookmark_selector,
-                toga.Button('Return to reading', on_press=self.show_library, style=Pack(height=48))],
-                style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+            self.reader_tools_view = tree
+
+    def reflow_chapters(self):
+        sidebar = getattr(self, 'chapter_sidebar', None)
+        if sidebar is not None:
+            width = 0 if self.reader_immersive else self.app.adaptive.content_width(self.presentation_destination, margin=0)
+            sidebar.reflow(width)
+
+    def render_chapters(self):
+        if not hasattr(self, 'chapter_sidebar'):
+            return
+        from features.books.mobile.navigation import ChapterList
+        from types import SimpleNamespace
+        entries = list(self.contents_choices.values()) or [
+            SimpleNamespace(label=label, depth=0, index=index, fragment='')
+            for index, label in enumerate(self.chapter_labels)]
+        async def choose(entry):
+            self._epub_target = entry.fragment
+            self.chapter_sidebar.show_detail()
+            await self.open_reader_destination(entry.index)
+        def activate(entry):
+            return self.loop.create_task(choose(entry))
+        self.chapter_tree = ChapterList(entries, activate)
+        self.chapter_rows.clear()
+        self.chapter_rows.add(self.chapter_tree.rows)
+        self.reflow_chapters()
 
     def show_reader_tools(self, widget=None, **kwargs):
-        title = 'Comic pages' if self.session.kind == 'comic' else 'Contents and bookmarks'
-        self.show_view(self.reader_tools_view, reader_route='tools', title=title)
+        if self.session.kind == 'comic':
+            self.show_view(self.reader_tools_view, reader_route='tools', title='Comic pages')
+        else:
+            if self.reader_immersive:
+                self.set_reading_mode(False, present=False)
+            self.reflow_chapters()
+            self.chapter_sidebar.toggle()
+            self.show_library()
 
     async def show_comic_info(self, widget=None, **kwargs):
         if self.book_reader is None or self.session.kind != 'comic':
@@ -95,8 +133,11 @@ class ReaderChrome:
 
     def set_reading_mode(self, immersive, *, present=True):
         self.reader_immersive = immersive
-        comic = self.book_record is not None and self.book_record['kind'] == 'comic'
+        comic = self.session.kind == 'comic'
         self.reading_frame.set_immersive(immersive, comic=comic)
+        if not comic:
+            self.reflow_chapters()
+            self.chapter_sidebar.show_detail()
         self.refresh_transfer_status()
         if present:
             self.show_library()

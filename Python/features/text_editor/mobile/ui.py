@@ -216,6 +216,9 @@ class TextEditorView:
                 self.status.text = str(error)
 
     def dispose(self):
+        speech = getattr(self, "markdown_speech", None)
+        if speech is not None:
+            speech.close()
         self.editor.dispose()
         self.actions.dispose()
         if self.formatted is not None:

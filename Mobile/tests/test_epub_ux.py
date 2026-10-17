@@ -83,14 +83,14 @@ class EpubUXTests(unittest.TestCase):
                     with patch.object(app.adaptive, 'show_browser') as browse:
                         menu.on_press()
                         browse.assert_not_called()
-                    label = next(label for label, entry in owner.contents_choices.items() if entry.index == 1)
-                    owner.chapter_selector.value = label
-                    await until(lambda: show.called and not owner.book_busy)
+                    entry = next(entry for entry in owner.contents_choices.values() if entry.index == 1)
+                    await owner.chapter_tree.choose(entry)
+                    await until(lambda: show.called and not owner.book_busy and owner.book_record['position'] == 1)
                     self.assertEqual(owner.book_record['position'], 1)
                     show.reset_mock()
                     owner.show_reader_tools()
                     owner.bookmark_selector.value = next(iter(owner.epub_bookmark_choices))
-                    await until(lambda: show.called and not owner.book_busy)
+                    await until(lambda: show.called and not owner.book_busy and owner.book_record['position'] == 0)
                     self.assertEqual(owner.book_record['position'], 0)
                     self.assertEqual(owner.epub_offset, 7)
                     self.assertIn('Chapter 1/2', owner.page_footer.spacer.text)

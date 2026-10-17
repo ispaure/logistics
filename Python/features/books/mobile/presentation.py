@@ -13,7 +13,26 @@ SCRIPT = r'''
  const marker = document.querySelector('meta[name="logistics-reader-root"]');
  if (!marker || marker.content !== options.root) return;
  if (window.reader && window.reader.dispose) window.reader.dispose();
- let anchor = options.offset, timer = null, restoring = false, selectedCache = null, restoreUntil = 0;
+ const pages = document.createElement('div');
+ while(document.body.firstChild) pages.appendChild(document.body.firstChild);
+ const viewport=document.createElement('div');viewport.appendChild(pages);document.body.appendChild(viewport);
+ Object.assign(viewport.style,{overflow:'hidden',position:'relative',width:'100%'});
+ document.documentElement.style.overflow='hidden';
+ Object.assign(document.body.style,{overflow:'hidden',height:'100vh',boxSizing:'border-box'});
+ Object.assign(pages.style,{columnFill:'auto',columnGap:'0px',position:'relative'});
+ let page=0, pageWidth=1, pageCount=1, touch=null, disposed=false;
+ const layout=()=>{
+   const css=getComputedStyle(document.body);
+   pageWidth=Math.max(1,document.body.clientWidth-parseFloat(css.paddingLeft)-parseFloat(css.paddingRight));
+   pages.style.width=pageWidth+'px';pages.style.columnWidth=pageWidth+'px';
+   pages.style.height=Math.max(1,innerHeight-parseFloat(css.paddingTop)-parseFloat(css.paddingBottom))+'px';
+   viewport.style.height=pages.style.height;
+   for(const image of pages.querySelectorAll('img')) Object.assign(image.style,{maxHeight:pages.style.height,maxWidth:'100%',objectFit:'contain',breakInside:'avoid'});
+   pageCount=Math.max(1,Math.ceil((pages.scrollWidth-1)/pageWidth));
+ };
+ const place=value=>{page=Math.max(0,Math.min(pageCount-1,value));pages.style.transform='translateX('+(-page*pageWidth)+'px)';scrollTo(0,0);};
+ layout();
+ let anchor = options.offset, selectedCache = null;
  const nodes = () => {
    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
    const result = []; let n; while ((n = walk.nextNode())) result.push(n);
@@ -28,20 +47,22 @@ SCRIPT = r'''
    return list.length ? [list[list.length-1], list[list.length-1].length] : null;
  };
  const notify = (action, value) => {
-   window.location.href = options.root + action + '?offset=' + value + '&end=' + (scrollY >= document.documentElement.scrollHeight-innerHeight-2 ? '1' : '0');
+   window.location.href = options.root + action + '?offset=' + value + '&end=' + (page===pageCount-1 ? '1' : '0');
  };
  const visible = () => {
    let total = 0;
+   const bounds=document.body.getBoundingClientRect();
+   const left=bounds.left+parseFloat(getComputedStyle(document.body).paddingLeft), right=left+pageWidth;
    for (const node of nodes()) {
      if (!node.length) continue;
      const range = document.createRange(); range.selectNodeContents(node);
      const rects = [...range.getClientRects()];
-     if (rects.some(r => r.bottom > 16 && r.top < innerHeight)) {
+     if (rects.some(r => r.right > left+1 && r.left < right-1 && r.bottom > 0 && r.top < innerHeight)) {
        let lo = 0, hi = node.length;
        while (lo < hi) {
          const mid = Math.floor((lo+hi)/2);
          range.setStart(node, mid); range.setEnd(node, Math.min(mid+1,node.length));
-         if (range.getBoundingClientRect().bottom <= 16) lo = mid+1; else hi = mid;
+         if (range.getBoundingClientRect().right <= left+1) lo = mid+1; else hi = mid;
        }
        return total + lo;
      }
@@ -52,17 +73,12 @@ SCRIPT = r'''
  const seek = (offset, end=null) => {
    const p = point(offset); if (!p) return;
    selectedCache = end !== null ? {start:offset,end} : null;
-   restoring = true; restoreUntil=performance.now()+500; anchor = Math.max(0, offset);
+   anchor = Math.max(0, offset);
    const r = document.createRange(); r.setStart(...p); r.collapse(true);
-   scrollTo(0, Math.max(0, scrollY + r.getBoundingClientRect().top - 16));
+   const left=document.body.getBoundingClientRect().left+parseFloat(getComputedStyle(document.body).paddingLeft);
+   place(Math.floor((r.getBoundingClientRect().left-left+page*pageWidth+.5)/pageWidth));
    const selection = getSelection(); selection.removeAllRanges();
    if (end !== null) {const q=point(end,true); if(q){r.setEnd(...q);selection.addRange(r);}}
-   requestAnimationFrame(() => {restoring=false;});
- };
- const changed = () => {
-   if (restoring || performance.now()<restoreUntil) return;
-   clearTimeout(timer);
-   timer = setTimeout(() => {anchor=visible();notify('position',anchor);},150);
  };
  const selectedRange = () => {
      const s = getSelection();
@@ -73,31 +89,46 @@ SCRIPT = r'''
      const start = before.toString().length;
      return {start, end:start+r.toString().length};
  };
- const clearSelectionCache = () => {selectedCache=null;restoreUntil=0;restoring=false;};
+ const clearSelectionCache = () => {selectedCache=null;};
  const rememberSelection = () => {const range=selectedRange();if(range) selectedCache=range;};
- const resized = () => {const range=selectedRange() || selectedCache; if(range) seek(range.start,range.end); else seek(anchor);};
+ const resized = () => {const range=selectedRange() || selectedCache;layout();if(range) seek(range.start,range.end); else seek(anchor);};
+ const touchStart=e=>{const t=e.touches[0];touch=t?{x:t.clientX,y:t.clientY}:null;};
+ const touchMove=e=>{if(!selectedRange()) e.preventDefault();};
+ const touchEnd=e=>{
+   if(!touch || selectedRange()) return;
+   const t=e.changedTouches[0], dx=t.clientX-touch.x,dy=t.clientY-touch.y;touch=null;
+   if(Math.abs(dx)>45 && Math.abs(dx)>Math.abs(dy)*1.3) window.reader.turn(dx<0?1:-1);
+ };
+ const wheel=e=>{e.preventDefault();};
+ const key=e=>{if(['ArrowLeft','ArrowRight','PageUp','PageDown',' '].includes(e.key)){
+   e.preventDefault();window.reader.turn(['ArrowLeft','PageUp'].includes(e.key)?-1:1);
+ }};
+ document.addEventListener('touchstart',touchStart,{passive:true});
+ document.addEventListener('touchmove',touchMove,{passive:false});
+ document.addEventListener('touchend',touchEnd);
+ document.addEventListener('wheel',wheel,{passive:false});document.addEventListener('keydown',key);
  window.reader = {
    selection: () => selectedRange() || selectedCache,
+   pagination: () => ({index:page,count:pageCount,width:pageWidth,anchor}),
    seek,
    turn: direction => {
-     selectedCache=null;restoreUntil=0;restoring=false;getSelection().removeAllRanges();
-     const max = Math.max(0,document.documentElement.scrollHeight-innerHeight);
-     if ((direction>0 && scrollY>=max-2) || (direction<0 && scrollY<=2)) {
+     selectedCache=null;getSelection().removeAllRanges();
+     if ((direction>0 && page===pageCount-1) || (direction<0 && page===0)) {
        notify(direction>0?'next':'previous',visible()); return;
      }
-     scrollBy(0,direction*Math.max(80,innerHeight-32));
+     place(page+(direction>0?1:-1));
      anchor=visible();notify('position',anchor);
    },
-   dispose: () => {clearTimeout(timer);removeEventListener('scroll',changed);removeEventListener('resize',resized);document.removeEventListener('selectionchange',rememberSelection);removeEventListener('pointerdown',clearSelectionCache);removeEventListener('keydown',clearSelectionCache);selectedCache=null;}
+   dispose: () => {disposed=true;if(viewport.isConnected){while(pages.firstChild) viewport.before(pages.firstChild);viewport.remove();}document.removeEventListener('touchstart',touchStart);document.removeEventListener('touchmove',touchMove);document.removeEventListener('touchend',touchEnd);document.removeEventListener('wheel',wheel);document.removeEventListener('keydown',key);removeEventListener('resize',resized);document.removeEventListener('selectionchange',rememberSelection);removeEventListener('pointerdown',clearSelectionCache);removeEventListener('keydown',clearSelectionCache);selectedCache=null;}
  };
- addEventListener('scroll',changed,{passive:true});addEventListener('resize',resized);
+ addEventListener('resize',resized);
  document.addEventListener('selectionchange',rememberSelection);addEventListener('pointerdown',clearSelectionCache);addEventListener('keydown',clearSelectionCache);
  // Images can settle after WebView load. Reapply the initial anchor then.
  Promise.all([...document.images].map(i => i.complete ? Promise.resolve() : new Promise(r => {
    i.addEventListener('load',r,{once:true});i.addEventListener('error',r,{once:true});
- }))).then(() => seek(options.offset));
+ }))).then(() => {if(!disposed){layout();seek(options.offset);}});
  seek(options.offset);
- requestAnimationFrame(() => notify('position',anchor));
+ requestAnimationFrame(() => {if(!disposed) notify('position',anchor);});
 })();
 '''
 
@@ -160,6 +191,17 @@ class ChapterBridge:
 def chapter_view(content, view=None, *, offset=0, on_event=None, on_link=None):
     if view is None:
         view = toga.WebView(style=Pack(flex=1))
+    impl = getattr(view, '_impl', None)
+    native = getattr(impl, 'native', None)
+    from toga.platform import get_factory
+    backend = get_factory().WebView.__module__ if native is not None else ''
+    if backend.startswith('toga_iOS.'):
+        native.scrollView.scrollEnabled = False
+        native.scrollView.bounces = False
+    elif backend.startswith('toga_android.'):
+        native.setVerticalScrollBarEnabled(False)
+        native.setHorizontalScrollBarEnabled(False)
+        native.setOverScrollMode(2)
     previous = getattr(view, '_chapter_bridge', None)
     if previous:
         previous.dispose()

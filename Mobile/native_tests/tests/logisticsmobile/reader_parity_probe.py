@@ -169,9 +169,41 @@ class ReaderProbe(LogisticsMobile):
                 owner = self.readers.active
                 await self.ready(owner)
                 cases.append('native_epub_bridge')
+                pagination = json.loads(await owner.epub_view.evaluate_javascript('JSON.stringify(window.reader.pagination())'))
+                assert pagination['count'] > 1, pagination
+                await owner.epub_view.evaluate_javascript('scrollTo(0,500)')
+                assert await owner.epub_view.evaluate_javascript('scrollY') == 0
+                owner.show_reader_tools()
+                assert len(owner.chapter_tree.rows.children) >= 3
+                owner.chapter_tree.rows.children[0].children[1].on_press()
+                assert len(owner.chapter_tree.rows.children) == 2
+                owner.chapter_tree.rows.children[0].children[1].on_press()
+                owner.chapter_sidebar.show_detail()
+                owner.set_reading_mode(True)
+                await asyncio.sleep(.5)
+                assert self._reader_chrome_hidden
+                assert not owner.chapter_sidebar.expanded
+                before = json.loads(await owner.epub_view.evaluate_javascript('JSON.stringify(window.reader.pagination())'))
+                # Exercise the trusted swipe handler in a real native WebView.
+                swipe = """(() => {
+                  const start=new Event('touchstart');Object.defineProperty(start,'touches',{value:[{clientX:250,clientY:200}]});document.dispatchEvent(start);
+                  const end=new Event('touchend');Object.defineProperty(end,'changedTouches',{value:[{clientX:60,clientY:205}]});document.dispatchEvent(end);
+                })()"""
+                await owner.epub_view.evaluate_javascript(swipe)
+                await asyncio.sleep(.3)
+                after = json.loads(await owner.epub_view.evaluate_javascript('JSON.stringify(window.reader.pagination())'))
+                assert after['index'] == before['index'] + 1, (before, after)
+                owner.set_reading_mode(False)
+                await asyncio.sleep(.5)
+                assert not self._reader_chrome_hidden
+                before = json.loads(await owner.epub_view.evaluate_javascript('JSON.stringify(window.reader.pagination())'))
+                await owner.epub_view.evaluate_javascript(swipe)
+                await asyncio.sleep(.3)
+                after = json.loads(await owner.epub_view.evaluate_javascript('JSON.stringify(window.reader.pagination())'))
+                assert after['index'] == before['index'] + 1, (before, after)
+                cases.append('native_paginated_swipes_fullscreen_nested_chapters')
                 assert any(entry.fragment == 'p35' for entry in owner.contents_choices.values())
-                owner._epub_target = 'p35'
-                await owner.move_book_page(0)
+                await owner.chapter_tree.choose(next(entry for entry in owner.contents_choices.values() if entry.fragment == 'p35'))
                 await self.ready(owner)
                 target = owner.epub_text.anchors['p35']
                 assert owner.epub_offset == target
@@ -212,6 +244,10 @@ class ReaderProbe(LogisticsMobile):
                 result['reader_layout'] = dict(frame=owner.library_view.layout.width, content=owner.book_content.layout.width,
                     body=self.native_host.bodies['documents'].layout.width, host=self.native_host.diagnostics())
                 assert owner.library_view.layout.width >= self.main_window.size.width - 32, result['reader_layout']
+                available = self.adaptive.content_width(owner.presentation_destination, margin=0)
+                if owner.chapter_sidebar.expanded:
+                    available -= owner.chapter_sidebar.policy.sidebar_width + owner.chapter_sidebar.policy.gap
+                assert owner.epub_view.layout.content_width <= available + 2, (owner.epub_view.layout.content_width, available)
                 await asyncio.sleep(.6)
                 await capture_window(self, output / 'typography.png')
                 assert json.loads(metrics) == ['serif', '40px', '480px', 'rgb(244, 236, 216)'], metrics
@@ -232,6 +268,15 @@ class ReaderProbe(LogisticsMobile):
                 assert speech.session.state == 'paused'
                 speech.pause()
                 assert speech.session.state == 'speaking'
+                speech.session.stop()
+                await owner.epub_view.evaluate_javascript('window.reader.seek(0)')
+                await speech.play()
+                speech.pause()
+                start = speech.session.ranges[0][1]
+                speech.session.skip(15)
+                assert speech.session.state == 'paused' and speech.session.ranges[0][1] > start
+                speech.session.skip(-15)
+                assert speech.session.state == 'paused'
                 speech.session.stop()
                 # A short real native utterance must complete via the platform callback.
                 await owner.epub_view.evaluate_javascript('window.reader.seek(0, 9)')
@@ -432,10 +477,10 @@ class ReaderProbe(LogisticsMobile):
                 catalog.show_library(present=False)
                 catalog.refresh_library()
                 await catalog.metadata_task
-                catalog.library_search.value = 'metadata author distinctivetag'
-                catalog.filter_library()
-                assert any(button.text == 'Book.epub' for button in catalog.library_row_buttons)
-                cases.append('imported_metadata_search_and_suggestions')
+                await catalog.library_scan_task
+                assert not hasattr(catalog, 'library_search')
+                assert not any(button.text == 'Book.epub' for button in catalog.library_row_buttons)
+                cases.append('configured_library_list_without_imported_search')
                 batch_root = self.private_root / 'LocalFiles/FolderBatch'
                 (batch_root / 'nested').mkdir(parents=True, exist_ok=True)
                 for path in [batch_root / 'one.cbz', batch_root / 'nested/two.cbz']:

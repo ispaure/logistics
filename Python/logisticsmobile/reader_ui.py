@@ -213,6 +213,9 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                     f'{number + 1}. ' + '  ' * entry.depth + entry.label: entry
                     for number, entry in enumerate(contents(reader))}
             self.chapter_selector.items = list(self.contents_choices) or self.chapter_labels
+            if record['kind'] == 'epub':
+                self.chapter_collapsed.clear()
+                self.render_chapters()
             self.book_loading = False
             self.refresh_library()
             await self.display_book_page(min(record['position'], count - 1))
@@ -636,9 +639,14 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         if task is not None and not task.done():
             return
         from features.books.mobile.presentation import watch_width, pane_width
+        def width():
+            self.reflow_chapters()
+            available = pane_width(self.library_view, self.app.adaptive.content_width(self.presentation_destination, margin=0), 0)
+            sidebar = self.chapter_sidebar
+            return max(1, available - (sidebar.policy.sidebar_width + sidebar.policy.gap if sidebar.expanded else 0))
         self._epub_width_task = self.loop.create_task(watch_width(
             alive=lambda: self.book_reader is reader and self.book_epoch == epoch,
-            width=lambda: pane_width(self.library_view, self.main_window.size.width, 16),
+            width=width,
             view=lambda: self.epub_view))
 
     def watch_comic_layout(self, reader, epoch):

@@ -148,3 +148,19 @@ Desktop widgets and controllers live in feature-owned `ui/`. Registration stays 
 ## Mobile source manifest
 
 `../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.
+
+## Native mobile pagination and speech
+
+`mobile/presentation.py` lays sanitized chapter content into fixed-height CSS
+columns inside a clipped viewport. Page turns translate by one column; touch
+and wheel handlers prevent vertical page scrolling. Resizing rebuilds columns
+and seeks the retained UTF-16 text anchor. The same bridge serves imported and
+nonpersistent provider WebViews. `mobile/navigation.py` owns nested chapter rows;
+the hosts mount them through the shared adaptive sidebar. Search remains an
+explicit action outside the chapter list.
+
+`mobile/speech.py` keeps bounded utterances and a private in-memory word-offset
+index. Fifteen-second skips use 180 words/minute multiplied by playback speed,
+including elapsed time in the current utterance; native synthesis supplies no
+seekable audio timeline. Skips invalidate old completion tokens, respect selected
+passage bounds and preserve pause state. Stop/disposal clear text and word offsets.

@@ -78,6 +78,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         host_identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
         previous_host = _active_hosts.get(host_identity)
         if previous_host is not None:
+            from .markdown_speech import stop_markdown_speech
+            stop_markdown_speech(previous_host)
             vault = getattr(previous_host, 'vault_browser', None)
             if vault is not None:
                 vault.dispose()
@@ -224,9 +226,13 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         return True
 
     def mark_navigation(self):
+        from .markdown_speech import stop_markdown_speech
+        stop_markdown_speech(self)
         self.navigation_generation += 1
 
     def route_changed(self, body):
+        from .markdown_speech import stop_markdown_speech
+        stop_markdown_speech(self)
         self.body = body
         batch = getattr(self, 'private_comic_batch', None)
         if batch is not None and batch.view is not None and batch.view not in body.children:
@@ -654,6 +660,12 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             owner.preview_box = toga.Box(children=[
                 toga.Button('Edit Markdown', on_press=back_to_editor, style=Pack(height=48)),
                 owner.preview], style=Pack(direction=COLUMN, flex=1))
+        from .markdown_speech import MarkdownSpeech
+        speech = getattr(owner, 'markdown_speech', None)
+        if speech is None:
+            owner.markdown_speech = speech = MarkdownSpeech(self, owner.preview, owner.preview_box)
+            owner.preview_box.insert(1, speech.button)
+        speech.close()
         self.preview_box = owner.preview_box
         self.show_view(self.preview_box, route='preview', title=owner.document.name)
         self.save_workspace()
@@ -887,6 +899,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             return False
         saved = self.checkpoint()
         if saved:
+            from .markdown_speech import stop_markdown_speech
+            stop_markdown_speech(self)
             vault = getattr(self, 'vault_browser', None)
             if vault is not None:
                 vault.dispose()
@@ -904,6 +918,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
     def release_disposable_resources(self):
         if not self.active_host:
             return
+        from .markdown_speech import stop_markdown_speech
+        stop_markdown_speech(self)
         self.retire_private_comic_batch()
         private = getattr(self, 'private_sessions', None)
         if private is not None:
