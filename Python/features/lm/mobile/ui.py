@@ -4,15 +4,15 @@ from copy import deepcopy
 import inspect
 import time
 import toga
-from .control_icons import icon_button, apply_icon
+from logisticsmobile.control_icons import icon_button, apply_icon
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, END
 
 from features.lm.domain import build_request, message, validate_settings
-from .appearance import surface, action_button
-from .chat import ChatStore, DEFAULT_SETTINGS, export_chat
-from .chat_transport import ChatClient, ChatCancelled
-from .chat_presentation import composer_height, transcript_document, transcript_entries, transcript_update
+from logisticsmobile.appearance import surface, action_button
+from features.lm.mobile.storage import ChatStore, DEFAULT_SETTINGS, export_chat
+from features.lm.mobile.transport import ChatClient, ChatCancelled
+from features.lm.mobile.presentation import composer_height, transcript_document, transcript_entries, transcript_update
 
 
 class ChatUI:
@@ -72,7 +72,7 @@ class ChatUI:
                 self.chat_refresh, self.chat_models, self.chat_config_status_box,
                 toga.Button('Save configuration', on_press=self.save_chat_configuration, style=Pack(height=48))],
                 style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
-            from .workspace_navigation import menu_button
+            from logisticsmobile.workspace_navigation import menu_button
             self.chat_title = toga.Label('New conversation', style=Pack(font_weight='bold', font_size=16))
             self.chat_model_label = toga.Label('', style=Pack(font_size=12))
             for label in (self.chat_title, self.chat_model_label):
@@ -241,7 +241,7 @@ class ChatUI:
             bar = tab.convertRect(tab.bounds, toView=window)
             bottom = float(viewport.origin.y + viewport.size.height - container.bottom_inset)
             top = float(viewport.origin.y + container.top_inset)
-            from .chat_presentation import navigation_clearance
+            from features.lm.mobile.presentation import navigation_clearance
             margin = navigation_clearance(top, bottom, float(bar.origin.y), float(bar.size.height),
                                           bar_width=float(bar.size.width))
         if self.chat_view.style.margin_bottom != margin:
@@ -274,7 +274,7 @@ class ChatUI:
         """Match the navigation/status area to Chat without moving its menu."""
         if not self.routes.apple:
             return
-        from .appearance import apple_color
+        from logisticsmobile.appearance import apple_color
         from rubicon.objc import ObjCClass
         surface(self.routes.roots['chat'], radius=0, background='chat_background', outlined=False)
         navigation = self.native_host.adapter.navigation[self.native_host.destinations.index('chat')]
@@ -625,7 +625,7 @@ class ChatUI:
         self.set_chat_status('Stopping…')
 
     async def export_chat(self, widget=None, **kwargs):
-        from .pickers import export_document
+        from logisticsmobile.pickers import export_document
         if self.chat_busy or self.chat_current is None:
             return
         try:

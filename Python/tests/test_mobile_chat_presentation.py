@@ -2,7 +2,7 @@
 import unittest
 
 from features.lm.domain import message
-from logisticsmobile.chat_presentation import composer_height, transcript_document, transcript_entries, transcript_update
+from features.lm.mobile.presentation import composer_height, transcript_document, transcript_entries, transcript_update
 
 
 class MobileChatPresentationTests(unittest.TestCase):
@@ -54,7 +54,7 @@ class MobileChatPresentationTests(unittest.TestCase):
 
 class NavigationClearanceTests(unittest.TestCase):
     def test_floating_bar_and_keyboard_use_actual_overlap(self):
-        from logisticsmobile.chat_presentation import navigation_clearance
+        from features.lm.mobile.presentation import navigation_clearance
         self.assertEqual(navigation_clearance(116, 840, 790, 64), 62)
         self.assertEqual(navigation_clearance(116, 546, 496, 64), 62)
         self.assertEqual(navigation_clearance(116, 546, 790, 64), 12)

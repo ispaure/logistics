@@ -10,7 +10,7 @@ from .documents import DocumentStore, document_name
 from .preferences import Preferences
 from .preview import markdown_preview
 from .reader_sessions import ReaderWorkspace
-from .chat_ui import ChatUI
+from features.lm.mobile.ui import ChatUI
 from features.rclone.mobile.cloud_ui import CloudUI
 from commonUtils.ui.native.navigation import NativeNavigationHost
 from commonUtils.ui.native.routes import Routes

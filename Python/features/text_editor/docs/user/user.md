@@ -222,3 +222,5 @@ ordinary filesystem operations; choosing the LocalCrypt location performs both
 name and content encryption.
 
 Session-only text editor tabs and windows begin with **🕵️ Private -**, followed by the filename. The prefix stays visible after editing or Save As, including export to Local storage, because the draft remains session-only.
+
+- [Text Editor preferences](preferences.md)

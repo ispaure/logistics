@@ -198,3 +198,10 @@ uses the separate protected vault contract in [mobile preparation](mobile-prepar
 
 Local ciphertext mapping, dependent credential revocation and reader ownership are
 described in [LocalCrypt](../../Python/features/rclone/docs/development/localcrypt.md).
+
+## Schema integration
+
+The [shared configuration guide](https://github.com/ispaure/commonUtils/blob/main/configuration/README.md)
+covers schema APIs, editor embedding and gradual migration. Logistics keeps its
+`ui_new.settings` imports as compatibility wrappers; its editor opts into typed
+keys by default.

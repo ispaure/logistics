@@ -96,7 +96,7 @@ def reserve_navigation(app):
         window = app.main_window._impl.native
         viewport = container.native.convertRect(container.native.bounds, toView=window)
         bounds = bar.convertRect(bar.bounds, toView=window)
-        from .chat_presentation import navigation_clearance
+        from features.lm.mobile.presentation import navigation_clearance
         extra = navigation_clearance(float(viewport.origin.y + container.top_inset),
             float(viewport.origin.y + viewport.size.height - container.bottom_inset),
             float(bounds.origin.y), float(bounds.size.height), bar_width=float(bounds.size.width)) - 12

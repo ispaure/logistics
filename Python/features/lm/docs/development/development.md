@@ -170,3 +170,7 @@ records; arbitrary Markdown resources remain blocked.
 ## Further reading
 
 - [LM Chat integration](lm.md)
+
+## Mobile ownership
+
+`mobile/storage.py`, `mobile/transport.py`, `mobile/presentation.py` and `mobile/ui.py` own mobile chat. The mobile host composes the view and supplies application presentation utilities. `streaming.py` owns portable desktop SSE decoding; Qt networking stays in `transport.py`. Mobile transport retains its stricter bounded text-only protocol.

@@ -96,7 +96,7 @@ In **Settings → rclone**, the configuration tabs list supported platforms. Eac
 contains the version, download URL, ZIP member, local destination and verification
 hashes. If you change releases, update these values together. One hash verifies
 the ZIP; the other verifies its executable. Saving does not download anything or
-replace a running tool. See [download settings](../../../../../docs/user/configuration.md#rclone-download-versions)
+replace a running tool. See [download settings](download-versions.md#rclone-download-versions)
 for the field details.
 
 Sync progress opens in **Folder Actions** on the left rail. Each job has its own
@@ -433,3 +433,5 @@ See [Rclone mobile workflows](../user_mobile/workflows.md#side-by-side-mobile-cr
 
 See [Rclone mobile workflows](../user_mobile/workflows.md#mobile-folder-hub-source-tabs).
 
+
+- [Choose rclone download versions](download-versions.md)

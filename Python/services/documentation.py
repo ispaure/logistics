@@ -2,10 +2,6 @@
 from pathlib import Path
 
 
-def application_docs():
-    return Path(__file__).resolve().parents[2] / 'docs'
-
-
 def feature_guide(owner):
     """Prefer the owned wiki, preserving separately installed legacy features."""
     owner = Path(owner)
