@@ -82,10 +82,13 @@ def run(target, device, *, local=False, require_independent_windows=False):
     logs.mkdir(exist_ok=True)
     path = logs / (target + '-native-ui.log')
     started_ns = time.time_ns()
+    # Briefcase includes cold simulator startup and installation in this run.
+    # Hosted iPads can spend much of the old 15-minute limit before tests begin.
+    timeout = 1500 if target == 'ios' else 900
     with path.open('w') as stream:
         process = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
         try:
-            code = process.wait(timeout=900)
+            code = process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGTERM)
             try:
@@ -93,7 +96,7 @@ def run(target, device, *, local=False, require_independent_windows=False):
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
-            raise RuntimeError('Native app UI run exceeded 15 minutes; see retained logs.') from None
+            raise RuntimeError(f'Native app UI run exceeded {timeout // 60} minutes; see retained logs.') from None
     # Briefcase returns 200 when Apple's log stream closes before its exit
     # marker, even after every native test passed. The cache result is written
     # atomically before exit and must pass the same complete source contract.
