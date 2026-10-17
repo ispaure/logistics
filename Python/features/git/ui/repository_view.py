@@ -745,7 +745,7 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         if not registry.is_feature_enabled('text_editor'):
             self._message('Enable the Text Editor feature in Settings to edit files outside registered IDE projects.', error=True)
             return
-        from features.text_editor.service import editor_service
+        from features.text_editor.ui.service import editor_service
         service = editor_service()
         if not hasattr(self, '_editor_service'):
             self._editor_service = service

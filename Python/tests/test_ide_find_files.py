@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from features.ide.project_search import search_files
+from features.ide.ui.project_search import search_files
 
 
 class SearchFilesTests(unittest.TestCase):
@@ -46,7 +46,7 @@ class FindFilesTests(QtTestCase):
         super().setUp()
         self.app = qt.QApplication.instance() or qt.QApplication([])
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         self.directory = self.temporary_directory()
         self.root = Path(self.directory.name).resolve()
         self.path = self.root / 'file.py'
@@ -81,7 +81,7 @@ class FindFilesTests(QtTestCase):
         self.workspace.current.document().setModified(False)
 
     def test_stale_job_is_discarded_and_close_cancels_search(self):
-        from features.ide.project_search import SearchResult
+        from features.ide.ui.project_search import SearchResult
         started, release = Event(), Event()
         def delayed(*args, **kwargs):
             started.set()
@@ -90,7 +90,7 @@ class FindFilesTests(QtTestCase):
             return SearchResult((), 0, False)
         self.workspace.find_project()
         dialog = self.workspace.project_find
-        with patch('features.ide.find_files.search_files', side_effect=delayed):
+        with patch('features.ide.ui.find_files.search_files', side_effect=delayed):
             dialog.query.setText('old')
             dialog.debounce.stop(); dialog.start_search()
             self.wait_until(started.is_set)

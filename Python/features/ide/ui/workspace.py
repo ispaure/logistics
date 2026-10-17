@@ -7,10 +7,10 @@ from commonUtils.ui.appearance.status_line import StatusLine
 from commonUtils.ui.tasks.operations import ResultWorker
 from commonUtils.ui.code_editor.search import SearchPanel
 from commonUtils.persistence.text import read_text_file
-from .documents import EditorDocument
-from .browser import ProjectBrowser
-from .navigation import Navigation
-from .autosave import pause_autosave
+from features.ide.ui.documents import EditorDocument
+from features.ide.ui.browser import ProjectBrowser
+from features.ide.ui.navigation import Navigation
+from features.ide.ui.autosave import pause_autosave
 
 
 class ProjectWorkspace(Navigation, qt.QMainWindow):
@@ -33,7 +33,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         self.worker = None
         self.queue = deque()
         self.closing = False
-        from .menus import build_menus
+        from features.ide.ui.menus import build_menus
         central = qt.QWidget(self)
         self.setCentralWidget(central)
         layout = qt.QVBoxLayout(central)
@@ -190,7 +190,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                 doc = representative
                 target = self.group_for(doc)
             if doc is None:
-                from .markdown_document import MarkdownDocument
+                from features.ide.ui.markdown_document import MarkdownDocument
                 document_type = MarkdownDocument if path.suffix.lower() in ('.md', '.markdown') else EditorDocument
                 document_type = type(representative) if representative else document_type
                 doc = document_type(snapshot, self, buffer=representative.buffer if representative else None)
@@ -198,7 +198,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                 if representative is None:
                     self.documents[path] = doc
                     buffer = doc.buffer
-                    from .autosave import AutoSave
+                    from features.ide.ui.autosave import AutoSave
                     buffer.autosave = AutoSave(self, buffer)
                     buffer.markers.run = self.run
                     buffer.text.modificationChanged.connect(lambda _: self.update_buffer_titles(buffer))
@@ -493,7 +493,7 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
             self.drop_editor(doc, self.groups[index])
 
     def install_project_menu(self, page):
-        from .menus import install_project_menu
+        from features.ide.ui.menus import install_project_menu
         install_project_menu(self, page)
 
     def find(self):

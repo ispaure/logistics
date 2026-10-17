@@ -1,9 +1,9 @@
 """Standalone metadata workflow; never constructs a reader or reading state."""
 from commonUtils.ui import pyside as qt
-from .epub import EPUBBook
-from .metadata import save_metadata
-from .metadata_editor import MetadataEditor
-from .tasks import BookTask
+from features.books.epub import EPUBBook
+from features.books.metadata import save_metadata
+from features.books.ui.metadata_editor import MetadataEditor
+from features.books.ui.tasks import BookTask
 
 
 class MetadataWindow(qt.QDialog):

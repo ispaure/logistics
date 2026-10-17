@@ -9,7 +9,7 @@ from commonUtils.ui.code_editor.syntax import (
     LANGUAGES,
     detect_language,
 )
-from .preferences import Preferences
+from features.text_editor.preferences import Preferences
 
 
 class SyntaxSettings:

@@ -728,7 +728,7 @@ class GitUITests(QtTestCase):
         self.commit_fixture(); self.open()
         service = Mock()
         with patch('features.registry.is_feature_enabled', return_value=True), \
-             patch('features.text_editor.service.editor_service', return_value=service):
+             patch('features.text_editor.ui.service.editor_service', return_value=service):
             self.page.edit_file('file.txt')
             self.page.edit_file('file.txt')
         self.assertEqual(service.open.call_count, 2)
@@ -743,7 +743,7 @@ class GitUITests(QtTestCase):
         opener = self.page.working_file_opener = Mock(return_value=True)
         item = self.page.changes.unstaged_files.topLevelItem(0)
         with patch('features.registry.is_feature_enabled', return_value=False), \
-             patch('features.text_editor.service.editor_service') as service:
+             patch('features.text_editor.ui.service.editor_service') as service:
             self.page.changes.unstaged_files.itemDoubleClicked.emit(item, 0)
             opener.assert_called_once_with(self.repo.root() / 'file.txt')
             service.assert_not_called()
@@ -757,7 +757,7 @@ class GitUITests(QtTestCase):
         self.page.working_file_opener = Mock(return_value=False)
         service = Mock()
         with patch('features.registry.is_feature_enabled', return_value=True), \
-             patch('features.text_editor.service.editor_service', return_value=service):
+             patch('features.text_editor.ui.service.editor_service', return_value=service):
             self.page.edit_file('file.txt')
         service.open.assert_called_once_with(self.repo.root() / 'file.txt')
 
@@ -769,7 +769,7 @@ class GitUITests(QtTestCase):
         self.page.views.setCurrentIndex(1); self.wait()
         self.page.history.select_ref(self.page.snapshot.status.oid); self.wait()
         opener = self.page.working_file_opener = Mock(return_value=True)
-        with patch('features.text_editor.service.editor_service') as service:
+        with patch('features.text_editor.ui.service.editor_service') as service:
             for mode in (0, 1):
                 with self.subTest(mode=mode):
                     self.page.history.file_mode.setCurrentIndex(mode); self.wait()
@@ -791,7 +791,7 @@ class GitUITests(QtTestCase):
         self.page.working_file_opener = Mock(return_value=False)
         service = Mock()
         with patch('features.registry.is_feature_enabled', return_value=True), \
-             patch('features.text_editor.service.editor_service', return_value=service):
+             patch('features.text_editor.ui.service.editor_service', return_value=service):
             self.page.history.tree.itemDoubleClicked.emit(self.page.history.tree.topLevelItem(0), 0)
         service.open.assert_called_once_with(self.repo.root() / 'file.txt')
 

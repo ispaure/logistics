@@ -1,6 +1,6 @@
 """Reader bookmark commands; location interpretation and state stay with EPUB."""
 from commonUtils.ui import pyside as qt
-from .epub import BookError
+from features.books.epub import BookError
 
 
 class Bookmarks:

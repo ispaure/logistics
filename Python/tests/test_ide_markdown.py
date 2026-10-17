@@ -4,8 +4,8 @@ from pathlib import Path
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
 from features.ide.projects import Project
-from features.ide.workspace import ProjectWorkspace
-from features.ide.markdown_document import MarkdownDocument
+from features.ide.ui.workspace import ProjectWorkspace
+from features.ide.ui.markdown_document import MarkdownDocument
 from commonUtils.tests.qt_test_case import QtTestCase
 
 

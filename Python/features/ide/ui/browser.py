@@ -26,7 +26,7 @@ class ProjectFilter(ByteSortModel):
                 status = (status[0], status[1] + '; unsaved changes') if status else ('modify', 'Unsaved changes')
             if status:
                 if role == qt.Qt.ItemDataRole.ForegroundRole:
-                    from .git_status import COLORS
+                    from features.ide.ui.git_status import COLORS
                     return qt.QBrush(qt.QColor(COLORS[status[0]]))
                 return str(path) + '\n' + ('Git: ' if path in self.git_changes else '') + status[1]
         return super().data(index, role)
@@ -126,7 +126,7 @@ class ProjectBrowser(qt.QWidget):
         layout.addWidget(self.tree)
         self.filter.textChanged.connect(self.filter_changed)
         self.reset_root()
-        from .git_status import ProjectGitStatus
+        from features.ide.ui.git_status import ProjectGitStatus
         self.git_status = ProjectGitStatus(self)
 
     def reset_root(self):

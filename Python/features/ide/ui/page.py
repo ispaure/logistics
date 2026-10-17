@@ -1,7 +1,7 @@
 """Project registration, retained tabs and application close participation."""
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.status_line import StatusLine
-from .projects import Project, ProjectStore
+from features.ide.projects import Project, ProjectStore
 from commonUtils.ui.workspaces.workspace import Workspace
 from commonUtils.ui.workspaces.workspace_policy import WorkspacePolicy
 
@@ -106,7 +106,7 @@ class IDEPage(qt.QWidget):
         return True
 
     def _create_project(self, project):
-        from .workspace import ProjectWorkspace
+        from features.ide.ui.workspace import ProjectWorkspace
         view = ProjectWorkspace(project, self)
         view.host_page = self
         view.changed.connect(self.changed)

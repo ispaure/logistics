@@ -16,7 +16,7 @@ class DocumentBuffer(qt.QObject):
         self.text.setParent(self)
         self.views = []
         self.highlighter = None
-        from features.editor_changes import ChangeMarkers
+        from services.editors.ui.changes import ChangeMarkers
         self.markers = ChangeMarkers(self, self.text, lambda: self.snapshot,
             lambda: [v if isinstance(v, CodeEdit) else v.editor for v in self.views])
 

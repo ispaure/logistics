@@ -1,6 +1,6 @@
 """Explicit-save dialog for Dublin Core metadata stored inside the EPUB."""
 from commonUtils.ui import pyside as qt
-from .metadata import EDITABLE
+from features.books.metadata import EDITABLE
 
 LABELS = {'title': 'Title', 'creator': 'Authors (one per line)', 'language': 'Language (e.g. en)',
           'publisher': 'Publisher', 'subject': 'Tags (one per line)', 'description': 'Description'}

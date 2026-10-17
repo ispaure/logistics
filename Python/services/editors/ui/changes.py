@@ -112,7 +112,7 @@ class ChangeMarkers(qt.QObject):
                 if change is None:
                     change = next((c for c in view.line_changes if c.start <= row < c.end), None)
                 if change is not None:
-                    from features.editor_hunks import HunkReview
+                    from services.editors.ui.hunks import HunkReview
                     review = HunkReview(self, view, change)
                     review.show()
                     return True

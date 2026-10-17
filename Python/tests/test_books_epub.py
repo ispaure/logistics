@@ -8,7 +8,7 @@ from xml.etree import ElementTree as ET
 from books_fixture import make_book
 from features.books.epub import EPUBBook, BookError, OPF, DC, resolve_href
 from features.books.metadata import save_metadata, package_metadata
-from features.books.content import chapter_html
+from features.books.ui.content import chapter_html
 from features.books.preferences import ReadingState
 
 

@@ -2,7 +2,7 @@
 from pathlib import Path
 from copy import deepcopy
 from commonUtils.ui import pyside as qt
-from .analysis import analyze, project_files
+from features.ide.analysis import analyze, project_files
 
 
 class Navigation:
@@ -171,7 +171,7 @@ class Navigation:
                 if ok and not stale():
                     doc.insertPlainText(result[labels.index(value)][1])
             elif result_kind == 'usages':
-                from .usages import UsagePopup
+                from features.ide.ui.usages import UsagePopup
                 if not hasattr(self, 'usage_popup'):
                     self.usage_popup = UsagePopup(self)
                 def choose(target):
@@ -203,7 +203,7 @@ class Navigation:
             result = analyze(project, path, code, line, column, kind)
             resolved_kind = result['kind'] if isinstance(result, dict) else kind
             if resolved_kind == 'usages':
-                from .usages import usage_previews
+                from features.ide.ui.usages import usage_previews
                 targets = result['targets'] if isinstance(result, dict) else result
                 return {'kind': 'usages', 'targets': targets,
                         'previews': usage_previews(targets, path, code)}
@@ -213,7 +213,7 @@ class Navigation:
         self.run(resolve, done)
 
     def find_project(self):
-        from .find_files import FindFiles
+        from features.ide.ui.find_files import FindFiles
         if getattr(self, 'project_find', None) is None:
             self.project_find = FindFiles(self)
         self.project_find.reveal()

@@ -9,7 +9,7 @@ import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
-from features.text_editor.window import EditorWindow
+from features.text_editor.ui.window import EditorWindow
 
 
 class TextEditorTests(QtTestCase):
@@ -342,7 +342,7 @@ class TextEditorTests(QtTestCase):
 
     def test_real_browser_activation_and_disable_reenable_reuse_buffers(self):
         from features.text_editor import register
-        from features.text_editor.service import EditorService
+        from features.text_editor.ui.service import EditorService
         from commonUtils.filesystem.files import File
         from commonUtils.formats.markdownType import MarkdownFile
         from ui_new.file_browser import FileBrowserWindow
@@ -352,7 +352,7 @@ class TextEditorTests(QtTestCase):
         with patch.object(registry, "get_browser_extensions", return_value=[]):
             host = FileBrowserWindow(self.root)
         definition = register()
-        with patch("features.text_editor.service.editor_service", return_value=service):
+        with patch("features.text_editor.ui.service.editor_service", return_value=service):
             binding = definition.install_browser(host.file_browser, host=host)
         path = self.root / "script.py"
         path.write_text("print(1)")

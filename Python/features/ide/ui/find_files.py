@@ -6,8 +6,8 @@ from threading import Event
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.code_editor import CodeEdit
 from commonUtils.ui.code_editor.syntax import SyntaxHighlighter, detect_language
-from .project_search import search_files, preview_text
-from .usages import position_editor_popup
+from features.ide.ui.project_search import search_files, preview_text
+from features.ide.ui.usages import position_editor_popup
 
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='ide-find-files')
 

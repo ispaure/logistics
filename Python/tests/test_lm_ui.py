@@ -230,7 +230,7 @@ class LMUITests(QtTestCase):
         self.assertIn('unsaved value', self.page.composer.toPlainText())
 
     def test_code_uses_real_ide_registration_buffer_and_selection(self):
-        from features.ide.page import IDEPage
+        from features.ide.ui.page import IDEPage
         from features.ide.projects import Project
         from features.lm.ide_context import registered_projects, editor_context
         root = Path(self.temp.name) / 'source'

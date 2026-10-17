@@ -6,7 +6,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.code_editor import CodeEdit
 from commonUtils.ui.code_editor.markers import line_changes
-from features.editor_hunks import restore_change
+from services.editors.ui.hunks import restore_change
 from features.git.editor_baseline import stage_preview, stage_reviewed
 from features.git.runner import GitError
 
@@ -86,9 +86,9 @@ class HunkRestoreTests(QtTestCase):
 
     def test_click_red_boundary_reviews_deletion_instead_of_overlapping_modify(self):
         from PySide6.QtTest import QTest
-        from features.text_editor.document import Document
+        from features.text_editor.ui.document import Document
         from commonUtils.persistence.text import TextSnapshot
-        from features.editor_hunks import HunkReview
+        from services.editors.ui.hunks import HunkReview
         document = Document(TextSnapshot(None, b'old\nremoved', 'old\nremoved'))
         self.addCleanup(document.deleteLater)
         editor = document.editor
@@ -114,10 +114,10 @@ class HunkRestoreTests(QtTestCase):
         self.assertEqual(review.change.kind, 'delete')
 
     def test_review_restores_through_host_and_blocks_stale_ui(self):
-        from features.text_editor.document import Document
+        from features.text_editor.ui.document import Document
         from commonUtils.persistence.text import TextSnapshot
-        from features.editor_changes import compare
-        from features.editor_hunks import HunkReview
+        from services.editors.ui.changes import compare
+        from services.editors.ui.hunks import HunkReview
         document = Document(TextSnapshot(None, b'original\n', 'original\n'))
         self.addCleanup(document.deleteLater)
         document.editor.setPlainText('edited\n')
@@ -148,9 +148,9 @@ class HunkRestoreTests(QtTestCase):
         import time
         from PySide6.QtTest import QTest
         from features.ide.projects import Project
-        from features.ide.workspace import ProjectWorkspace
-        from features.text_editor.window import EditorWindow
-        from features.editor_hunks import HunkReview
+        from features.ide.ui.workspace import ProjectWorkspace
+        from features.text_editor.ui.window import EditorWindow
+        from services.editors.ui.hunks import HunkReview
         def until(predicate):
             deadline = time.monotonic() + 8
             while not predicate():
@@ -191,7 +191,7 @@ class HunkRestoreTests(QtTestCase):
 
     def test_destroying_document_cancels_queued_baseline_read(self):
         from concurrent.futures import Future
-        from features.text_editor.document import Document
+        from features.text_editor.ui.document import Document
         document = Document()
         markers = document.markers
         cancel = markers.cancel

@@ -1,7 +1,7 @@
 """Independent reading/editing windows share the browser's close lifecycle."""
 from commonUtils.ui import pyside as qt
-from .reader import BookWindow
-from .metadata_window import MetadataWindow
+from features.books.ui.reader import BookWindow
+from features.books.ui.metadata_window import MetadataWindow
 
 
 class BooksController(qt.QObject):

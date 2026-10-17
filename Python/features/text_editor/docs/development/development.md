@@ -131,3 +131,7 @@ Comparisons now refresh after each accepted hunk and use resizable, linked panes
 ## Mobile editor
 
 `mobile/ui.py` owns native editor widgets and per-document callbacks. `resources.py` owns provider text adapters, and `names.py` owns display-name validation. The mobile application supplies `services.mobile_presentation.MobilePresentation`; managed recovery records, picker workflows and scene ownership remain host concerns. Both platforms reuse commonUtils text persistence and conflict handling.
+
+## Desktop presentation
+
+Desktop widgets and controllers live in feature-owned `ui/`. Registration stays lazy; portable domain modules do not import this package. IDE/Text Editor change-marker and hunk integration is shared through `services/editors/ui/`.

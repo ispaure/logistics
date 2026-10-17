@@ -7,10 +7,10 @@ from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.ui.readers.reader_menus import RecentFiles
 from commonUtils.filesystem.storage import cache_directory
 from commonUtils.ui.code_editor.syntax import LANGUAGES
-from .file_operations import FileOperations
-from .editing import EditingCommands
-from .syntax_settings import SyntaxSettings
-from .commands import CommandControls
+from features.text_editor.ui.file_operations import FileOperations
+from features.text_editor.ui.editing import EditingCommands
+from features.text_editor.ui.syntax_settings import SyntaxSettings
+from features.text_editor.ui.commands import CommandControls
 
 
 class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperations, qt.QMainWindow):
@@ -34,7 +34,7 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
         self.document_stack = qt.QStackedWidget(self)
         self.document_stack.currentChanged.connect(self._active_changed)
         self._opening_path = None
-        from .service import EditorService
+        from features.text_editor.ui.service import EditorService
         self.service = service or EditorService(qt.QApplication.instance(),
             history_path=history_path, preferences_path=preferences_path)
         self.service.register(self)
@@ -81,7 +81,7 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
         self._build_syntax_controls()
         self._build_command_controls()
         if create_blank:
-            from .document import Document
+            from features.text_editor.ui.document import Document
             self._add_document(Document())
 
     @property

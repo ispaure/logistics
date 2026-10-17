@@ -162,7 +162,7 @@ class DocumentWorkspaceTests(QtTestCase):
         self.assertEqual(self.page.attached_count, 1)
 
     def test_text_files_use_separate_host_tabs_without_inner_tabs_or_untitled_buffers(self):
-        from features.text_editor.service import EditorService
+        from features.text_editor.ui.service import EditorService
         from time import monotonic, sleep
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -230,7 +230,7 @@ class DocumentWorkspaceTests(QtTestCase):
         self.assertFalse(document_is_open(first))
 
     def test_cancel_keeps_dirty_editor_and_detachment_preserves_its_buffer(self):
-        from features.text_editor.window import EditorWindow
+        from features.text_editor.ui.window import EditorWindow
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             editor = EditorWindow(history_path=root/'recent.json', preferences_path=root/'preferences.ini')
@@ -253,7 +253,7 @@ class DocumentWorkspaceTests(QtTestCase):
             self.assertIsNone(editor.service.session.lock)
 
     def test_origin_controller_leaves_hosted_document_alive(self):
-        from features.books.controller import BooksController
+        from features.books.ui.controller import BooksController
         window = qt.QMainWindow(); window.setWindowTitle('Retained reader')
         window.prepare_close = lambda: True
         controller = BooksController(self.host)
@@ -268,7 +268,7 @@ class DocumentWorkspaceTests(QtTestCase):
 
     def test_epub_survives_deleted_origin_controller_and_closes_from_its_tab(self):
         from books_fixture import make_book
-        from features.books.controller import BooksController
+        from features.books.ui.controller import BooksController
         from time import monotonic, sleep
         with TemporaryDirectory() as temporary:
             path = Path(temporary)/'sample.epub'; make_book(path)
@@ -369,9 +369,9 @@ class DocumentWorkspaceTests(QtTestCase):
 
     def test_async_session_restore_keeps_all_documents_in_originating_container(self):
         from time import monotonic, sleep
-        from features.text_editor.document import Document
-        from features.text_editor.session import document_record
-        from features.text_editor.service import EditorService
+        from features.text_editor.ui.document import Document
+        from features.text_editor.ui.session import document_record
+        from features.text_editor.ui.service import EditorService
         from commonUtils.persistence.session import SessionStore
         first = qt.QMainWindow(); show_document(first); self.settle()
         self.page.detach_current(); self.settle()
@@ -403,7 +403,7 @@ class DocumentWorkspaceTests(QtTestCase):
             first.close(); self.settle()
 
     def test_detached_text_creation_keeps_service_alive_after_return(self):
-        from features.text_editor.service import EditorService
+        from features.text_editor.ui.service import EditorService
         from features.text_editor.contributions import new_document
         first = qt.QMainWindow(); show_document(first); self.settle()
         self.page.detach_current(); self.settle()
@@ -469,7 +469,7 @@ class DocumentWorkspaceTests(QtTestCase):
 
     def test_embedded_epub_keeps_its_title_and_close_action_local(self):
         from books_fixture import make_book
-        from features.books.reader import BookWindow
+        from features.books.ui.reader import BookWindow
         from time import monotonic, sleep
         with TemporaryDirectory() as temporary:
             path = Path(temporary) / 'sample.epub'; make_book(path)

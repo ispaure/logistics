@@ -1,6 +1,6 @@
 """Two synchronized native rich-text pages sharing one paginated document."""
 from commonUtils.ui import pyside as qt
-from .text_view import BookText
+from features.books.ui.text_view import BookText
 
 
 class BookSpread(qt.QObject):

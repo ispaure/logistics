@@ -1,9 +1,9 @@
 """One browser verb dispatches to EPUB and ComicInfo editors by selected type."""
-from .file_type import EPUBFile
+from features.books.file_type import EPUBFile
 
 
 def edit_metadata(context):
-    from .controller import BooksController
+    from features.books.ui.controller import BooksController
     epubs = [item.path for item in context.selection if isinstance(item, EPUBFile)]
     comics = [item.path for item in context.selection if not isinstance(item, EPUBFile)]
     controller = context.controller

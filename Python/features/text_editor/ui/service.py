@@ -15,7 +15,7 @@ class EditorService(qt.QObject):
         self.preferences_path = preferences_path
         from pathlib import Path
         from commonUtils.filesystem.storage import cache_directory
-        from .session import EditorSession
+        from features.text_editor.ui.session import EditorSession
         directory = Path(preferences_path).parent if preferences_path else cache_directory(create=False) / "TextEditor"
         self.session = EditorSession(self, directory / "sessions")
         self._restore_checked = False
@@ -35,7 +35,7 @@ class EditorService(qt.QObject):
 
     def open(self, path=None, *, force=False, encoding=None):
         from pathlib import Path
-        from .window import EditorWindow
+        from features.text_editor.ui.window import EditorWindow
         from commonUtils.ui.document_host import show_document
         path = Path(path).resolve() if path is not None else None
         if not self._restore_checked:

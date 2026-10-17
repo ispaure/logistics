@@ -9,7 +9,7 @@ from commonUtils.persistence.text import (
     FileConflictError,
     MAX_BYTES,
 )
-from .document import Document
+from features.text_editor.ui.document import Document
 
 
 class FileOperations:

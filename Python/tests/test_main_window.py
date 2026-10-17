@@ -17,7 +17,7 @@ class MainWindowTests(QtTestCase):
         from tempfile import TemporaryDirectory
         from PySide6.QtTest import QTest
         from features.text_editor.contributions import register
-        from features.text_editor.service import EditorService
+        from features.text_editor.ui.service import EditorService
         launcher = RegisteredContribution('text_editor', 'Text Editor', register().document_launchers[0])
         with TemporaryDirectory() as temporary, patch.object(main_window.registry,
                 'get_document_launchers', return_value=[launcher]), patch(
@@ -71,7 +71,7 @@ class MainWindowTests(QtTestCase):
         from PySide6.QtTest import QTest
         from commonUtils.ui.document_host import show_document
         from commonUtils.ui.markdown.window import MarkdownWindow
-        from features.text_editor.window import EditorWindow
+        from features.text_editor.ui.window import EditorWindow
         with TemporaryDirectory() as temporary, patch('commonUtils.ui.workspaces.workspace_menus.sys.platform', 'darwin'):
             root = Path(temporary)
             window = self.window(); window.dlg.show(); window.dlg.activateWindow()
@@ -236,7 +236,7 @@ class MainWindowTests(QtTestCase):
         from zipfile import ZipFile
         from PIL import Image
         from books_fixture import make_book
-        from features.books.reader import BookWindow
+        from features.books.ui.reader import BookWindow
         from features.comics.pages import ComicPages
         from features.comics.ui.reader import ComicReaderWindow
         from commonUtils.ui.document_host import show_document
@@ -782,7 +782,7 @@ class MainWindowTests(QtTestCase):
         window.dlg.close(); self.app.processEvents()
 
     def test_document_popup_lists_and_selects_individual_text_buffers(self):
-        from features.text_editor.window import EditorWindow
+        from features.text_editor.ui.window import EditorWindow
         from ui_new.documents import show_document
         window = self.browser_window(); self.wait_browser(window.tabs.widget(0))
         editor = EditorWindow(history_path=self.root/'recent.json', preferences_path=self.root/'editor.ini')

@@ -8,13 +8,13 @@ from pathlib import Path
 
 
 def create_page(parent=None):
-    from .page import TextEditorPage
+    from features.text_editor.ui.page import TextEditorPage
 
     return TextEditorPage(parent)
 
 
 def create_controller(host):
-    from .service import BrowserController
+    from features.text_editor.ui.service import BrowserController
 
     return BrowserController(host)
 
@@ -76,7 +76,7 @@ def register():
 
 
 def _service(parent):
-    from .service import EditorService
+    from features.text_editor.ui.service import EditorService
     parent = getattr(parent, 'document_service_owner', parent)
     service = getattr(parent, '_text_editor_service', None)
     if service is None:
@@ -96,7 +96,7 @@ def launch(parent):
 
 
 def new_document(parent):
-    from .window import EditorWindow
+    from features.text_editor.ui.window import EditorWindow
     from commonUtils.ui.document_host import show_document
     window = EditorWindow(service=_service(parent))
     show_document(window)

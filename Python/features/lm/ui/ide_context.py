@@ -4,7 +4,7 @@ from ..project_tools import MAX_FILE_BYTES
 
 
 def ide_pages(owner):
-    from features.ide.page import IDEPage
+    from features.ide.ui.page import IDEPage
     pages = [widget for widget in qt.QApplication.allWidgets() if isinstance(widget, IDEPage)]
     return sorted(pages, key=lambda page: page.window() is not owner.window())
 

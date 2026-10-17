@@ -2,7 +2,7 @@
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.markdown import MarkdownViewer
-from .documents import DocumentBuffer, EditorDocument
+from features.ide.ui.documents import DocumentBuffer, EditorDocument
 
 
 class MarkdownBuffer(DocumentBuffer):

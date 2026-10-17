@@ -1,7 +1,7 @@
 """Feature entry point; the document window stays independent of browser hosts."""
 
 from commonUtils.ui import pyside as qt
-from .service import editor_service
+from features.text_editor.ui.service import editor_service
 
 
 class TextEditorPage(qt.QWidget):

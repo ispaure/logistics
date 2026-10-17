@@ -136,3 +136,7 @@ focus or resize the WebView. Programmatic scroll restoration is distinguished
 from user movement so reflow does not replace a precise anchor with the beginning
 of its newly wrapped line. No speech text, voice buffer or private selection is
 written to the catalogue or recovery records.
+
+## Desktop presentation
+
+Desktop widgets and controllers live in feature-owned `ui/`. Registration stays lazy; portable domain modules do not import this package. IDE/Text Editor change-marker and hunk integration is shared through `services/editors/ui/`.

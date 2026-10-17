@@ -1,6 +1,6 @@
 """Convert chapter XHTML into readable, inert Qt rich text."""
 from xml.etree import ElementTree as ET
-from .xhtml import chapter_document
+from features.books.xhtml import chapter_document
 
 
 def chapter_html(book, path, *, foreground, spacing):
