@@ -31,6 +31,21 @@ class PrivateSessionTests(unittest.TestCase):
         self.assertTrue(self.run_async(self.app.open_crypt(copies=self.copies, key=name)))
         return self.app.private_sessions.active
 
+    def test_local_provider_recent_survives_close_and_reopens_original(self):
+        from logisticsmobile.recent_documents import RecentDocuments
+        owner = self.open('remember-me.md', b'# Original')
+        # Each scene stores its history beside its workspace manifest.
+        recent = RecentDocuments(self.app.recent_documents.path.parent)
+        self.assertEqual(recent.sessions()[0].title, 'remember-me.md')
+        self.assertEqual(recent.sessions()[0].source['type'], 'local')
+        self.assertFalse(self.app.recent_items(excluding=[owner.session.identity]))
+        self.assertTrue(self.app.private_sessions.close(owner.session.id))
+        session, summary = self.app.recent_items()[0]
+        self.run_async(self.app.recent_opener(session)())
+        reopened = self.app.private_sessions.active
+        self.assertEqual(reopened._crypt_reader_store.provider.root, self.local)
+        self.assertEqual(reopened.crypt_text.value, '# Original')
+
     def test_close_from_documents_immediately_refreshes_cards_and_list(self):
         def widgets(widget):
             yield widget
@@ -159,6 +174,8 @@ class PrivateSessionTests(unittest.TestCase):
     def test_private_names_never_enter_history_and_locked_sessions_are_hidden(self):
         from types import SimpleNamespace
         self.app.cloud_client = SimpleNamespace(generation=1, cancel=lambda: None)
+        # Model the encrypted boundary before opening, when history eligibility is decided.
+        self.copies.encrypted = True
         owner = self.open('Sensitive-title.md', b'Sensitive body')
         owner.credential_client = self.app.cloud_client
         owner.credential_generation = self.app.cloud_client.generation

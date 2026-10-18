@@ -96,6 +96,7 @@ class ScreenPrivacy:
     def retire_stale(self):
         if self.disposed or not self.app.active_host:
             return
+        self.app.credential_document_lists.refresh()
         self.app.retire_private_comic_batch(stale_only=True)
         private = getattr(self.app, 'private_sessions', None)
         if private is not None:

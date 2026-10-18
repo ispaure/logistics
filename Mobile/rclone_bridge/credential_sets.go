@@ -293,7 +293,7 @@ func credentialPackageInfo() []map[string]any {
 			set.storage.mu.Unlock()
 		}
 		sort.Strings(names)
-		result = append(result, map[string]any{"id": id, "package_name": set.storage.values.Label, "saved": set.storage.parent != nil || set.storage.path != "", "remotes": names, "aliases": aliases, "identities": identities, "crypt_identities": cryptIDs})
+		result = append(result, map[string]any{"document_cache_id": documentListID(id), "id": id, "package_name": set.storage.values.Label, "saved": set.storage.parent != nil || set.storage.path != "", "remotes": names, "aliases": aliases, "identities": identities, "crypt_identities": cryptIDs})
 	}
 	return result
 }

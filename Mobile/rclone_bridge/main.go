@@ -207,6 +207,7 @@ func shutdownClients() {
 }
 
 func clearSession() {
+	clearDocumentListKeys()
 	shutdownClients()
 	for _, set := range credentialSets {
 		set.storage.detach()
@@ -292,7 +293,11 @@ func importPackageWithAliases(data []byte, password, label string, sessionOnly b
 	if !validLabel(label) {
 		return nil, errors.New("invalid credential package name")
 	}
-	return installCredentialPackage(snapshot{Label: label, Remotes: pending, Pins: initialConnectionPins(pending), Aliases: aliases}, sessionOnly)
+	names, err := installCredentialPackage(snapshot{Label: label, Remotes: pending, Pins: initialConnectionPins(pending), Aliases: aliases}, sessionOnly)
+	if err == nil {
+		installDocumentListKey(label, data, password, sessionOnly)
+	}
+	return names, err
 }
 
 func remote(ctx context.Context, name string) (fs.Fs, error) {
@@ -486,6 +491,16 @@ func dispatch(action, input string) (output string) {
 					result = vaultInfo()
 				}
 			}
+		case "document_lists_seal", "document_lists_open":
+			var data []byte
+			data, err = base64.StdEncoding.DecodeString(request.Data)
+			if err == nil {
+				data, err = documentLists(request.ID, data, action == "document_lists_open")
+				if err == nil {
+					result = base64.StdEncoding.EncodeToString(data)
+				}
+			}
+			clear(data)
 		case "protect_package", "unprotect_package":
 			var key, data []byte
 			key, err = base64.StdEncoding.DecodeString(request.Key)

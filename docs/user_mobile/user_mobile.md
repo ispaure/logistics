@@ -1,6 +1,6 @@
 # Logistics on mobile
 
-Open **Settings → Mobile documentation** near the bottom for offline guides with
+Open **Settings → Help → Mobile documentation** for offline guides with
 folder navigation and built-in file/title or page-text search. A hamburger toggles browsing
 in narrow windows; wider windows show the tree and article together.
 

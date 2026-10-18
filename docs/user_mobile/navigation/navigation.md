@@ -11,11 +11,17 @@ navigation rail makes the available content area asymmetric. Fully opening the
 device restores the ordinary responsive layout.
 
 Home shows **Your workspace**, with a **Continue** card for the selected document,
-**New document** and **Open file…**. Recent lists up to three other ordinary
-files; Folder Hub and Books & Comics remain available below. Wider windows put
+**New document** and **Open file…**. Recent lists up to ten other files; Folder Hub and Books & Comics remain available below. Wider windows put
 Recent and Your spaces side by side. Continue restores the document's
 Edit/Preview mode. Open file browses existing Local/LocalCrypt files and detects
 the supported format when you open one.
+
+When an unloaded credential ZIP is retained on disk, **Unlock** appears beside
+**Your workspace**. Choose a credential and enter its ZIP password to unlock it
+for this app session, then return to Home. Home does not list credential or remote
+names in this button. Disabled Legacy credentials are excluded from the chooser;
+if only Legacy is available and Show Legacy is off, the button stays hidden.
+Passwords are never saved.
 
 Documents puts **Open documents** first, with New document and Open file in a
 compact toolbar. Open files are grouped by Text, Markdown, EPUB books and Comics;
@@ -24,8 +30,17 @@ cards and compact rows. Cards use bounded excerpts of ordinary text drafts;
 private provider contents are never previewed here. Cards use one column on
 phones, two in wider windows and three on large tablets. Closing an item retains
 its stored file and uses the existing unsaved-change guard. Recent appears below
-open documents and excludes files already open. Private provider sessions and
-protected readers remain excluded from durable recent history.
+open documents and excludes files already open. A disk or cloud icon beside each
+filename identifies its source; connection-backed files also show a locked or
+unlocked padlock. Ordinary local files and files using saved credentials can remain
+in Recent after closing or restarting. For a password-protected session-only
+credential ZIP, the app saves open and recent entry lists in an AES-256 ZIP using
+that credential ZIP's password. These entries appear only after you unlock the
+matching credential; restoring the list does not download or open every file.
+Session-only paths and filenames stay out of ordinary history and workspace files.
+Passwords, document contents and unsaved edits are not saved in this list cache.
+**Forget saved credentials** also deletes these encrypted lists across windows.
+
 
 Editor status distinguishes **Unsaved changes · recovery copy kept** from
 **Saved on this device**. A recovery copy protects your draft; it does not save
@@ -45,12 +60,10 @@ them. Search does not include other files or the separate private reader editor.
 
 Documents has a hamburger in its navigation bar. Opening it reveals a menu
 with **Browse Local Files**, on-disk unlocked LocalCrypt locations, **Recent**
-(up to six ordinary documents), **Comics Library**, and **Shortcuts** for new text,
+(up to ten eligible files), **Comics Library**, and **Shortcuts** for new text,
 new Markdown and Folder Hub. Browse and library shortcuts open the existing file
 browser in the main area. LocalCrypt browse labels show the remote name without
-a transfer-status suffix. Recent can reopen a closed document. Private provider
-sessions and password-protected reader sessions are excluded from durable recent
-history. The menu's comics folders come from the same discovery as Home's
+a transfer-status suffix. Recent can reopen a closed document. Session-only entries restore from their encrypted list cache after credential unlock. The menu's comics folders come from the same discovery as Home's
 **Books & Comics**; both show folder names without full paths. Books & Comics
 uses folder icons and opens each folder through the existing file browser.
 
@@ -75,7 +88,11 @@ list; choosing a conversation restores its unsent draft and messages. On a wide
 Duo/tablet window the list occupies the left half and the conversation remains on
 the right. Close the menu to give messages the full width. Chat configuration and
 app Settings open as full-screen pages with native Back navigation, rather than
-bottom sheets. Opening these screens does not send a model request.
+bottom sheets. Settings first lists categories on phones; tapping one opens its
+options with native Back navigation. At 640 points/dp of usable width, including
+an unfolded Duo in landscape, categories remain on the left and options on the
+right. Rotation keeps the selected category and current values. Opening these
+screens does not send a model request.
 
 ## Related pages
 

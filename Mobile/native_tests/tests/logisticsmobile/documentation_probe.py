@@ -30,7 +30,11 @@ class DocumentationProbe(LogisticsMobile):
         try:
             await asyncio.sleep(1)
             self.show_settings()
-            box = self.body.children[0].content
+            if hasattr(self, 'settings_navigation'):
+                self.settings_navigation.choose('Help')
+                box = self.settings_navigation.sections['Help']
+            else:
+                box = self.body.children[0].content
             button = next(child for child in box.children if getattr(child, 'text', '') == 'Mobile documentation')
             button.on_press()
             owner = self.documentation

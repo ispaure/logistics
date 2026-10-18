@@ -896,6 +896,8 @@ class ProviderUI(FilesUI):
         self.show_private_markdown_editor()
 
     def show_private_markdown_editor(self):
+        if self.crypt_reader is None or getattr(self.crypt_reader, 'read_only', False):
+            return
         self.crypt_markdown_mode = 'edit'
         if getattr(self.crypt_edit_mode, 'value', 'Formatted') == 'Source':
             return

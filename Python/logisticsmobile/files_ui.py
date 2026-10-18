@@ -79,6 +79,7 @@ class FilesUI:
                         self.file_storage.value, self.file_location.value = self.file_loaded_location
                     finally:
                         self.file_changing_location = False
+                    self.refresh_file_source_tabs()
                 else:
                     self.file_provider = None
                     self.file_rows = {}
@@ -121,7 +122,8 @@ class FilesUI:
                     self.file_browser.search.value = ''
                     self.file_browser.history.clear()
                 await self.browse_files()
-            self.show_view(self.files_view, destination='files', route='browser', title='File browser')
+            self.refresh_file_source_tabs()
+            self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser')
             return
         if hasattr(self, 'file_browser'):
             await self.file_browser.close()
@@ -180,16 +182,37 @@ class FilesUI:
              ('Archive password…', lambda: self.show_file_actions(operation='password'))], self.show_file_actions)
         self.file_browser.attach_location_header(self.file_status,
             icon_button('back', 'Back to Folder Hub', on_press=self.parent_file_folder))
+        self.file_source_tabs = toga.Box(style=Pack(direction=ROW, flex=1))
+        self.refresh_file_source_tabs()
         self.files_view = toga.Box(children=[
-            toga.Box(children=[toga.Button('Folder Hub', on_press=self.show_locations, style=Pack(height=48, flex=1)),
-                               self.file_actions_button], style=Pack(direction=ROW)),
-            self.file_storage,
+            toga.Box(children=[self.file_source_tabs, self.file_actions_button], style=Pack(direction=ROW)),
             self.file_browser.location_bar,
             toga.ScrollContainer(horizontal=False, content=scroll_content(self.file_browser.widget), style=Pack(flex=1))],
             style=Pack(direction=COLUMN, margin=12, flex=1))
-        self.show_view(self.files_view, destination='files', route='browser', title='File browser')
+        self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser')
         await self.browse_files()
         self.file_storage.on_change = self.change_file_storage
+
+    def refresh_file_source_tabs(self):
+        if not hasattr(self, 'file_source_tabs'):
+            return
+        from .folder_hub_style import source_tab
+        for child in list(self.file_source_tabs.children):
+            self.file_source_tabs.remove(child)
+        selected = self.file_storage.value
+        roots = self.ordinary_file_roots()
+        if selected not in roots:
+            roots[selected] = self.file_roots.get(selected)
+        self.file_source_buttons = {}
+        for label in roots:
+            def choose(widget=None, label=label, **kwargs):
+                if self.file_storage.value != label:
+                    self.file_storage.value = label
+            title = {'Local files': 'On this device', 'Shared files': 'Shared with Files'}.get(label, label)
+            button = toga.Button(title, on_press=choose, style=Pack(height=44, flex=1, font_size=13, margin=2))
+            source_tab(button, selected == label)
+            self.file_source_buttons[label] = button
+            self.file_source_tabs.add(button)
 
     def change_file_storage(self, widget=None, **kwargs):
         # Check programmatic-change guards synchronously. Native async handlers
@@ -216,6 +239,7 @@ class FilesUI:
                 self.file_changing_location = False
             self.file_status.value = 'This connection is busy. Local files remain available.'
             return
+        self.refresh_file_source_tabs()
         if selected != loaded:
             self.file_location.value = ''
             return self.loop.create_task(self.browse_files())
@@ -318,6 +342,7 @@ class FilesUI:
             self.file_storage.value, self.file_location.value = location
         finally:
             self.file_changing_location = False
+        self.refresh_file_source_tabs()
         return await self.browse_files()
 
     def update_file_locations(self):
@@ -329,6 +354,8 @@ class FilesUI:
                 picker.reloadAllComponents()
         finally:
             self.file_changing_location = False
+
+        self.refresh_file_source_tabs()
 
     def files_back(self, widget=None, **kwargs):
         if not self.cloud_busy:

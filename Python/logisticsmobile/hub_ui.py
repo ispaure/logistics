@@ -80,14 +80,20 @@ class PanelGrid(toga.Box):
 
 class HubUI:
     def session_visible(self, session):
+        if session.provider == 'credential-reference':
+            return getattr(session, 'cache_id', None) in self.app.credential_document_lists.states
         if session.provider == 'provider-session':
             manager = getattr(self, 'private_sessions', None)
             return manager is not None and manager.available(session.id)
         return True
 
     def recent_items(self, *, excluding=()):
-        """Use ordinary history identities only; never persist private names."""
+        """Resolve recent files without opening their contents or credentials."""
         excluded = set(excluding)
+        for current in self.workspace.sessions.values():
+            source = getattr(current, 'history_source', None) or getattr(current, 'cache_source', None)
+            if source is not None and current.identity in excluded:
+                excluded.add(('file-reference', self.recent_documents.reference_id(source)))
         items = []
         for session in self.recent_documents.sessions():
             if session.identity in excluded:
@@ -102,7 +108,13 @@ class HubUI:
             if not self.checkpoint():
                 return
             self.adaptive.menu_open['documents'] = False
-            if session.provider == 'library':
+            if session.provider == 'file-reference':
+                from .document_sources import reopen_file
+                try:
+                    await reopen_file(self.app, session.source)
+                except (OSError, ValueError, KeyError) as error:
+                    await self.main_window.dialog(toga.InfoDialog('Could not open file', str(error)))
+            elif session.provider == 'library':
                 await self.open_book(session.resource)
             elif self.open_document(session.resource):
                 self.show_documents(resume=True)
@@ -111,13 +123,25 @@ class HubUI:
     def recent_row(self, session, summary):
         title, kind, _ = summary
         row = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
-        row.add(list_button(toga.Button(title, on_press=self.recent_opener(session), style=Pack(height=48))))
+        opener = self.recent_opener(session)
+        from .browser_ui import middle_filename
+        name = list_button(toga.Button(title, on_press=opener, style=Pack(height=48, flex=1)))
+        middle_filename(name)
+        row.add(toga.Box(children=[*self.document_source_badges(session, opener), name],
+            style=Pack(direction=ROW, align_items=CENTER)))
         row.add(toga.Label(DOCUMENT_TYPES.get(kind, 'Document'), style=Pack(font_size=12, margin_left=8)))
         return row
 
     def build_home(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Your workspace', style=Pack(font_size=22, font_weight='bold', margin_top=8, margin_bottom=16)))
+        title = toga.Label('Your workspace', style=Pack(font_size=22, font_weight='bold', margin_top=8, margin_bottom=16))
+        if self.app.home_unlock_candidates():
+            title.style.flex = 1
+            box.add(toga.Box(children=[title,
+                toga.Button('Unlock', on_press=self.app.show_home_unlock, style=Pack(height=44, margin_left=8))],
+                style=Pack(direction=ROW, align_items=CENTER)))
+        else:
+            box.add(title)
         active = self.workspace.sessions.get(self.workspace.active)
         active = active if active is not None and self.session_visible(active) else None
         self.home_continue = None
@@ -146,7 +170,7 @@ class HubUI:
             action_button(self.home_actions.children[1])
         self.home_content = box
         box.add(self.home_actions)
-        recent = self.recent_items(excluding=[active.identity] if active else [])[:3]
+        recent = self.recent_items(excluding=[active.identity] if active else [])
         recent_box = toga.Box(style=Pack(direction=COLUMN))
         recent_box.add(heading('Recent'))
         for session, summary in recent:
@@ -253,6 +277,16 @@ class HubUI:
         await self.adaptive.browser('documents').show_main_browser(
             'Local files', extensions=extensions[category], title=category)
 
+    def document_source_badges(self, session, opener):
+        from .document_sources import source_icons
+        from .folder_hub_style import compact_icon
+        badges = []
+        for glyph, label in source_icons(self.app, session):
+            button = icon_button(glyph, label, on_press=opener)
+            compact_icon(button, width=26)
+            badges.append(button)
+        return badges
+
     def session_card(self, session, summary):
         """A lightweight overview; never mount live editors or private readers."""
         title, kind, details = summary
@@ -262,7 +296,7 @@ class HubUI:
         name = list_button(toga.Button(title, on_press=self.session_opener(session.id), style=Pack(flex=1, height=48)))
         middle_filename(name)
         box.add(toga.Box(children=[
-            name,
+            *self.document_source_badges(session, self.session_opener(session.id)), name,
             icon_button('close', 'Close ' + title, on_press=self.session_closer(session.id))],
             style=Pack(direction=ROW, margin=12)))
         preview = ''
@@ -294,7 +328,8 @@ class HubUI:
             title = owner.document.name
             kind = text_document_kind(title)
         if session.provider == 'provider-session':
-            details.append('Session only')
+            if not getattr(session, 'history_source', None):
+                details.append('Session only')
         if owner is not None and owner.document.conflict:
             details.append('File changed outside editor')
         if session.provider == 'managed-text' and owner is None:
@@ -328,9 +363,10 @@ class HubUI:
         middle_filename(button)
         if close:
             close_button = icon_button('close', 'Close ' + title, on_press=self.session_closer(session.id))
-            box.add(toga.Box(children=[button, close_button], style=Pack(direction=ROW)))
+            box.add(toga.Box(children=[*self.document_source_badges(session, self.session_opener(session.id)), button, close_button], style=Pack(direction=ROW)))
         else:
-            box.add(button)
+            box.add(toga.Box(children=[*self.document_source_badges(session, self.session_opener(session.id)), button],
+                             style=Pack(direction=ROW)))
         return box
 
     def new_hub_document(self, widget=None, **kwargs):

@@ -3,6 +3,7 @@ import base64
 from contextlib import contextmanager
 from hashlib import sha256
 from io import BytesIO
+from pathlib import Path
 import json
 from zipfile import ZipFile, BadZipFile
 from commonUtils.persistence import atomic_write_json, atomic_write_bytes
@@ -10,9 +11,10 @@ from features.rclone.mobile.cloud import PACKAGE_LIMIT, download_name
 
 
 class CredentialPackages:
-    def __init__(self, vault, client):
+    def __init__(self, vault, client, *, document_cache_root=None):
         self.vault, self.client = vault, client
         self.root = vault.root
+        self.document_cache_root = Path(document_cache_root) if document_cache_root is not None else self.root / 'document-lists'
         self.index = self.root / 'packages.json'
         self.items = {}
         if self.index.is_symlink():
@@ -85,6 +87,8 @@ class CredentialPackages:
         previous = self.items
         self.items = next_items
         for retired in previous.keys() - next_items.keys():
+            from .document_lists import forget_cache
+            forget_cache(self.document_cache_root, retired)
             self.path(retired).unlink(missing_ok=True)
         return key
 
@@ -112,6 +116,8 @@ class CredentialPackages:
                 if remote in item['remotes'] and (identity is None or item['remotes'][remote] == identity)]
 
     def forget(self):
+        from .document_lists import forget_cache
+        forget_cache(self.document_cache_root)
         self.vault.forget()
         for key in self.items:
             self.path(key).unlink(missing_ok=True)

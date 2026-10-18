@@ -41,11 +41,13 @@ class EInkProbe(LogisticsMobile):
             assert type(self._impl).__module__.startswith('toga_android.')
             phase = report['phase']
             self.show_settings()
+            self.settings_navigation.choose('Appearance')
             if phase == 0:
                 assert not self.android_eink_choice.value and not palette.eink_enabled()
                 self.new_document()
                 self.editor.value = DRAFT
                 self.show_settings()
+                self.settings_navigation.choose('Appearance')
                 original_ink = self.editor._impl.native.getCurrentTextColor()
                 report['original_ink'] = original_ink
                 await asyncio.sleep(.5)
@@ -72,6 +74,7 @@ class EInkProbe(LogisticsMobile):
                 assert await view.evaluate_javascript('getComputedStyle(document.body).color') == 'rgb(0, 0, 0)'
                 assert await view.evaluate_javascript('getComputedStyle(document.body).backgroundColor') == 'rgb(255, 255, 255)'
                 self.show_settings()
+                self.settings_navigation.choose('Appearance')
                 self.android_eink_choice.value = False
                 await self.until(lambda: not palette.eink_enabled())
                 await asyncio.sleep(.3)
@@ -88,6 +91,7 @@ class EInkProbe(LogisticsMobile):
                 assert not view._impl._large_content_dir.exists()
                 view.clear_private_content()
                 self.show_settings()
+                self.settings_navigation.choose('Appearance')
                 report['cases'] += ['default_unchanged', 'toggle_saves_immediately', 'native_black_text_on_white',
                     'open_draft_preserved', 'private_webview_live_toggle_and_restore', 'private_html_bound_no_disk_fallback']
                 report['phase'] = 1

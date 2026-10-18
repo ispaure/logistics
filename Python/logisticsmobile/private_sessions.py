@@ -225,6 +225,17 @@ class PrivateSessions:
         if prepared is None and not self.app.checkpoint():
             return False
         previous = self.active
+        # A restored list entry is only metadata; release its placeholder slot
+        # before claiming the real reader, and restore it automatically on failure.
+        from .document_sources import file_source
+        try:
+            source = file_source(self.app, copies, key, session_only=True)
+        except (OSError, ValueError, AttributeError, KeyError):
+            source = None
+        if source is not None:
+            for pending in list(self.app.workspace.sessions.values()):
+                if pending.provider == 'credential-reference' and getattr(pending, 'cache_source', None) == source:
+                    self.app.workspace.close(pending.id, guard=lambda session: True)
         selection = self.app.workspace.active
         origin = self.app.native_host.state.destination, self.app.navigation_generation, selection
         session = self.app.workspace.open('provider-session', identity, 'text', transient=True)
@@ -265,6 +276,17 @@ class PrivateSessions:
             session.kind = ('pdf' if reader.kind == '.pdf' else 'epub' if reader.kind == '.epub' else 'comic' if not reader.editable
                             else 'markdown' if reader.kind in {'.md', '.markdown'} else 'text')
             session.title = reader.name
+            from .document_sources import file_source
+            try:
+                session.history_source = file_source(self.app, copies, key) if privacy_gate is None else None
+            except (OSError, ValueError, AttributeError, KeyError):
+                session.history_source = None
+            if privacy_gate is None:
+                try:
+                    source = file_source(self.app, copies, key, session_only=True)
+                    self.app.credential_document_lists.remember(session, source)
+                except (OSError, ValueError, AttributeError, KeyError):
+                    self.app.credential_document_lists.notice()
             if owner._open_presented:
                 self.bind(owner)
             else:
@@ -294,6 +316,8 @@ class PrivateSessions:
         owner.presentation_destination = destination
         self.bind(owner)
         owner.resume_crypt()
+        self.app.credential_document_lists.remember(owner.session)
+        self.app.save_workspace()
         return True
 
     def dirty(self):
@@ -318,6 +342,8 @@ class PrivateSessions:
             source.close()
         if hasattr(reader, 'password'):
             reader.password = ''
+        if not force:
+            self.app.credential_document_lists.closed(owner.session)
         owner.session.title = ''
         owner.session.view.clear()
         owner.session.dirty = False

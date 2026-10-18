@@ -1,6 +1,6 @@
 # Using documentation
 
-Open Settings and scroll to Mobile documentation near the bottom. These guides
+Open **Settings → Help → Mobile documentation**. These guides
 are bundled with the app and can be read offline.
 
 ## Browse folders and pages

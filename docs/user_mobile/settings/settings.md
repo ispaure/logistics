@@ -1,9 +1,25 @@
 # Mobile settings
 
+## Categories and adaptive layout
+
+Settings opens a category list: **App**, **Read aloud**, **Text & Markdown**,
+**Books & Comics**, **LM Chat**, **Folder Hub**, **Help**, and **About**.
+Android also includes **Appearance** for High contrast / E Ink. On a phone, tap
+one category to see its options and use Back to return to the list.
+
+With at least 640 points/dp of usable width, Settings shows categories on the
+left and the selected category's options on the right. This applies to Android
+and iOS tablets, wide app windows, and an unfolded iPhone Duo in landscape.
+A partially folded Duo with a vertical seam aligns the two panes to that seam.
+Rotating or resizing retains the selected category and its controls. A nested
+page stays open during a resize; Back returns to its category in the new layout.
+Preferences still save immediately, and each window keeps its own category
+selection.
+
 ## Android appearance and E Ink status
 
 Android normally follows the device's light/dark mode. This remains the default.
-To opt in, open **Settings → High contrast / E Ink**. The Android-only switch saves
+To opt in, open **Settings → Appearance → High contrast / E Ink**. The Android-only switch saves
 immediately on this device and persists after restarting the app.
 
 While enabled, the app uses black text on white, black outlines and simpler
@@ -61,7 +77,7 @@ on Android and iOS, **Show Legacy**. Preferences save automatically when changed
 **Show Legacy** applies immediately for the current session only and resets to off
 when the app starts. Reloading preferences keeps the current session choice.
 
-**About** at the bottom of Settings shows muted build information: the app version,
+The **About** category in Settings shows muted build information: the app version,
 short source revision and commit time when available, plus the platform and
 packaged source snapshot. Local modified builds are identified. This information
 is available offline; the About heading keeps its normal appearance.
@@ -167,7 +183,7 @@ and standalone pages retain their folder and document icons.
 
 ## Speech while locked
 
-In **Settings → Mobile documentation**, tap the speaker beside Back, Forward
+In **Settings → Help → Mobile documentation**, tap the speaker beside Back, Forward
 and Up, then Play to read the current page or selected text aloud. Changing
 documentation pages stops playback. Playback controls float above the page
 without changing its layout. Speed and 15-second skip controls are available in

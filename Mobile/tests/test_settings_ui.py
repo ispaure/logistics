@@ -17,7 +17,7 @@ class SettingsUITests(unittest.TestCase):
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile', version='0.1.5')
             app.show_settings()
-            box = app.body.children[0].content
+            box = app.settings_navigation.sections['About']
             for switch, title in ((app.document_cards_choice, 'Document card overview'),
                                   (app.restore_choice, 'Restore last document'),
                                   (app.clear_documents_choice, 'Close saved documents on restart')):
@@ -35,7 +35,8 @@ class SettingsUITests(unittest.TestCase):
                     self.assertTrue(notice.call_args.args[1])
                     self.assertIs(dialog.await_args.args[0], notice.return_value)
                 self.assertEqual(switch.value, previous)
-            self.assertEqual(box.children[-2].text, 'About')
+            self.assertEqual(list(app.settings_navigation.sections)[-1], 'About')
+            self.assertEqual(box.children[0].text, 'About')
             self.assertIs(box.children[-1], app.build_version_label)
             self.assertIn('0.1.5', app.build_version_label.text)
             self.assertIsNotNone(app.build_version_label.style.color)

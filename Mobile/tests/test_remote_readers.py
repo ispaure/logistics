@@ -529,6 +529,12 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertEqual(owner.crypt_preview_button.accessible_name, 'View source text')
                 owner.toggle_private_preview()
                 self.assertTrue(owner.crypt_text.readonly)
+                owner.show_private_markdown_editor()
+                self.assertEqual(owner.crypt_markdown_mode, 'source')
+                self.assertIsNone(getattr(owner, 'crypt_formatted', None))
+                app.loop.run_until_complete(owner.save_crypt_metadata())
+                app.loop.run_until_complete(owner.show_crypt_save_as())
+                self.assertFalse(any('write' in action for action, _ in app.cloud_client.calls))
             finally:
                 app.main_window.close()
                 app.loop.close()

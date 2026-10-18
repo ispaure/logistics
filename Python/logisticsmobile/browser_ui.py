@@ -87,18 +87,21 @@ class FolderLocationHeader(toga.Box):
         self.folder_name.value = name if name is not None else PurePosixPath(path).name if path else 'Root'
         apply_icon(self.parent_button, 'up' if path else 'back',
                    'Parent folder' if path else 'Back to Folder Hub')
-        for child in list(self.storage_icons.children):
-            self.storage_icons.remove(child)
         from .folder_hub_style import compact_icon
         kinds = [('storage_remote', 'Online folder')] if remote else [('storage_local', 'On-device folder')]
         if encrypted:
             state = 'unlocked' if unlocked else 'locked'
             kinds.append(('folder_' + state, 'Encrypted folder, ' + state))
+        if kinds == getattr(self, '_storage_kinds', None):
+            return
+        for child in list(self.storage_icons.children):
+            self.storage_icons.remove(child)
         for name, label in kinds:
             indicator = icon_button(name, label)
             compact_icon(indicator, width=28, height=48, size=23 if name.startswith('folder_') else 20,
                          foreground=name if name.startswith('folder_') else 'accent')
             self.storage_icons.add(indicator)
+        self._storage_kinds = kinds
 
 
 class FileBrowser(NativeBrowser):

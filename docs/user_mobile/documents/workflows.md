@@ -40,7 +40,14 @@ Each open text/Markdown document owns its editor and draft. **New**, opening a
 stored document, and successful imports add it to **Documents → Open documents**;
 opening the same stored identity again activates it. Documents with the same name
 remain separate. Switch using Open documents or Recent. Closing a document keeps
-its stored data; the six most recent ordinary documents can be reopened from Recent.
+its stored data; the ten most recent eligible files can be reopened from Recent. Disk, cloud and
+padlock icons beside names in Open documents and Recent show each source and
+connection lock state. Local files and files using saved credentials retain ordinary history entries.
+Password-protected session-only credential ZIPs instead protect their open and
+recent entries in a separate AES-256 ZIP with the same password. Unlocking the
+matching credential restores those list entries; selecting one loads its file on
+demand. The cache contains no document contents or unsaved edits. Forgetting the
+credential deletes its encrypted lists in every window.
 **Close** removes an item from that list without deleting its stored document.
 For an ordinary unsaved document, choose **Save and close**, **Keep draft and
 close**, **Discard changes and close**, or **Cancel**. Retained drafts remain on disk and recent entries can reopen them. Discard resets recovery to the current saved file without

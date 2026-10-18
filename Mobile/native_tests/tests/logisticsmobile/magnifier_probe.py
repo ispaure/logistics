@@ -130,6 +130,7 @@ class MagnifierProbe(LogisticsMobile):
                     assert not popup.isShowing()
                 result[name] = dict(buttons=True,bounds=True,shared=True,persisted=True)
             self.show_settings()
+            self.settings_navigation.choose('Books & Comics')
             self.magnifier_choice.value = '230%'
             assert comic.magnifier_zoom == pdf.magnifier_zoom == 230
             assert Preferences(self.private_root).values['magnifier_zoom']=='230'

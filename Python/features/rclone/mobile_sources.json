@@ -14,6 +14,7 @@
     "mobile/controller.py",
     "mobile/credential_packages.py",
     "mobile/credential_vault.py",
+    "mobile/document_lists.py",
     "mobile/host.py",
     "mobile/messages.py",
     "mobile/previews.py",

@@ -18,6 +18,22 @@ class HubDocumentTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_locked_cloud_recent_renders_source_and_requests_credentials(self):
+        from logisticsmobile.workspace import Session
+        from unittest.mock import AsyncMock, patch
+        app = self.app
+        session = Session('live', 'provider-session', 'memory-only', 'markdown', title='Cloud note.md', transient=True)
+        app.recent_documents.remember_file(session,
+            dict(type='remote', remote='Drive', identity='a' * 64, key='Cloud note.md'))
+        recent, summary = app.recent_items()[0]
+        row = app.recent_row(recent, summary)
+        self.assertEqual([child.control_icon for child in row.children[0].children[:-1]],
+                         ['storage_remote', 'storage_crypt'])
+        app.build_documents_hub()
+        with patch.object(app, 'require_remote_credentials_async', new_callable=AsyncMock, return_value=False) as unlock:
+            app.loop.run_until_complete(app.recent_opener(recent)())
+            self.assertEqual(unlock.await_args.kwargs['identity'], 'a' * 64)
+
     def test_new_from_home_displays_new_editor_and_keeps_previous_draft(self):
         app = self.app
         first = app.current.id
@@ -206,7 +222,8 @@ class HubDocumentTests(unittest.TestCase):
         session = app.editor_view.session
         for row in (app.session_panel(session, close=True), app.session_card(session, app.session_summary(session))):
             actions = next(child for child in row.children if any(isinstance(button, toga.Button) for button in child.children))
-            name, close = actions.children
+            badge, name, close = actions.children
+            self.assertEqual(badge.control_icon, 'storage_local')
             self.assertEqual(name.text, app.session_summary(session)[0])
             self.assertFalse(getattr(name._impl, '_row_hint', False))
             self.assertEqual(close.text, '×')
@@ -235,7 +252,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertFalse(any(child.text.startswith('Opened') for child in markdown_content.children if isinstance(child, toga.Label)))
         open_rows = [child for category in app.document_categories.values()
                      for child in category.children if hasattr(child, 'session_id')]
-        names = [row.children[-1].children[0].text for row in open_rows]
+        names = [row.children[-1].children[-2].text for row in open_rows]
         self.assertLess(names.index('Notes.txt'), names.index('Plan.MD'))
         # Clean grouped rows consist only of the filename link and close button.
         self.assertTrue(all(len(row.children) == 1 for row in open_rows))
@@ -262,7 +279,7 @@ class HubDocumentTests(unittest.TestCase):
         card.children[0].children[0].on_press()
         self.assertEqual(app.workspace.active, session_id)
         self.assertEqual(app.editor.value, '# Current draft\nStill unsaved')
-        card.children[0].children[1].on_press()
+        card.children[0].children[-1].on_press()
         self.assertIn(session_id, app.workspace.sessions)  # Unsaved close guard.
 
     def test_overview_setting_persists_and_feature_settings_are_grouped(self):
@@ -270,10 +287,9 @@ class HubDocumentTests(unittest.TestCase):
         from logisticsmobile.preferences import Preferences
         app = self.app
         app.show_settings()
-        content = app.body.children[0].content
-        labels = [child.text for child in content.children if isinstance(child, toga.Label)]
+        categories = app.settings_navigation.sections
         sections = ['App', 'Text & Markdown', 'Books & Comics', 'LM Chat', 'Folder Hub']
-        self.assertEqual([label for label in labels if label in sections], sections)
+        self.assertEqual([title for title in categories if title in sections], sections)
         app.document_cards_choice.value = False
         app.save_preferences()
         self.assertEqual(Preferences(app.private_root).values['document_card_overview'], 'false')

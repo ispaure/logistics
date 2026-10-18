@@ -118,8 +118,17 @@ mode rewrites the source ZIP. A locked device, missing key or damaged vault stop
 restoration; there is no plaintext fallback or silent replacement of saved data.
 Unlock the device and reload, or use **Forget saved credentials** before reimporting.
 
+Password-protected session-only credential ZIPs also have an **AES-256 ZIP** cache
+for their open and recent file lists. It uses the same credential ZIP password,
+with filenames and paths inside the encrypted payload. Unlocking that credential
+restores the entries in the current window; file contents load only when selected.
+The cache keeps no passwords, document contents or unsaved edits. Locking a session
+preserves the encrypted cache while removing the visible entries. Unencrypted
+credential ZIPs do not enable password-protected list caching.
+
 **Forget saved credentials** unloads the active session and removes the saved
-ciphertext and its known protected key while preserving private downloads. Private
+ciphertext, its known protected key, retained ZIPs and encrypted open/recent list
+caches in every window, while preserving private downloads. Private
 downloads follow the platform's normal app-data backup policy. Interactive OAuth
 account setup remains future work. Session-only token updates are lost on exit;
 providers that rotate refresh tokens may require a fresh credential package.
@@ -134,7 +143,8 @@ Wrong passwords keep the prompt open. The Settings connection page also offers
 one that was not retained. **Lock credential session** clears decoded credentials
 while keeping discoverable remote names, local copies, retained ZIPs and saved
 credentials. Save or discard private edits
-before locking. **Forget saved credentials** also removes retained ZIPs and keys.
+before locking. **Forget saved credentials** also removes retained ZIPs, keys and encrypted
+open/recent list caches.
 
 ### Multiple credential packages on Android and iOS
 

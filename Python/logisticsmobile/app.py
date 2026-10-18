@@ -116,6 +116,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         from .recent_documents import RecentDocuments
         self.recent_documents = RecentDocuments(workspace_root)
         self.workspace = Workspace(workspace_root)
+        from features.rclone.mobile.document_lists import CredentialDocumentLists
+        self.credential_document_lists = CredentialDocumentLists(self)
         if self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
             self.clear_restored_documents()
         restored_reader = self.workspace.sessions.get(self.workspace.active)
@@ -236,6 +238,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         from .markdown_speech import stop_markdown_speech
         stop_markdown_speech(self)
         self.body = body
+        if hasattr(self, 'settings_navigation'):
+            self.settings_navigation.reflow()
         batch = getattr(self, 'private_comic_batch', None)
         if batch is not None and batch.view is not None and batch.view not in body.children:
             self.retire_private_comic_batch()
@@ -256,6 +260,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         for overlay in tuple(getattr(self, '_speech_overlays', ())):
             overlay.reposition()
         self.adaptive.render()
+        if hasattr(self, 'settings_navigation'):
+            self.settings_navigation.reflow()
         if hasattr(self, 'home_panels') and self.main_window.content is self.native_host.root:
             self.reflow_home()
         if hasattr(self, 'document_launchers'):
@@ -356,6 +362,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 self.adaptive.focus_session(key)
                 if session.provider == 'library':
                     self.loop.create_task(self.resume_library_session(session))
+                elif session.provider == 'credential-reference':
+                    self.loop.create_task(self.credential_document_lists.open(session))
                 elif session.provider == 'provider-session':
                     self.provider_sessions().activate(session.id)
                 else:
@@ -433,6 +441,12 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 self.workspace.close(key, guard=lambda session: True)
             self.show_documents_hub()
             return True
+        if self.workspace.sessions[key].provider == 'credential-reference':
+            self.credential_document_lists.closed(self.workspace.sessions[key])
+            self.workspace.close(key, guard=lambda session: True)
+            self.save_workspace()
+            self.show_documents_hub()
+            return True
         if self.workspace.sessions[key].provider == 'provider-session':
             if not self.provider_sessions().close(key, discard=choice == 'discard'):
                 return False
@@ -493,8 +507,12 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         for view in self.text_views.values():
             view.session.transient = bool(getattr(view.document, 'private', False))
         try:
+            self.credential_document_lists.refresh()
             self.workspace.save()
-            self.recent_documents.remember(self.workspace.sessions.get(self.workspace.active))
+            active = self.workspace.sessions.get(self.workspace.active)
+            self.recent_documents.remember(active)
+            if active is not None and getattr(active, 'history_source', None):
+                self.recent_documents.remember_file(active, active.history_source)
             self.scene_manager.save_destination(self)
         except (OSError, ValueError) as error:
             self.recovery_notice.text = str(error)
@@ -525,9 +543,14 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
 
     def show_settings(self, widget=None, **kwargs):
         from .hub_ui import heading
-        from .settings_ui import switch_row, build_information, speech_voice_setting
-        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(heading('App'))
+        from .settings_ui import switch_row, build_information, speech_voice_setting, SettingsNavigation
+        sections = {}
+        def category(title):
+            section = toga.Box(style=Pack(direction=COLUMN, margin=16))
+            section.add(heading(title))
+            sections[title] = section
+            return section
+        box = category('App')
         self.document_cards_choice = toga.Switch('Document card overview',
             value=self.preferences.values['document_card_overview'] == 'true', style=Pack(height=48))
         box.add(switch_row(self, 'Document card overview', self.document_cards_choice,
@@ -547,13 +570,14 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             'Closes documents with no pending changes in Open documents when the app restarts. '
             'Stored documents, reading progress and unsaved drafts are kept.'))
         if type(self._impl).__module__.startswith('toga_android.'):
+            box = category('Appearance')
             self.android_eink_choice = toga.Switch('High contrast / E Ink',
                 value=self.preferences.values['android_eink'] == 'true', style=Pack(height=48))
             box.add(switch_row(self, 'High contrast / E Ink', self.android_eink_choice,
                 'Use black text on white, strong borders and simpler controls. Overrides dark mode and reader colors '
                 'without changing images or files. Saved immediately. No BOOX hardware refresh control.'))
             self.android_eink_choice.on_change = self.change_android_eink
-        box.add(heading('Read aloud'))
+        box = category('Read aloud')
         box.add(speech_voice_setting(self))
         self.session_speech_choice = toga.Switch('Session-only speech while locked',
             value=self.preferences.values['session_speech_when_locked'] == 'true',
@@ -562,10 +586,10 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             'Allow already-started read-aloud from session-only credentials to keep playing '
             'and show system playback controls while locked. Off by default. This choice is saved. '
             'It does not unlock credentials or permit new file reads while locked.'))
-        box.add(heading('Text & Markdown'))
+        box = category('Text & Markdown')
         box.add(toga.Label('Editor and preview font size'))
         box.add(self.font_choice)
-        box.add(heading('Books & Comics'))
+        box = category('Books & Comics')
         from .magnifier import setting
         box.add(toga.Label('Comic & PDF magnifier zoom'))
         self.magnifier_choice = setting(self)
@@ -573,9 +597,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         box.add(toga.Label('Keep holding; tap −/+ just outside the lens’s upper corners.\nShared across comics and PDFs. Saved immediately.', style=Pack(font_size=12)))
         box.add(toga.Button('Saved books & comics…', on_press=self.show_saved_files, style=Pack(height=48)))
         box.add(toga.Label('Use Appearance in an open reader\nto adjust its pages.', style=Pack(font_size=12)))
-        box.add(heading('LM Chat'))
+        box = category('LM Chat')
         box.add(toga.Button('Server & generation settings…', on_press=self.show_chat_configuration, style=Pack(height=48)))
-        box.add(heading('Folder Hub'))
+        box = category('Folder Hub')
         if type(self._impl).__module__.startswith('toga_android.'):
             box.add(toga.Button('Local / LocalCrypt location…', on_press=self.show_collection_storage, style=Pack(height=48)))
         self.show_legacy_choice = toga.Switch('Show Legacy',
@@ -585,6 +609,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             'Show Legacy- folders in Folder Hub, file browsers and library shortcuts, '
             'and credential choices whose names start with Legacy. This choice lasts only until the app closes.'))
         box.add(toga.Button('rclone / Remote connections…', on_press=self.show_cloud_connections, style=Pack(height=48)))
+        box = sections['App']
         box.add(toga.Label('Preferences save automatically on this device.', style=Pack(font_size=12)))
         box.add(toga.Button('Reload preferences', on_press=self.reload_preferences, style=Pack(height=48)))
         box.add(self.settings_status)
@@ -593,12 +618,13 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             if self.window_id != 'primary':
                 box.add(toga.Button('Close window', on_press=lambda widget, **kw:
                     self.scene_manager.close_window(self), style=Pack(height=48)))
+        box = category('Help')
         if type(self._impl).__module__.startswith('toga_android.'):
             box.add(toga.Button('Developer settings…', on_press=self.open_android_developer_settings, style=Pack(height=48)))
         from .documentation_ui import show_documentation
         box.add(toga.Button('Mobile documentation', on_press=lambda widget, **kw: show_documentation(self),
                             style=Pack(height=48)))
-        box.add(heading('About'))
+        box = category('About')
         self.build_version_label = toga.Label(build_information(self.version),
             style=Pack(font_size=12, color='#808080'))
         box.add(self.build_version_label)
@@ -606,7 +632,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.font_choice.on_change = self.save_preferences
         self.restore_choice.on_change = self.save_preferences
         self.clear_documents_choice.on_change = self.save_preferences
-        self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), destination='settings', root=True)
+        self.settings_navigation = SettingsNavigation(self, sections)
+        self.show_view(self.settings_navigation, destination='settings', root=True)
+        self.settings_navigation.reflow()
 
     def refresh_document_overview(self):
         # Replace only the retained root, including when a detail is open.

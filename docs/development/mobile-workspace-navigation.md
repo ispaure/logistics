@@ -166,12 +166,35 @@ Documents keeps the menu and main browser as separate widgets to avoid borrowing
 a widget twice. Library shortcuts retain the discovery provider (including pulled
 crypt namespaces) and reject changed credentials. Clearing private catalog state
 invalidates drawer enumeration, clears private browser rows and rebuilds the menu.
-`RecentDocuments` stores at most six provider/resource/kind triples in each
-window's private workspace. It omits titles and transient/provider-session entries,
-preserves malformed history, and can reopen a closed ordinary document or book.
+`RecentDocuments` exposes at most ten entries in each window's private workspace.
+Ordinary identities and saved-credential file references carry an optional opened
+timestamp; older histories remain readable. `document_sources` excludes session-only
+connections from the ordinary on-disk history, even when their credential ZIP is
+retained. Session-only recent entries join the list only in RAM after authentication.
+
+`features.rclone.mobile.document_lists.CredentialDocumentLists` saves session-only
+open/recent references under `CredentialDocumentLists/<credential digest>/<window
+digest>.zip`. The archive's sole member is the generic `entries.json`; user filenames
+and paths occur only in its encrypted contents. Native `document_lists_seal/open`
+uses the already authenticated credential ZIP's password and AES-256 ZIP encryption.
+The password stays only in native session memory and is cleared when credentials
+lock, clear or are replaced; neither it nor decrypted cache payloads enter a vault.
+Only password-protected credential ZIPs enable caching. Connection identities are
+validated when decrypting and when reopening files. Corrupt caches are preserved.
+
+Unlocking restores metadata-only transient `credential-reference` entries in Open
+documents and RAM-only Recent entries, without network reads. Selecting an entry
+constructs its reader on demand. Closing removes it from the encrypted open list
+and retains its recent entry. Locking/replacing credentials retires live readers
+without erasing their saved open list. The cache contains no document bytes or
+unsaved edits; explicit privacy-gated exports remain excluded. Files inherited
+from older retained-credential plaintext history are migrated only after ciphertext
+publication succeeds. Cache writes serialize with deletion; forgetting credentials
+removes encrypted lists and decoded entries across windows. Credential replacement
+also deletes the replaced retained package's list cache.
 
 `SavedFilesUI` exposes retained library imports in Settings independently of the
-six recent identities and active workspace sessions. `LibraryStore.stored_files`
+ten recent identities and active workspace sessions. `LibraryStore.stored_files`
 counts UUID archive/JSON pairs once and includes incomplete or corrupt imports;
 linked or invalid identities are reported as unmeasurable. Sizes cover archive
 and reading-record bytes, excluding the derived metadata index, Local/LocalCrypt
@@ -284,7 +307,7 @@ session imports without a retained archive need one fresh selection. Forgetting
 credentials destroys the cache key before removing the retained files.
 
 Documents groups open sessions by format, ahead of recent closed documents. New/Open commands use a compact toolbar rather than tool cards. Private provider
-sessions remain transient and recent history admits only ordinary provider UUIDs.
+sessions remain transient; recent history separately admits eligible reopen references.
 Workspace saving also checks that provider allowlist independently of the transient
 flag. PrivateSessions records the opening client/generation; Home, document cards
 and activation reject locked or superseded private sessions without consulting the
@@ -387,9 +410,9 @@ credential becomes hidden, both the selection and its retained name reset to All
 
 ## Task-focused presentation (local UX passes, 2026-10-15)
 
-`HubUI` renders visible open sessions before ordinary recent identities. Recent
+`HubUI` renders visible open sessions before eligible recent identities. Recent
 reopening uses the existing checkpoint and reader/editor activation contracts;
-private session titles and previews remain excluded. Card grids reflow to one,
+session-only references stay out of plaintext history and private content previews remain excluded. Card grids reflow to one,
 two or three columns, including spacers for an incomplete row. Home reflows
 Recent and Your spaces independently of the document grids.
 
@@ -612,3 +635,28 @@ Markdown toolbars at the article's left edge (documentation x=284, Notes Library
 x=272 logical points), beyond each 260-point browser pane. Local screenshots
 and measurements are in ignored `Mobile/logs/browser-pane-review/`. Android
 rendering was not visually verified in this pass.
+
+## Settings categories and responsive panes
+
+`SettingsNavigation` in `settings_ui.py` owns each window's category selection
+and retained option ScrollContainers. `show_settings` builds the existing controls
+into category-owned Boxes rather than one long scroll page. Compact category
+selection uses the existing `settings-category` native route. At 640 points/dp
+of allocated Settings width, the root keeps a category sidebar and selected
+options pane; category selection replaces only that pane. Both panes scroll
+independently. The width comes from `adaptive.content_width`, accounting for
+native rails and safe areas on Android and iOS. `fold_layout.seam_fraction`
+aligns the sidebar with a vertical Duo hinge; unfolded landscape uses the normal
+wide layout.
+
+`resize_workspace` and native `route_changed` synchronize the layout. Widening
+a compact category returns its retained controls to the root and removes only
+that category route. Narrowing a visible wide root opens the selected category
+as a detail route. Nested pages are retained during resizing; returning through
+Back completes the category transition without dropping those pages early.
+Control instances and current values survive layout changes. The shared
+preferences status follows the selected category.
+
+`test_settings_navigation` covers compact Back, wide selection, rotation,
+nested-page return, Duo seam sizing and Android/iOS category availability;
+`test_settings_ui` retains preference persistence and explanatory help checks.

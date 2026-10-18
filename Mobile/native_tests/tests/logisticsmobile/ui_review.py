@@ -357,6 +357,8 @@ async def exercise_ui_review(app):
         await capture('files-' + mode)
         app.show_settings()
         await capture('settings-' + mode)
+        app.settings_navigation.choose('Folder Hub')
+        await capture('settings-folder-hub-' + mode)
     if get_os() is OS.IOS:
         app.main_window._impl.native.overrideUserInterfaceStyle = 0
     else:

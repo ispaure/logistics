@@ -26,6 +26,15 @@ does not run Obsidian plugins.
 
 ## File browser locations and actions
 
+**Local File Browser** uses source tabs rather than a storage dropdown.
+**On this device** opens the managed Local collection. On iOS, **Shared with
+Files** opens files beside that collection in the app's shared Files directory;
+the collection itself is accessed through the other tab. The shared tab appears
+only when that storage location is available. Opening LocalCrypt shows its
+selected source as an additional tab. Folder actions are under **…**; the back
+control returns to the parent folder or Folder Hub. **Cloud File Browser** uses
+the same directory, search and listing controls.
+
 The file browser keeps your current folder, selection, list/tile mode, search, sort and browse
 history when you visit Documents or Settings. Local and remote browsers give most
 of the screen to the listing. Tap a local file to open it, or a folder to browse

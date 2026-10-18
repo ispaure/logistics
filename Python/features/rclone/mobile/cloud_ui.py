@@ -191,7 +191,7 @@ class CloudUI(LocalCryptUI):
             self.set_loaded_remote_names(self.loaded_remote_names())
             self.cloud_package.text = self.loaded_package_label()
         if present:
-            self.show_view(self.cloud_view, destination='files', route='remote-browser', title='Remote file browser')
+            self.show_view(self.cloud_view, destination='files', route='remote-browser', title='Cloud File Browser')
 
     async def browse_cloud_path(self, widget=None, **kwargs):
         if await self.browse_cloud(preserve_path=True):
@@ -445,7 +445,7 @@ class CloudUI(LocalCryptUI):
         if not hasattr(self, 'credential_packages'):
             from features.rclone.mobile.credential_packages import CredentialPackages
             from features.rclone.mobile.credential_vault import ProtectedVault
-            self.credential_packages = CredentialPackages(ProtectedVault.for_app(self.app, packages=True), self.cloud_client)
+            self.credential_packages = CredentialPackages(ProtectedVault.for_app(self.app, packages=True), self.cloud_client, document_cache_root=self.app.credential_document_lists.root)
         return self.credential_packages
 
     def remember_credential_association(self, name, remotes, *, session_only):
@@ -517,6 +517,30 @@ class CloudUI(LocalCryptUI):
             groups[title] = remotes
         return groups
 
+    def home_unlock_candidates(self):
+        """Inspect retained metadata/files only; never restore or decode credentials."""
+        try:
+            cache = self.retained_packages()
+            loaded = {item['package_name'] for item in
+                      getattr(getattr(self, 'cloud_client', None), 'package_records', ())}
+            return sorted(((key, item) for key, item in getattr(cache, 'items', {}).items()
+                           if item['zip'] not in loaded
+                           and self.legacy_name_visible(item['zip'], prefix='legacy')
+                           and cache.path(key).is_file()), key=lambda row: row[1]['zip'].casefold())
+        except (OSError, ValueError):
+            return []
+
+    def show_home_unlock(self, widget=None, **kwargs):
+        if not self.app.checkpoint():
+            return
+        self.show_cloud(present=False)
+        choices = self.home_unlock_candidates()
+        if choices:
+            self.show_retained_unlock(choices[0][0], destination='home',
+                                      resume=self.app.show_home, choices=choices)
+        else:
+            self.app.show_home()
+
     def retained_credential_associations(self):
         try:
             cache = self.retained_packages()
@@ -580,11 +604,17 @@ class CloudUI(LocalCryptUI):
             self.cloud_import_message.text = import_hint('Load the credential ZIP for ' + remote + '. Retained password-protected ZIPs need their ZIP password to unlock again.')
         return False
 
-    def show_retained_unlock(self, key, remote=None, *, identity=None, resume=None, destination='files'):
+    def show_retained_unlock(self, key, remote=None, *, identity=None, resume=None, destination='files', choices=None):
         cache = self.retained_packages()
         password = self.credential_unlock_password = PasswordInput(placeholder='ZIP password', style=Pack(height=44))
         status = self.credential_unlock_status = toga.Label('')
+        selector = None
+        if choices:
+            labels = {item['zip']: candidate for candidate, item in choices}
+            selector = toga.Selection(items=list(labels), style=Pack(height=44))
+            selector.on_change = lambda widget, **kw: setattr(password, 'value', '')
         async def unlock(widget=None, **kwargs):
+            selected = labels[selector.value] if selector is not None else key
             if self.cloud_busy or getattr(self, 'transfer_busy', False):
                 return
             secret = password.value
@@ -595,16 +625,17 @@ class CloudUI(LocalCryptUI):
                 if not self.clear_private_reader():
                     raise ValueError('Save or discard private edits before unlocking another credential.')
                 self.clear_private_catalog()
-                names = await asyncio.to_thread(self.cloud_client.import_package, cache, key, secret, remember=False)
+                names = await asyncio.to_thread(self.cloud_client.import_package, cache, selected, secret, remember=False)
                 await self._load_crypt_remote_names()
                 self.set_loaded_remote_names(self.visible_remote_names(names))
                 checked_remote = self.cloud_client.resolve_remote(remote, identity) if remote is not None and identity is not None and hasattr(self.cloud_client, 'resolve_remote') else remote
                 if checked_remote is not None and (checked_remote not in names or (identity is not None
                         and await asyncio.to_thread(self.cloud_client.connection_identity, checked_remote) != identity)):
                     raise ValueError('This ZIP does not match the folder connection.')
-                self.remember_loaded_packages(cache.items[key]['zip'], names, session_only=True)
+                self.remember_loaded_packages(cache.items[selected]['zip'], names, session_only=True)
                 self.cloud_package.text = self.loaded_package_label()
-                self.cloud_status.value = 'Credential ZIP unlocked for this app session. All its available remotes are now shown.'
+                self.app.credential_document_lists.refresh()
+                self.cloud_status.value = 'Credential ZIP unlocked for this app session. Its open and recent file lists are restored.'
                 ready = True
             except (OSError, ValueError) as error:
                 status.text = import_hint('Unlock failed: ' + str(error)[:160])
@@ -621,7 +652,8 @@ class CloudUI(LocalCryptUI):
         visible_remotes = self.rclone_ui.visible_remotes
         password.on_confirm = unlock
         self.credential_unlock_button = toga.Button('Unlock', on_press=unlock, style=Pack(height=44))
-        box = toga.Box(children=[toga.Label(import_hint('Unlock ' + cache.items[key]['zip']), style=Pack(font_size=18)),
+        box = toga.Box(children=[toga.Label('Choose credential' if choices else import_hint('Unlock ' + cache.items[key]['zip']), style=Pack(font_size=18)),
+            *([selector] if selector is not None else []),
             toga.Label(import_hint('Its ZIP is retained on this device. The password is needed for this session and is never saved.')),
             password, self.credential_unlock_button, status,
             toga.Button('Cancel', on_press=lambda widget, **kw: self.routes.back(), style=Pack(height=44))],
@@ -739,6 +771,7 @@ class CloudUI(LocalCryptUI):
             self.cloud_pending_zip = None
             self.cloud_selected_zip.text = import_hint('Loaded ZIP: ' + selected.name)
             self.cloud_import_message.text = import_hint(f'{len(names)} total remote(s) available. Open Folder Hub or Browse remote files to choose a remote, then tap Browse folder.' + cache_error)
+            self.app.credential_document_lists.refresh()
             self.cloud_status.value = f'{selected.name} loaded ({"saved" if self.cloud_remember.value else "session only"}). {len(names)} total remote(s) available. Open Folder Hub to browse. No connection has been made yet.'
         except Exception as error:
             self.cloud_status.value = 'Import failed: ' + str(error)[:300]
@@ -931,7 +964,10 @@ class CloudUI(LocalCryptUI):
                 cache.forget()
             self.preferences.save(remote_packages='[]')
             self.session_credential_packages = []
-            self.cloud_status.value = 'Saved and session credentials forgotten. Private downloads remain available.'
+            self.app.credential_document_lists.forget_memory()
+            from .document_lists import forget_cache
+            forget_cache(self.app.credential_document_lists.root)
+            self.cloud_status.value = 'Saved and session credentials and encrypted document lists forgotten. Private downloads remain available.'
         except Exception:
             self.cloud_status.value = 'Could not forget the protected credentials. Unlock the device and retry.'
         finally:

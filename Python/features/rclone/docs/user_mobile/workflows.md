@@ -24,6 +24,16 @@ for connection scopes, encrypted storage, cancellation and credential persistenc
 
 ### Mobile folder navigation
 
+Cloud folders open in **Cloud File Browser**. Open documents and Recent display
+cloud or device icons and a connection padlock beside filenames. Recent keeps up
+to ten eligible files. For password-protected session-only credential ZIPs, open
+and recent filenames and paths are saved in an AES-256 ZIP protected with the same
+credential ZIP password. Enter that password to unlock the credential and restore
+its entries; files load only when selected. No file contents, unsaved edits or
+passwords are stored in the cache. Forgetting credentials also removes these
+caches, including other windows' copies. An unencrypted credential ZIP has no
+required password and does not enable this cache.
+
 In the mobile Folder Hub, tapping a folder opens its preferred available copy.
 The adjacent **•••** action button keeps explicit Browse Local/LocalCrypt/Remote,
 Pull and Push choices together. Mapped copies show Pull and Push direction.
@@ -42,6 +52,15 @@ source retained as a recovery backup. Credentials and transfer associations stay
 internal. A missing card stops collection operations without an internal fallback.
 See the [mobile storage guide](../../../../../docs/user_mobile/settings/settings.md#local--localcrypt-location)
 for migration, restart and existing-destination behavior.
+
+### Unlock from Home
+
+**Unlock** beside **Your workspace** opens a credential chooser and ZIP password
+field for retained credential ZIPs that are present on disk and not already
+loaded. Unlocking uses the existing session-only import and returns to Home;
+the password is cleared after each attempt and when changing the selection.
+Show Legacy applies to this chooser and button availability. Home displays only
+the generic Unlock action until you open the chooser.
 
 ### Side-by-side mobile credential packages
 

@@ -15,6 +15,7 @@ class CloudClient:
     # wrapper must invalidate cached plaintext when any wrapper replaces it.
     _credential_generation = 0
     _credential_observers = weakref.WeakSet()
+    _document_list_observers = weakref.WeakSet()
     _session_privacy = None
     _package_records = ()
     _package_privacy = {}
@@ -97,7 +98,7 @@ class CloudClient:
         return self._request(action, **values)
 
     def _request(self, action, **values):
-        if action not in {'remote_cache_open', 'remote_cache_status', 'remote_cache_close', 'remote_cache_archive', 'remote_stat', 'remote_range', 'remote_archive', 'add_smb', 'import', 'list', 'connection_identity', 'mirror_info', 'mirror_validate', 'mirror_progress', 'mirror_review', 'mirror_review_progress', 'mirror_review_clear', 'mirror_sync', 'probe', 'clear', 'cancel', 'vault_open', 'vault_info', 'protect_package', 'unprotect_package', 'crypt_remotes', 'crypt_describe', 'crypt_decode', 'crypt_encode', 'crypt_metadata', 'crypt_path', 'crypt_paths', 'crypt_raw_read', 'crypt_raw_write', 'crypt_stat', 'crypt_range', 'crypt_archive', 'crypt_manifest', 'crypt_thumbnail', 'file_thumbnail', 'image_thumbnail', 'remote_thumbnail', 'file_archive'}:
+        if action not in {'document_lists_seal', 'document_lists_open', 'remote_cache_open', 'remote_cache_status', 'remote_cache_close', 'remote_cache_archive', 'remote_stat', 'remote_range', 'remote_archive', 'add_smb', 'import', 'list', 'connection_identity', 'mirror_info', 'mirror_validate', 'mirror_progress', 'mirror_review', 'mirror_review_progress', 'mirror_review_clear', 'mirror_sync', 'probe', 'clear', 'cancel', 'vault_open', 'vault_info', 'protect_package', 'unprotect_package', 'crypt_remotes', 'crypt_describe', 'crypt_decode', 'crypt_encode', 'crypt_metadata', 'crypt_path', 'crypt_paths', 'crypt_raw_read', 'crypt_raw_write', 'crypt_stat', 'crypt_range', 'crypt_archive', 'crypt_manifest', 'crypt_thumbnail', 'file_thumbnail', 'image_thumbnail', 'remote_thumbnail', 'file_archive'}:
             raise ValueError('Unsupported remote operation.')
         if values.get('remote') and values.get('identity'):
             values['remote'] = self.resolve_remote(values['remote'], values['identity'], cipher=action.startswith('crypt_'))
@@ -153,7 +154,7 @@ class CloudClient:
                     CloudClient._package_privacy = {name: gate for name, gate in CloudClient._package_privacy.items() if name in labels}
             CloudClient._session_privacy = next(iter(CloudClient._package_privacy.values()), None)
             CloudClient._credential_generation += 1
-            for observer in tuple(CloudClient._credential_observers):
+            for observer in (*tuple(CloudClient._credential_observers), *tuple(CloudClient._document_list_observers)):
                 observer.credentials_changed()
 
     def import_package(self, access, reference, password, *, remember=True):

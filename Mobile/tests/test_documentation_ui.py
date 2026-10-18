@@ -85,7 +85,9 @@ class DocumentationTests(unittest.TestCase):
 
     def test_settings_entry_opens_bundled_guide(self):
         self.app.show_settings()
-        box = self.app.body.children[0].content
+        navigation = self.app.settings_navigation
+        navigation.choose('Help')
+        box = navigation.sections['Help']
         button = next(child for child in box.children if getattr(child, 'text', '') == 'Mobile documentation')
         button.on_press()
         owner = self.app.documentation
@@ -93,7 +95,10 @@ class DocumentationTests(unittest.TestCase):
         self.assertGreaterEqual(len(owner.catalog.pages), 5)
         self.assertEqual(self.app.native_host.state.destination, 'settings')
         self.assertTrue(self.app.routes.back())
-        self.assertIs(self.app.body.children[0].content, box)
+        self.assertEqual(navigation.selected, 'Help')
+        self.assertIs(navigation.options['Help'].content, box)
+        self.assertIn(navigation.options['Help'],
+                      navigation.detail.children if navigation.wide else self.app.body.children)
 
     def test_documentation_speaker_opens_current_page_and_stops_on_navigation(self):
         import json

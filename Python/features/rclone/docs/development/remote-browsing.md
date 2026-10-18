@@ -15,12 +15,26 @@ mode: enumerating a folder must not enqueue archive-cover reads on the serial
 native connection. `CloudUI.remote_activity` runs a UI-loop timer and marshals
 worker step notifications back to that loop. Its timer and indeterminate bar are
 retired on success, error and cancellation; late worker callbacks are ignored.
-The mobile browser starts with its compact location header and the listing.
-The header uses a plain label for the current directory's final path component
-(the remote name at its root), alongside storage/lock icons and a search
-button. Search is hidden until requested; closing it clears the filter. Item
-counts and the top Sort control are omitted; large-folder paging shows only the current page and total
-pages. It has no general actions dropdown or extra Folder Hub row.
+The mobile browser is titled **Cloud File Browser** and starts with its compact
+location header and the listing. Open documents and Recent use cloud/device and
+connection lock badges. The mobile host's `document_sources` keeps saved-credential
+references in ordinary app-private history. Session-only credential paths and
+filenames use `mobile.document_lists.CredentialDocumentLists` instead. Native
+`document_lists_seal/open` writes/reads an AES-256 ZIP containing one generic
+`entries.json` member, under hashes of the credential package and window. The
+credential ZIP's original password is held only in native session memory and is
+cleared with credential lock/replacement. Only authenticated, password-protected
+credential ZIPs enable this cache. No cache contains file contents or unsaved edits.
+
+After credential unlock, validated open/recent entries restore in RAM; restored
+open entries are transient placeholders until selected. Restore never fetches
+remote file content. Explicit close updates the encrypted open list; credential
+lock preserves it. Forgetting retained credentials deletes list caches across
+windows, and cache writes serialize with deletion. Malformed/authentication-failed
+archives are preserved; there is no plaintext cache fallback. Native tests cover
+AES strength, credential-password compatibility, authentication, tampering,
+replacement, isolation and bounded input; host tests cover restoration, migration,
+list limits, explicit close and forget actions. Live readers remain transient.
 `set_cloud_busy` attaches Cancel to the location header and a slim progress bar
 below it only during requests, removing both on completion. It uses the header’s
 current parent because adaptive presentation may wrap the browser contents.
@@ -78,7 +92,14 @@ including the transfer-review entry path. They must never wait on native locks
 on the UI thread. The native remote probe checks comic → Hub → other remote's
 actions and rejects native requests made from the UI thread during that return.
 
-Remote readers are read-only, including text and metadata. Unsupported formats and
+Remote readers are read-only, including text and metadata. The internal Markdown
+editor entry point also rejects read-only readers. Plaintext history eligibility
+requires the current connection fingerprint to match a saved credential record;
+a reused remote name alone cannot authorize it. Mobile location headers reuse
+their native storage indicators while storage and lock state remain unchanged.
+Document connection badges use published credential fingerprints without native
+I/O on the UI thread, including while a network operation holds the bridge lock.
+Unsupported formats and
 reader limits produce a manual-copy dialog; there is no automatic download/open
 fallback. Desktop and mobile filter the listed folder without invoking recursive
 resource search. Ordinary and crypt remote previews stay in memory.
@@ -203,3 +224,13 @@ The host uses cancellable local reads without rebuilding cloud controls or
 rescanning downloads on folder taps. A superseded host, folder request or private
 credential generation cannot publish late rows. Native pages contain at most 40
 entries, are assembled offscreen, and load thumbnails asynchronously.
+
+## Home credential unlock
+
+Home checks retained package metadata and file presence without restoring or
+decrypting credentials. `home_unlock_candidates` excludes loaded package names
+and credentials hidden by the Legacy visibility policy. The generic Home action
+opens `show_retained_unlock` with a credential selector in the Home route; the
+existing session-only import, private-reader edit guard and password clearing
+apply. Successful unlock returns to Home. No remote list or document contents
+are added to the Home heading.
