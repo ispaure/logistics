@@ -50,21 +50,13 @@ class ObsidianTests(unittest.TestCase):
         self.assertIsNone(vault_root(self.provider, 'Vault', [dict(path='Vault/.obsidian', directory=False)]))
         self.assertEqual(vault_root(LocalFiles(self.vault), '', LocalFiles(self.vault).list('')), '')
 
-    def test_file_browser_offer_disappears_on_navigation_and_stop(self):
-        browser = FileBrowser(vault_app=self.app, vault_destination='documents')
+    def test_file_browser_has_no_vault_action(self):
+        browser = FileBrowser()
         try:
             browser.set_entries(ResourceSelection(self.provider), 'Vault', self.provider.list('Vault'))
-            self.assertIn(browser.vault_button, browser.navigation_controls.children)
-            self.assertEqual(browser.vault_button.control_icon, 'obsidian')
-            owner = self.run_async(browser.open_vault())
-            self.assertEqual(owner.destination, 'documents')
-            self.assertEqual(self.app.native_host.state.destination, 'documents')
-            browser.set_entries(self.provider, 'Vault/Projects', self.provider.list('Vault/Projects'))
-            self.assertNotIn(browser.vault_button, browser.navigation_controls.children)
-            browser.set_entries(self.provider, 'Vault', self.provider.list('Vault'))
-            browser.stop()
-            self.assertIsNone(browser.vault_offer)
-            self.assertNotIn(browser.vault_button, browser.navigation_controls.children)
+            self.assertFalse(hasattr(browser, 'vault_button'))
+            self.assertFalse(any(getattr(button, 'control_icon', '') == 'obsidian'
+                for button in browser.navigation_controls.children))
         finally:
             self.run_async(browser.close())
 
@@ -148,7 +140,7 @@ class ObsidianTests(unittest.TestCase):
         owner.dispose()
         self.assertEqual(owner.rows.children, [])
         self.assertIsNone(owner.path)
-        self.assertEqual(owner.title.text, 'Vault closed')
+        self.assertEqual(owner.title.text, 'Notes Library closed')
 
     def test_credential_catalog_cleanup_clears_private_vault_preview(self):
         self.app.show_cloud(present=False)

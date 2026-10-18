@@ -1,6 +1,6 @@
 """Independent, optional plain-text/code editing feature."""
 
-FEATURE_DESCRIPTION = 'Edit text and code files with search, syntax highlighting and file options.'
+FEATURE_DESCRIPTION = 'Edit text and code files, or browse Markdown Notes Libraries from location actions.'
 
 
 def register():

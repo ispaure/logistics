@@ -17,19 +17,26 @@ async def exercise_obsidian(app, encrypted):
                            ('Projects/Plan.md', b'# Native plan\n\n**Nested Markdown note**'),
                            ('.obsidian/hidden.md', b'# Not a note'), ('attachment.txt', b'Not Markdown')]:
             provider.create_file('Native Obsidian Vault/' + path, BytesIO(data))
-        if label == 'local':
-            await app.show_files(local_root=True)
-            assert await app.browser_file_location(('Local files', 'Native Obsidian Vault'))
-            browser = app.file_browser
-        else:
-            drawer = app.adaptive.browser('documents')
-            assert await drawer.show_main_browser('LocalCrypt: Vault review', folder='Native Obsidian Vault', provider=provider)
-            browser = drawer.browser
-        assert browser.vault_button in browser.navigation_controls.children
-        assert browser.vault_button.control_icon == 'obsidian'
-        await asyncio.sleep(.2)
+        from unittest.mock import patch
+        from contextlib import nullcontext
+        entry = dict(source='Local' if label == 'local' else 'LocalCrypt',
+            kind='local' if label == 'local' else 'crypt',
+            value='Native Obsidian Vault' if label == 'local' else encrypted.remote,
+            name='Native Notes Library', copies=[])
+        # This fixture's crypt vault is a selected subfolder inside the native
+        # encrypted root. Production mapped roots use the same provider/scope.
+        scope = (patch('logisticsmobile.notes_actions.resolve_source', return_value=(provider, 'Native Obsidian Vault'))
+                 if label == 'localcrypt' else nullcontext())
+        with scope:
+            app.show_picker_folder(entry)
+            await app._notes_offer_task
+        button = next(button for button, _ in app.folder_action_controls if button.text == 'Open Notes Library')
+        assert button.parent is not None
         await capture_window(app, output / (label + '-button.png'))
-        owner = await browser.open_vault()
+        await button.on_press()
+        owner = app.vault_browser
+        assert app.native_host.state.destination == 'documents'
+        assert owner.session.provider == 'notes-library'
         assert owner is not None and owner.provider.root == provider.root
         if label == 'localcrypt':
             assert owner.provider is provider
@@ -53,19 +60,25 @@ async def exercise_obsidian(app, encrypted):
             assert list(owner.sidebar.view.children) == [owner.tree]
         await capture_window(app, output / (label + '-tree.png'))
         owner.sidebar.show_detail()
+        await asyncio.sleep(.3)
         await capture_window(app, output / (label + '-note.png'))
         assert await owner.open_editor()
         assert 'Nested Markdown note' in app.provider_sessions().active.crypt_text.value
         app.close_crypt()
         owner.dispose()
         assert owner.path is None and not owner.rows.children
-        for _ in range(50):
-            text = await owner.web.evaluate_javascript('document.body ? document.body.textContent : ""')
-            if 'Nested Markdown note' not in str(text):
-                break
-            await asyncio.sleep(.1)
+        if hasattr(owner.web, 'private_closed'):
+            # Android deliberately destroys a private WebView; evaluating JS on
+            # a destroyed view cannot produce a callback.
+            assert owner.web.private_closed
         else:
-            raise AssertionError('Retired vault retained its note preview')
+            for _ in range(50):
+                text = await asyncio.wait_for(owner.web.evaluate_javascript('document.body ? document.body.textContent : ""'), 2)
+                if 'Nested Markdown note' not in str(text):
+                    break
+                await asyncio.sleep(.1)
+            else:
+                raise AssertionError('Retired Notes Library retained its preview')
     assert (ordinary.root / 'Native Obsidian Vault/Projects/Plan.md').read_bytes().startswith(b'# Native plan')
     for path in encrypted.root.rglob('*'):
         if path.is_file():

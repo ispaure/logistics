@@ -501,6 +501,16 @@ class FolderHubUI:
         page = toga.Box(children=[scroll], style=Pack(direction=COLUMN, flex=1, margin=12))
         if present:
             self.show_view(page, destination='files', route='folder-options', title=entry['name'])
+        from .notes_actions import offer_notes
+        notes_button = toga.Button('Open Notes Library', style=Pack(height=48))
+        self.folder_action_controls.append((notes_button, entry['source'] == 'Remote'))
+        notes_button._requires_crypt_session = entry['source'] == 'LocalCrypt'
+        host = getattr(self, 'app', self)
+        if present:
+            previous = getattr(host, '_notes_offer_task', None)
+            if previous is not None and not previous.done():
+                previous.cancel()
+            host._notes_offer_task = host.loop.create_task(offer_notes(host, dict(entry), box, notes_button, self.folder_picker_status))
         return page
 
 

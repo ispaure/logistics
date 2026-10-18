@@ -1,26 +1,32 @@
 # Mobile workspace drawers and paired documents
 
-## Obsidian vault browser
+## Notes Library
 
-`logisticsmobile.obsidian` owns mobile vault presentation over LocalFiles and
-CryptFiles. Both the Folder Hub file browser and the Documents workspace browser
-offer a crystal control only when the current listing contains a `.obsidian`
-directory. Remote providers and marker files do not opt in. Changing folder or
-retiring a browser removes its offer.
+`features.text_editor.notes` owns rooted containment, immediate-folder filtering,
+marker detection and bounded revision-checked note reads for both desktop and
+mobile. Desktop Text Editor contributes **Open Notes Library** to location
+actions through `notes_actions` and hosts `ui.notes_library` in Documents.
+`logisticsmobile.notes_actions` resolves the selected Local, LocalCrypt, mapped
+copy or Remote scope without opening its file browser; a background root probe
+adds the command to the location's Push/Pull actions page only when `.obsidian`
+is a directory. Probes perform no filesystem mutations, and generation/navigation
+checks discard stale results.
 
-The route reuses the Settings documentation's `AdaptiveSidebar`, with lazy
-provider folder enumeration, expandable Markdown-only rows, and a 2 MiB bounded
-note preview. Notes are read and rendered on a worker through the rooted provider;
-LocalCrypt previews never require a plaintext staging directory. Local Markdown
-links remain inside the vault, and Open in editor delegates to the existing
-provider session. Generation checks reject late private reads. Credential catalog
-cleanup clears private trees and previews; window resize reflows the retained
-sidebar using the native destination allocation.
+`logisticsmobile.obsidian` retains the native adaptive folder/page reader and
+owns a transient `notes-library` Documents session. Its hamburger, history,
+parent navigation and read-aloud controls stay with the reader. Closing the
+library removes its session; private catalog revocation clears its tree, speech
+and preview. iOS private previews use a nonpersistent WebView and Android disables
+browser disk caching/storage. Private HTML above 2 MiB is refused before toolkit
+loading. No plaintext staging directory is created.
 
-Host regressions live in `Mobile/tests/test_obsidian.py`. The native suite's
-`obsidian_checks.py` exercises the real crystal control, nested notes, adaptive
-layout and editor handoff for Local and native-bridge LocalCrypt, capturing the
-button, hierarchy and preview on both mobile platforms.
+Remote adapters advertise `remote_storage`; neither UI creates a search field
+for them. Root detection and explicit folder expansion use immediate listings,
+with no recursive enumeration, prefetch or remote search. Local name filtering
+only examines loaded rows. `Mobile/tests/test_notes_library.py` and desktop
+`test_notes_library_desktop.py` cover action placement, Documents ownership,
+remote call bounds, containment, cancellation and credential retirement. Native
+`obsidian_checks.py` covers real Local/LocalCrypt reads and action screenshots.
 
 Remote browsing mounts `cloud_up` beside `cloud_status` in the main browser,
 using the same 48-point up-arrow control as local browsing. It calls the existing

@@ -3,9 +3,10 @@
   "modules": [
     "__init__.py",
     "mobile/__init__.py",
-    "mobile/ui.py",
     "mobile/markdown_editor.py",
+    "mobile/ui.py",
     "names.py",
+    "notes.py",
     "resources.py"
   ]
 }

@@ -28,7 +28,7 @@ class MarkdownEditorTests(unittest.TestCase):
         self.app.show_documents(resume=True)
         self.assertEqual(self.app.editor_view.session.view['markdown_mode'], 'preview')
         self.assertIs(self.app.body.children[0], self.app.preview_box)
-        next(child for child in self.app.preview_box.children
+        next(child for child in self.app.editor_view.markdown_speech.button.parent.children
              if getattr(child, 'text', '') == 'Edit Markdown').on_press()
         self.assertEqual(self.app.editor_view.session.view['markdown_mode'], 'edit')
         self.assertIs(self.app.body.children[0], self.app.document_view)
@@ -117,7 +117,8 @@ class MarkdownEditorTests(unittest.TestCase):
         run = self.app.loop.run_until_complete
         self.assertTrue(run(self.app.open_crypt(copies=copies, key='Note.md')))
         owner = self.app.private_sessions.active
-        self.assertEqual(owner.crypt_content.children, [owner.markdown_speech.button, owner.crypt_preview])
+        self.assertEqual(owner.crypt_content.children, [owner.crypt_preview])
+        self.assertIn(owner.markdown_speech.button, owner.reader_toolbar.children)
         owner.toggle_private_preview()
         self.assertEqual(owner.crypt_content.children, [owner.crypt_formatted.view])
         bridge = owner.crypt_formatted
@@ -130,7 +131,8 @@ class MarkdownEditorTests(unittest.TestCase):
         owner.crypt_edit_mode.value = 'Source'
         self.assertEqual(owner.crypt_content.children, [owner.crypt_text])
         owner.toggle_private_preview()
-        self.assertEqual(owner.crypt_content.children, [owner.markdown_speech.button, owner.crypt_preview])
+        self.assertEqual(owner.crypt_content.children, [owner.crypt_preview])
+        self.assertIn(owner.markdown_speech.button, owner.reader_toolbar.children)
         self.assertTrue(run(self.app.open_crypt(copies=copies, key='Note.md', edit=True)))
         self.assertEqual(owner.crypt_content.children, [owner.crypt_text])
         owner.crypt_edit_mode.value = 'Formatted'

@@ -39,3 +39,13 @@ Markdown read-aloud shares the system playback controls used by EPUBs, including
 Play/Pause and approximate 15-second skips. Session-only credentials require an
 explicit saved opt-in for background speech; it defaults to off. See
 [Speech while locked](../../../../../docs/user_mobile/settings/settings.md#speech-while-locked).
+
+## Notes Library
+
+From a Local, LocalCrypt or Remote location's actions page, choose **Open Notes
+Library** when the root contains an `.obsidian` directory. The reader opens in
+Documents with a folder/page sidebar, note history and read-aloud controls.
+Remote libraries have no search or recursive index; folders load only when
+expanded. Local filtering searches only loaded note names. Notes are read-only
+in this view and limited to 2 MiB. Hidden configuration is excluded and links
+stay inside the library.

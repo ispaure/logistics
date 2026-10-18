@@ -453,7 +453,7 @@ class FileDrawer:
         self.refresh_requested = False
         self.storage = toga.Selection(items=['Local files'], style=Pack(height=48))
         self.status = toga.Label('', style=Pack(font_size=12, margin_bottom=4))
-        self.browser = FileBrowser(vault_app=self.app, vault_destination=destination, folder_visible=self.app.folder_path_visible, selected=lambda row: None, open_folder=self.open_folder,
+        self.browser = FileBrowser(folder_visible=self.app.folder_path_visible, selected=lambda row: None, open_folder=self.open_folder,
                                    navigate=self.navigate, open_file=self.open_file, preview=False)
         self.browser.navigation_controls.remove(self.browser.back_button)
         self.parent_button = toga.Button('Parent folder', on_press=self.up, enabled=False, style=Pack(height=48))

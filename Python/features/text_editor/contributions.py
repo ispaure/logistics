@@ -3,7 +3,7 @@
 from commonUtils.ui.features import BrowserExtension, FileActivation, SelectionAction
 from commonUtils.filesystem.files import File
 from commonUtils.persistence.text import is_text_path
-from features.contributions import Feature, SettingsContribution, DocumentLauncherContribution
+from features.contributions import Feature, SettingsContribution, DocumentLauncherContribution, FolderFeatureContribution
 from pathlib import Path
 
 
@@ -44,7 +44,9 @@ def activate_text(context):
 
 
 def register():
+    from .notes_actions import available, actions
     return Feature(
+        folder_features=[FolderFeatureContribution('Notes Library', available, actions, order=5, supports_private_folders=True)],
         id="text_editor",
         label="Text Editor",
         document_launchers=[DocumentLauncherContribution("text", "Text Editor", launch, "text", 10, new_document, "Edit plain text and code files.")],

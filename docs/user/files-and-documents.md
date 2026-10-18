@@ -353,3 +353,12 @@ In desktop reading mode, hover a local Markdown/text/code link to see a short
 source snippet in a preview window. Moving off the link closes it immediately.
 This does not open the file or change your reading history. Editing mode does
 not show hover previews. Missing, binary and external web links have no preview.
+
+## Notes Library
+
+On a location's Folder Hub actions page, **Open Notes Library** is offered when
+its root contains an `.obsidian` directory. It opens a document under Documents
+with an expandable folder/page sidebar and Back/Forward/Up navigation. Remote
+libraries have no search or recursive index; local filtering only filters loaded
+names. Notes are read-only here; private content remains in memory and stops
+being available when its credentials are retired.

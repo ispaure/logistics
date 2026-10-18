@@ -187,3 +187,17 @@ Markdown syntax for serialization. Wiki embeds retain their exact block source.
 Missing images fall back to alt text. Tests in `Mobile/tests/test_markdown_images.py`
 and `test_markdown_editor.py` cover rooted paths, WebP/PNG/JPEG, encrypted-provider
 reads, revoked access and source preservation.
+
+## Notes Library ownership
+
+`notes.py` provides toolkit-independent marker detection, rooted paths, bounded
+reads and immediate-child filtering. Desktop `notes_actions.py` contributes the
+location command; `ui/notes_library.py` owns its lazy Documents window and
+cooperative workers. Mobile resolves the same location scopes in
+`logisticsmobile.notes_actions` and presents them through the retained adaptive
+reader. No shared commonUtils API changes are required.
+
+Remote providers never get a search widget or recursive index. Private note data
+stays in memory and credential revocation retires the document. See the
+[workspace contracts](../../../../../docs/development/mobile-workspace-navigation.md#notes-library)
+for lifecycle and cross-platform validation.

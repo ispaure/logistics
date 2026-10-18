@@ -30,9 +30,7 @@ class FileBrowser(NativeBrowser):
         return 500
 
     def __init__(self, *, open_file=None, item_actions=None, folder_visible=None, bounded_pages=False,
-                 vault_app=None, vault_destination='files', **kwargs):
-        self.vault_app, self.vault_destination = vault_app, vault_destination
-        self.vault_offer = None
+                 **kwargs):
         self.bounded_pages = bounded_pages
         self.folder_visible = folder_visible
         self.on_open_file, self.on_item_actions = open_file, item_actions
@@ -55,7 +53,6 @@ class FileBrowser(NativeBrowser):
         self.widget.add(toga.Box(children=[self.back_button, self.page_label, self.options_button],
                                  style=Pack(direction=ROW, margin_top=4, margin_bottom=8)))
         self.navigation_controls = self.widget.children[-1]
-        self.vault_button = icon_button('obsidian', 'Browse Obsidian vault notes', on_press=self.open_vault)
         self.page_label.style.flex = 1
         self.page_label.style.font_size = 12
         self.widget.add(self.items)
@@ -63,30 +60,7 @@ class FileBrowser(NativeBrowser):
     def set_entries(self, provider, directory, rows, *, location=None):
         rows = tuple(rows)
         super().set_entries(provider, directory, rows, location=location)
-        self.vault_offer = None
-        if self.vault_button in self.navigation_controls.children:
-            self.navigation_controls.remove(self.vault_button)
-        if self.vault_app is not None:
-            from .obsidian import vault_root
-            root = vault_root(provider, directory, rows)
-            if root is not None:
-                client = getattr(self.vault_app, 'cloud_client', None)
-                self.vault_offer = (getattr(provider, 'provider', provider), root, client, getattr(client, 'generation', None))
-                self.navigation_controls.add(self.vault_button)
-
-    async def open_vault(self, widget=None, **kwargs):
-        if self.closed or self.vault_offer is None:
-            return None
-        provider, root, client, generation = self.vault_offer
-        if provider.private and (client is not self.vault_app.cloud_client or generation != client.generation):
-            return None
-        from .obsidian import open_vault
-        return await open_vault(self.vault_app, provider, root, self.vault_destination)
-
     def stop(self):
-        self.vault_offer = None
-        if hasattr(self, 'vault_button') and self.vault_button in self.navigation_controls.children:
-            self.navigation_controls.remove(self.vault_button)
         return super().stop()
 
     @property

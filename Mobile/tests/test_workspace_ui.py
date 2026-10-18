@@ -33,7 +33,7 @@ class WorkspaceUITests(unittest.TestCase):
             a.editor.value = '# A'
             app.show_preview()
             self.assertEqual(a.session.view['markdown_mode'], 'preview')
-            back = next(child.on_press for child in app.preview_box.children
+            back = next(child.on_press for child in app.editor_view.markdown_speech.button.parent.children
                         if getattr(child, 'text', '') == 'Edit Markdown')
             app.new_document()
             b = app.editor_view

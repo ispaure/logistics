@@ -55,7 +55,7 @@ def native_transfer(client, record, path, encrypted):
 class CryptFiles(LocalFiles):
     private = True
 
-    def __init__(self, root, client, remote, *, namespace=None, storage_root=None):
+    def __init__(self, root, client, remote, *, namespace=None, storage_root=None, create=True):
         self.collection_storage_root = storage_root
         self.client, self.remote = client, remote
         self.identity = client.request('crypt_path', remote=remote, path='', directory=True)['identity']
@@ -66,7 +66,8 @@ class CryptFiles(LocalFiles):
         root = Path(root) / namespace
         if root.is_symlink() or root.parent.is_symlink():
             raise ValueError('Managed encrypted storage cannot use linked folders.')
-        root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if create:
+            root.mkdir(parents=True, exist_ok=True, mode=0o700)
         super().__init__(root)
         self.storage_namespace = namespace
 
@@ -277,9 +278,9 @@ class DownloadedCryptFile(LocalFiles):
         return row
 
 
-def encrypted_storage(root, client, remote):
+def encrypted_storage(root, client, remote, *, create=True):
     """Resolve an unscoped encrypted location without leaking its layout to hosts."""
-    return CryptFiles(collection_path(Path(root), True), client, remote, storage_root=root)
+    return CryptFiles(collection_path(Path(root), True), client, remote, storage_root=root, create=create)
 
 
 def encrypted_copies(provider):

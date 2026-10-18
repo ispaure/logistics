@@ -105,12 +105,14 @@ class MobileWorkflowTests(unittest.TestCase):
         owner = app.private_sessions.active
         self.assertEqual(owner.crypt_reader.name, 'Notes.md')
         self.assertEqual(app.native_host.state.destination, 'files')
-        self.assertEqual(owner.crypt_content.children, [owner.markdown_speech.button, owner.crypt_preview])
+        self.assertEqual(owner.crypt_content.children, [owner.crypt_preview])
+        self.assertIn(owner.markdown_speech.button, owner.reader_toolbar.children)
         owner.toggle_private_preview()
         self.assertEqual(owner.crypt_content.children, [owner.crypt_formatted.view])
         owner.crypt_text.value = '# Unsaved draft\n'
         owner.toggle_private_preview()
-        self.assertEqual(owner.crypt_content.children, [owner.markdown_speech.button, owner.crypt_preview])
+        self.assertEqual(owner.crypt_content.children, [owner.crypt_preview])
+        self.assertIn(owner.markdown_speech.button, owner.reader_toolbar.children)
         self.assertEqual(owner.crypt_text.value, '# Unsaved draft\n')
         app.show_settings()
         self.assertNotIn(owner.crypt_preview, owner.crypt_content.children)

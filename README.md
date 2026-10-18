@@ -101,7 +101,7 @@ with the [mobile build and release handbook](docs/development/mobile-handbook.md
 
 | Tool | Use it to… |
 | --- | --- |
-| [File Browser & Markdown](docs/user/files-and-documents.md) | Browse, search, preview files and explore storage usage |
+| [File Browser & Markdown](docs/user/files-and-documents.md) | Browse files, explore storage usage, and open Markdown Notes Libraries from location actions |
 | [Git](Python/features/git/docs/user/user.md) | Clone repositories, browse history, stage and commit changes, manage branches and remotes |
 | [Bulk Rename](Python/ui_new/bulk_rename/docs/user/user.md) | Preview and apply changes to many filenames at once |
 | [Text Editor](Python/features/text_editor/docs/user/user.md) | Edit text and code in tabs, search/replace, see Git change markers, and preserve file encodings |

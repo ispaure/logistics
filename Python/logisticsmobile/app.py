@@ -344,6 +344,13 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         def activate(widget=None, **kwargs):
             session = self.workspace.sessions.get(key)
             if session is not None and self.checkpoint():
+                if session.provider == 'notes-library':
+                    owner = getattr(self, 'vault_browser', None)
+                    if owner is not None and owner.session is session:
+                        owner.present()
+                    else:
+                        self.show_unavailable_session(key)
+                    return
                 self.adaptive.focus_session(key)
                 if session.provider == 'library':
                     self.loop.create_task(self.resume_library_session(session))
@@ -416,6 +423,14 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             return False
         if choice not in ('keep', 'save', 'discard'):
             raise ValueError('Unsupported close action.')
+        if self.workspace.sessions[key].provider == 'notes-library':
+            owner = getattr(self, 'vault_browser', None)
+            if owner is not None and owner.session is self.workspace.sessions[key]:
+                owner.dispose()
+            else:
+                self.workspace.close(key, guard=lambda session: True)
+            self.show_documents_hub()
+            return True
         if self.workspace.sessions[key].provider == 'provider-session':
             return self.provider_sessions().close(key, discard=choice == 'discard')
         if self.workspace.sessions[key].provider == 'library':

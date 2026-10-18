@@ -1,19 +1,28 @@
 # Folder Hub on mobile
 
-## Obsidian vault notes
+## Notes Library
 
-When the file browser opens a Local or LocalCrypt folder containing a
-`.obsidian` directory, a crystal-shaped **Browse Obsidian vault notes** button
-appears beside the browser controls. Tap it to browse folders and Markdown notes.
-Expand folders, then tap a `.md` or `.markdown` file to preview it. The crystal
-button toggles the note hierarchy on a phone; a sufficiently wide window shows
-the hierarchy beside the note, like Settings documentation.
+Select a Local, LocalCrypt or Remote location, then open its actions page (the
+page with Push/Pull). **Open Notes Library** appears when that location's root
+contains an actual `.obsidian` directory. It opens under **Documents**, with a
+hamburger for the folder/page hierarchy, like Settings documentation. The old
+crystal button is no longer in the file browser.
 
-**Open in editor** opens the selected note through its existing Local or
-LocalCrypt editor. The preview does not change files. LocalCrypt previews stay
-in memory and close when their credentials are cleared. Configuration and hidden
-folders are omitted, and note links remain within the selected vault. This view
-browses Markdown files; it does not run Obsidian plugins.
+Expand a folder to load its immediate children, then select a `.md` or `.markdown`
+note. Back/Forward revisit notes; Up shows the parent folder. The speaker opens
+Read aloud with the same playback and 15-second controls as other Markdown
+readers. The preview is read-only; **Open in editor** uses the selected storage.
+
+Remote Notes Libraries have **no search field or recursive index**: opening
+one lists only its root, expanding a folder lists just that folder, and opening
+a note reads only that note. Local/LocalCrypt libraries offer **Filter loaded
+notes**, which filters names already displayed without scanning other folders.
+
+Notes are limited to 2 MiB, configuration/hidden files are excluded and links
+stay within the selected library. Private previews stay in memory and are
+retired when credentials change. Libraries are session-only Documents entries;
+they do not restore decrypted paths or note names after a restart. This reader
+does not run Obsidian plugins.
 
 ## File browser locations and actions
 

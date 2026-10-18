@@ -12,45 +12,41 @@ from uuid import uuid4
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
-from commonUtils.runtime.local_files import LocalFiles
+from features.text_editor.notes import NotesLibrary, vault_root, MAX_NOTE, MARKDOWN
+from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.ui.native.adaptive import AdaptiveSidebar, allocated_width
 from commonUtils.ui.native.presentation import list_button
 from .control_icons import icon_button
 from .preview import markdown_preview
 
-MARKDOWN = {'.md', '.markdown'}
-MAX_NOTE = 2 * 1024 * 1024
-
-
-def vault_root(provider, directory, rows):
-    """Only an actual local directory marker opts the current folder in."""
-    provider = getattr(provider, 'provider', provider)
-    if not isinstance(provider, LocalFiles):
-        return None
-    directory = provider.relative(directory)
-    marker = posixpath.join(directory, '.obsidian')
-    return directory if any(row['path'] == marker and row['directory'] for row in rows) else None
-
-
-async def open_vault(app, provider, root, destination):
+async def open_vault(app, provider, root, destination='documents', *, title='', rows=None):
     if not app.checkpoint():
         return None
     previous = getattr(app, 'vault_browser', None)
     if previous is not None:
         previous.dispose()
     owner = VaultBrowser(app, provider, root, destination)
+    owner.session = app.workspace.open('notes-library', uuid4().hex, 'markdown',
+        'Notes Library' + (' — ' + title if title else ''), transient=True)
     app.vault_browser = owner
-    if app.show_view(owner.view, destination=destination, route='obsidian-vault', title='Obsidian vault') is False:
+    if app.show_view(owner.view, destination=destination, route='notes-library:' + owner.session.id, title=owner.session.title) is False:
         owner.dispose()
         return None
-    await owner.load_folder(owner.root)
+    if rows is None:
+        await owner.load_folder(owner.root)
+    else:
+        owner.folders[owner.root] = owner.library.visible_rows(rows)
+        owner.render_tree()
     return owner
 
 
 class VaultBrowser:
     def __init__(self, app, provider, root, destination):
         self.app, self.provider, self.destination = app, provider, destination
-        self.root = provider.relative(root)
+        self.library = NotesLibrary(provider, root)
+        self.root = self.library.root
+        self.history, self.history_index = [], -1
+        self.session = None
         self.client = getattr(app, 'cloud_client', None)
         self.generation = getattr(self.client, 'generation', None)
         self.cancelled = Event()
@@ -66,7 +62,10 @@ class VaultBrowser:
             style=Pack(direction=COLUMN, flex=1))
         self.title = toga.Label('Choose a Markdown note', style=Pack(font_size=18, flex=1))
         self.edit = toga.Button('Open in editor', on_press=self.open_editor, enabled=False, style=Pack(height=48))
-        self.web = toga.WebView(on_navigation_starting=self.follow_link, style=Pack(flex=1))
+        from features.books.mobile.private_view import PrivateWebView, private_webview_supported
+        web_type = PrivateWebView if provider.private and private_webview_supported() else toga.WebView
+        self.pending_fragment = ''
+        self.web = web_type(on_navigation_starting=self.follow_link, on_webview_load=self.page_loaded, style=Pack(flex=1))
         self.article = toga.Box(children=[self.title, self.edit, self.web], style=Pack(direction=COLUMN, flex=1))
         from .markdown_speech import MarkdownSpeech
         self.speech = MarkdownSpeech(app, self.web, self.article,
@@ -76,10 +75,18 @@ class VaultBrowser:
                     and self.generation == getattr(self.client, "generation", None))))
         self.speech.button.enabled = False
         self.sidebar = AdaptiveSidebar(self.tree, self.article, label='Vault folders and Markdown notes')
-        self.menu = icon_button('obsidian', 'Browse Obsidian vault notes', on_press=self.sidebar.toggle)
-        self.view = toga.Box(children=[toga.Box(children=[self.menu, self.notice,
+        from .workspace_navigation import menu_button
+        self.menu = menu_button(self.sidebar.toggle, label='Browse Notes Library')
+        self.back_button = icon_button('back', 'Previous note', on_press=lambda w: self.navigate_history(-1), enabled=False)
+        self.forward_button = icon_button('forward', 'Next note', on_press=lambda w: self.navigate_history(1), enabled=False)
+        self.up_button = icon_button('up', 'Browse parent folder', on_press=self.browse_parent, enabled=False)
+        self.search = None
+        if not self.library.remote:
+            self.search = toga.TextInput(placeholder='Filter loaded notes', on_change=lambda w: self.render_tree(), style=Pack(height=48))
+            self.tree.insert(1, self.search)
+        self.view = toga.Box(children=[toga.Box(children=[self.menu, self.back_button, self.forward_button, self.up_button,
             toga.Box(style=Pack(flex=1)), self.speech.button], style=Pack(direction=ROW)),
-            self.sidebar.view], style=Pack(direction=COLUMN, margin=12, flex=1))
+            self.notice, self.sidebar.view], style=Pack(direction=COLUMN, margin=12, flex=1))
         self.reflow(app.adaptive.content_width(destination, margin=0))
         self.sidebar.show_sidebar()
 
@@ -93,13 +100,7 @@ class VaultBrowser:
         return True
 
     def contained(self, path):
-        path = self.provider.relative(path)
-        if self.root and path != self.root and not path.startswith(self.root + '/'):
-            raise ValueError('That note is outside this vault.')
-        relative = PurePosixPath(path).relative_to(self.root or '.')
-        if any(part.startswith('.') for part in relative.parts):
-            raise ValueError('Vault configuration is not a note.')
-        return path
+        return self.library.contained(path)
 
     def reflow(self, width):
         available = max(0, allocated_width(self.view, width) - 24)
@@ -114,7 +115,7 @@ class VaultBrowser:
         self.notice.text = 'Loading notes…'
         try:
             path = self.contained(path)
-            rows = await asyncio.to_thread(self.provider.list, path, cancelled=lambda: not self.valid())
+            rows = await asyncio.to_thread(self.library.folders, path, cancelled=lambda: not self.valid())
             if not self.valid():
                 return False
             self.folders[path] = sorted((row for row in rows
@@ -124,6 +125,8 @@ class VaultBrowser:
             self.notice.text = ''
             self.render_tree()
             return True
+        except OperationCancelled:
+            return False
         except (OSError, ValueError) as error:
             if self.valid():
                 self.notice.text = fill('Could not browse notes: ' + str(error)[:120], width=28)
@@ -155,6 +158,9 @@ class VaultBrowser:
                 if entry['directory'] and entry['path'] in self.expanded:
                     add(entry['path'], depth + 1)
         add(self.root)
+        query = (self.search.value or '').casefold() if self.search is not None else ''
+        flattened = [(entry, depth) for entry, depth in flattened
+            if entry['directory'] or not query or query in entry['path'].casefold()]
         for entry, depth in flattened[:self.shown]:
             path, directory = entry['path'], entry['directory']
             async def choose(widget=None, path=path, directory=directory, **kwargs):
@@ -176,7 +182,7 @@ class VaultBrowser:
         elif not flattened:
             self.rows.add(toga.Label('No Markdown notes in this folder.'))
 
-    async def open_note(self, path):
+    async def open_note(self, path, *, remember=True, fragment=''):
         if not self.valid():
             return False
         self.speech.close()
@@ -187,29 +193,35 @@ class VaultBrowser:
             if PurePosixPath(path).suffix.lower() not in MARKDOWN:
                 raise ValueError('Choose a Markdown note.')
             def read():
-                before = self.provider.entry(path)
-                # CryptFiles reports ciphertext bytes, including block tags.
-                if before['directory'] or before['size'] > MAX_NOTE + 4096:
-                    raise ValueError('Note exceeds the 2 MiB preview limit. Open it in the file browser.')
-                with self.provider.open(path) as stream:
-                    data = stream.read(MAX_NOTE + 1)
-                if len(data) > MAX_NOTE or self.provider.entry(path) != before:
-                    raise ValueError('Note changed or is too large. Reopen it in the file browser.')
-                return markdown_preview(data.decode('utf-8-sig'), int(self.app.preferences.values['font_size']), local_links=True)
+                data = self.library.read(path, cancelled=lambda: not self.valid())
+                html = markdown_preview(data.decode('utf-8-sig'), int(self.app.preferences.values['font_size']), local_links=True)
+                if self.provider.private and len(html.encode('utf-8')) > MAX_NOTE:
+                    raise ValueError('Private preview exceeds the 2 MiB memory-only limit.')
+                return html
             html = await asyncio.to_thread(read)
             if not self.valid() or epoch != self.epoch:
                 return False
+            if remember and path != self.path:
+                del self.history[self.history_index + 1:]
+                self.history.append(path)
+                self.history_index = len(self.history) - 1
             self.path = path
             self.title.text = fill(PurePosixPath(path).name, width=28)
             self.base = 'https://markdown.invalid/vault/' + uuid4().hex + '/'
             html = re.sub(r'href="([^"]*)"', lambda match: 'href="' + self.base + '?target='
                           + quote(unescape(match[1]), safe='') + '"', html)
+            self.pending_fragment = fragment
             self.web.set_content(self.base, html)
             self.edit.enabled = True
             self.speech.button.enabled = True
             self.notice.text = ''
+            self.back_button.enabled = self.history_index > 0
+            self.forward_button.enabled = self.history_index < len(self.history) - 1
+            self.up_button.enabled = True
             self.sidebar.show_detail()
             return True
+        except OperationCancelled:
+            return False
         except (OSError, UnicodeError, ValueError) as error:
             if self.valid() and epoch == self.epoch:
                 self.notice.text = fill(str(error)[:180], width=28)
@@ -226,20 +238,59 @@ class VaultBrowser:
         else:
             return False
         link = urlsplit(target)
+        if not link.path and link.fragment:
+            self.scroll_fragment(link.fragment)
+            return False
         if link.scheme or link.netloc or link.query or not link.path or link.path.startswith(('/', '\\')):
             return False
         try:
             path = self.contained(posixpath.normpath(posixpath.join(posixpath.dirname(self.path), unquote(link.path))))
         except ValueError:
             return False
-        self.app.loop.create_task(self.open_note(path))
+        self.app.loop.create_task(self.open_note(path, fragment=link.fragment))
         return False
+
+    def scroll_fragment(self, fragment):
+        import json
+        self.web.evaluate_javascript('(function(){const h=document.getElementById('
+            + json.dumps(unquote(fragment)) + ');if(h)h.scrollIntoView();})()')
+
+    def page_loaded(self, widget=None, **kwargs):
+        if self.pending_fragment:
+            fragment, self.pending_fragment = self.pending_fragment, ''
+            self.scroll_fragment(fragment)
+
+    async def navigate_history(self, offset):
+        index = self.history_index + offset
+        if 0 <= index < len(self.history) and await self.open_note(self.history[index], remember=False):
+            self.history_index = index
+            self.back_button.enabled = index > 0
+            self.forward_button.enabled = index < len(self.history) - 1
+
+    async def browse_parent(self, widget=None, **kwargs):
+        if self.path is not None:
+            parent = posixpath.dirname(self.path)
+            self.expanded.add(parent)
+            if parent not in self.folders:
+                await self.load_folder(parent)
+            self.sidebar.show_sidebar()
+            self.render_tree()
+
+    def present(self):
+        if self.valid() and self.session is not None:
+            self.app.workspace.activate(self.session.id)
+            return self.app.show_view(self.view, destination='documents',
+                route='notes-library:' + self.session.id, title=self.session.title)
 
     async def open_editor(self, widget=None, **kwargs):
         if not self.valid() or self.path is None:
             return False
         from features.text_editor.resources import LocalTextCopies
         from features.rclone.localcrypt.mobile.resources import encrypted_document
+        if self.library.remote:
+            from features.rclone.mobile.remote_readers import RemoteReaders
+            return await self.app.open_crypt(copies=RemoteReaders(self.client, self.provider.remote),
+                key=self.path, destination='documents')
         source = encrypted_document(self.provider, self.path)
         copies, key = source if source is not None else (LocalTextCopies(self.provider), self.path)
         return await self.app.open_crypt(copies=copies, key=key, destination=self.destination)
@@ -248,14 +299,23 @@ class VaultBrowser:
         self.speech.close()
         self.speech.button.enabled = False
         self.cancelled.set()
+        if self.search is not None:
+            self.search.value = ''
         self.epoch += 1
         self.folders.clear()
         self.expanded.clear()
         self.rows.clear()
         self.path = None
         self.root = ''
-        self.title.text = 'Vault closed'
+        self.title.text = 'Notes Library closed'
         self.edit.enabled = False
-        self.notice.text = 'Reopen the vault from its file browser.'
+        self.notice.text = 'Reopen Notes Library from the location actions.'
+        self.history.clear()
+        if self.session is not None and self.session.id in self.app.workspace.sessions:
+            self.app.workspace.close(self.session.id, guard=lambda session: True)
+        self.session = None
         from features.text_editor.mobile.markdown_editor import retire_webview
-        retire_webview(self.web)
+        if hasattr(self.web, 'clear_private_content'):
+            self.web.clear_private_content()
+        else:
+            retire_webview(self.web)
