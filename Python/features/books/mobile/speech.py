@@ -80,6 +80,7 @@ class SpeechSession:
         text, start, end = self.ranges[self.index]
         self.cancel_timer()
         self.native_progress = False
+        self.position = start
         self.generation += 1
         self.token = str(self.generation)
         try:
@@ -113,6 +114,7 @@ class SpeechSession:
                 or self.native_progress or index >= len(self.utterance_words)):
             return
         self.word_timer = None
+        self.position = self.utterance_words[index][0]
         self.on_range(*self.utterance_words[index])
         loop = getattr(self.engine, 'loop', None)
         if loop is not None and index + 1 < len(self.utterance_words):
@@ -129,6 +131,7 @@ class SpeechSession:
             return
         self.native_progress = True
         self.cancel_timer()
+        self.position = base + start
         self.on_range(base + start, base + end)
 
     def completed(self, token):
@@ -146,10 +149,14 @@ class SpeechSession:
             self.cancel_timer()
             self.elapsed = max(0, monotonic() - self.started_at)
             self.state = 'paused'
-            self.engine.stop()
             self.generation += 1
             self.token = str(self.generation)
-            self.on_state('paused', 'Paused · Resume repeats the current sentence.')
+            self.engine.stop()
+            text, base, end = self.ranges[self.index]
+            offset = len(self.text.encode('utf-16-le')[:self.position * 2].decode('utf-16-le'))
+            stop = len(self.text.encode('utf-16-le')[:end * 2].decode('utf-16-le'))
+            self.ranges[self.index] = (self.text[offset:stop], self.position, end)
+            self.on_state('paused', 'Paused · Resume continues from the current word.')
 
     def resume(self):
         if not self.closed and self.state == 'paused':

@@ -44,8 +44,8 @@ class SpeechTests(unittest.TestCase):
         session.resume()
         engine.progress(token, 0, 2)
         self.assertEqual(len(ranges), count)
-        engine.progress(session.token, 7, 11)
-        self.assertEqual(ranges[-1], (13, 17))
+        engine.progress(session.token, 0, 3)
+        self.assertEqual(ranges[-1], (9, 12))
         session.stop()
         self.assertEqual(ranges[-1], (-1, -1))
         engine.progress(session.token, 0, 2)
@@ -88,6 +88,21 @@ class SpeechTests(unittest.TestCase):
             )
         )
         self.assertEqual(list(utterances(chapter.text, 8, 15))[0], ("Straße.", 8, 15))
+
+    def test_pause_resumes_current_word_and_ignores_old_native_completion(self):
+        engine = Engine()
+        session = SpeechSession(engine, on_range=lambda *args: None, on_state=lambda *args: None)
+        session.play('One two three four five.', voice='local', speed=1.25)
+        old = session.token
+        session.progress(old, 8, 13)
+        session.pause()
+        session.completed(old)
+        session.resume()
+        self.assertEqual(session.ranges[session.index], ('three four five.', 8, 24))
+        session.pause()
+        session.resume()
+        self.assertEqual(session.ranges[session.index][1], 8)
+        self.assertEqual(session.speed, 1.25)
 
     def test_pause_repeat_sentence_stale_callbacks_completion_and_disposal(self):
         engine = Engine()

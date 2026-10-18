@@ -59,7 +59,7 @@ view using system speech progress. Android voices that omit word progress use
 estimated highlighting. Android initially selects the system's current voice
 when it is installed and works offline. The same **Play/Pause** button switches to
 pause while reading and back to play when paused. Pausing stops at the current
-utterance; playing again resumes that sentence/passage. **Stop** ends reading. Playback uses icon buttons with accessible names. The
+word; playing again continues from that word. **Stop** ends reading. Playback uses icon buttons with accessible names. The
 back/forward **15** controls use the same circular-arrow design as desktop and
 jump approximately 15 seconds within the current
 passage, accounting for the selected speed. System speech has no recorded
@@ -104,8 +104,7 @@ private positions and bookmarks retain their existing session-only lifetime.
 ### Mobile EPUB speech and expanded appearance
 
 EPUB reader menus now include **Read aloud…**, with installed offline voices,
-speed, selected-passage playback, pause/resume and stop. Resume repeats the current
-sentence/passage. Private-reader suspension stops speech and clears its queued text.
+speed, selected-passage playback, pause/resume and stop. Resume continues from the current word. Private-reader suspension stops speech and clears its queued text.
 Appearance includes local font families, custom line spacing and maximum width,
 and Sepia/Slate alongside existing themes. See the
 [Books guide](reading.md#native-mobile-reading).
