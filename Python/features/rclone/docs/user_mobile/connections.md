@@ -9,6 +9,10 @@ in the remote browser). The native app embeds rclone 1.74.1; no desktop
 executable, shell, mount, or separate RC server is required. **Check rclone engine**
 performs an offline in-memory read and displays the engine version.
 
+Folder Hub's **rclone** tab includes remotes from retained password-protected ZIPs
+even before a local copy exists. Tap a locked remote to enter its ZIP password and
+continue browsing online. A wrong password leaves it locked.
+
 In Folder Hub's **rclone** tab, regular remote folders show a cloud icon;
 encrypted remote folders show both a cloud and a lock. Local encrypted copies
 show a disk and a lock in the **Local** tab. Locks open when their credentials
@@ -116,20 +120,14 @@ providers that rotate refresh tokens may require a fresh credential package.
 
 ### Locked credentials and Folder Hub
 
-Mobile now follows desktop Folder Hub visibility. Before a session-only credential
-is unlocked, only its existing mapped Local/LocalCrypt copies appear. A
-retained ZIP remembers which password can unlock a local copy; it does not expose the
-ZIP's entire remote list in Folder Hub. Credential groups with no visible copies
-are omitted there while locked. After unlocking, all normally visible remotes in
-that credential appear, including remotes without a local copy.
-
-Use **Settings → rclone / Remote connections… → Unlock <ZIP name>** to unlock a
-retained ZIP even if it has no local folders. Enter its ZIP password; a wrong
-password keeps the prompt open and the remote-only list hidden. Success returns
-to Folder Hub with the loaded remotes. **Choose credential ZIP…** still imports a
-new ZIP or one that was not retained. **Lock credential session** clears the
-unlocked credentials and hides remote-only entries while keeping local copies,
-retained ZIPs and previously saved credentials. Save or discard private edits
+Retained session-only ZIPs keep their remote names visible in Folder Hub even
+while locked and without a downloaded copy. Their credential filter remains
+available. Tapping one asks for the matching ZIP password before browsing.
+Wrong passwords keep the prompt open. The Settings connection page also offers
+**Unlock** for each retained ZIP. Use **Choose credential ZIP** for a new ZIP or
+one that was not retained. **Lock credential session** clears decoded credentials
+while keeping discoverable remote names, local copies, retained ZIPs and saved
+credentials. Save or discard private edits
 before locking. **Forget saved credentials** also removes retained ZIPs and keys.
 
 ### Multiple credential packages on Android and iOS

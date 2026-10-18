@@ -96,9 +96,11 @@ class FolderHubUI:
         from features.rclone.transfers.mobile.jobs import resolved_job
         client = getattr(self, 'cloud_client', None)
         jobs = {key: resolved_job(client, job) for key, job in self.mirror_store().jobs.items()}
-        # Retained ZIP metadata associates local copies with credentials; it
-        # must not advertise remote-only folders before those credentials unlock.
-        remotes = self.loaded_remote_names()
+        # Retained metadata is a discovery index, never permission to browse.
+        # Opening any locked remote still goes through the matching ZIP guard.
+        retained = self.retained_credential_associations()
+        remotes = sorted(set(self.loaded_remote_names()) | {
+            remote for package in retained for remote in package['remotes']}, key=str.casefold)
         crypt = dict(getattr(self, 'hub_crypt_locations', ()))
         roots = getattr(self, 'hub_crypt_roots', {})
         if roots:
@@ -310,6 +312,8 @@ class FolderHubUI:
                         remote = target.get('remote') or entry.get('remote')
                         encrypted = source == 'LocalCrypt' or (source == 'Remote' and (
                             remote in getattr(self.app, 'cloud_crypt_remotes', ())
+                            or any(remote in package.get('crypt_remotes', ())
+                                   for package in self.retained_credential_associations())
                             or any(copy['source'] == 'LocalCrypt' for copy in entry.get('copies', ()))))
                         icons = [('storage_remote', 'Remote')] if source == 'Remote' else [('storage_local', 'Local')]
                         if encrypted:

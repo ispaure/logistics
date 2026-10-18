@@ -518,7 +518,8 @@ class CloudUI(LocalCryptUI):
     def retained_credential_associations(self):
         try:
             cache = self.retained_packages()
-            return [dict(zip=item['zip'], remotes=list(item['remotes']), session_only=True)
+            return [dict(zip=item['zip'], remotes=list(item['remotes']), session_only=True,
+                         crypt_remotes=list(item.get('crypt_remotes', ())))
                     for item in getattr(cache, 'items', {}).values()] if cache is not None else []
         except (OSError, ValueError):
             return []
@@ -720,7 +721,11 @@ class CloudUI(LocalCryptUI):
                         identities = {remote: self.cloud_client.connection_identity(remote) for remote in self.visible_remote_names(self.package_remote_names(selected.name, names))}
                         aliases = next((item.get('aliases', {}) for item in getattr(self.cloud_client, 'package_records', ()) if item['package_name'] == selected.name), {})
                         aliases = {name: alias for name, alias in aliases.items() if alias in identities}
-                        await asyncio.to_thread(cache.remember, selected, identities, **({'aliases': aliases} if aliases else {}))
+                        metadata = {'aliases': aliases} if aliases else {}
+                        crypt = set(self.cloud_crypt_remotes) & set(identities)
+                        if crypt:
+                            metadata['crypt_remotes'] = sorted(crypt)
+                        await asyncio.to_thread(cache.remember, selected, identities, **metadata)
                 except (OSError, ValueError) as error:
                     cache_error = ' ZIP not retained; select it again next time. ' + str(error)[:120]
             self.set_loaded_remote_names(self.visible_remote_names(names))

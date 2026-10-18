@@ -25,7 +25,8 @@ class CredentialPackages:
                 raise ValueError('Invalid retained credential packages.')
             for key, item in items.items():
                 if (len(key) != 64 or any(c not in '0123456789abcdef' for c in key)
-                        or not isinstance(item, dict) or set(item) not in ({'zip', 'remotes'}, {'zip', 'remotes', 'aliases'})
+                        or not isinstance(item, dict) or not {'zip', 'remotes'} <= set(item)
+                        or not set(item) <= {'zip', 'remotes', 'aliases', 'crypt_remotes'}
                         or download_name(item['zip']) != item['zip'] or not isinstance(item['remotes'], dict)
                         or len(item['remotes']) > 256 or any(not isinstance(remote, str) or not remote or len(remote) > 80
                             or not isinstance(identity, str) or len(identity) != 64
@@ -33,6 +34,9 @@ class CredentialPackages:
                             for remote, identity in item['remotes'].items())):
                     raise ValueError('Invalid retained credential association.')
             for item in items.values():
+                crypt = item.get('crypt_remotes', [])
+                if not isinstance(crypt, list) or any(not isinstance(name, str) or name not in item['remotes'] for name in crypt):
+                    raise ValueError('Invalid retained crypt remote names.')
                 aliases = item.get('aliases', {})
                 if (not isinstance(aliases, dict) or len(aliases) > 64
                         or any(not isinstance(name, str) or not 0 < len(name) <= 80
@@ -49,7 +53,7 @@ class CredentialPackages:
             raise ValueError('Retained package cannot be linked.')
         return path
 
-    def remember(self, package, remotes, *, aliases=None):
+    def remember(self, package, remotes, *, aliases=None, crypt_remotes=()):
         if len(package.data) > PACKAGE_LIMIT:
             raise ValueError('Credential ZIP exceeds the limit.')
         # The device key alone must never recover decoded session credentials.
@@ -74,6 +78,8 @@ class CredentialPackages:
         next_items[key] = dict(zip=package.name, remotes=remotes)
         if aliases:
             next_items[key]['aliases'] = dict(aliases)
+        if crypt_remotes:
+            next_items[key]['crypt_remotes'] = sorted(set(crypt_remotes) & set(remotes))
         atomic_write_bytes(self.path(key), data)
         atomic_write_json(self.index, next_items, max_bytes=128 * 1024)
         previous = self.items

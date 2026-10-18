@@ -663,12 +663,13 @@ predates this follow-up; its screen and revocation protections are unchanged.
 
 ## Mobile Folder Hub visibility and Settings unlocking
 
-Folder Hub derives remote-only entries from `CloudUI.loaded_remote_names`, which
-checks the credential generation associated with its selector snapshot. Retained
-ZIP/preferences metadata supplies ownership/grouping only; it cannot contribute
-remote-only rows. Mirror records with an existing physical target still
-contribute local rows while locked. Credential groups intersect their associated
-remotes with the actually available Folder Hub copies.
+Folder Hub combines `CloudUI.loaded_remote_names` with retained ZIP remote names.
+Retained names allow online-only folders to remain discoverable while locked;
+all opens still use `require_remote_credentials_async` and the matching ZIP's
+password guard. Optional `crypt_remotes` metadata preserves encryption icons
+without retaining decoded credentials. Older indexes without it remain readable.
+Mirror records with an existing physical target contribute local rows while locked.
+Credential groups intersect their associated remotes with the available Hub rows.
 
 Settings' rclone connections page enumerates retained ZIP labels independently of
 Folder Hub. Its unlock action uses the same password-only session import as a

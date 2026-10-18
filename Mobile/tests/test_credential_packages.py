@@ -45,7 +45,7 @@ class CacheClient:
 
 
 class CredentialPackageTests(unittest.TestCase):
-    def test_settings_unlock_without_local_copy_then_lock_hides_remote_only_entries(self):
+    def test_retained_remote_without_local_copy_remains_visible_and_requires_unlock(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             LogisticsMobile.storage_root = root
@@ -59,17 +59,26 @@ class CredentialPackageTests(unittest.TestCase):
                 vault.root.mkdir()
                 cache = CredentialPackages(vault, app.cloud_client)
                 key = cache.remember(SimpleNamespace(name='Personal.zip', data=PACKAGE),
-                                     {'Secret': 'a' * 64, 'RemoteOnly': 'a' * 64})
+                                     {'Secret': 'a' * 64, 'RemoteOnly': 'a' * 64}, crypt_remotes=['Secret'])
                 with patch.object(app, 'retained_packages', return_value=cache):
-                    self.assertEqual(set(app.folder_choices()), {'All files'})
-                    self.assertEqual(app.credential_groups(), {'All': None})
+                    self.assertEqual(set(app.folder_choices()), {'All files', 'Secret', 'RemoteOnly'})
+                    self.assertEqual(app.credential_groups(), {'All': None, 'Personal': {'Secret', 'RemoteOnly'}})
+                    self.assertEqual(CredentialPackages(vault, app.cloud_client).items[key]['crypt_remotes'], ['Secret'])
+                    app.folder_source = 'rclone'
+                    app.build_folder_picker()
+                    icons = [getattr(c, 'control_icon', '') for c in app.folder_buttons['Secret'].parent.children]
+                    self.assertIn('storage_crypt', icons)
+                    entry = app.folder_picker_choices['RemoteOnly']
+                    app.show_picker_folder(entry, present=False)
+                    self.assertFalse(app.loop.run_until_complete(app.open_picker_folder(entry)))
+                    self.assertEqual(app.routes.screens['files'][-1][0], 'unlock-credential')
                     app.show_cloud_connections()
                     self.assertEqual(app.native_host.state.destination, 'settings')
                     app.cloud_retained_buttons[key].on_press()
                     self.assertEqual(app.routes.screens['settings'][-1][0], 'unlock-credential')
                     app.credential_unlock_password.value = 'wrong'
                     app.loop.run_until_complete(app.credential_unlock_button.on_press())
-                    self.assertEqual(set(app.folder_choices()), {'All files'})
+                    self.assertEqual(set(app.folder_choices()), {'All files', 'Secret', 'RemoteOnly'})
                     self.assertEqual(app.credential_unlock_password.value, '')
                     app.credential_unlock_password.value = 'correct'
                     app.loop.run_until_complete(app.credential_unlock_button.on_press())
@@ -84,9 +93,9 @@ class CredentialPackageTests(unittest.TestCase):
                     store.target(job).mkdir(parents=True)
                     app.loop.run_until_complete(app.lock_cloud())
                     choices = app.folder_choices()
-                    self.assertEqual(set(choices), {'All files', 'Secret'})
+                    self.assertEqual(set(choices), {'All files', 'Secret', 'RemoteOnly'})
                     self.assertEqual([copy['source'] for copy in choices['Secret']['copies']], ['LocalCrypt', 'Remote'])
-                    self.assertEqual(app.credential_groups()['Personal'], {'Secret'})
+                    self.assertEqual(app.credential_groups()['Personal'], {'Secret', 'RemoteOnly'})
                     self.assertTrue(cache.path(key).is_file())
                     self.assertFalse(app.cloud_client.loaded)
             finally:
@@ -180,7 +189,7 @@ class CredentialPackageTests(unittest.TestCase):
                 app.cloud_client.loaded = False
                 resumed = Mock()
                 with patch.object(app, 'retained_packages', return_value=cache):
-                    self.assertNotIn('Personal', app.credential_groups())
+                    self.assertEqual(app.credential_groups()['Personal'], {'Secret'})
                     self.assertFalse(app.require_remote_credentials('Secret', identity='a' * 64, resume=resumed))
                     self.assertEqual(app.routes.screens['files'][-1][0], 'unlock-credential')
                     app.credential_unlock_password.value = 'wrong'

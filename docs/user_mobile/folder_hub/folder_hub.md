@@ -71,7 +71,8 @@ to browse its online copy, including the mapped subfolder for a partial pull.
 The **•••** menu keeps the same available browse, Push/Pull and folder-management
 actions on both tabs. The rclone **Credential** selector defaults to **All**; choose a credential
 ZIP to filter its folders. Returning from another source resets it to **All**.
-The remote names and credential filters come from the unlocked ZIP configuration;
+The remote names and credential filters come from loaded configurations and retained
+password-protected ZIP metadata. Locked entries ask for their ZIP password when opened;
 populating this tab does not ping online services. On iPad, all windows use the
 same loaded credential packages. Browsing an online folder still requires a connection.
 Loaded ZIPs remain in the Credential dropdown even if they currently have no
