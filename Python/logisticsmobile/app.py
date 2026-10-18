@@ -414,6 +414,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if not getattr(owner.document, 'private', False):
             box.add(toga.Button('Keep draft and close', on_press=choose('keep'), style=Pack(height=48)))
         box.add(toga.Button('Discard changes and close', on_press=choose('discard'), style=Pack(height=48)))
+        async def delete_document(widget=None, **kwargs):
+            await self.request_delete_document(key)
+        box.add(toga.Button('Delete document…', on_press=delete_document, style=Pack(height=48)))
         box.add(toga.Button('Cancel', on_press=lambda widget, **kw: self.cancel_close_session(key), style=Pack(height=48)))
         self.close_notice = toga.Label('', style=Pack(margin_top=8))
         box.add(self.close_notice)
@@ -426,13 +429,39 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.workspace.activate(key)
             self.show_documents()
 
+    async def request_delete_document(self, key):
+        owner = self.text_views.get(key)
+        if owner is None or key not in self.workspace.sessions:
+            return False
+        try:
+            if len(self.scene_manager.owners.hosts) > 1:
+                raise ValueError('Close other app windows before deleting a document.')
+            warning = ('Are you sure you want to close and delete this document? '
+                       'Its saved content and recovery copy will be permanently removed from this device.')
+            if owner.document.modified:
+                warning += ' Your unsaved changes will be lost.'
+            if not await self.main_window.dialog(toga.ConfirmDialog(
+                    'Delete ' + owner.document.name + '?', warning)):
+                return False
+            if not self.active_host or self.text_views.get(key) is not owner or key not in self.workspace.sessions:
+                return False
+            if len(self.scene_manager.owners.hosts) > 1:
+                raise ValueError('Close other app windows before deleting a document.')
+            return self.close_session(key, choice='delete')
+        except (OSError, ValueError) as error:
+            owner.status.text = 'Could not delete; document retained: ' + str(error)
+            return False
+
     def close_session(self, key, *, choice='keep'):
         if key not in self.workspace.sessions:
             return False
         if choice == 'cancel':
             return False
-        if choice not in ('keep', 'save', 'discard'):
+        if choice not in ('keep', 'save', 'discard', 'delete'):
             raise ValueError('Unsupported close action.')
+        if choice == 'delete' and (self.workspace.sessions[key].provider != 'managed-text'
+                                   or key not in self.text_views):
+            return False
         if self.workspace.sessions[key].provider == 'notes-library':
             owner = getattr(self, 'vault_browser', None)
             if owner is not None and owner.session is self.workspace.sessions[key]:
@@ -462,7 +491,13 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 owner.status.text = 'Save this session-only draft before closing.'
                 return False
             try:
-                if choice == 'save':
+                if choice == 'delete':
+                    self.recent_documents.forget(session.provider, session.resource)
+                    from .resource_imports import ResourceImports
+                    imports = getattr(self, 'resource_imports', None) or ResourceImports(self.private_root)
+                    imports.forget(session.provider, session.resource)
+                    self.store.delete(owner.document)
+                elif choice == 'save':
                     self.store.save(owner.document)
                 elif choice == 'discard':
                     self.store.discard(owner.document)
@@ -543,7 +578,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
 
     def show_settings(self, widget=None, **kwargs):
         from .hub_ui import heading
-        from .settings_ui import switch_row, build_information, speech_voice_setting, SettingsNavigation
+        from .settings_ui import switch_row, build_information, speech_voice_setting, SettingsNavigation, SettingsLabel
         sections = {}
         def category(title):
             section = toga.Box(style=Pack(direction=COLUMN, margin=16))
@@ -554,7 +589,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.document_cards_choice = toga.Switch('Document card overview',
             value=self.preferences.values['document_card_overview'] == 'true', style=Pack(height=48))
         box.add(switch_row(self, 'Document card overview', self.document_cards_choice,
-            'Show open documents as preview cards. Turn off to use the grouped list.'))
+            'Show Recent as preview cards. Turn off to use compact rows.'))
         self.font_choice = toga.Selection(items=[str(size) for size in range(12, 33)],
             value=self.preferences.values['font_size'], style=Pack(height=48))
         self.restore_choice = toga.Switch('Restore last document',
@@ -562,7 +597,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.clear_documents_choice = toga.Switch('Clear on restart',
             value=self.preferences.values['clear_unmodified_documents_on_restart'] == 'true',
             style=Pack(height=48))
-        self.settings_status = toga.Label(self.preferences.error, style=Pack(margin_top=12))
+        self.settings_status = SettingsLabel(self.preferences.error, style=Pack(margin_top=12))
         box.add(switch_row(self, 'Restore last document', self.restore_choice,
             'Resume the last active document when the app starts, including ordinary EPUB and comic readers. '
             'Private documents are never restored.'))
@@ -738,19 +773,25 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if owner.preview_box is None:
             from .control_icons import icon_button
             owner.preview_edit = icon_button('edit', 'Edit Markdown', on_press=back_to_editor)
+            from .action_menu import ActionMenu
+            owner.preview_actions_button = icon_button('more', 'Document actions')
+            owner.preview_actions = ActionMenu(owner.preview_actions_button, owner, [
+                ('Close document', lambda: self.request_close_session(owner.session.id)),
+                ('Delete document…', lambda: self.request_delete_document(owner.session.id))])
             owner.preview_toolbar = toga.Box(children=[owner.preview_edit,
-                toga.Box(style=Pack(flex=1))], style=Pack(direction=ROW))
+                toga.Box(style=Pack(flex=1)), owner.preview_actions_button], style=Pack(direction=ROW))
             owner.preview_box = toga.Box(children=[
                 owner.preview_toolbar,
                 owner.preview], style=Pack(direction=COLUMN, flex=1))
             owner.preview_box._workspace_toolbar = owner.preview_toolbar
             owner.preview_box._native_reader_toolbar = owner.preview_toolbar
-            owner.preview_box._native_reader_buttons = lambda: [owner.preview_edit, owner.markdown_speech.button]
+            owner.preview_box._native_reader_buttons = lambda: [owner.preview_edit, owner.markdown_speech.button,
+                                                               owner.preview_actions_button]
         from .markdown_speech import MarkdownSpeech
         speech = getattr(owner, 'markdown_speech', None)
         if speech is None:
             owner.markdown_speech = speech = MarkdownSpeech(self, owner.preview, owner.preview_box)
-            owner.preview_toolbar.add(speech.button)
+            owner.preview_toolbar.insert(len(owner.preview_toolbar.children) - 1, speech.button)
         speech.close()
         self.preview_box = owner.preview_box
         self.show_view(self.preview_box, route='preview', title=owner.document.name)
@@ -837,13 +878,15 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         from .document_choices import choose_document_type
         choose_document_type(self)
 
-    def create_chosen_document(self, extension):
+    def create_chosen_document(self, extension, *, name=None, content=''):
         previous = self.current
-        self.new_document(extension=extension)
+        self.new_document(extension=extension, name=name, content=content)
         if self.current is not previous:
             self.show_documents(edit=True)
+            return True
+        return False
 
-    def new_document(self, widget=None, *, extension='txt', **kwargs):
+    def new_document(self, widget=None, *, extension='txt', name=None, content='', **kwargs):
         if not self.checkpoint():
             return
         try:
@@ -851,7 +894,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 raise ValueError('Close an open document before creating another (limit: 32).')
             if extension not in ('txt', 'md'):
                 raise ValueError('Choose TXT or Markdown.')
-            created = self.store.create('Untitled.' + extension)
+            created = self.store.create(name if name is not None else 'Untitled.' + extension,
+                                        content=content.encode('utf-8'))
             self.refresh_documents()
             self.open_document(created.id)
             self.editor_view.session.view['markdown_mode'] = 'edit'

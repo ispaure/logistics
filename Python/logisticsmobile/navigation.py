@@ -36,6 +36,31 @@ ANDROID_DESTINATION_PATHS = {
 }
 
 
+def eink_selection_indicator(bar, enabled, original=None):
+    """Give checked Android destinations a square backing; preserve theme geometry."""
+    if enabled:
+        from com.google.android.material.shape import ShapeAppearanceModel
+        if original is None:
+            original = (bar.isItemActiveIndicatorEnabled(),
+                        bar.getItemActiveIndicatorWidth(), bar.getItemActiveIndicatorHeight(),
+                        bar.getItemActiveIndicatorShapeAppearance())
+        # MaterialComponents themes can disable indicators entirely. A white
+        # checked icon needs an explicitly enabled backing in both presentations.
+        size = round(40 * bar.getResources().getDisplayMetrics().density)
+        bar.setItemActiveIndicatorShapeAppearance(ShapeAppearanceModel.builder().build())
+        bar.setItemActiveIndicatorWidth(size)
+        bar.setItemActiveIndicatorHeight(size)
+        bar.setItemActiveIndicatorEnabled(True)
+        return original
+    if original is not None:
+        active, width, height, shape = original
+        bar.setItemActiveIndicatorShapeAppearance(shape)
+        bar.setItemActiveIndicatorWidth(width)
+        bar.setItemActiveIndicatorHeight(height)
+        bar.setItemActiveIndicatorEnabled(active)
+    return None
+
+
 def install_destination_icons(host):
     """Install app-owned glyphs on Android bottom bars and wide-screen rails."""
     install_folder_hub_icon(host)

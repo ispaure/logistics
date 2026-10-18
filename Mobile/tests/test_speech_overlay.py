@@ -47,6 +47,23 @@ class SpeechOverlayTests(unittest.TestCase):
                 panel.source = source
                 await panel.play()
                 self.assertEqual(panel.session.voice, 'Another voice')
+                panel.speed_choice.value = '1.5'
+                self.assertEqual(panel.engine.calls[-1][2], 1.5)
+                panel.session.pause()
+                calls = len(panel.engine.calls)
+                panel.speed_choice.value = '2'
+                self.assertEqual(len(panel.engine.calls), calls)
+                await panel.toggle_playback()
+                self.assertEqual(panel.engine.calls[-1][2], 2)
+                token = panel.session.token
+                close_button = panel.play_button.parent.children[-1]
+                close_button.on_press()
+                self.assertIsNone(panel.overlay)
+                self.assertFalse(panel.closed)
+                self.assertEqual(panel.session.state, 'speaking')
+                speech.show()
+                self.assertIs(speech.panel, panel)
+                self.assertEqual(panel.session.token, token)
                 overlay = panel.overlay
                 speech.close()
                 self.assertTrue(panel.closed)

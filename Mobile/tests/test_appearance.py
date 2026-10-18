@@ -7,6 +7,87 @@ from features.lm.mobile.presentation import transcript_document
 
 
 class AppearanceTests(unittest.TestCase):
+    def test_android_command_outline_survives_theme_and_eink_transitions(self):
+        import sys
+        from types import SimpleNamespace as NS
+        from unittest.mock import MagicMock, patch
+        from logisticsmobile.appearance import outline_command, paint_surface
+        from logisticsmobile.palette import EINK, set_eink_enabled
+
+        class Impl:
+            __module__ = 'toga_android.widgets.button'
+
+        impl = Impl()
+        # Backend creation happens before interface._impl exists.
+        impl.interface = NS(on_press=lambda: None)
+        impl.native = MagicMock()
+        impl.scale_in = lambda value: value * 2
+        drawable = MagicMock()
+        class Colors:
+            def __new__(cls, states, colors):
+                return NS(states=states, colors=colors)
+            valueOf = staticmethod(lambda value: value)
+        ripple = MagicMock()
+        modules = {'android': NS(R=NS(attr=NS(state_enabled=1))),
+                   'android.content.res': NS(ColorStateList=Colors),
+                   'android.graphics.drawable': NS(GradientDrawable=lambda: drawable,
+                                                   RippleDrawable=ripple)}
+        try:
+            with patch.dict(sys.modules, modules):
+                for index, (dark, eink, colors) in enumerate((
+                        (False, False, LIGHT), (True, False, DARK),
+                        (False, True, EINK), (False, False, LIGHT))):
+                    set_eink_enabled(eink)
+                    impl.native.getResources().getConfiguration().uiMode = 0x20 if dark else 0x10
+                    if index == 0:
+                        outline_command(impl)
+                    else:
+                        paint_surface(impl, 8)
+                    drawable.setStroke.assert_called_with(2, argb(colors['control_border']))
+                    drawable.setCornerRadius.assert_called_with(0 if eink else 16)
+                    tint = impl.native.setTextColor.call_args.args[0]
+                    self.assertEqual(tint.states, [[-1], []])
+                    self.assertEqual(tint.colors, [argb(colors['muted']), argb(colors['text'])])
+                    impl.native.setBackgroundTintList.assert_called_with(None)
+                    impl.native.setBackground.assert_called_with(ripple.return_value)
+                    impl.native.setSelected.assert_not_called()
+        finally:
+            set_eink_enabled(False)
+
+    def test_command_boundaries_contrast_with_light_dark_and_chat_surfaces(self):
+        from logisticsmobile.palette import EINK
+        for colors in (LIGHT, DARK, EINK):
+            for background in ('surface', 'window', 'alternate', 'chat_background', 'chat_input'):
+                if background in colors:
+                    with self.subTest(background=background, colors=colors):
+                        self.assertGreaterEqual(contrast_ratio(argb(colors['control_border']),
+                                                               argb(colors[background])), 3)
+
+    def test_android_alert_dimming_is_applied_before_show_without_changing_completion(self):
+        import sys
+        from types import SimpleNamespace as NS
+        from unittest.mock import Mock, patch
+        from logisticsmobile.appearance import show_android_dialog
+        events = []
+        window = NS(addFlags=lambda value: events.append(('flags', value)),
+                    setDimAmount=lambda value: events.append(('dim', value)))
+        impl = NS(native=NS(getWindow=lambda: window))
+        host, future, result = object(), object(), object()
+        def show(dialog, owner, completion):
+            self.assertIs(dialog, impl)
+            self.assertIs(owner, host)
+            self.assertIs(completion, future)
+            self.assertEqual(events, [('flags', 2), ('dim', .5)])
+            return result
+        with patch.dict(sys.modules, {'android.view': NS(WindowManager=NS(
+                LayoutParams=NS(FLAG_DIM_BEHIND=2)))}):
+            self.assertIs(show_android_dialog(impl, host, future, show=show), result)
+            # Unsupported picker backends still complete through Toga normally.
+            impl.native = None
+            fallback = Mock()
+            show_android_dialog(impl, host, future, show=fallback)
+            fallback.assert_called_once_with(impl, host, future)
+
     def test_folder_states_have_distinct_shapes_and_readable_light_dark_colors(self):
         from logisticsmobile.control_icons import ICONS
         from logisticsmobile.palette import EINK

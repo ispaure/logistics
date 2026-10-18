@@ -4,9 +4,10 @@ from .control_icons import icon_button
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from .hub_icons import icon
-from commonUtils.ui.native.presentation import list_button
+from .appearance import list_button
 from .appearance import template_icon
-from .appearance import surface, action_button
+from .appearance import surface, action_button, accessible_name
+from .recent_documents import MAX_RECENT
 
 DOCUMENT_TYPES = {'text': 'Text', 'markdown': 'Markdown', 'epub': 'EPUB books', 'comic': 'Comics', 'pdf': 'PDF documents'}
 
@@ -25,6 +26,31 @@ def document_groups(items):
 
 def heading(text):
     return toga.Label(text, style=Pack(font_size=19, font_weight='bold', margin_top=16, margin_bottom=8))
+
+
+def session_identities(session, history):
+    identities = {session.identity}
+    source = getattr(session, 'history_source', None) or getattr(session, 'cache_source', None)
+    if source is not None:
+        identities.add(('file-reference', history.reference_id(source)))
+    return identities
+
+
+def status_badges(details):
+    """Text-labelled status remains readable without relying on colour."""
+    box = toga.Box(style=Pack(direction=COLUMN, margin_left=8, margin_right=8))
+    row, length = None, 0
+    for detail in details:
+        # Bound each line so phone-sized cards do not grow to fit long statuses.
+        if row is None or length + len(detail) + 2 > 30:
+            row = toga.Box(style=Pack(direction=ROW, margin_bottom=4))
+            box.add(row)
+            length = 0
+        badge = surface(toga.Box(children=[toga.Label(detail, style=Pack(font_size=12, margin=4))],
+                                 style=Pack(direction=COLUMN, margin_right=4)), radius=6)
+        row.add(badge)
+        length += len(detail) + 2
+    return box
 
 
 def home_surface(widget, *, hero=False):
@@ -88,30 +114,55 @@ class HubUI:
         return True
 
     def recent_items(self, *, excluding=()):
-        """Resolve recent files without opening their contents or credentials."""
+        """Merge history with live owners, resolving file aliases only in RAM."""
         excluded = set(excluding)
+        live = {}
         for current in self.workspace.sessions.values():
-            source = getattr(current, 'history_source', None) or getattr(current, 'cache_source', None)
-            if source is not None and current.identity in excluded:
-                excluded.add(('file-reference', self.recent_documents.reference_id(source)))
-        items = []
-        for session in self.recent_documents.sessions():
-            if session.identity in excluded:
+            aliases = session_identities(current, self.recent_documents)
+            if current.identity in excluded:
+                excluded.update(aliases)
+            if self.session_visible(current):
+                live.update((identity, current) for identity in aliases)
+        history = self.recent_documents.sessions()
+        recorded = {session.identity for session in history}
+        # Unrecorded session-only work is still discoverable without persisting it.
+        missing = [session for session in reversed(list(self.workspace.sessions.values()))
+                   if self.session_visible(session)
+                   and not session_identities(session, self.recent_documents) & recorded]
+        active_missing = [session for session in missing if session.id == self.workspace.active]
+        other_missing = [session for session in missing if session.id != self.workspace.active]
+        items, seen = [], set()
+        for entry in [*active_missing, *history, *other_missing]:
+            session = live.get(entry.identity, entry)
+            aliases = session_identities(session, self.recent_documents)
+            if aliases & (excluded | seen):
                 continue
+            seen.update(aliases)
             summary = self.session_summary(session)
-            if 'Unavailable; retry to reopen' not in summary[2]:
+            if session.id in self.workspace.sessions or 'Unavailable; retry to reopen' not in summary[2]:
                 items.append((session, summary))
-        return items
+        return items[:MAX_RECENT]
 
     def recent_opener(self, session):
         async def reopen(widget=None, **kwargs):
+            # Re-resolve at press time: the row may outlive a close or reopen.
+            aliases = session_identities(session, self.recent_documents)
+            current = next((item for item in self.workspace.sessions.values()
+                            if self.session_visible(item)
+                            and aliases & session_identities(item, self.recent_documents)), None)
+            if current is not None:
+                self.adaptive.menu_open['documents'] = False
+                self.session_opener(current.id)()
+                return
             if not self.checkpoint():
                 return
             self.adaptive.menu_open['documents'] = False
-            if session.provider == 'file-reference':
+            source = (getattr(session, 'source', None) or getattr(session, 'history_source', None)
+                      or getattr(session, 'cache_source', None))
+            if source is not None:
                 from .document_sources import reopen_file
                 try:
-                    await reopen_file(self.app, session.source)
+                    await reopen_file(self.app, source)
                 except (OSError, ValueError, KeyError) as error:
                     await self.main_window.dialog(toga.InfoDialog('Could not open file', str(error)))
             elif session.provider == 'library':
@@ -121,7 +172,7 @@ class HubUI:
         return reopen
 
     def recent_row(self, session, summary):
-        title, kind, _ = summary
+        title, kind, details = summary
         row = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
         opener = self.recent_opener(session)
         from .browser_ui import middle_filename
@@ -129,7 +180,9 @@ class HubUI:
         middle_filename(name)
         row.add(toga.Box(children=[*self.document_source_badges(session, opener), name],
             style=Pack(direction=ROW, align_items=CENTER)))
-        row.add(toga.Label(DOCUMENT_TYPES.get(kind, 'Document'), style=Pack(font_size=12, margin_left=8)))
+        badges = (['Open'] if session.id in self.workspace.sessions else []) + details
+        if badges:
+            row.add(status_badges(badges))
         return row
 
     def build_home(self):
@@ -137,8 +190,10 @@ class HubUI:
         title = toga.Label('Your workspace', style=Pack(font_size=22, font_weight='bold', margin_top=8, margin_bottom=16))
         if self.app.home_unlock_candidates():
             title.style.flex = 1
-            box.add(toga.Box(children=[title,
-                toga.Button('Unlock', on_press=self.app.show_home_unlock, style=Pack(height=44, margin_left=8))],
+            unlock = surface(icon_button('storage_crypt', 'Unlock credentials',
+                on_press=self.app.show_home_unlock), foreground='text')
+            unlock.style.margin_left = 8
+            box.add(toga.Box(children=[title, unlock],
                 style=Pack(direction=ROW, align_items=CENTER)))
         else:
             box.add(title)
@@ -153,8 +208,8 @@ class HubUI:
             hero_content.add(toga.Label('Continue', style=Pack(font_size=13, margin_bottom=8)))
             from textwrap import fill
             hero_content.add(toga.Label(fill(title, width=26), style=Pack(font_size=22, font_weight='bold', margin_bottom=8)))
-            hero_content.add(toga.Label(' · '.join([DOCUMENT_TYPES.get(kind, 'Document'), *details]),
-                                style=Pack(font_size=12, margin_bottom=12)))
+            if details:
+                hero_content.add(status_badges(details))
             self.home_continue_button = action_button(toga.Button('Continue', on_press=self.session_opener(active.id),
                                 style=Pack(height=48)))
             hero_content.add(self.home_continue_button)
@@ -166,11 +221,9 @@ class HubUI:
             toga.Button('New document', on_press=self.new_hub_document, style=Pack(height=48, flex=1, margin_right=8)),
             toga.Button('Open file…', on_press=self.open_hub_file, style=Pack(height=48, flex=1))],
             style=Pack(direction=ROW))
-        if active is None:
-            action_button(self.home_actions.children[1])
         self.home_content = box
         box.add(self.home_actions)
-        recent = self.recent_items(excluding=[active.identity] if active else [])
+        recent = self.recent_items()
         recent_box = toga.Box(style=Pack(direction=COLUMN))
         recent_box.add(heading('Recent'))
         for session, summary in recent:
@@ -223,44 +276,47 @@ class HubUI:
     def build_documents_hub(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         box.add(toga.Box(children=[
-            action_button(toga.Button('New document', on_press=self.new_hub_document,
-                                      style=Pack(height=48, flex=1, margin_right=8))),
+            toga.Button('New document', on_press=self.new_hub_document,
+                        style=Pack(height=48, flex=1, margin_right=8)),
             toga.Button('Open file…', on_press=self.open_hub_file, style=Pack(height=48, flex=1))],
             style=Pack(direction=ROW)))
-        box.add(heading('Open documents'))
         self.document_grids = []
         self.document_categories = {}
-        # Kept as a resize hook for older workspace owners; no tool-card grid.
         self.document_launchers = PanelGrid([], self.main_window.size.width)
-        sessions = []
-        identities = []
-        for session in self.workspace.sessions.values():
-            if self.session_visible(session):
-                summary = self.session_summary(session)
-                sessions.append((summary[1], session, summary))
-                identities.append(session.identity)
-        for title, group in document_groups(sessions):
-            section = toga.Box(style=Pack(direction=COLUMN, margin_bottom=12))
-            section.add(toga.Label(title, style=Pack(font_size=15, font_weight='bold', margin_bottom=8)))
-            kind = group[0][0]
-            self.document_categories[kind] = section
-            if self.preferences.values['document_card_overview'] == 'true':
-                grid = PanelGrid([self.session_card(session, summary) for _, session, summary in group],
-                                 self.main_window.size.width, maximum_columns=3)
-                self.document_grids.append(grid)
-                section.add(grid)
+        sessions = [session for session in self.workspace.sessions.values() if self.session_visible(session)]
+        switcher = toga.Box(style=Pack(direction=COLUMN))
+        entries = toga.Box(style=Pack(direction=COLUMN))
+
+        def toggle(widget, **kwargs):
+            if entries in switcher.children:
+                switcher.remove(entries)
+                widget.text = f'Open · {len(sessions)} ▸'
+                accessible_name(widget, f'Show {len(sessions)} open documents')
             else:
-                for _, session, summary in group:
-                    section.add(self.session_panel(session, close=True, summary=summary, show_kind=False))
-            box.add(section)
-        if not sessions:
-            box.add(toga.Label('No open documents.\nOpen a file or create a document\nto get started.',
-                               style=Pack(margin_top=8, margin_bottom=16)))
-        recent = self.recent_items(excluding=identities)
-        if recent:
-            box.add(heading('Recent'))
+                switcher.add(entries)
+                widget.text = f'Open · {len(sessions)} ▾'
+                accessible_name(widget, f'Hide {len(sessions)} open documents')
+
+        switcher.add(accessible_name(toga.Button(f'Open · {len(sessions)} ▸', on_press=toggle,
+                                enabled=bool(sessions), style=Pack(height=48)),
+                                f'Show {len(sessions)} open documents'))
+        entries.add(toga.Label('Closing keeps saved files.\nYou’ll be asked about unsaved edits.',
+                              style=Pack(font_size=12, margin_bottom=8)))
+        for session in sessions:
+            entries.add(self.session_panel(session, close=True))
+        box.add(switcher)
+        box.add(heading('Recent'))
+        recent = self.recent_items()
+        if self.preferences.values['document_card_overview'] == 'true' and recent:
+            grid = PanelGrid([self.session_card(session, summary, recent=True) for session, summary in recent],
+                             self.main_window.size.width, maximum_columns=3)
+            self.document_grids.append(grid)
+            box.add(grid)
+        else:
             for session, summary in recent:
                 box.add(self.recent_row(session, summary))
+        if not recent:
+            box.add(toga.Label('Recently used documents\nwill appear here.', style=Pack(font_size=13)))
         if self.workspace.error:
             box.add(toga.Label(self.workspace.error, style=Pack(margin_top=8)))
         self.register_transfer_status(box)
@@ -287,18 +343,19 @@ class HubUI:
             badges.append(button)
         return badges
 
-    def session_card(self, session, summary):
+    def session_card(self, session, summary, *, recent=False):
         """A lightweight overview; never mount live editors or private readers."""
         title, kind, details = summary
         box = toga.Box(style=Pack(direction=COLUMN, margin_bottom=12))
         box.session_id = session.id
         from .browser_ui import middle_filename
-        name = list_button(toga.Button(title, on_press=self.session_opener(session.id), style=Pack(flex=1, height=48)))
+        opener = self.recent_opener(session) if recent else self.session_opener(session.id)
+        name = list_button(toga.Button(title, on_press=opener, style=Pack(flex=1, height=48)))
         middle_filename(name)
-        box.add(toga.Box(children=[
-            *self.document_source_badges(session, self.session_opener(session.id)), name,
-            icon_button('close', 'Close ' + title, on_press=self.session_closer(session.id))],
-            style=Pack(direction=ROW, margin=12)))
+        actions = [*self.document_source_badges(session, opener), name]
+        if not recent:
+            actions.append(icon_button('close', 'Close ' + title, on_press=self.session_closer(session.id)))
+        box.add(toga.Box(children=actions, style=Pack(direction=ROW, margin=12)))
         preview = ''
         owner = self.text_views.get(session.id)
         if owner is not None and session.provider == 'managed-text':
@@ -311,10 +368,11 @@ class HubUI:
         # A bounded excerpt keeps card height and native layout work predictable.
         from textwrap import wrap
         excerpt = '\n'.join(wrap(' '.join(preview[:600].split()), width=32)[:4])
-        box.add(toga.Label(excerpt or DOCUMENT_TYPES.get(kind, 'Document'),
+        box.add(toga.Label(excerpt or 'No preview available',
                            style=Pack(height=80, font_size=12, margin_left=12, margin_right=12, margin_bottom=8)))
-        if details:
-            box.add(toga.Label('\n'.join(details), style=Pack(font_size=12, margin_left=12, margin_right=12, margin_bottom=12)))
+        badges = (['Open'] if recent and session.id in self.workspace.sessions else []) + details
+        if badges:
+            box.add(status_badges(badges))
         return surface(box)
 
     def session_summary(self, session):
@@ -323,7 +381,12 @@ class HubUI:
         kind = session.kind
         owner = self.text_views.get(session.id)
         dirty = owner.document.modified if owner is not None else session.dirty
-        details = ['Unsaved changes'] if dirty else []
+        if session.provider == 'provider-session':
+            manager = getattr(self, 'private_sessions', None)
+            private_owner = manager.controllers.get(session.id) if manager else None
+            if private_owner is not None:
+                dirty = private_owner.private_dirty()
+        details = ['Unsaved changes', 'Draft'] if dirty else []
         if owner is not None:
             title = owner.document.name
             kind = text_document_kind(title)
@@ -338,7 +401,9 @@ class HubUI:
                 title = document.name
                 kind = text_document_kind(title)
                 if document.modified:
-                    details.append('Recovered draft')
+                    details = ['Unsaved changes', 'Recovered draft']
+                if document.conflict:
+                    details.append('File changed outside editor')
             except (OSError, ValueError, KeyError, TypeError):
                 details.append('Unavailable; retry to reopen')
         elif session.provider == 'library':
@@ -349,14 +414,14 @@ class HubUI:
                 details.append('Unavailable; retry to reopen')
         return title, kind, details
 
-    def session_panel(self, session, *, close=False, summary=None, show_kind=True):
+    def session_panel(self, session, *, close=False, summary=None, show_kind=False):
         title, kind, details = summary if summary is not None else self.session_summary(session)
         if show_kind:
             details = [DOCUMENT_TYPES.get(kind, 'Document'), *details]
         # One compact row per item; names are the primary navigation target.
         box = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
         if details:
-            box.add(toga.Label(' · '.join(details), style=Pack(font_size=12)))
+            box.add(status_badges(details))
         box.session_id = session.id
         button = list_button(toga.Button(title, on_press=self.session_opener(session.id), style=Pack(height=48, flex=1)))
         from .browser_ui import middle_filename

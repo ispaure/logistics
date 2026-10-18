@@ -1,5 +1,25 @@
 # Mobile workspace drawers and paired documents
 
+## Document hub and recent sessions
+
+`HubUI.recent_items` merges the bounded recent history with visible workspace
+sessions. Provider `history_source` and credential `cache_source` references map
+back to live owners by source identity, so an open file appears once and its
+current title and dirty status take precedence over history metadata. Unrecorded
+session-only entries participate in memory without adding plaintext history.
+Recent remains bounded to ten entries; the collapsed **Open · count** switcher
+provides access to every visible open session with the existing guarded Close
+actions. The card preference applies to Recent; the switcher always uses rows.
+
+Recent activation resolves live owners again at press time and dispatches through
+`session_opener`; closed entries use the existing reopen commands. Rendering
+neither opens private contents nor unlocks credentials. Status badges distinguish
+open sessions, live unsaved drafts and recovered drafts; ordinary documents have
+a stored baseline even before their first explicit Save. No storage schema or
+credential-list encryption changes are required. Hub, private-session and UX
+workflow tests exercise identity deduplication, retained edits and closed-draft
+recovery using the dummy native backend.
+
 ## Notes Library
 
 `features.text_editor.notes` owns rooted containment, immediate-folder filtering,
@@ -27,6 +47,11 @@ only examines loaded rows. `Mobile/tests/test_notes_library.py` and desktop
 `test_notes_library_desktop.py` cover action placement, Documents ownership,
 remote call bounds, containment, cancellation and credential retirement. Native
 `obsidian_checks.py` covers real Local/LocalCrypt reads and action screenshots.
+
+The shared `FolderLocationHeader` groups passive storage/lock images and labels
+beneath the folder name, separate from parent navigation. That secondary line
+shows `BrowserStatusLabel` messages while nonempty and restores storage identity
+when cleared, preserving result/error visibility.
 
 Remote browsing mounts `cloud_up` beside `cloud_status` in the main browser,
 using the same 48-point up-arrow control as local browsing. It calls the existing

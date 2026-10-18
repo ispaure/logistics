@@ -59,13 +59,18 @@ view using system speech progress. Android voices that omit word progress use
 estimated highlighting. Android initially selects the system's current voice
 when it is installed and works offline. The same **Play/Pause** button switches to
 pause while reading and back to play when paused. Pausing stops at the current
-word; playing again continues from that word. **Stop** ends reading. Playback uses icon buttons with accessible names. The
+word; playing again continues from that word. Speed changes apply immediately
+from the current word during playback, or on resume when paused. **Stop** ends
+reading; pressing Play again starts at the top of the visible page unless text
+is selected. Playback uses icon buttons with accessible names. The
 back/forward **15** controls use the same circular-arrow design as desktop and
 jump approximately 15 seconds within the current
 passage, accounting for the selected speed. System speech has no recorded
 timeline, so skips estimate distance at 180 words per minute at normal speed.
-Skipping while paused keeps playback paused. Closing the speech
-panel, changing chapters, leaving a private reader or closing its session stops
+Skipping while paused keeps playback paused. The **×** button hides the controls
+and keeps playback running, including automatic page turns within the chapter.
+Tap the speaker again to reopen the same controls. Changing chapters,
+leaving a private reader or closing its session stops
 the engine and clears queued text. The app does not download voices or send text
 to a speech service. If no offline voice is available, use the operating system's
 speech settings to install one. Physical-device audio and accessibility ergonomics

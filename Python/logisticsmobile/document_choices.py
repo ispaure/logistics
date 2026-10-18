@@ -1,51 +1,53 @@
-"""Native new-document format prompt, with a host-test fallback."""
+"""Shared new-document form for every mobile entry point."""
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
+from features.text_editor.names import document_name
 
 CHOICES = (('Plain text (.txt)', 'txt'), ('Markdown (.md)', 'md'))
 
 
 def choose_document_type(app):
-    backend = type(app._impl).__module__
-    if backend.startswith('toga_iOS.'):
-        from rubicon.objc import ObjCClass, Block, objc_id
-        alert = ObjCClass('UIAlertController').alertControllerWithTitle(
-            'New document', message='Choose a file type', preferredStyle=1)
-        blocks = []
-        for title, extension in CHOICES:
-            def choose(action, selected=extension):
-                if app.active_host:
-                    app.create_chosen_document(selected)
-            block = Block(choose, None, objc_id)
-            blocks.append(block)
-            alert.addAction(ObjCClass('UIAlertAction').actionWithTitle(title, style=0, handler=block))
-        alert.addAction(ObjCClass('UIAlertAction').actionWithTitle('Cancel', style=1, handler=None))
-        # Keep Python callbacks alive for the lifetime of the native prompt.
-        app.document_type_prompt = (alert, blocks)
-        controller = app.main_window._impl.native.rootViewController
-        while controller.presentedViewController:
-            controller = controller.presentedViewController
-        controller.presentViewController(alert, animated=True, completion=None)
-    elif backend.startswith('toga_android.'):
-        from android.app import AlertDialog
-        from android.content import DialogInterface
-        from java import dynamic_proxy
-        class Listener(dynamic_proxy(DialogInterface.OnClickListener)):
-            def onClick(self, dialog, index):
-                if app.active_host:
-                    app.create_chosen_document(CHOICES[index][1])
-        listener = Listener()
-        dialog = (AlertDialog.Builder(app._impl.native).setTitle('New document')
-                  .setItems([title for title, extension in CHOICES], listener)
-                  .setNegativeButton('Cancel', None).create())
-        app.document_type_prompt = (dialog, listener)
-        dialog.show()
-    else:
-        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Choose a file type'))
-        for title, extension in CHOICES:
-            box.add(toga.Button(title, on_press=lambda widget, selected=extension, **kw:
-                app.create_chosen_document(selected), style=Pack(height=44)))
-        box.add(toga.Button('Cancel', on_press=lambda widget, **kw: app.routes.back(), style=Pack(height=44)))
-        app.show_view(box, destination='documents', route='new-document', title='New document')
+    box = toga.Box(style=Pack(direction=COLUMN, margin=16))
+    name = toga.TextInput(placeholder='Document name', style=Pack(height=48))
+    title = toga.TextInput(placeholder='Optional title', style=Pack(height=48))
+    title_label = toga.Label('Title (optional)')
+    error = toga.Label('', style=Pack(margin_top=8))
+
+    def type_changed(widget, **kwargs):
+        markdown = widget.value == CHOICES[1][0]
+        title.enabled = markdown
+        title_label.text = 'Title (optional)' if markdown else 'Title (Markdown only)'
+
+    kind = toga.Selection(items=[label for label, extension in CHOICES],
+                          on_change=type_changed, style=Pack(height=48))
+    type_changed(kind)
+
+    def create(widget, **kwargs):
+        if not app.active_host:
+            return
+        extension = dict(CHOICES)[kind.value]
+        try:
+            filename = document_name(name.value)
+            # Selecting a type controls the extension; accept either a base
+            # name or the full filename without doubling a matching suffix.
+            suffixes = ('.md', '.markdown') if extension == 'md' else ('.txt',)
+            if not filename.lower().endswith(suffixes):
+                filename = document_name(filename + '.' + extension)
+            heading = title.value.strip() if extension == 'md' else ''
+            if '\n' in heading or '\r' in heading:
+                raise ValueError('Use a single line for the title.')
+        except ValueError as exc:
+            error.text = str(exc)
+            return
+        if not app.create_chosen_document(extension, name=filename,
+                                          content=('# ' + heading + '\n\n') if heading else ''):
+            error.text = app.status.text
+
+    box.add(toga.Label('Document name'), name, toga.Label('File type'), kind,
+            title_label, title, error,
+            toga.Button('Create document', on_press=create, style=Pack(height=48)),
+            toga.Button('Cancel', on_press=lambda widget, **kw: app.routes.back(), style=Pack(height=48)))
+    app.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)),
+                  destination='documents', route='new-document', title='New document')
+    name.focus()

@@ -6,10 +6,10 @@ __all__ = ['markdown_body', 'markdown_preview']
 
 
 def markdown_preview(text, font_size=16, *, local_links=False, image_source=None):
-    # Android's generic sans-serif follows the device font; system-ui can
-    # resolve to WebView's fixed UI face instead of the user's chosen font.
+    # The Android host replaces this fallback with the actual native font.
     stylesheet = css_variables() + 'html body{font-family:-apple-system,BlinkMacSystemFont,sans-serif}'
-    return _markdown_preview(text, font_size, local_links=local_links, stylesheet=stylesheet, image_source=image_source)
+    content = _markdown_preview(text, font_size, local_links=local_links, stylesheet=stylesheet, image_source=image_source)
+    return content.replace('</head>', '<meta name="logistics-native-font" content="true"></head>', 1)
 
 
 def folder_image_source(provider, document):

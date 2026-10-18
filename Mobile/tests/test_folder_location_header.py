@@ -30,6 +30,14 @@ class FolderLocationTests(unittest.TestCase):
                 indicator = header.storage_icons.children[-1]
                 self.assertEqual(indicator._impl._surface_roles[1], expected[-1])
                 self.assertEqual(indicator.accessible_name, 'Encrypted folder, ' + ('unlocked' if unlocked else 'locked'))
+            self.assertNotIn(header.storage_icons, header.children)
+            self.assertTrue(all(isinstance(child, toga.ImageView) for child in header.storage_icons.children))
+            header.status.text = ''
+            header.refresh_status()
+            self.assertEqual(header.caption.children, [header.folder_name, header.storage_identity])
+            self.assertEqual(header.storage_identity.children[-1].value,
+                             ('Cloud' if online else 'On-device') +
+                             ((' · Unlocked' if unlocked else ' · Locked') if encrypted else ''))
             self.assertEqual(button.control_icon, 'up' if path else 'back')
             self.assertEqual(button.accessible_name, 'Parent folder' if path else 'Back to Folder Hub')
 
@@ -50,7 +58,7 @@ class FolderLocationTests(unittest.TestCase):
         self.assertIsInstance(status, toga.Label)
         self.assertEqual(status.value, 'Current folder')
         self.assertEqual(header.children[-1], browser.search_button)
-        self.assertEqual(header.children, [header.parent_button, header.storage_icons, header.caption, browser.search_button])
+        self.assertEqual(header.children, [header.parent_button, header.caption, browser.search_button])
         self.assertEqual(header.caption.children, [header.folder_name, status])
         self.assertEqual(browser.search_button.control_icon, 'find')
         self.assertNotIn(browser.navigation_controls, browser.widget.children)

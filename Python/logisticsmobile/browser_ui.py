@@ -6,8 +6,8 @@ from .control_icons import apply_icon, icon_button
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from commonUtils.ui.native_browser import NativeBrowser
-from commonUtils.ui.native.presentation import list_button
-from .appearance import surface, template_icon
+from .appearance import list_button
+from .appearance import accessible_name, surface, template_icon
 from .hub_icons import icon
 
 
@@ -53,7 +53,8 @@ class BrowserStatusLabel(toga.Label):
             from android.text import TextUtils
             self._impl.native.setSingleLine(True)
             self._impl.native.setEllipsize(TextUtils.TruncateAt.MIDDLE)
-        surface(self, radius=0, background='transparent', foreground='text', outlined=False)
+        surface(self, radius=0, background='transparent', foreground='text',
+                outlined=False, eink_outlined=False)
 
     @property
     def value(self):
@@ -62,32 +63,47 @@ class BrowserStatusLabel(toga.Label):
     @value.setter
     def value(self, value):
         self.text = value
+        changed = getattr(self, 'status_changed', None)
+        if changed is not None:
+            changed()
 
 
 class FolderLocationHeader(toga.Box):
     """Current storage identity and a parent/root navigation control."""
     def __init__(self, status, parent_button, *, actions=()):
         self.parent_button = parent_button
-        self.folder_name = BrowserStatusLabel('Root', style=Pack(font_size=15))
+        self.folder_name = BrowserStatusLabel('Root', style=Pack(font_size=20, font_weight='bold'))
         self.status = status
         self.folder_name.style.flex = self.status.style.flex = 0
         self.folder_name.style.margin_left = self.status.style.margin_left = 0
         self.status.style.font_size = 12
         self.status.style.height = 18
         self.status.style.margin = 0
-        surface(self.status, radius=0, background='transparent', foreground='muted', outlined=False)
-        self.caption = toga.Box(children=[self.folder_name, self.status],
+        surface(self.status, radius=0, background='transparent', foreground='muted',
+                outlined=False, eink_outlined=False)
+        self.storage_icons = toga.Box(style=Pack(direction=ROW, align_items=CENTER, height=18))
+        self.storage_identity = toga.Box(style=Pack(direction=ROW, align_items=CENTER, height=18))
+        self.caption = toga.Box(children=[self.folder_name],
                                 style=Pack(direction=COLUMN, flex=1, margin_left=6))
-        self.storage_icons = toga.Box(style=Pack(direction=ROW, align_items=CENTER))
-        super().__init__(children=[parent_button, self.storage_icons, self.caption, *actions],
+        self.status.status_changed = self.refresh_status
+        self.refresh_status()
+        super().__init__(children=[parent_button, self.caption, *actions],
                          style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
         self.update('')
+
+    def refresh_status(self):
+        """Use one secondary line for operation text or passive storage identity."""
+        visible = self.status if self.status.text else self.storage_identity
+        for child in (self.status, self.storage_identity):
+            if child is not visible and child in self.caption.children:
+                self.caption.remove(child)
+        if visible not in self.caption.children:
+            self.caption.add(visible)
 
     def update(self, path, *, remote=False, encrypted=False, unlocked=False, name=None):
         self.folder_name.value = name if name is not None else PurePosixPath(path).name if path else 'Root'
         apply_icon(self.parent_button, 'up' if path else 'back',
                    'Parent folder' if path else 'Back to Folder Hub')
-        from .folder_hub_style import compact_icon
         kinds = [('storage_remote', 'Online folder')] if remote else [('storage_local', 'On-device folder')]
         if encrypted:
             state = 'unlocked' if unlocked else 'locked'
@@ -96,11 +112,21 @@ class FolderLocationHeader(toga.Box):
             return
         for child in list(self.storage_icons.children):
             self.storage_icons.remove(child)
+        for child in list(self.storage_identity.children):
+            self.storage_identity.remove(child)
+        self.storage_identity.add(self.storage_icons)
         for name, label in kinds:
-            indicator = icon_button(name, label)
-            compact_icon(indicator, width=28, height=48, size=23 if name.startswith('folder_') else 20,
-                         foreground=name if name.startswith('folder_') else 'accent')
+            indicator = template_icon(toga.ImageView(icon(name), style=Pack(width=18, height=18, margin_right=4)))
+            indicator.control_icon = name
+            accessible_name(indicator, label)
+            surface(indicator, radius=0, background='transparent',
+                    foreground=name if name.startswith('folder_') else 'accent',
+                    outlined=False, eink_outlined=False)
             self.storage_icons.add(indicator)
+        identity = ('Cloud' if remote else 'On-device') + ((' · Unlocked' if unlocked else ' · Locked') if encrypted else '')
+        self.storage_identity.add(BrowserStatusLabel(identity, style=Pack(font_size=12, height=18, margin=0)))
+        surface(self.storage_identity.children[-1], radius=0, background='transparent', foreground='muted',
+                outlined=False, eink_outlined=False)
         self._storage_kinds = kinds
 
 

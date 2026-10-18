@@ -29,8 +29,9 @@ class ReadAloudPanel(toga.Box):
             toga.Box(children=[toga.Label('Speed', style=Pack(margin_right=12)), self.speed_choice], style=Pack(direction=ROW)),
             toga.Box(children=[self.skip_back, self.play_button, self.skip_forward,
                 icon_button('stop', 'Stop read-aloud', on_press=lambda w: self.session.stop()),
-                icon_button('close', 'Close read-aloud', on_press=close)], style=Pack(direction=ROW))],
+                icon_button('close', 'Hide read-aloud controls', on_press=self.hide)], style=Pack(direction=ROW))],
             style=Pack(direction=COLUMN, margin=12))
+        self.speed_choice.on_change = self.change_speed
         if app is not None:
             from .media_controls import SpeechPlayback
             self.playback = SpeechPlayback(self, app, gate=privacy_gate, valid=valid)
@@ -39,7 +40,16 @@ class ReadAloudPanel(toga.Box):
 
     def show_over(self, owner):
         from logisticsmobile.speech_overlay import SpeechOverlay
-        self.overlay = SpeechOverlay(self, owner, self.speech_app)
+        if not self.closed and self.overlay is None:
+            self.overlay = SpeechOverlay(self, owner, self.speech_app)
+
+    def hide(self, widget=None, **kwargs):
+        if self.overlay is not None:
+            self.overlay.close()
+            self.overlay = None
+
+    def change_speed(self, widget=None, **kwargs):
+        self.session.set_speed(float(self.speed_choice.value))
 
     @property
     def overlay_height(self):

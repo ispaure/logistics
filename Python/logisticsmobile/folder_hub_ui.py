@@ -1,6 +1,7 @@
 """A folder list and focused, source-owned folder actions."""
 from features.rclone.mobile.storage_location import collection_path
 import asyncio
+from copy import deepcopy
 import toga
 from .control_icons import icon_button
 from toga.style import Pack
@@ -8,7 +9,7 @@ from toga.style.pack import COLUMN, ROW, CENTER
 from .folder_hub import hub_entries, folder_tree, credential_choices, source_choices, folder_storage_label, folder_browse_copy
 from features.rclone.mobile.messages import import_hint
 from textwrap import fill
-from commonUtils.ui.native.presentation import list_button
+from .appearance import list_button
 from .appearance import action_button, accessible_name
 from .folder_hub_style import surface, source_tab, compact_icon, toolbar_button, folder_row, folder_name, source_actions, SOURCE_LABELS
 
@@ -221,6 +222,8 @@ class FolderHubUI:
             self.folder_source_buttons[source] = button
             self.folder_source_tabs.add(button)
         self.folder_list = toga.Box(style=Pack(direction=COLUMN))
+        self.folder_tab_views = {}
+        self.folder_tab_snapshot = None
         self.folder_collapsed = getattr(self, 'folder_collapsed', set())
         self.folder_credentials = self.credential_groups(source_choices(choices, 'rclone', self.network_share_remotes()))
         selected = getattr(self, 'folder_credential_name', 'All')
@@ -258,7 +261,8 @@ class FolderHubUI:
         return box
 
     def update_folder_list(self, choices):
-        credentials = self.credential_groups(source_choices(choices, 'rclone', self.network_share_remotes()))
+        network_remotes = self.network_share_remotes()
+        credentials = self.credential_groups(source_choices(choices, 'rclone', network_remotes))
         if credentials != self.folder_credentials:
             self.folder_credentials = credentials
             selected = self.selected_folder_credential()
@@ -269,7 +273,7 @@ class FolderHubUI:
             self.folder_credential.on_change = self.change_folder_credential
         self.folder_picker_choices = choices
         selected = self.folder_credentials.get(self.selected_folder_credential())
-        visible = source_choices(choices, self.folder_source, self.network_share_remotes())
+        visible = source_choices(choices, self.folder_source, network_remotes)
         if self.folder_source == 'rclone' and selected is not None:
             visible = credential_choices(visible, selected)
         for source, button in self.folder_source_buttons.items():
@@ -282,8 +286,27 @@ class FolderHubUI:
         source_actions(self.app)
         visible = {name: entry for name, entry in visible.items()
                    if self.folder_path_visible(name) and self.folder_path_visible(entry.get('remote') or '')}
-        for child in list(self.folder_list.children):
-            self.folder_list.remove(child)
+        # Native selectors and retained metadata are relatively expensive. Read
+        # them once, rather than once for every encrypted folder in the tree.
+        loaded_remotes = set(self.loaded_remote_names())
+        crypt_remotes = set(getattr(self.app, 'cloud_crypt_remotes', ()))
+        crypt_remotes.update(remote for package in self.retained_credential_associations()
+                             for remote in package.get('crypt_remotes', ()))
+        snapshot = (choices, network_remotes, loaded_remotes, crypt_remotes,
+                    getattr(self, 'show_legacy_session', False))
+        if snapshot != self.folder_tab_snapshot:
+            # Discard every source on a discovery/privacy change, even when
+            # that source is currently detached. Keep at most one view per tab.
+            self.folder_tab_views.clear()
+            self.folder_tab_snapshot = deepcopy(snapshot)
+        cached = self.folder_tab_views.get(self.folder_source)
+        if cached is not None and cached[0] == visible:
+            _, content, self.folder_buttons, self.folder_tree_buttons = cached
+            self.mount_folder_tab(content)
+            return
+        # Assemble the hierarchy offscreen so adding each row does not trigger
+        # a layout of the visible iOS/Android scroll container.
+        content = toga.Box(style=Pack(direction=COLUMN))
         self.folder_buttons = {}
         self.folder_tree_buttons = {}
 
@@ -313,11 +336,9 @@ class FolderHubUI:
                                else target['source'])
                     remote = target.get('remote') or entry.get('remote')
                     encrypted = ('LocalCrypt' in storage or ('Remote' in storage and (
-                        remote in getattr(self.app, 'cloud_crypt_remotes', ())
-                        or any(remote in package.get('crypt_remotes', ())
-                               for package in self.retained_credential_associations())
+                        remote in crypt_remotes
                         or any(copy['source'] == 'LocalCrypt' for copy in entry.get('copies', ())))))
-                    state = ('unlocked' if remote in self.loaded_remote_names() else 'locked') if encrypted else None
+                    state = ('unlocked' if remote in loaded_remotes else 'locked') if encrypted else None
                     icon = 'folder_' + state if state else 'folder'
                     description = storage + (', ' + state if state else '')
                     indicator = icon_button(icon, name + ', ' + description, on_press=select)
@@ -338,15 +359,13 @@ class FolderHubUI:
                 else:
                     # Labels deliberately have no press handler or disclosure
                     # glyph. The entire hierarchy is always expanded.
-                    group_icon = icon_button('group', 'Group ' + title)
-                    compact_icon(group_icon, width=32, height=48, size=21, foreground='muted')
-                    row.add(group_icon)
                     group = surface(toga.Label(title,
                         style=Pack(height=20, margin_top=14, margin_bottom=14, font_size=15,
-                                   # Group and folder icons occupy the same slot.
-                                   font_weight='normal', flex=1, margin_left=4)),
+                                   # Start at this level's origin; only browsable
+                                   # folders reserve an icon slot before the title.
+                                   font_weight='normal', flex=1)),
                         radius=0, background='transparent',
-                        foreground='text', outlined=False)
+                        foreground='muted', outlined=False)
                     accessible_name(group, title + ', group')
                     self.folder_tree_buttons[path] = group
                     row.add(group)
@@ -366,14 +385,14 @@ class FolderHubUI:
                     parent.add(divider())
 
         for title, node in sorted(folder_tree(visible).items(), key=lambda item: item[0].casefold()):
-            content = toga.Box(style=Pack(direction=COLUMN, margin=12))
-            panel = surface(toga.Box(children=[content], style=Pack(direction=COLUMN)),
+            branch_content = toga.Box(style=Pack(direction=COLUMN, margin=12))
+            panel = surface(toga.Box(children=[branch_content], style=Pack(direction=COLUMN)),
                             radius=16, outlined=False)
             panel.style.margin_bottom = 12
-            add_branch({title: node}, content)
-            self.folder_list.add(panel)
+            add_branch({title: node}, branch_content)
+            content.add(panel)
         if not visible:
-            self.folder_list.add(toga.Label('No folders available for this source.'))
+            content.add(toga.Label('No folders available for this source.'))
         legend = toga.Box(style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
         labels = (('Locked', 'folder_locked', 'folder_locked'),
                   ('Unlocked', 'folder_unlocked', 'folder_unlocked'))
@@ -383,7 +402,16 @@ class FolderHubUI:
             legend.add(mark)
             legend.add(surface(toga.Label(label, style=Pack(font_size=11, margin_right=16)),
                                background='window', foreground='muted', outlined=False))
-        self.folder_list.add(legend)
+        content.add(legend)
+        self.folder_tab_views[self.folder_source] = (deepcopy(visible), content,
+                                                    self.folder_buttons, self.folder_tree_buttons)
+        self.mount_folder_tab(content)
+
+    def mount_folder_tab(self, content):
+        if list(self.folder_list.children) != [content]:
+            for child in list(self.folder_list.children):
+                self.folder_list.remove(child)
+            self.folder_list.add(content)
 
     def network_share_remotes(self):
         import json
@@ -403,7 +431,11 @@ class FolderHubUI:
             self.show_cloud(present=False)
         self.folder_source = source
         self.folder_credential_name = 'All'
+        # Resetting a native Selection can emit on_change synchronously. The
+        # source switch below already renders the new filter exactly once.
+        self.folder_credential.on_change = None
         self.folder_credential.value = 'All'
+        self.folder_credential.on_change = self.change_folder_credential
         self.folder_collapsed.clear()
         self.update_folder_list(self.folder_choices())
         self.app.refresh_transfer_status()

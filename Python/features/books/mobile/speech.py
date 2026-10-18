@@ -163,6 +163,17 @@ class SpeechSession:
             self.state = 'speaking'
             self.next()
 
+    def set_speed(self, speed):
+        """Re-synthesize from the current word; native rates apply per utterance."""
+        if self.closed or speed == getattr(self, 'speed', None):
+            return
+        speaking = self.state == 'speaking'
+        if speaking:
+            self.pause()
+        self.speed = speed
+        if speaking:
+            self.resume()
+
     def skip(self, seconds):
         """Estimate a time jump from word rate; system synthesis has no seek API."""
         if self.closed or self.state not in {'speaking', 'paused'} or not self.words or not self.ranges:

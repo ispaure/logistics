@@ -44,7 +44,7 @@ class ChatUI:
             self.chat_selector = toga.Selection(on_change=self.select_chat, style=Pack(height=48))
             self.chat_new = self.presentation.surface(toga.Button('New chat', on_press=self.new_chat,
                 style=Pack(height=52, width=148, font_size=17, font_weight='bold')),
-                radius=26, background='chat_primary', foreground='chat_on_primary', outlined=False)
+                radius=26, background='chat_background', foreground='text', outlined=True)
             self.chat_render_ready = False
             self.chat_render_revision = 0
             self.chat_render_generation = 0
@@ -133,7 +133,7 @@ class ChatUI:
             self.chat_workspace = toga.Box(style=Pack(direction=ROW, flex=1))
             self.chat_drawer_open = self.adaptive.width() >= 640
             for control in (self.chat_header_new, self.chat_actions_button):
-                self.presentation.surface(control, radius=24, background='chat_input', foreground='text', outlined=False)
+                self.presentation.surface(control, radius=24, background='chat_input', foreground='text', outlined=True)
             self.chat_header_actions = self.presentation.surface(toga.Box(children=[self.chat_header_new, self.chat_actions_button],
                 style=Pack(direction=ROW)), radius=24, background='chat_input', outlined=False)
             self.chat_header = toga.Box(children=[self.chat_menu_button,
@@ -377,7 +377,7 @@ class ChatUI:
             button = list_button(toga.Button(label, on_press=select,
                 enabled=not self.chat_busy, style=Pack(height=56, margin_bottom=8, font_size=17)))
             self.presentation.surface(button, radius=16, background='chat_selected' if current else 'chat_background',
-                    foreground='text', outlined=False)
+                    foreground='text', outlined=True)
             backend = type(button._impl).__module__
             if backend.startswith('toga_iOS.'):
                 from rubicon.objc import UIEdgeInsets

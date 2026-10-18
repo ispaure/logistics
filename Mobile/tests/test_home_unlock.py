@@ -59,7 +59,12 @@ class HomeUnlockTests(unittest.TestCase):
             app.show_legacy_session = False
             app.show_home()
             header = app.home_content.children[0]
-            self.assertEqual([child.text for child in header.children], ['Your workspace', 'Unlock'])
+            self.assertEqual(header.children[0].text, 'Your workspace')
+            unlock = header.children[1]
+            self.assertEqual(unlock.control_icon, 'storage_crypt')
+            self.assertEqual(unlock.accessible_name, 'Unlock credentials')
+            self.assertEqual((unlock.style.width, unlock.style.height), (48, 48))
+            self.assertEqual(unlock._impl._surface_roles, ('surface', 'text', True))
             header.children[1].on_press()
             self.assertEqual(app.native_host.state.destination, 'home')
             self.assertEqual(app.routes.screens['home'][-1][0], 'unlock-credential')

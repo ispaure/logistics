@@ -209,6 +209,11 @@ async def exercise_ui_review(app):
         assert str(native.getButton(-1).getText()) == 'OK'
         assert str(native.getButton(-2).getText()) == 'Cancel'
         assert native.isShowing()
+        from android.view import WindowManager
+        attributes = native.getWindow().getAttributes()
+        assert attributes.flags & WindowManager.LayoutParams.FLAG_DIM_BEHIND
+        assert abs(attributes.dimAmount - .5) < .01
+        await capture('transfer-confirmation')
         native.getButton(-2).performClick()
     assert not await pending
     from commonUtils.runtime.local_files import LocalFiles

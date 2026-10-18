@@ -46,6 +46,27 @@ class PrivateSessionTests(unittest.TestCase):
         self.assertEqual(reopened._crypt_reader_store.provider.root, self.local)
         self.assertEqual(reopened.crypt_text.value, '# Original')
 
+    def test_unified_recent_matches_local_source_and_keeps_live_unsaved_edits(self):
+        from logisticsmobile.document_sources import reopen_file
+        owner = self.open('live-draft.md', b'# Original')
+        owner.crypt_text.value = '# Unsaved provider draft'
+        source = owner.session.history_source
+        session, summary = self.app.recent_items()[0]
+        self.assertIs(session, owner.session)
+        self.assertIn('Unsaved changes', summary[2])
+        self.assertEqual(sum(item is session for item, _ in self.app.recent_items()), 1)
+        with patch('logisticsmobile.document_sources.reopen_file', wraps=reopen_file) as reopen:
+            self.run_async(self.app.recent_opener(session)())
+            reopen.assert_not_called()
+        self.assertIs(self.app.private_sessions.active, owner)
+        self.assertEqual(owner.crypt_text.value, '# Unsaved provider draft')
+        # Even a previously rendered live entry can reopen the original after close.
+        action = self.app.recent_opener(session)
+        self.assertTrue(self.app.private_sessions.close(session.id, discard=True))
+        self.run_async(action())
+        self.assertEqual(self.app.private_sessions.active.session.history_source, source)
+        self.assertEqual(self.app.private_sessions.active.crypt_text.value, '# Original')
+
     def test_close_from_documents_immediately_refreshes_cards_and_list(self):
         def widgets(widget):
             yield widget
@@ -62,6 +83,9 @@ class PrivateSessionTests(unittest.TestCase):
                 key = owner.session.id
                 self.app.show_documents_hub()
                 root = self.app.routes.roots['documents']
+                switcher = next(widget for widget in widgets(root)
+                                if getattr(widget, 'text', '').startswith('Open ·'))
+                switcher.on_press()
                 close = next(widget for widget in widgets(root)
                              if getattr(widget, 'accessible_name', '') == 'Close close-me.md')
                 close.on_press()

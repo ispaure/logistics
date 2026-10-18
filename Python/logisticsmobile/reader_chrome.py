@@ -191,6 +191,10 @@ class ReaderChrome:
     def show_read_aloud(self, widget=None, **kwargs):
         if self.book_reader is None or self.book_record['kind'] != 'epub' or self.book_busy:
             return
+        panel = getattr(self, 'speech_panel', None)
+        if panel is not None and not panel.closed:
+            panel.show_over(self.book_content)
+            return
         self.close_read_aloud()
         from features.books.mobile.speech_view import ReadAloudPanel
         from features.books.mobile.presentation import speech_source

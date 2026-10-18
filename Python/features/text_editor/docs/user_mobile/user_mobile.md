@@ -13,6 +13,18 @@ Background memory cleanup preserves the active Markdown reading or editing
 surface when returning from sleep. Reading and formatted editing use the
 platform's default font, including the device-selected sans-serif font on Android;
 code retains a monospace font.
+Open the **three-dot Document actions** menu in the editor or Markdown preview
+and choose **Delete document…** to remove an app-stored document, including an
+unsaved Untitled document. Confirm the warning to close it and permanently remove
+its saved content, recovery copy and Recent entry. **Cancel** keeps it open.
+**Close document** keeps the stored document; discarding changes only reverts edits.
+Close other app windows before deleting. Files opened directly from a folder
+continue to use that folder's file-management actions.
+Choose **New document** from Home, Documents or Document actions to enter a name
+and select the file type before creating it. Markdown offers an optional title
+that becomes the first heading; the filename remains independently editable.
+For a new Markdown document, tap anywhere in the blank writing area below the
+formatting toolbar to place the cursor and open the keyboard.
 Formatting and source share the same
 buffer, recovery and Save actions. There is no automatic preview split on phones
 or tablets. See [Reading and editing](../../../../../docs/user_mobile/documents/reading-and-editing.md)

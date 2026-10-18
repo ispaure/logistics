@@ -36,36 +36,30 @@ def accessible_name(widget, name):
 
 
 def action_button(button, *, destructive=False):
-    """Use native action hierarchy; keep platform disabled/focus states."""
+    """Give commands a boundary without making them look selected."""
     button.action_role = 'destructive' if destructive else 'primary'
     button._impl._action_role = button.action_role
     _widgets.add(button._impl)
-    backend = type(button._impl).__module__
-    if backend.startswith('toga_iOS.'):
-        from rubicon.objc import ObjCClass
-        if destructive:
-            button._impl.native.setTitleColor(ObjCClass('UIColor').systemRedColor(), forState=0)
-        else:
-            config = ObjCClass('UIButtonConfiguration').filledButtonConfiguration()
-            config.title = button.text
-            config.cornerStyle = 3
-            config.baseForegroundColor = ObjCClass('UIColor').whiteColor
-            config.baseBackgroundColor = apple_color('primary')
-            button._impl.native.configuration = config
-            button._impl.native.setTitleColor(ObjCClass('UIColor').whiteColor, forState=0)
-    elif backend.startswith('toga_android.'):
-        restore_eink_button(button._impl)
-        if eink_enabled():
-            paint_eink_button(button._impl)
-        elif destructive:
-            dark = button._impl.native.getResources().getConfiguration().uiMode & 0x30 == 0x20
-            button._impl.native.setTextColor(argb('#ff8a80' if dark else '#c62828'))
-        else:
-            from android.content.res import ColorStateList
-            from android import R
-            button._impl.native.setBackgroundTintList(ColorStateList(
-                [[R.attr.state_enabled], [-R.attr.state_enabled]], [argb('#2563eb'), argb('#606b7c')]))
-            button._impl.native.setTextColor(argb('#ffffff'))
+    return surface(button, radius=8, foreground='destructive' if destructive else 'text')
+
+
+def outline_command(impl):
+    """Default for native buttons; rows and selections can override explicitly.
+
+    Called during backend creation, before the interface has its _impl assigned.
+    Do not set _row_hint: list_button must still install its shrinking row hint.
+    """
+    impl._surface_roles = ('surface', 'text', True)
+    _surfaces[impl] = 8
+    paint_surface(impl, 8)
+
+
+def list_button(button):
+    """Keep native row sizing/alignment and restore the app's command outline."""
+    from commonUtils.ui.native.presentation import list_button as native_list_button
+    native_list_button(button)
+    if button._impl in _surfaces:
+        paint_surface(button._impl, _surfaces[button._impl])
     return button
 
 
@@ -127,19 +121,26 @@ def apple_color(role):
 def paint_surface(impl, radius):
     backend = type(impl).__module__
     background, foreground, outlined = getattr(impl, '_surface_roles', ('surface', None, True))
+    border = 'control_border' if hasattr(impl.interface, 'on_press') and outlined else 'border'
     if backend.startswith('toga_iOS.'):
         native = impl.native
         impl._default_background_color = apple_color(background)
         native.backgroundColor = impl._default_background_color
         native.layer.cornerRadius = radius
         native.layer.borderWidth = 1 if outlined else 0
-        native.layer.borderColor = apple_color('border').resolvedColorWithTraitCollection(native.traitCollection).CGColor
+        native.layer.borderColor = apple_color(border).resolvedColorWithTraitCollection(native.traitCollection).CGColor
+        if hasattr(impl.interface, 'on_press'):
+            from rubicon.objc import UIEdgeInsets
+            inset = 8 if outlined and not getattr(impl.interface, 'control_icon', None) else 0
+            native.contentEdgeInsets = UIEdgeInsets(0, inset, 0, inset)
         if foreground:
             if hasattr(impl.interface, 'on_press'):
                 native.configuration = None
                 native.tintColor = apple_color(foreground)
                 native.setTitleColor(apple_color(foreground), forState=0)
                 native.setTitleColor(apple_color('muted'), forState=2)
+            elif hasattr(impl.interface, 'image'):
+                native.tintColor = apple_color(foreground)
             else:
                 native.textColor = apple_color(foreground)
     elif backend.startswith('toga_android.'):
@@ -156,12 +157,16 @@ def paint_surface(impl, radius):
         eink_outline = getattr(impl, '_surface_eink_outlined', True)
         has_outline = eink_outline if eink_enabled() else outlined
         if has_outline:
-            drawable.setStroke(max(1, impl.scale_in(1)), argb(colors['border']))
+            drawable.setStroke(max(1, impl.scale_in(1)), argb(colors[border]))
         if foreground:
             from android.content.res import ColorStateList
             from android import R
-            impl.native.setTextColor(ColorStateList(
-                [[-R.attr.state_enabled], []], [argb(colors['muted']), argb(colors.get(foreground, colors['text']))]))
+            tint = ColorStateList(
+                [[-R.attr.state_enabled], []], [argb(colors['muted']), argb(colors.get(foreground, colors['text']))])
+            if hasattr(impl.interface, 'image'):
+                impl.native.setImageTintList(tint)
+            else:
+                impl.native.setTextColor(tint)
         if hasattr(impl.interface, 'on_press'):
             from android.content.res import ColorStateList
             from android.graphics.drawable import RippleDrawable
@@ -224,6 +229,17 @@ def commit_apple_selection(picker, row):
     picker.interface.on_change()
 
 
+def show_android_dialog(impl, host_window, future, *, show):
+    """Give intervention alerts a consistent scrim across Android themes."""
+    if impl.native is not None:
+        from android.view import WindowManager
+        window = impl.native.getWindow()
+        if window is not None:
+            window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            window.setDimAmount(0.5)
+    return show(impl, host_window, future)
+
+
 def install_appearance(app):
     backend = type(app._impl).__module__
     if backend in _installed:
@@ -267,14 +283,21 @@ def install_appearance(app):
 
         class LogisticsActionButton(button_module.TogaButton):
             @objc_method
+            def traitCollectionDidChange_(self, previous: objc_id) -> None:
+                send_super(__class__, self, 'traitCollectionDidChange:', previous, argtypes=[objc_id])
+                impl = self.impl
+                if impl in _surfaces:
+                    paint_surface(impl, _surfaces[impl])
+
+            @objc_method
             def pointInside_withEvent_(self, point: CGPoint, event: objc_id) -> bool:
                 inside = send_super(__class__, self, 'pointInside:withEvent:', point, event,
                                     restype=c_bool, argtypes=[CGPoint, objc_id])
                 if not inside or self.impl is None:
                     return bool(inside)
-                # Filled rows, small icon controls and glass buttons show their
-                # full target. A plain text action shows only its title/image.
-                if (getattr(self.impl, '_row_hint', False) or self.bounds.size.width <= 52
+                # The visible boundary is the touch target, including its edges.
+                outlined = getattr(self.impl, '_surface_roles', (None, None, False))[2]
+                if (outlined or getattr(self.impl, '_row_hint', False) or self.bounds.size.width <= 52
                         or self.configuration is not None):
                     return True
                 title = self.titleRectForContentRect(self.bounds)
@@ -293,6 +316,7 @@ def install_appearance(app):
         original_create_button = button_module.Button.create
         def create_action_button(impl):
             original_create_button(impl)
+            outline_command(impl)
             from rubicon.objc import SEL
             impl.native.removeTarget(impl.native, action=SEL('onPress:'), forControlEvents=1)
             impl.native.addTarget(impl.native, action=SEL('onPress:'), forControlEvents=1 << 6)
@@ -304,13 +328,13 @@ def install_appearance(app):
             if value is None and isinstance(impl, (TextInput, MultilineTextInput, Selection)):
                 impl._default_background_color = apple_color('surface')
             original_background(impl, value)
+            if isinstance(impl, Button) and impl in _surfaces:
+                paint_surface(impl, _surfaces[impl])
         Widget.set_background_color = set_background
         original_button_color = Button.set_color
         def button_color(impl, value):
-            role = getattr(impl, '_action_role', None)
-            if role is not None:
-                colour = ObjCClass('UIColor').systemRedColor() if role == 'destructive' else ObjCClass('UIColor').whiteColor
-                impl.native.setTitleColor(colour, forState=0)
+            if impl in _surfaces:
+                paint_surface(impl, _surfaces[impl])
                 return
             if value is None:
                 impl.native.tintColor = apple_color('accent')
@@ -363,6 +387,11 @@ def install_appearance(app):
                             getattr(impl.native, edge).hidden = True
             cls.create = create
     elif backend.startswith('toga_android.'):
+        from toga_android.dialogs import BaseDialog
+        original_show_dialog = BaseDialog.show
+        def show_dialog(impl, host_window, future):
+            return show_android_dialog(impl, host_window, future, show=original_show_dialog)
+        BaseDialog.show = show_dialog
         from android import R
         from android.content.res import ColorStateList
         from toga_android.widgets.label import TextViewWidget
@@ -390,6 +419,7 @@ def install_appearance(app):
         original_rehint = Button.rehint
         def create_button(impl):
             original_create(impl)
+            outline_command(impl)
             impl.native.setAllCaps(False)
             impl.native.setSingleLine(True)
             impl.native.setEllipsize(TextUtils.TruncateAt.END)
@@ -445,11 +475,14 @@ def install_appearance(app):
                 original_box_background(impl, value)
         Box.set_background_color = box_background
         from toga_android.widgets.webview import WebView
+        from .android_markdown_font import install_font_responses
+        install_font_responses()
         original_content = WebView.set_content
         def web_content(impl, root_url, content):
             from .palette import eink_html
+            from .android_markdown_font import style_markdown
             _android_webviews.add(impl)
-            content = eink_html(content)
+            content = eink_html(style_markdown(content, impl=impl))
             if getattr(impl.interface, 'private_configured', False) and len(content.encode('utf-8')) > 2 * 1024 * 1024:
                 raise ValueError('Private HTML exceeds the memory-only limit after appearance styling.')
             original_content(impl, root_url, content)
@@ -538,6 +571,7 @@ def refresh_appearance(app):
                 toolbar.getOverflowIcon().mutate().setTint(foreground)
 
     if host is not None and host.adapter is not None:
+        from .navigation import eink_selection_indicator
         from android.content.res import ColorStateList
         from com.google.android.material import R as MaterialR
         impl = host.root._impl
@@ -552,7 +586,8 @@ def refresh_appearance(app):
             if bar is not None:
                 saved = host.adapter._eink_bar_styles
                 if eink_enabled() and index not in saved:
-                    saved[index] = bar.getItemActiveIndicatorColor(), bar.getItemRippleColor(), bar.getElevation()
+                    saved[index] = (bar.getItemActiveIndicatorColor(), bar.getItemRippleColor(),
+                                    bar.getElevation(), eink_selection_indicator(bar, True))
                 if eink_enabled():
                     bar.setItemActiveIndicatorColor(ColorStateList.valueOf(argb('#000000')))
                     bar.setItemRippleColor(ColorStateList.valueOf(0))
@@ -561,7 +596,8 @@ def refresh_appearance(app):
                     bar.setItemTextColor(ColorStateList.valueOf(foreground))
                 else:
                     if index in saved:
-                        indicator, ripple, elevation = saved.pop(index)
+                        indicator, ripple, elevation, geometry = saved.pop(index)
+                        eink_selection_indicator(bar, False, geometry)
                         bar.setItemActiveIndicatorColor(indicator)
                         bar.setItemRippleColor(ripple)
                         bar.setElevation(elevation)

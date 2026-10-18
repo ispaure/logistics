@@ -15,7 +15,7 @@ from toga.style.pack import COLUMN, ROW, CENTER
 from features.text_editor.notes import NotesLibrary, vault_root, MAX_NOTE, MARKDOWN
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.ui.native.adaptive import AdaptiveSidebar, allocated_width
-from commonUtils.ui.native.presentation import list_button
+from .appearance import list_button
 from .control_icons import icon_button
 from .browser_ui import entry_icon, highlight_entry
 from .preview import markdown_preview

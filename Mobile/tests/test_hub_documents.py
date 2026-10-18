@@ -5,6 +5,27 @@ import unittest
 from logisticsmobile.app import LogisticsMobile
 
 
+def widgets(root):
+    yield root
+    for child in root.children:
+        yield from widgets(child)
+    if getattr(root, 'content', None) is not None:
+        yield from widgets(root.content)
+
+
+def labels(root):
+    import toga
+    return [widget.text for widget in widgets(root) if isinstance(widget, toga.Label)]
+
+
+def expand_open(content):
+    import toga
+    button = next(widget for widget in widgets(content)
+                  if isinstance(widget, toga.Button) and widget.text.startswith('Open ·'))
+    button.on_press()
+    return button.parent
+
+
 class HubDocumentTests(unittest.TestCase):
     def setUp(self):
         self.directory = TemporaryDirectory()
@@ -40,8 +61,10 @@ class HubDocumentTests(unittest.TestCase):
         app.editor.value = 'Retain my draft'
         app.show_home()
         app.new_hub_document()
-        self.assertEqual(app.body.children[0].children[0].text, 'Choose a file type')
-        app.body.children[0].children[1].on_press()
+        form = app.body.children[0].content
+        form.children[1].value = 'My notes'
+        form.children[7].on_press()
+        self.assertEqual(app.current.name, 'My notes.txt')
         self.assertNotEqual(app.current.id, first)
         self.assertEqual(app.native_host.state.destination, 'documents')
         self.assertIn(app.document_view, app.body.children)
@@ -189,7 +212,9 @@ class HubDocumentTests(unittest.TestCase):
         first = app.editor_view
         first.search.query.value = 'first'
         app.new_hub_document()
-        app.body.children[0].children[1].on_press()
+        form = app.body.children[0].content
+        form.children[1].value = 'Second'
+        form.children[7].on_press()
         app.editor.value = 'second'
         second = app.editor_view
         second.search.query.value = 'second'
@@ -209,6 +234,9 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual(content.children[0].text, 'Your workspace')
         self.assertIn(app.home_continue, content.children)
         self.assertEqual(app.home_continue.children[0].children[1].text, 'Focus.md')
+        self.assertNotIn('Markdown', labels(content))
+        self.assertNotIn('Markdown', labels(app.recent_row(app.editor_view.session, app.session_summary(app.editor_view.session))))
+        self.assertNotIn('Markdown', labels(app.session_panel(app.editor_view.session)))
         actions = app.home_actions
         self.assertTrue(all(isinstance(button, toga.Button) for button in actions.children))
         self.assertEqual([button.text for button in actions.children], ['New document', 'Open file…'])
@@ -233,32 +261,82 @@ class HubDocumentTests(unittest.TestCase):
         row.children[-1].children[-1].on_press()
         self.assertNotIn(session.id, app.workspace.sessions)
 
-    def test_documents_group_only_open_files_by_type(self):
-        import toga
+    def test_documents_unify_recent_and_keep_open_switcher_collapsed(self):
         app = self.app
         app.preferences.save(document_card_overview='false')
-        text = app.store.create('Notes.txt')
-        markdown = app.store.create('Plan.MD')
-        duplicate = app.store.create('Plan.MD')
-        # Interleaved sessions must become contiguous type groups.
-        for doc in (markdown, text, duplicate):
-            app.workspace.open('managed-text', doc.id, 'text', doc.name)
-        app.refresh_documents()
+        documents = [app.store.create(name) for name in ('Notes.txt', 'Plan.MD', 'Plan.MD')]
+        for doc in documents:
+            session = app.workspace.open('managed-text', doc.id, 'text', doc.name)
+            app.recent_documents.remember(session)
         content = app.build_documents_hub().content
-        labels = [child.text for child in content.children if isinstance(child, toga.Label)]
-        self.assertIn('Open documents', labels)
-        self.assertFalse(any(hasattr(child, 'commands') for child in content.children))
-        markdown_content = app.document_categories['markdown']
-        self.assertFalse(any(child.text.startswith('Opened') for child in markdown_content.children if isinstance(child, toga.Label)))
-        open_rows = [child for category in app.document_categories.values()
-                     for child in category.children if hasattr(child, 'session_id')]
-        names = [row.children[-1].children[-2].text for row in open_rows]
-        self.assertLess(names.index('Notes.txt'), names.index('Plan.MD'))
-        # Clean grouped rows consist only of the filename link and close button.
-        self.assertTrue(all(len(row.children) == 1 for row in open_rows))
-        stored_names = [child.text for child in content.children if isinstance(child, toga.Button)]
-        self.assertEqual(stored_names, [])
-        self.assertFalse(any(label.startswith('Stored documents') for label in labels))
+        self.assertIn('Recent', labels(content))
+        self.assertFalse(any(hasattr(widget, 'session_id') for widget in widgets(content)))
+        switcher = expand_open(content)
+        rows = [widget for widget in widgets(switcher) if hasattr(widget, 'session_id')]
+        self.assertEqual(len(rows), len(app.workspace.sessions))
+        names = [row.children[-1].children[-2].text for row in rows]
+        self.assertEqual(names.count('Plan.MD'), 2)  # Identity, not name, defines a document.
+        switcher.children[0].on_press()
+        self.assertEqual(len(switcher.children), 1)
+        recent = app.recent_items()
+        self.assertTrue({doc.id for doc in documents} <= {item.resource for item, _ in recent})
+        self.assertEqual(len(recent), len({item.identity for item, _ in recent}))
+
+    def test_old_open_items_do_not_displace_bounded_recent_history(self):
+        app = self.app
+        for index in range(12):
+            doc = app.store.create(f'File-{index}.txt')
+            session = app.workspace.open('managed-text', doc.id, 'text', doc.name)
+            app.recent_documents.remember(session)
+        recent = app.recent_items()
+        self.assertEqual(len(recent), 10)
+        self.assertEqual([summary[0] for _, summary in recent],
+                         [f'File-{index}.txt' for index in range(11, 1, -1)])
+        content = app.build_documents_hub().content
+        switcher = expand_open(content)
+        self.assertEqual(sum(hasattr(widget, 'session_id') for widget in widgets(switcher)),
+                         len(app.workspace.sessions))
+
+    def test_recent_live_draft_uses_current_owner_and_closed_draft_recovers(self):
+        app = self.app
+        app.name.value = 'Live.md'
+        app.editor.value = '# Keep these edits'
+        owner = app.editor_view
+        app.save_workspace()
+        session, summary = next(item for item in app.recent_items() if item[0].resource == owner.document.id)
+        self.assertIs(session, owner.session)
+        self.assertTrue({'Unsaved changes', 'Draft'} <= set(summary[2]))
+        row = app.recent_row(session, summary)
+        self.assertTrue({'Open', 'Unsaved changes', 'Draft'} <= set(labels(row)))
+        app.loop.run_until_complete(app.recent_opener(session)())
+        self.assertIs(app.editor_view, owner)
+        self.assertEqual(owner.document.text, '# Keep these edits')
+        app.close_session(session.id, choice='keep')
+        closed, summary = next(item for item in app.recent_items() if item[0].resource == owner.document.id)
+        self.assertTrue({'Unsaved changes', 'Recovered draft'} <= set(summary[2]))
+        self.assertNotIn('Open', labels(app.recent_row(closed, summary)))
+        app.loop.run_until_complete(app.recent_opener(closed)())
+        self.assertEqual(app.current.text, '# Keep these edits')
+        app.save_document()
+        saved, summary = next(item for item in app.recent_items() if item[0].resource == app.current.id)
+        self.assertEqual(summary[2], [])
+        self.assertIn('Open', labels(app.recent_row(saved, summary)))
+
+    def test_recent_keeps_last_use_order_across_open_and_closed_documents(self):
+        app = self.app
+        app.editor.value = 'First'
+        app.save_document()
+        first = app.editor_view.session
+        app.new_document()
+        app.editor.value = 'Second'
+        app.save_document()
+        second = app.editor_view.session
+        app.save_workspace()
+        app.request_close_session(first.id)
+        recent = app.recent_items()
+        self.assertEqual([item.resource for item, _ in recent[:2]], [second.resource, first.resource])
+        app.loop.run_until_complete(app.recent_opener(first)())
+        self.assertEqual(app.recent_items()[0][0].resource, first.resource)
 
     def test_card_overview_defaults_on_reflows_and_resumes_live_draft(self):
         app = self.app
@@ -271,15 +349,15 @@ class HubDocumentTests(unittest.TestCase):
                     if any(card.session_id == session_id for card in grid.cards))
         card = next(card for card in grid.cards if card.session_id == session_id)
         self.assertIn('Current draft', card.children[1].text)
-        self.assertIn('Unsaved changes', card.children[2].text)
+        self.assertTrue({'Open', 'Unsaved changes', 'Draft'} <= set(labels(card)))
         for width, columns in ((390, 1), (1200, 3), (390, 1)):
             grid.reflow(width)
             self.assertEqual(grid.columns, columns)
             self.assertEqual(len(grid.children[0].children), columns)
-        card.children[0].children[0].on_press()
+        app.loop.run_until_complete(card.children[0].children[-1].on_press())
         self.assertEqual(app.workspace.active, session_id)
         self.assertEqual(app.editor.value, '# Current draft\nStill unsaved')
-        card.children[0].children[-1].on_press()
+        app.session_closer(session_id)()
         self.assertIn(session_id, app.workspace.sessions)  # Unsaved close guard.
 
     def test_overview_setting_persists_and_feature_settings_are_grouped(self):
@@ -295,8 +373,8 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual(Preferences(app.private_root).values['document_card_overview'], 'false')
         app.show_documents_hub()
         self.assertEqual(app.document_grids, [])
-        self.assertTrue(any(hasattr(child, 'session_id') for card in app.document_categories.values()
-                            for child in card.children))
+        switcher = expand_open(app.routes.roots['documents'])
+        self.assertTrue(any(hasattr(widget, 'session_id') for widget in widgets(switcher)))
 
     def test_cards_do_not_preview_provider_text_or_open_missing_records(self):
         app = self.app
@@ -306,13 +384,13 @@ class HubDocumentTests(unittest.TestCase):
         try:
             session.provider = 'provider-session'
             card = app.session_card(session, app.session_summary(session))
-            self.assertEqual(card.children[1].text, 'Text')
+            self.assertEqual(card.children[1].text, 'No preview available')
         finally:
             session.provider = original
         missing = app.workspace.open('managed-text', 'd' * 32, 'text')
         card = app.session_card(missing, app.session_summary(missing))
-        self.assertEqual(card.children[1].text, 'Text')
-        self.assertIn('Unavailable', card.children[2].text)
+        self.assertEqual(card.children[1].text, 'No preview available')
+        self.assertTrue(any('Unavailable' in text for text in labels(card)))
 
     def test_overview_switch_immediately_updates_retained_root_and_keeps_editor(self):
         from logisticsmobile.preferences import Preferences
@@ -390,10 +468,10 @@ class HubDocumentTests(unittest.TestCase):
         doc.text = 'Unsaved draft'
         app.store.checkpoint(doc)
         session = app.workspace.open('managed-text', doc.id, 'text')
-        self.assertEqual(app.session_summary(session), ('Recovered.md', 'markdown', ['Recovered draft']))
+        self.assertEqual(app.session_summary(session), ('Recovered.md', 'markdown', ['Unsaved changes', 'Recovered draft']))
         app.store.path(doc.id, '.json').unlink()
         row = app.session_panel(session, close=True, show_kind=False)
-        self.assertIn('Unavailable', row.children[0].text)
+        self.assertTrue(any('Unavailable' in text for text in labels(row)))
         self.assertEqual(row.children[-1].children[-1].text, '×')
 
     def test_restart_clears_clean_sessions_keeps_drafts_conflicts_and_stored_bytes(self):
@@ -445,11 +523,41 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIs(app.body, app.routes.roots['chat'])
         self.assertEqual(app.native_host.state.destination, 'home')
 
+    def test_new_document_validation_cancel_and_plain_text_title(self):
+        app = self.app
+        previous = app.current
+        count = len(app.store.documents()[0])
+        app.new_hub_document()
+        form = app.body.children[0].content
+        for invalid in ('', '../bad'):
+            form.children[1].value = invalid
+            form.children[7].on_press()
+            self.assertIs(app.current, previous)
+            self.assertTrue(form.children[6].text)
+            self.assertEqual(len(app.store.documents()[0]), count)
+        form.children[8].on_press()
+        self.assertIs(app.current, previous)
+        app.new_hub_document()
+        form = app.body.children[0].content
+        form.children[1].value = 'Notes.txt'
+        form.children[3].value = 'Markdown (.md)'
+        form.children[5].value = 'Unused title'
+        form.children[3].value = 'Plain text (.txt)'
+        self.assertFalse(form.children[5].enabled)
+        form.children[7].on_press()
+        self.assertEqual(app.current.name, 'Notes.txt')
+        self.assertEqual(app.current.text, '')
+
     def test_markdown_choice_and_independent_chat_destination(self):
         app = self.app
         app.new_hub_document()
-        app.body.children[0].children[2].on_press()
-        self.assertEqual(app.current.name, 'Untitled.md')
+        form = app.body.children[0].content
+        form.children[1].value = 'Trip.markdown'
+        form.children[3].value = 'Markdown (.md)'
+        form.children[5].value = 'Trip plans'
+        form.children[7].on_press()
+        self.assertEqual(app.current.name, 'Trip.markdown')
+        self.assertEqual(app.current.text, '# Trip plans\n\n')
         self.assertEqual(app.editor_view.session.kind, 'markdown')
         document_routes = list(app.routes.screens['documents'])
         app.native_host.root.current_tab = 'Chat'

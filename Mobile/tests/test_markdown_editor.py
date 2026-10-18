@@ -224,11 +224,12 @@ class MarkdownEditorTests(unittest.TestCase):
         owner.resume_crypt()
         self.assertEqual(owner.crypt_content.children, [owner.crypt_formatted.view])
 
-    def test_markdown_web_surfaces_use_platform_default_font_stack(self):
+    def test_markdown_web_surfaces_keep_fallback_and_opt_into_native_font_bridge(self):
         from logisticsmobile.preview import markdown_preview
         preview = markdown_preview('Paragraph and `code`')
         self.assertIn('html body{font-family:-apple-system,BlinkMacSystemFont,sans-serif}', preview)
         self.assertIn('code{font-family:monospace}', preview)
+        self.assertIn('<meta name="logistics-native-font" content="true">', preview)
         self.assertIn('16px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;',
                       editor_html('Paragraph', 'logistics-editor://test/'))
 

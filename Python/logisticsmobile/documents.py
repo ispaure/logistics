@@ -138,6 +138,14 @@ class DocumentStore:
     def save_copy(self, doc, name=None):
         return self.create(name or doc.name, doc.snapshot.encode(doc.text))
 
+    def delete(self, doc):
+        """Remove one app-owned document and its recovery record."""
+        source = self.path(doc.id, '.data')
+        recovery = self.path(doc.id, '.json')
+        # Leave recovery available if removing the saved bytes fails.
+        source.unlink(missing_ok=True)
+        recovery.unlink(missing_ok=True)
+
     def discard(self, doc):
         """Reset recovery to the current saved bytes without writing the source."""
         source = self.path(doc.id, '.data')

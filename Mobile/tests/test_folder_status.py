@@ -17,9 +17,14 @@ class FolderStatusTests(unittest.TestCase):
             status.value = message
             self.assertEqual(header.folder_name.value, 'Fiction')
             self.assertEqual(header.status.value, message)
-            self.assertEqual(header.caption.children, [header.folder_name, status])
+            self.assertEqual(header.caption.children, [header.folder_name, status] if message else [header.folder_name, header.storage_identity])
             self.assertLess(status.style.font_size, header.folder_name.style.font_size)
             self.assertEqual(status.style.height, 18)
+        self.assertGreaterEqual(header.folder_name.style.font_size, 20)
+        self.assertFalse(header.folder_name._impl._surface_eink_outlined)
+        self.assertFalse(status._impl._surface_eink_outlined)
+        status.value = 'Opening folder…'
+        self.assertEqual(header.caption.children, [header.folder_name, status])
 
     def test_remote_and_local_roots_keep_their_storage_name(self):
         browser = FileBrowser()

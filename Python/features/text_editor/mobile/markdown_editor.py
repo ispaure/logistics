@@ -354,11 +354,16 @@ def editor_html(text, bridge, font_size=16, *, image_source=None):
         '<label>Link <input id="link-target" type="text" placeholder="https://… or relative file" aria-label="Link destination"></label>' +
         icon_button('Apply link', 'link', 'id="apply-link"')) + table_menu + '</div></details>'
     return (f'<!doctype html><html><head><meta charset="utf-8">'
+            '<meta name="logistics-native-font" content="true">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; '
             f'script-src \'nonce-{nonce}\'; style-src \'unsafe-inline\'; img-src data:; base-uri \'none\'; form-action \'none\'">'
             f'<style>:root{{color-scheme:light dark}}body{{font:{int(font_size)}px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;'
-            'margin:12px;background:Canvas;color:CanvasText;overflow-wrap:anywhere}'
+            'margin:12px;background:Canvas;color:CanvasText;overflow-wrap:anywhere;'
+            'min-height:calc(100vh - 24px);min-height:calc(100dvh - 24px);display:flex;flex-direction:column}'
+            'nav,#notice{flex-shrink:0}#document{flex:1;display:flex;flex-direction:column}'
+            # Keep the blank writing area a native contenteditable touch target.
+            'section{flex-shrink:0}section[contenteditable=true]:last-child{flex:1;min-height:6em}'
             'nav{position:sticky;top:0;background:Canvas;z-index:1;display:flex;flex-wrap:wrap;gap:4px}'
             'button,select,input,summary{min-height:44px;box-sizing:border-box}select,input{font:inherit;max-width:100%}'
             'summary{display:flex;align-items:center;justify-content:center;width:44px;padding:0;cursor:pointer;list-style:none}summary::-webkit-details-marker{display:none}.icon-button{width:44px;padding:0;display:inline-flex;align-items:center;justify-content:center}.icon-button svg,summary svg{pointer-events:none}.format-menu{display:flex;flex-wrap:wrap;gap:4px;padding:8px 0}.format-menu label{max-width:100%}'

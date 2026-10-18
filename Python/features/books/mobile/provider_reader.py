@@ -135,6 +135,10 @@ class RichBookView(toga.Box):
 
 
     def show_read_aloud(self, loop, *, app=None, privacy_gate=lambda: None, valid=lambda: True):
+        panel = getattr(self, 'speech_panel', None)
+        if panel is not None and not panel.closed:
+            panel.show_over(self)
+            return
         self.close_read_aloud()
         from .speech_view import ReadAloudPanel
         from .presentation import speech_source

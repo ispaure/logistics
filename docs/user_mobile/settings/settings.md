@@ -11,7 +11,9 @@ With at least 640 points/dp of usable width, Settings shows categories on the
 left and the selected category's options on the right. This applies to Android
 and iOS tablets, wide app windows, and an unfolded iPhone Duo in landscape.
 A partially folded Duo with a vertical seam aligns the two panes to that seam.
-Rotating or resizing retains the selected category and its controls. A nested
+Labels, descriptions and action buttons wrap to the available pane width; long
+switch labels leave room for both help and the full switch. Each pane scrolls
+independently. Rotating or resizing retains the selected category and its controls. A nested
 page stays open during a resize; Back returns to its category in the new layout.
 Preferences still save immediately, and each window keeps its own category
 selection.
@@ -23,7 +25,9 @@ To opt in, open **Settings → Appearance → High contrast / E Ink**. The Andro
 immediately on this device and persists after restarting the app.
 
 While enabled, the app uses black text on white, black outlines and simpler
-square controls. Navigation keeps a visible selected state. Button elevation and
+square controls. The selected destination (Home, Folder Hub, Documents, Chat or
+Settings) has a white icon inside a solid black square on both the bottom bar
+and the navigation rail. Button elevation and
 navigation ripple effects are removed; HTML text views disable CSS animation and
 transitions. Markdown previews, chat and EPUB text receive the same high-contrast
 treatment, including already-open HTML views. Images and comic pixels are not
@@ -61,7 +65,7 @@ On iOS these imports live in private app storage and do not appear in Files.
 Older import records do not identify their original source; the inventory says
 so rather than guessing whether a copy originally came from cloud storage.
 
-**Close** in Open documents keeps the saved file and its progress. To reclaim
+**Close** in the Open switcher keeps the saved file and its progress. To reclaim
 space, use **Delete local copy…**, or **Delete all local copies…** to clear the
 listed saved books and comics with one confirmation. These actions
 close the affected readers and remove their imported archives, reading progress,

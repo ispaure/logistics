@@ -6,6 +6,70 @@ pushes, tags or releases were made for this refresh.
 
 ## Implemented presentation
 
+### Command boundaries — 2026-10-18
+
+The host appearance adapter gives native Toga buttons a neutral outlined surface
+on creation for both iOS and Android. This covers Home, Documents, pickers,
+configuration forms and feature-owned commands without each owner opting in.
+`action_button` keeps command/destructive metadata but uses the same outline;
+primary metadata no longer implies a filled selection-like appearance. Destructive
+commands keep red text. The host `list_button` wrapper preserves commonUtils row
+sizing/alignment and reapplies the outline after Android's native row tint.
+Shared commonUtils code is unchanged.
+
+Command strokes use a separate `control_border` role with at least 3:1 contrast
+against the app and chat surfaces. iOS rounds the corners, supplies horizontal
+title inset, and refreshes resolved strokes on trait changes. Android retains
+ripple feedback and disabled text state lists; E Ink makes command boundaries
+square and monochrome. Explicit surfaces still own folder rows, tabs and actual
+selection states. Compact Settings entries are commands, while the wide sidebar
+retains selection styling. Chat New/Setup, conversation choices and Copy/Latest
+controls have boundaries; Send/Stop keeps its contrasting composer treatment.
+
+The disposable `command_buttons_probe` captures Home, Documents, Chat, Settings
+and Folder Hub in light/dark appearance and checks that ordinary commands remain
+unselected, outlined and usable after disabled-state changes. It also supports
+Android E Ink. iOS Simulator checks passed and screenshots were reviewed under
+`Mobile/logs/command-buttons/`. Android emulator validation is unavailable locally:
+the cached system image has no system disk. Host tests cover Android light/dark
+and E Ink stroke, disabled-text and ripple restoration contracts.
+
+### Intervention alert dimming — 2026-10-18
+
+The Android appearance adapter explicitly applies `FLAG_DIM_BEHIND` and a
+`0.5` dim amount to native Toga alert windows before showing them. Confirmation,
+information and error alerts therefore request the same background dim across
+themes, including the e-ink preference. The native window owns the dimming
+lifetime, so dismissing an alert restores the underlying screen. UIKit alerts
+retain their system presentation and background dimming. Anchored command menus
+and persistent speech/magnifier controls retain their existing presentation.
+
+Validation: 11 appearance tests passed, including applying dimming before
+presentation and preserving the original completion future and unsupported
+dialog fallback. The native UI review now checks the Android confirmation
+window's dim flag and amount and captures it before cancellation; this added
+native check has not yet been run on a device.
+
+### Duo Settings text fitting — 2026-10-18
+
+Settings measures Apple text with its native font and inserts explicit line
+breaks because Toga labels clip instead of wrapping. Category content uses the
+available viewport width, with the physical seam dividing partially folded
+landscape panes. Switch rows reserve native switch/help widths; multiline action
+buttons grow beyond their 48-point minimum. Status and offline voice messages
+refit when changed. Retained source text allows widening without accumulating
+old line breaks. Compact category navigation and nested Back routes are retained.
+
+Validation: 24 focused host tests passed. The disposable native
+`settings_layout_probe` checked all eight categories at 951 × 669 points on the
+iOS 27.1 Duo simulator, with an explicitly injected partial-hinge status (observed
+status was fully open). All text lines and controls fit their detail pane,
+category scroll views reached their bottom, and the split stayed within 0.5
+points of the window crease. Screenshots were reviewed locally under
+`Mobile/logs/settings-layout/`. The [native geometry report](mobile-evidence/2026-10-18-duo-settings.json)
+records scope and source hashes. Physical hinge transitions and a production app
+deployment were not tested.
+
 ### Duo destination rail clearance
 
 The floating-navigation clearance calculation uses both native bar dimensions.

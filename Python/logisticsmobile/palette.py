@@ -7,6 +7,8 @@ LIGHT = dict(window='#f0f2f6', surface='#fafbfc', alternate='#f5f7fa',
              text='#202838', muted='#606b7c', border='#c5cedb', primary='#2563eb', accent='#2563eb', hover='#e3eaf7')
 DARK = dict(window='#23262c', surface='#2d3035', alternate='#34373c',
             text='#eef1f7', muted='#a6b0c0', border='#52555a', primary='#2563eb', accent='#75a7ff', hover='#3d4045')
+LIGHT.update(control_border='#7b8493', destructive='#c62828')
+DARK.update(control_border='#858c99', destructive='#ff8a80')
 
 # Blue/orange plus open/closed lock shapes keep folder states distinguishable
 # with red-green colour deficiencies. Both roles follow native appearance.
@@ -48,6 +50,7 @@ EINK = dict(window='#ffffff', surface='#ffffff', alternate='#ffffff',
             text='#000000', muted='#000000', border='#000000',
             primary='#000000', accent='#000000', hover='#ffffff')
 EINK.update(folder_unlocked='#000000', folder_locked='#000000')
+EINK.update(control_border='#000000', destructive='#000000')
 _eink_enabled = False
 
 

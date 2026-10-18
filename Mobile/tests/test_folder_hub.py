@@ -436,6 +436,21 @@ class FolderHubTests(unittest.TestCase):
                 self.assertFalse(hasattr(group, 'on_press'))
                 self.assertEqual(group.text, 'Library')
                 self.assertEqual(group.accessible_name, 'Library, group')
+                for label in app.folder_tree_buttons.values():
+                    self.assertEqual(list(label.parent.children), [label])
+                    self.assertEqual(label._impl._surface_roles[1], 'muted')
+                    self.assertEqual(label.style.margin_left, 0)
+                    self.assertEqual(label.parent.style.height, 48)
+                    self.assertEqual(label.style.font_weight, 'normal')
+                # Each nested container keeps the guide plus a 40-point
+                # indent, even though groups no longer reserve an icon slot.
+                for widget in (group, app.folder_buttons['Server-Library-Comics']):
+                    guide = widget.parent.parent.parent.children[0]
+                    self.assertEqual(guide.style.width + guide.style.margin_left
+                                     + guide.style.margin_right, 40)
+                folder_row = app.folder_buttons['Server-Library-Comics'].parent
+                self.assertEqual(folder_row.children[0].control_icon, 'folder')
+                self.assertEqual(folder_row.children[-1].control_icon, 'more')
                 self.assertIsNot(group.parent.parent, app.folder_list)
                 self.assertIsNot(app.folder_buttons['Server-Library-Comics'].parent.parent, app.folder_list)
                 app.folder_collapsed.add(('Server',))

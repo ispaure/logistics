@@ -127,6 +127,26 @@ beside the source at 720 logical units of usable width. The session's existing
 preview remains available. Local/private editable Markdown retains its source
 while previewing; remote text stays read-only.
 
+On Android 12 and newer, `logisticsmobile.android_markdown_font` obtains the
+font selected for a native Toga label through `TextRunShaper`, then supplies its
+exact glyph tables to marked Markdown preview and formatted-editor WebViews.
+CSS `sans-serif` alone does not reliably follow OEM font customization. The
+bridge supports TrueType collections and compresses the selected face as WOFF
+using the standard library. The pinned Toga client's request interceptor serves
+each view's unique font URL from RAM with CORS and `no-store` headers; it never
+fetches that URL from the network. Font bytes stay outside document HTML so
+private pages retain their existing 2 MiB memory-only bound. Retired URLs return
+410, and unmarked book/transcript pages retain their own typography. Code stays
+monospace. Older Android versions, inaccessible fonts and native font buffers
+above 32 MiB retain the CSS fallback; other script fallback remains WebView-owned.
+`Mobile/tests/test_markdown_font.py` covers routing, retirement, content policy,
+font collection extraction and lossless WOFF tables. The isolated
+`Mobile/native_tests/tests/logisticsmobile/markdown_font_probe.py` checks actual
+font loading and native glyph measurements across preview, formatted editing
+and large private pages, using the device font plus serif and monospace faces.
+The [2026-10-18 Note Air 5C report](mobile-evidence/2026-10-18-markdown-font.json)
+records all nine successful Android 15 checks and the tested source hashes.
+
 Desktop and mobile share language detection and Pygments grammars through
 `formats.code_syntax`, `formats.code_blade` and `formats.code_spans`. The mobile
 manifest pins Pygments 2.19.2. Native attributes/spans preserve source, selection
@@ -186,6 +206,22 @@ choices retain their existing widgets; changed choices update the list in place
 without replacing the page or navigation. Credential loading owns
 `refresh_hub_crypt_locations`, including its client/generation guard.
 
+Source switches cache one native row hierarchy per source on the current hub
+page. A return to an unchanged tab reattaches that hierarchy; credential filters
+replace only that source's cached view. Discovery, loaded/crypt credential state,
+network-share ownership or legacy visibility changes invalidate all three views.
+Snapshots own copies of discovery data so in-place mapping changes invalidate
+them too. New hierarchies are assembled detached and mounted as one subtree,
+avoiding incremental layout of the visible scroll container. Rendering reads
+loaded remote names and retained crypt metadata once per update, independently
+of row count. Source changes suppress the credential selector's reset callback
+to avoid a duplicate discovery/render pass. Folder discovery still checks local
+changes when switching sources; cached widgets do not authorize remote access.
+
+`Mobile/tests/test_folder_navigation_performance.py` covers row reuse, bounded
+credential reads, a single source-change render and local/lock-state invalidation.
+These host checks establish work reduction; device timing remains unmeasured.
+
 The default source is Local. `source_choices` includes managed Local/LocalCrypt
 copies there as well as under their remote owner, retaining the full logical
 entry for overflow actions. `folder_browse_copy` selects the device copy for
@@ -218,8 +254,12 @@ are detached from `folder_loading_box`; folder opening temporarily attaches the
 status and progress controls, and removes them on completion.
 
 Android high-contrast surfaces repaint after generic native button styling, so
-refreshes preserve selected-tab inversion and borderless row controls. Surface
-buttons suppress elevation and state animation in that mode; leaving it restores
+refreshes preserve selected-tab inversion and borderless row controls.
+The app explicitly enables Material's active destination indicator on both the
+bottom bar and rail, using a 40 dp square with a black fill and white checked
+icon. Leaving high contrast restores the indicator's original enabled state,
+dimensions, shape and colors as well as ripple and elevation.
+Surface buttons suppress elevation and state animation in that mode; leaving it restores
 the saved native button styling. Folder Hub transfer banners use a live visibility
 predicate: only the rclone source shows running or unsuccessful transfer notices.
 Changing source reevaluates it immediately, without changing transfer state.

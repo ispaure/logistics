@@ -24,6 +24,27 @@ class Engine:
 
 
 class SpeechTests(unittest.TestCase):
+    def test_speed_changes_restart_current_word_and_preserve_pause_and_selection(self):
+        engine = Engine()
+        session = SpeechSession(engine, on_range=lambda *args: None, on_state=lambda *args: None)
+        self.addCleanup(session.dispose)
+        session.play('😀 One two. Secret tail.', 0, 11, voice='local')
+        old = session.token
+        session.progress(old, 7, 10)
+        session.set_speed(1.5)
+        self.assertEqual(engine.calls[-1][:3], ('two.', 'local', 1.5))
+        self.assertEqual(session.ranges[-1][2], 11)
+        session.completed(old)
+        session.failed(old)
+        self.assertEqual(session.state, 'speaking')
+        session.pause()
+        calls = len(engine.calls)
+        session.set_speed(.75)
+        self.assertEqual(session.state, 'paused')
+        self.assertEqual(len(engine.calls), calls)
+        session.resume()
+        self.assertEqual(engine.calls[-1][:3], ('two.', 'local', .75))
+
     def test_native_word_offsets_selection_and_stale_events(self):
         engine = Engine()
         ranges = []

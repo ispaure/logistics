@@ -15,6 +15,86 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class FolderNavigationTests(unittest.TestCase):
+    def folder_app(self):
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        LogisticsMobile.storage_root = Path(directory.name)
+        self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+        app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        self.addCleanup(app.loop.close)
+        self.addCleanup(app.main_window.close)
+        app.show_cloud(present=False)
+        return app
+
+    def test_source_round_trip_reuses_native_rows_and_renders_once(self):
+        app = self.folder_app()
+        app.cloud_remote.items = ['Drive', 'Mac']
+        app.remember_credential_association('Personal.zip', ['Drive'], session_only=True)
+        app.remember_credential_association('Session network shares', ['Mac'], session_only=True)
+        app.show_locations()
+        local = app.folder_buttons['All files']
+        app.change_folder_source('rclone')
+        cloud = app.folder_buttons['Drive']
+        app.folder_credential.value = 'Personal'
+        with patch.object(app, 'update_folder_list', wraps=app.update_folder_list) as render:
+            app.change_folder_source('Network shares')
+            self.assertEqual(render.call_count, 1)
+        server = app.folder_buttons['Mac']
+        for source, name, button in [('Local', 'All files', local),
+                                      ('rclone', 'Drive', cloud),
+                                      ('Network shares', 'Mac', server)]:
+            app.change_folder_source(source)
+            self.assertIs(app.folder_buttons[name], button)
+        self.assertLessEqual(len(app.folder_tab_views), 3)
+
+    def test_tab_cache_invalidates_after_local_and_credential_changes(self):
+        app = self.folder_app()
+        app.cloud_remote.items = ['Secret']
+        app.cloud_crypt_remotes = {'Secret'}
+        app.show_locations()
+        app.change_folder_source('rclone')
+        unlocked = app.folder_buttons['Secret']
+        self.assertIn('unlocked', unlocked.accessible_name)
+        app.change_folder_source('Local')
+        (app.private_root / 'LocalFiles' / 'New folder').mkdir(parents=True)
+        app.change_folder_source('rclone')
+        app.change_folder_source('Local')
+        self.assertIn('New folder', app.folder_buttons)
+        app.remember_credential_association('Personal.zip', ['Secret'], session_only=True)
+        retained = patch.object(app, 'retained_credential_associations', return_value=[
+            dict(zip='Personal.zip', remotes=['Secret'], crypt_remotes=['Secret'])])
+        retained.start()
+        self.addCleanup(retained.stop)
+        app.cloud_remote.items = []
+        app.change_folder_source('rclone')
+        locked = app.folder_buttons['Secret']
+        self.assertIsNot(locked, unlocked)
+        self.assertIn('locked', locked.accessible_name)
+        self.assertNotIn('unlocked', locked.accessible_name)
+        # A changed mapping may reuse its original dict; cache keys must own a
+        # snapshot rather than compare the same, now-mutated object to itself.
+        choices = app.folder_picker_choices
+        choices['Secret']['name'] = 'Renamed'
+        app.update_folder_list(choices)
+        self.assertIsNot(app.folder_buttons['Secret'], locked)
+
+    def test_large_encrypted_tab_reads_credential_state_a_constant_number_of_times(self):
+        app = self.folder_app()
+        names = [f'Server-Library-{index}' for index in range(120)]
+        app.cloud_remote.items = names
+        app.cloud_crypt_remotes = set(names)
+        app.show_locations()
+        choices = app.folder_picker_choices
+        app.folder_source = 'rclone'
+        with patch.object(app, 'loaded_remote_names', wraps=app.loaded_remote_names) as loaded, patch.object(
+                app, 'retained_credential_associations', wraps=app.retained_credential_associations) as retained:
+            app.update_folder_list(choices)
+            self.assertEqual(len(app.folder_buttons), 120)
+            self.assertEqual(loaded.call_count, 1)
+            self.assertLessEqual(retained.call_count, 3)
+        with patch('logisticsmobile.folder_hub_ui.toga.Button', side_effect=AssertionError('Rebuilt tab')):
+            app.update_folder_list(choices)
+
     def test_collection_snapshot_matches_rows_with_constant_location_checks(self):
         with TemporaryDirectory() as root:
             provider = CollectionFiles(root)
@@ -108,6 +188,9 @@ class FolderNavigationTests(unittest.TestCase):
                         app.file_browser, '_load_thumbnail', side_effect=delayed_thumbnail):
                     self.assertTrue(await asyncio.wait_for(app.browse_files(), 2))
                     self.assertEqual(app.file_path, 'books')
+                    self.assertEqual(app.file_status.value, '')
+                    header = app.file_browser.location_bar
+                    self.assertEqual(header.caption.children, [header.folder_name])
                     busy.assert_not_called()
                     downloads.assert_not_called()
                     release.set()

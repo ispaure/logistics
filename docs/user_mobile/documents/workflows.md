@@ -13,7 +13,10 @@ beside a folder opens its Browse Local/LocalCrypt/Remote, Pull, Push and managem
 actions. The main Browse action is prominent; Delete local folder is separated
 and uses destructive styling. Pull/Push direction is shown for mapped copies.
 Deletion still requires confirmation, and Push retains its existing review. Local browsing uses app-managed files rather than
-the entire device filesystem. Choose **Documents → New** for **Plain text (.txt)** or **Markdown (.md)**.
+the entire device filesystem. Choose **New document** from Home, Documents or Document actions. Enter a document
+name and select **Plain text (.txt)** or **Markdown (.md)**, then tap
+**Create document**. The selected extension is added when needed. Markdown also
+offers an optional title, inserted as the first heading. **Cancel** creates nothing.
 Books and comics are available through Folder Hub or Home’s Books & Comics panel;
 Chat has its own bottom navigation button between Documents and Settings. Native tab
 controls adapt to the Apple layout; Android uses bottom navigation in compact
@@ -30,18 +33,26 @@ Back action that would leave the screen.
 The Documents hamburger lists configured Comics Library folders. Recent files,
 local browsing, and new-document actions stay on the main page.
 
-Choose a document from **Open documents** in Documents or **Recent** on its main page,
+Choose a document from **Open** in Documents or **Recent** on its main page,
 or use **Actions → New document**. Edit its name in the name field and
 its contents in the text area. **Save** publishes the edited file inside the app.
 Text, source files and Markdown share the native source editor. Markdown can
 show a live formatted preview while you edit. See [Text and Markdown](documents.md#text-and-markdown).
 
+Recent lists up to ten recently used documents, including ones still open. An
+**Open** badge indicates an existing workspace session; selecting it resumes that
+session without reloading its file. Expand **Open · count** to see all open items
+and their Close buttons. The switcher starts collapsed each time you return.
+Home and document lists show names and useful status badges without a separate
+file-type subheader. **Unsaved changes** and **Draft** badges mark pending edits. **Recovered draft**
+marks edits restored from recovery; saving clears these badges.
+
 Each open text/Markdown document owns its editor and draft. **New**, opening a
-stored document, and successful imports add it to **Documents → Open documents**;
+stored document, and successful imports add it to **Documents → Open**;
 opening the same stored identity again activates it. Documents with the same name
-remain separate. Switch using Open documents or Recent. Closing a document keeps
+remain separate. Switch using the expandable Open switcher or Recent. Closing a document keeps
 its stored data; the ten most recent eligible files can be reopened from Recent. Disk, cloud and
-padlock icons beside names in Open documents and Recent show each source and
+padlock icons beside names in Open and Recent show each source and
 connection lock state. Local files and files using saved credentials retain ordinary history entries.
 Password-protected session-only credential ZIPs instead protect their open and
 recent entries in a separate AES-256 ZIP with the same password. Unlocking the
@@ -49,19 +60,24 @@ matching credential restores those list entries; selecting one loads its file on
 demand. The cache contains no document contents or unsaved edits. Forgetting the
 credential deletes its encrypted lists in every window.
 **Close** removes an item from that list without deleting its stored document.
+To remove an app-stored text or Markdown document completely, open its three-dot
+**Document actions** menu and choose **Delete document…**. This is also available
+in Markdown preview. Confirm the warning to remove its saved content, recovery
+copy and Recent entry, including any unsaved changes. Cancel keeps the document.
+Other app windows must be closed first.
 For an ordinary unsaved document, choose **Save and close**, **Keep draft and
 close**, **Discard changes and close**, or **Cancel**. Retained drafts remain on disk and recent entries can reopen them. Discard resets recovery to the current saved file without
 overwriting changes made outside the editor or recreating a deleted file. A
 failed save or conflict keeps the document open; use **Save a copy** to preserve
 both versions. Session-only drafts offer Save, Discard, and Cancel without durable
 draft retention. **Close saved documents on restart** is enabled
-by default in Settings. On restart, saved text and reader sessions leave Open
-documents; stored files and reading progress remain available. Unsaved text,
+by default in Settings. On restart, saved text and reader sessions leave the Open
+switcher; stored files and reading progress remain available. Unsaved text,
 conflicts and unreadable recovery entries stay in the open list. Turn this setting
 off to retain all ordinary open items at the next launch. There is a maximum of
 32 open items. An empty workspace stays empty until you create or open a file. Their active selection resumes when **Restore last
 document** is enabled; turning it off also prevents automatic EPUB/comic reopening.
-You can still explicitly reopen those readers from Open documents with their saved
+You can still explicitly reopen those readers from Open with their saved
 progress. Private resource restoration remains excluded. Native cursor/selection and scroll offsets are recorded for text views.
 Opening an item from the open/stored list also resumes its Edit or Preview mode.
 Back to the editor selects Edit for that document.

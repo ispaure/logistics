@@ -38,15 +38,19 @@ the same directory, search and listing controls.
 The file browser keeps your current folder, selection, list/tile mode, search, sort and browse
 history when you visit Documents or Settings. Local and remote browsers give most
 of the screen to the listing. Tap a local file to open it, or a folder to browse
-it. The top bar shows the current directory name as plain text beside its storage
-and lock icons, with no item count. Tap the magnifying glass on the right to
+it. The top bar shows the current directory name as plain text,
+with a larger, bold title and no item count or outline, including in Android
+e-ink mode. Beneath it, a smaller line shows passive storage and lock icons with
+Cloud or On-device and, for encrypted folders, Locked or Unlocked labels.
+Opening, download, result and error messages temporarily replace that line; the
+indicators return when the message clears. Tap the magnifying glass on the right to
 reveal search; close it with **×** to clear the filter and hide the field.
 The top bar has no Sort control. The
 rows show filenames rather than full paths, shortening long names in the middle.
 File sizes remain available in **Details** instead of beside every filename. The
 **↑ Parent folder** control beside the folder status goes up one level in local
 and remote browsing on iOS and Android. At the current storage root it becomes
-**Back to Folder Hub**. Beside the path, a drive identifies on-device storage and
+**Back to Folder Hub**. Beneath the folder name, a drive identifies on-device storage and
 a cloud identifies online storage. Encrypted folders additionally show the same
 combined folder-and-lock icon as Folder Hub: an open blue padlock after successful
 unlocked browsing, or an orange closed padlock with chains when locked.
@@ -62,8 +66,8 @@ controls clear of the bottom destination bar.
 Files opened from this browser stay in the Folder Hub navigation stack. Native Back
 returns to the same folder, search, sorting, selection and scroll position.
 Back leaves the reading/editing session open, including unsaved provider text
-drafts; reopen it through **Open documents** to continue. Files opened from
-Books & Comics or Open documents keep their document navigation instead.
+drafts; reopen it through **Open** to continue. Files opened from
+Books & Comics or the Open switcher keep their document navigation instead.
 Connection import, reload, remember and forget remain in Settings.
 
 Use **Pin current folder** to add an ordinary local or remote folder to Folder Hub.
@@ -119,8 +123,8 @@ the copy type and individual lock state. Group headings describe structure,
 not a shared credential state.
 Dash-separated names form expanded levels (for example Server → Lib → ComicRack);
 group labels are informational and remain expanded. Groups and browsable folders
-use the same text size, color and row height. Groups have a muted branch icon
-and regular text, including the top level; browsable folders have bold names,
+use the same text size and row height. Groups have plain muted labels
+with regular text and no icon, including the top level; browsable folders have bold names,
 folder icons and **•••**. Each level has a consistent
 indent and branch guide. Child
 labels and folder icons start to the right of their parent label; there are no
@@ -135,7 +139,9 @@ browsing opens the read-only online file browser, with direct previews and exist
 actions. Choose folders and start Push/Pull from their Folder Hub action pages.
 Existing managed copies remember their storage type and transfer association.
 The first pull chooses storage; later transfers reuse it. Folder Hub updates
-when you return to it and when transfers or loaded credentials change. It uses
+when you return to it and when transfers or loaded credentials change. Switching
+back to an unchanged source tab reuses its existing folder rows; folder and
+credential changes refresh those rows automatically. Discovery uses
 already loaded connections and local folder checks, without repeating native
 connection checks or downloading remote contents. There is no manual Refresh
 button. Loading or unlocking credentials updates remote names and discovers

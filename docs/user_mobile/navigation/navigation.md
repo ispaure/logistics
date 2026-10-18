@@ -1,5 +1,11 @@
 # Mobile navigation
 
+Commands such as **Open file**, **New document**, **Set up chat**, and compact
+Settings entries have neutral outlined buttons. Icon commands also have visible
+boundaries. Highlighted tabs and choices indicate the current selection; ordinary
+commands do not stay highlighted after use. Folder names within browser rows keep
+their row presentation, while chat Send/Stop keeps its distinct composer control.
+
 ## Home and document search
 
 On iPhone Duo, pages retain their full available height when the system moves
@@ -11,26 +17,32 @@ navigation rail makes the available content area asymmetric. Fully opening the
 device restores the ordinary responsive layout.
 
 Home shows **Your workspace**, with a **Continue** card for the selected document,
-**New document** and **Open file…**. Recent lists up to ten other files; Folder Hub and Books & Comics remain available below. Wider windows put
+**New document** and **Open file…**. Recent lists up to ten recently used documents, including open documents; Folder Hub and Books & Comics remain available below. Wider windows put
 Recent and Your spaces side by side. Continue restores the document's
 Edit/Preview mode. Open file browses existing Local/LocalCrypt files and detects
 the supported format when you open one.
 
-When an unloaded credential ZIP is retained on disk, **Unlock** appears beside
-**Your workspace**. Choose a credential and enter its ZIP password to unlock it
+When an unloaded credential ZIP is retained on disk, a bordered lock icon button
+(**Unlock credentials**) appears beside **Your workspace**. Choose a credential and enter its ZIP password to unlock it
 for this app session, then return to Home. Home does not list credential or remote
 names in this button. Disabled Legacy credentials are excluded from the chooser;
 if only Legacy is available and Show Legacy is off, the button stays hidden.
 Passwords are never saved.
 
-Documents puts **Open documents** first, with New document and Open file in a
-compact toolbar. Open files are grouped by Text, Markdown, EPUB books and Comics;
-empty groups are omitted. **Document card overview** switches between preview
-cards and compact rows. Cards use bounded excerpts of ordinary text drafts;
-private provider contents are never previewed here. Cards use one column on
-phones, two in wider windows and three on large tablets. Closing an item retains
-its stored file and uses the existing unsaved-change guard. Recent appears below
-open documents and excludes files already open. A disk or cloud icon beside each
+Documents shows **New document** and **Open file…**, a compact **Open · count**
+switcher, and a unified **Recent** list. Recent includes open and closed documents;
+selecting an open entry returns to its existing editor and pending edits. Expand
+Open to switch between all open documents or close individual items. Closing keeps
+saved files and retains the existing unsaved-change choices. The switcher is
+collapsed when you return to the hub.
+
+**Open** badges identify active workspace entries. **Unsaved changes** and
+**Draft** mark pending edits; **Recovered draft** identifies edits available from
+a recovery copy. These badges do not mean changes have been saved back to the
+source. Saving clears the draft badges. **Document card overview** switches Recent
+between preview cards and compact rows. Cards use bounded excerpts of ordinary
+text drafts; private provider contents are never previewed. Cards use one column
+on phones, two in wider windows and three on large tablets. A disk or cloud icon beside each
 filename identifies its source; connection-backed files also show a locked or
 unlocked padlock. Ordinary local files and files using saved credentials can remain
 in Recent after closing or restarting. For a password-protected session-only
@@ -55,6 +67,10 @@ belong to each editor, so switching documents keeps their separate queries and
 drafts. **Done** hides the controls. Replacements update the draft and use the
 same checkpoint and conflict-aware save behavior as typing; press Save to publish
 them. Search does not include other files or the separate private reader editor.
+
+Confirmation and information alerts dim the screen behind them while waiting
+for your response. Android requests a 50% background dim; iOS uses the system
+alert dimming. Dismissing the alert restores the screen.
 
 ## File and conversation drawers
 

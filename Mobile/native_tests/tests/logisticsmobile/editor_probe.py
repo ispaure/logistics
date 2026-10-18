@@ -27,6 +27,25 @@ class EditorProbe(LogisticsMobile):
         output.mkdir(exist_ok=True)
         result = {'success': False}
         try:
+            # A blank document must accept a tap throughout the writing area,
+            # not just on the first (empty) line. Check the actual WebView layout.
+            self.create_chosen_document('md')
+            blank = self.editor_view
+            web = blank.formatted.view
+            await asyncio.sleep(1)
+            targets = json.loads(await web.evaluate_javascript("""JSON.stringify((() => {
+                const root = document.getElementById('document');
+                const rect = root.getBoundingClientRect();
+                return [0.5, 0.9].map(fraction => {
+                    const y = rect.top + (innerHeight - 12 - rect.top) * fraction;
+                    const target = document.elementFromPoint(innerWidth / 2, y);
+                    return !!target?.closest('section[contenteditable=true]');
+                });
+            })())"""))
+            assert targets == [True, True], targets
+            assert blank.document.text == '' and not blank.document.modified
+            result['blank_markdown_writing_targets'] = True
+            assert self.close_session(blank.session.id)
             doc = self.store.create('Live.md', b'# Live preview\n\n| Source | Result |\n| --- | --- |\n| **Markdown** | Ready |\n\n- Parent\n  - Child\n')
             self.refresh_documents()
             self.open_document(doc.id)

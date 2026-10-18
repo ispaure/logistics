@@ -11,7 +11,8 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.resource_selection import ResourceSelection
-from commonUtils.ui.native.presentation import list_button, scroll_content
+from commonUtils.ui.native.presentation import scroll_content
+from .appearance import list_button
 from .adaptive_workspace import AdaptiveWorkspace
 from .files_ui import local_read_available
 from .navigation import DESTINATION_ITEMS

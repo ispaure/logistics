@@ -141,9 +141,13 @@ offline voices on demand, releasing its temporary engine afterward. Playback
 resolves the saved voice against the current installed voices and falls back to
 the system default when unavailable. Markdown and EPUB share
 one playback button, which toggles play/pause and resumes without reloading the
-source text; stop and completion restore its play icon. Hosts provide current
+source text; stop and completion restore its play icon. Speed changes re-synthesize
+from the current word with a fresh generation, or update the rate for a paused
+session's next resume. The close button detaches only the overlay; hosts reuse
+the panel when reopening controls and retain session disposal for reader teardown.
+Hosts provide current
 text/selection and range-follow callbacks, then dispose speech before chapter
-replacement or reader retirement. Resume repeats the current bounded utterance.
+replacement or reader retirement. Resume continues from the current word.
 
 Android initializes audio attributes after `onInit` succeeds and prefers the
 system's current installed offline voice. Null voice-feature sets are accepted;
@@ -159,9 +163,12 @@ word timing starting at the native audio-start event; native ranges cancel it.
 Apple uses native ranges throughout. Stop/completion clear the speech highlight.
 
 EPUB uses a separate DOM speech highlight so playback does not become the next
-user-selected passage. Markdown builds an in-memory rendered-text node map,
+user-selected passage, including on engines using the native selection fallback.
+Speech highlighting seeks the word's column without stopping synthesis. New
+playback queries the DOM's visible page start and current selection, so Stop/Play
+starts at the current page rather than the last spoken word. Markdown builds an in-memory rendered-text node map,
 including inline formatting and block separators, and applies those same UTF-16
-ranges to its DOM. The map is removed when controls close. Preview-read failures
+ranges to its DOM. The map is removed when the speech owner is disposed. Preview-read failures
 show a recoverable error instead of escaping the Play handler.
 
 `Mobile/native_tests/tests/logisticsmobile/speech_probe.py` is an isolated-bundle

@@ -64,7 +64,7 @@ class UXWorkflowTests(unittest.TestCase):
         app.loop.run_until_complete(app.recent_opener(session)())
         self.assertEqual(sum(s.identity == identity for s in app.workspace.sessions.values()), 1)
         view = app.build_documents_hub()
-        self.assertFalse(any(getattr(widget, 'text', '') == 'Recent' for widget in widgets(view)))
+        self.assertTrue(any(getattr(widget, 'text', '') == 'Recent' for widget in widgets(view)))
 
     def test_folder_tap_skips_actions_and_parent_navigation_stays_separate(self):
         app = self.app

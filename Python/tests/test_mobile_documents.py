@@ -32,6 +32,31 @@ class MobileDocumentsTests(unittest.TestCase):
         self.assertEqual(reopened.snapshot.path.read_bytes(), b'original\r\nrecovered\r\n')
         self.assertFalse(self.store.open(doc.id).modified)
 
+    def test_delete_removes_saved_bytes_and_unsaved_recovery_only_for_target(self):
+        doc = self.store.create('Untitled.md')
+        doc.text = '# Unsaved draft'
+        self.store.checkpoint(doc)
+        other = self.store.create('Keep.md', b'keep')
+        self.store.delete(doc)
+        self.assertFalse(self.store.path(doc.id, '.data').exists())
+        self.assertFalse(self.store.path(doc.id, '.json').exists())
+        self.assertEqual(self.store.open(other.id).text, 'keep')
+        self.assertEqual(self.store.documents()[0][0].id, other.id)
+
+    def test_failed_delete_keeps_recovery_and_never_follows_link(self):
+        doc = self.store.create('Untitled.md')
+        doc.text = 'Retain draft'
+        self.store.checkpoint(doc)
+        source = self.store.path(doc.id, '.data')
+        source.unlink()
+        outside = self.root / 'outside.md'
+        outside.write_text('outside')
+        source.symlink_to(outside)
+        with self.assertRaises(ValueError):
+            self.store.delete(doc)
+        self.assertTrue(self.store.path(doc.id, '.json').exists())
+        self.assertEqual(outside.read_text(), 'outside')
+
     def test_private_creation_works_without_hard_links_and_hides_incomplete_records(self):
         with patch('logisticsmobile.documents.os.link', side_effect=PermissionError('sandbox forbids links')):
             doc = self.store.create(content=b'original')

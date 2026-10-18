@@ -32,7 +32,7 @@ SCRIPT = r'''
  };
  const place=value=>{page=Math.max(0,Math.min(pageCount-1,value));pages.style.transform='translateX('+(-page*pageWidth)+'px)';scrollTo(0,0);};
  layout();
- let anchor = options.offset, selectedCache = null;
+ let anchor = options.offset, selectedCache = null, speechRange = null;
  const nodes = () => {
    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
    const result = []; let n; while ((n = walk.nextNode())) result.push(n);
@@ -84,6 +84,8 @@ SCRIPT = r'''
      const s = getSelection();
      if (!s || !s.rangeCount || s.isCollapsed) return null;
      const r = s.getRangeAt(0), before = document.createRange();
+     if(speechRange && r.startContainer===speechRange.startContainer && r.startOffset===speechRange.startOffset &&
+        r.endContainer===speechRange.endContainer && r.endOffset===speechRange.endOffset) return null;
      if (!document.body.contains(r.commonAncestorContainer)) return null;
      before.selectNodeContents(document.body); before.setEnd(r.startContainer,r.startOffset);
      const start = before.toString().length;
@@ -108,10 +110,11 @@ SCRIPT = r'''
  document.addEventListener('touchend',touchEnd);
  document.addEventListener('wheel',wheel,{passive:false});document.addEventListener('keydown',key);
  window.reader = {
+   speechSource: () => ({selection:selectedRange() || selectedCache, offset:visible()}),
    selection: () => selectedRange() || selectedCache,
    highlight: (start, end) => {
      if (window.CSS && CSS.highlights) CSS.highlights.delete('logistics-speech');
-     if (start < 0) {getSelection().removeAllRanges();return;}
+     if (start < 0) {getSelection().removeAllRanges();selectedCache=null;speechRange=null;return;}
      seek(start);
      const p=point(start), q=point(end,true);if(!p || !q)return;
      const r=document.createRange();r.setStart(...p);r.setEnd(...q);
@@ -122,7 +125,7 @@ SCRIPT = r'''
          document.head.appendChild(style);
        }
        CSS.highlights.set('logistics-speech',new Highlight(r));
-     } else getSelection().addRange(r);
+     } else {speechRange=r;getSelection().addRange(r);}
    },
    pagination: () => ({index:page,count:pageCount,width:pageWidth,anchor}),
    seek,
@@ -261,8 +264,13 @@ def pane_width(widget, fallback, margin=0):
 
 async def speech_source(view, chapter, offset):
     """Read the native DOM selection without trusting arbitrary book callbacks."""
-    selected = await view.evaluate_javascript('JSON.stringify(window.reader && window.reader.selection ? window.reader.selection() : null)')
+    selected = await view.evaluate_javascript('JSON.stringify(window.reader && window.reader.speechSource ? window.reader.speechSource() : null)')
     value = json.loads(selected) if isinstance(selected, str) else None
+    if isinstance(value, dict) and 'selection' in value:
+        visible = value.get('offset')
+        if type(visible) is int and 0 <= visible <= chapter.length:
+            offset = visible
+        value = value['selection']
     if (isinstance(value, dict) and type(value.get('start')) is int and type(value.get('end')) is int
             and 0 <= value['start'] < value['end'] <= chapter.length):
         return chapter, value['start'], value['end']

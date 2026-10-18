@@ -16,6 +16,41 @@ from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
 
 
 class EpubUXTests(unittest.TestCase):
+    def test_stop_then_play_queries_visible_page_and_keeps_selection_bounds(self):
+        import json
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+        from features.books.locations import ChapterText
+        from features.books.mobile.presentation import speech_source
+        from features.books.mobile.speech_view import ReadAloudPanel
+        from test_markdown_speech import Engine
+
+        async def exercise():
+            chapter = ChapterText('<html><body><p>First page. Second page. Third page.</p></body></html>')
+            web = SimpleNamespace(evaluate_javascript=AsyncMock(return_value=json.dumps(
+                {'selection': None, 'offset': 12})))
+            async def source():
+                return await speech_source(web, chapter, 4)
+            panel = ReadAloudPanel(loop=asyncio.get_running_loop(), source=source,
+                on_range=lambda *args: None, close=lambda *args: None,
+                engine=Engine(asyncio.get_running_loop()))
+            try:
+                await panel.ready_task
+                await panel.play()
+                self.assertEqual(panel.engine.calls[-1][0], 'Second page.')
+                panel.session.stop()
+                web.evaluate_javascript.return_value = json.dumps({'selection': None, 'offset': 25})
+                await panel.toggle_playback()
+                self.assertEqual(panel.engine.calls[-1][0], 'Third page.')
+                panel.session.stop()
+                web.evaluate_javascript.return_value = json.dumps(
+                    {'selection': {'start': 12, 'end': 18}, 'offset': 25})
+                await panel.play()
+                self.assertEqual(panel.engine.calls[-1][0], 'Second')
+            finally:
+                panel.dispose()
+        asyncio.run(exercise())
+
     def test_private_tools_preserve_passage_and_search_feedback(self):
         class MemoryWebView(toga.WebView):
             def clear_private_content(self):

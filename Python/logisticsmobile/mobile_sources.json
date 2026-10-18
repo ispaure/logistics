@@ -5,6 +5,7 @@
     "__main__.py",
     "action_menu.py",
     "adaptive_workspace.py",
+    "android_markdown_font.py",
     "app.py",
     "appearance.py",
     "browser_preview.py",

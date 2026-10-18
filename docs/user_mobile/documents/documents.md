@@ -12,6 +12,10 @@ reading the current draft. New Markdown documents start editing. Preview and
 formatted editing have a 1 MiB source limit; larger documents use Source.
 See [Reading and editing](reading-and-editing.md) for supported formatting.
 
+On Android 12 and newer, Markdown preview and formatted editing use the native
+app font, including device font customizations when Android exposes the font.
+Code remains monospace. Older Android versions use the platform font fallback.
+
 Text and source files have logical line numbers, monospace text and syntax colours.
 Automatic detects the filename, or choose a language from the selector. Wrapped
 continuations keep the same logical line number. Common source/configuration

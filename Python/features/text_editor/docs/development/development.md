@@ -144,6 +144,10 @@ of the reading/editing `markdown_mode`. Ordinary Markdown opening defaults to
 preview, while New and explicit edit commands enter editing. Each managed
 document owns its preview WebView too, so paired/resumed previews do not replace
 another session’s content; closing a document retires both WebViews.
+The formatted page uses a viewport-height flex column. Its trailing editable
+section fills the remaining writing area, so blank-page taps reach a native
+`contenteditable` target without programmatic focus or keyboard requests. Dynamic
+viewport height follows the available space when the mobile keyboard opens.
 Memory-pressure cleanup retains the active provider Markdown surface, including
 its reading/editing choice. Android can request trimming while the activity is
 backgrounded; clearing that preview would expose the retained source input on
@@ -157,12 +161,19 @@ validation. The mobile application supplies
 picker workflows and scene ownership remain host concerns. Both platforms reuse
 commonUtils text persistence and conflict handling.
 
+Managed text/Markdown menus expose confirmed deletion in editing and preview.
+The host rechecks session ownership and window count after confirmation, removes
+Recent/import identities and both DocumentStore files, then closes and disposes
+the editor without checkpointing it again. Failed removal retains the open
+buffer; ordinary close/discard still preserves the stored document. Provider
+files use their existing folder-owned deletion workflow.
+
 Closing an iOS editor stops its live WebView and detaches WebKit delegates before
 replacing preview content. Queued native navigation decisions must not outlive
 the Toga interface. Native close/discard checks explicitly collect closed editors.
 Regression coverage lives in `Mobile/tests/test_markdown_editor.py`,
 `test_source_editor.py` and the workspace/provider suites. The isolated native
-`editor_probe.py` checks default preview, formatted typing and toolbar edits,
+`editor_probe.py` checks blank-page hit targets, default preview, formatted typing and toolbar edits,
 source fallback, table structure undo/redo and unchanged neighboring syntax in
 iPhone/iPad WebKit. Table replacements use paragraph caret boundaries around
 the enclosing editable block: WebKit otherwise inserts a replacement table
@@ -208,3 +219,13 @@ Remote providers never get a search widget or recursive index. Private note data
 stays in memory and credential revocation retires the document. See the
 [workspace contracts](../../../../../docs/development/mobile-workspace-navigation.md#notes-library)
 for lifecycle and cross-platform validation.
+
+## Mobile new-document form
+
+`logisticsmobile.document_choices` owns one scrollable form shared by Home,
+Documents and the editor action menu. It validates the display name, adds the
+selected text/Markdown extension if absent, and optionally seeds Markdown with
+a first heading. Creation passes the name and UTF-8 content to the managed
+document store before opening the editor; cancellation leaves storage untouched.
+Validation and creation errors remain visible in the form. Home and document
+lists omit redundant type subheaders while retaining state badges.

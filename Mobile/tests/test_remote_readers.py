@@ -120,7 +120,8 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertTrue(await app.browse_cloud(preserve_path=True))
                 self.assertIsInstance(app.cloud_status, toga.Label)
                 self.assertEqual(toolbar.folder_name.value, 'Series')
-                self.assertEqual(app.cloud_status.value, '3 items')
+                self.assertEqual(app.cloud_status.value, '')
+                self.assertEqual(toolbar.caption.children, [toolbar.folder_name, toolbar.storage_identity])
                 self.assertEqual([child.control_icon for child in app.remote_browser.location_bar.storage_icons.children],
                                  ['storage_remote', 'folder_unlocked'])
                 for expected in ('Books', '', ''):

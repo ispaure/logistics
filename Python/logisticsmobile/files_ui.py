@@ -67,7 +67,7 @@ class FilesUI:
             # set_entries publishes selection reset once with the new snapshot.
             self.file_loaded_location = label, path
             self.populate_file_browser(rows, self.file_password.value, location=self.file_loaded_location)
-            self.file_status.value = f'{len(rows)} items'
+            self.file_status.value = ''
             return True
         except Exception as error:
             if (self.active_host and not cancel.is_set()

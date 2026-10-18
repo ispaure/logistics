@@ -56,7 +56,8 @@ class FolderHubDesignProbe(LogisticsMobile):
             assert all(not hasattr(label, 'on_press') for label in self.folder_tree_buttons.values())
             for label in self.folder_tree_buttons.values():
                 assert label.style.font_weight == 'normal'
-                assert label.parent.children[0].control_icon == 'group'
+                assert list(label.parent.children) == [label]
+                assert label._impl._surface_roles[1] == 'muted'
             self.folder_collapsed.add(('Server',))
             self.update_folder_list(choices)
             assert set(self.folder_buttons) == set(names)

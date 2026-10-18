@@ -822,7 +822,7 @@ class CloudUI(LocalCryptUI):
                 self.remote_browser.location_bar.update(folder, remote=True,
                     encrypted=remote in self.cloud_crypt_remotes, unlocked=True,
                     name=Path(folder).name if folder else remote)
-            self.cloud_status.value = f'{len(rows)} items'
+            self.cloud_status.value = ''
             return True
         except Exception as error:
             self.cloud_status.value = 'Browse failed: ' + str(error)[:300]

@@ -43,7 +43,7 @@ def transcript_document(*, theme_css=""):
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <style>
 ''' + theme_css + '''
-:root { --ink:var(--text); --user:var(--chat_bubble); --line:var(--border) }
+:root { --ink:var(--text); --user:var(--chat_bubble); --line:var(--control_border) }
 html { min-height:100%; background:var(--chat_background) }
 body::before { content:""; position:fixed; top:0; left:0; right:0; height:40px; z-index:10;
  background:linear-gradient(to bottom, var(--chat_background), transparent); pointer-events:none }
@@ -56,7 +56,7 @@ p { margin:0 0 12px } p:last-child { margin-bottom:0 } .plain { white-space:pre-
 ul,ol { padding-left:24px; margin:8px 0 16px } li { margin-bottom:6px }
 pre { padding:12px; background:var(--user); border-radius:8px; white-space:pre-wrap; overflow-wrap:anywhere } code { font-family:monospace }
 h1,h2,h3,h4,h5,h6 { font-size:1.15em; margin:16px 0 8px } .muted { color:var(--muted) }
-.copy { min-height:48px; min-width:48px; padding:8px 0; border:0; background:transparent; color:var(--muted); font:inherit; font-size:.75em }
+.copy { min-height:48px; min-width:48px; padding:8px 12px; border:1px solid var(--control_border); border-radius:8px; background:transparent; color:var(--text); font:inherit; font-size:.75em }
 button { touch-action:manipulation } button:focus-visible { outline:2px solid var(--accent) }
 #latest { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); padding:10px 16px; min-height:48px; border:1px solid var(--line); border-radius:24px; background:var(--chat_background); color:var(--ink); font:inherit; font-size:.8em }
 #empty { padding:20vh 16px 36px; text-align:center } #empty h1 { font-size:1.25em; margin:0 0 8px } #copy-status { position:fixed; bottom:0; background:var(--chat_background); color:var(--ink); font-size:.8em }

@@ -89,7 +89,7 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertEqual(list(nav.detail.children), [nav.options['Books & Comics']])
 
     def test_duo_landscape_seam_splits_the_panes_and_unfolded_width_keeps_them(self):
-        app, nav = self.app, self.nav
+        nav = self.nav
         self.width.return_value = 600
         with patch('logisticsmobile.fold_layout.seam_fraction', return_value=.46):
             nav.reflow()
@@ -114,3 +114,40 @@ class SettingsNavigationTests(unittest.TestCase):
                     nav.choose('Folder Hub')
                     self.assertEqual(nav.wide, width >= 640)
                     self.assertIs(self.app.show_legacy_choice.parent.parent, nav.sections['Folder Hub'])
+
+    def test_narrow_crease_pane_wraps_all_categories_and_widening_restores_text(self):
+        app, nav = self.app, self.nav
+        self.width.return_value = 600
+        with patch('logisticsmobile.fold_layout.seam_fraction', return_value=.55):
+            nav.reflow()
+            self.assertEqual(nav.sidebar.style.width, 330)
+            label, info, switch = app.clear_documents_choice.parent.children
+            self.assertEqual(label.text.replace('\n', ' '), 'Close saved documents on restart')
+            self.assertGreater(len(label.text.splitlines()), 1)
+            self.assertEqual(info.style.width, 48)
+            self.assertIs(switch, app.clear_documents_choice)
+            nav.choose('LM Chat')
+            button = nav.sections['LM Chat'].children[1]
+            self.assertIn('\n', button.text)
+            self.assertGreater(button.style.height, 48)
+            nav.choose('Books & Comics')
+            hint = nav.sections['Books & Comics'].children[3]
+            original = hint._settings_source_text
+            self.assertGreater(len(hint.text.splitlines()), len(original.splitlines()))
+        self.width.return_value = 1400
+        nav.reflow()
+        self.assertEqual(button.text, 'Server & generation settings…')
+        self.assertEqual(button.style.height, 48)
+        self.assertEqual(hint.text, original)
+        self.assertEqual(nav.selected, 'Books & Comics')
+
+    def test_changed_status_is_rewrapped_from_the_new_message(self):
+        self.width.return_value = 600
+        with patch('logisticsmobile.fold_layout.seam_fraction', return_value=.55):
+            self.nav.reflow()
+        self.app.settings_status.text = 'Preferences saved on this device.'
+        self.assertIn('\n', self.app.settings_status.text)
+        self.assertEqual(self.app.settings_status.text.replace('\n', ' '),
+                         'Preferences saved on this device.')
+        self.assertEqual(self.app.settings_status._settings_source_text,
+                         'Preferences saved on this device.')

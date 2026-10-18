@@ -62,7 +62,8 @@ class TextEditorView:
             ('Import…', lambda: app.import_document(origin=self)), ('Open from Files…', app.show_editor_open),
             ('Save', app.save_document), ('Save a copy', app.save_copy),
             ('Save As…', app.show_document_save_as), ('Export…', lambda: app.export_document(origin=self)),
-            ('Close document', lambda: app.request_close_session(self.session.id))]
+            ('Close document', lambda: app.request_close_session(self.session.id)),
+            ('Delete document…', lambda: app.request_delete_document(self.session.id))]
         self.save_visible = False
         self.actions = ActionMenu(self.actions_button, self,
             [item for item in self.action_items if item[0] != 'Save'])
@@ -237,6 +238,8 @@ class TextEditorView:
             speech.close()
         self.editor.dispose()
         self.actions.dispose()
+        if hasattr(self, 'preview_actions'):
+            self.preview_actions.dispose()
         if self.formatted is not None:
             self.formatted.dispose()
         if self.preview is not None:
