@@ -39,6 +39,11 @@ def configure_android_sources(project):
         if line.startswith('android.sourceSets.main.java.srcDir(') and line not in text.splitlines():
             text += '\n' + line + '\n'
     gradle.write_text(text)
+    # Media custom actions need resource IDs, including Android 13+ lock screens.
+    import shutil
+    resources = ROOT.parent / 'Python/features/books/mobile/android_res'
+    shutil.copytree(resources, Path(project) / 'app/src/main/res', dirs_exist_ok=True)
+
 
 
 def configure_android_appearance(project):

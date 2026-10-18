@@ -93,6 +93,9 @@ public final class SpeechMediaService extends Service {
             .putExtra("command", action).putExtra("epoch", epoch);
         return PendingIntent.getService(this, code, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
+    private int skipIcon(String name) {
+        return getResources().getIdentifier("speech_" + name, "drawable", getPackageName());
+    }
     private void render() {
         if (listener == null || session == null) return;
         if (playing && !focused && Build.VERSION.SDK_INT >= 26) {
@@ -108,9 +111,9 @@ public final class SpeechMediaService extends Service {
             .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED,
                 PlaybackState.PLAYBACK_POSITION_UNKNOWN, playing ? 1f : 0f)
             .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
-                | PlaybackState.ACTION_STOP | PlaybackState.ACTION_REWIND | PlaybackState.ACTION_FAST_FORWARD)
-            .addCustomAction("back15", "Back 15 seconds", android.R.drawable.ic_media_rew)
-            .addCustomAction("forward15", "Forward 15 seconds", android.R.drawable.ic_media_ff);
+                | PlaybackState.ACTION_STOP)
+            .addCustomAction("back15", "Back 15 seconds", skipIcon("back15"))
+            .addCustomAction("forward15", "Forward 15 seconds", skipIcon("forward15"));
         session.setPlaybackState(state.build());
         Notification.Builder notice = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
         Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
@@ -119,10 +122,10 @@ public final class SpeechMediaService extends Service {
         Notification notification = notice.setContentTitle("Read aloud").setContentText("Logisticks")
             .setSmallIcon(android.R.drawable.ic_media_play).setVisibility(Notification.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true).setOngoing(playing)
-            .addAction(android.R.drawable.ic_media_rew, "Back 15 seconds", action("back", 1))
+            .addAction(skipIcon("back15"), "Back 15 seconds", action("back", 1))
             .addAction(playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play,
                 playing ? "Pause" : "Play", action(playing ? "pause" : "play", 2))
-            .addAction(android.R.drawable.ic_media_ff, "Forward 15 seconds", action("forward", 3))
+            .addAction(skipIcon("forward15"), "Forward 15 seconds", action("forward", 3))
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", action("stop", 4))
             .setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()).setShowActionsInCompactView(0, 1, 2)).build();
         if (Build.VERSION.SDK_INT >= 29) startForeground(NOTICE, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
