@@ -65,6 +65,23 @@ class WorkspaceNavigationTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_system_metadata_is_hidden_in_folders_and_file_lists(self):
+        from commonUtils.runtime.local_files import LocalFiles
+        from logisticsmobile.browser_ui import FileBrowser
+        app = self.app
+        root = Path(self.directory.name) / 'metadata-fixture'
+        root.mkdir()
+        for name in ('.DS_Store', 'Thumbs.db', 'THUMBS.DB', 'note.md'):
+            (root / name).write_text('fixture')
+        browser = FileBrowser(folder_visible=app.folder_path_visible)
+        browser.set_entries(LocalFiles(root), '', [
+            dict(name=p.name, path=p.name, directory=False, size=p.stat().st_size) for p in root.iterdir()])
+        self.assertEqual([row.label for row in browser.entries], ['note.md'])
+        for path in ('a/.DS_Store', 'Thumbs.db', 'nested/THUMBS.DB'):
+            self.assertFalse(app.folder_path_visible(path, directory=False))
+            self.assertFalse(app.folder_path_visible(path))
+        app.loop.run_until_complete(browser.close())
+
     def test_legacy_session_toggle_save_reload_and_platform_scope(self):
         from logisticsmobile.preferences import Preferences
         app = self.app

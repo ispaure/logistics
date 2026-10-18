@@ -75,6 +75,7 @@ The remote names and credential filters come from loaded configurations and reta
 password-protected ZIP metadata. Locked entries ask for their ZIP password when opened;
 populating this tab does not ping online services. On iPad, all windows use the
 same loaded credential packages. Browsing an online folder still requires a connection.
+Mobile folder and file lists hide `.DS_Store` and `Thumbs.db` metadata files.
 Loaded ZIPs remain in the Credential dropdown even if they currently have no
 visible folders; refreshing the hub also refreshes the package choices.
 Credential labels omit `.zip` (including uppercase `.ZIP`). Duplicate labels use

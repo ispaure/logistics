@@ -24,6 +24,8 @@ class FolderHubUI:
     def folder_path_visible(self, path, *, directory=True):
         from pathlib import PurePosixPath
         parts = PurePosixPath(str(path)).parts
+        if any(part.casefold() in {'.ds_store', 'thumbs.db'} for part in parts):
+            return False
         return all(self.legacy_name_visible(part) for part in (parts if directory else parts[:-1]))
 
     def library_folder_visible(self, record):
