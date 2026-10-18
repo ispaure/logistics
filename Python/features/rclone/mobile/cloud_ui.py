@@ -1065,7 +1065,8 @@ class CloudUI(LocalCryptUI):
             self.set_cloud_busy(True)
         try:
             ResourceImports = self.rclone_ui.ResourceImports
-            collection_root = collection_path(self.private_root).resolve()
+            collection_root = (None if Path(selected).resolve().is_relative_to(Path(self.private_root).resolve())
+                               else collection_path(self.private_root).resolve())
             if (not hasattr(self, 'resource_imports')
                     or self.resource_imports.collection_root != collection_root):
                 self.resource_imports = ResourceImports(self.private_root, collection_root=collection_root)

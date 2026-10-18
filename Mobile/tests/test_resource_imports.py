@@ -2,6 +2,7 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 from logisticsmobile.app import LogisticsMobile
 
 
@@ -83,7 +84,8 @@ class ResourceImportTests(unittest.TestCase):
                 app.show_cloud()
                 path = seed_download(app.downloads, 'same.md', b'original')
                 app.refresh_downloads(path)
-                app.loop.run_until_complete(app.open_download())
+                with patch('features.rclone.mobile.cloud_ui.collection_path', side_effect=OSError('SD card unavailable')):
+                    app.loop.run_until_complete(app.open_download())
                 self.assertEqual(app.editor.value, 'original', app.cloud_status.value)
                 key = app.current.id
                 app.editor.value = 'kept draft'
