@@ -323,19 +323,21 @@ class FolderHubUI:
                                else target['source'])
                     accessible_name(button, name + ', ' + storage)
                     for source in storage.split(' · '):
-                        icon = {'Local': 'storage_local', 'LocalCrypt': 'storage_crypt',
-                                'Remote': 'storage_remote'}[source]
-                        encrypted_remote = (source == 'Remote' and (
-                            target.get('remote') in getattr(self.app, 'cloud_crypt_remotes', ())
+                        remote = target.get('remote') or entry.get('remote')
+                        encrypted = source == 'LocalCrypt' or (source == 'Remote' and (
+                            remote in getattr(self.app, 'cloud_crypt_remotes', ())
                             or any(copy['source'] == 'LocalCrypt' for copy in entry.get('copies', ()))))
-                        if encrypted_remote:
-                            icon = 'storage_crypt'
-                        label = 'Encrypted remote' if encrypted_remote else source
-                        indicator = icon_button(icon, label + ' copy of ' + name, on_press=select)
-                        compact_icon(indicator)
-                        if not row.children:
-                            indicator.style.margin_left = 8
-                        row.add(indicator)
+                        icons = [('storage_remote', 'Remote')] if source == 'Remote' else [('storage_local', 'Local')]
+                        if encrypted:
+                            unlocked = remote in self.loaded_remote_names()
+                            icons.append(('storage_unlocked' if unlocked else 'storage_crypt',
+                                          'Crypt unlocked' if unlocked else 'Crypt locked'))
+                        for icon, label in icons:
+                            indicator = icon_button(icon, label + ' copy of ' + name, on_press=select)
+                            compact_icon(indicator)
+                            if not row.children:
+                                indicator.style.margin_left = 8
+                            row.add(indicator)
                     row.add(button)
                     def options(widget=None, selected=name, **kwargs):
                         self.choose_folder(selected)
@@ -357,9 +359,9 @@ class FolderHubUI:
         if not visible:
             self.folder_list.add(toga.Label('No folders available for this source.'))
         legend = toga.Box(style=Pack(direction=ROW, align_items=CENTER, margin_top=14))
-        labels = (('Local', 'storage_local'), ('LocalCrypt', 'storage_crypt'))
+        labels = (('Local', 'storage_local'), ('Crypt', 'storage_crypt'), ('Unlocked', 'storage_unlocked'))
         if self.folder_source == 'rclone':
-            labels = (('Remote', 'storage_remote'), ('Encrypted remote', 'storage_crypt'))
+            labels = (('Remote', 'storage_remote'), ('Crypt', 'storage_crypt'), ('Unlocked', 'storage_unlocked'))
         elif self.folder_source == 'Network shares':
             labels += (('Remote', 'storage_remote'),)
         for label, icon in labels:
@@ -383,6 +385,10 @@ class FolderHubUI:
                 for remote in item['remotes']}
 
     def change_folder_source(self, source):
+        # The startup hub is built before the remote UI. Native tab navigation
+        # reuses that page, so entering a remote source must start saved restore.
+        if source in ('rclone', 'Network shares'):
+            self.show_cloud(present=False)
         self.folder_source = source
         self.folder_credential_name = 'All'
         self.folder_credential.value = 'All'
@@ -614,8 +620,7 @@ class FolderHubUI:
                 and host.state.destination == 'files' and not self.routes.screens['files']):
             choices = self.folder_choices()
             credentials = self.credential_groups(source_choices(choices, 'rclone', self.network_share_remotes()))
-            if choices != self.folder_picker_choices or credentials != self.folder_credentials:
-                self.update_folder_list(choices)
+            self.update_folder_list(choices)
         status = getattr(self, 'folder_picker_status', None)
         if status is not None and not getattr(self, '_folder_opening', False):
             status.text = import_hint('A transfer is running. Local and LocalCrypt files remain available; online operations wait.'

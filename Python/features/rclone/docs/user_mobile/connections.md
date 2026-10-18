@@ -9,6 +9,11 @@ in the remote browser). The native app embeds rclone 1.74.1; no desktop
 executable, shell, mount, or separate RC server is required. **Check rclone engine**
 performs an offline in-memory read and displays the engine version.
 
+In Folder Hub's **rclone** tab, regular remote folders show a cloud icon;
+encrypted remote folders show both a cloud and a lock. Local encrypted copies
+show a disk and a lock in the **Local** tab. Locks open when their credentials
+are available in the current session, and close again when the session locks.
+
 The online browser loads filenames and sizes without fetching thumbnails, in
 both list and tile views. Opening a folder or file shows the current step and
 elapsed seconds, with an animated progress bar. Remote previews report connection
@@ -96,7 +101,9 @@ Saved settings and refreshed OAuth tokens use an AES-256-GCM encrypted private
 vault. Android Keystore protects its key, and the files are outside Android backup;
 iOS Keychain stores a device-only key available while the device is unlocked, and
 the vault folder is excluded from backup. Credentials restore when Remote files
-opens, without contacting a remote. The ZIP password is never saved, and neither
+opens or when you enter Folder Hub's **rclone** or **Network shares** source,
+without contacting a remote. The folder list updates when restoration finishes;
+opening credential settings first is unnecessary. The ZIP password is never saved, and neither
 mode rewrites the source ZIP. A locked device, missing key or damaged vault stops
 restoration; there is no plaintext fallback or silent replacement of saved data.
 Unlock the device and reload, or use **Forget saved credentials** before reimporting.

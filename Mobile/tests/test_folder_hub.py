@@ -11,6 +11,70 @@ from test_mirror_jobs import MirrorClient
 
 
 class FolderHubTests(unittest.TestCase):
+    def test_startup_rclone_tab_restores_saved_remotes_and_shows_cloud_and_lock(self):
+        from logisticsmobile.app import LogisticsMobile
+        from types import SimpleNamespace
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            self.assertFalse(hasattr(app, 'cloud_view'))
+            client = SimpleNamespace(vault=object(), generation=1, package_name='', package_records=(),
+                                     crypt_remotes=lambda: ['Secret'], cancel=lambda: None)
+            def restore():
+                client.package_records = (dict(package_name='Saved.zip', remotes=['Plain', 'Secret']),)
+                return ['Plain', 'Secret']
+            client.restore = restore
+            app.cloud_client = client
+            with patch.object(app, 'retained_packages', return_value=None), \
+                    patch.object(app, 'refresh_hub_crypt_locations', new_callable=AsyncMock):
+                # Enter the cached startup page through native navigation, then
+                # tap its rclone source without visiting credential settings.
+                app.native_host.activate('files')
+                app.folder_source_buttons['rclone'].on_press()
+                self.assertTrue(app.cloud_busy)
+                app.loop.run_until_complete(app.cloud_restore_task)
+                self.assertFalse(app.cloud_busy)
+                self.assertEqual(set(app.folder_buttons), {'Plain', 'Secret'})
+                row = app.folder_buttons['Secret'].parent
+                self.assertEqual([child.control_icon for child in row.children
+                                  if hasattr(child, 'control_icon')],
+                                 ['storage_remote', 'storage_unlocked', 'more'])
+                row = app.folder_buttons['Plain'].parent
+                self.assertEqual([child.control_icon for child in row.children
+                                  if hasattr(child, 'control_icon')], ['storage_remote', 'more'])
+
+    def test_crypt_icons_follow_session_lock_and_local_location(self):
+        from logisticsmobile.app import LogisticsMobile
+        from types import SimpleNamespace
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            app.show_cloud(present=False)
+            app.cloud_client = SimpleNamespace(generation=1, cancel=lambda: None, package_records=())
+            local = dict(name='Secret', source='LocalCrypt', kind='crypt', value='Secret', remote='Secret')
+            remote = dict(name='Secret', source='Remote', kind='remote', value=('Secret', ''), remote='Secret')
+            choices = {'Secret': dict(local, copies=[local, remote])}
+            app.build_folder_picker(choices=choices)
+            def icons():
+                return [c.control_icon for c in app.folder_buttons['Secret'].parent.children
+                        if hasattr(c, 'control_icon')]
+            self.assertEqual(icons(), ['storage_local', 'storage_crypt', 'more'])
+            app.cloud_client.package_records = (dict(package_name='Session.zip', remotes=['Secret']),)
+            app.update_folder_list(choices)
+            self.assertEqual(icons(), ['storage_local', 'storage_unlocked', 'more'])
+            app.folder_source = 'rclone'
+            app.update_folder_list(choices)
+            self.assertEqual(icons(), ['storage_remote', 'storage_unlocked', 'more'])
+            app.cloud_client.package_records = ()
+            app.update_folder_list(choices)
+            self.assertEqual(icons(), ['storage_remote', 'storage_crypt', 'more'])
+
     def test_loaded_package_populates_hub_without_selector_or_bridge_access(self):
         from logisticsmobile.app import LogisticsMobile
         from types import SimpleNamespace
