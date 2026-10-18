@@ -5,6 +5,7 @@ from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import toga
 from commonUtils.ui.native.password_input import PasswordInput
 from unittest.mock import AsyncMock, patch
 from zipfile import ZipFile
@@ -105,25 +106,37 @@ class RemoteReaderTests(unittest.TestCase):
                     ancestor = ancestor.parent
                 self.assertIs(ancestor, app.cloud_view)
                 self.assertIn(app.cloud_status, toolbar.caption.children)
+                self.assertFalse(hasattr(app, 'cloud_actions_button'))
+                self.assertLessEqual(app.cloud_status.style.height, 48)
+                self.assertNotIn(app.cloud_cancel, toolbar.children)
+                self.assertIsNone(app.cloud_transfer_progress.parent)
                 self.assertEqual(app.cloud_up.control_icon, 'back')
                 self.assertEqual(app.cloud_up.style.width, 48)
                 self.assertNotIn(app.remote_browser.back_button,
                                  app.remote_browser.navigation_controls.children)
                 app.cloud_remote.items = ['Files']
+                app.cloud_crypt_remotes = {'Files'}
                 app.cloud_location.value = 'Books/Series'
                 self.assertTrue(await app.browse_cloud(preserve_path=True))
+                self.assertIsInstance(app.cloud_status, toga.Label)
                 self.assertEqual(toolbar.folder_name.value, 'Series')
                 self.assertEqual(app.cloud_status.value, '3 items')
+                self.assertEqual([child.control_icon for child in app.remote_browser.location_bar.storage_icons.children],
+                                 ['storage_remote', 'folder_unlocked'])
                 for expected in ('Books', '', ''):
                     await app.cloud_up.on_press()
                     self.assertEqual(app.cloud_path, expected)
-                    self.assertEqual(toolbar.folder_name.value, expected or 'Files')
                     self.assertEqual(app.cloud_location.value, expected)
+                    self.assertEqual(toolbar.folder_name.value, expected or 'Files')
                     self.assertEqual(client.calls[-1], ('list', expected))
                 app.set_cloud_busy(True)
                 self.assertTrue(app.cloud_up.enabled)
+                self.assertIn(app.cloud_cancel, toolbar.children)
+                self.assertIs(app.cloud_transfer_progress.parent, toolbar.parent)
                 app.set_cloud_busy(False)
                 self.assertTrue(app.cloud_up.enabled)
+                self.assertNotIn(app.cloud_cancel, toolbar.children)
+                self.assertIsNone(app.cloud_transfer_progress.parent)
 
             app.loop.run_until_complete(check())
 
@@ -327,7 +340,7 @@ class RemoteReaderTests(unittest.TestCase):
                     await task
             app.loop.run_until_complete(check())
 
-    def test_item_actions_open_selected_folder_and_prompt_for_inner_password(self):
+    def test_folder_tap_opens_directly_and_comic_prompts_for_inner_password(self):
         from commonUtils.archives.zip_access import ArchivePasswordError
         from features.rclone.mobile.remote_readers import RemoteReaders
         with TemporaryDirectory() as folder:
@@ -342,18 +355,9 @@ class RemoteReaderTests(unittest.TestCase):
                 await app.browse_cloud()
                 browser = app.remote_browser
                 entry = next(entry for entry in browser.entries if entry.container)
-                row = browser.items.children[browser.entries.index(entry)]
-                import toga
-                menu = [child for child in row.children[0].children if isinstance(child, toga.Button)][-1]
-                await menu.on_press()
-                self.assertIn(app.remote_item_view, app.body.children)
-                self.assertNotIn(app.cloud_advanced_view, app.body.children)
-                open_button = next(child for child in app.remote_item_view.children
-                                   if getattr(child, 'text', '') == 'Open folder')
-                with patch.object(app, 'browser_cloud_folder', new=AsyncMock(return_value=True)) as opened:
-                    self.assertTrue(await open_button.on_press())
-                    opened.assert_awaited_once()
-                    self.assertEqual(opened.call_args.args[0]['path'], entry.payload['path'])
+                with patch.object(browser, 'on_open_folder', new=AsyncMock(return_value=True)) as opened:
+                    await browser.buttons[entry.identity].on_press()
+                    opened.assert_awaited_once_with(entry.payload)
                 with patch.object(RemoteReaders, 'open', side_effect=ArchivePasswordError('ZIP password required')), \
                         patch.object(app.main_window, 'dialog', new=AsyncMock()) as dialog:
                     self.assertFalse(await app.open_remote_document(dict(path='locked.cbz', directory=False, size=100)))

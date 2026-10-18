@@ -144,6 +144,13 @@ of the reading/editing `markdown_mode`. Ordinary Markdown opening defaults to
 preview, while New and explicit edit commands enter editing. Each managed
 document owns its preview WebView too, so paired/resumed previews do not replace
 another session’s content; closing a document retires both WebViews.
+Memory-pressure cleanup retains the active provider Markdown surface, including
+its reading/editing choice. Android can request trimming while the activity is
+backgrounded; clearing that preview would expose the retained source input on
+wake. Normal navigation still suspends hidden provider WebViews and reconstructs
+the chosen surface on resume. Both mobile Markdown Web surfaces use Apple's
+system font names followed by generic `sans-serif`, allowing Android's device
+font choice instead of WebView's `system-ui` face; code remains monospace.
 `resources.py` owns provider text adapters, and `names.py` owns display-name
 validation. The mobile application supplies
 `services.mobile_presentation.MobilePresentation`; managed recovery records,

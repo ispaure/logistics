@@ -10,7 +10,7 @@ from features.rclone.mobile.messages import import_hint
 from textwrap import fill
 from commonUtils.ui.native.presentation import list_button
 from .appearance import action_button, accessible_name
-from .folder_hub_style import surface, source_tab, compact_icon, toolbar_button, folder_row, folder_name, source_actions
+from .folder_hub_style import surface, source_tab, compact_icon, toolbar_button, folder_row, folder_name, source_actions, SOURCE_LABELS
 
 
 
@@ -216,8 +216,8 @@ class FolderHubUI:
             def select_source(widget=None, selected=source, **kwargs):
                 if self.folder_source != selected:
                     self.change_folder_source(selected)
-            button = toga.Button(source, on_press=select_source,
-                                 style=Pack(flex=1.5 if source == 'Network shares' else 1, height=44, font_size=13, margin=2))
+            button = toga.Button(SOURCE_LABELS[source], on_press=select_source,
+                                 style=Pack(flex=1, height=44, font_size=13, margin=2))
             self.folder_source_buttons[source] = button
             self.folder_source_tabs.add(button)
         self.folder_list = toga.Box(style=Pack(direction=COLUMN))
@@ -274,7 +274,7 @@ class FolderHubUI:
             visible = credential_choices(visible, selected)
         for source, button in self.folder_source_buttons.items():
             source_tab(button, source == self.folder_source)
-            accessible_name(button, source + (' selected' if source == self.folder_source else ''))
+            accessible_name(button, SOURCE_LABELS[source] + (' selected' if source == self.folder_source else ''))
         if self.folder_source == 'rclone' and not self.folder_picker_header.children:
             self.folder_picker_header.add(self.folder_credential_row)
         elif self.folder_source != 'rclone' and self.folder_picker_header.children:
@@ -287,80 +287,101 @@ class FolderHubUI:
         self.folder_buttons = {}
         self.folder_tree_buttons = {}
 
-        def add_branch(branch, ancestors=()):
-            for title, node in sorted(branch.items(), key=lambda item: item[0].casefold()):
+        def divider():
+            return surface(toga.Box(style=Pack(height=1, margin_left=34)),
+                           radius=0, background='border', outlined=False)
+
+        def branch_height(branch, depth):
+            # A fixed-width Box has no intrinsic height on either native
+            # backend. Size tree guides from the same fixed row geometry.
+            return sum(48
+                       + (branch_height(node['children'], depth + 1) if node['children'] else 0)
+                       for node in branch.values()) + max(0, len(branch) - 1)
+
+        def add_branch(branch, parent, ancestors=()):
+            for index, (title, node) in enumerate(sorted(branch.items(), key=lambda item: item[0].casefold())):
                 path = (*ancestors, title)
                 children = node['children']
-                row = toga.Box(style=Pack(direction=ROW, align_items=CENTER,
-                    margin_left=24 * len(ancestors),
-                    margin_bottom=1 if node['names'] else 0))
-                if ancestors:
-                    guide = surface(toga.Label('└', style=Pack(width=20, font_size=16)),
-                                    background='transparent', foreground='muted', outlined=False)
-                    row.add(guide)
+                row = toga.Box(style=Pack(direction=ROW, align_items=CENTER, height=48))
                 if node['names']:
                     name = node['names'][0]
                     async def select(widget=None, selected=name, **kwargs):
                         return await self.browse_hub_folder(selected)
-                    button = folder_name(list_button(toga.Button(title, on_press=select,
-                        style=Pack(height=56, font_size=15, flex=1, margin_left=8))))
-                    self.folder_buttons[name] = button
                     entry = visible[name]
                     target = folder_browse_copy(entry, self.folder_source)
                     storage = (folder_storage_label(entry) if self.folder_source == 'Network shares'
                                else target['source'])
-                    accessible_name(button, name + ', ' + storage)
-                    for source in storage.split(' · '):
-                        remote = target.get('remote') or entry.get('remote')
-                        encrypted = source == 'LocalCrypt' or (source == 'Remote' and (
-                            remote in getattr(self.app, 'cloud_crypt_remotes', ())
-                            or any(remote in package.get('crypt_remotes', ())
-                                   for package in self.retained_credential_associations())
-                            or any(copy['source'] == 'LocalCrypt' for copy in entry.get('copies', ()))))
-                        icons = [('storage_remote', 'Remote')] if source == 'Remote' else [('storage_local', 'Local')]
-                        if encrypted:
-                            unlocked = remote in self.loaded_remote_names()
-                            icons.append(('storage_unlocked' if unlocked else 'storage_crypt',
-                                          'Crypt unlocked' if unlocked else 'Crypt locked'))
-                        for icon, label in icons:
-                            indicator = icon_button(icon, label + ' copy of ' + name, on_press=select)
-                            compact_icon(indicator)
-                            if not row.children:
-                                indicator.style.margin_left = 8
-                            row.add(indicator)
+                    remote = target.get('remote') or entry.get('remote')
+                    encrypted = ('LocalCrypt' in storage or ('Remote' in storage and (
+                        remote in getattr(self.app, 'cloud_crypt_remotes', ())
+                        or any(remote in package.get('crypt_remotes', ())
+                               for package in self.retained_credential_associations())
+                        or any(copy['source'] == 'LocalCrypt' for copy in entry.get('copies', ())))))
+                    state = ('unlocked' if remote in self.loaded_remote_names() else 'locked') if encrypted else None
+                    icon = 'folder_' + state if state else 'folder'
+                    description = storage + (', ' + state if state else '')
+                    indicator = icon_button(icon, name + ', ' + description, on_press=select)
+                    compact_icon(indicator, width=32, size=23,
+                                 foreground='folder_' + state if state else 'accent')
+                    row.add(indicator)
+                    button = folder_name(list_button(toga.Button(title, on_press=select,
+                        style=Pack(height=48, font_size=15, font_weight='bold', flex=1, margin_left=4))))
+                    self.folder_buttons[name] = button
+                    accessible_name(button, name + ', ' + description)
                     row.add(button)
                     def options(widget=None, selected=name, **kwargs):
                         self.choose_folder(selected)
                     menu = icon_button('more', 'Folder actions for ' + name, on_press=options)
                     compact_icon(menu, width=44, size=18)
-                    menu.style.margin_right = 4
                     row.add(menu)
+                    folder_row(row)
                 else:
-                    group = surface(toga.Label(title + ' · group',
-                        style=Pack(height=36, font_size=13, font_weight='bold', flex=1)),
-                        radius=0, background='window', foreground='muted', outlined=False)
+                    # Labels deliberately have no press handler or disclosure
+                    # glyph. The entire hierarchy is always expanded.
+                    group_icon = icon_button('group', 'Group ' + title)
+                    compact_icon(group_icon, width=32, height=48, size=21, foreground='muted')
+                    row.add(group_icon)
+                    group = surface(toga.Label(title,
+                        style=Pack(height=20, margin_top=14, margin_bottom=14, font_size=15,
+                                   # Group and folder icons occupy the same slot.
+                                   font_weight='normal', flex=1, margin_left=4)),
+                        radius=0, background='transparent',
+                        foreground='text', outlined=False)
+                    accessible_name(group, title + ', group')
                     self.folder_tree_buttons[path] = group
                     row.add(group)
-                if node['names']:
-                    folder_row(row)
-                self.folder_list.add(row)
+                parent.add(row)
                 if children:
-                    add_branch(children, path)
-        add_branch(folder_tree(visible))
+                    content = toga.Box(style=Pack(direction=COLUMN, flex=1))
+                    add_branch(children, content, path)
+                    guide = surface(toga.Box(style=Pack(width=1,
+                                    height=branch_height(children, len(path)),
+                                    # Forty points per level puts even the
+                                    # child's folder icon beyond the parent's
+                                    # text origin (32-point icon + 4-point gap).
+                                    margin_left=28, margin_right=11)),
+                                    radius=0, background='border', outlined=False)
+                    parent.add(toga.Box(children=[guide, content], style=Pack(direction=ROW)))
+                if index < len(branch) - 1:
+                    parent.add(divider())
+
+        for title, node in sorted(folder_tree(visible).items(), key=lambda item: item[0].casefold()):
+            content = toga.Box(style=Pack(direction=COLUMN, margin=12))
+            panel = surface(toga.Box(children=[content], style=Pack(direction=COLUMN)),
+                            radius=16, outlined=False)
+            panel.style.margin_bottom = 12
+            add_branch({title: node}, content)
+            self.folder_list.add(panel)
         if not visible:
             self.folder_list.add(toga.Label('No folders available for this source.'))
-        legend = toga.Box(style=Pack(direction=ROW, align_items=CENTER, margin_top=14))
-        labels = (('Local', 'storage_local'), ('Crypt', 'storage_crypt'), ('Unlocked', 'storage_unlocked'))
-        if self.folder_source == 'rclone':
-            labels = (('Remote', 'storage_remote'), ('Crypt', 'storage_crypt'), ('Unlocked', 'storage_unlocked'))
-        elif self.folder_source == 'Network shares':
-            labels += (('Remote', 'storage_remote'),)
-        for label, icon in labels:
-            mark = icon_button(icon, label + ' copy')
-            compact_icon(mark, width=20, height=24, size=13, background='window')
-            mark.enabled = False
+        legend = toga.Box(style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
+        labels = (('Locked', 'folder_locked', 'folder_locked'),
+                  ('Unlocked', 'folder_unlocked', 'folder_unlocked'))
+        for label, icon, color in labels:
+            mark = icon_button(icon, label + ' folder')
+            compact_icon(mark, width=28, height=32, size=22, background='window', foreground=color)
             legend.add(mark)
-            legend.add(surface(toga.Label(label, style=Pack(font_size=11, margin_right=10)),
+            legend.add(surface(toga.Label(label, style=Pack(font_size=11, margin_right=16)),
                                background='window', foreground='muted', outlined=False))
         self.folder_list.add(legend)
 

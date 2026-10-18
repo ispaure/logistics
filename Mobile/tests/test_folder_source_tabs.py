@@ -81,6 +81,43 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertIsNone(app.folder_add_share_button.parent)
         self.assertIn(app.folder_credential_row, app.folder_picker_header.children)
 
+    def test_loaded_network_share_packages_never_enter_cloud_credential_filter(self):
+        from types import SimpleNamespace
+        app = self.app
+        app.cloud_client = SimpleNamespace(cancel=lambda: None, package_records=[
+            dict(package_name='Network shares', remotes=['Mac']),
+            dict(package_name='Session network shares', remotes=['NAS']),
+            dict(package_name='Personal.zip', remotes=['Drive']),
+        ])
+        app.cloud_remote.items = ['Mac', 'NAS', 'Drive']
+        app.change_folder_source('rclone')
+        self.assertEqual(set(app.folder_credentials), {'All', 'Personal'})
+        self.assertEqual(set(app.folder_buttons), {'Drive'})
+
+    def test_browsable_siblings_are_bold_and_groups_use_branch_icons(self):
+        app = self.app
+        names = ['Server-Lib-Books', 'Server-Perforce', 'Server-Perforce-2']
+        choices = {}
+        for name in names:
+            copy = dict(name=name, source='Remote', kind='remote', value=(name, ''), remote=name)
+            choices[name] = dict(copy, copies=[copy])
+        app.folder_source = 'rclone'
+        app.update_folder_list(choices)
+        group = app.folder_tree_buttons[('Server', 'Lib')]
+        folder = app.folder_buttons['Server-Perforce']
+        self.assertEqual(group.style.font_size, folder.style.font_size)
+        self.assertEqual(group.style.font_weight, 'normal')
+        self.assertEqual(folder.style.font_weight, 'bold')
+        self.assertEqual(group.parent.style.height, folder.parent.style.height)
+        self.assertEqual(group._impl._surface_roles[1], folder._impl._surface_roles[1])
+        self.assertEqual(len(group.parent.children), 2)
+        for heading in app.folder_tree_buttons.values():
+            self.assertEqual(heading.parent.children[0].control_icon, 'group')
+            self.assertEqual(heading.parent.children[0]._impl._surface_roles[1], 'muted')
+        self.assertFalse(hasattr(group, 'on_press'))
+        self.assertEqual([child.control_icon for child in folder.parent.children
+                          if hasattr(child, 'control_icon')], ['folder', 'more'])
+
     def test_ios_local_tab_opens_files_beside_local_and_other_subfolders(self):
         app = self.app
         documents = Path(self.directory.name) / 'Documents'
@@ -128,21 +165,41 @@ class FolderSourceTabTests(unittest.TestCase):
 
         def icons(name):
             return [child.control_icon for child in app.folder_buttons[name].parent.children
-                    if getattr(child, 'control_icon', '').startswith('storage_')]
+                    if getattr(child, 'control_icon', '').startswith('folder')]
 
-        self.assertEqual(icons(local['target']), ['storage_local'])
-        self.assertEqual(icons(crypt['target']), ['storage_local', 'storage_unlocked'])
-        self.assertEqual(icons('Notes'), ['storage_local'])
-        self.assertEqual(icons('All files'), ['storage_local'])
+        self.assertEqual(icons(local['target']), ['folder'])
+        self.assertEqual(icons(crypt['target']), ['folder_unlocked'])
+        self.assertEqual(icons('Notes'), ['folder'])
+        self.assertEqual(icons('All files'), ['folder'])
         app.change_folder_source('rclone')
-        self.assertEqual(icons('Online'), ['storage_remote'])
-        self.assertEqual(icons(local['target']), ['storage_remote'])
-        self.assertEqual(icons(crypt['target']), ['storage_remote', 'storage_unlocked'])
+        self.assertEqual(icons('Online'), ['folder'])
+        self.assertEqual(icons(local['target']), ['folder'])
+        self.assertEqual(icons(crypt['target']), ['folder_unlocked'])
         store.target(crypt).rename(store.target(crypt).with_name('unmapped'))
         app.show_locations()
-        self.assertEqual(icons('Secret'), ['storage_remote', 'storage_unlocked'])
+        self.assertEqual(icons('Secret'), ['folder_unlocked'])
         app.change_folder_source('Local')
         self.assertNotIn('Secret', app.folder_buttons)
+
+    def test_sibling_encrypted_folders_have_independent_icon_state_and_accessible_names(self):
+        from unittest.mock import patch
+        app = self.app
+        names = ['Server-LLib-Books', 'Server-LLib-Comics']
+        choices = {}
+        for name in names:
+            copy = dict(name=name, source='Remote', kind='remote', value=(name, ''), remote=name)
+            choices[name] = dict(copy, copies=[copy])
+        app.cloud_crypt_remotes = set(names)
+        app.folder_source = 'rclone'
+        with patch.object(app, 'loaded_remote_names', return_value=[names[0]]):
+            app.update_folder_list(choices)
+        for name, expected in zip(names, ['folder_unlocked', 'folder_locked']):
+            button = app.folder_buttons[name]
+            self.assertEqual(button.parent.children[0].control_icon, expected)
+            self.assertEqual(button.parent.children[0]._impl._surface_roles[1], expected)
+            self.assertIn(expected.removeprefix('folder_'), button.accessible_name)
+        self.assertFalse(hasattr(app.folder_tree_buttons[('Server', 'LLib')], 'on_press'))
+        self.assertEqual([b.text for b in app.folder_source_buttons.values()], ['Local', 'Cloud', 'Home Server'])
 
     def test_tab_taps_open_matching_copy_and_menus_keep_same_mapping_actions(self):
         from unittest.mock import AsyncMock, patch

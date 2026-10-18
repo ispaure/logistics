@@ -1,6 +1,8 @@
 """Folder Hub presentation using native controls and dynamic app colour roles."""
 from .appearance import surface as app_surface
 
+SOURCE_LABELS = {'Local': 'Local', 'rclone': 'Cloud', 'Network shares': 'Home Server'}
+
 
 def surface(widget, *, outlined=True, **kwargs):
     """Keep a row's children borderless in monochrome, just as in Slate."""
@@ -20,10 +22,10 @@ def source_tab(button, selected):
         button._impl.native.setSelected(selected)
 
 
-def compact_icon(button, *, width=24, height=56, size=17, background='transparent'):
+def compact_icon(button, *, width=24, height=48, size=17, background='transparent', foreground='muted'):
     """Small symbols within a full-height, tappable folder row."""
     button.style.width, button.style.height = width, height
-    surface(button, radius=0, background=background, foreground='muted', outlined=False)
+    surface(button, radius=0, background=background, foreground=foreground, outlined=False)
     backend = type(button._impl).__module__
     if backend.startswith('toga_iOS.'):
         from rubicon.objc import ObjCClass
@@ -49,16 +51,7 @@ def toolbar_button(button, symbol):
 
 def folder_row(row):
     backend = type(row._impl).__module__
-    if backend.startswith('toga_android.'):
-        # Toga flattens boxes and controls into native siblings. Keep opaque
-        # controls inside the outline instead of painting across its edges.
-        for child in row.children:
-            child.style.margin_top = child.style.margin_bottom = 1
-        if row.children:
-            row.children[0].style.margin_left = max(1, row.children[0].style.margin_left)
-            row.children[-1].style.margin_right = max(1, row.children[-1].style.margin_right)
-        row.style.margin_bottom = 6
-    app_surface(row, radius=10, outlined=False, eink_outlined=True)
+    app_surface(row, radius=0, background='transparent', outlined=False, eink_outlined=False)
     if backend.startswith('toga_iOS.'):
         row._impl.native.layer.masksToBounds = True
     elif backend.startswith('toga_android.'):
@@ -68,6 +61,11 @@ def folder_row(row):
 
 def folder_name(button):
     """The title is part of the folder row, rather than a boxed action."""
+    button.style.font_weight = 'bold'
+    if type(button._impl).__module__.startswith('toga_android.'):
+        # Keep the platform's default button family from changing row metrics.
+        button.style.font_family = 'sans-serif'
+        button._impl.native.setPadding(0, 0, 0, 0)
     return surface(button, radius=0, background='transparent', foreground='text', outlined=False)
 
 

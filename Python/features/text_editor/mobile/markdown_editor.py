@@ -357,7 +357,7 @@ def editor_html(text, bridge, font_size=16, *, image_source=None):
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; '
             f'script-src \'nonce-{nonce}\'; style-src \'unsafe-inline\'; img-src data:; base-uri \'none\'; form-action \'none\'">'
-            f'<style>:root{{color-scheme:light dark}}body{{font:{int(font_size)}px/1.6 system-ui;'
+            f'<style>:root{{color-scheme:light dark}}body{{font:{int(font_size)}px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;'
             'margin:12px;background:Canvas;color:CanvasText;overflow-wrap:anywhere}'
             'nav{position:sticky;top:0;background:Canvas;z-index:1;display:flex;flex-wrap:wrap;gap:4px}'
             'button,select,input,summary{min-height:44px;box-sizing:border-box}select,input{font:inherit;max-width:100%}'

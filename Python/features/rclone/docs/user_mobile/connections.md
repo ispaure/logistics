@@ -4,19 +4,19 @@
 
 Open a folder’s **•••** actions in **Folder Hub**, then choose **Browse Remote** to open its
 online file browser. Credential setup is under
-**Settings → rclone / Remote connections…** (also reached through **Manage connections…**
-in the remote browser). The native app embeds rclone 1.74.1; no desktop
+**Settings → rclone / Remote connections…**. The native app embeds rclone 1.74.1; no desktop
 executable, shell, mount, or separate RC server is required. **Check rclone engine**
 performs an offline in-memory read and displays the engine version.
 
-Folder Hub's **rclone** tab includes remotes from retained password-protected ZIPs
+Folder Hub's **Cloud** tab includes remotes from retained password-protected ZIPs
 even before a local copy exists. Tap a locked remote to enter its ZIP password and
 continue browsing online. A wrong password leaves it locked.
 
-In Folder Hub's **rclone** tab, regular remote folders show a cloud icon;
-encrypted remote folders show both a cloud and a lock. Local encrypted copies
-show a disk and a lock in the **Local** tab. Locks open when their credentials
-are available in the current session, and close again when the session locks.
+In Folder Hub's **Cloud** and **Local** tabs, encrypted folders show a combined
+folder-and-lock icon before their name. Blue open padlocks mean unlocked;
+orange closed padlocks mean locked. Each folder reports its own state, including
+mixed states within one group. Ordinary folders use a plain folder icon.
+Group headings and nesting remain expanded and cannot be collapsed.
 
 The online browser loads filenames and sizes without fetching thumbnails, in
 both list and tile views. The current folder name stays in the header. Loading,
@@ -49,9 +49,10 @@ other backends are not currently supported. WebDAV URLs and custom S3 endpoints
 must use HTTPS. Certificate verification stays enabled. A single crypt layer over
 one supported backing remote is available for [LocalCrypt reading](localcrypt.md#localcrypt-encrypted-offline-reading).
 
-Choose a connection and tap **Open remote**. **Connections…** opens credential
-setup. Tap folders to open them; **Back** returns through successful visits.
-**Folder Hub** returns to the folder list. Tap supported files for read-only,
+Choose a connection in Settings and tap **Browse remote files** to open the
+browser. Tap folders to open them.
+The header’s parent arrow moves up a folder; at the remote root it returns to
+Folder Hub. The bottom **Folder Hub** tab also returns to the folder list. Tap supported files for read-only,
 in-memory previews. Unsupported files show a dialog asking you to make a local
 copy yourself. The remote browser has no file or folder download/copy actions;
 use the managed Pull workflows to create or refresh offline folders.
@@ -74,14 +75,16 @@ encrypted-folder discovery in the background. Opening a mapped remote shows
 **Checking connection…** while its identity and folder path are checked; menus
 and navigation remain usable during that check.
 
-A file or folder's **•••** opens actions for that item: **Open preview** for a file
-or **Open folder** for a folder. Comic archives offer an inner ZIP password field;
-opening a password-protected comic also brings up this form automatically.
+Tap a file to open its preview or a folder to browse it directly. File browser
+rows have no **•••** button. Opening a password-protected comic brings up its
+inner ZIP password form automatically.
 The browser status shows when a remote file is opening and reports opening failures.
 
-**Search** filters names in the current folder. Changing folders clears search. Tapping outside a search field dismisses the keyboard.
+The magnifying glass on the right reveals **Search**, which filters names in the
+current folder. **×** clears and hides it. Changing folders clears search.
+Tapping outside a search field dismisses the keyboard.
 Remote listings read only the selected folder's immediate children. Remote
-screens display up to 500 items per page in both List and Tiles, with **Previous** and **Next**
+screens display up to 40 items per page in both List and Tiles, with **Previous** and **Next**
 above the items; paging, sorting and filtering do not contact the remote again.
 The status distinguishes **Listing…** from **Displaying…** and keeps an elapsed
 timer while waiting. Folder Hub and its action menus remain available during listing.
@@ -89,9 +92,10 @@ Failed navigation preserves the prior listing and history. Browsing has a
 two-minute deadline; managed Sync has no fixed overall deadline. Cancellation
 may wait for an upstream network call to return.
 
-**Actions → Downloaded copies…** and **Encrypted offline copies…** retain access
-to copies created by older versions. Open or export existing private copies;
-new standalone copies cannot be downloaded from the browser.
+The remote browser uses a compact location header with a plain directory-name
+label, storage and lock icons, and the search button. It omits item
+counts and the Sort control. Progress and **Cancel** appear only
+while a request is running.
 
 **Save credentials on this device** is enabled by default. Turn it off before
 importing to keep decoded credentials and the ZIP password only in memory for
@@ -107,7 +111,7 @@ Saved settings and refreshed OAuth tokens use an AES-256-GCM encrypted private
 vault. Android Keystore protects its key, and the files are outside Android backup;
 iOS Keychain stores a device-only key available while the device is unlocked, and
 the vault folder is excluded from backup. Credentials restore when Remote files
-opens or when you enter Folder Hub's **rclone** or **Network shares** source,
+opens or when you enter Folder Hub's **Cloud** or **Home Server** source,
 without contacting a remote. The folder list updates when restoration finishes;
 opening credential settings first is unnecessary. The ZIP password is never saved, and neither
 mode rewrites the source ZIP. A locked device, missing key or damaged vault stops
@@ -170,7 +174,7 @@ retains its existing explicit all-credentials removal behavior.
 Remote and PC-server search filters every entry in the active folder listing.
 It does not descend into subfolders. Local and LocalCrypt search includes
 subfolders recursively. Neither search has an entry or result count limit.
-The browser shows up to 500 results per page; use the page arrows for more.
+The browser shows up to 40 results per page; use the page arrows for more.
 
 ## Resuming a locked session
 

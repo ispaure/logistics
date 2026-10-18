@@ -4,7 +4,7 @@
 
 The app opens on **Home**, a landing page with quick access to files, editors,
 books/comics and chat. The house icon is the first native destination, before
-**Folder Hub**, **Documents**, **Chat** and **Settings**. **Folder Hub** separates rclone, ordinary Local files and Network shares into source tabs, with available copies grouped under their owning source.
+**Folder Hub**, **Documents**, **Chat** and **Settings**. **Folder Hub** separates ordinary Local files, Cloud and Home Server into source tabs, with available copies grouped under their owning source.
 If folder discovery fails while credentials change, Folder Hub shows an error
 with **Refresh**, **Browse local files** and **Connections…**. Retry there after
 the connection is ready; restarting the app is unnecessary.

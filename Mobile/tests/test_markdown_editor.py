@@ -187,6 +187,51 @@ class MarkdownEditorTests(unittest.TestCase):
         self.assertNotIn(owner.crypt_preview if hasattr(owner, 'crypt_preview') else None, owner.crypt_content.children)
         self.app.private_sessions.close(owner.session.id, discard=True)
 
+    def test_memory_trim_preserves_active_markdown_surface_across_sleep(self):
+        from commonUtils.runtime.local_files import LocalFiles
+        from features.text_editor.resources import LocalTextCopies
+        root = Path(self.temporary.name) / 'sleep'
+        root.mkdir()
+        (root / 'Read.md').write_text('# Keep reading\n')
+        copies = LocalTextCopies(LocalFiles(root))
+        self.assertTrue(self.app.loop.run_until_complete(self.app.open_crypt(copies=copies, key='Read.md')))
+        owner = self.app.private_sessions.active
+        for mode in ('preview', 'formatted', 'source'):
+            with self.subTest(mode=mode):
+                if mode == 'formatted':
+                    owner.toggle_private_preview()
+                elif mode == 'source':
+                    owner.crypt_edit_mode.value = 'Source'
+                surface = owner.crypt_content.children[0]
+                self.app.screen_privacy.conceal()
+                self.app.release_disposable_resources()
+                self.app.release_disposable_resources()
+                self.app.screen_privacy.reveal()
+                self.assertEqual(owner.crypt_content.children, [surface])
+                self.assertEqual(owner.crypt_markdown_mode, 'preview' if mode == 'preview' else 'edit')
+                self.assertEqual(owner.crypt_text.value, '# Keep reading\n')
+                if mode == 'preview':
+                    self.assertEqual(owner.crypt_preview_button.control_icon, 'edit')
+                    self.assertNotIn(owner.crypt_edit_mode, owner.crypt_markdown_footer.children)
+                elif mode == 'formatted':
+                    self.assertFalse(owner.crypt_formatted.closed)
+        # Normal navigation must still retire hidden WebViews.
+        owner.crypt_edit_mode.value = 'Formatted'
+        formatted = owner.crypt_formatted
+        self.app.show_settings()
+        self.assertTrue(formatted.closed)
+        self.assertIsNone(owner.crypt_formatted)
+        owner.resume_crypt()
+        self.assertEqual(owner.crypt_content.children, [owner.crypt_formatted.view])
+
+    def test_markdown_web_surfaces_use_platform_default_font_stack(self):
+        from logisticsmobile.preview import markdown_preview
+        preview = markdown_preview('Paragraph and `code`')
+        self.assertIn('html body{font-family:-apple-system,BlinkMacSystemFont,sans-serif}', preview)
+        self.assertIn('code{font-family:monospace}', preview)
+        self.assertIn('16px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;',
+                      editor_html('Paragraph', 'logistics-editor://test/'))
+
     def test_code_and_unicode_line_separators_keep_correct_source_ranges(self):
         source = '# Heading\r\n\r\nText with \u2028 separator\r\n\r\n```html\r\n<tag>$5 [0]</tag>\r\n```\r\n'
         blocks = editor_blocks(source)

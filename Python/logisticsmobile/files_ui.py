@@ -134,14 +134,14 @@ class FilesUI:
         self.file_location = toga.TextInput(placeholder='Folder path (empty for root)', style=Pack(height=48))
         self.file_selection = toga.Selection(style=Pack(height=48))
         from .browser_ui import FileBrowser as NativeBrowser
-        self.file_browser = NativeBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open, item_actions=self.show_file_actions)
+        self.file_browser = NativeBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open)
         self.file_browser.navigation_controls.remove(self.file_browser.back_button)
         self.file_password = PasswordInput(placeholder='Inner archive password, when needed', style=Pack(height=48))
         self.file_name = toga.TextInput(placeholder='New name / folder name', style=Pack(height=48))
         self.file_destination = toga.Selection(items=list(self.file_roots), style=Pack(height=48))
         self.file_target = toga.TextInput(placeholder='Destination path including name', style=Pack(height=48))
         (collection_path(self.private_root)).mkdir(exist_ok=True)
-        self.file_status = NativeBrowser.status_label(style=Pack(height=18, font_size=12))
+        self.file_status = NativeBrowser.status_label(style=Pack(height=20, margin_top=14, margin_bottom=14, font_size=15))
         self.file_action_status = toga.Label('', style=Pack(font_size=12, margin_top=8))
         self.file_rows, self.file_provider = {}, None
         buttons = [toga.Button(label, on_press=handler, style=Pack(height=48)) for label, handler in (
@@ -178,7 +178,7 @@ class FilesUI:
              ('Pin current folder', self.pin_local_folder),
              ('Delete selected…', self.delete_file), ('Change location…', lambda: self.show_file_actions(operation='location')),
              ('Archive password…', lambda: self.show_file_actions(operation='password'))], self.show_file_actions)
-        self.file_browser.location_bar = NativeBrowser.location_header(self.file_status,
+        self.file_browser.attach_location_header(self.file_status,
             icon_button('back', 'Back to Folder Hub', on_press=self.parent_file_folder))
         self.files_view = toga.Box(children=[
             toga.Box(children=[toga.Button('Folder Hub', on_press=self.show_locations, style=Pack(height=48, flex=1)),
@@ -412,7 +412,7 @@ class FilesUI:
         if location is None:
             self.file_browser.history.clear()
         self.file_browser.set_entries(self.file_provider, self.file_path, rows, location=location)
-        self.file_browser.location_bar.update(self.file_path, encrypted=self.file_provider.private,
+        self.file_browser.location_bar.update(self.file_path, encrypted=self.file_provider.private, unlocked=True,
             name=Path(self.file_path).name if self.file_path else self.file_storage.value)
 
     def selected_file(self):

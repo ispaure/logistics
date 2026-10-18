@@ -194,14 +194,25 @@ action pages keep their existing transfer and deletion identity. Row icons and
 legends describe the active tab’s storage. Remote encryption uses the cached
 crypt-remote snapshot or an existing LocalCrypt copy, without bridge discovery.
 
-Folder Hub uses a source-owned action row: rclone shows Transfers, Network
-shares shows Add share, and Local has no toolbar or reserved toolbar spacing.
+Folder Hub displays Local, Cloud and Home Server, while retaining the internal
+source keys `Local`, `rclone` and `Network shares` for routing and copy selection.
+It uses a source-owned action row: Cloud shows Transfers when needed, Home
+Server shows Add share, and Local has no toolbar or reserved toolbar spacing.
 Switching sources moves the existing native controls; the credential selector
 appears only for rclone. Empty Network shares keeps one Add share control in
 the toolbar rather than duplicating it in the folder listing.
 
 Folder Hub styling lives in `folder_hub_style.py`: dynamic semantic surfaces,
-selected tab styling, compact native symbols and clipped rounded row backgrounds.
+selected tab styling and compact native symbols. Each top-level branch has one
+rounded surface with transparent rows, separators and permanent vertical guides.
+Each level advances 40 points. Group labels reserve the same 32-point icon slot
+and 4-point label gap as folder rows, so a child group cannot back-align with
+its parent's label. Child folder icons also start beyond their parent's label.
+Informational group labels have no handlers or disclosure controls. Encrypted
+folders use shared vector folder/lock geometry on both native platforms, with
+individual blue `folder_unlocked` and orange `folder_locked` roles. These roles
+have light/dark palettes and turn black in Android monochrome mode; distinct
+open/closed shackles and accessible names preserve the state without color.
 The shared native destination bar remains platform-owned. Idle loading controls
 are detached from `folder_loading_box`; folder opening temporarily attaches the
 status and progress controls, and removes them on completion.

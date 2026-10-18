@@ -6,7 +6,10 @@ __all__ = ['markdown_body', 'markdown_preview']
 
 
 def markdown_preview(text, font_size=16, *, local_links=False, image_source=None):
-    return _markdown_preview(text, font_size, local_links=local_links, stylesheet=css_variables(), image_source=image_source)
+    # Android's generic sans-serif follows the device font; system-ui can
+    # resolve to WebView's fixed UI face instead of the user's chosen font.
+    stylesheet = css_variables() + 'html body{font-family:-apple-system,BlinkMacSystemFont,sans-serif}'
+    return _markdown_preview(text, font_size, local_links=local_links, stylesheet=stylesheet, image_source=image_source)
 
 
 def folder_image_source(provider, document):

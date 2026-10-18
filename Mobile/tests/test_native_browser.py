@@ -15,7 +15,7 @@ class NativeBrowserTests(unittest.TestCase):
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            browser = FileBrowser(item_actions=lambda: None, bounded_pages=True)
+            browser = FileBrowser(bounded_pages=True)
             provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path)
             rows = [dict(path=f'{index}.txt', name=f'{index}.txt', directory=index % 2 == 0, size=index)
                     for index in range(41)]
@@ -25,7 +25,7 @@ class NativeBrowserTests(unittest.TestCase):
                     browser.set_entries(provider, '', rows[:40])
                     self.assertEqual(len(browser.buttons), 40)
                     self.assertNotIn(browser.paging, browser.widget.children)
-                    self.assertEqual(browser.page_label.text, '40 items')
+                    self.assertEqual(browser.page_label.text, '')
                     browser.set_entries(provider, '', rows)
                     self.assertTrue(browser.next.enabled)
                     self.assertLess(browser.widget.children.index(browser.paging),
@@ -35,6 +35,9 @@ class NativeBrowserTests(unittest.TestCase):
                     last = browser.entries[-1]
                     self.assertIn(last.identity, browser.buttons)
                     if mode == 'List':
+                        controls = browser.items.children[0].children[0]
+                        self.assertEqual([child for child in controls.children if isinstance(child, toga.Button)],
+                                         [browser.buttons[last.identity]])
                         self.assertEqual(browser.items.children[0].children[0].children[1],
                                          browser.buttons[last.identity])
                     browser.previous_page()

@@ -989,7 +989,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 if (getattr(getattr(owner, 'provider_epub_view', None), 'speech_panel', None) is playing
                     or getattr(getattr(owner, 'markdown_speech', None), 'panel', None) is playing)
                 and playing is not None), None)
-            private.suspend(except_owner=keep)
+            private.suspend(except_owner=keep, keep_active_markdown=True)
         readers = getattr(self, 'readers', None)
         if readers is not None:
             for owner in readers.controllers.values():

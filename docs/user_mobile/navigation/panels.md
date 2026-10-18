@@ -62,8 +62,8 @@ exact raw allowlisted name can be removed directly; encrypted generated files
 must authenticate before removal. Corrupted ciphertext blocks Push and is
 preserved. Custom exclusions never authorize local cleanup.
 
-Folder rows use one line with an icon/name and a navigation chevron. Files can
-show their size and **•••** actions. Opening a folder does not flash a selection
+Folder rows use one line with an icon/name and a navigation chevron. Tap a file to open it directly. File browser rows
+have no **•••** button. Opening a folder does not flash a selection
 checkmark. Sort and List/Tiles remain in the Sort controls.
 
 Push and Pull scan their comparison without changing destination files. Both ask

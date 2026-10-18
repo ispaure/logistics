@@ -56,12 +56,12 @@ Reloading saved credentials keeps active session packages. See the
 
 ### Mobile Folder Hub source tabs
 
-On Android and iOS, Folder Hub opens the **rclone** source with **Credential: All**.
+On Android and iOS, Folder Hub opens on **Local**. The **Cloud** source uses **Credential: All**.
 Choose a package to filter its folders and their downloaded Local/LocalCrypt copies.
-The **Local** and **Network shares** tabs display separate folder trees and hide the
-credential selector. Returning to rclone selects All again. Directly added SMB/Mac
-connections and their copies appear under Network shares; SMB remotes imported
-from a credential ZIP remain under rclone with that package. On iOS, Local browses
+The **Local** and **Home Server** tabs display separate folder trees and hide the
+credential selector. Returning to Cloud selects All again. Directly added SMB/Mac
+connections and their copies appear under Home Server; SMB remotes imported
+from a credential ZIP remain under Cloud with that package. On iOS, Local browses
 files directly in `Logisticks` and subfolders beside the managed `Local` folder.
 
 Cancelling a sync stops that transfer or its comparison. It does not cancel an independent local file operation. Changes already published remain in place.

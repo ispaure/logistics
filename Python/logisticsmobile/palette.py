@@ -8,6 +8,11 @@ LIGHT = dict(window='#f0f2f6', surface='#fafbfc', alternate='#f5f7fa',
 DARK = dict(window='#23262c', surface='#2d3035', alternate='#34373c',
             text='#eef1f7', muted='#a6b0c0', border='#52555a', primary='#2563eb', accent='#75a7ff', hover='#3d4045')
 
+# Blue/orange plus open/closed lock shapes keep folder states distinguishable
+# with red-green colour deficiencies. Both roles follow native appearance.
+LIGHT.update(folder_unlocked='#175eab', folder_locked='#a64b00')
+DARK.update(folder_unlocked='#86b9ff', folder_locked='#ffb86b')
+
 
 # Chat uses neutral layers like the conversation drawer, independent of Slate's
 # blue tint elsewhere. Keep a light counterpart and dynamic platform colours.
@@ -42,6 +47,7 @@ def themed_chapter(content, mode):
 EINK = dict(window='#ffffff', surface='#ffffff', alternate='#ffffff',
             text='#000000', muted='#000000', border='#000000',
             primary='#000000', accent='#000000', hover='#ffffff')
+EINK.update(folder_unlocked='#000000', folder_locked='#000000')
 _eink_enabled = False
 
 

@@ -66,7 +66,7 @@ class BrowserStatusLabel(toga.Label):
 
 class FolderLocationHeader(toga.Box):
     """Current storage identity and a parent/root navigation control."""
-    def __init__(self, status, parent_button):
+    def __init__(self, status, parent_button, *, actions=()):
         self.parent_button = parent_button
         self.folder_name = BrowserStatusLabel('Root', style=Pack(font_size=15))
         self.status = status
@@ -79,11 +79,11 @@ class FolderLocationHeader(toga.Box):
         self.caption = toga.Box(children=[self.folder_name, self.status],
                                 style=Pack(direction=COLUMN, flex=1, margin_left=6))
         self.storage_icons = toga.Box(style=Pack(direction=ROW, align_items=CENTER))
-        super().__init__(children=[parent_button, self.storage_icons, self.caption],
+        super().__init__(children=[parent_button, self.storage_icons, self.caption, *actions],
                          style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
         self.update('')
 
-    def update(self, path, *, remote=False, encrypted=False, name=None):
+    def update(self, path, *, remote=False, encrypted=False, unlocked=False, name=None):
         self.folder_name.value = name if name is not None else PurePosixPath(path).name if path else 'Root'
         apply_icon(self.parent_button, 'up' if path else 'back',
                    'Parent folder' if path else 'Back to Folder Hub')
@@ -92,10 +92,12 @@ class FolderLocationHeader(toga.Box):
         from .folder_hub_style import compact_icon
         kinds = [('storage_remote', 'Online folder')] if remote else [('storage_local', 'On-device folder')]
         if encrypted:
-            kinds.append(('storage_crypt', 'Encrypted folder'))
+            state = 'unlocked' if unlocked else 'locked'
+            kinds.append(('folder_' + state, 'Encrypted folder, ' + state))
         for name, label in kinds:
-            indicator = icon_button(name, label, enabled=False)
-            compact_icon(indicator, width=28, height=48, size=20)
+            indicator = icon_button(name, label)
+            compact_icon(indicator, width=28, height=48, size=23 if name.startswith('folder_') else 20,
+                         foreground=name if name.startswith('folder_') else 'accent')
             self.storage_icons.add(indicator)
 
 
@@ -107,13 +109,13 @@ class FileBrowser(NativeBrowser):
         # Local and remote folders share the same widget bound in both layouts.
         return 40
 
-    def __init__(self, *, open_file=None, item_actions=None, folder_visible=None, bounded_pages=True,
+    def __init__(self, *, open_file=None, folder_visible=None, bounded_pages=True,
                  **kwargs):
         self.bounded_pages = bounded_pages
         self.folder_visible = folder_visible
-        self.on_open_file, self.on_item_actions = open_file, item_actions
+        self.on_open_file = open_file
         super().__init__(**kwargs)
-        # Keep search visible. Sorting and layout are secondary controls.
+        # Keep the listing unobstructed until search is requested.
         for child in list(self.widget.children):
             self.widget.remove(child)
         self.search.placeholder = 'Search files and folders'
@@ -122,18 +124,27 @@ class FileBrowser(NativeBrowser):
         apply_icon(self.back_button, 'back', 'Go back')
         apply_icon(self.previous, 'back', 'Previous results')
         apply_icon(self.next, 'forward', 'Next results')
-        self.options_button = toga.Button('Sort', on_press=self.toggle_options, style=Pack(height=48))
-        self.options = toga.Box(children=[self.sort, self.list_button, self.tile_button],
-                                style=Pack(direction=ROW, margin_bottom=8))
-        self.paging = toga.Box(children=[self.previous, self.next], style=Pack(direction=ROW))
-        self.search_panel.remove(self.close_search_button)
-        self.widget.add(self.search_panel)
-        self.widget.add(toga.Box(children=[self.back_button, self.page_label, self.options_button],
+        apply_icon(self.search_button, 'find', 'Search this folder')
+        apply_icon(self.close_search_button, 'close', 'Close search')
+        self.paging = toga.Box(children=[self.previous, self.page_label, self.next], style=Pack(direction=ROW))
+        self.widget.add(toga.Box(children=[self.back_button, toga.Box(style=Pack(flex=1)),
+                                          self.search_button],
                                  style=Pack(direction=ROW, margin_top=4, margin_bottom=8)))
         self.navigation_controls = self.widget.children[-1]
         self.page_label.style.flex = 1
         self.page_label.style.font_size = 12
         self.widget.add(self.items)
+
+    def attach_location_header(self, status, parent_button):
+        for action in (self.search_button,):
+            if action.parent is not None:
+                action.parent.remove(action)
+        self.location_bar = self.location_header(status, parent_button,
+            actions=(self.search_button,))
+        # The explicit parent control replaces the generic browser history row.
+        if self.navigation_controls in self.widget.children:
+            self.widget.remove(self.navigation_controls)
+        return self.location_bar
 
     def set_entries(self, provider, directory, rows, *, location=None):
         rows = tuple(rows)
@@ -155,16 +166,14 @@ class FileBrowser(NativeBrowser):
             entry.payload.get('path', entry.label), directory=entry.container)]
 
     def open_search(self, widget=None, **kwargs):
+        if self.search_panel not in self.widget.children:
+            self.widget.insert(0, self.search_panel)
         self.search.focus()
 
     def close_search(self, widget=None, **kwargs):
         self.search.value = ''
-
-    def toggle_options(self, widget=None, **kwargs):
-        if self.options in self.widget.children:
-            self.widget.remove(self.options)
-        else:
-            self.widget.insert(2, self.options)
+        if self.search_panel in self.widget.children:
+            self.widget.remove(self.search_panel)
 
     def render(self):
         if not self.bounded_pages or self.closed:
@@ -195,7 +204,6 @@ class FileBrowser(NativeBrowser):
             list_button(button)
             middle_filename(button)
         self.entry_rows = {}
-        entries_by_button = {self.buttons[entry.identity]: entry for entry in entries}
         for row in self.items.children:
             if not isinstance(row, toga.Box):
                 continue
@@ -206,16 +214,6 @@ class FileBrowser(NativeBrowser):
                         row.remove(child)
                     elif isinstance(child, toga.Button):
                         child.style.height = 52
-                if self.on_item_actions and row.children:
-                    entry = next((entries_by_button[child] for child in row.children if child in entries_by_button), None)
-                    if entry is not None:
-                        async def commands(widget=None, selected=entry, **kw):
-                            if not self.closed and not self.navigation_busy:
-                                await self.select(selected)
-                                result = self.on_item_actions()
-                                if inspect.isawaitable(result):
-                                    await result
-                        row.add(icon_button('more', 'Actions for ' + entry.label, on_press=commands))
 
         if self.mode == 'List':
             for row, entry in zip(self.items.children, entries):
@@ -249,12 +247,13 @@ class FileBrowser(NativeBrowser):
 
         if self.previous.enabled or self.next.enabled:
             if self.paging not in self.widget.children:
-                self.widget.insert(self.widget.children.index(self.navigation_controls) + 1, self.paging)
+                # During bounded rendering the replacement list is offscreen;
+                # the current list remains the last visible child until commit.
+                self.widget.insert(len(self.widget.children) - 1, self.paging)
         elif self.paging in self.widget.children:
             self.widget.remove(self.paging)
-        if not self.previous.enabled and not self.next.enabled:
-            count = len(self.entries)
-            self.page_label.text = f'{count} item' + ('' if count == 1 else 's')
+        pages = max(1, (len(self.entries) + self.page_size - 1) // self.page_size)
+        self.page_label.text = f'{self.page + 1} / {pages}' if pages > 1 else ''
 
     async def _select_pressed(self, entry, widget, **kwargs):
         if self.closed or self.navigation_busy or not self.tree or entry.identity not in self.tree.entries or entry not in self.entries:

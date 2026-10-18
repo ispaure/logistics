@@ -15,6 +15,18 @@ mode: enumerating a folder must not enqueue archive-cover reads on the serial
 native connection. `CloudUI.remote_activity` runs a UI-loop timer and marshals
 worker step notifications back to that loop. Its timer and indeterminate bar are
 retired on success, error and cancellation; late worker callbacks are ignored.
+The mobile browser starts with its compact location header and the listing.
+The header uses a plain label for the current directory's final path component
+(the remote name at its root), alongside storage/lock icons and a search
+button. Search is hidden until requested; closing it clears the filter. Item
+counts and the top Sort control are omitted; large-folder paging shows only the current page and total
+pages. It has no general actions dropdown or extra Folder Hub row.
+`set_cloud_busy` attaches Cancel to the location header and a slim progress bar
+below it only during requests, removing both on completion. It uses the header’s
+current parent because adaptive presentation may wrap the browser contents.
+Successful remote listings mark the location header unlocked. Encrypted locations
+reuse Folder Hub's combined folder/lock glyph and color beside the cloud icon;
+local encrypted listings use the same unlocked glyph beside the device icon.
 Remote provider opening holds the application's cloud-busy state, and Cancel
 signals both pending private controllers and the native request. Folder Hub
 shows a status and spinner in its existing list before awaiting a folder,
@@ -71,9 +83,9 @@ reader limits produce a manual-copy dialog; there is no automatic download/open
 fallback. Desktop and mobile filter the listed folder without invoking recursive
 resource search. Ordinary and crypt remote previews stay in memory.
 
-Mobile row menus retain the selected item and credential generation, and open an
-item-specific page rather than remote configuration. Inner ZIP password errors
-route to that item's password form; retry clears the field before opening.
+Mobile browser rows open files and folders directly, without per-row action
+buttons. Inner ZIP password errors route to an item-specific password form that
+retains the item and credential generation; retry clears the field before opening.
 Credential retirement clears the item page and password. The browser reports
 opening progress, setup exceptions and unsuccessful session presentation instead
 of leaving only a selection message. Folder Hub retains name-based groups but

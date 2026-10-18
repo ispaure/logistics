@@ -34,7 +34,7 @@ class FolderHubContrastTests(unittest.TestCase):
         impl.native = Mock()
         impl.native.getResources.return_value.getConfiguration.return_value.uiMode = 0
         impl.scale_in = lambda value: value
-        widget = NS(_impl=impl, style=NS(margin_left=0, margin_right=0), children=[])
+        widget = NS(_impl=impl, style=NS(margin_left=0, margin_right=0, margin_top=0, margin_bottom=0), children=[])
         if button:
             widget.on_press = None
         impl.interface = widget
@@ -57,10 +57,10 @@ class FolderHubContrastTests(unittest.TestCase):
         folder_hub_style.source_tab(tab, False)
         self.drawable.return_value.setColor.assert_called_with(palette.argb('#ffffff'))
 
-    def test_only_row_container_has_outline_and_title_restores_native_style(self):
+    def test_shared_surface_rows_and_titles_remain_borderless_in_monochrome(self):
         palette.set_eink_enabled(True)
         folder_hub_style.folder_row(self.widget(button=False))
-        self.drawable.return_value.setStroke.assert_called_once_with(1, palette.argb('#000000'))
+        self.drawable.return_value.setStroke.assert_not_called()
         self.drawable.reset_mock()
         folder_hub_style.surface(self.widget(), outlined=False)
         self.drawable.return_value.setStroke.assert_not_called()
@@ -79,14 +79,14 @@ class FolderHubContrastTests(unittest.TestCase):
         self.drawable.return_value.setStroke.assert_not_called()
         title._impl.native.setElevation.assert_called_with(0)
 
-    def test_row_controls_do_not_cover_the_monochrome_outline(self):
+    def test_rows_keep_compact_spacing_inside_shared_group(self):
         palette.set_eink_enabled(True)
         row = self.widget(button=False)
         row.children = [self.widget(), self.widget()]
         folder_hub_style.folder_row(row)
-        self.assertEqual(row.style.margin_bottom, 6)
-        self.assertEqual(row.children[0].style.margin_left, 1)
-        self.assertEqual(row.children[-1].style.margin_right, 1)
-        self.assertTrue(all(child.style.margin_top == child.style.margin_bottom == 1
+        self.assertEqual(row.style.margin_bottom, 0)
+        self.assertEqual(row.children[0].style.margin_left, 0)
+        self.assertEqual(row.children[-1].style.margin_right, 0)
+        self.assertTrue(all(child.style.margin_top == child.style.margin_bottom == 0
                             for child in row.children))
-        self.drawable.return_value.setStroke.assert_called_once()
+        self.drawable.return_value.setStroke.assert_not_called()

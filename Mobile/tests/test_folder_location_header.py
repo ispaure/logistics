@@ -16,14 +16,20 @@ class FolderLocationTests(unittest.TestCase):
     def test_header_replaces_source_identity_when_location_changes(self):
         button = icon_button('up', 'Parent folder')
         header = FolderLocationHeader(toga.Label('Folder path'), button)
-        for path, online, encrypted, expected in (
-                ('', False, False, ['storage_local']),
-                ('Books', True, True, ['storage_remote', 'storage_crypt']),
-                ('Books', False, True, ['storage_local', 'storage_crypt']),
-                ('', True, False, ['storage_remote']),
-                ('', False, False, ['storage_local'])):
-            header.update(path, remote=online, encrypted=encrypted)
+        for path, online, encrypted, unlocked, expected in (
+                ('', False, False, False, ['storage_local']),
+                ('Books', True, True, False, ['storage_remote', 'folder_locked']),
+                ('Books', True, True, True, ['storage_remote', 'folder_unlocked']),
+                ('Books', False, True, True, ['storage_local', 'folder_unlocked']),
+                ('Books', False, True, False, ['storage_local', 'folder_locked']),
+                ('', True, False, True, ['storage_remote']),
+                ('', False, False, False, ['storage_local'])):
+            header.update(path, remote=online, encrypted=encrypted, unlocked=unlocked)
             self.assertEqual([child.control_icon for child in header.storage_icons.children], expected)
+            if encrypted:
+                indicator = header.storage_icons.children[-1]
+                self.assertEqual(indicator._impl._surface_roles[1], expected[-1])
+                self.assertEqual(indicator.accessible_name, 'Encrypted folder, ' + ('unlocked' if unlocked else 'locked'))
             self.assertEqual(button.control_icon, 'up' if path else 'back')
             self.assertEqual(button.accessible_name, 'Parent folder' if path else 'Back to Folder Hub')
 
@@ -35,6 +41,26 @@ class FolderLocationTests(unittest.TestCase):
             self.run_async(self.app.parent_file_folder())
             self.run_async(self.app.parent_cloud())
             self.assertEqual(hub.call_count, 2)
+
+    def test_plain_location_label_and_search_toggle_live_in_header(self):
+        from logisticsmobile.browser_ui import FileBrowser
+        browser = FileBrowser()
+        status = browser.status_label('Current folder')
+        header = browser.attach_location_header(status, icon_button('up', 'Parent folder'))
+        self.assertIsInstance(status, toga.Label)
+        self.assertEqual(status.value, 'Current folder')
+        self.assertEqual(header.children[-1], browser.search_button)
+        self.assertEqual(header.children, [header.parent_button, header.storage_icons, header.caption, browser.search_button])
+        self.assertEqual(header.caption.children, [header.folder_name, status])
+        self.assertEqual(browser.search_button.control_icon, 'find')
+        self.assertNotIn(browser.navigation_controls, browser.widget.children)
+        self.assertNotIn(browser.search_panel, browser.widget.children)
+        browser.search_button.on_press()
+        self.assertIn(browser.search_panel, browser.widget.children)
+        browser.search.value = 'test'
+        browser.close_search_button.on_press()
+        self.assertEqual(browser.search.value, '')
+        self.assertNotIn(browser.search_panel, browser.widget.children)
 
     def test_parent_remote_navigation_stays_in_current_storage(self):
         self.app.show_cloud(present=False)

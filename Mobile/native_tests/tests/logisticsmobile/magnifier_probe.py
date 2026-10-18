@@ -82,7 +82,10 @@ class MagnifierProbe(LogisticsMobile):
                     parent = impl.native.superview
                     if callable(parent):parent = parent()
                     for button in (less,more):
-                        point = button.convertPoint(CGPoint(22,22),toView=parent)
+                        assert float(button.bounds.size.width) == 33
+                        assert float(button.bounds.size.height) == 33
+                        assert float(button.frame.origin.y) >= float(impl.lens.frame.origin.y + impl.lens.frame.size.height - 33)
+                        point = button.convertPoint(CGPoint(16.5,16.5),toView=parent)
                         hit = parent.hitTest(point,withEvent=None)
                         assert hit == button or hit.isDescendantOfView(button), 'Lens button is not touchable'
                 else:
@@ -101,7 +104,8 @@ class MagnifierProbe(LogisticsMobile):
                     field = native.getClass().getDeclaredField('lensControls');field.setAccessible(True)
                     popup = field.get(native)
                     assert popup is not None and popup.isShowing() and popup.isSplitTouchEnabled()
-                    less, more = popup.getContentView().getChildAt(1),popup.getContentView().getChildAt(2)
+                    assert popup.getContentView().getChildCount() == 2
+                    less, more = popup.getContentView().getChildAt(0),popup.getContentView().getChildAt(1)
                     self._probe_less = less
                     def click(button):assert button.performClick()
                     def enabled(button):return bool(button.isEnabled())
@@ -117,7 +121,7 @@ class MagnifierProbe(LogisticsMobile):
                 click(more)
                 assert comic.magnifier_zoom == pdf.magnifier_zoom == 170
                 if apple:
-                    assert impl.lens_label.text == '170%'
+                    assert not hasattr(impl, 'lens_label')
                     impl.hide_magnifier();impl.hold = original_hold
                     assert impl.lens is None
                 else:

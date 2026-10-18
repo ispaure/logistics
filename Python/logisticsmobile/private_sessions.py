@@ -161,9 +161,15 @@ class PrivateSessions:
     def update_session(self, owner):
         owner.session.dirty = owner.private_dirty()
 
-    def suspend(self, *, except_owner=None):
+    def suspend(self, *, except_owner=None, keep_active_markdown=False):
         for owner in self.controllers.values():
             if owner is except_owner:
+                continue
+            # Memory trimming also runs when Android backgrounds the activity.
+            # The retained reader must still show the same surface on wake;
+            # clearing its preview would expose the source input underneath.
+            if (keep_active_markdown and owner is self.active
+                    and getattr(owner.crypt_reader, 'kind', None) in {'.md', '.markdown'}):
                 continue
             for name in ('_provider_layout_task', '_provider_width_task'):
                 task = getattr(owner, name, None)

@@ -9,6 +9,10 @@ is hidden while reading. The top **page** icon returns to preview. Save is shown
 only after text changes, and disappears after saving or reverting. Reading uses
 one compact top toolbar in portrait and landscape on iOS and Android, with no
 separate edit/save footer or duplicate file-drawer row.
+Background memory cleanup preserves the active Markdown reading or editing
+surface when returning from sleep. Reading and formatted editing use the
+platform's default font, including the device-selected sans-serif font on Android;
+code retains a monospace font.
 Formatting and source share the same
 buffer, recovery and Save actions. There is no automatic preview split on phones
 or tablets. See [Reading and editing](../../../../../docs/user_mobile/documents/reading-and-editing.md)

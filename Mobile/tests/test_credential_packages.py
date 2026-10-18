@@ -67,7 +67,7 @@ class CredentialPackageTests(unittest.TestCase):
                     app.folder_source = 'rclone'
                     app.build_folder_picker()
                     icons = [getattr(c, 'control_icon', '') for c in app.folder_buttons['Secret'].parent.children]
-                    self.assertIn('storage_crypt', icons)
+                    self.assertIn('folder_locked', icons)
                     entry = app.folder_picker_choices['RemoteOnly']
                     app.show_picker_folder(entry, present=False)
                     self.assertFalse(app.loop.run_until_complete(app.open_picker_folder(entry)))

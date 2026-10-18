@@ -123,7 +123,7 @@ class CloudUI(LocalCryptUI):
             self.cloud_up = self.rclone_ui.icon_button('up', 'Parent folder', on_press=self.parent_cloud)
             self.cloud_entries = toga.Selection(style=Pack(height=44))
             NativeBrowser = self.rclone_ui.NativeBrowser
-            self.remote_browser = NativeBrowser(bounded_pages=True, folder_visible=self.folder_path_visible, selected=self.browser_cloud_selected, open_folder=self.browser_cloud_folder, navigate=self.browser_cloud_location, open_file=self.open_remote_document, item_actions=self.show_remote_item_actions)
+            self.remote_browser = NativeBrowser(bounded_pages=True, folder_visible=self.folder_path_visible, selected=self.browser_cloud_selected, open_folder=self.browser_cloud_folder, navigate=self.browser_cloud_location, open_file=self.open_remote_document)
             self.remote_browser.navigation_controls.remove(self.remote_browser.back_button)
             self.remote_browser.search.placeholder = 'Search this folder'
             self.cloud_open = toga.Button('Open folder', on_press=self.open_cloud_folder, style=Pack(height=44))
@@ -132,7 +132,7 @@ class CloudUI(LocalCryptUI):
             self.cloud_lock = toga.Button('Lock credential session', on_press=self.lock_cloud, style=Pack(height=44))
             self.cloud_retained_box = toga.Box(style=Pack(direction=COLUMN))
             self.cloud_status = NativeBrowser.status_label(value=error or 'Choose saved or session-only credentials, then import a ZIP. Its password is never saved.',
-                                                       style=Pack(height=18, font_size=12))
+                                                       style=Pack(height=20, margin_top=14, margin_bottom=14))
             self.download_selector = toga.Selection(style=Pack(height=44))
             self.download_open = toga.Button('Open private copy', on_press=self.open_download, style=Pack(flex=1, height=44))
             self.download_export = toga.Button('Export private copy…', on_press=self.export_download, style=Pack(flex=1, height=44))
@@ -164,35 +164,23 @@ class CloudUI(LocalCryptUI):
                 advanced.remove(control)
             self.cloud_up.parent.remove(self.cloud_up)
             from commonUtils.ui.native.presentation import scroll_content
-            FeatureCommands = self.rclone_ui.FeatureCommands
-            self.cloud_actions_button = toga.Button('•••', style=Pack(width=44, height=44))
-            self.cloud_actions = FeatureCommands(self.cloud_actions_button, self, [
-                ('Browse path…', self.show_cloud_actions),
-                ('Open selected file', self.open_remote_document),
-                ('Pin current folder', self.pin_remote_folder),
-                ('Downloaded copies…', self.show_cloud_actions), ('Encrypted offline copies…', self.show_cloud_actions),
-                ('Manage connections…', self.show_cloud_connections)], self.show_cloud_actions)
             self.cloud_open.style.flex = 1
             advanced.add(self.cloud_remote)
             advanced.add(self.cloud_browse)
             advanced.insert(advanced.children.index(self.cloud_location) + 1,
                 toga.Button('Browse folder', on_press=self.browse_cloud_path, style=Pack(height=44)))
-            self.cloud_locations = toga.Button('Folder Hub', on_press=self.show_locations, style=Pack(height=44, flex=1))
             self.cloud_remote.style.flex = 1
             self.cloud_browse.text = 'Open remote'
             self.cloud_cancel.text = 'Cancel'
-            self.cloud_status.style.height = 72
-            self.cloud_status.style.font_size = 12
+            self.cloud_status.style.font_size = 15
             self.cloud_status.style.flex = 1
-            self.cloud_transfer_progress = toga.ProgressBar(max=100, value=0, style=Pack(height=12))
-            self.remote_browser.location_bar = NativeBrowser.location_header(self.cloud_status, self.cloud_up)
+            self.cloud_cancel.style.width = 68
+            self.cloud_transfer_progress = toga.ProgressBar(max=100, value=0, style=Pack(height=4))
+            self.remote_browser.attach_location_header(self.cloud_status, self.cloud_up)
             self.remote_browser.location_bar.update('', remote=True)
             self.cloud_view = toga.Box(children=[
-                toga.Box(children=[self.cloud_locations, self.cloud_actions_button], style=Pack(direction=ROW)),
                 self.remote_browser.location_bar,
-                self.cloud_transfer_progress,
-                toga.ScrollContainer(horizontal=False, content=scroll_content(self.remote_browser.widget), style=Pack(flex=1)),
-                self.cloud_cancel],
+                toga.ScrollContainer(horizontal=False, content=scroll_content(self.remote_browser.widget), style=Pack(flex=1))],
                 style=Pack(direction=COLUMN, margin=12, flex=1))
             self.refresh_downloads()
             self.set_cloud_busy(False)
@@ -402,6 +390,18 @@ class CloudUI(LocalCryptUI):
             item.enabled = not value and self.cloud_client is not None
         self.cloud_import.enabled = not value and self.cloud_client is not None and self.cloud_pending_zip is not None
         self.cloud_cancel.enabled = value
+        # Request controls take no list space while the browser is idle.
+        header = self.remote_browser.location_bar
+        if value:
+            if self.cloud_cancel not in header.children:
+                header.add(self.cloud_cancel)
+            if self.cloud_transfer_progress.parent is None:
+                header.parent.insert(header.parent.children.index(header) + 1, self.cloud_transfer_progress)
+        else:
+            if self.cloud_cancel in header.children:
+                header.remove(self.cloud_cancel)
+            if self.cloud_transfer_progress.parent is not None:
+                self.cloud_transfer_progress.parent.remove(self.cloud_transfer_progress)
         if not self.cloud_path:
             self.cloud_up.enabled = True
         self.refresh_folder_actions()
@@ -500,6 +500,8 @@ class CloudUI(LocalCryptUI):
         available = {copy['remote'] for entry in (self.folder_choices() if choices is None else choices).values()
                      for copy in entry.get('copies', ()) if copy.get('remote')}
         for item in associations.values():
+            if item['zip'] in ('Network shares', 'Session network shares'):
+                continue
             if not self.legacy_name_visible(Path(item['zip']).name, prefix='legacy'):
                 continue
             remotes = set(item['remotes']) & available
@@ -785,7 +787,7 @@ class CloudUI(LocalCryptUI):
                 self.remote_browser.thumbnail = None
                 self.remote_browser.set_entries(provider, folder, [dict(row, name=Path(row['path']).name, modified='') for row in rows], location=(remote, folder))
                 self.remote_browser.location_bar.update(folder, remote=True,
-                    encrypted=remote in self.cloud_crypt_remotes,
+                    encrypted=remote in self.cloud_crypt_remotes, unlocked=True,
                     name=Path(folder).name if folder else remote)
             self.cloud_status.value = f'{len(rows)} items'
             return True

@@ -29,13 +29,18 @@ does not run Obsidian plugins.
 The file browser keeps your current folder, selection, list/tile mode, search, sort and browse
 history when you visit Documents or Settings. Local and remote browsers give most
 of the screen to the listing. Tap a local file to open it, or a folder to browse
-it. Search stays visible; **Sort** reveals sorting and list/tile options. The
+it. The top bar shows the current directory name as plain text beside its storage
+and lock icons, with no item count. Tap the magnifying glass on the right to
+reveal search; close it with **×** to clear the filter and hide the field.
+The top bar has no Sort control. The
 rows show filenames rather than full paths, shortening long names in the middle.
 File sizes remain available in **Details** instead of beside every filename. The
 **↑ Parent folder** control beside the folder status goes up one level in local
 and remote browsing on iOS and Android. At the current storage root it becomes
 **Back to Folder Hub**. Beside the path, a drive identifies on-device storage and
-a cloud identifies online storage; a lock additionally marks encrypted folders.
+a cloud identifies online storage. Encrypted folders additionally show the same
+combined folder-and-lock icon as Folder Hub: an open blue padlock after successful
+unlocked browsing, or an orange closed padlock with chains when locked.
 These indicators describe the folder currently open, including when a remote
 also has an on-device copy.
 **•••** beside an item selects that item and opens its commands without opening
@@ -64,42 +69,54 @@ files, and cancellation leaves any already completed changes in place.
 
 ## Folder Hub and Local / LocalCrypt sync
 
-**Folder Hub** opens on **Local**, followed by **rclone** and **Network shares**
+**Folder Hub** opens on **Local**, followed by **Cloud** and **Home Server**
 tabs. Local includes ordinary folders and downloaded Local/LocalCrypt copies of
-rclone folders. Remote-only folders appear under rclone once credentials load.
-Tap a folder under **Local** to browse its device copy; tap it under **rclone**
+rclone folders. Remote-only folders appear under Cloud once credentials load.
+Tap a folder under **Local** to browse its device copy; tap it under **Cloud**
 to browse its online copy, including the mapped subfolder for a partial pull.
 The **•••** menu keeps the same available browse, Push/Pull and folder-management
-actions on both tabs. The rclone **Credential** selector defaults to **All**; choose a credential
+actions on both tabs. The Cloud **Credential** selector defaults to **All**; choose a credential
 ZIP to filter its folders. Returning from another source resets it to **All**.
 The remote names and credential filters come from loaded configurations and retained
 password-protected ZIP metadata. Locked entries ask for their ZIP password when opened;
 populating this tab does not ping online services. On iPad, all windows use the
 same loaded credential packages. Browsing an online folder still requires a connection.
 Mobile folder and file lists hide `.DS_Store` and `Thumbs.db` metadata files.
-Loaded ZIPs remain in the Credential dropdown even if they currently have no
+Home Server's saved and session network-share packages never appear in the Cloud
+Credential dropdown. Loaded ZIPs remain in the dropdown even if they currently have no
 visible folders; refreshing the hub also refreshes the package choices.
 Credential labels omit `.zip` (including uppercase `.ZIP`). Duplicate labels use
 a number, such as **Personal (2)**. Loaded-package changes refresh a visible hub
 automatically, including changes made in another iPad window.
 **Local** browses ordinary files: on iOS, **All files** opens the `Logisticks` shared
 folder and other subfolders beside `Local`, excluding the managed `Local` folder.
-On Android it browses the ordinary collection folder. **Network shares** contains
+On Android it browses the ordinary collection folder. **Home Server** contains
 SMB/Mac connections added through **Add share…**, including their managed offline
 copies. SMB remotes imported inside credential ZIPs stay with their package under
-**rclone**. Local and Network shares hide the credential selector. **Transfers** appears on **rclone** only while a transfer is active or a stopped
-transfer needs attention; **Add share…** appears only on **Network shares**. **Local** has
+**Cloud**. Local and Home Server hide the credential selector. **Transfers** appears on **Cloud** only while a transfer is active or a stopped
+transfer needs attention; **Add share…** appears only on **Home Server**. **Local** has
 no action toolbar. The source tabs use a rounded strip with a highlighted
-selection. Compact folder rows have storage icons and an overflow menu;
-a legend below the tree describes the selected tab’s icons. Loading status and
+selection. Compact folder rows share one rounded surface per top-level branch,
+with an overflow menu for each folder. Loading status and
 progress appear only while a folder is opening or an error needs attention.
-Local rows show a disk for device storage, plus a lock for encrypted copies.
-rclone rows show a cloud, plus a lock for encrypted remotes. Locks are open when
-the credentials are available in the current session. Network shares retain icons for their available copies. Screen readers
-announce the copy types. Group-only headings have no storage icons.
+Each encrypted folder has a combined folder-and-lock icon before its name:
+blue with an open padlock when its credentials are available, orange with a
+closed padlock and a short pair of chain links when locked. The unlocked padlock's
+raised shackle has a clear gap above its body. Sibling folders can have different states. The
+blue/orange colors, distinct padlock shapes and Locked/Unlocked legend avoid
+relying on red/green differences. Android monochrome mode retains the distinct
+shapes in black. Ordinary folders use a plain folder icon. Screen readers announce
+the copy type and individual lock state. Group headings describe structure,
+not a shared credential state.
 Dash-separated names form expanded levels (for example Server → Lib → ComicRack);
-group labels are informational and remain expanded. Each level is indented with
-a branch guide; only folder rows with storage icons and an actions menu open a folder. Its action page reflects the copies available. **Browse Local** opens readable files on this device, **Browse LocalCrypt** opens
+group labels are informational and remain expanded. Groups and browsable folders
+use the same text size, color and row height. Groups have a muted branch icon
+and regular text, including the top level; browsable folders have bold names,
+folder icons and **•••**. Each level has a consistent
+indent and branch guide. Child
+labels and folder icons start to the right of their parent label; there are no
+collapse controls. Only folder rows with folder
+icons and an actions menu open a folder. Its action page reflects the copies available. **Browse Local** opens readable files on this device, **Browse LocalCrypt** opens
 the encrypted device copy, and **Browse Remote** opens the online folder. Only
 available copies receive a browse button; each copy is offered once. Existing
 mapped Local and LocalCrypt folders retain **Browse Remote** even while their

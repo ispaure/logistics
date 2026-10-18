@@ -41,10 +41,10 @@ class FolderHubTests(unittest.TestCase):
                 row = app.folder_buttons['Secret'].parent
                 self.assertEqual([child.control_icon for child in row.children
                                   if hasattr(child, 'control_icon')],
-                                 ['storage_remote', 'storage_unlocked', 'more'])
+                                 ['folder_unlocked', 'more'])
                 row = app.folder_buttons['Plain'].parent
                 self.assertEqual([child.control_icon for child in row.children
-                                  if hasattr(child, 'control_icon')], ['storage_remote', 'more'])
+                                  if hasattr(child, 'control_icon')], ['folder', 'more'])
 
     def test_crypt_icons_follow_session_lock_and_local_location(self):
         from logisticsmobile.app import LogisticsMobile
@@ -64,16 +64,16 @@ class FolderHubTests(unittest.TestCase):
             def icons():
                 return [c.control_icon for c in app.folder_buttons['Secret'].parent.children
                         if hasattr(c, 'control_icon')]
-            self.assertEqual(icons(), ['storage_local', 'storage_crypt', 'more'])
+            self.assertEqual(icons(), ['folder_locked', 'more'])
             app.cloud_client.package_records = (dict(package_name='Session.zip', remotes=['Secret']),)
             app.update_folder_list(choices)
-            self.assertEqual(icons(), ['storage_local', 'storage_unlocked', 'more'])
+            self.assertEqual(icons(), ['folder_unlocked', 'more'])
             app.folder_source = 'rclone'
             app.update_folder_list(choices)
-            self.assertEqual(icons(), ['storage_remote', 'storage_unlocked', 'more'])
+            self.assertEqual(icons(), ['folder_unlocked', 'more'])
             app.cloud_client.package_records = ()
             app.update_folder_list(choices)
-            self.assertEqual(icons(), ['storage_remote', 'storage_crypt', 'more'])
+            self.assertEqual(icons(), ['folder_locked', 'more'])
 
     def test_loaded_package_populates_hub_without_selector_or_bridge_access(self):
         from logisticsmobile.app import LogisticsMobile
@@ -434,8 +434,10 @@ class FolderHubTests(unittest.TestCase):
                 self.assertIn(('Server', 'Library'), app.folder_tree_buttons)
                 group = app.folder_tree_buttons[('Server', 'Library')]
                 self.assertFalse(hasattr(group, 'on_press'))
-                self.assertEqual(group.parent.style.margin_left, 24)
-                self.assertEqual(app.folder_buttons['Server-Library-Comics'].parent.style.margin_left, 48)
+                self.assertEqual(group.text, 'Library')
+                self.assertEqual(group.accessible_name, 'Library, group')
+                self.assertIsNot(group.parent.parent, app.folder_list)
+                self.assertIsNot(app.folder_buttons['Server-Library-Comics'].parent.parent, app.folder_list)
                 app.folder_collapsed.add(('Server',))
                 app.update_folder_list(app.folder_picker_choices)
                 self.assertIn('Server-Library-Comics', app.folder_buttons)
@@ -514,7 +516,7 @@ class FolderHubTests(unittest.TestCase):
                 app.cloud_remote.items = ['Loaded drive']
                 app.show_locations()
                 view = app.body.children[0]._workspace_frame.main
-                self.assertEqual([button.text for button in view.children[0].children], ['Local', 'rclone', 'Network shares'])
+                self.assertEqual([button.text for button in view.children[0].children], ['Local', 'Cloud', 'Home Server'])
                 self.assertEqual(app.folder_source, 'Local')
                 self.assertFalse(view.children[1].children)
                 self.assertIn('Comics', app.folder_buttons)
