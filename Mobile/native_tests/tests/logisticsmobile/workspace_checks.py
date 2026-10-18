@@ -27,7 +27,7 @@ async def exercise_workspace(app):
     assert folder_frame.header not in folder_frame.view().children
     if app.adaptive.wide:
         pair = width(folder_frame.folder_master), width(folder_frame.main)
-        assert abs(pair[0] - pair[1]) <= 2, ('Unequal native Folder Hub panes', pair)
+        assert abs(pair[0] - pair[1]) <= 2, ('Unequal native Workspaces panes', pair)
         assert max(pair) <= app.adaptive.content_width('files') / 2 + 2
     app.create_chosen_document('md')
     app.name.value = 'Left draft.md'

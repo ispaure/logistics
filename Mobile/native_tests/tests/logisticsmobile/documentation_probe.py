@@ -52,12 +52,12 @@ class DocumentationProbe(LogisticsMobile):
                 row = next(row for row in owner.rows.children if row.children[-1].text.removeprefix('✓ ') == title)
                 row.children[-1].on_press()
             choose('Logistics on mobile')
-            # Expand the audience folder and select the actual Folder Hub row.
+            # Expand the audience folder and select the actual Workspaces row.
             owner.show_browse()
             row = next(row for row in owner.rows.children if row.children[-1].text.removeprefix('✓ ') == 'Logistics on mobile')
             if row.children[1].text == '+':
                 row.children[1].on_press()
-            choose('Folder Hub on mobile')
+            choose('Workspaces on mobile')
             assert owner.path == (scope / 'user_mobile/folder_hub/folder_hub.md').resolve()
             assert owner.catalog.root == scope.resolve()
             assert owner.up()

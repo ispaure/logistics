@@ -34,7 +34,7 @@ async def exercise(app):
         app.show_home()
         assert app.body.children[0].content.children[0].text == 'Your workspace'
         assert app.native_host.state.destination == 'home'
-        assert [tab.text for tab in app.navigation.content] == ['Home', 'Folder Hub', 'Documents', 'Chat', 'Settings']
+        assert [tab.text for tab in app.navigation.content] == ['Home', 'Workspaces', 'Documents', 'Chat', 'Settings']
         passed.append('native_hub')
         from .navigation_checks import exercise_navigation
         navigation_proof = await exercise_navigation(app)

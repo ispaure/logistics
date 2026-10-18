@@ -4,8 +4,8 @@
 
 The app opens on **Home**, a landing page with quick access to files, editors,
 books/comics and chat. The house icon is the first native destination, before
-**Folder Hub**, **Documents**, **Chat** and **Settings**. **Folder Hub** separates ordinary Local files, Cloud and Home Server into source tabs, with available copies grouped under their owning source.
-If folder discovery fails while credentials change, Folder Hub shows an error
+**Workspaces**, **Documents**, **Chat** and **Settings**. **Workspaces** separates ordinary Local files, Cloud and Home Server into source tabs, with available copies grouped under their owning source.
+If folder discovery fails while credentials change, Workspaces shows an error
 with **Refresh**, **Browse local files** and **Connections…**. Retry there after
 the connection is ready; restarting the app is unnecessary.
 Tap a folder to browse its preferred available copy directly. The **•••** button
@@ -17,11 +17,11 @@ the entire device filesystem. Choose **New document** from Home, Documents or Do
 name and select **Plain text (.txt)** or **Markdown (.md)**, then tap
 **Create document**. The selected extension is added when needed. Markdown also
 offers an optional title, inserted as the first heading. **Cancel** creates nothing.
-Books and comics are available through Folder Hub or Home’s Books & Comics panel;
+Books and comics are available through Workspaces or Home’s Books & Comics panel;
 Chat has its own bottom navigation button between Documents and Settings. Native tab
 controls adapt to the Apple layout; Android uses bottom navigation in compact
 windows and a rail at 600 dp or wider. Switching destinations retains each
-screen. **Folder Hub** returns to the folder list and **All documents** returns
+screen. **Workspaces** returns to the folder list and **All documents** returns
 from the editor to the Documents hub.
 
 Back returns through screens within the current destination. It does not switch

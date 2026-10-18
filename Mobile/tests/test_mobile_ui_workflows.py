@@ -36,7 +36,7 @@ class MobileWorkflowTests(unittest.TestCase):
             browser.search.value = filename
             entry = next(item for item in browser.entries if item.label == filename)
             app.loop.run_until_complete(browser._select_pressed(entry, browser.buttons[entry.identity]))
-            self.assertEqual(app.native_host.state.destination, 'files')
+            self.assertEqual(app.native_host.state.destination, 'documents')
             owner = app.readers.active if filename.endswith('.cbz') else app.private_sessions.active
             if filename.endswith('.md'):
                 owner.crypt_text.value = '# Unsaved browser draft'
@@ -61,7 +61,7 @@ class MobileWorkflowTests(unittest.TestCase):
         path.write_text('Downloaded text')
         for _ in range(2):
             app.loop.run_until_complete(app.open_download(path=path))
-            self.assertEqual(app.native_host.state.destination, 'files')
+            self.assertEqual(app.native_host.state.destination, 'documents')
             self.assertTrue(app.routes.back())
             self.assertIs(app.body, panel)
 
@@ -104,7 +104,7 @@ class MobileWorkflowTests(unittest.TestCase):
         app.loop.run_until_complete(browser._select_pressed(entry, browser.buttons[entry.identity]))
         owner = app.private_sessions.active
         self.assertEqual(owner.crypt_reader.name, 'Notes.md')
-        self.assertEqual(app.native_host.state.destination, 'files')
+        self.assertEqual(app.native_host.state.destination, 'documents')
         self.assertEqual(owner.crypt_content.children, [owner.crypt_preview])
         self.assertIn(owner.markdown_speech.button, owner.reader_toolbar.children)
         owner.toggle_private_preview()

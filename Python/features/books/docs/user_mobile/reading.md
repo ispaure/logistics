@@ -130,3 +130,7 @@ session-only credentials, background speech is disabled unless **Settings →
 Session-only speech while locked** is enabled. The saved opt-in does not unlock
 credentials or allow another chapter/file to be read while locked. See
 [the speech setting](../../../../../docs/user_mobile/settings/settings.md#speech-while-locked).
+
+EPUB page swipes work with reading controls visible or hidden. On iOS,
+horizontal reader swipes take priority over navigation swipe back. Use Back
+or the destination tabs to leave the reader.

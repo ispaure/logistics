@@ -39,7 +39,7 @@ class FolderLocationTests(unittest.TestCase):
                              ('Cloud' if online else 'On-device') +
                              ((' · Unlocked' if unlocked else ' · Locked') if encrypted else ''))
             self.assertEqual(button.control_icon, 'up' if path else 'back')
-            self.assertEqual(button.accessible_name, 'Parent folder' if path else 'Back to Folder Hub')
+            self.assertEqual(button.accessible_name, 'Parent folder' if path else 'Back to Workspaces')
 
     def test_root_navigation_returns_to_hub_even_when_cloud_busy(self):
         self.app.show_cloud(present=False)

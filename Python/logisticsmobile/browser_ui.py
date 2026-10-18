@@ -11,6 +11,12 @@ from .appearance import accessible_name, surface, template_icon
 from .hub_icons import icon
 
 
+def browser_command(button):
+    """Use normal accent navigation, retaining outlines for Android E Ink."""
+    return surface(button, radius=8, background='transparent', foreground='accent',
+                   outlined=False, eink_outlined=True)
+
+
 def middle_filename(button):
     """Let the native label fit the middle ellipsis without changing identity."""
     backend = type(button._impl).__module__
@@ -103,7 +109,8 @@ class FolderLocationHeader(toga.Box):
     def update(self, path, *, remote=False, encrypted=False, unlocked=False, name=None):
         self.folder_name.value = name if name is not None else PurePosixPath(path).name if path else 'Root'
         apply_icon(self.parent_button, 'up' if path else 'back',
-                   'Parent folder' if path else 'Back to Folder Hub')
+                   'Parent folder' if path else 'Back to Workspaces')
+        browser_command(self.parent_button)
         kinds = [('storage_remote', 'Online folder')] if remote else [('storage_local', 'On-device folder')]
         if encrypted:
             state = 'unlocked' if unlocked else 'locked'
@@ -155,6 +162,9 @@ class FileBrowser(NativeBrowser):
         apply_icon(self.next, 'forward', 'Next results')
         apply_icon(self.search_button, 'find', 'Search this folder')
         apply_icon(self.close_search_button, 'close', 'Close search')
+        for control in (self.back_button, self.previous, self.next,
+                        self.search_button, self.close_search_button):
+            browser_command(control)
         self.paging = toga.Box(children=[self.previous, self.page_label, self.next], style=Pack(direction=ROW))
         self.widget.add(toga.Box(children=[self.back_button, toga.Box(style=Pack(flex=1)),
                                           self.search_button],

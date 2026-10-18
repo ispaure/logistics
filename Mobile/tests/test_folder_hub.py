@@ -482,7 +482,7 @@ class FolderHubTests(unittest.TestCase):
                 self.assertTrue(root.children)
                 self.assertIn('Credentials changed', app.folder_hub_error)
                 recovery = root.children[0]._workspace_frame.main
-                self.assertEqual(recovery.children[0].text, 'Folder Hub could not refresh.')
+                self.assertEqual(recovery.children[0].text, 'Workspaces could not refresh.')
                 app.loop.run_until_complete(recovery.children[2].on_press())
                 self.assertTrue(app.routes.roots['files'].children)
             app.loop.run_until_complete(app.refresh_folder_hub())
@@ -538,7 +538,7 @@ class FolderHubTests(unittest.TestCase):
                 app.change_folder_source('rclone')
                 self.assertEqual(view.children[1].children[0].children[0].text, 'Credential')
                 self.assertEqual(app.folder_credential.value, 'All')
-                self.assertEqual(app.native_host.labels[app.native_host.destinations.index('files')], 'Folder Hub')
+                self.assertEqual(app.native_host.labels[app.native_host.destinations.index('files')], 'Workspaces')
                 self.assertEqual(view.children[2].children, [])
                 app.transfer_busy = True
                 app.refresh_transfer_status()
@@ -562,7 +562,7 @@ class FolderHubTests(unittest.TestCase):
                 app.set_cloud_busy(False)
                 self.assertIn('Restored later', app.folder_picker_choices)
                 self.assertIn('Restored later', app.folder_buttons)
-                # Returning to Folder Hub discovers local changes automatically.
+                # Returning to Workspaces discovers local changes automatically.
                 (root.parent / 'Added later').mkdir()
                 app.show_home()
                 app.show_locations()
@@ -636,7 +636,9 @@ class FolderHubTests(unittest.TestCase):
                 self.assertEqual(app.file_provider.remote, 'Secret')
                 row = next(row for row in app.file_rows.values() if not row['directory'])
                 app.browser_file_selected(row)
+                origin = app.body
                 app.loop.run_until_complete(app.read_managed_file())
+                self.assertEqual(app.native_host.state.destination, 'documents')
                 self.assertEqual(app.private_sessions.active.crypt_text.value, '# Read while pulling')
                 self.assertTrue(app.cloud_busy and app.transfer_busy)
                 self.assertIs(app.transfer_controller()._transfer_cancel, cancel)
@@ -645,7 +647,8 @@ class FolderHubTests(unittest.TestCase):
                 self.assertTrue(app.folder_browse_button.enabled)
                 app.show_home()
                 app.select_destination('files')
-                self.assertFalse(app.routes.screens['files'])
+                self.assertIs(app.body, origin)
+                self.assertEqual(app.file_provider.remote, 'Secret')
                 self.assertEqual(set(before), set(app.folder_picker_choices))
                 self.assertTrue(app.mirror_store().target(crypt).exists())
             finally:

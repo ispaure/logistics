@@ -65,6 +65,18 @@ class SourceEditorTests(unittest.TestCase):
         self.assertIsNone(owner.editor.pending)
         self.assertTrue(owner.editor.closed)
 
+    def test_typing_does_not_relayout_unchanged_status_and_line_count(self):
+        for name in ('Typing.txt', 'Typing.md'):
+            with self.subTest(name=name):
+                owner = self.open(name)
+                owner.editor.value = 'First edit'
+                with patch.object(owner.status._impl, 'set_text') as status, patch.object(
+                        owner.line_count._impl, 'set_text') as lines:
+                    owner.editor.value = 'Continuing on the same line'
+                    status.assert_not_called()
+                    lines.assert_not_called()
+                self.assertEqual(owner.document.text, 'Continuing on the same line')
+
     def test_closing_ios_preview_retires_delegates_before_loading_closed_content(self):
         owner = self.open('Closed.md')
         events = []

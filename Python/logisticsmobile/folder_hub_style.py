@@ -1,4 +1,4 @@
-"""Folder Hub presentation using native controls and dynamic app colour roles."""
+"""Workspaces presentation using native controls and dynamic app colour roles."""
 from .appearance import surface as app_surface
 
 SOURCE_LABELS = {'Local': 'Local', 'rclone': 'Cloud', 'Network shares': 'Home Server'}

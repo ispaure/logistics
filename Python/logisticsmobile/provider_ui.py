@@ -393,6 +393,14 @@ class ProviderUI(FilesUI):
                 seam=controller.private_comic_seam(view))
             from .magnifier import bind
             bind(controller, prepared_spread)
+        from .page_animation import page_direction, begin_page_slide, finish_page_slide
+        index = view.crypt_reader.labels.index(view.crypt_page.value)
+        direction = 0
+        if (kind in {'spread', 'image'} and view.crypt_reader.kind in {'.cbz', '.zip'}
+                and view.crypt_content.children):
+            direction = page_direction(getattr(view, '_provider_displayed_index', None), index,
+                right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
+        begin_page_slide(view.crypt_content, direction, self.preferences.values)
         for child in list(view.crypt_content.children):
             if hasattr(child, 'dispose') and child not in (view.crypt_image, view.crypt_text):
                 child.dispose()
@@ -440,6 +448,7 @@ class ProviderUI(FilesUI):
         else:
             view.crypt_text.value = content
             view.crypt_content.add(view.crypt_text)
+        finish_page_slide(view.crypt_content, direction, self.preferences.values)
         comic = view.crypt_reader.kind in {'.cbz', '.zip'}
         for child in view.crypt_content.children:
             if hasattr(child, 'magnifier_enabled'):

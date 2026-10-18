@@ -298,12 +298,19 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                 on_event=lambda action, value: self.epub_event(reader, epoch, index, action, value),
                 on_link=lambda href: self.epub_link(reader, epoch, index, href))
             view = self.epub_view
+        from .page_animation import page_direction, begin_page_slide, finish_page_slide
+        direction = 0
+        if record['kind'] == 'comic' and self.book_content.children:
+            direction = page_direction(record['position'], index,
+                right_to_left=getattr(reader, 'right_to_left', False))
+        begin_page_slide(self.book_content, direction, self.preferences.values)
         for child in list(self.book_content.children):
             if hasattr(child, 'dispose'):
                 child.dispose()
             self.book_content.remove(child)
         self.close_read_aloud()
         self.book_content.add(view)
+        finish_page_slide(self.book_content, direction, self.preferences.values)
         if record['kind'] == 'comic':
             from .magnifier import bind
             bind(self, view)
@@ -345,6 +352,9 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         self.previous_page.enabled = index > 0 or (record['kind'] == 'epub' and self.epub_offset > 0)
         self.next_page.enabled = index + 1 < count if record['kind'] == 'epub' else self.comic_navigation.next(index) is not None
         self.book_loading = False
+        # Initial EPUB content arrives after its reader route was presented.
+        from .reader_chrome import sync_comic_chrome
+        sync_comic_chrome(self.app, self.app.body)
 
     async def move_book_page(self, index):
         pending = getattr(self, '_epub_location_task', None)

@@ -363,7 +363,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         drawer.refresh_menu()
         labels = [getattr(child, 'text', '') for child in drawer.menu_content.children]
         self.assertIn('Comics Library', labels)
-        for label in ('Recent', 'Recent.md', 'Shortcuts', 'Browse Local Files', 'Folder Hub', 'New text document'):
+        for label in ('Recent', 'Recent.md', 'Shortcuts', 'Browse Local Files', 'Workspaces', 'New text document'):
             self.assertNotIn(label, labels)
         self.assertTrue(app.open_document(resource))
         self.assertEqual(app.editor.value, '# Keep this draft')
@@ -393,6 +393,71 @@ class WorkspaceNavigationTests(unittest.TestCase):
                 self.assertEqual(list(frame.row.children), [frame.main])
             self.navigation.render()
             self.assertEqual(list(frame.row.children), [frame.folder_master, frame.main])
+
+    def test_workspace_browser_keeps_the_actual_overview_through_rotation_and_back(self):
+        app = self.app
+        with patch.object(self.navigation, 'width', return_value=900):
+            app.show_locations()
+            overview = app.body.children[0]._workspace_frame
+            controls = app.folder_source_tabs
+            self.assertEqual(list(overview.row.children), [overview.main, overview.folder_placeholder])
+            app.loop.run_until_complete(app.show_files(local_root=True))
+            browser = app.files_view._workspace_frame
+            self.assertEqual(list(browser.row.children), [overview.main, browser.main])
+            self.assertIs(app.folder_source_tabs, controls)
+            with patch.object(self.navigation, 'width', return_value=390):
+                self.navigation.render()
+                self.assertEqual(list(browser.row.children), [browser.main])
+                self.assertEqual(list(overview.row.children), [overview.main])
+            self.navigation.render()
+            self.assertEqual(list(browser.row.children), [overview.main, browser.main])
+            app.routes.back()
+            self.assertEqual(list(overview.row.children), [overview.main, overview.folder_placeholder])
+            self.assertIs(app.folder_source_tabs, controls)
+        app.loop.run_until_complete(app.file_browser.close())
+
+    def test_workspace_hinge_reflows_without_a_window_resize(self):
+        app = self.app
+        with patch.object(self.navigation, 'width', return_value=900):
+            app.show_locations()
+            app.loop.run_until_complete(app.show_files(local_root=True))
+            frame = app.files_view._workspace_frame
+            with patch('logisticsmobile.fold_layout.seam_fraction', return_value=.54):
+                self.navigation.render()
+                available = self.navigation.content_width('files', margin=24)
+                self.assertAlmostEqual(frame.folder_master.style.width, available * .54, delta=1)
+                self.assertAlmostEqual(frame.main.style.width, available * .46, delta=1)
+            self.navigation.render()
+            self.assertAlmostEqual(frame.folder_master.style.width, frame.main.style.width)
+        app.loop.run_until_complete(app.file_browser.close())
+
+    def test_workspace_uses_allocated_width_after_the_tablet_rail(self):
+        app = self.app
+        app.show_locations()
+        with patch.object(self.navigation, 'width', return_value=700), patch.object(
+                self.navigation, 'content_width', return_value=600):
+            app.choose_folder('All files')
+            frame = app.body.children[0]._workspace_frame
+            self.assertEqual(list(frame.row.children), [frame.main])
+
+    def test_remote_and_scoped_browsers_share_the_retained_workspace_list(self):
+        import toga
+        from toga.style import Pack
+        app = self.app
+        app.show_locations()
+        overview = app.body.children[0]._workspace_frame
+        controls = app.folder_source_tabs
+        with patch.object(self.navigation, 'width', return_value=900):
+            for route in ('remote-browser', 'workspace-browser', 'folder-options'):
+                view = toga.Box(style=Pack(flex=1))
+                app.show_view(view, destination='files', route=route)
+                frame = view._workspace_frame
+                self.assertEqual(list(frame.row.children), [overview.main, frame.main])
+                self.assertIs(app.folder_source_tabs, controls)
+                app.change_folder_source('rclone')
+                self.assertIs(app.folder_source_tabs, controls)
+                app.routes.back()
+                self.assertEqual(list(overview.row.children), [overview.main, overview.folder_placeholder])
 
     def test_phone_file_drawer_opens_a_nested_file_without_losing_editor_draft(self):
         app = self.app

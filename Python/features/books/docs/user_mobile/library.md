@@ -24,7 +24,7 @@ system light/dark appearance and uses the configured font size.
 
 Standalone password-protected CBZ/ZIP comics support AES and legacy ZipCrypto
 on iOS and Android, without rclone or a credential package. Import one through
-Folder Hub, then enter its ZIP password and choose **Unlock comic**, or press Enter.
+Workspaces, then enter its ZIP password and choose **Unlock comic**, or press Enter.
 A wrong password clears the field and keeps the prompt ready for another attempt.
 **Cancel** keeps the imported encrypted copy. The password stays only with the
 active reader; closing the reader clears the password, decoded-page cache and

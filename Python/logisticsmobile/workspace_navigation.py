@@ -178,6 +178,9 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             view._workspace_frame = WorkspaceFrame(self, view, destination)
             view._workspace_frame.folder_options = route == 'folder-options'
             self.frames.add(view._workspace_frame)
+        if eligible and destination == 'files':
+            view._workspace_frame.folder_root = root
+            view._workspace_frame.folder_detail = not root
         if route == 'preview' and isinstance(view, toga.Box) and not getattr(view, '_workspace_menu', False):
             menu = menu_button(lambda widget, **kw: self.show_browser(destination))
             toolbar = getattr(view, '_workspace_toolbar', view)
@@ -309,8 +312,14 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 key = destination or self.app.native_host.state.destination
                 self.menu_open[key] = False
             frame = getattr(view, '_workspace_frame', None)
+            from .fold_layout import seam_fraction
+            seam = (seam_fraction(self.app, frame.row, include_open=True)
+                    if frame is not None and frame.destination == 'files' else None)
+            if frame is not None and frame.destination == 'files':
+                self.wide = self.content_width('files', margin=0) >= 640 or seam is not None
             layout = (id(frame), self.wide, self.layout_width, self.pinned,
-                      tuple(self.menu_open.items()), frame.row.layout.content_width if frame else 0)
+                      tuple(self.menu_open.items()), frame.row.layout.content_width if frame else 0,
+                      seam)
             if layout != self.last_layout:
                 transition = frame.begin_transition() if frame is not None else None
                 for item in list(self.frames):
@@ -327,6 +336,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                     mount_native_menu(self.app, menu, destination or self.app.native_host.state.destination)
             if view is not None:
                 sync_reader_toolbar(self.app, view)
+            from .reader_chrome import sync_comic_chrome
+            sync_comic_chrome(self.app, body)
             if hasattr(self.app, 'render_chat_workspace'):
                 self.app.render_chat_workspace()
             from .appearance import reserve_navigation
@@ -404,7 +415,7 @@ class WorkspaceFrame:
         item = controller.navigationItem
         item.leftItemsSupplementBackButton = True
         self.native_menu = mount_native_menu(app, self.menu, self.destination)
-        # Folder Hub enters browsers through its folder actions. Keep the drawer
+        # Workspaces enters browsers through its folder actions. Keep the drawer
         # implementation available without mounting a menu in this destination.
         item.leftBarButtonItem = self.native_menu if self.destination != 'files' else None
         if hasattr(self, 'pair'):
@@ -471,13 +482,22 @@ class WorkspaceFrame:
         left = None
         if opened:
             left = navigation.browser(destination).widget
-        elif navigation.wide and destination == 'files' and getattr(self, 'folder_options', False):
-            if not hasattr(self, 'folder_master'):
-                self.folder_master = navigation.app.build_folder_picker(
-                    choices=navigation.app.folder_picker_choices)
-                # The action page already supplies the outer twelve-point inset.
-                self.folder_master.style.margin = 0
-            left = self.folder_master
+        elif navigation.wide and destination == 'files':
+            if getattr(self, 'folder_root', False):
+                # Keep a stable two-pane overview before a location is opened.
+                if not hasattr(self, 'folder_placeholder'):
+                    self.folder_placeholder = toga.Box(children=[toga.Label('Choose a workspace',
+                        style=Pack(margin=16))], style=Pack(direction=COLUMN, flex=1))
+                left = self.main
+            elif getattr(self, 'folder_detail', False):
+                root = navigation.app.routes.roots['files']
+                overview = root.children[0] if root.children else None
+                master = getattr(overview, '_workspace_frame', None)
+                if master is not None:
+                    # Borrow the actual overview: rebuilding it loses scroll
+                    # state and overwrites the host's source-control references.
+                    self.folder_master = master.main
+                    left = self.folder_master
         elif navigation.wide and destination == 'documents':
             view = navigation.session_view(navigation.pinned)
             if view is not None and view is not self.view():
@@ -485,7 +505,8 @@ class WorkspaceFrame:
                 left = frame.main if frame else view
         if left is None:
             return
-        detach(left)
+        if left is not self.main:
+            detach(left)
         if not navigation.wide:
             available = navigation.content_width(destination)
             drawer_width = max(1, min(320, available - 64))
@@ -498,17 +519,25 @@ class WorkspaceFrame:
                 self.row._impl.native.clipsToBounds = True
                 self.main._impl.native.userInteractionEnabled = False
         else:
-            available = navigation.content_width(destination)
-            half = max(1, int(available / 2))
+            view = self.view()
+            margin = view.style.margin_left + view.style.margin_right if destination == 'files' else 24
+            available = navigation.content_width(destination, margin=margin)
+            from .fold_layout import seam_fraction
+            seam = seam_fraction(navigation.app, self.row, include_open=True) if destination == 'files' else None
+            half = max(1, available * (seam if seam is not None else .5))
             left.style.width, left.style.flex = half, 0
-            self.main.style.width, self.main.style.flex = max(1, int(available) - half), 0
+            right = self.folder_placeholder if left is self.main else self.main
+            right.style.width, right.style.flex = max(1, available - half), 0
+            if left is self.main:
+                self.row.add(right)
+                return
             self.row.insert(0, left)
 
 
 class FileDrawer:
-    """Independent browser state; opening never rewrites the Folder Hub tab's selection."""
+    """Independent browser state; opening never rewrites the Workspaces tab's selection."""
     def __init__(self, navigation, destination):
-        from .browser_ui import FileBrowser
+        from .browser_ui import FileBrowser, browser_command
         self.navigation, self.app, self.destination = navigation, navigation.app, destination
         self.roots = {'Local files': None}
         self.provider = None
@@ -522,12 +551,13 @@ class FileDrawer:
         self.browser = FileBrowser(folder_visible=self.app.folder_path_visible, selected=lambda row: None, open_folder=self.open_folder,
                                    navigate=self.navigate, open_file=self.open_file, preview=False)
         self.browser.navigation_controls.remove(self.browser.back_button)
-        self.parent_button = toga.Button('Parent folder', on_press=self.up, enabled=False, style=Pack(height=48))
+        self.parent_button = browser_command(toga.Button('Parent folder', on_press=self.up,
+                                                       enabled=False, style=Pack(height=48)))
         self.breadcrumb = toga.Label('Local', style=Pack(font_size=13, flex=1))
         self.widget = toga.Box(children=[self.storage,
             toga.Box(children=[self.parent_button, self.breadcrumb], style=Pack(direction=ROW)), self.status,
             toga.ScrollContainer(horizontal=False, content=scroll_content(self.browser.widget), style=Pack(flex=1)),
-            toga.Button('Folder Hub', on_press=self.app.show_locations, style=Pack(height=48))],
+            toga.Button('Workspaces', on_press=self.app.show_locations, style=Pack(height=48))],
             style=Pack(direction=COLUMN, flex=1))
         self.browser_widget = self.widget
         if destination == 'documents':

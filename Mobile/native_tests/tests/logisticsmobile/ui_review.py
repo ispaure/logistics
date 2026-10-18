@@ -124,7 +124,7 @@ async def exercise_ui_review(app):
     (folder / 'WebP comic.cbz').write_bytes(original)
     (folder / 'Cover.webp').write_bytes(webp)
     def home_browse_button(widget):
-        if isinstance(widget, toga.Button) and widget.text == 'Folder Hub':
+        if isinstance(widget, toga.Button) and widget.text == 'Workspaces':
             return widget
         children = list(widget.children)
         if isinstance(widget, toga.ScrollContainer) and widget.content is not None:
@@ -362,7 +362,7 @@ async def exercise_ui_review(app):
         await capture('files-' + mode)
         app.show_settings()
         await capture('settings-' + mode)
-        app.settings_navigation.choose('Folder Hub')
+        app.settings_navigation.choose('Workspaces')
         await capture('settings-folder-hub-' + mode)
     if get_os() is OS.IOS:
         app.main_window._impl.native.overrideUserInterfaceStyle = 0

@@ -202,8 +202,42 @@ function publish() {
         document.getElementById('notice').textContent = error.message + ' Undo this change before switching modes.';
     }
 }
-root.addEventListener('input', event => {if (!event.isComposing) publish();});
-root.addEventListener('compositionend', publish);
+// The document is the only writing scroller. Reveal the caret only when it
+// actually leaves that viewport; never recenter it after every keystroke.
+let caretFrame = null;
+function revealCaret() {
+    caretFrame = null;
+    const selection = getSelection();
+    if (!root.contains(document.activeElement) || !selection.rangeCount || !selection.isCollapsed) return;
+    const range = selection.getRangeAt(0).cloneRange();
+    if (!editableRange(range)) return;
+    let rect = range.getBoundingClientRect();
+    if (!rect.height && range.startContainer.nodeType === Node.TEXT_NODE && range.startOffset > 0) {
+        range.setStart(range.startContainer, range.startOffset - 1);
+        rect = range.getBoundingClientRect();
+    }
+    if (!rect.height) return;
+    const bounds = root.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    const top = Math.max(bounds.top, viewport ? viewport.offsetTop : 0) + 12;
+    const bottom = Math.min(bounds.bottom, viewport ? viewport.offsetTop + viewport.height : innerHeight) - 12;
+    if (bottom <= top) return;
+    if (rect.bottom > bottom) root.scrollTop += rect.bottom - bottom;
+    else if (rect.top < top) root.scrollTop += rect.top - top;
+}
+function scheduleCaretReveal() {
+    if (caretFrame === null) caretFrame = requestAnimationFrame(revealCaret);
+}
+root.addEventListener('input', event => {
+    if (!event.isComposing) { publish(); scheduleCaretReveal(); }
+});
+root.addEventListener('compositionend', () => { publish(); scheduleCaretReveal(); });
+root.addEventListener('focusin', scheduleCaretReveal);
+root.addEventListener('keyup', event => {
+    if (/^(Arrow|Home|End|Page)/.test(event.key)) scheduleCaretReveal();
+});
+window.addEventListener('resize', scheduleCaretReveal);
+window.visualViewport?.addEventListener('resize', scheduleCaretReveal);
 root.addEventListener('paste', event => {
     event.preventDefault();
     document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));
@@ -219,9 +253,10 @@ document.addEventListener('selectionchange', () => {
     const selection = getSelection();
     if (root.contains(document.activeElement) && selection.rangeCount && editableRange(selection.getRangeAt(0))) savedRange = selection.getRangeAt(0).cloneRange();
 });
-function restoreRange() {
+function restoreRange(rangeOverride=null) {
     const selection = getSelection();
-    if (root.contains(document.activeElement) && selection.rangeCount && editableRange(selection.getRangeAt(0)))
+    if (rangeOverride && editableRange(rangeOverride)) savedRange = rangeOverride.cloneRange();
+    else if (root.contains(document.activeElement) && selection.rangeCount && editableRange(selection.getRangeAt(0)))
         savedRange = selection.getRangeAt(0).cloneRange();
     if (!savedRange || !editableRange(savedRange)) {
         savedRange = document.createRange();
@@ -260,20 +295,47 @@ document.getElementById('inline-code').addEventListener('click', () => {
     code.textContent = selection.toString() || 'code';
     command('insertHTML', code.outerHTML);
 });
-document.getElementById('apply-link').addEventListener('click', () => {
+const linkDialog = document.getElementById('link-dialog');
+const linkTarget = document.getElementById('link-target');
+const linkError = document.getElementById('link-error');
+let linkRange = null;
+document.getElementById('show-link').addEventListener('click', () => {
+    const selection = restoreRange();
+    linkRange = selection.getRangeAt(0).cloneRange();
+    const node = selection.anchorNode;
+    const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    linkTarget.value = element.closest('a')?.getAttribute('href') || '';
+    linkError.textContent = '';
+    linkDialog.showModal();
+    linkTarget.focus();
+    linkTarget.select();
+});
+function cancelLink() {
+    linkDialog.close();
+    restoreRange(linkRange);
+}
+document.getElementById('cancel-link').addEventListener('click', cancelLink);
+linkDialog.addEventListener('cancel', event => { event.preventDefault(); cancelLink(); });
+function applyLink() {
     const href = document.getElementById('link-target').value.trim().replace(/ /g, '%20');
     if (!href || /[\x00-\x20<>]/.test(href) || href.startsWith('//') ||
         (/^[\w+.-]+:/.test(href) && !/^(https?:|mailto:)/i.test(href))) {
-        document.getElementById('notice').textContent = 'Enter a relative file path, https:// address or mailto: link.';
+        linkError.textContent = 'Enter a relative file path, https:// address or mailto: link.';
+        linkTarget.focus();
         return;
     }
-    const selection = restoreRange();
+    linkDialog.close();
+    const selection = restoreRange(linkRange);
     if (selection.isCollapsed) {
         const anchor = document.createElement('a');
         anchor.setAttribute('href', href);
         anchor.textContent = 'Link';
         command('insertHTML', anchor.outerHTML);
     } else command('createLink', href);
+}
+document.getElementById('apply-link').addEventListener('click', applyLink);
+linkTarget.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); applyLink(); }
 });
 function tableCommand(action) {
     const selection = restoreRange();
@@ -351,28 +413,40 @@ def editor_html(text, bridge, font_size=16, *, image_source=None):
     table_menu = ''.join(icon_button(name, table_glyphs[action], f'data-table="{action}"') for name, action in tables)
     toolbar = buttons(common) + '<details><summary aria-label="Markdown formatting" title="Markdown formatting">' + formatting_svg('format') + '</summary><div class="format-menu">' + style_menu + buttons(more) + (
         icon_button('Inline code', 'code', 'id="inline-code"') +
-        '<label>Link <input id="link-target" type="text" placeholder="https://… or relative file" aria-label="Link destination"></label>' +
-        icon_button('Apply link', 'link', 'id="apply-link"')) + table_menu + '</div></details>'
+        icon_button('Insert link', 'link', 'id="show-link" aria-haspopup="dialog"')) + table_menu + '</div></details>'
+    link_dialog = ('<dialog id="link-dialog" aria-labelledby="link-title">'
+                   '<h2 id="link-title">Insert link</h2>'
+                   '<div class="link-fields">'
+                   '<label for="link-target">URL or file path</label>'
+                   '<input id="link-target" type="text" inputmode="url" autocomplete="off" '
+                   'autocapitalize="none" spellcheck="false" placeholder="https://… or relative file">'
+                   '<p id="link-error" role="alert"></p></div><div class="dialog-actions">'
+                   '<button type="button" id="cancel-link">Cancel</button>'
+                   '<button type="button" id="apply-link">Insert link</button></div></dialog>')
     return (f'<!doctype html><html><head><meta charset="utf-8">'
             '<meta name="logistics-native-font" content="true">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; '
             f'script-src \'nonce-{nonce}\'; style-src \'unsafe-inline\'; img-src data:; base-uri \'none\'; form-action \'none\'">'
-            f'<style>:root{{color-scheme:light dark}}body{{font:{int(font_size)}px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;'
-            'margin:12px;background:Canvas;color:CanvasText;overflow-wrap:anywhere;'
-            'min-height:calc(100vh - 24px);min-height:calc(100dvh - 24px);display:flex;flex-direction:column}'
-            'nav,#notice{flex-shrink:0}#document{flex:1;display:flex;flex-direction:column}'
+            f'<style>:root{{color-scheme:light dark}}html{{height:100%;overflow:hidden}}body{{font:{int(font_size)}px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;'
+            'margin:0;padding:12px;box-sizing:border-box;background:Canvas;color:CanvasText;overflow-wrap:anywhere;'
+            'height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column}'
+            'nav,#notice{flex-shrink:0}#notice:empty{display:none}#document{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scroll-padding:12px 0;display:flex;flex-direction:column}'
             # Keep the blank writing area a native contenteditable touch target.
             'section{flex-shrink:0}section[contenteditable=true]:last-child{flex:1;min-height:6em}'
-            'nav{position:sticky;top:0;background:Canvas;z-index:1;display:flex;flex-wrap:wrap;gap:4px}'
+            'nav{background:Canvas;z-index:1;display:flex;flex-wrap:wrap;gap:4px;max-height:45%;overflow:auto}'
             'button,select,input,summary{min-height:44px;box-sizing:border-box}select,input{font:inherit;max-width:100%}'
             'summary{display:flex;align-items:center;justify-content:center;width:44px;padding:0;cursor:pointer;list-style:none}summary::-webkit-details-marker{display:none}.icon-button{width:44px;padding:0;display:inline-flex;align-items:center;justify-content:center}.icon-button svg,summary svg{pointer-events:none}.format-menu{display:flex;flex-wrap:wrap;gap:4px;padding:8px 0}.format-menu label{max-width:100%}'
             'button{min-height:44px;font:inherit;color:CanvasText;background:Canvas;border:1px solid GrayText;border-radius:6px}'
+            'dialog{color:CanvasText;background:Canvas;border:1px solid GrayText;border-radius:12px;padding:12px;max-width:calc(100vw - 24px);max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px);box-sizing:border-box;width:360px}'
+            'dialog[open]{display:flex;flex-direction:column}dialog::backdrop{background:#0008}dialog h2{flex-shrink:0;font-size:1.15em;margin:0 0 8px}dialog label,dialog input{display:block;width:100%}'
+            '.link-fields{min-height:0;overflow:auto}.dialog-actions{flex-shrink:0;display:flex;justify-content:flex-end;gap:8px;margin-top:8px}.dialog-actions button{padding:0 12px}#link-error{color:CanvasText}#link-error:empty{display:none}'
+            '@media(max-height:260px){dialog{padding:8px}dialog h2{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}dialog label{font-size:.85em}.dialog-actions{margin-top:4px}#link-error{font-size:.8em;margin:4px 0}}'
             'p[data-editor-boundary]{margin:0;line-height:.5em;min-height:.5em}section{outline:none;min-height:1em}section:empty{display:none}section[contenteditable=true]:focus{outline:1px solid Highlight}'
             'section[contenteditable=false]{opacity:.8}section[data-source-only]::after{content:"Edit this block in Source";display:block;font-size:.8em;color:GrayText}pre{white-space:pre-wrap}blockquote{border-left:3px solid GrayText;padding-left:1em}'
             'table{border-collapse:collapse;max-width:100%;display:block;overflow-x:auto}td,th{border:1px solid GrayText;padding:4px}#notice{color:MarkText;background:Mark}'
             '</style></head><body><nav aria-label="Markdown formatting">' + toolbar + '</nav>'
-            '<p id="notice" role="status"></p><main id="document" aria-label="Formatted Markdown editor"></main>'
+            '<p id="notice" role="status"></p><main id="document" aria-label="Formatted Markdown editor"></main>' + link_dialog +
             f'<script nonce="{nonce}">{script}</script></body></html>')
 
 

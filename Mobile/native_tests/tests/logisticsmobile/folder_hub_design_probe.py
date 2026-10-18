@@ -142,4 +142,4 @@ class FolderHubDesignProbe(LogisticsMobile):
 
 
 def main():
-    return FolderHubDesignProbe('Folder Hub Preview', 'io.github.ispaure.logisticsfolderhubcapture')
+    return FolderHubDesignProbe('Workspaces Preview', 'io.github.ispaure.logisticsfolderhubcapture')

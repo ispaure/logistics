@@ -29,7 +29,7 @@ class TextEditorView:
         self.formatted = None
         self.preview = self.preview_box = None
         self.selector = toga.Selection(on_change=self.selected, style=Pack(flex=1, height=48))
-        self.name = toga.TextInput(placeholder='Document name', on_change=self.name_changed, style=Pack(flex=1, width=1, height=48))
+        self.name = toga.TextInput(placeholder='Document name', on_change=self.name_changed, style=Pack(flex=1, height=48))
         self.editor = CodeInput(loop=app.loop, on_change=self.text_changed,
             highlighting=app.preferences.values.get('android_eink') != 'true',
             style=Pack(flex=1, font_size=int(app.preferences.values['font_size']), margin_top=4))
@@ -108,7 +108,9 @@ class TextEditorView:
         self.loading = False
 
     def refresh_status(self):
-        self.status.text = document_status(self.document)
+        status = document_status(self.document)
+        if self.status.text != status:
+            self.status.text = status
         dirty = bool(self.document.modified)
         self.save_button.enabled = dirty
         if dirty != self.save_visible:
@@ -167,7 +169,9 @@ class TextEditorView:
 
     def update_source_info(self):
         count = len(self.editor.line_starts)
-        self.line_count.text = f'{count} line' + ('s' if count != 1 else '')
+        caption = f'{count} line' + ('s' if count != 1 else '')
+        if self.line_count.text != caption:
+            self.line_count.text = caption
         if self.session is not None:
             markdown = self.session.kind == 'markdown'
             if markdown and self.edit_mode not in self.source_tools.children:

@@ -1,10 +1,42 @@
 # Mobile navigation
 
-Commands such as **Open file**, **New document**, **Set up chat**, and compact
-Settings entries have neutral outlined buttons. Icon commands also have visible
+Commands such as **Open file**, **New document**, and **Set up chat** have neutral
+outlined buttons. Icon commands also have visible
 boundaries. Highlighted tabs and choices indicate the current selection; ordinary
 commands do not stay highlighted after use. Folder names within browser rows keep
 their row presentation, while chat Send/Stop keeps its distinct composer control.
+Settings uses unboxed category and action rows, with gray descriptions separating
+explanatory text from commands and native preference controls.
+
+## Android Back
+
+The Android Back button and back gesture dismiss the current temporary surface
+before leaving its screen. This includes a compact file/conversation drawer,
+editor Find controls, PDF pages/search, book chapters, and fullscreen reading.
+Back hides floating read-aloud controls while allowing playback to continue.
+Android handles keyboard, native dialog and popup-menu dismissal itself.
+
+In a file browser, Back clears an active search, closes its search controls,
+then returns through visited folders. Opening a folder directly without history
+falls back to its parent. The folder header's **Parent folder** arrow always
+goes up one level; it can differ from Back after visiting several folders or
+storage sources. Documentation and Notes Library follow their page/note history
+before returning to the screen that opened them.
+
+Reader tools, Settings categories, connection forms and transfer pages each
+have their own return step. Leaving a transfer comparison cancels that review;
+leaving an active transfer's details lets the transfer continue. Returning from
+a document keeps its open session and draft; use the document's Close command
+to close it explicitly.
+
+Each bottom tab or rail destination retains its own place. Back follows the
+current destination's screens. Opening a file from Workspaces hands it to
+Documents; after leaving that file, Back returns to the same folder. Ordinary
+tab taps preserve each tab's place without creating these action return steps.
+At a destination's root, Back returns to **Home**. From Home's root,
+Android handles leaving the app. Switching tabs does not create a trail of tab
+selections to undo. Wide companion sidebars stay in place while Back leaves the
+active detail; compact drawers close first.
 
 ## Home and document search
 
@@ -17,7 +49,7 @@ navigation rail makes the available content area asymmetric. Fully opening the
 device restores the ordinary responsive layout.
 
 Home shows **Your workspace**, with a **Continue** card for the selected document,
-**New document** and **Open file…**. Recent lists up to ten recently used documents, including open documents; Folder Hub and Books & Comics remain available below. Wider windows put
+**New document** and **Open file…**. Recent lists up to ten recently used documents, including open documents; Workspaces and Books & Comics remain available below. Wider windows put
 Recent and Your spaces side by side. Continue restores the document's
 Edit/Preview mode. Open file browses existing Local/LocalCrypt files and detects
 the supported format when you open one.
@@ -36,7 +68,8 @@ Open to switch between all open documents or close individual items. Closing kee
 saved files and retains the existing unsaved-change choices. The switcher is
 collapsed when you return to the hub.
 
-**Open** badges identify active workspace entries. **Unsaved changes** and
+**Currently open** appears as plain status text beneath recent filenames for documents
+still open in the workspace. Select the filename to return to that document. **Unsaved changes** and
 **Draft** mark pending edits; **Recovered draft** identifies edits available from
 a recovery copy. These badges do not mean changes have been saved back to the
 source. Saving clears the draft badges. **Document card overview** switches Recent
@@ -77,7 +110,7 @@ alert dimming. Dismissing the alert restores the screen.
 Documents has a hamburger in its navigation bar. Opening it reveals a menu
 with **Browse Local Files**, on-disk unlocked LocalCrypt locations, **Recent**
 (up to ten eligible files), **Comics Library**, and **Shortcuts** for new text,
-new Markdown and Folder Hub. Browse and library shortcuts open the existing file
+new Markdown and Workspaces. Browse and library shortcuts open the existing file
 browser in the main area. LocalCrypt browse labels show the remote name without
 a transfer-status suffix. Recent can reopen a closed document. Session-only entries restore from their encrypted list cache after credential unlock. The menu's comics folders come from the same discovery as Home's
 **Books & Comics**; both show folder names without full paths. Books & Comics
@@ -85,8 +118,8 @@ uses folder icons and opens each folder through the existing file browser.
 
 The menu leaves a strip of the current page visible on compact screens. Tap the
 hamburger again to return. Reduce Motion skips the animation. Browsing retains
-independent storage, folder, search and history, without changing Folder Hub's
-selection. Folder Hub has no hamburger; use its Browse Local/LocalCrypt/Remote
+independent storage, folder, search and history, without changing Workspaces's
+selection. Workspaces has no hamburger; use its Browse Local/LocalCrypt/Remote
 actions instead.
 
 At window widths of 640 points/dp or more, including a sufficiently wide Duo

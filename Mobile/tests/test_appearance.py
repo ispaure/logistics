@@ -7,6 +7,48 @@ from features.lm.mobile.presentation import transcript_document
 
 
 class AppearanceTests(unittest.TestCase):
+    def test_browser_navigation_returns_to_accent_without_losing_eink_outlines(self):
+        import sys
+        from types import SimpleNamespace as NS
+        from unittest.mock import MagicMock, patch
+        from logisticsmobile.appearance import paint_surface
+        from logisticsmobile.browser_ui import browser_command
+        from logisticsmobile.palette import EINK, set_eink_enabled
+
+        class Impl:
+            __module__ = 'toga_android.widgets.button'
+        class Colors:
+            def __new__(cls, states, colors):
+                return NS(states=states, colors=colors)
+            valueOf = staticmethod(lambda value: value)
+        impl = Impl()
+        button = NS(_impl=impl, on_press=lambda: None)
+        impl.interface, impl.native, impl.scale_in = button, MagicMock(), lambda value: value
+        drawable = MagicMock()
+        modules = {'android': NS(R=NS(attr=NS(state_enabled=1))),
+                   'android.content.res': NS(ColorStateList=Colors),
+                   'android.graphics.drawable': NS(GradientDrawable=lambda: drawable,
+                                                   RippleDrawable=MagicMock())}
+        try:
+            with patch.dict(sys.modules, modules):
+                for index, (eink, colors) in enumerate(((False, LIGHT), (True, EINK), (False, DARK))):
+                    set_eink_enabled(eink)
+                    impl.native.getResources().getConfiguration().uiMode = 0x20 if colors is DARK else 0x10
+                    drawable.setStroke.reset_mock()
+                    if index == 0:
+                        browser_command(button)
+                    else:
+                        paint_surface(impl, 8)
+                    drawable.setColor.assert_called_with(0)
+                    if eink:
+                        drawable.setStroke.assert_called_with(1, argb('#000000'))
+                    else:
+                        drawable.setStroke.assert_not_called()
+                    tint = impl.native.setTextColor.call_args.args[0]
+                    self.assertEqual(tint.colors, [argb(colors['muted']), argb(colors['accent'])])
+        finally:
+            set_eink_enabled(False)
+
     def test_android_command_outline_survives_theme_and_eink_transitions(self):
         import sys
         from types import SimpleNamespace as NS

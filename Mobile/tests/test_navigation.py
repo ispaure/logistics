@@ -14,7 +14,7 @@ class NavigationTests(unittest.TestCase):
         selected = Mock()
         host = NativeNavigationHost(DESTINATION_ITEMS, on_select=selected)
         routes = Routes(host, guard=lambda: True, changed=lambda body: None)
-        routes.show(toga.Label('Folder Hub'), destination='files', root=True)
+        routes.show(toga.Label('Workspaces'), destination='files', root=True)
         reader = toga.Label('Markdown remains open')
         routes.show(reader, destination='files', route='private:note')
         selected.reset_mock()

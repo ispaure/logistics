@@ -7,7 +7,7 @@ class SharedFiles(LocalFiles):
     def _guard(self, path):
         relative = path.relative_to(self.root)
         if relative.parts and relative.parts[0] == 'Local':
-            raise ValueError('Open managed Local copies from their Folder Hub source.')
+            raise ValueError('Open managed Local copies from their Workspaces source.')
         return super()._guard(path)
 
     def list(self, path='', *, cancelled=lambda: False):

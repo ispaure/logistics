@@ -134,9 +134,9 @@ class UXWorkflowTests(unittest.TestCase):
         labels = [getattr(w, 'text', '') for w in widgets(catalog.library_rows)]
         self.assertIn('No configured library folders.', labels)
         self.assertIn('Import a book or comic…', labels)
-        self.assertIn('Open Folder Hub', labels)
+        self.assertIn('Open Workspaces', labels)
         folder_hub = next(w for w in widgets(catalog.library_rows)
-                          if getattr(w, 'text', '') == 'Open Folder Hub')
+                          if getattr(w, 'text', '') == 'Open Workspaces')
         folder_hub.on_press()
         self.assertEqual(app.native_host.state.destination, 'files')
 

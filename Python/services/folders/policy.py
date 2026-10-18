@@ -1,4 +1,4 @@
-"""Portable Folder Hub visibility and naming rules, shared by both hosts."""
+"""Portable Workspaces visibility and naming rules, shared by both hosts."""
 from configparser import ConfigParser
 from pathlib import Path
 

@@ -2,7 +2,7 @@
 
 ## Using the mobile panels
 
-Home offers Continue and compact shortcuts to Folder Hub, writing and the library.
+Home offers Continue and compact shortcuts to Workspaces, writing and the library.
 Documents groups open sessions by type and shows preview cards by default. Tap
 a filename to continue. Cards show a short text excerpt for ordinary text/Markdown documents
 and a type placeholder for books, comics and private provider sessions. The **×**
@@ -11,7 +11,7 @@ In **Settings → App**, turn off **Document card overview** to use the grouped 
 with the same direct **×** close control. This switch saves immediately and updates the document
 overview, including when an editor is open. Stored documents are not listed in the overview.
 Settings groups feature options under Text & Markdown, Books & Comics, LM Chat
-and Folder Hub; reader appearance stays in each open reader. Documents offers New document and Open file in its toolbar; Chat has
+and Workspaces; reader appearance stays in each open reader. Documents offers New document and Open file in its toolbar; Chat has
 its own bottom navigation destination. The Library shortcut has been removed
 from Documents.
 
@@ -22,22 +22,22 @@ Markdown opened from local/provider files offers Preview/Edit without saving the
 draft; leaving the view clears the rendered preview and keeps the draft in memory.
 Closing or locking private content clears the preview as well as its editor text.
 
-Folder Hub starts with a scrollable list of folders. Names have no Local/Remote prefix.
-Name-based groups (such as Server → Library → Comics) remain expandable. The Hub
+Workspaces starts with a scrollable list of folders. Names have no Local/Remote prefix.
+Name-based groups (such as Server → Library → Comics) remain expandable. Workspaces
 lists storage entry points and managed copies; browsing a remote does not add its
 contents to this tree. Open an entry to browse actual subfolders in its file browser.
 Tap a folder row to open its action page. **Browse Local**, **Browse LocalCrypt** or **Browse Remote** opens the file browser for that copy.
 Managed copies offer **Pull…** and **Push…**. Folders with a loaded remote offer
 Pull to create or associate a copy. Local folders also offer **Delete local
 folder…**, with native confirmation; online files are kept. Deletion waits until
-transfers finish. **Choose another folder** returns to the list. At widths of at
+transfers finish. **Choose another workspace** returns to the list. At widths of at
 least 640 points/dp, the tree remains on the left and actions appear on the right,
 in equal panes centered in the available content. Narrow windows use a separate
 action screen. Mapping removal is not offered on this page.
 **Settings → rclone / Remote connections…** loads credentials. **Transfers** and
 **Refresh** stay above the scrolling list. Transfers opens progress and managed-copy
 options; Refresh has its own circular-arrow icon and updates folder discovery.
-Returning through the bottom Folder Hub tab refreshes the same complete list.
+Returning through the bottom Workspaces tab refreshes the same complete list.
 
 An ordinary local folder can also **Push…** before its first Pull. **Push whole
 folder…** infers the remote from the folder name: `Books` goes to `Books:` in the
@@ -77,7 +77,7 @@ a new-copy mapping. The popup identifies the
 source and destination and warns about replacements/deletions. Changing the
 connection or mapping while the popup is open invalidates that operation.
 A compact transfer strip remains available while writing or reading. The rclone
-Sync behaviour and destructive scope are described in the Folder Hub section above.
+Sync behaviour and destructive scope are described in the Workspaces section above.
 
 Native colours follow the system appearance, and phone lists use vertical scrolling.
 iPhones request the tab-bar presentation; iPads retain the adaptive sidebar. These
@@ -85,7 +85,7 @@ local UI changes need a freshly built app; the previously released main.07 does
 not contain them. Screen-reader and physical touch/keyboard validation remain
 separate from the automated checks.
 
-Local file folders remain browsable during a pull: open Folder Hub, choose a readable local folder,
+Local file folders remain browsable during a pull: open Workspaces, choose a readable local folder,
 and enter folders or go Up while the transfer continues. Remote engine operations
 remain serialized. The transfer status strip opens details and can be dismissed
 after completion without closing your current document.
@@ -97,7 +97,7 @@ running. Opening and browsing use separate local work without replacing the
 transfer cancellation handle. LocalCrypt operations that need the cloud engine
 remain serialized.
 
-Home’s **Folder Hub** opens the same folder list each time. Choosing
+Home’s **Workspaces** opens the same folder list each time. Choosing
 **All files → Browse Local** refreshes the local root and clears an old
 search filter. Local browsing does not wait for a credential restore or an
 unrelated cloud request.
@@ -123,7 +123,7 @@ return to the centered page. LocalCrypt bookmarks remain in memory until close;
 ordinary library bookmarks retain their saved behavior.
 
 Contents and appearance screens have their own Back step. A reader opened from
-Folder Hub returns first to reading and then to the same folder. Each provider document
+Workspaces returns first to reading and then to the same folder. Each provider document
 owns its request and cancellation; cancelling that document does not cancel a
 separate pull. Wait for its operation to finish before closing it.
 
@@ -135,9 +135,9 @@ menus use the native navigation bar's own touch target.
 ## Panel layout
 
 Home hides its redundant top navigation title while retaining its bottom tab.
-Documents and Folder Hub use their existing navigation titles without a second
+Documents and Workspaces use their existing navigation titles without a second
 large heading. Settings starts directly with its grouped controls. Both Home and
-the bottom navigation use the desktop Folder Hub stack-of-three glyph.
+the bottom navigation use the desktop Workspaces stack-of-three glyph.
 On iOS, Chat measures floating-tab overlap to keep the composer and Send control
 above the navigation bar, including while the keyboard is open and drafts grow.
 
@@ -148,7 +148,7 @@ preserves the selected destination and does not open other workspaces.
 
 ## Credential groups, open documents and privacy
 
-Folder Hub's Credential selector includes All and the names of imported credential
+Workspaces's Credential selector includes All and the names of imported credential
 ZIPs (for example, Personal). All combines known local and remote folder trees.
 Session-only imports retain their original password-protected ZIP under device
 encryption in private app storage, along with its remote associations. Future
@@ -193,7 +193,7 @@ opening them uses their reader, while text and Markdown use the editor. The
 format-specific Open actions inside Documents retain their category filters.
 
 
-Folder Hub shows active transfer progress directly below its navigation title,
+Workspaces shows active transfer progress directly below its navigation title,
 above Credential. Transfers, Refresh and Add share appear on a single row;
 Add share opens the SMB / Mac share connection form. The transfer banner also
 shows completion and opens the existing transfer details screen.
@@ -228,9 +228,9 @@ reads through encrypted storage and stops at that storage root. An empty nearest
 LogisticsZIP section stops inheritance; a manually supplied value takes priority.
 Resolved values stay in memory for the reader session and are cleared on close.
 
-On Android and iOS, folders whose names start with `Legacy-` are hidden in Folder Hub,
+On Android and iOS, folders whose names start with `Legacy-` are hidden in Workspaces,
 file browsers and library shortcuts by default, including Local, Remote and
-LocalCrypt folders. Settings → Folder Hub → **Show Legacy** changes visibility
+LocalCrypt folders. Settings → Workspaces → **Show Legacy** changes visibility
 for the current session only and resets to off when the app starts.
 **Reload preferences** keeps the current session choice. Files with that
 prefix remain visible when their parent folders are visible.
@@ -238,16 +238,16 @@ prefix remain visible when their parent folders are visible.
 The same **Show Legacy** switch also hides credential/ZIP choices whose
 names start with `Legacy` (case-insensitive, no dash required), including retained
 ZIP unlock choices. Turning it on reveals these choices immediately. Hiding a
-selected credential returns the Folder Hub selector to **All**; stored credentials
+selected credential returns the Workspaces selector to **All**; stored credentials
 and their ZIPs are retained.
 
 ### LocalCrypt session and screen privacy
 
 See [LocalCrypt on mobile](../../../Python/features/rclone/docs/user_mobile/localcrypt.md#localcrypt-session-and-screen-privacy).
 
-### Locked credentials and Folder Hub
+### Locked credentials and Workspaces
 
-See [Remote connections on mobile](../../../Python/features/rclone/docs/user_mobile/connections.md#locked-credentials-and-folder-hub).
+See [Remote connections on mobile](../../../Python/features/rclone/docs/user_mobile/connections.md#locked-credentials-and-workspaces).
 
 ### Reader navigation and imported metadata
 
@@ -271,7 +271,7 @@ messages use an open layout. The conversation menu, streaming Stop action and
 history remain available.
 
 An empty Books & Comics library offers **Import a book or comic…** and
-**Open Folder Hub**. An empty search offers **Clear search**. Library search has
+**Open Workspaces**. An empty search offers **Clear search**. Library search has
 its own row so Refresh and Import do not crowd the search field.
 
 On iOS, ordinary screens reserve the measured overlap of the floating tab bar,

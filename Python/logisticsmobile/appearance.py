@@ -570,40 +570,47 @@ def refresh_appearance(app):
             if toolbar is not None and toolbar.getOverflowIcon() is not None:
                 toolbar.getOverflowIcon().mutate().setTint(foreground)
 
-    if host is not None and host.adapter is not None:
-        from .navigation import eink_selection_indicator
-        from android.content.res import ColorStateList
-        from com.google.android.material import R as MaterialR
-        impl = host.root._impl
-        foreground = impl.get_theme_color(R.attr.textColorPrimary)
-        accent = impl.get_theme_color(R.attr.colorAccent)
-        background = impl.get_theme_color(MaterialR.attr.colorSurface)
-        accent = readable_accent(accent, foreground, background)
-        colours = ColorStateList([[R.attr.state_checked], []], [accent, foreground])
-        if not hasattr(host.adapter, '_eink_bar_styles'):
-            host.adapter._eink_bar_styles = {}
-        for index, bar in enumerate((host.adapter.bottom, host.adapter.rail)):
-            if bar is not None:
-                saved = host.adapter._eink_bar_styles
-                if eink_enabled() and index not in saved:
-                    saved[index] = (bar.getItemActiveIndicatorColor(), bar.getItemRippleColor(),
-                                    bar.getElevation(), eink_selection_indicator(bar, True))
-                if eink_enabled():
-                    bar.setItemActiveIndicatorColor(ColorStateList.valueOf(argb('#000000')))
-                    bar.setItemRippleColor(ColorStateList.valueOf(0))
-                    bar.setElevation(0)
-                    bar.setItemIconTintList(ColorStateList([[R.attr.state_checked], []], [argb('#ffffff'), foreground]))
-                    bar.setItemTextColor(ColorStateList.valueOf(foreground))
-                else:
-                    if index in saved:
-                        indicator, ripple, elevation, geometry = saved.pop(index)
-                        eink_selection_indicator(bar, False, geometry)
-                        bar.setItemActiveIndicatorColor(indicator)
-                        bar.setItemRippleColor(ripple)
-                        bar.setElevation(elevation)
-                    bar.setItemIconTintList(colours)
-                    bar.setItemTextColor(colours)
-                bar.setBackgroundColor(background)
+    refresh_android_navigation(host)
+
+
+def refresh_android_navigation(host):
+    """Apply the same checked-icon treatment to bottom bars and late-created rails."""
+    if host is None or host.adapter is None:
+        return
+    from android import R
+    from .navigation import eink_selection_indicator
+    from android.content.res import ColorStateList
+    from com.google.android.material import R as MaterialR
+    impl = host.root._impl
+    foreground = impl.get_theme_color(R.attr.textColorPrimary)
+    accent = impl.get_theme_color(R.attr.colorAccent)
+    background = impl.get_theme_color(MaterialR.attr.colorSurface)
+    accent = readable_accent(accent, foreground, background)
+    colours = ColorStateList([[R.attr.state_checked], []], [accent, foreground])
+    if not hasattr(host.adapter, '_eink_bar_styles'):
+        host.adapter._eink_bar_styles = {}
+    for index, bar in enumerate((host.adapter.bottom, host.adapter.rail)):
+        if bar is not None:
+            saved = host.adapter._eink_bar_styles
+            if eink_enabled() and index not in saved:
+                saved[index] = (bar.getItemActiveIndicatorColor(), bar.getItemRippleColor(),
+                                bar.getElevation(), eink_selection_indicator(bar, True))
+            if eink_enabled():
+                bar.setItemActiveIndicatorColor(ColorStateList.valueOf(argb('#000000')))
+                bar.setItemRippleColor(ColorStateList.valueOf(0))
+                bar.setElevation(0)
+                bar.setItemIconTintList(ColorStateList([[R.attr.state_checked], []], [argb('#ffffff'), foreground]))
+                bar.setItemTextColor(ColorStateList.valueOf(foreground))
+            else:
+                if index in saved:
+                    indicator, ripple, elevation, geometry = saved.pop(index)
+                    eink_selection_indicator(bar, False, geometry)
+                    bar.setItemActiveIndicatorColor(indicator)
+                    bar.setItemRippleColor(ripple)
+                    bar.setElevation(elevation)
+                bar.setItemIconTintList(colours)
+                bar.setItemTextColor(colours)
+            bar.setBackgroundColor(background)
 
 
 def configure_android_eink(app):

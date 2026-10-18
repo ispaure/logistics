@@ -6,7 +6,7 @@ DESTINATIONS = ('home', 'files', 'documents', 'chat', 'settings')
 
 DESTINATION_ITEMS = (
     ('home', 'Home', 'house', 'home'),
-    ('files', 'Folder Hub', 'square.grid.2x2', 'ic_menu_mapmode'),
+    ('files', 'Workspaces', 'square.grid.2x2', 'ic_menu_mapmode'),
     ('documents', 'Documents', 'doc.on.doc', 'ic_menu_edit'),
     ('chat', 'Chat', 'bubble.left.and.bubble.right', 'ic_dialog_email'),
     ('settings', 'Settings', 'gearshape', 'ic_menu_preferences'),
@@ -67,6 +67,7 @@ def install_destination_icons(host):
     adapter = host.adapter
     if adapter is None or not hasattr(adapter, 'bottom'):
         return
+    install_android_navigation_appearance(host)
     from android.graphics import Path, Paint
     from android.graphics.drawable import ShapeDrawable
     from android.graphics.drawable.shapes import PathShape
@@ -92,6 +93,24 @@ def install_destination_icons(host):
             if bar is not None:
                 # Independent instances let Material own each bar's tint state.
                 bar.getMenu().getItem(index).setIcon(drawable.getConstantState().newDrawable().mutate())
+
+
+def install_android_navigation_appearance(host):
+    """A rail first created by a resize needs the current theme immediately."""
+    adapter = host.adapter
+    if getattr(adapter, '_logistics_appearance_installed', False):
+        return
+    original = adapter.set_mode
+
+    def set_mode(mode):
+        previous = adapter.mode
+        original(mode)
+        if adapter.mode != previous:
+            from .appearance import refresh_android_navigation
+            refresh_android_navigation(host)
+
+    adapter.set_mode = set_mode
+    adapter._logistics_appearance_installed = True
 
 
 class NavigationState(DestinationState):

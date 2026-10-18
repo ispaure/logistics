@@ -19,7 +19,7 @@ including Documents and configured library shortcuts. Empty-folder changes
 participate in the mobile review and its final recheck.
 Progress displays the latest reported totals, without queuing older updates
 ahead of browsing when native rendering is busy.
-Mobile does not offer mounts. See the [mobile transfer guide](../../../../../docs/user_mobile/folder_hub/folder_hub.md#folder-hub-and-local--localcrypt-sync)
+Mobile does not offer mounts. See the [mobile transfer guide](../../../../../docs/user_mobile/folder_hub/folder_hub.md#workspaces-and-local--localcrypt-sync)
 for connection scopes, encrypted storage, cancellation and credential persistence.
 
 ### Mobile folder navigation
@@ -34,7 +34,7 @@ passwords are stored in the cache. Forgetting credentials also removes these
 caches, including other windows' copies. An unencrypted credential ZIP has no
 required password and does not enable this cache.
 
-In the mobile Folder Hub, tapping a folder opens its preferred available copy.
+In the mobile Workspaces, tapping a folder opens its preferred available copy.
 The adjacent **•••** action button keeps explicit Browse Local/LocalCrypt/Remote,
 Pull and Push choices together. Mapped copies show Pull and Push direction.
 Delete local folder is separated and styled as destructive, and retains its
@@ -43,7 +43,7 @@ dismiss label. Credential, Local, LocalCrypt, Pull and Push terminology is retai
 
 ### Android collection drive
 
-Android and iOS both offer **Settings → Folder Hub → Show Legacy** for Legacy
+Android and iOS both offer **Settings → Workspaces → Show Legacy** for Legacy
 folder and credential visibility. Android additionally offers **Local / LocalCrypt
 location…**: choose one drive for both `<drive>/Logistics/Local` and
 `<drive>/Logistics/LocalCrypt`. Android All files access is required for public
@@ -67,15 +67,15 @@ the generic Unlock action until you open the chooser.
 Android and iOS can keep several ZIP packages loaded together. Each import's
 **Save credentials on this device** choice applies to that package: saved
 packages persist in the encrypted private vault; session-only packages remain
-active in memory without entering that vault. Folder Hub exposes their separate
+active in memory without entering that vault. Workspaces exposes their separate
 credential groups, and Connections shows their loading modes. Duplicate remote
 names receive package qualifiers and preserve their original account identities.
 Reloading saved credentials keeps active session packages. See the
 [mobile package guide](../../../../../docs/user_mobile/navigation/panels.md#multiple-credential-packages-on-android-and-ios).
 
-### Mobile Folder Hub source tabs
+### Mobile Workspaces source tabs
 
-On Android and iOS, Folder Hub opens on **Local**. The **Cloud** source uses **Credential: All**.
+On Android and iOS, Workspaces opens on **Local**. The **Cloud** source uses **Credential: All**.
 Choose a package to filter its folders and their downloaded Local/LocalCrypt copies.
 The **Local** and **Home Server** tabs display separate folder trees and hide the
 credential selector. Returning to Cloud selects All again. Directly added SMB/Mac

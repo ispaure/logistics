@@ -1,4 +1,18 @@
-# Folder Hub on mobile
+# Workspaces on mobile
+
+Each workspace is a configured folder or storage location with relevant tools and
+actions: browse its files, open a Notes Library, or manage available local,
+encrypted and remote copies. Open **Workspaces** from the main navigation, then
+use a folder's **Workspace actions** menu for its available commands.
+
+On tablets and other windows with at least 640 points of usable width,
+Workspaces keeps the locations and source controls on the left. Opening a local,
+LocalCrypt or remote folder shows its files on the right; workspace actions use
+that same right pane. Each pane scrolls independently. Narrow windows use the
+full-screen browser and Back returns to Workspaces. Rotating between these
+layouts keeps the current browser. In landscape on an open or partially open
+Duo, the pane boundary follows the physical crease when hinge information is
+available, accounting for the navigation rail and safe areas.
 
 ## Notes Library
 
@@ -31,8 +45,8 @@ does not run Obsidian plugins.
 Files** opens files beside that collection in the app's shared Files directory;
 the collection itself is accessed through the other tab. The shared tab appears
 only when that storage location is available. Opening LocalCrypt shows its
-selected source as an additional tab. Folder actions are under **…**; the back
-control returns to the parent folder or Folder Hub. **Cloud File Browser** uses
+selected source as an additional tab. Workspace actions are under **…**; the back
+control returns to the parent folder or Workspaces. **Cloud File Browser** uses
 the same directory, search and listing controls.
 
 The file browser keeps your current folder, selection, list/tile mode, search, sort and browse
@@ -50,9 +64,15 @@ rows show filenames rather than full paths, shortening long names in the middle.
 File sizes remain available in **Details** instead of beside every filename. The
 **↑ Parent folder** control beside the folder status goes up one level in local
 and remote browsing on iOS and Android. At the current storage root it becomes
-**Back to Folder Hub**. Beneath the folder name, a drive identifies on-device storage and
-a cloud identifies online storage. Encrypted folders additionally show the same
-combined folder-and-lock icon as Folder Hub: an open blue padlock after successful
+**Back to Workspaces**.
+
+Browser Back, Parent, Search and paging controls use borderless accent-colored
+icons in normal appearance. Android High contrast / E Ink keeps their black
+outlines and monochrome icons.
+
+Beneath the folder name, a drive identifies on-device storage and a cloud
+identifies online storage. Encrypted folders additionally show the same
+combined folder-and-lock icon as Workspaces: an open blue padlock after successful
 unlocked browsing, or an orange closed padlock with chains when locked.
 These indicators describe the folder currently open, including when a remote
 also has an on-device copy.
@@ -63,14 +83,15 @@ Folders show up to 40 items per page, in both List and Tiles, so large folders
 open promptly while thumbnails load in the background.
 Larger listings show **Previous** and **Next** above the items, keeping paging
 controls clear of the bottom destination bar.
-Files opened from this browser stay in the Folder Hub navigation stack. Native Back
-returns to the same folder, search, sorting, selection and scroll position.
-Back leaves the reading/editing session open, including unsaved provider text
-drafts; reopen it through **Open** to continue. Files opened from
-Books & Comics or the Open switcher keep their document navigation instead.
+Files opened from this browser open under **Documents**, which becomes the
+selected tab. Tap the **Workspaces** tab/icon to return to the folder you opened
+them from, with its search, sorting and selection retained. Documents keeps the
+reading/editing session open, including unsaved provider text drafts. Native Back
+inside Documents returns through its document screens; Android Back can also
+return to the source destination after leaving the reader.
 Connection import, reload, remember and forget remain in Settings.
 
-Use **Pin current folder** to add an ordinary local or remote folder to Folder Hub.
+Use **Pin current folder** to add an ordinary local or remote folder to Workspaces.
 Remote pins identify the connection, not just its display name; a missing or
 changed connection reports unavailable instead of opening another provider.
 Encrypted folder paths cannot be pinned for restoration. Remove pin removes only
@@ -80,9 +101,9 @@ Managed folders use the reviewed Pull/Push workflow. Pull refreshes the selected
 local destination; Push updates the remote. Both can replace or delete destination
 files, and cancellation leaves any already completed changes in place.
 
-## Folder Hub and Local / LocalCrypt sync
+## Workspaces and Local / LocalCrypt sync
 
-**Folder Hub** opens on **Local**, followed by **Cloud** and **Home Server**
+**Workspaces** opens on **Local**, followed by **Cloud** and **Home Server**
 tabs. Local includes ordinary folders and downloaded Local/LocalCrypt copies of
 rclone folders. Remote-only folders appear under Cloud once credentials load.
 Tap a folder under **Local** to browse its device copy; tap it under **Cloud**
@@ -136,9 +157,9 @@ mapped Local and LocalCrypt folders retain **Browse Remote** even while their
 credentials are locked; opening it prompts for the matching credentials and
 returns to the mapped online subfolder. Remote
 browsing opens the read-only online file browser, with direct previews and existing offline-copy
-actions. Choose folders and start Push/Pull from their Folder Hub action pages.
+actions. Choose folders and start Push/Pull from their Workspaces action pages.
 Existing managed copies remember their storage type and transfer association.
-The first pull chooses storage; later transfers reuse it. Folder Hub updates
+The first pull chooses storage; later transfers reuse it. Workspaces updates
 when you return to it and when transfers or loaded credentials change. Switching
 back to an unchanged source tab reuses its existing folder rows; folder and
 credential changes refresh those rows automatically. Discovery uses
@@ -148,7 +169,7 @@ button. Loading or unlocking credentials updates remote names and discovers
 existing encrypted copies. If the hub cannot load, **Try again** retries it.
 
 Mobile bundles the existing `Python/configFile.ini`; its `[Folders]` exclusions
-control both the remote picker and Folder Hub. Hidden backing remotes remain
+control both the remote picker and Workspaces. Hidden backing remotes remain
 loaded for crypt connections. Remote-name exclusions apply to remote entries;
 folder suffix exclusions apply to all sources. These names are not hard-coded
 in mobile. List and Tiles reuse the shared browser, with separated row/card
@@ -179,7 +200,7 @@ snapshots. Transfers use rclone's normal incremental comparison. LocalCrypt sync
 ciphertext to/from the backing scope; a readable Local copy of a crypt remote uses
 rclone's crypt filesystem for automatic encryption/decryption.
 
-**Folder Hub → Transfers** opens **Transfer details**: **From** and **To** folders
+**Workspaces → Transfers** opens **Transfer details**: **From** and **To** folders
 for the current or most recent transfer, live progress, completed/known
 file counts and transferred/known megabytes (MB), cancellation, active review, and completion or error
 messages, wrapped to fit the phone screen. It does not list remotes or offer folder selection. The transfer banner
@@ -187,9 +208,9 @@ also opens these details; the remote browser reflects the same progress. If a
 remote folder matches several local mappings, Pull opens a focused destination
 chooser for those matches.
 
-On Folder Hub itself, the transfer banner appears only on **rclone**, while a
+On Workspaces itself, the transfer banner appears only on **rclone**, while a
 transfer is running or an interrupted/failed transfer needs attention. Successful
-completion stays available in **Transfers** without keeping a banner on the Hub.
+completion stays available in **Transfers** without keeping a banner on Workspaces.
 Local and Network shares never show this banner.
 
 Folder action pages offer **Delete local folder…** and, for managed copies,
@@ -232,7 +253,7 @@ completed writes/deletions at the destination, just like CLI rclone sync; retry
 uses the same recorded location. Mobile runs one transfer at a time and does not
 queue another transfer. Existing Local and LocalCrypt folders remain browsable
 and readable while a folder transfer runs, including through Documents’ hamburger
-menu, configured library shortcuts and Folder Hub. Opening a library keeps its
+menu, configured library shortcuts and Workspaces. Opening a library keeps its
 encrypted provider and account namespace. Locking or replacing credentials still
 invalidates those private shortcuts. LocalCrypt listings omit rclone's
 incomplete download files; refresh to discover newly completed files. A file that

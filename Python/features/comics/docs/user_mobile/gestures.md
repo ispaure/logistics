@@ -19,6 +19,9 @@ reader. It works on single pages and spreads, including Local/LocalCrypt comics.
 Comic pages use native pinch zoom and panning on iOS and Android. Fit page resets
 zoom; swipe left for the next page and right for the previous page at fit size.
 Manga reverses those directions. Swipes stop at the first/last page without an
-error. While zoomed, dragging pans the page and does not change pages. Swipes
-leave the outer edge available for system navigation. Private comic pages
+error. Page changes slide horizontally in the reading direction, including manga
+and spreads, with controls visible or hidden. Reduced motion on iOS, disabled
+Android animations and E Ink mode suppress the slide. While zoomed, dragging
+pans the page and does not change pages. On iOS, reader swipes take priority
+over the navigation swipe back; use Back or the destination tabs to leave. Private comic pages
 use the same presentation while their content and position remain session-only.

@@ -11,7 +11,7 @@ available crypt remotes and confirms when a crypt is selected. If it reports
 no crypt remote, the loaded ZIP must include both the crypt configuration and
 its backing remote configuration; choosing only the backing Dropbox/Drive/etc.
 remote does not apply crypt decryption.
-For a new encrypted offline folder, use Folder Hub's managed **Pull to LocalCrypt**
+For a new encrypted offline folder, use Workspaces's managed **Pull to LocalCrypt**
 workflow. Existing individual encrypted copies remain readable with matching
 credentials; the remote browser no longer creates them.
 
@@ -91,7 +91,7 @@ saved bookmark record, plaintext export or thumbnail cache. Its tools offer
 **Bookmark** and a bookmark selector for comics and EPUBs. These bookmarks remain
 in memory while switching documents and are cleared when the session closes.
 Markdown is edited as source text, with an offline preview. Folder transfers use
-the Folder Hub actions described below.
+the Workspaces actions described below.
 
 For a LocalCrypt comic or EPUB, choose **Edit metadata…** in the private reader,
 change the fields and choose **Save encrypted metadata**. EPUB fields include title,
@@ -172,7 +172,7 @@ continues to save encrypted bytes through the existing verified transaction.
 
 ### SMB and Mac shared folders
 
-In **Folder Hub**, tap **Add SMB / Mac share…** (also available in Remote connections).
+In **Workspaces**, tap **Add SMB / Mac share…** (also available in Remote connections).
 Give each server a unique connection name, enter its IP address or hostname,
 username and password, and choose **Add connection and browse**. Enter only the
 server in the Server field, without `smb://` or a shared-folder path. The default
@@ -182,7 +182,7 @@ port is 445; change Domain when your server requires one. For guest access, ente
 You can add multiple servers. Adding one preserves existing connections and rejects
 names already in use. **Save credentials on this device** defaults to on: usernames
 and passwords are stored in the existing encrypted credential vault, protected by
-Android Keystore or iOS Keychain, and restored when Folder Hub initializes. Turn it off
+Android Keystore or iOS Keychain, and restored when Workspaces initializes. Turn it off
 for a session-only connection; this leaves previously saved credentials unchanged.
 Saved and session-only servers can remain loaded together.
 Reloading saved credentials preserves temporary connections;
@@ -207,7 +207,7 @@ Physical-device SMB transfers still require validation with an actual server.
 
 ### Managed folder pulls
 
-Use **Pull…** from Folder Hub for reviewed Local or LocalCrypt sync. The older
+Use **Pull…** from Workspaces for reviewed Local or LocalCrypt sync. The older
 snapshot-style repeatable-pull workflow has been removed. Existing downloaded
 folders remain on the device; they can still be browsed as local files. Sync can
 replace or delete destination files after confirmation, without a retained backup.

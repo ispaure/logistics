@@ -216,6 +216,7 @@ class ChapterBridge:
 def chapter_view(content, view=None, *, offset=0, on_event=None, on_link=None):
     if view is None:
         view = toga.WebView(style=Pack(flex=1))
+    view.page_swipes_at_edges = True
     impl = getattr(view, '_impl', None)
     native = getattr(impl, 'native', None)
     from toga.platform import get_factory

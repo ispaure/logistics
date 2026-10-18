@@ -11,7 +11,7 @@ from .preferences import Preferences
 from .preview import markdown_preview
 from .reader_sessions import ReaderWorkspace
 from commonUtils.ui.native.navigation import NativeNavigationHost
-from commonUtils.ui.native.routes import Routes
+from .routes import MobileRoutes
 from .navigation import DESTINATION_ITEMS
 from .workspace import Workspace, MAX_SESSIONS
 from features.text_editor.mobile.ui import TextEditorView
@@ -132,7 +132,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.editor_view = TextEditorView(self)
         self.editor_view.bind()
         self.native_host = NativeNavigationHost(DESTINATION_ITEMS, on_select=self.select_destination)
-        self.routes = Routes(self.native_host, guard=self.checkpoint, changed=self.route_changed,
+        self.routes = MobileRoutes(self, self.native_host, guard=self.checkpoint, changed=self.route_changed,
                              intent=self.mark_navigation)
         self.adaptive = AdaptiveWorkspace(self)
         self.routes.on_render = self.adaptive.render
@@ -219,8 +219,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         from .reader_chrome import sync_comic_chrome
         sync_comic_chrome(self, self.body)
         # Material selection is reported before the shared destination commits.
-        if self.routes.back_callback is not None:
-            self.routes.back_callback.setEnabled(bool(self.routes.screens[destination]))
+        self.routes.sync_back(destination)
         key = self.pending_reader_restore
         if destination == 'documents' and key is not None:
             self.pending_reader_restore = None
@@ -634,14 +633,14 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         box.add(toga.Label('Use Appearance in an open reader\nto adjust its pages.', style=Pack(font_size=12)))
         box = category('LM Chat')
         box.add(toga.Button('Server & generation settings…', on_press=self.show_chat_configuration, style=Pack(height=48)))
-        box = category('Folder Hub')
+        box = category('Workspaces')
         if type(self._impl).__module__.startswith('toga_android.'):
             box.add(toga.Button('Local / LocalCrypt location…', on_press=self.show_collection_storage, style=Pack(height=48)))
         self.show_legacy_choice = toga.Switch('Show Legacy',
             value=getattr(self, 'show_legacy_session', False),
             on_change=self.change_show_legacy, style=Pack(height=48))
         box.add(switch_row(self, 'Show Legacy', self.show_legacy_choice,
-            'Show Legacy- folders in Folder Hub, file browsers and library shortcuts, '
+            'Show Legacy- folders in Workspaces, file browsers and library shortcuts, '
             'and credential choices whose names start with Legacy. This choice lasts only until the app closes.'))
         box.add(toga.Button('rclone / Remote connections…', on_press=self.show_cloud_connections, style=Pack(height=48)))
         box = sections['App']

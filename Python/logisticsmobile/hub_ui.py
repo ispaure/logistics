@@ -36,9 +36,12 @@ def session_identities(session, history):
     return identities
 
 
-def status_badges(details):
+def status_badges(details, *, currently_open=False):
     """Text-labelled status remains readable without relying on colour."""
     box = toga.Box(style=Pack(direction=COLUMN, margin_left=8, margin_right=8))
+    if currently_open:
+        box.add(toga.Label('Currently open',
+                           style=Pack(font_size=13, font_weight='bold', margin_bottom=4)))
     row, length = None, 0
     for detail in details:
         # Bound each line so phone-sized cards do not grow to fit long statuses.
@@ -180,9 +183,9 @@ class HubUI:
         middle_filename(name)
         row.add(toga.Box(children=[*self.document_source_badges(session, opener), name],
             style=Pack(direction=ROW, align_items=CENTER)))
-        badges = (['Open'] if session.id in self.workspace.sessions else []) + details
-        if badges:
-            row.add(status_badges(badges))
+        currently_open = session.id in self.workspace.sessions
+        if currently_open or details:
+            row.add(status_badges(details, currently_open=currently_open))
         return row
 
     def build_home(self):
@@ -229,11 +232,11 @@ class HubUI:
         for session, summary in recent:
             recent_box.add(self.recent_row(session, summary))
         if not recent:
-            recent_box.add(toga.Label('Recently opened files\nwill appear here.', style=Pack(font_size=13)))
+            recent_box.add(toga.Label('Recently opened files will appear here.', style=Pack(font_size=13)))
         spaces = toga.Box(style=Pack(direction=COLUMN))
         spaces.add(heading('Your spaces'))
         for title, subtitle, glyph, action in (
-            ('Folder Hub', 'Local · LocalCrypt · Remote', 'folder_hub', self.show_home_files),
+            ('Workspaces', 'Local · LocalCrypt · Remote', 'folder_hub', self.show_home_files),
             ('Books & Comics', 'Browse your library', 'books', self.show_library),
         ):
             text = toga.Box(children=[
@@ -316,7 +319,7 @@ class HubUI:
             for session, summary in recent:
                 box.add(self.recent_row(session, summary))
         if not recent:
-            box.add(toga.Label('Recently used documents\nwill appear here.', style=Pack(font_size=13)))
+            box.add(toga.Label('Recently used documents will appear here.', style=Pack(font_size=13)))
         if self.workspace.error:
             box.add(toga.Label(self.workspace.error, style=Pack(margin_top=8)))
         self.register_transfer_status(box)
@@ -370,9 +373,9 @@ class HubUI:
         excerpt = '\n'.join(wrap(' '.join(preview[:600].split()), width=32)[:4])
         box.add(toga.Label(excerpt or 'No preview available',
                            style=Pack(height=80, font_size=12, margin_left=12, margin_right=12, margin_bottom=8)))
-        badges = (['Open'] if recent and session.id in self.workspace.sessions else []) + details
-        if badges:
-            box.add(status_badges(badges))
+        currently_open = recent and session.id in self.workspace.sessions
+        if currently_open or details:
+            box.add(status_badges(details, currently_open=currently_open))
         return surface(box)
 
     def session_summary(self, session):
@@ -446,6 +449,9 @@ class HubUI:
             'Local files', title='Open file')
 
     def refresh_hub(self, destination):
+        if destination == 'files' and self.routes.screens['files']:
+            # Returning from Documents restores the folder that opened it.
+            return
         if destination == 'files' and self.window_id == 'primary':
             self.show_cloud(present=False)
             view = self.folder_picker_or_error()

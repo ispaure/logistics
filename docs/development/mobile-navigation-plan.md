@@ -80,7 +80,7 @@ workspace to readers and storage workflows.
 
 ## Product decisions
 
-- **Files** owns locations, pinned folders and folder browsing. The folder hub is
+- **Files** owns locations, pinned folders and folder browsing. The workspaces is
   the root of Files, not another primary destination. Opening a supported file
   activates it in Documents; returning to Files restores the browsing context.
 - **Documents** owns open text, Markdown, EPUB and comic sessions. Open items are

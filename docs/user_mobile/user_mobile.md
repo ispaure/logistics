@@ -24,14 +24,14 @@ replaced by the beta in place. See the
 
 ## Direct remote reading
 
-Open a remote from Folder Hub or Remote files. Tap a supported file to open a
+Open a remote from Workspaces or Remote files. Tap a supported file to open a
 read-only, memory-only reader: small text/Markdown/INI, PNG/JPEG/WebP, EPUB and
 CBZ/ZIP comics. Search filters the current folder only. Unsupported files and
 content beyond the reader limits show a dialog asking you to manually make a
 local copy; opening a file never automatically creates one.
 
 Remote browsers have no standalone file or folder download actions, including
-encrypted downloads. Use Folder Hub's managed Pull workflows for offline Local
+encrypted downloads. Use Workspaces's managed Pull workflows for offline Local
 or LocalCrypt folders. Existing offline copies remain readable and exportable.
 Direct readers show no Save, Save As or metadata-edit controls. Locking or replacing credentials
 retires their contents, including readers opened with session-only credentials.
@@ -54,7 +54,7 @@ the native app; real-device interaction testing is still required.
 | Logistics capability | Mobile status |
 | --- | --- |
 | Plain-text editing | Implemented: create, select, rename, edit and save private documents |
-| Hub and navigation | Native Home, Folder Hub, Documents, Chat and Settings destinations; retained screen per destination |
+| Workspaces and navigation | Native Home, Workspaces, Documents, Chat and Settings destinations; retained screen per destination |
 | Markdown | Text editing and offline preview: tables, headings, nested lists, quotes, emphasis and code |
 | Document import | Native picker adapters implemented; actual provider permissions still need device testing |
 | Draft recovery | Implemented: checkpoints, restored drafts and conflict-safe save-a-copy |
@@ -103,7 +103,7 @@ See [LocalCrypt on mobile](../../Python/features/rclone/docs/user_mobile/localcr
 
 ## File browser locations and actions
 
-See [Folder Hub on mobile](folder_hub/folder_hub.md#file-browser-locations-and-actions).
+See [Workspaces on mobile](folder_hub/folder_hub.md#file-browser-locations-and-actions).
 
 ## Reading and editing
 
@@ -113,9 +113,9 @@ See [Reading and editing on mobile](documents/reading-and-editing.md#reading-and
 
 See [iPad windows](navigation/windows.md#using-ipad-windows).
 
-## Folder Hub and Local / LocalCrypt sync
+## Workspaces and Local / LocalCrypt sync
 
-See [Folder Hub on mobile](folder_hub/folder_hub.md#folder-hub-and-local--localcrypt-sync).
+See [Workspaces on mobile](folder_hub/folder_hub.md#workspaces-and-local--localcrypt-sync).
 
 ## Using the mobile panels
 

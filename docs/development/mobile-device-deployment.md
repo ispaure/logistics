@@ -52,7 +52,7 @@ initial creation path.
 On 2026-10-17, the physical iPhone console confirmed a startup
 `ModuleNotFoundError: No module named 'markdown_it'` in the stale bundle.
 After refreshing requirements and installing in place over Wi-Fi, the app
-remained running and a physical-device screenshot showed Folder Hub with its
+remained running and a physical-device screenshot showed Workspaces with its
 existing configured folders. All 11 deployment tests passed; the screenshot is
 retained locally at `Mobile/logs/iphone-startup-dependencies-fixed.png`.
 The toolchain selector requires SDK 27.1 or newer and supplies `DEVELOPER_DIR`
@@ -172,7 +172,7 @@ when `devicectl --console` shows only native Python initialization. Inspect the
 system log when installation and process launch succeed without a usable UI.
 
 The corrected signed build was installed in place on the paired iPhone over
-Wi-Fi. A physical-device screenshot showed Folder Hub and the destination bar;
+Wi-Fi. A physical-device screenshot showed Workspaces and the destination bar;
 the local evidence is `Mobile/logs/iphone-startup-appearance-fixed.png`.
 All 10 focused appearance and packaged-startup tests passed. No uninstall or
 app-data reset was performed.

@@ -24,12 +24,15 @@ class FoldLayoutTests(unittest.TestCase):
         self.assertEqual(comic_mode(host, widget), 'double')
         host._hinge_status = 3
         self.assertIsNone(seam_fraction(host, widget))
+        self.assertAlmostEqual(seam_fraction(host, widget, include_open=True), 480 / 900)
         self.assertEqual(comic_mode(host, widget), 'single')
         host._hinge_status = 0
         self.assertIsNone(seam_fraction(host, widget))
+        self.assertIsNone(seam_fraction(host, widget, include_open=True))
         host._hinge_status = 2
         host.main_window._impl.native.windowScene.interfaceOrientation = 1
         self.assertIsNone(seam_fraction(host, widget))
+        self.assertIsNone(seam_fraction(host, widget, include_open=True))
 
     def test_unequal_pages_meet_at_seam_without_distortion(self):
         sizes = [(500, 1000), (800, 1000)]

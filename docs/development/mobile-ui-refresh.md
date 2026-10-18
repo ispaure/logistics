@@ -8,6 +8,39 @@ pushes, tags or releases were made for this refresh.
 
 ### Command boundaries — 2026-10-18
 
+Browser navigation is an explicit exception to boxed commands: Back, Parent,
+Search/Close search and paging controls use a transparent accent surface with no
+normal-mode stroke. Their retained E Ink outline flag gives Android the current
+black border in high contrast, and theme changes repaint the existing controls.
+
+### Editor typing and keyboard stability — 2026-10-18
+
+Formatted Markdown uses one scrolling document area below its formatting toolbar.
+The outer HTML/body stay at the native WebView's allocated size; they no longer
+add a second full-page scroll offset during IME resizing. Input and keyboard
+viewport changes coalesce a caret visibility check, which scrolls minimally only
+when the caret leaves the visible writing area. This does not force the document
+back to its beginning or recenter every keystroke. The same formatted surface is
+used by managed and provider documents. Native source/plain-text inputs keep their
+platform keyboard behavior. Unchanged status and line-count captions no longer
+cause form relayout on every key; the filename field uses its available flex
+width instead of a one-point fixed width.
+
+Validation uses the disposable `editor_keyboard_probe` with a long Markdown
+document, followed by long plain-text and Markdown Source inputs. It checks
+caret bounds through repeated typing, stable toolbar position, zero outer-page
+scroll and unchanged WebView ownership. The iOS software-keyboard check requires
+a nonzero native keyboard inset; screenshots/reports are retained locally under
+`Mobile/logs/editor-keyboard/`. Android device validation remains pending the
+next user-requested deployment; local tests cover the shared rendering and
+browser light/dark/E Ink appearance transitions.
+The focused host run passed 44 tests. The final iOS run retained the caret for
+16 formatted edits with a 362-point software-keyboard inset and 24 native edits
+across plain text and Markdown Source; outer-page scroll remained zero. The
+filename field retained 186 points of width instead of overlapping its actions.
+
+### Shared command style
+
 The host appearance adapter gives native Toga buttons a neutral outlined surface
 on creation for both iOS and Android. This covers Home, Documents, pickers,
 configuration forms and feature-owned commands without each owner opting in.
@@ -22,17 +55,32 @@ against the app and chat surfaces. iOS rounds the corners, supplies horizontal
 title inset, and refreshes resolved strokes on trait changes. Android retains
 ripple feedback and disabled text state lists; E Ink makes command boundaries
 square and monochrome. Explicit surfaces still own folder rows, tabs and actual
-selection states. Compact Settings entries are commands, while the wide sidebar
-retains selection styling. Chat New/Setup, conversation choices and Copy/Latest
+selection states. Settings is an explicit exception: category/action rows are
+unboxed, descriptive and status labels use the dynamic muted text role, and
+headings/control labels retain primary ink. Only the selected wide-sidebar
+category has a background. Chat New/Setup, conversation choices and Copy/Latest
 controls have boundaries; Send/Stop keeps its contrasting composer treatment.
 
 The disposable `command_buttons_probe` captures Home, Documents, Chat, Settings
-and Folder Hub in light/dark appearance and checks that ordinary commands remain
+and Workspaces in light/dark appearance and checks that ordinary commands remain
 unselected, outlined and usable after disabled-state changes. It also supports
 Android E Ink. iOS Simulator checks passed and screenshots were reviewed under
 `Mobile/logs/command-buttons/`. Android emulator validation is unavailable locally:
 the cached system image has no system disk. Host tests cover Android light/dark
 and E Ink stroke, disabled-text and ripple restoration contracts.
+
+Android's destination appearance also refreshes immediately when a resize first
+creates the left navigation rail. Both presentations use a 40-dp black square
+and white checked-icon tint in E Ink mode, preserving the original artwork's
+alpha. Normal appearance restores the original indicator geometry and colors.
+
+Follow-up validation: 35 focused host tests passed, including a rail created
+after E Ink was already enabled and restoring native geometry after disabling it.
+The isolated iOS `settings_links_probe` passed selection-preserving cancellation,
+URL validation, Enter-to-insert and toolbar-only link-icon checks. Light/dark
+Settings and the keyboard-sized link dialog were visually reviewed under
+`Mobile/logs/settings-links/`; its URL input and both actions remain visible.
+These follow-up changes are local and have not been redeployed to test devices.
 
 ### Intervention alert dimming — 2026-10-18
 
@@ -83,9 +131,9 @@ empty-state message also uses explicit short lines to fit narrow native labels.
 Validation: 56 focused host tests passed, including bottom bar → rail → bottom
 bar margin restoration. The isolated `navigation_clearance_probe` passed 15
 native page measurements on an iOS 27.1 Duo simulator: Home, Documents, Settings,
-Folder Hub and Chat in portrait, landscape and portrait again. Home/Documents/
+Workspaces and Chat in portrait, landscape and portrait again. Home/Documents/
 Settings occupied all 596 available points in portrait and 384 in landscape;
-Folder Hub and Chat retained their normal 12-point margins. Both tested poses
+Workspaces and Chat retained their normal 12-point margins. Both tested poses
 used rails; bottom-bar transitions are covered by host regression tests. This
 does not establish physical fold-transition behavior. Results are retained in
 `mobile-evidence/2026-10-15-duo-navigation-clearance.json`.
@@ -697,7 +745,7 @@ The Files folder selector offers Transfers and Refresh. Connection management
 is available through Settings → Remote connections…, without a Connections
 shortcut on the selector.
 
-Folder actions use the desktop storage names: Browse Local (on this device),
+Workspace actions use the desktop storage names: Browse Local (on this device),
 Browse LocalCrypt (encrypted on this device), and Browse Remote (online).
 Discovery only contributes existing local directories and loaded remotes; the
 folder page deduplicates copy references. Managed subfolder remote browsing uses
@@ -1007,7 +1055,7 @@ paths call `Fs.List` only for the selected directory, without descending into
 children. Paging, sorting and filtering operate on the current listing.
 
 The remote-reader regression blocks a 200-folder listing in a worker, checks the
-elapsed timer and Folder Hub menu while it is pending, then verifies bounded row
+elapsed timer and Workspaces menu while it is pending, then verifies bounded row
 creation and a single listing call through paging and filtering. The isolated
 `remote_browsing_probe` repeats this with actual native plain/crypt memory backends
 and records UI heartbeat gaps on iOS. These fixtures do not measure a live server’s
@@ -1016,7 +1064,7 @@ latency.
 Validation: 73 affected host tests passed. The iOS Simulator probe passed all
 35 remote-browser cases, including delayed 200-folder listings on both plain and
 crypt backends. Its maximum UI heartbeat gaps were 0.145 s and 0.236 s respectively;
-the timer advanced and another remote’s Hub menu opened before listing completed.
+the timer advanced and another remote’s Workspace actions menu opened before listing completed.
 Bounded remote pages are built offscreen before attachment, avoiding repeated
 layout of the live screen for each row decoration. Evidence:
 `mobile-evidence/2026-10-15-remote-listing-responsiveness-ios-native-ui-local.json`.

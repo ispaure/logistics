@@ -128,7 +128,7 @@ class HubDocumentTests(unittest.TestCase):
         import toga
         app = self.app
         def button(widget):
-            if isinstance(widget, toga.Button) and widget.text == 'Folder Hub':
+            if isinstance(widget, toga.Button) and widget.text == 'Workspaces':
                 return widget
             children = list(widget.children)
             if isinstance(widget, toga.ScrollContainer) and widget.content is not None:
@@ -307,20 +307,20 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIs(session, owner.session)
         self.assertTrue({'Unsaved changes', 'Draft'} <= set(summary[2]))
         row = app.recent_row(session, summary)
-        self.assertTrue({'Open', 'Unsaved changes', 'Draft'} <= set(labels(row)))
+        self.assertTrue({'Currently open', 'Unsaved changes', 'Draft'} <= set(labels(row)))
         app.loop.run_until_complete(app.recent_opener(session)())
         self.assertIs(app.editor_view, owner)
         self.assertEqual(owner.document.text, '# Keep these edits')
         app.close_session(session.id, choice='keep')
         closed, summary = next(item for item in app.recent_items() if item[0].resource == owner.document.id)
         self.assertTrue({'Unsaved changes', 'Recovered draft'} <= set(summary[2]))
-        self.assertNotIn('Open', labels(app.recent_row(closed, summary)))
+        self.assertNotIn('Currently open', labels(app.recent_row(closed, summary)))
         app.loop.run_until_complete(app.recent_opener(closed)())
         self.assertEqual(app.current.text, '# Keep these edits')
         app.save_document()
         saved, summary = next(item for item in app.recent_items() if item[0].resource == app.current.id)
         self.assertEqual(summary[2], [])
-        self.assertIn('Open', labels(app.recent_row(saved, summary)))
+        self.assertIn('Currently open', labels(app.recent_row(saved, summary)))
 
     def test_recent_keeps_last_use_order_across_open_and_closed_documents(self):
         app = self.app
@@ -349,7 +349,7 @@ class HubDocumentTests(unittest.TestCase):
                     if any(card.session_id == session_id for card in grid.cards))
         card = next(card for card in grid.cards if card.session_id == session_id)
         self.assertIn('Current draft', card.children[1].text)
-        self.assertTrue({'Open', 'Unsaved changes', 'Draft'} <= set(labels(card)))
+        self.assertTrue({'Currently open', 'Unsaved changes', 'Draft'} <= set(labels(card)))
         for width, columns in ((390, 1), (1200, 3), (390, 1)):
             grid.reflow(width)
             self.assertEqual(grid.columns, columns)
@@ -366,7 +366,7 @@ class HubDocumentTests(unittest.TestCase):
         app = self.app
         app.show_settings()
         categories = app.settings_navigation.sections
-        sections = ['App', 'Text & Markdown', 'Books & Comics', 'LM Chat', 'Folder Hub']
+        sections = ['App', 'Text & Markdown', 'Books & Comics', 'LM Chat', 'Workspaces']
         self.assertEqual([title for title in categories if title in sections], sections)
         app.document_cards_choice.value = False
         app.save_preferences()

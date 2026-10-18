@@ -151,7 +151,7 @@ class LibraryCatalog:
                 style=Pack(font_size=18, margin_top=16, margin_bottom=8)))
             self.library_rows.add(toga.Label('Import an EPUB or comic, or browse\na folder in Local or LocalCrypt.', style=Pack(font_size=13, margin_bottom=12)))
             self.library_rows.add(action_button(toga.Button('Import a book or comic…', on_press=self.import_book, style=Pack(height=48))))
-            self.library_rows.add(toga.Button('Open Folder Hub', on_press=self.app.show_locations, style=Pack(height=48)))
+            self.library_rows.add(toga.Button('Open Workspaces', on_press=self.app.show_locations, style=Pack(height=48)))
 
     async def refresh_library_folders(self, widget=None, **kwargs):
         app = self.app

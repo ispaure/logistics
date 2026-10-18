@@ -42,9 +42,9 @@ file alone.
 
 ## Remote files
 
-Open configured remotes from Folder Hub or Remote files. Supported remote documents
+Open configured remotes from Workspaces or Remote files. Supported remote documents
 open read-only in memory within the reader limits. Direct remote reading does not
-automatically create an offline copy. Use Folder Hub's managed Pull workflow when
+automatically create an offline copy. Use Workspaces's managed Pull workflow when
 you want an offline Local or LocalCrypt folder.
 
 [Remote and offline files](remote.md) explains the difference.

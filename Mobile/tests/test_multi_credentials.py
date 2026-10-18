@@ -1,4 +1,4 @@
-"""Mixed saved/session package metadata drives both platforms' shared Folder Hub."""
+"""Mixed saved/session package metadata drives both platforms' shared Workspaces."""
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory

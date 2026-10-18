@@ -1,5 +1,65 @@
 # Mobile workspace drawers and paired documents
 
+## Android Back policy and panel audit (2026-10-18)
+
+`logisticsmobile.routes.MobileRoutes` specializes the shared route host at
+the Android dispatcher entry point. It installs the existing lifecycle-scoped
+AndroidX `NavigationBack` bridge with `system_back`; explicit toolbar Back and
+Cancel pop their route directly. On Android, both paths honor an action's
+cross-destination return edge. UIKit keeps the shared delegate and split handling.
+The app module is included in `mobile_sources.json`.
+
+The policy follows Android's [fixed start destination and navigation principles](https://developer.android.com/guide/navigation/principles)
+and [independent destination stacks](https://developer.android.com/guide/navigation/backstack/multi-back-stacks).
+Tab changes preserve local stacks without accumulating tab-selection history.
+An action that opens a detail in another destination records its source tab.
+After popping that detail, Back restores the source's retained panel; for example,
+Workspaces opens a file in Documents and Back returns to that folder. Opening
+tools within the file does not replace this return edge. Trimming a route clears
+its edge, and checkpoint refusal retains it.
+Each non-Home root returns to the retained Home root; Home's root disables the
+callback and delegates exit to Android. Both native tab selection and route
+rendering update callback eligibility, including Material's pre-commit selection
+ordering. The existing AndroidX bridge is retained; custom predictive transition
+animations are not implemented by this policy.
+
+| Audited panel | System Back behavior |
+| --- | --- |
+| Home | Pop any detail; otherwise defer to Android |
+| Workspaces and workspace actions | Pop detail to the retained Workspaces page, then Home |
+| Local, LocalCrypt and Remote browser | Clear query, close search controls, follow bounded browser history; direct entry falls back to parent |
+| Documents and ordinary text/Markdown | Close compact drawer/Find, then pop detail; keep session and draft |
+| Notes Library and documentation | Close compact browse surface, retrace note/page history, then pop the owning route |
+| Imported EPUB/comic | Close compact chapter list or fullscreen, then pop tools/reader to its origin |
+| Provider EPUB/comic/PDF | Close visible find, chapter or PDF tools, leave fullscreen, then return to origin |
+| Chat | Close compact conversation drawer; pop configuration/actions; root returns Home |
+| Settings | Pop nested help/connections/storage/saved-file pages and compact category before returning Home |
+| Transfer review | Cancel the comparison before popping its route; never confirm execution through Back |
+| Active transfer details | Pop details while leaving work running |
+| Floating speech controls | Hide controls without stopping playback |
+| Native keyboard/dialog/menu | Retain native dismissal ownership |
+
+Visibility checks walk the mounted widget tree, including ScrollContainer content,
+so retained hidden owners do not consume Back from another panel. Wide companion
+sidebars do not consume a detail Back. Asynchronous folder/note returns are
+serialized until completion; failed browser navigation retains its history.
+Checkpoint refusal consumes Back without popping or changing tabs. Returning Home
+runs destination selection and route rendering, restoring body ownership and chrome.
+
+`Mobile/tests/test_android_back.py` covers these policies with real app panels,
+synthetic local files/books/PDFs, remote navigation fixtures, and a mocked Java
+listener boundary. These host tests do not certify physical gestures, IME ordering
+or predictive animations. The local QA emulator could not boot for this audit:
+its Android 35 system image lacks the initial system image.
+
+Validation: 101 targeted mobile host checks passed across Android Back, shared
+navigation, adaptive workspaces, Settings, file workflows, documentation, Notes
+Library, PDF and transfers, plus all seven mobile packaging checks. Test modules
+were run in isolated processes after the combined dummy-backend runs became
+unusually slow. Ruff and whitespace checks passed. The packaging omission test
+now checks the missing module rather than depending on which importer is visited
+first. This is targeted verification, not a completed full mobile/native suite.
+
 ## Document hub and recent sessions
 
 `HubUI.recent_items` merges the bounded recent history with visible workspace
@@ -16,7 +76,7 @@ Recent activation resolves live owners again at press time and dispatches throug
 neither opens private contents nor unlocks credentials. Status badges distinguish
 open sessions, live unsaved drafts and recovered drafts; ordinary documents have
 a stored baseline even before their first explicit Save. No storage schema or
-credential-list encryption changes are required. Hub, private-session and UX
+credential-list encryption changes are required. Workspaces, private-session and UX
 workflow tests exercise identity deduplication, retained edits and closed-draft
 recovery using the dummy native backend.
 
@@ -99,11 +159,11 @@ list and message area; it does not infer device type from a name.
 
 The file drawer has independent browser state over the shared bounded browser
 and ResourceSelection APIs. Its roots are local files and available LocalCrypt
-copies. Remote connection/mapping operations stay in the existing folder hub.
+copies. Remote connection/mapping operations stay in the existing workspaces.
 Enumeration runs in a worker, rejects superseded folder/storage results, and
 serializes scheduled refreshes. Opening files uses the existing provider-session
 or library import path and preserves the destination where the user opened it.
-It does not modify the Folder Hub tab's selected resource or reuse transfer cancellation
+It does not modify the Workspaces tab's selected resource or reuse transfer cancellation
 handles. Failed enumeration disables stale file opening.
 
 In Documents, Split chooses another open editable text/Markdown session. The
@@ -131,7 +191,15 @@ Wide native checks assert that actual pane widths differ by at most two points.
 Evidence must identify the staged source; a simulated width in a host test does
 not establish native Duo fold-gesture support.
 
-## Folder Hub and file browser naming
+## Workspaces and file browser naming
+
+**Workspaces** is the desktop/mobile product name for the configured-folder
+destination formerly called Folder Hub. Its per-folder tools are labelled
+**Workspace actions**. Keep the mobile `files` destination, `folder-options`
+route, desktop `folders`/`hub` navigation keys, `FolderHubUI` class and existing
+`folder_hub` modules/documentation paths stable. This is a presentation rename,
+with no saved-state or storage migration. The separate document workspace APIs
+continue to manage open sessions and panes.
 
 Reader and preview menus use `mount_native_menu` to occupy the same UIKit
 navigation-item slot as Documents, with native Back preserved. Android retains
@@ -148,9 +216,9 @@ controls used the native Documents menu slot and left reading status 16 points
 above the destination-bar boundary. The diagnostic restored ordinary startup
 after cleanup. Detailed local measurements are retained in ignored
 `Mobile/logs/ipad-reader-layout.json`. This does not establish the cause of the
-user's original intermittent Folder Hub failure.
+user's original intermittent Workspaces failure.
 
-Folder Hub constructs discovery results and its replacement page before clearing
+Workspaces constructs discovery results and its replacement page before clearing
 the existing root. Discovery failures show a recovery page with Refresh, local
 browsing and Connections instead of an empty tab. Refresh can retry after credentials
 change. Credential selectors guard transient native row indices and compute the
@@ -158,13 +226,13 @@ visible selection before clearing folder rows. Regression tests inject LocalCryp
 discovery failure during tab entry and transient credential-selection indices.
 
 The `files` destination key remains stable for routing and session origins; its
-visible name is **Folder Hub**, with the desktop three-row hub glyph in navigation
+visible name is **Workspaces**, with the desktop three-row hub glyph in navigation
 and on Home. Its root lists logical folders. Selecting a row opens the preferred
 available copy directly. The adjacent actions button opens `folder-options`,
 where Browse Local/LocalCrypt/Remote selects an explicit copy. Pull/Push remain on the folder action page. Browser return links and the
-drawer’s folder-management shortcut are labelled Folder Hub. The Documents drawer offers browse roots, recent identities, discovered libraries
+drawer’s folder-management shortcut are labelled Workspaces. The Documents drawer offers browse roots, recent identities, discovered libraries
 and creation shortcuts. Browse roots and libraries mount the independent file browser
-in the main route. The Folder Hub drawer implementation remains available, but its
+in the main route. The Workspaces drawer implementation remains available, but its
 hamburger is not mounted.
 
 
@@ -274,7 +342,7 @@ cannot show their path.
 Chat reserves the actual overlap between the native tab bar and the content
 viewport. This handles floating bars extending above UIKit's reported bottom safe
 inset, both before and after keyboard layout. It does not add a second keyboard
-inset. The native workspace checks cover Folder Hub pane widths and composer
+inset. The native workspace checks cover Workspaces pane widths and composer
 clearance in addition to retained editor ownership.
 
 Validation: 183 mobile host tests and 52 portable mobile tests (three expected
@@ -282,7 +350,7 @@ platform skips), plus lint and whitespace checks. Targeted native probes used th
 existing simulator executable with the current Python UI sources: iPhone category
 cards, folder nesting/collapse/credential filtering, matching library shortcuts,
 and composer bounds/hit testing with keyboard and six-line drafts; wide iPad
-Folder Hub panes measured 405/405 points and met at x=417 in an 834-point window.
+Workspaces panes measured 405/405 points and met at x=417 in an 834-point window.
 These are targeted local checks, not full native-suite, Android-rendering,
 physical-device or Duo fold-transition evidence. Probe sources, screenshots,
 results and source hashes are retained under `Mobile/logs/feedback-review/`.
@@ -290,14 +358,14 @@ results and source hashes are retained under `Mobile/logs/feedback-review/`.
 
 ## iPhone tab labels at cold start
 
-After installing the app-owned Folder Hub glyph, `navigation.refresh_apple_tab_items`
+After installing the app-owned Workspaces glyph, `navigation.refresh_apple_tab_items`
 creates a fresh `UITabBarItem` for each wrapped navigation controller, using the
 final destination title and image, then refreshes the native tab array. This avoids
 reusing the original OptionContainer items' compressed label geometry on iOS 26.
 The change does not select destinations, initialize Chat or change the route stacks.
 No private UIKit label classes or frame writes are used by the application.
 
-An iOS 26.5 cold-start probe reproduced Folder Hub at 24.3 points wide despite a
+An iOS 26.5 cold-start probe reproduced Workspaces at 24.3 points wide despite a
 55.3-point intrinsic width; selecting it repaired the label. With fresh items, all
 five labels fit before any selection, and their heights increase from the clipped
 7–8 points to 12 points. Cold-start label checks passed on iOS 26.5 and 27.0.
@@ -321,7 +389,7 @@ probes, not the physical screenshot. Lint and whitespace checks passed.
 
 Credential group labels come from the persisted ZIP-to-remote associations and
 are seeded from the protected vault label when restoring older saved credentials.
-Known but locked remotes stay available in Folder Hub. Action entry points check
+Known but locked remotes stay available in Workspaces. Action entry points check
 that a remote is loaded and, for mapped folders, matches its connection identity.
 Session imports retain the original ZIP via CredentialPackages: AES-256-GCM in
 the native bridge, a separate device-protected key, identity-bound authenticated
@@ -341,7 +409,7 @@ local downloads/imports retain their existing local-file semantics.
 
 Drawer taps render cached menu contents immediately, defer credential/provider
 queries to a worker, and do not checkpoint an editor just to reveal its menu.
-Folder Hub takes unlocked remote names and credential groups from the shared
+Workspaces takes unlocked remote names and credential groups from the shared
 `CloudClient.package_records` snapshot rather than a scene's native selector.
 An empty selector cannot hide another iPad scene's loaded package; an empty shared
 snapshot cannot revive stale unlocked names. Rendering this list does not call
@@ -585,9 +653,29 @@ See [native measurements](mobile-evidence/2026-10-16-chat-wide-layout.json).
 These are simulator results, not physical fold/keyboard interaction evidence.
 
 
-## Folder Hub source tabs
+## Workspaces source tabs
 
-The mobile Folder Hub places rclone, Local and Network shares source controls
+`WorkspaceFrame` retains the Workspaces root's actual `main` container as the
+leading pane on wide folder-options, local/LocalCrypt, remote and workspace-browser
+routes. The root shows a choose-workspace placeholder before opening a folder.
+Frames return borrowed widgets to their owners before reflow, preserving source
+control references, scroll position and browser state across Back and rotation.
+No duplicate folder picker is constructed for a detail route. Both existing
+ScrollContainers retain independent scrolling and native route history remains
+authoritative.
+
+Workspaces uses 640 points of allocated content width after rails and safe areas
+to choose two panes. The split normally divides that allocation equally.
+`fold_layout.seam_fraction(include_open=True)` also accepts fully open hinge
+status 3, alongside partial status 2, in landscape; other callers keep their
+existing partial-only policy. The row's converted window coordinate aligns the
+boundary to the physical midpoint, including asymmetric rails/insets. Hinge
+changes participate in the layout key even without a size change. Regression
+coverage in `test_workspace_navigation` checks retained controls, compact/wide
+rotation, Back, content-width thresholds and posture-only reflow;
+`test_fold_layout` checks the full-open coordinate policy.
+
+The mobile Workspaces places rclone, Local and Network shares source controls
 above its credential row. `folder_hub.source_choices` partitions logical folders
 by their remote ownership, retaining all associated Local/LocalCrypt/Remote copies
 within that source. Direct SMB connections use the existing `Network shares` and
@@ -685,3 +773,19 @@ preferences status follows the selected category.
 `test_settings_navigation` covers compact Back, wide selection, rotation,
 nested-page return, Duo seam sizing and Android/iOS category availability;
 `test_settings_ui` retains preference persistence and explanatory help checks.
+
+## Reader gestures and Workspaces handoff
+
+Workspaces file activation targets Documents for local imports, provider readers
+and direct remote readers. Returning to Workspaces retains its existing browser
+route instead of trimming the source folder. Android Back unwinds file tools,
+then returns through the opening action's source edge. Switching destinations
+preserves the reader session.
+
+The host reapplies reader chrome and horizontal swipe ownership after adaptive
+layout and after UIKit navigation completion, including pushes. EPUB WebViews
+advertise page swipes alongside comic canvases, independently of fullscreen.
+`page_animation.py` applies short native comic page slides in logical reading
+direction (reversed for manga), skipping initial/same-page renders and respecting
+platform animation settings and E Ink mode. Library and provider content swaps
+share this animation policy; private pixels remain in their native view layers.

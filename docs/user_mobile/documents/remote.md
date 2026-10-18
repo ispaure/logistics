@@ -1,7 +1,7 @@
 # Remote and offline files
 
 Configure remote connections from Settings → rclone / Remote connections. Browse a
-connection from Folder Hub or Remote files, then tap a supported document.
+connection from Workspaces or Remote files, then tap a supported document.
 
 ## Direct reading
 
@@ -15,7 +15,7 @@ Locking or replacing credentials retires associated private reader contents.
 
 ## Offline folders
 
-Use Folder Hub's managed Pull workflow to keep files in a Local or LocalCrypt
+Use Workspaces's managed Pull workflow to keep files in a Local or LocalCrypt
 folder. Review the proposed transfer before applying it. Existing offline copies
 remain readable and exportable when the remote is unavailable.
 

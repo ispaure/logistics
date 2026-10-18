@@ -154,7 +154,7 @@ class FilesUI:
             ('Cancel operation', self.cancel_cloud), ('Back to remote files', self.files_back))]
         self.file_commands = buttons
         self.file_operation_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
-            toga.Button('Folder Hub', on_press=self.show_locations, style=Pack(height=48)),
+            toga.Button('Workspaces', on_press=self.show_locations, style=Pack(height=48)),
             toga.Label('Local files and folders'), self.file_storage, self.file_location, buttons[0],
             icon_button('up', 'Parent folder', on_press=self.parent_file_folder),
             self.file_password, self.file_browser.widget, buttons[1], buttons[2], self.file_name, *buttons[3:6],
@@ -181,7 +181,7 @@ class FilesUI:
              ('Delete selected…', self.delete_file), ('Change location…', lambda: self.show_file_actions(operation='location')),
              ('Archive password…', lambda: self.show_file_actions(operation='password'))], self.show_file_actions)
         self.file_browser.attach_location_header(self.file_status,
-            icon_button('back', 'Back to Folder Hub', on_press=self.parent_file_folder))
+            icon_button('back', 'Back to Workspaces', on_press=self.parent_file_folder))
         self.file_source_tabs = toga.Box(style=Pack(direction=ROW, flex=1))
         self.refresh_file_source_tabs()
         self.files_view = toga.Box(children=[
@@ -251,7 +251,7 @@ class FilesUI:
         for child in list(box.children):
             box.remove(child)
         selected = self.file_rows.get(self.file_selection.value)
-        title = selected['name'] if selected else 'Folder actions'
+        title = selected['name'] if selected else 'Workspace actions'
         box.add(toga.Label(title, style=Pack(font_size=20, margin_bottom=12)))
         if operation in ('new', 'rename'):
             if operation == 'rename' and selected:
@@ -515,12 +515,12 @@ class FilesUI:
             if source is not None:
                 self.crypt_password.value = self.file_password.value
                 copies, key = source
-                await self.open_crypt(copies=copies, key=key, destination='files')
+                await self.open_crypt(copies=copies, key=key, destination='documents')
             elif Path(path).suffix.lower() in SOURCE_EXTENSIONS:
                 from features.text_editor.resources import LocalTextCopies
-                await self.open_crypt(copies=LocalTextCopies(provider), key=path, destination='files')
+                await self.open_crypt(copies=LocalTextCopies(provider), key=path, destination='documents')
             else:
-                await self.open_download(path=provider._locate(path), destination='files')
+                await self.open_download(path=provider._locate(path), destination='documents')
         except ValueError as error:
             self.file_status.value = str(error)
 

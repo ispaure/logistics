@@ -35,9 +35,9 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertEqual(Preferences(app.private_root).values['font_size'], '24')
         app.routes.back()
         self.assertEqual(list(app.body.children), [nav])
-        nav.buttons['Folder Hub'].on_press()
-        self.assertEqual(list(app.body.children), [nav.options['Folder Hub']])
-        self.assertIs(app.show_legacy_choice.parent.parent, nav.sections['Folder Hub'])
+        nav.buttons['Workspaces'].on_press()
+        self.assertEqual(list(app.body.children), [nav.options['Workspaces']])
+        self.assertIs(app.show_legacy_choice.parent.parent, nav.sections['Workspaces'])
         self.assertEqual(app.font_choice.value, '24')
 
     def test_tablet_switches_categories_in_place_with_one_selected_row(self):
@@ -106,14 +106,14 @@ class SettingsNavigationTests(unittest.TestCase):
                 self.app.show_settings()
                 nav = self.app.settings_navigation
                 self.assertEqual('Appearance' in nav.sections, appearance)
-                self.assertIn('Folder Hub', nav.sections)
+                self.assertIn('Workspaces', nav.sections)
                 self.assertIn('About', nav.sections)
                 for width in (900, 390):
                     self.width.return_value = width
                     nav.reflow()
-                    nav.choose('Folder Hub')
+                    nav.choose('Workspaces')
                     self.assertEqual(nav.wide, width >= 640)
-                    self.assertIs(self.app.show_legacy_choice.parent.parent, nav.sections['Folder Hub'])
+                    self.assertIs(self.app.show_legacy_choice.parent.parent, nav.sections['Workspaces'])
 
     def test_narrow_crease_pane_wraps_all_categories_and_widening_restores_text(self):
         app, nav = self.app, self.nav

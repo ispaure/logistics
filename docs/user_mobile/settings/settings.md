@@ -3,9 +3,13 @@
 ## Categories and adaptive layout
 
 Settings opens a category list: **App**, **Read aloud**, **Text & Markdown**,
-**Books & Comics**, **LM Chat**, **Folder Hub**, **Help**, and **About**.
+**Books & Comics**, **LM Chat**, **Workspaces**, **Help**, and **About**.
 Android also includes **Appearance** for High contrast / E Ink. On a phone, tap
 one category to see its options and use Back to return to the list.
+Categories and actions use unboxed rows. Descriptions and status text use gray
+in light and dark mode; headings, option names and actions use the primary text
+color. Switches and input fields retain their native controls. E Ink uses black
+text for both to keep its high-contrast presentation.
 
 With at least 640 points/dp of usable width, Settings shows categories on the
 left and the selected category's options on the right. This applies to Android
@@ -25,10 +29,12 @@ To opt in, open **Settings → Appearance → High contrast / E Ink**. The Andro
 immediately on this device and persists after restarting the app.
 
 While enabled, the app uses black text on white, black outlines and simpler
-square controls. The selected destination (Home, Folder Hub, Documents, Chat or
+square controls. The selected destination (Home, Workspaces, Documents, Chat or
 Settings) has a white icon inside a solid black square on both the bottom bar
-and the navigation rail. Button elevation and
-navigation ripple effects are removed; HTML text views disable CSS animation and
+and the left navigation rail. The icon's transparent areas remain transparent, and unselected
+icons and labels stay black on white. Rotating into a sidebar applies this
+treatment immediately, without toggling the preference again.
+Button elevation and navigation ripple effects are removed; HTML text views disable CSS animation and
 transitions. Markdown previews, chat and EPUB text receive the same high-contrast
 treatment, including already-open HTML views. Images and comic pixels are not
 recolored, and no source files or reader theme preferences are changed.
@@ -100,7 +106,7 @@ Files app under **On My iPhone/iPad**. Launch the app once to create the `Local`
 folder, even before pulling any remotes. The app recreates it on later launches
 if it was removed. In Finder, choose your device → **Files → Logisticks**;
 on Windows use Apple Devices or iTunes File Sharing, then open `Local`.
-Pulled ordinary remotes and files added inside `Local` appear in Folder Hub.
+Pulled ordinary remotes and files added inside `Local` appear in Workspaces.
 Adding a folder does not create a remote mapping. Computer file sharing can also
 copy out or delete these files. Files already beside `Local` are left in place;
 this layout change does not move existing shared files.
@@ -120,7 +126,7 @@ these files do not sync through iCloud Drive. File sharing becomes enabled when
 the update is installed, so the previous storage layout can be visible to a
 trusted computer until the updated app has been opened and migration completes.
 
-On Android, open **Settings → Folder Hub → Local / LocalCrypt location…**.
+On Android, open **Settings → Workspaces → Local / LocalCrypt location…**.
 One drive setting controls both collections. Select the SD card to use:
 
 ```text

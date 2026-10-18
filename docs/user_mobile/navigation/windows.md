@@ -12,7 +12,7 @@ recoverable and the original window is activated again.
 
 Up to four windows may coexist. Protected content requires one window, and an
 open protected session prevents creating another window. Secondary windows offer
-ordinary text/Markdown and library reading; Folder Hub, transfers, connections and chat
+ordinary text/Markdown and library reading; Workspaces, transfers, connections and chat
 remain in the original window. This keeps private views and connection workers
 under one owner. Phone/Duo and Android independent-window controls remain disabled;
 Android resizing and split-screen presentation remain available.

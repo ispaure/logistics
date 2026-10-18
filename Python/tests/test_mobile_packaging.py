@@ -45,7 +45,7 @@ assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile', 'config')) 
         mobile_tools.validate_app_modules(REPO / 'Python/logisticsmobile')
         # This omission caused a black launch screen in signed iPhone builds.
         missing_recent = tuple(name for name in mobile_tools.APP_MODULES if name != 'recent_documents.py')
-        with self.assertRaisesRegex(ValueError, 'app.py imports unstaged logisticsmobile.recent_documents'):
+        with self.assertRaisesRegex(ValueError, 'imports unstaged logisticsmobile.recent_documents'):
             mobile_tools.validate_app_modules(REPO / 'Python/logisticsmobile', missing_recent)
 
     def test_payload_excludes_private_files_desktop_features_and_links(self):

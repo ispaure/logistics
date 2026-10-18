@@ -96,6 +96,21 @@ def fit_section(section, width):
             fit_section(child, width)
 
 
+def settings_presentation(section):
+    """Use text hierarchy and native fields rather than boxing every action."""
+    from .appearance import surface
+    for child in section.children:
+        if isinstance(child, toga.Button):
+            surface(child, radius=0, background='transparent', foreground='text',
+                    outlined=False, eink_outlined=False)
+        elif isinstance(child, toga.Label):
+            primary = child.style.font_weight == 'bold' or getattr(section, '_settings_switch_row', False)
+            surface(child, radius=0, background='transparent', foreground='text' if primary else 'muted',
+                    outlined=False, eink_outlined=False)
+        elif isinstance(child, toga.Box):
+            settings_presentation(child)
+
+
 class SettingsLabel(toga.Label):
     """Refit asynchronous status messages as soon as their text changes."""
     @toga.Label.text.setter
@@ -207,6 +222,8 @@ class SettingsNavigation(toga.Box):
         super().__init__(style=Pack(direction=ROW, flex=1))
         self.owner = app
         self.sections = sections
+        for section in sections.values():
+            settings_presentation(section)
         self.selected = next(iter(sections))
         self.wide = None
         self._reflowing = False
@@ -247,6 +264,7 @@ class SettingsNavigation(toga.Box):
 
     def update_selection(self):
         from .folder_hub_style import source_tab
+        from .appearance import surface
         status = self.owner.settings_status
         section = self.sections[self.selected]
         if status.parent is not section:
@@ -254,11 +272,10 @@ class SettingsNavigation(toga.Box):
             section.add(status)
         for title, button in self.buttons.items():
             button.text = title if self.wide else title + '  ›'
-            if self.wide:
-                source_tab(button, title == self.selected)
-            else:
-                from .appearance import surface
-                surface(button, radius=8, foreground='text')
+            selected = bool(self.wide and title == self.selected)
+            source_tab(button, selected)
+            surface(button, radius=8, background='alternate' if selected else 'transparent',
+                    foreground='text', outlined=False, eink_outlined=False, eink_selected=selected)
 
     def reflow(self):
         if self._reflowing:

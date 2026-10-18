@@ -1,4 +1,4 @@
-"""Synthetic Android Folder Hub review; never loads credentials or user files."""
+"""Synthetic Android Workspaces review; never loads credentials or user files."""
 import asyncio
 import json
 from pathlib import Path
@@ -86,4 +86,4 @@ class FolderHubProbe(LogisticsMobile):
 
 
 def main():
-    FolderHubProbe('Folder Hub review', 'io.github.ispaure.logisticsfolderhubprobe').main_loop()
+    FolderHubProbe('Workspaces review', 'io.github.ispaure.logisticsfolderhubprobe').main_loop()

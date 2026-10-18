@@ -185,7 +185,7 @@ class MirrorUI(TransferReviewUI):
             def choose(widget=None, selected=job['id'], **kwargs):
                 (self.start_mirror_review if push else self.start_mirror_pull)(selected)
             box.add(toga.Button(storage + '/' + job['target'], on_press=choose, style=Pack(height=48)))
-        box.add(toga.Button('Choose another folder', on_press=self.show_locations, style=Pack(height=44)))
+        box.add(toga.Button('Choose another workspace', on_press=self.show_locations, style=Pack(height=44)))
         self.show_view(box, destination='files', route='transfer-copy', title='Choose local copy')
 
     async def delete_mirror_copy(self, key):

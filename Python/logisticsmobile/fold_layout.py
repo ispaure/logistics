@@ -27,14 +27,15 @@ def install(app):
     app.main_window._impl.native.addInteraction(app._hinge_interaction)
 
 
-def seam_fraction(owner, widget):
+def seam_fraction(owner, widget, *, include_open=False):
     """Return the physical vertical seam in widget coordinates, or None.
 
     Safe areas and the side rail can make the widget's midpoint asymmetric.
     Horizontal hinges (rotated windows) do not define side-by-side panes.
+    Workspaces also aligns its panes when the hinge reports fully open.
     """
     app = getattr(owner, 'app', owner)
-    if getattr(app, '_hinge_status', 0) != 2:
+    if getattr(app, '_hinge_status', 0) not in ((2, 3) if include_open else (2,)):
         return None
     window = app.main_window._impl.native
     if int(window.windowScene.interfaceOrientation) not in (3, 4):

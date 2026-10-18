@@ -682,7 +682,7 @@ class CloudUI(LocalCryptUI):
             if self.cloud_pending_zip is None and names:
                 saved = [item['package_name'] for item in getattr(self.cloud_client, 'package_records', ()) if item['saved']]
                 self.cloud_selected_zip.text = import_hint('Saved packages: ' + ', '.join(saved) if saved else 'Loaded ZIP: ' + (self.cloud_client.package_name or 'saved package'))
-                self.cloud_import_message.text = import_hint('Loaded remotes are ready. Open Folder Hub or Browse remote files to choose a remote, then tap Browse folder.\nChoose another ZIP to add another credential package.')
+                self.cloud_import_message.text = import_hint('Loaded remotes are ready. Open Workspaces or Browse remote files to choose a remote, then tap Browse folder.\nChoose another ZIP to add another credential package.')
             self.cloud_status.value = (f'{len(names)} total remote(s) available. Saved packages reloaded; active session-only packages were kept.'
                                        if names else 'No saved credential package. Import a ZIP to get started.')
         except Exception:
@@ -770,9 +770,9 @@ class CloudUI(LocalCryptUI):
             self.cloud_entries.items = []
             self.cloud_pending_zip = None
             self.cloud_selected_zip.text = import_hint('Loaded ZIP: ' + selected.name)
-            self.cloud_import_message.text = import_hint(f'{len(names)} total remote(s) available. Open Folder Hub or Browse remote files to choose a remote, then tap Browse folder.' + cache_error)
+            self.cloud_import_message.text = import_hint(f'{len(names)} total remote(s) available. Open Workspaces or Browse remote files to choose a remote, then tap Browse folder.' + cache_error)
             self.app.credential_document_lists.refresh()
-            self.cloud_status.value = f'{selected.name} loaded ({"saved" if self.cloud_remember.value else "session only"}). {len(names)} total remote(s) available. Open Folder Hub to browse. No connection has been made yet.'
+            self.cloud_status.value = f'{selected.name} loaded ({"saved" if self.cloud_remember.value else "session only"}). {len(names)} total remote(s) available. Open Workspaces to browse. No connection has been made yet.'
         except Exception as error:
             self.cloud_status.value = 'Import failed: ' + str(error)[:300]
             self.cloud_import_message.text = import_hint('Could not load ZIP. Check the password and tap Load remotes again.\n' + str(error)[:150])
@@ -917,7 +917,7 @@ class CloudUI(LocalCryptUI):
             async with self.remote_activity(opening) as progress:
                 opened = await self.open_crypt(
                     copies=RemoteReaders(self.cloud_client, self.cloud_open_remote, progress=progress),
-                    key=row['path'], destination='files')
+                    key=row['path'], destination='documents')
         except Exception as error:
             # Session setup can fail before the provider reader's error handler.
             self.cloud_status.value = 'Remote opening failed: ' + str(error)[:300]
@@ -927,7 +927,7 @@ class CloudUI(LocalCryptUI):
         if opened:
             self.cloud_status.value = 'Opened remote file: ' + row['path']
         elif self.cloud_status.value.startswith((opening, 'Checking remote', 'Reading remote', 'Preparing remote')):
-            self.cloud_status.value = 'The reader could not open this file. Return to Folder Hub and try again.'
+            self.cloud_status.value = 'The reader could not open this file. Return to Workspaces and try again.'
         return bool(opened)
 
     def cancel_cloud(self, widget=None, **kwargs):
@@ -986,13 +986,13 @@ class CloudUI(LocalCryptUI):
             from features.pdf.mobile.copies import PDFCopies
             from commonUtils.runtime.local_files import LocalFiles
             selected = Path(selected)
-            destination = destination or ('files' if self.native_host.state.destination == 'files' else 'documents')
+            destination = destination or 'documents'
             return await self.open_crypt(copies=PDFCopies(LocalFiles(selected.parent)), key=selected.name, destination=destination)
         independent = (self.cloud_busy and getattr(self, 'transfer_busy', False) and path is not None
                        and selected.resolve().is_relative_to((collection_path(self.private_root)).resolve()))
         if (self.cloud_busy and not independent) or selected is None:
             return
-        destination = destination or ('files' if self.native_host.state.destination == 'files' else 'documents')
+        destination = destination or 'documents'
         if not independent:
             self.set_cloud_busy(True)
         try:

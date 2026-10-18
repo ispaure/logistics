@@ -1018,7 +1018,7 @@ location. Private `collection-storage.json` records the selected volume and a
 random identity matching `<volume>/Logistics/.logistics-storage`. Unconfigured
 Android installs retain the existing private `LocalFiles`/`LocalCryptFolders` layout.
 Configured drives use `Logistics/Local` and `Logistics/LocalCrypt`; neither
-credentials nor `mirror-jobs.json` move. All provider, Folder Hub, library and
+credentials nor `mirror-jobs.json` move. All provider, Workspaces, library and
 transfer destination resolution uses this boundary. Retained collection providers
 revalidate the selected marker before filesystem operations. No missing-card
 fallback or replacement directory is created.
@@ -1075,7 +1075,7 @@ paths remain in their existing private location. Startup creates `Local` on ever
 launch, including fresh installs, completed journals and after deletion in Files,
 so the shared Documents container has a visible child before any remote is pulled.
 No migration is added for files previously pulled directly into Documents; files
-beside `Local` remain untouched and outside Folder Hub's Local collection. Mapping records retain their relative targets and stay private;
+beside `Local` remain untouched and outside Workspaces's Local collection. Mapping records retain their relative targets and stay private;
 arbitrary computer imports do not create mapping records. Android's drive switch
 is refused for a registered iOS root.
 
@@ -1150,7 +1150,7 @@ password gates after backgrounding. Explicit Lock clears all contexts. Retained
 ZIP metadata keeps only its own remotes plus optional alias hints; it never
 includes decoded credentials or other loaded packages.
 
-Folder Hub, encrypted library discovery and transfers resolve existing job
+Workspaces, encrypted library discovery and transfers resolve existing job
 identities against the loaded package metadata without native I/O while rendering.
 The actual native operation still validates its account/cipher identity.
 

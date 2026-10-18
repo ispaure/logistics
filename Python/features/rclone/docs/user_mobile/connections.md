@@ -2,17 +2,17 @@
 
 ## Remote files and credential ZIPs
 
-Open a folder’s **•••** actions in **Folder Hub**, then choose **Browse Remote** to open its
+Open a folder’s **•••** actions in **Workspaces**, then choose **Browse Remote** to open its
 online file browser. Credential setup is under
 **Settings → rclone / Remote connections…**. The native app embeds rclone 1.74.1; no desktop
 executable, shell, mount, or separate RC server is required. **Check rclone engine**
 performs an offline in-memory read and displays the engine version.
 
-Folder Hub's **Cloud** tab includes remotes from retained password-protected ZIPs
+Workspaces's **Cloud** tab includes remotes from retained password-protected ZIPs
 even before a local copy exists. Tap a locked remote to enter its ZIP password and
 continue browsing online. A wrong password leaves it locked.
 
-In Folder Hub's **Cloud** and **Local** tabs, encrypted folders show a combined
+In Workspaces's **Cloud** and **Local** tabs, encrypted folders show a combined
 folder-and-lock icon before their name. Blue open padlocks mean unlocked;
 orange closed padlocks mean locked. Each folder reports its own state, including
 mixed states within one group. Ordinary folders use a plain folder icon.
@@ -52,7 +52,7 @@ one supported backing remote is available for [LocalCrypt reading](localcrypt.md
 Choose a connection in Settings and tap **Browse remote files** to open the
 browser. Tap folders to open them.
 The header’s parent arrow moves up a folder; at the remote root it returns to
-Folder Hub. The bottom **Folder Hub** tab also returns to the folder list. Tap supported files for read-only,
+Workspaces. The bottom **Workspaces** tab also returns to the folder list. Tap supported files for read-only,
 in-memory previews. Unsupported files show a dialog asking you to make a local
 copy yourself. The remote browser has no file or folder download/copy actions;
 use the managed Pull workflows to create or refresh offline folders.
@@ -65,11 +65,11 @@ cache. Closing, locking or replacing credentials clears its cache; nothing is
 written to disk. Larger archives require a managed local copy. To see changes made
 to the online archive after it was cached, close and reopen the reader.
 
-While an online request is running, Folder Hub's action menus and local folders
+While an online request is running, Workspaces's action menus and local folders
 remain available. Another online operation shows a busy message and **Cancel
 current request** rather than silently waiting. LocalCrypt browsing can continue
 during transfers and remote reads; credential replacement must finish first.
-Returning to Folder Hub and opening **•••** use the last discovered folder
+Returning to Workspaces and opening **•••** use the last discovered folder
 metadata without rechecking rclone. Credential loading and **Refresh** update
 encrypted-folder discovery in the background. Opening a mapped remote shows
 **Checking connection…** while its identity and folder path are checked; menus
@@ -87,7 +87,7 @@ Remote listings read only the selected folder's immediate children. Remote
 screens display up to 40 items per page in both List and Tiles, with **Previous** and **Next**
 above the items; paging, sorting and filtering do not contact the remote again.
 The status distinguishes **Listing…** from **Displaying…** and keeps an elapsed
-timer while waiting. Folder Hub and its action menus remain available during listing.
+timer while waiting. Workspaces and its action menus remain available during listing.
 Failed navigation preserves the prior listing and history. Browsing has a
 two-minute deadline; managed Sync has no fixed overall deadline. Cancellation
 may wait for an upstream network call to return.
@@ -111,7 +111,7 @@ Saved settings and refreshed OAuth tokens use an AES-256-GCM encrypted private
 vault. Android Keystore protects its key, and the files are outside Android backup;
 iOS Keychain stores a device-only key available while the device is unlocked, and
 the vault folder is excluded from backup. Credentials restore when Remote files
-opens or when you enter Folder Hub's **Cloud** or **Home Server** source,
+opens or when you enter Workspaces's **Cloud** or **Home Server** source,
 without contacting a remote. The folder list updates when restoration finishes;
 opening credential settings first is unnecessary. The ZIP password is never saved, and neither
 mode rewrites the source ZIP. A locked device, missing key or damaged vault stops
@@ -133,9 +133,9 @@ downloads follow the platform's normal app-data backup policy. Interactive OAuth
 account setup remains future work. Session-only token updates are lost on exit;
 providers that rotate refresh tokens may require a fresh credential package.
 
-### Locked credentials and Folder Hub
+### Locked credentials and Workspaces
 
-Retained session-only ZIPs keep their remote names visible in Folder Hub even
+Retained session-only ZIPs keep their remote names visible in Workspaces even
 while locked and without a downloaded copy. Their credential filter remains
 available. Tapping one asks for the matching ZIP password before browsing.
 Wrong passwords keep the prompt open. The Settings connection page also offers
@@ -150,7 +150,7 @@ open/recent list caches.
 
 Load each ZIP with **Save credentials on this device** set independently. For
 example, load Personal with it on and Legacy with it off. Both remain active and
-appear as separate credential groups in Folder Hub; select **All** to see all
+appear as separate credential groups in Workspaces; select **All** to see all
 available folders. Connections lists each loaded package with **saved** or
 **session only** status. **Show Legacy** still controls Legacy-prefixed groups
 and folders on both platforms.

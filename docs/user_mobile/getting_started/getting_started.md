@@ -5,12 +5,12 @@ sources and actions depend on your device and configured connections.
 
 ## Find your way around
 
-Use the main navigation to open documents, browse files, visit Folder Hub or open
+Use the main navigation to open documents, browse files, visit Workspaces or open
 Settings. Open documents stay in the workspace when you change destinations.
 Tap a document to return to it. Close a document when you no longer need its open
 view; closing a saved book does not delete its retained copy.
 
-Folder Hub brings configured folders and remote connections together. Start with
+Workspaces brings configured folders and remote connections together. Start with
 a local file to try the readers before configuring a remote connection.
 
 ## Make the app comfortable

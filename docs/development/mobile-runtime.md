@@ -12,7 +12,7 @@ User behavior belongs in [the mobile user guide](../user_mobile/user_mobile.md).
 | Startup, navigation composition and managed text-document lifetime | `app.py` |
 | Workspace identities, generations and sessions | `workspace.py`, `window_owners.py`, `window_scenes.py` |
 | Adaptive panes and destination drawers | `workspace_navigation.py`, `adaptive_workspace.py` |
-| Folder Hub sources and presentation | `folder_hub.py`, `local_sources.py`, `folder_hub_ui.py`, `folder_hub_style.py` |
+| Workspaces sources and presentation | `folder_hub.py`, `local_sources.py`, `folder_hub_ui.py`, `folder_hub_style.py` |
 | Local file management and comic batch entry points | `files_ui.py` |
 | Text Open/Save As, picker widgets and pending bytes | `editor_picker.py` |
 | Saved-import inventory and confirmed deletion | `saved_files_ui.py`: composed `SavedFilesController` |
@@ -28,7 +28,7 @@ remain with `features/rclone/mobile`. The host owns navigation, session policy a
 workflow composition. Shared toolkit mechanisms remain in commonUtils.
 
 `navigation.py` installs application-owned Android destination artwork on both
-the bottom bar and side rail: Home, the existing Folder Hub glyph, stacked
+the bottom bar and side rail: Home, the existing Workspaces glyph, stacked
 Documents, Chat bubbles and a Settings gear. These avoid manufacturer-dependent
 stock menu artwork (in particular, Android's Send arrow is not the Chat icon).
 Material navigation owns selection/theme tinting; iOS keeps its native symbols.
@@ -91,7 +91,7 @@ mixin. The controller owns inventory presentation/message state and explicitly
 uses host reader/workspace services. Deletion still checks other windows and busy
 readers before and after confirmation, retires affected sessions, and forgets
 Recent/import mappings. Original sources and managed Local/LocalCrypt folders
-are outside this workflow. Chat, Cloud, Transfers, Folder Hub, Home/Documents, Locations and Storage are now composed controllers. Their `METHODS` and `FIELDS` enumerate compatibility accessors; explicit host descriptors supply other dependencies. No catch-all attribute forwarding is used. The app retains document/provider lifecycle and reader manager integration.
+are outside this workflow. Chat, Cloud, Transfers, Workspaces, Home/Documents, Locations and Storage are now composed controllers. Their `METHODS` and `FIELDS` enumerate compatibility accessors; explicit host descriptors supply other dependencies. No catch-all attribute forwarding is used. The app retains document/provider lifecycle and reader manager integration.
 
 ## Packaging and verification
 
@@ -192,9 +192,9 @@ locked gates, updating after each accepted password. Unnamed private-document
 gates use a generic private-session label. The scrollable form preserves the
 existing root replacement, safe-area handling and lifecycle race checks.
 
-## Folder Hub refresh
+## Workspaces refresh
 
-Folder Hub has no routine Refresh button; returning to the hub and credential/
+Workspaces has no routine Refresh button; returning to the hub and credential/
 transfer state changes update its list automatically. The error page offers
 **Try again** through `refresh_folder_hub`. Refresh uses loaded remote names, the credential-load crypt location
 snapshot and local transfer mappings. Credential loading also retains crypt
@@ -230,7 +230,7 @@ action pages keep their existing transfer and deletion identity. Row icons and
 legends describe the active tab’s storage. Remote encryption uses the cached
 crypt-remote snapshot or an existing LocalCrypt copy, without bridge discovery.
 
-Folder Hub displays Local, Cloud and Home Server, while retaining the internal
+Workspaces displays Local, Cloud and Home Server, while retaining the internal
 source keys `Local`, `rclone` and `Network shares` for routing and copy selection.
 It uses a source-owned action row: Cloud shows Transfers when needed, Home
 Server shows Add share, and Local has no toolbar or reserved toolbar spacing.
@@ -238,7 +238,7 @@ Switching sources moves the existing native controls; the credential selector
 appears only for rclone. Empty Network shares keeps one Add share control in
 the toolbar rather than duplicating it in the folder listing.
 
-Folder Hub styling lives in `folder_hub_style.py`: dynamic semantic surfaces,
+Workspaces styling lives in `folder_hub_style.py`: dynamic semantic surfaces,
 selected tab styling and compact native symbols. Each top-level branch has one
 rounded surface with transparent rows, separators and permanent vertical guides.
 Each level advances 40 points. Group labels reserve the same 32-point icon slot
@@ -260,11 +260,11 @@ bottom bar and rail, using a 40 dp square with a black fill and white checked
 icon. Leaving high contrast restores the indicator's original enabled state,
 dimensions, shape and colors as well as ripple and elevation.
 Surface buttons suppress elevation and state animation in that mode; leaving it restores
-the saved native button styling. Folder Hub transfer banners use a live visibility
+the saved native button styling. Workspaces transfer banners use a live visibility
 predicate: only the rclone source shows running or unsuccessful transfer notices.
 Changing source reevaluates it immediately, without changing transfer state.
 
 `browser_ui.FolderLocationHeader` shows only the currently browsed storage (drive
 or cloud), adding a lock for encrypted providers/remotes. Local and remote
 browsing update it after a successful listing. Its navigation glyph becomes Back
-at the provider root and returns to Folder Hub; nested folders retain Up.
+at the provider root and returns to Workspaces; nested folders retain Up.

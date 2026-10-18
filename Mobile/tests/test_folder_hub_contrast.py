@@ -1,4 +1,4 @@
-"""Folder Hub keeps a single row outline and a visible monochrome selection."""
+"""Workspaces keeps a single row outline and a visible monochrome selection."""
 import unittest
 from types import SimpleNamespace as NS
 from unittest.mock import Mock, patch

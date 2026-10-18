@@ -178,7 +178,7 @@ class FolderHubUI:
             async def local(widget=None, **kwargs):
                 await self.show_files(local_root=True)
             return toga.Box(children=[
-                toga.Label('Folder Hub could not refresh.', style=Pack(font_size=18)),
+                toga.Label('Workspaces could not refresh.', style=Pack(font_size=18)),
                 toga.Label(fill(self.folder_hub_error, 40), style=Pack(font_size=12)),
                 toga.Button('Try again', on_press=self.refresh_folder_hub, style=Pack(height=48)),
                 toga.Button('Browse local files', on_press=local, style=Pack(height=48)),
@@ -352,7 +352,7 @@ class FolderHubUI:
                     row.add(button)
                     def options(widget=None, selected=name, **kwargs):
                         self.choose_folder(selected)
-                    menu = icon_button('more', 'Folder actions for ' + name, on_press=options)
+                    menu = icon_button('more', 'Workspace actions for ' + name, on_press=options)
                     compact_icon(menu, width=44, size=18)
                     row.add(menu)
                     folder_row(row)
@@ -456,7 +456,7 @@ class FolderHubUI:
             return False
         entry = folder_browse_copy(action_entry, self.folder_source)
         if getattr(self, '_folder_opening', False):
-            # A pending online folder must not disable the whole Hub. Local
+            # A pending online folder must not disable Workspaces. Local
             # browsing can proceed; another online tap gets actions and Cancel.
             from .files_ui import local_read_available
             offline = entry['source'] == 'Local' or (entry['source'] == 'LocalCrypt'
@@ -512,7 +512,7 @@ class FolderHubUI:
         self.folder_browse_button = action_button(toga.Button('Browse ' + entry['source'], on_press=browse,
             enabled=not self.cloud_busy or entry['source'] == 'Local'
             or (entry['source'] == 'LocalCrypt' and (getattr(self, 'transfer_busy', False) or getattr(self, 'remote_read_busy', False))), style=Pack(height=48)))
-        box = toga.Box(children=[toga.Button('Choose another folder', on_press=self.show_locations, style=Pack(height=48)),
+        box = toga.Box(children=[toga.Button('Choose another workspace', on_press=self.show_locations, style=Pack(height=48)),
             toga.Label(fill(entry['name'], width=24), style=Pack(font_size=22, margin_top=12)),
             toga.Label(descriptions[entry['source']], style=Pack(font_size=12, margin_bottom=12)), self.folder_browse_button],
             style=Pack(direction=COLUMN, margin=12, flex=1))
@@ -608,7 +608,7 @@ class FolderHubUI:
         if kind == 'job':
             job = self.mirror_store().jobs.get(value)
             if job is None:
-                self.folder_picker_status.text = 'This folder mapping is no longer available. Choose another folder.'
+                self.folder_picker_status.text = 'This folder mapping is no longer available. Choose another workspace.'
                 return False
             if job['crypt']:
                 return await self.open_mirror_copy(value)
@@ -626,7 +626,7 @@ class FolderHubUI:
         if kind == 'job-remote':
             job = self.mirror_store().jobs.get(value)
             if job is None:
-                self.folder_picker_status.text = 'This folder mapping is no longer available. Choose another folder.'
+                self.folder_picker_status.text = 'This folder mapping is no longer available. Choose another workspace.'
                 return False
             try:
                 from features.rclone.transfers.mobile.jobs import remote_location
@@ -657,7 +657,7 @@ class FolderHubUI:
             button.enabled = not busy or (not needs_idle and (
                 not getattr(button, '_requires_crypt_session', False) or getattr(self, 'transfer_busy', False)
                 or getattr(self, 'remote_read_busy', False)))
-        # Credential restore can finish while Folder Hub is already showing its root.
+        # Credential restore can finish while Workspaces is already showing its root.
         # Refresh the list in place instead of leaving a local-only snapshot.
         host = getattr(self, 'native_host', None)
         if (refresh_choices and not busy and hasattr(self, 'folder_list') and host is not None

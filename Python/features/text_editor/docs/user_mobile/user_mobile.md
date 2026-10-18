@@ -1,6 +1,6 @@
 # Text editing on mobile
 
-The mobile app provides its text editor in Documents and Folder Hub.
+The mobile app provides its text editor in Documents and Workspaces.
 See the [Documents and editing](../../../../../docs/user_mobile/documents/documents.md) guide for opening, editing, saving and exporting files.
 
 Markdown opens in preview. The top **pencil** icon (**Edit Markdown**) opens a single formatted editing
@@ -25,6 +25,9 @@ and select the file type before creating it. Markdown offers an optional title
 that becomes the first heading; the filename remains independently editable.
 For a new Markdown document, tap anywhere in the blank writing area below the
 formatting toolbar to place the cursor and open the keyboard.
+The formatting toolbar stays above the writing area while the document scrolls.
+Opening the keyboard resizes that area; continuing to type scrolls only as needed
+to keep the caret visible. Plain text and Markdown Source use native text inputs.
 Formatting and source share the same
 buffer, recovery and Save actions. There is no automatic preview split on phones
 or tablets. See [Reading and editing](../../../../../docs/user_mobile/documents/reading-and-editing.md)
@@ -43,6 +46,10 @@ play the whole rendered note. See [Reading and editing](../../../../../docs/user
 
 Formatting controls use the same icons as desktop, including Bold, Italic, Undo,
 Redo and the Format menu. Buttons keep accessible names and tooltips.
+In the **Format** menu, tap the **link** icon to open the URL prompt. Enter a URL
+or relative file path and choose **Insert link** (or press Enter). Selected text
+becomes the link; with no selection, the editor inserts “Link”. **Cancel** keeps
+the text and selection unchanged. The URL field appears only in this prompt.
 
 ## Images in folder-backed Markdown
 
