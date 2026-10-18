@@ -86,15 +86,15 @@ folder and other subfolders beside `Local`, excluding the managed `Local` folder
 On Android it browses the ordinary collection folder. **Network shares** contains
 SMB/Mac connections added through **Add share…**, including their managed offline
 copies. SMB remotes imported inside credential ZIPs stay with their package under
-**rclone**. Local and Network shares hide the credential selector. **Transfers** appears only
-on **rclone**; **Add share…** appears only on **Network shares**. **Local** has
+**rclone**. Local and Network shares hide the credential selector. **Transfers** appears on **rclone** only while a transfer is active or a stopped
+transfer needs attention; **Add share…** appears only on **Network shares**. **Local** has
 no action toolbar. The source tabs use a rounded strip with a highlighted
 selection. Compact folder rows have storage icons and an overflow menu;
 a legend below the tree describes the selected tab’s icons. Loading status and
 progress appear only while a folder is opening or an error needs attention.
-Local rows show a drive for readable device files or a lock for **LocalCrypt**.
-rclone rows show a cloud for ordinary online folders or a lock for encrypted
-remotes. Network shares retain icons for their available copies. Screen readers
+Local rows show a disk for device storage, plus a lock for encrypted copies.
+rclone rows show a cloud, plus a lock for encrypted remotes. Locks are open when
+the credentials are available in the current session. Network shares retain icons for their available copies. Screen readers
 announce the copy types. Group-only headings have no storage icons.
 Dash-separated names form expanded levels (for example Server → Lib → ComicRack);
 group labels are informational and remain expanded. Each level is indented with

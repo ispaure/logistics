@@ -72,11 +72,12 @@ class FolderHubContrastTests(unittest.TestCase):
         appearance.restore_eink_button(title._impl)
         title._impl.native.setBackground.assert_called_with(original)
 
-    def test_regular_folder_title_keeps_its_native_appearance(self):
+    def test_regular_folder_title_has_a_transparent_borderless_surface(self):
         title = self.widget()
         folder_hub_style.folder_name(title)
-        title._impl.native.setBackground.assert_not_called()
-        self.drawable.assert_not_called()
+        self.drawable.return_value.setColor.assert_called_with(0)
+        self.drawable.return_value.setStroke.assert_not_called()
+        title._impl.native.setElevation.assert_called_with(0)
 
     def test_row_controls_do_not_cover_the_monochrome_outline(self):
         palette.set_eink_enabled(True)

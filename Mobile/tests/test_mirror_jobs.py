@@ -510,6 +510,7 @@ class MirrorProgressDisplayTests(unittest.TestCase):
         from unittest.mock import Mock
         from features.rclone.transfers.mobile.ui import MirrorUI
         parent, banner = toga.Box(), toga.Box()
+        banner.visible_when = lambda: True
         banner.notice = toga.Button('Details')
         banner.dismiss = toga.Button('Dismiss')
         banner.progress = toga.ProgressBar(max=100, value=0)
