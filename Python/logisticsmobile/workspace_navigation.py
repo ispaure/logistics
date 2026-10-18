@@ -559,35 +559,6 @@ class FileDrawer:
             self.menu_content.remove(child)
         # The tap path only renders cached results. Native rclone calls run
         # in refresh() on a worker after the drawer is already visible.
-        roots = self.roots
-        for storage in roots:
-            remote = getattr(roots[storage], 'remote', '') or storage.removeprefix('LocalCrypt: ')
-            if not self.app.folder_path_visible(remote):
-                continue
-            async def browse(widget=None, selected=storage, **kwargs):
-                await self.show_main_browser(selected)
-            label = 'LocalCrypt: ' + roots[storage].remote if getattr(roots[storage], 'remote', '') else storage
-            title = 'Browse Local Files' if storage == 'Local files' else 'Browse ' + label
-            self.menu_content.add(list_button(toga.Button(title, on_press=browse, style=Pack(height=48))))
-        self.menu_content.add(heading('Recent'))
-        self.recent_buttons = []
-        for session in self.app.recent_documents.sessions():
-            title, kind, details = self.app.session_summary(session)
-            if 'Unavailable; retry to reopen' in details:
-                continue
-            async def reopen(widget=None, selected=session, **kwargs):
-                if not self.app.checkpoint():
-                    return
-                self.navigation.menu_open['documents'] = False
-                if selected.provider == 'library':
-                    await self.app.open_book(selected.resource)
-                elif self.app.open_document(selected.resource):
-                    self.app.show_documents(resume=True)
-            button = list_button(toga.Button(title, on_press=reopen, style=Pack(height=48)))
-            self.recent_buttons.append(button)
-            self.menu_content.add(button)
-        if not self.recent_buttons:
-            self.menu_content.add(toga.Label('No recent documents yet.'))
         self.menu_content.add(heading('Comics Library'))
         readers = getattr(self.app, 'readers', None)
         catalog = readers.catalog if readers is not None else None
@@ -609,13 +580,6 @@ class FileDrawer:
             self.menu_content.add(button)
         if not self.library_buttons:
             self.menu_content.add(toga.Label('No configured libraries found.'))
-        self.menu_content.add(heading('Shortcuts'))
-        for title, extension in (('New text document', 'txt'), ('New Markdown document', 'md')):
-            def create(widget=None, selected=extension, **kwargs):
-                self.navigation.menu_open['documents'] = False
-                self.app.create_chosen_document(selected)
-            self.menu_content.add(toga.Button(title, on_press=create, style=Pack(height=48)))
-        self.menu_content.add(toga.Button('Folder Hub', on_press=self.app.show_locations, style=Pack(height=48)))
 
 
     def schedule_refresh(self):

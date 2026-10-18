@@ -334,7 +334,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
             app.cloud_busy = app.transfer_busy = False
             app.transfer_controller()._transfer_cancel = None
 
-    def test_documents_menu_recent_reopens_closed_file_and_browse_uses_main_area(self):
+    def test_documents_menu_has_only_comics_and_browse_uses_main_area(self):
         app = self.app
         app.name.value = 'Recent.md'
         app.editor.value = '# Keep this draft'
@@ -344,9 +344,11 @@ class WorkspaceNavigationTests(unittest.TestCase):
         app.close_session(key, choice='keep')
         drawer = self.navigation.browser('documents')
         drawer.refresh_menu()
-        recent = next(button for button in drawer.recent_buttons if button.text == 'Recent.md')
-        app.loop.run_until_complete(recent.on_press())
-        self.assertEqual(app.current.id, resource)
+        labels = [getattr(child, 'text', '') for child in drawer.menu_content.children]
+        self.assertIn('Comics Library', labels)
+        for label in ('Recent', 'Recent.md', 'Shortcuts', 'Browse Local Files', 'Folder Hub', 'New text document'):
+            self.assertNotIn(label, labels)
+        self.assertTrue(app.open_document(resource))
         self.assertEqual(app.editor.value, '# Keep this draft')
         local = app.private_root / 'LocalFiles'
         local.mkdir(exist_ok=True)

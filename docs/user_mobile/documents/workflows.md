@@ -27,7 +27,10 @@ Android uses the lifecycle-owned AndroidX Back dispatcher. At a destination root
 Android yields Back to the system. Existing save/checkpoint failures block a
 Back action that would leave the screen.
 
-Choose a document from **Open documents** in Documents or **Recent** in its menu,
+The Documents hamburger lists configured Comics Library folders. Recent files,
+local browsing, and new-document actions stay on the main page.
+
+Choose a document from **Open documents** in Documents or **Recent** on its main page,
 or use **Actions → New document**. Edit its name in the name field and
 its contents in the text area. **Save** publishes the edited file inside the app.
 Text, source files and Markdown share the native source editor. Markdown can
