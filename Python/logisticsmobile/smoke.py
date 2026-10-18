@@ -15,6 +15,8 @@ EXPECTED_TESTS = (
     'test_bom_encoding_and_endings_survive_recovery_and_save',
     'test_changed_or_deleted_private_file_preserves_draft_and_requires_copy',
     'test_discard_preserves_external_change_and_deleted_source',
+    'test_delete_removes_saved_bytes_and_unsaved_recovery_only_for_target',
+    'test_failed_delete_keeps_recovery_and_never_follows_link',
     'test_failed_checkpoint_and_failed_save_keep_original_and_recovery',
     'test_failed_discard_retains_draft_and_baseline',
     'test_import_consumes_a_scoped_stream_and_never_modifies_source',

@@ -113,11 +113,15 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         from .appearance import configure_android_eink
         configure_android_eink(self)
         self.store = DocumentStore(root / 'Documents')
-        from .recent_documents import RecentDocuments
+        from .recent_documents import RecentDocuments, MAX_RECENT
         self.recent_documents = RecentDocuments(workspace_root)
         self.workspace = Workspace(workspace_root)
         from features.rclone.mobile.document_lists import CredentialDocumentLists
-        self.credential_document_lists = CredentialDocumentLists(self)
+        async def reopen_reference(source):
+            from .document_sources import reopen_file
+            return await reopen_file(self, source)
+        self.credential_document_lists = CredentialDocumentLists(self,
+            references=self.recent_documents, max_recent=MAX_RECENT, reopen=reopen_reference)
         if self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
             self.clear_restored_documents()
         restored_reader = self.workspace.sessions.get(self.workspace.active)

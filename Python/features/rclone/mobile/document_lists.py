@@ -8,7 +8,6 @@ from threading import RLock
 from time import time_ns
 
 from commonUtils.persistence import atomic_write_bytes
-from logisticsmobile.recent_documents import RecentDocuments, MAX_RECENT
 
 LIMIT = 128 * 1024
 _managers = weakref.WeakSet()
@@ -53,8 +52,9 @@ def _forget_cache(root, key=None):
 
 
 class CredentialDocumentLists:
-    def __init__(self, app):
+    def __init__(self, app, *, references, max_recent, reopen):
         self.app = app
+        self.references, self.max_recent, self.reopen = references, max_recent, reopen
         self.root = app.private_root / 'CredentialDocumentLists'
         self.scene = sha256(getattr(app, 'window_id', 'primary').encode()).hexdigest()
         self.states = {}
@@ -92,18 +92,17 @@ class CredentialDocumentLists:
             raise ValueError('Credential document caches cannot be linked.')
         return path
 
-    @staticmethod
-    def validate(state, credential=None):
+    def validate(self, state, credential=None):
         if not isinstance(state, dict) or set(state) != {'version', 'credential', 'open', 'recent'} or state['version'] != 1:
             raise ValueError('Invalid encrypted document lists.')
         key = state['credential']
         if not isinstance(key, str) or len(key) != 64 or any(c not in '0123456789abcdef' for c in key) or (credential is not None and key != credential):
             raise ValueError('Encrypted document lists belong to a different credential.')
-        for field, limit in (('open', 32), ('recent', MAX_RECENT)):
+        for field, limit in (('open', 32), ('recent', self.max_recent)):
             if not isinstance(state[field], list) or len(state[field]) > limit:
                 raise ValueError('Encrypted document list exceeds limits.')
             for item in state[field]:
-                RecentDocuments.validate_reference(item)
+                self.references.validate_reference(item)
                 if item['source']['type'] == 'local':
                     raise ValueError('Credential cache contains an unrelated local file.')
         return state
@@ -163,7 +162,7 @@ class CredentialDocumentLists:
         if not matches:
             return
         state = self.states[key]
-        state['recent'] = [*state['recent'], *(item for item in matches if item not in state['recent'])][:MAX_RECENT]
+        state['recent'] = [*state['recent'], *(item for item in matches if item not in state['recent'])][:self.max_recent]
         # Publish ciphertext before removing old references from the ordinary file.
         self.write(key)
         for item in matches:
@@ -186,7 +185,7 @@ class CredentialDocumentLists:
 
     def publish_recent(self):
         self.app.recent_documents.private_items = sorted((item for state in self.states.values() for item in state['recent']),
-            key=lambda item: item.get('opened', 0), reverse=True)[:MAX_RECENT]
+            key=lambda item: item.get('opened', 0), reverse=True)[:self.max_recent]
 
     def write(self, key):
         with _cache_io_lock:
@@ -218,11 +217,11 @@ class CredentialDocumentLists:
             for pending in list(self.app.workspace.sessions.values()):
                 if pending.provider == 'credential-reference' and getattr(pending, 'cache_source', None) == source:
                     self.app.workspace.close(pending.id, guard=lambda session: True)
-        item = dict(provider='file-reference', resource=RecentDocuments.reference_id(source),
+        item = dict(provider='file-reference', resource=self.references.reference_id(source),
                     kind=session.kind, title=session.title, source=source, opened=time_ns())
-        RecentDocuments.validate_reference(item)
+        self.references.validate_reference(item)
         state = self.states[key]
-        for field, limit in (('recent', MAX_RECENT), ('open', 32)):
+        for field, limit in (('recent', self.max_recent), ('open', 32)):
             state[field] = [item, *(old for old in state[field] if old['resource'] != item['resource'])][:limit]
         try:
             self.write(key)
@@ -235,7 +234,7 @@ class CredentialDocumentLists:
         key = getattr(session, 'cache_id', None)
         if key not in self.states:
             return
-        resource = RecentDocuments.reference_id(session.cache_source)
+        resource = self.references.reference_id(session.cache_source)
         self.states[key]['open'] = [item for item in self.states[key]['open'] if item['resource'] != resource]
         try:
             self.write(key)
@@ -254,9 +253,8 @@ class CredentialDocumentLists:
         self.queue_views()
 
     async def open(self, session):
-        from logisticsmobile.document_sources import reopen_file
         try:
-            opened = await reopen_file(self.app, session.cache_source)
+            opened = await self.reopen(session.cache_source)
         except (OSError, ValueError, KeyError) as error:
             import toga
             await self.app.main_window.dialog(toga.InfoDialog('Could not reopen file', str(error)))

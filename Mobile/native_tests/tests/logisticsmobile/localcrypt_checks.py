@@ -303,8 +303,7 @@ async def exercise_localcrypt(app, passed):
     app.file_target.value = 'imported'
     await app.move_file()
     assert not (local / 'source').exists(), app.file_status.value
-    app.file_storage.value = crypt_label
-    await app.browse_files()
+    assert await app.browser_file_location((crypt_label, '')), app.file_status.value
     select('imported')
     app.file_name.value = 'renamed'
     await app.rename_file()
