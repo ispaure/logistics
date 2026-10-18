@@ -166,12 +166,12 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertTrue(await task)
                 browser = app.remote_browser
                 self.assertEqual(len(browser.entries), 200)
-                self.assertEqual(len(browser.buttons), 200)
-                self.assertNotIn(browser.paging, browser.widget.children)
+                self.assertEqual(len(browser.buttons), browser.page_size)
+                self.assertIn(browser.paging, browser.widget.children)
                 browser.next_page()
-                self.assertEqual(len(browser.buttons), 200)
+                self.assertEqual(len(browser.buttons), browser.page_size)
                 browser.show_tiles()
-                self.assertEqual(len(browser.buttons), 200)
+                self.assertEqual(len(browser.buttons), browser.page_size)
                 browser.search.value = 'series-199'
                 for _ in range(100):
                     if len(browser.buttons) == 1:
