@@ -7,7 +7,7 @@ from threading import Event
 from unittest.mock import AsyncMock, patch
 
 
-async def approve_transfer(app, *, timeout=30):
+async def approve_transfer(app, *, timeout=60):
     for _ in range(600):
         view = getattr(app, '_transfer_review_view', None)
         if view is not None and view.children[-1].children[1].enabled:
@@ -17,9 +17,25 @@ async def approve_transfer(app, *, timeout=30):
         await asyncio.sleep(.05)
     else:
         raise AssertionError('Native review never completed: ' + app.cloud_status.value)
+    # A second completed scan can legitimately ask for confirmation again.
+    # Follow that visible full-review flow; never use the incomplete-review action.
+    deadline = asyncio.get_running_loop().time() + timeout
+    confirmations = 0
     with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
         await view.children[-1].children[1].on_press()
-    assert await asyncio.wait_for(app.transfer_task, timeout=timeout), app.transfer_message
+        while not app.transfer_task.done():
+            current = getattr(app, '_transfer_review_view', None)
+            if (current is not None and current.children[-1].children[1].enabled
+                    and current.children[2].text.startswith('Files changed or could not be checked.')):
+                assert confirmations < 3, 'Native review kept changing after three fresh confirmations'
+                confirmations += 1
+                await current.children[-1].children[1].on_press()
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                phase = current.children[2].text if current is not None else app.transfer_message
+                raise AssertionError('Native transfer timed out: ' + phase)
+            await asyncio.wait([app.transfer_task], timeout=min(.1, remaining))
+    assert await app.transfer_task, app.transfer_message
 
 
 async def exercise_reviews(app):

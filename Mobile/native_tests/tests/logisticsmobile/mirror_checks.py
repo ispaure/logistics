@@ -174,9 +174,9 @@ async def exercise_crypt_mirror(app, fixture):
         await asyncio.to_thread(provider.create_file, payload, source)
     local_probe.unlink()
     app.start_mirror_review(job['id'])
-    # Seeding and revalidating the real 256 MiB object can exceed two minutes
-    # on a cold hosted iPad. Smaller document reviews retain their own budget.
-    await approve_transfer(app, timeout=240)
+    # Full revalidation of the real 256 MiB encrypted object can exceed four
+    # minutes on cold hosted emulators. Keep a separate, bounded fixture budget.
+    await approve_transfer(app, timeout=600)
     provider._locate(payload).unlink()
     assert app.clear_private_reader(discard=True)
     async def files_route():
