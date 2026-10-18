@@ -9,6 +9,12 @@ from commonUtils.ui.native.markdown import MarkdownWikiView
 from logisticsmobile.preview import markdown_preview
 
 
+def widgets(root):
+    yield root
+    for child in root.children:
+        yield from widgets(child)
+
+
 class DocumentationTests(unittest.TestCase):
     def test_bundled_settings_guide_renders_real_tables(self):
         root = Path(__file__).resolve().parents[2] / 'docs/user_mobile'
@@ -88,7 +94,7 @@ class DocumentationTests(unittest.TestCase):
         navigation = self.app.settings_navigation
         navigation.choose('Help')
         box = navigation.sections['Help']
-        button = next(child for child in box.children if getattr(child, 'text', '') == 'Mobile documentation')
+        button = next(child for child in widgets(box) if getattr(child, 'text', '') == 'Mobile documentation')
         button.on_press()
         owner = self.app.documentation
         self.assertEqual(owner.title.text, 'Logistics on mobile')
