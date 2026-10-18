@@ -10,7 +10,7 @@ from commonUtils.ui.native_browser import NativeBrowser
 
 
 class NativeBrowserTests(unittest.TestCase):
-    def test_mobile_large_folders_page_only_after_500_and_controls_precede_rows(self):
+    def test_mobile_large_folders_bound_native_rows_and_controls_precede_rows(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
@@ -18,14 +18,14 @@ class NativeBrowserTests(unittest.TestCase):
             browser = FileBrowser(item_actions=lambda: None, bounded_pages=True)
             provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path)
             rows = [dict(path=f'{index}.txt', name=f'{index}.txt', directory=index % 2 == 0, size=index)
-                    for index in range(501)]
+                    for index in range(41)]
             try:
                 for mode in ('List', 'Tiles'):
                     browser.mode = mode
-                    browser.set_entries(provider, '', rows[:500])
-                    self.assertEqual(len(browser.buttons), 500)
+                    browser.set_entries(provider, '', rows[:40])
+                    self.assertEqual(len(browser.buttons), 40)
                     self.assertNotIn(browser.paging, browser.widget.children)
-                    self.assertEqual(browser.page_label.text, '500 items')
+                    self.assertEqual(browser.page_label.text, '40 items')
                     browser.set_entries(provider, '', rows)
                     self.assertTrue(browser.next.enabled)
                     self.assertLess(browser.widget.children.index(browser.paging),
@@ -38,7 +38,7 @@ class NativeBrowserTests(unittest.TestCase):
                         self.assertEqual(browser.items.children[0].children[0].children[1],
                                          browser.buttons[last.identity])
                     browser.previous_page()
-                    self.assertEqual(len(browser.buttons), 500)
+                    self.assertEqual(len(browser.buttons), 40)
                 for row in browser.items.children:
                     glyph = row.children[0].children[0]
                     self.assertIsInstance(glyph, toga.ImageView)
@@ -102,9 +102,9 @@ class NativeBrowserTests(unittest.TestCase):
                 await browser._search_subfolders(browser.search_epoch, browser.search_cancelled)
                 self.assertEqual(len(browser.entries), 10005)
                 self.assertIn('sub', calls)
-                browser.page = 20
+                browser.page = (len(browser.entries) - 1) // browser.page_size
                 browser.render()
-                self.assertEqual(len(browser.buttons), 5)
+                self.assertEqual(len(browser.buttons), 10_005 % browser.page_size)
                 self.assertIn('/virtual/sub/match-10004.txt', [str(key) for key in browser.buttons])
                 self.assertFalse(browser.next.enabled)
                 for mode in ('List', 'Tiles'):

@@ -29,6 +29,11 @@ class LocalCryptConfigurationTests(unittest.TestCase):
                     vanished.unlink(missing_ok=True)
                 return path
             provider.mapping = mapping
+            provider.remote, provider.identity = 'Secret', 'a' * 64
+            def request(action, **values):
+                self.assertEqual(action, 'crypt_paths')
+                return [mapping(item['path'], item['directory'], decode=True) for item in values['entries']]
+            provider.client = SimpleNamespace(request=request)
             self.assertEqual([row['name'] for row in provider.list()], ['finished.md'])
             self.assertTrue(partial.exists())
 

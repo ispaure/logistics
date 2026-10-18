@@ -68,9 +68,9 @@ class FileBrowser(NativeBrowser):
     @property
     def page_size(self):
         # Local and remote folders share the same widget bound in both layouts.
-        return 500
+        return 40
 
-    def __init__(self, *, open_file=None, item_actions=None, folder_visible=None, bounded_pages=False,
+    def __init__(self, *, open_file=None, item_actions=None, folder_visible=None, bounded_pages=True,
                  **kwargs):
         self.bounded_pages = bounded_pages
         self.folder_visible = folder_visible

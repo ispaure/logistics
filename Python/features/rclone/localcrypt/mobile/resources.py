@@ -93,30 +93,47 @@ class CryptFiles(LocalFiles):
     def list(self, path='', *, cancelled=lambda: False):
         path = self.relative(path)
         rows = []
-        for child in self._locate(path).iterdir():
+        # Bound native requests while sharing the credential lookup and JSON
+        # boundary across filenames. Keep plaintext names only in this snapshot.
+        folder = self._locate(path)
+        children = []
+        for child in folder.iterdir():
             check_cancelled(cancelled)
-            self._guard(child)
-            # rclone downloads to <name>.<8-hex-hash>.partial, then publishes by
-            # rename. Never decode or expose its incomplete transfer object.
+            LocalFiles._guard(self, child)
             if re.fullmatch(r'.+\.[0-9a-f]{8}\.partial', child.name):
                 continue
             try:
-                plain = self.relative(self.mapping(child.relative_to(self.root).as_posix(), child.is_dir(), decode=True))
+                info = child.stat()
+                children.append((child, info, child.is_dir()))
+            except FileNotFoundError:
+                continue
+        for offset in range(0, len(children), 256):
+            check_cancelled(cancelled)
+            batch = children[offset:offset + 256]
+            names = self.client.request('crypt_paths', remote=self.remote, identity=self.identity,
+                entries=[dict(path=child.relative_to(self.root).as_posix(), directory=directory)
+                         for child, _, directory in batch])
+            if len(names) != len(batch):
+                raise ValueError('Incomplete encrypted folder listing.')
+            for plain, (child, info, directory) in zip(names, batch):
+                check_cancelled(cancelled)
+                plain = self.relative(plain)
                 if plain.rpartition('/')[0] != path:
                     raise ValueError('Invalid encrypted folder entry.')
-                # The physical entry is already known. Re-encoding its plain
-                # name through entry() used three additional native requests
-                # per child, making recursive offline searches unnecessarily slow.
-                info = child.stat()
-                directory = child.is_dir()
+                try:
+                    current = child.stat()
+                except FileNotFoundError:
+                    continue  # A concurrent Pull retired this entry during decode.
+                if (current.st_dev, current.st_ino, current.st_mode) != (info.st_dev, info.st_ino, info.st_mode):
+                    continue
+                info = current
                 revision = ((info.st_dev, info.st_ino) if directory else
                     (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns))
                 rows.append(dict(name=PurePosixPath(plain).name, path=plain, directory=directory,
                     size=info.st_size, revision=revision,
                     modified=datetime.fromtimestamp(info.st_mtime).astimezone().isoformat(sep=' ', timespec='seconds')))
-            except FileNotFoundError:
-                # A concurrent Pull can remove or atomically replace this entry.
-                continue
+        check_cancelled(cancelled)
+        self._guard(folder)
         return sorted(rows, key=lambda row: (not row['directory'], row['name'].casefold()))
 
     @contextmanager

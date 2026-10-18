@@ -260,8 +260,45 @@ func cryptPath(name, value, identity string, directory, decode bool) (map[string
 	if identity != "" && identity != expected {
 		return nil, errors.New("crypt settings changed")
 	}
+	result, err := cryptMappedPath(cipher, value, directory, decode)
+	return map[string]string{"path": result, "identity": expected}, err
+}
+
+type cryptPathEntry struct {
+	Path      string `json:"path"`
+	Directory bool   `json:"directory"`
+}
+
+// A folder page shares one credential lookup and native boundary crossing.
+func cryptPaths(ctx context.Context, name, identity string, entries []cryptPathEntry) ([]string, error) {
+	if len(entries) > 256 {
+		return nil, errors.New("too many encrypted names")
+	}
+	cipher, _, _, expected, err := cryptConnection(name)
+	if err != nil {
+		return nil, err
+	}
+	if identity == "" || identity != expected {
+		return nil, errors.New("crypt settings changed")
+	}
+	result := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		plain, err := cryptMappedPath(cipher, entry.Path, entry.Directory, true)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, plain)
+	}
+	return result, nil
+}
+
+func cryptMappedPath(cipher *crypt.Cipher, value string, directory, decode bool) (string, error) {
+	var err error
 	if !validPath(value) {
-		return nil, errors.New("invalid resource path")
+		return "", errors.New("invalid resource path")
 	}
 	var result string
 	if decode {
@@ -276,9 +313,9 @@ func cryptPath(name, value, identity string, directory, decode bool) (map[string
 		result = cipher.EncryptFileName(value)
 	}
 	if err != nil || !validPath(result) {
-		return nil, errors.New("invalid resource name")
+		return "", errors.New("invalid resource name")
 	}
-	return map[string]string{"path": result, "identity": expected}, nil
+	return result, nil
 }
 
 func cryptRawRead(ctx context.Context, name, encrypted, identity string, fd int) (map[string]string, error) {

@@ -255,15 +255,30 @@ class MobileWorkflowTests(unittest.TestCase):
         (root / 'Newer' / 'New.txt').write_text('new')
         async def exercise():
             app.file_location.value = 'Older'
-            async def delayed(work, **kwargs):
-                work(lambda: False)
-                app.cloud_busy = True
-                app.file_location.value = 'Newer'
-                self.assertTrue(await app.browse_local_during_transfer('Newer'))
-                app.cloud_busy = False
-                return True
-            with patch.object(app, 'file_work', side_effect=delayed):
-                self.assertFalse(await app.browse_files())
+            import asyncio
+            import threading
+            from commonUtils.runtime.local_files import LocalFiles
+            started, release = threading.Event(), threading.Event()
+            original = LocalFiles.list
+            def delayed(provider, path='', **kwargs):
+                if path == 'Older':
+                    started.set()
+                    if not release.wait(5):
+                        raise RuntimeError('Listing fixture timed out')
+                return original(provider, path, **kwargs)
+            with patch.object(type(app.file_provider), 'list', delayed):
+                older = asyncio.create_task(app.browse_files())
+                try:
+                    for _ in range(100):
+                        if started.is_set():
+                            break
+                        await asyncio.sleep(.01)
+                    self.assertTrue(started.is_set())
+                    app.file_location.value = 'Newer'
+                    self.assertTrue(await app.browse_files())
+                finally:
+                    release.set()
+                self.assertFalse(await older)
             self.assertEqual(app.file_path, 'Newer')
             self.assertEqual([item.label for item in app.file_browser.entries], ['New.txt'])
         app.loop.run_until_complete(exercise())

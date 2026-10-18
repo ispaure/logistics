@@ -154,7 +154,9 @@ as false. Reloading preferences preserves the session visibility choice.
 Online folder search filters the complete native bridge listing in memory;
 ordinary and crypt remote listings have no entry count cap. Local providers use
 the cancellable recursive search with no scan or result count cap. Native rows
-remain paginated at 500 per page. Regression coverage lives in
+remain paginated at 40 per page. Local reads use the cancellable listing path
+without toggling global cloud controls or refreshing the download inventory.
+Folder pages are built offscreen before attachment; thumbnails remain asynchronous. Regression coverage lives in
 `Mobile/tests/test_native_browser.py`, `Mobile/tests/test_settings_ui.py`,
 `Python/tests/test_mobile_hub.py` and `Mobile/rclone_bridge/list_test.go`.
 

@@ -41,6 +41,9 @@ class MirrorClient:
             changes += [['delete', name] for name in destination if name not in source]
             fingerprint = sha256(json.dumps([source, destination], sort_keys=True).encode()).hexdigest()
             return dict(changes=changes, fingerprint=fingerprint)
+        if action == 'crypt_paths':
+            return [self.request('crypt_path', **dict(values, **entry, decode=True))['path']
+                    for entry in values['entries']]
         if action == 'crypt_path':
             return dict(path=path, identity='b' * 64)
         if action == 'mirror_info':

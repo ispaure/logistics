@@ -390,3 +390,45 @@ func TestINIEncryptedSaveRoundTrip(t *testing.T) {
 		t.Fatal("INI bytes changed")
 	}
 }
+
+func TestCryptPathsBatchPreservesNamesAndCredentialGuards(t *testing.T) {
+	clearSession()
+	t.Cleanup(clearSession)
+	if _, err := importPackage(cryptPackage(t, "Cloud:batch-fixture"), ""); err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, identity, _ := cryptConnection("Secret")
+	entries := []cryptPathEntry{}
+	want := []string{"folder", "folder/page2.cbz", "folder/page10.cbz"}
+	for index, plain := range want {
+		encoded, err := cryptPath("Secret", plain, identity, index == 0, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries = append(entries, cryptPathEntry{Path: encoded["path"], Directory: index == 0})
+	}
+	got, err := cryptPaths(context.Background(), "Secret", identity, entries)
+	if err != nil || strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("batch mismatch: %v, %v", got, err)
+	}
+	for _, bad := range []string{"", "changed"} {
+		if _, err := cryptPaths(context.Background(), "Secret", bad, entries); err == nil {
+			t.Fatal("missing or changed identity accepted")
+		}
+	}
+	if _, err := cryptPaths(context.Background(), "Secret", identity, make([]cryptPathEntry, 257)); err == nil {
+		t.Fatal("unbounded batch accepted")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := cryptPaths(ctx, "Secret", identity, entries); err == nil {
+		t.Fatal("cancelled batch accepted")
+	}
+	if _, err := cryptPaths(context.Background(), "Secret", identity, []cryptPathEntry{{Path: "../escape"}}); err == nil {
+		t.Fatal("traversal accepted")
+	}
+	clearSession()
+	if _, err := cryptPaths(context.Background(), "Secret", identity, entries); err == nil {
+		t.Fatal("locked credential accepted")
+	}
+}

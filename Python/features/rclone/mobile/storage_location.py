@@ -1,12 +1,15 @@
 """One mobile collection drive; private control state never leaves app storage."""
 from hashlib import sha256
 import json
+from datetime import datetime
 import os
 from pathlib import Path
 import shutil
+import stat
 from uuid import uuid4
 
 from commonUtils.persistence import atomic_write_json
+from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.local_files import LocalFiles
 
 CONFIG = 'collection-storage.json'
@@ -92,6 +95,36 @@ class CollectionFiles(LocalFiles):
         if collection_path(self.private_root) != self.root:
             raise ValueError('Collection location changed. Restart Logistics.')
         return super()._guard(path)
+
+    def list(self, path='', *, cancelled=lambda: False):
+        path = self.relative(path)
+        folder = self._locate(path)
+        from commonUtils.filesystem.local_access import check_local_path
+        rows = []
+        # Resolve collection configuration once at each snapshot boundary, not
+        # repeatedly for every entry. Each child still gets the rooted link and
+        # regular-file checks, including externally supplied SD-card contents.
+        with os.scandir(folder) as children:
+            for child in children:
+                check_cancelled(cancelled)
+                if child.is_symlink() or (hasattr(Path, 'is_junction') and Path(child.path).is_junction()):
+                    raise ValueError('Linked storage is not supported.')
+                check_local_path(child.path)
+                try:
+                    info = child.stat(follow_symlinks=False)
+                    directory = child.is_dir(follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+                if not directory and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
+                    raise ValueError('Choose an independent regular file or folder.')
+                revision = ((info.st_dev, info.st_ino) if directory else
+                    (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns))
+                rows.append(dict(name=child.name, path='/'.join(p for p in (path, child.name) if p),
+                    directory=directory, size=info.st_size, revision=revision,
+                    modified=datetime.fromtimestamp(info.st_mtime).astimezone().isoformat(sep=' ', timespec='seconds')))
+        check_cancelled(cancelled)
+        self._guard(folder)
+        return sorted(rows, key=lambda row: (not row['directory'], row['name'].casefold()))
 
 
 def _inventory(root):

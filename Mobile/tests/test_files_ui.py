@@ -67,7 +67,7 @@ class FileUITests(unittest.TestCase):
                     app.show_cloud(present=False)
                     await app.show_files()
                     status = app.file_status.value
-                    with patch.object(LocalFiles, 'list', new=delayed), patch.object(app, 'populate_file_browser') as publish:
+                    with patch.object(type(app.file_provider), 'list', new=delayed), patch.object(app, 'populate_file_browser') as publish:
                         task = asyncio.create_task(app.browse_files())
                         try:
                             for _ in range(100):

@@ -41,7 +41,8 @@ also has an on-device copy.
 **•••** beside an item selects that item and opens its commands without opening
 its contents. Rename, Move, New folder and archive-password entry have focused
 screens. **Details** shows metadata and bounded previews.
-Folders containing up to 500 items scroll in one list, in both List and Tiles.
+Folders show up to 40 items per page, in both List and Tiles, so large folders
+open promptly while thumbnails load in the background.
 Larger listings show **Previous** and **Next** above the items, keeping paging
 controls clear of the bottom destination bar.
 Files opened from this browser stay in the Folder Hub navigation stack. Native Back

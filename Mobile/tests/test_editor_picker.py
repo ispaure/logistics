@@ -65,7 +65,7 @@ class EditorPickerTests(unittest.TestCase):
                         await app.show_editor_open()
                         before = app.save_as_status.value
                         client = app.cloud_client
-                        with patch.object(LocalFiles, 'list', new=delayed), patch.object(
+                        with patch.object(type(picker.editor_provider(picker.save_as_storage.value)), 'list', new=delayed), patch.object(
                                 picker.editor_browser, 'set_entries') as publish:
                             task = asyncio.create_task(app.refresh_editor_browser())
                             try:

@@ -50,26 +50,40 @@ class FilesUI:
             previous.set()
         cancel = self._local_browse_cancel = threading.Event()
         label = self.file_storage.value
-        provider = self.file_provider_for(label)
-        generation = getattr(self.cloud_client, 'generation', None)
-        path = provider.relative(folder)
+        client = self.cloud_client
+        generation = getattr(client, 'generation', None)
         try:
+            provider = self.file_provider_for(label)
+            path = provider.relative(folder)
             rows = await asyncio.to_thread(provider.list, path, cancelled=cancel.is_set)
             if (not self.active_host or cancel.is_set()
                     or (self.file_storage.value, self.file_location.value) != (label, folder)
-                    or (provider.private and generation != getattr(self.cloud_client, 'generation', None))):
+                    or (provider.private and (client is not self.cloud_client
+                        or generation != getattr(self.cloud_client, 'generation', None)))):
                 return False
             self.file_provider, self.file_path = provider, path
             self.file_rows = {f'{i + 1}. {"Folder" if row["directory"] else "File"}: {row["name"]}' : row
                               for i, row in enumerate(rows)}
-            self.set_file_items(list(self.file_rows))
+            # set_entries publishes selection reset once with the new snapshot.
             self.file_loaded_location = label, path
             self.populate_file_browser(rows, self.file_password.value, location=self.file_loaded_location)
             self.file_status.value = f'{path or label} · {len(rows)} items'
             return True
         except Exception as error:
-            if self.active_host and not cancel.is_set():
+            if (self.active_host and not cancel.is_set()
+                    and (self.file_storage.value, self.file_location.value) == (label, folder)):
                 self.file_status.value = 'Could not browse local folder: ' + str(error)[:200]
+                if self.file_provider is not None and self.file_browser.tree is not None:
+                    self.file_changing_location = True
+                    try:
+                        self.file_storage.value, self.file_location.value = self.file_loaded_location
+                    finally:
+                        self.file_changing_location = False
+                else:
+                    self.file_provider = None
+                    self.file_rows = {}
+                    self.file_selection.items = []
+                    self.file_browser.stop()
             return False
 
     async def show_files(self, widget=None, *, local_root=False, **kwargs):
@@ -388,38 +402,9 @@ class FilesUI:
             if self.can_browse_local(self.file_storage.value):
                 return await self.browse_local_during_transfer(self.file_location.value)
             return False
-        label, folder = self.file_storage.value, self.file_location.value
-        password = self.file_password.value
-        result = []
-        def work(cancelled):
-            provider = self.file_provider_for(label)
-            path = provider.relative(folder)
-            rows = provider.list(path, cancelled=cancelled)
-            result.extend((provider, path, rows))
-        completed = await self.file_work(work, mutation=False)
-        if (self.file_storage.value, self.file_location.value) != (label, folder):
-            # A newer local navigation may have completed while this provider
-            # waited for the engine. Never replace that listing with stale rows.
-            return False
-        if completed:
-            self.file_provider, self.file_path, rows = result
-            self.file_rows = {f'{i + 1}. {"Folder" if row["directory"] else "File"}: {row["name"]}': row for i, row in enumerate(rows)}
-            self.set_file_items(list(self.file_rows))
-            self.file_loaded_location = label, self.file_path
-            self.populate_file_browser(rows, password, location=self.file_loaded_location)
-            self.file_status.value = f'{self.file_path or label} · {len(rows)} items'
-            return True
-        else:
-            if not self.active_host:
-                return False
-            if self.file_provider is not None and self.file_browser.tree is not None:
-                self.file_storage.value, self.file_location.value = self.file_loaded_location
-            else:
-                self.file_provider = None
-                self.file_rows = {}
-                self.file_selection.items = []
-                self.file_browser.stop()
-            return False
+        # Listing is a cancellable read, not a mutation. Keep cloud controls and
+        # download discovery out of the navigation path, including idle browsing.
+        return await self.browse_local_during_transfer(self.file_location.value)
 
     def populate_file_browser(self, rows, password='', *, location=None):
         from .browser_preview import callbacks

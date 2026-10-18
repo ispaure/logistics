@@ -17,6 +17,9 @@ class CryptClient:
         return self.connection
 
     def request(self, action, **values):
+        if action == 'crypt_paths':
+            return [self.request('crypt_path', **dict(values, **entry, decode=True))['path']
+                    for entry in values['entries']]
         if action == 'crypt_path':
             parts = values['path'].split('/') if values['path'] else []
             parts = ([bytes.fromhex(part).decode() for part in parts] if values.get('decode')

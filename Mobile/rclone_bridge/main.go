@@ -439,6 +439,7 @@ func dispatch(action, input string) (output string) {
 		CleanupPaths   []string          `json:"cleanup_paths"`
 		Decrypted      bool              `json:"decrypted"`
 		Directory      bool              `json:"directory"`
+		Entries        []cryptPathEntry  `json:"entries"`
 		Decode         bool              `json:"decode"`
 		SourceRemote   string            `json:"source_remote"`
 		SourcePath     string            `json:"source_path"`
@@ -537,6 +538,8 @@ func dispatch(action, input string) (output string) {
 			result = names
 		case "crypt_path":
 			result, err = cryptPath(request.Remote, request.Path, request.Identity, request.Directory, request.Decode)
+		case "crypt_paths":
+			result, err = cryptPaths(ctx, request.Remote, request.Identity, request.Entries)
 		case "crypt_raw_read":
 			result, err = cryptRawRead(ctx, request.Remote, request.Path, request.Identity, request.FD)
 		case "crypt_stat":

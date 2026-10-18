@@ -177,3 +177,17 @@ runs and final staged-source fingerprint.
 
 Android's implemented appearance controls and E Ink limitations are described in
 the [mobile user guide](../../../../../docs/user_mobile/settings/settings.md#android-appearance-and-e-ink-status).
+
+## Offline folder snapshots
+
+Ordinary mobile collection listings validate the selected drive at snapshot
+boundaries, scan entries once, and retain per-child link, hard-link, regular-file
+and protected-root checks. LocalCrypt decodes names through `crypt_paths` in
+batches of at most 256; each batch validates the cipher identity and runs in the
+local-read credential scope. Names remain in memory. Listings still validate
+parents, cancellation and the final collection location before publication.
+
+The host uses cancellable local reads without rebuilding cloud controls or
+rescanning downloads on folder taps. A superseded host, folder request or private
+credential generation cannot publish late rows. Native pages contain at most 40
+entries, are assembled offscreen, and load thumbnails asynchronously.
