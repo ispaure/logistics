@@ -136,7 +136,9 @@ def _inventory(root):
         return result
     if not root.is_dir():
         raise ValueError('Collection storage must be a folder.')
-    for folder, directories, files in os.walk(root, followlinks=False):
+    def unreadable(error):
+        raise error
+    for folder, directories, files in os.walk(root, followlinks=False, onerror=unreadable):
         for name in directories + files:
             path = _unlinked(Path(folder) / name)
             info = path.stat()

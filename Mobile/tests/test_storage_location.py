@@ -164,11 +164,24 @@ class CollectionStorageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'No existing collection'):
             recover_location(self.private, self.volume)
         self.assertFalse((self.private / CONFIG).exists())
+
         base = self.volume / 'Logistics/Local'
         base.mkdir(parents=True)
         (base / 'escape').symlink_to(self.private, target_is_directory=True)
         with self.assertRaisesRegex(ValueError, 'Linked'):
             recover_location(self.private, self.volume)
+        self.assertFalse((self.private / CONFIG).exists())
+
+    def test_unreadable_recovery_tree_never_activates(self):
+        (self.volume / 'Logistics/Local').mkdir(parents=True)
+
+        def unreadable(root, **kwargs):
+            kwargs['onerror'](PermissionError('Storage access denied'))
+            return iter(())
+
+        with patch('features.rclone.mobile.storage_location.os.walk', side_effect=unreadable):
+            with self.assertRaisesRegex(PermissionError, 'denied'):
+                recover_location(self.private, self.volume)
         self.assertFalse((self.private / CONFIG).exists())
 
     def test_android_filesystem_without_fsync_still_verifies_bytes(self):
