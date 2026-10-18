@@ -11,7 +11,7 @@ from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_
 DEFAULTS = {'android_eink': 'false', 'font_size': '16', 'restore_last_document': 'true', 'last_document': '',
             'document_card_overview': 'true', 'show_legacy': 'false',
             'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false',
-            'comic_layout': 'auto', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS}
+            'magnifier_zoom': '190', 'comic_layout': 'auto', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS}
 
 
 class Preferences:
@@ -74,6 +74,8 @@ class Preferences:
         if values['reading_margin'] not in {'8', '16', '24', '32'} or values['reading_theme'] not in {'system', 'light', 'dark', 'sepia', 'slate'}:
             raise ValueError('Invalid reader appearance preference.')
         validate_reading(values)
+        if values['magnifier_zoom'] not in {str(value) for value in range(150, 251, 20)}:
+            raise ValueError('Choose magnifier zoom from 150–250%, in 20% steps.')
         if values['comic_layout'] not in {'single', 'auto', 'double'}:
             raise ValueError('Invalid comic page layout.')
         packages = json.loads(values['remote_packages'])

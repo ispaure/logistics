@@ -243,3 +243,12 @@ imports; archive files and recovery journals are never used as cache storage.
 ## Mobile source manifest
 
 `../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.
+
+## Shared mobile magnifier preference
+
+Logistics binds single-page and spread canvases through
+`logisticsmobile.magnifier.bind`, alongside PDF canvases. The host persists
+`magnifier_zoom` as one percentage (150–250 in 20-point steps, default 190),
+merges current preferences before saving, and broadcasts updates across retained
+readers and windows. Native control gestures and image transforms belong to
+commonUtils. Controls change the lens without paging or toggling fullscreen.

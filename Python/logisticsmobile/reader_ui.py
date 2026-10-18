@@ -305,6 +305,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         self.close_read_aloud()
         self.book_content.add(view)
         if record['kind'] == 'comic':
+            from .magnifier import bind
+            bind(self, view)
             view.magnifier_enabled = self.reader_immersive
         if record['kind'] == 'epub':
             self.watch_epub_width(reader, epoch)

@@ -559,6 +559,11 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         box.add(toga.Label('Editor and preview font size'))
         box.add(self.font_choice)
         box.add(heading('Books & Comics'))
+        from .magnifier import setting
+        box.add(toga.Label('Comic & PDF magnifier zoom'))
+        self.magnifier_choice = setting(self)
+        box.add(self.magnifier_choice)
+        box.add(toga.Label('Hold to magnify; tap −/+ with another finger.\nShared across comics and PDFs. Saved immediately.', style=Pack(font_size=12)))
         box.add(toga.Button('Saved books & comics…', on_press=self.show_saved_files, style=Pack(height=48)))
         box.add(toga.Label('Use Appearance in an open reader\nto adjust its pages.', style=Pack(font_size=12)))
         box.add(heading('LM Chat'))
@@ -661,6 +666,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
 
     def reload_preferences(self, widget=None, **kwargs):
         self.preferences.reload()
+        from .magnifier import refresh
+        refresh(self.preferences)
         from .appearance import configure_android_eink
         configure_android_eink(self)
         if type(self._impl).__module__.startswith('toga_android.'):

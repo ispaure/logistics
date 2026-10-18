@@ -198,6 +198,8 @@ class ProviderUI(FilesUI):
                 view.crypt_image = ImageCanvas(on_page=self.swipe_crypt_page,
                     page_swipes_at_edges=reader.kind in {'.cbz', '.zip'},
                     on_toggle=self.toggle_private_reading_mode, style=Pack(flex=1))
+            from .magnifier import bind
+            bind(self, view.crypt_image)
             view.crypt_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
             self._show_crypt_content(kind, content, view=view)
             view.crypt_save = toga.Button('Save encrypted copy' if getattr(copies, 'encrypted', True) else 'Save local file', on_press=self.save_crypt, enabled=reader.editable and not getattr(reader, 'read_only', False), style=Pack(height=44))
@@ -388,6 +390,8 @@ class ProviderUI(FilesUI):
                 right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
                 viewport=controller.private_comic_viewport(view),
                 seam=controller.private_comic_seam(view))
+            from .magnifier import bind
+            bind(controller, prepared_spread)
         for child in list(view.crypt_content.children):
             if hasattr(child, 'dispose') and child not in (view.crypt_image, view.crypt_text):
                 child.dispose()

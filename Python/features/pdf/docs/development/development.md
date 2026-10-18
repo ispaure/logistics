@@ -66,7 +66,11 @@ before opening its first document. This allows local PDFs to open from a cold
 Documents session. Page jump and PDF search share a collapsible Pages & search
 panel. PDFCanvas specializes the shared ImageCanvas with vertical paging.
 Tapping toggles fullscreen; the ReadingFrame hides header/footer/navigation and
-enables the shared hold magnifier only while fullscreen. Page replacement keeps
+enables the shared hold magnifier only while fullscreen.
+`logisticsmobile.magnifier.bind` connects PDF and comic canvases to the same
+validated `magnifier_zoom` preference. Native −/+ requests save before applying;
+failed saves preserve the displayed zoom. Live canvases and Settings selectors
+share updates by preference path, including independent app windows. Page replacement keeps
 that eligibility, and disposal clears both callbacks and the lens. Swipes at fit
 scale work in both modes; pinch/pan and hold/tap arbitration use the same native
 backends as comics. Fullscreen removes reader margins and fits the entire page

@@ -30,6 +30,12 @@ and restoring the normal palette; physical BOOX behavior remains unverified.
 
 ## Settings and build information
 
+**Settings → Books & Comics → Comic & PDF magnifier zoom** controls the shared
+hold-to-magnify bubble: 150%, 170%, 190%, 210%, 230%, or 250% (default 190%).
+While holding a fullscreen comic or PDF, tap the bubble’s top-left **−** or
+top-right **+** with another finger to change the same setting. Changes save
+immediately, update open readers and app windows, and survive restarting.
+
 **Settings → Books & Comics → Saved books & comics…** lists every retained
 library import, including copies no longer open or in Recent. It shows the count,
 combined archive/reading-record size and each import's size. Incomplete or unreadable

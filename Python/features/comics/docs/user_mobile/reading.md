@@ -68,12 +68,17 @@ views also refit to the available width after rotation. Resizing waits while a
 spread is zoomed; fitting it allows the pending layout update.
 
 In fullscreen comics on iOS and Android, hold a thumb on the page for about
-400 ms to show a 2× magnifying bubble. The bubble enlarges the page beneath
+400 ms to show a magnifying bubble. The bubble enlarges the page beneath
 its center and grows larger on tablet screens. The bubble sits close
 to the thumb with a slight overlap. Keep holding and drag to move
 the bubble. Near a screen edge, keep dragging toward the edge to inspect the
-outermost pixels even after the bubble stops moving. Release to dismiss. The page stays still while the bubble is open. A second
-finger cancels the bubble so pinch zoom remains available. The bubble is disabled
+outermost pixels even after the bubble stops moving. Release to dismiss. The page stays still while the bubble is open.
+Keep one finger holding and tap **−** at the bubble’s top left or **+** at its
+top right with another finger. Zoom changes through **150%, 170%, 190%, 210%,
+230%, 250%**; the default is **190%**. Changes save immediately and are shared
+with PDF readers, other open readers, and the next app launch. The same value
+is available in **Settings → Books & Comics → Comic & PDF magnifier zoom**.
+A second finger outside the controls cancels the bubble for pinch zoom. The bubble is disabled
 when reading controls are visible and is cleared on page changes or leaving the
 reader. It works on single pages and spreads, including Local/LocalCrypt comics.
 
