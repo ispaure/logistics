@@ -65,6 +65,10 @@ async def exercise_obsidian(app, encrypted):
         assert await owner.open_editor()
         assert 'Nested Markdown note' in app.provider_sessions().active.crypt_text.value
         app.close_crypt()
+        # WKWebView may defer an offscreen replacement document. Close the
+        # visible Notes Library so the rendered cleanup proof can complete.
+        owner.present()
+        await asyncio.sleep(.2)
         owner.dispose()
         assert owner.path is None and not owner.rows.children
         if hasattr(owner.web, 'private_closed'):

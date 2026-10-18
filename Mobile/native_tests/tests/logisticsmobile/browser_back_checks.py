@@ -1,4 +1,4 @@
-"""Real platform Back returns file readers to the retained browser viewport."""
+"""Native document Back and tab return preserve the browser viewport."""
 import asyncio
 import base64
 from zipfile import ZipFile
@@ -44,9 +44,11 @@ async def exercise_browser_back(app):
         assert position > 0, 'Scroll fixture did not exceed the viewport'
         entry = next(item for item in browser.entries if item.label == filename)
         await browser._select_pressed(entry, browser.buttons[entry.identity])
-        assert app.native_host.state.destination == 'files'
+        assert app.native_host.state.destination == 'documents'
         owner = app.readers.active if filename.endswith('.cbz') else app.private_sessions.active
         if filename.endswith('.cbz'):
+            from .reader_checks import wait_for_reader
+            await wait_for_reader(owner)
             # Reveal the native Back button, as a user would from fullscreen.
             if owner.reader_immersive:
                 owner.book_content.children[0].toggle_controls()
@@ -54,7 +56,9 @@ async def exercise_browser_back(app):
             owner.show_reader_tools()
             await asyncio.sleep(.2)
             if get_os() is OS.IOS:
-                app.native_host.adapter.navigation[1].popViewControllerAnimated(True)
+                navigation = (app.adaptive.secondary if app.adaptive.split is not None else
+                              app.native_host.adapter.navigation[app.native_host.destinations.index('documents')])
+                navigation.popViewControllerAnimated(True)
             else:
                 app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
             for _ in range(60):
@@ -62,13 +66,18 @@ async def exercise_browser_back(app):
                     break
                 await asyncio.sleep(.05)
             assert app.body is reader_panel and owner.library_view in app.body.children, (
-                'Tools Back lost the reader', app.native_host.state.routes['files'],
+                'Tools Back lost the reader', app.native_host.state.routes['documents'],
                 [type(child).__name__ for child in app.body.children], app.body is reader_panel)
         else:
             owner.crypt_text.value = '# Unsaved note after opening from Files'
         await asyncio.sleep(.3)
         if get_os() is OS.IOS:
-            app.native_host.adapter.navigation[1].popViewControllerAnimated(True)
+            # Files live under Documents. UIKit keeps that destination's
+            # stack; return through the native Workspaces tab, as documented.
+            adapter = app.native_host.adapter
+            navigation = adapter.navigation[app.native_host.destinations.index('files')]
+            adapter.controller.selectedViewController = navigation
+            adapter.controller.tabBar_didSelectItem_(adapter.controller.tabBar, navigation.tabBarItem)
         else:
             app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
         # didShow arrives after UIKit's transition and layout work. A fixed
@@ -88,6 +97,7 @@ async def exercise_browser_back(app):
         if filename.endswith('.md'):
             assert owner.crypt_text.value == '# Unsaved note after opening from Files'
     assert not hasattr(app, 'book_reader') and not hasattr(app, 'crypt_text')
-    return {'native_back_to_files': True, 'browser_scroll_preserved': True,
+    return {'native_back_to_files': get_os() is OS.ANDROID,
+            'native_tab_to_files': get_os() is OS.IOS, 'browser_scroll_preserved': True,
             'draft_retained_on_back': True, 'reader_tools_back_preserved': True,
             'controller_state_is_owned': True}
