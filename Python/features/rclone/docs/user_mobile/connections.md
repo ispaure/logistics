@@ -19,7 +19,9 @@ show a disk and a lock in the **Local** tab. Locks open when their credentials
 are available in the current session, and close again when the session locks.
 
 The online browser loads filenames and sizes without fetching thumbnails, in
-both list and tile views. Opening a folder or file shows the current step and
+both list and tile views. The current folder name stays in the header. Loading,
+download progress and errors appear in a smaller status line beneath it, without
+replacing the folder name. Opening a folder or file shows the current step and
 elapsed seconds, with an animated progress bar. Remote previews report connection
 checks, archive index reads and member/data reads; **Cancel** stops the pending
 request. The elapsed time is a wait indicator, not a download percentage.

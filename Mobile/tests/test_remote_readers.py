@@ -104,7 +104,7 @@ class RemoteReaderTests(unittest.TestCase):
                 while ancestor is not None and ancestor is not app.cloud_view:
                     ancestor = ancestor.parent
                 self.assertIs(ancestor, app.cloud_view)
-                self.assertIn(app.cloud_status, toolbar.children)
+                self.assertIn(app.cloud_status, toolbar.caption.children)
                 self.assertEqual(app.cloud_up.control_icon, 'back')
                 self.assertEqual(app.cloud_up.style.width, 48)
                 self.assertNotIn(app.remote_browser.back_button,
@@ -112,9 +112,12 @@ class RemoteReaderTests(unittest.TestCase):
                 app.cloud_remote.items = ['Files']
                 app.cloud_location.value = 'Books/Series'
                 self.assertTrue(await app.browse_cloud(preserve_path=True))
+                self.assertEqual(toolbar.folder_name.value, 'Series')
+                self.assertEqual(app.cloud_status.value, '3 items')
                 for expected in ('Books', '', ''):
                     await app.cloud_up.on_press()
                     self.assertEqual(app.cloud_path, expected)
+                    self.assertEqual(toolbar.folder_name.value, expected or 'Files')
                     self.assertEqual(app.cloud_location.value, expected)
                     self.assertEqual(client.calls[-1], ('list', expected))
                 app.set_cloud_busy(True)

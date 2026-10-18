@@ -131,8 +131,8 @@ class CloudUI(LocalCryptUI):
             self.cloud_clear = toga.Button('Forget saved credentials', on_press=self.clear_cloud, style=Pack(height=44))
             self.cloud_lock = toga.Button('Lock credential session', on_press=self.lock_cloud, style=Pack(height=44))
             self.cloud_retained_box = toga.Box(style=Pack(direction=COLUMN))
-            self.cloud_status = toga.MultilineTextInput(value=error or 'Choose saved or session-only credentials, then import a ZIP. Its password is never saved.',
-                                                       readonly=True, style=Pack(height=72))
+            self.cloud_status = NativeBrowser.status_label(value=error or 'Choose saved or session-only credentials, then import a ZIP. Its password is never saved.',
+                                                       style=Pack(height=18, font_size=12))
             self.download_selector = toga.Selection(style=Pack(height=44))
             self.download_open = toga.Button('Open private copy', on_press=self.open_download, style=Pack(flex=1, height=44))
             self.download_export = toga.Button('Export private copy…', on_press=self.export_download, style=Pack(flex=1, height=44))
@@ -785,8 +785,9 @@ class CloudUI(LocalCryptUI):
                 self.remote_browser.thumbnail = None
                 self.remote_browser.set_entries(provider, folder, [dict(row, name=Path(row['path']).name, modified='') for row in rows], location=(remote, folder))
                 self.remote_browser.location_bar.update(folder, remote=True,
-                    encrypted=remote in self.cloud_crypt_remotes)
-            self.cloud_status.value = (f'{remote}:{folder} · {len(rows)} items.' if rows else f'{remote}:{folder} is empty.')
+                    encrypted=remote in self.cloud_crypt_remotes,
+                    name=Path(folder).name if folder else remote)
+            self.cloud_status.value = f'{len(rows)} items'
             return True
         except Exception as error:
             self.cloud_status.value = 'Browse failed: ' + str(error)[:300]

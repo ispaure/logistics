@@ -67,7 +67,7 @@ class FilesUI:
             # set_entries publishes selection reset once with the new snapshot.
             self.file_loaded_location = label, path
             self.populate_file_browser(rows, self.file_password.value, location=self.file_loaded_location)
-            self.file_status.value = f'{path or label} · {len(rows)} items'
+            self.file_status.value = f'{len(rows)} items'
             return True
         except Exception as error:
             if (self.active_host and not cancel.is_set()
@@ -141,7 +141,7 @@ class FilesUI:
         self.file_destination = toga.Selection(items=list(self.file_roots), style=Pack(height=48))
         self.file_target = toga.TextInput(placeholder='Destination path including name', style=Pack(height=48))
         (collection_path(self.private_root)).mkdir(exist_ok=True)
-        self.file_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
+        self.file_status = NativeBrowser.status_label(style=Pack(height=18, font_size=12))
         self.file_action_status = toga.Label('', style=Pack(font_size=12, margin_top=8))
         self.file_rows, self.file_provider = {}, None
         buttons = [toga.Button(label, on_press=handler, style=Pack(height=48)) for label, handler in (
@@ -187,7 +187,6 @@ class FilesUI:
             self.file_browser.location_bar,
             toga.ScrollContainer(horizontal=False, content=scroll_content(self.file_browser.widget), style=Pack(flex=1))],
             style=Pack(direction=COLUMN, margin=12, flex=1))
-        self.file_status.style.flex = 1
         self.show_view(self.files_view, destination='files', route='browser', title='File browser')
         await self.browse_files()
         self.file_storage.on_change = self.change_file_storage
@@ -413,7 +412,8 @@ class FilesUI:
         if location is None:
             self.file_browser.history.clear()
         self.file_browser.set_entries(self.file_provider, self.file_path, rows, location=location)
-        self.file_browser.location_bar.update(self.file_path, encrypted=self.file_provider.private)
+        self.file_browser.location_bar.update(self.file_path, encrypted=self.file_provider.private,
+            name=Path(self.file_path).name if self.file_path else self.file_storage.value)
 
     def selected_file(self):
         row = self.file_rows.get(self.file_selection.value)
