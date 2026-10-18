@@ -680,7 +680,8 @@ saved vault or retained-package key, clears selectors/private catalog state, and
 preserves the existing save/discard guard for private edits. Saved-vault reload
 remains an explicit separate action after locking.
 
-Validation: 225 mobile host tests passed, including the no-local-folder Settings
+Historical validation (2026-10-15, before retained online-only rows stayed visible):
+225 mobile host tests passed, including the no-local-folder Settings
 unlock, wrong-password retry, remote-only visibility after unlock, and retaining
 an existing LocalCrypt copy after session lock. Eight cloud/vault core tests
 passed, including confirmation that session lock never deletes the saved vault.

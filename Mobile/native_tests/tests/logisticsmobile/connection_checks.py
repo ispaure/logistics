@@ -74,7 +74,10 @@ async def exercise_connections(app, fixtures, background_comic, passed):
     retained_key = matches[0][0]
     await app.lock_cloud()
     locked_choice = app.folder_choices().get('Fixture', {})
-    assert all(copy['source'] != 'Remote' for copy in locked_choice.get('copies', ()))
+    assert any(copy['source'] == 'Remote' for copy in locked_choice.get('copies', ()))
+    assert not await app.require_remote_credentials_async('Fixture')
+    assert app.routes.screens['files'][-1][0] == 'unlock-credential'
+    assert not app.loaded_remote_names()
     app.show_cloud_connections()
     assert app.native_host.state.destination == 'settings'
     app.cloud_retained_buttons[retained_key].on_press()
