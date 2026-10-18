@@ -59,6 +59,8 @@ Cloud or On-device and, for encrypted folders, Locked or Unlocked labels.
 Opening, download, result and error messages temporarily replace that line; the
 indicators return when the message clears. Tap the magnifying glass on the right to
 reveal search; close it with **×** to clear the filter and hide the field.
+This control stays beside the folder name in local, remote and drawer browsers,
+including when a long folder name is shortened to fit.
 The top bar has no Sort control. The
 rows show filenames rather than full paths, shortening long names in the middle.
 File sizes remain available in **Details** instead of beside every filename. The

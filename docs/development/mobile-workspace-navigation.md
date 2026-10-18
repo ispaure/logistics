@@ -112,6 +112,11 @@ The shared `FolderLocationHeader` groups passive storage/lock images and labels
 beneath the folder name, separate from parent navigation. That secondary line
 shows `BrowserStatusLabel` messages while nonempty and restores storage identity
 when cleared, preserving result/error visibility.
+Main local/remote browsers and the local/library drawer browser mount the search
+button in this header beside the current folder. Native single-line label
+measurements retain a zero minimum width after rehinting so long folder names
+and status messages truncate instead of pushing the 48-point search control
+outside the viewport, including on Android.
 
 Remote browsing mounts `cloud_up` beside `cloud_status` in the main browser,
 using the same 48-point up-arrow control as local browsing. It calls the existing

@@ -1,5 +1,6 @@
 """Compact Logistics presentation over the shared, bounded native browser."""
 import inspect
+import weakref
 from pathlib import PurePosixPath
 import toga
 from .control_icons import apply_icon, icon_button
@@ -61,6 +62,19 @@ class BrowserStatusLabel(toga.Label):
             self._impl.native.setEllipsize(TextUtils.TruncateAt.MIDDLE)
         surface(self, radius=0, background='transparent', foreground='text',
                 outlined=False, eink_outlined=False)
+        # Native labels measure the whole single-line string. Let Pack shrink
+        # that text so the adjacent parent/search controls stay on screen.
+        from travertino.size import at_least
+        self.intrinsic.width = at_least(0)
+        native_rehint = getattr(type(self._impl), 'rehint', None)
+        if native_rehint is not None:
+            reference = weakref.ref(self)
+            def rehint():
+                target = reference()
+                if target is not None:
+                    native_rehint(target._impl)
+                    target.intrinsic.width = at_least(0)
+            self._impl.rehint = rehint
 
     @property
     def value(self):

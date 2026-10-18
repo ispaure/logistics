@@ -547,15 +547,14 @@ class FileDrawer:
         self.task = None
         self.refresh_requested = False
         self.storage = toga.Selection(items=['Local files'], style=Pack(height=48))
-        self.status = toga.Label('', style=Pack(font_size=12, margin_bottom=4))
         self.browser = FileBrowser(folder_visible=self.app.folder_path_visible, selected=lambda row: None, open_folder=self.open_folder,
                                    navigate=self.navigate, open_file=self.open_file, preview=False)
-        self.browser.navigation_controls.remove(self.browser.back_button)
+        self.status = self.browser.status_label('')
         self.parent_button = browser_command(toga.Button('Parent folder', on_press=self.up,
                                                        enabled=False, style=Pack(height=48)))
-        self.breadcrumb = toga.Label('Local', style=Pack(font_size=13, flex=1))
-        self.widget = toga.Box(children=[self.storage,
-            toga.Box(children=[self.parent_button, self.breadcrumb], style=Pack(direction=ROW)), self.status,
+        header = self.browser.attach_location_header(self.status, self.parent_button)
+        self.breadcrumb = header.folder_name
+        self.widget = toga.Box(children=[self.storage, header,
             toga.ScrollContainer(horizontal=False, content=scroll_content(self.browser.widget), style=Pack(flex=1)),
             toga.Button('Workspaces', on_press=self.app.show_locations, style=Pack(height=48))],
             style=Pack(direction=COLUMN, flex=1))
@@ -650,7 +649,7 @@ class FileDrawer:
             # Keep Local files usable and report the connection error in-place.
             if generation != self.generation or not self.app.active_host:
                 return False
-            self.status.text = str(error)[:160]
+            self.status.value = str(error)[:160]
             return False
         if generation != self.generation or not self.app.active_host:
             return False
@@ -690,10 +689,10 @@ class FileDrawer:
             self.provider_client = getattr(self.app, 'cloud_client', None)
             self.provider_generation = getattr(self.provider_client, 'generation', None)
             self.browser.set_entries(model, folder, rows, location=(selected, folder))
-            from textwrap import fill
-            self.breadcrumb.text = fill(folder.replace('/', ' / ') or 'Root', width=28)
+            self.browser.location_bar.update(folder, remote=getattr(provider, 'remote_storage', False),
+                                             encrypted=provider.private, unlocked=True)
             self.parent_button.enabled = bool(folder)
-            self.status.text = ''
+            self.status.value = ''
             if self.destination == 'documents':
                 self.refresh_menu()
                 catalog = self.app.reader_manager().catalog
@@ -704,7 +703,7 @@ class FileDrawer:
         except (OSError, ValueError) as error:
             self.provider = None
             self.browser.stop()
-            self.status.text = str(error)[:160]
+            self.status.value = str(error)[:160]
             return False
 
     async def open_folder(self, row):
@@ -748,7 +747,7 @@ class FileDrawer:
                 copies, key = source if source is not None else (LocalTextCopies(provider), path)
                 opened = await self.app.open_crypt(copies=copies, key=key, destination=self.destination)
                 if not opened:
-                    self.status.text = str(self.app.cloud_status.value or 'Could not open this private file. Unlock its connection and try again.')[:300]
+                    self.status.value = str(self.app.cloud_status.value or 'Could not open this private file. Unlock its connection and try again.')[:300]
                     return False
             if self.app.native_host.state.destination == self.destination:
                 if not self.navigation.wide:
@@ -756,5 +755,5 @@ class FileDrawer:
                 self.navigation.render()
             return True
         except (OSError, ValueError) as error:
-            self.status.text = str(error)[:160]
+            self.status.value = str(error)[:160]
             return False

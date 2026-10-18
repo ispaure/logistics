@@ -81,6 +81,45 @@ class FolderLocationTests(unittest.TestCase):
             browse.assert_awaited_once()
             hub.assert_not_called()
 
+    def test_long_native_folder_and_status_labels_leave_search_on_screen(self):
+        from logisticsmobile.browser_ui import FileBrowser
+        from travertino.layout import Viewport
+        from travertino.size import at_least
+
+        def native_measure(impl):
+            impl.interface.intrinsic.width = at_least(600)
+            impl.interface.intrinsic.height = 24
+
+        label_backend = type(toga.Label('')._impl)
+        with patch.object(label_backend, 'rehint', native_measure, create=True):
+            browser = FileBrowser()
+            header = browser.attach_location_header(browser.status_label(''), icon_button('up', 'Parent folder'))
+            header.update('A very long folder name that cannot fit beside navigation')
+            for message in ('', 'A long operation message that must truncate'):
+                header.status.value = message
+                for label in (header.folder_name, header.status, header.storage_identity.children[-1]):
+                    label._impl.rehint()
+                for width in (180, 320, 600):
+                    with self.subTest(message=message, width=width):
+                        header.style.layout(Viewport(width, 80))
+                        search = browser.search_button.layout
+                        self.assertLessEqual(search.content_left + search.content_width, width)
+                        self.assertEqual(search.content_width, 48)
+                        self.assertGreater(header.folder_name.layout.content_width, 0)
+
+    def test_local_drawer_search_stays_beside_current_folder(self):
+        drawer = self.app.adaptive.browser('documents')
+        browser = drawer.browser
+        header = browser.location_bar
+        self.assertIn(header, drawer.browser_widget.children)
+        self.assertIs(drawer.breadcrumb, header.folder_name)
+        self.assertIs(header.children[-1], browser.search_button)
+        self.assertNotIn(browser.navigation_controls, browser.widget.children)
+        browser.search_button.on_press()
+        self.assertIn(browser.search_panel, browser.widget.children)
+        browser.close_search_button.on_press()
+        self.assertNotIn(browser.search_panel, browser.widget.children)
+
     def test_hub_transfer_banner_only_reports_relevant_rclone_work(self):
         self.app.show_cloud(present=False)
         self.app.folder_source = 'rclone'
