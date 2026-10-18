@@ -14,6 +14,10 @@ and disappear when credentials are locked or forgotten.
 Use **Import…** for a standalone EPUB or comic. EPUB and
 CBZ/ZIP imports create private copies; the selected source is never
 changed. Imports open directly and remain available through document sessions.
+On iOS, EPUBs opened from **Workspaces → Local** can live in the shared
+**Files → Logistics → Local** folder. Their import history stays in private app
+storage; reopening the same Local file reuses its imported book and reading
+session, including after the app's storage migration.
 The Books and Comics library shows configured library folders only; it has no
 separate imported-items section, selection switches or imported-results paging.
 There is no folder search field; the available configured folders appear directly.

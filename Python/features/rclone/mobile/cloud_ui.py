@@ -1065,8 +1065,10 @@ class CloudUI(LocalCryptUI):
             self.set_cloud_busy(True)
         try:
             ResourceImports = self.rclone_ui.ResourceImports
-            if not hasattr(self, 'resource_imports'):
-                self.resource_imports = ResourceImports(self.private_root)
+            collection_root = collection_path(self.private_root).resolve()
+            if (not hasattr(self, 'resource_imports')
+                    or self.resource_imports.collection_root != collection_root):
+                self.resource_imports = ResourceImports(self.private_root, collection_root=collection_root)
             imported = self.resource_imports.find(selected)
             if imported is not None:
                 if imported['provider'] == 'library':

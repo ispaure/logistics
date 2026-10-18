@@ -8,10 +8,13 @@ from services.identifiers import digest
 
 
 class ResourceImports:
-    def __init__(self, root):
+    def __init__(self, root, *, collection_root=None):
         if Path(root).is_symlink():
             raise ValueError('Import storage cannot be linked.')
         self.root = Path(root).resolve()
+        if collection_root is not None and Path(collection_root).is_symlink():
+            raise ValueError('Import storage cannot be linked.')
+        self.collection_root = Path(collection_root).resolve() if collection_root is not None else None
         self.path = self.root / 'resource-imports.json'
         self.items, self.error = {}, ''
         if self.path.exists():
@@ -33,11 +36,21 @@ class ResourceImports:
 
     def identity(self, path):
         path = Path(path)
-        relative = path.resolve().relative_to(self.root)
+        resolved = path.resolve()
+        if resolved.is_relative_to(self.root):
+            relative = resolved.relative_to(self.root)
+            identity = relative.as_posix()
+        elif self.collection_root is not None and resolved.is_relative_to(self.collection_root):
+            relative = resolved.relative_to(self.collection_root)
+            # Preserve the pre-migration LocalFiles identity when iOS exposes
+            # Local in Documents, or Android moves the collection to an SD card.
+            identity = 'LocalFiles/' + relative.as_posix()
+        else:
+            raise ValueError('Choose a file in Local or private Downloads.')
         components = [path, *list(path.parents)[:max(0, len(relative.parts) - 1)]]
         if any(part.is_symlink() for part in components):
             raise ValueError('Linked private-copy imports are not supported.')
-        return sha256(relative.as_posix().encode()).hexdigest()
+        return sha256(identity.encode()).hexdigest()
 
     def find(self, path):
         if self.error:
