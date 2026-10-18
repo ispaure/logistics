@@ -38,6 +38,8 @@ class FoldersPage(pyside.QWidget):
         self._refresh_generation = 0
         self._refresh_pending = False
         self._closing = False
+        self.refresh_button = pyside.QPushButton('Refresh folders')
+        self.refresh_button.clicked.connect(self.refresh)
         self.discovery = OperationProgress(self)
         self.discovery.completed.connect(self._discovered)
         self.details = OperationProgress(self)
@@ -89,6 +91,7 @@ class FoldersPage(pyside.QWidget):
         left_layout.addWidget(self.credential_label)
         left_layout.addWidget(self.credential_combo)
         left_layout.addWidget(self.folder_tree, 1)
+        left_layout.addWidget(self.refresh_button)
 
         splitter = pyside.QSplitter(pyside.Qt.Orientation.Horizontal)
         splitter.addWidget(left_widget)
@@ -211,6 +214,10 @@ class FoldersPage(pyside.QWidget):
     def _source_changed(self, _index):
         self._refresh_credentials()
         self._refresh_folder_tree()
+        # A source can change while the hub remains open (for example when
+        # credentials are loaded in another window). Show the cached list now,
+        # then reconcile it without blocking the tab switch.
+        self.refresh()
 
     def _credential_changed(self, _index):
         self._refresh_folder_tree()

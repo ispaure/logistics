@@ -169,7 +169,7 @@ class FolderSourceTests(QtTestCase):
         self.wait(page)
         local_detector.assert_called_once()
 
-    def test_sources_are_read_once_per_refresh_not_again_on_show_or_selection(self):
+    def test_source_switch_refreshes_but_show_and_credential_selection_do_not(self):
         read_names = self.remote(['Shared', 'Remote-Only'], 'profile')
         self.local_folders = [self.folder('Local'), self.folder('Shared')]
         page = self.page()
@@ -179,14 +179,45 @@ class FolderSourceTests(QtTestCase):
         self.assertGreater(page.source_tabs.height(), 0)
         read_names.assert_called_once_with()
         page.source_tabs.setCurrentIndex(self.tab(page, 'Remote'))
-        page.credential_combo.setCurrentIndex(1)
-        page.credential_combo.setCurrentIndex(0)
-        read_names.assert_called_once_with()
-        page.refresh()
         self.wait(page)
         self.assertEqual(read_names.call_count, 2)
+        page.credential_combo.setCurrentIndex(1)
+        page.credential_combo.setCurrentIndex(0)
+        self.assertEqual(read_names.call_count, 2)
+        page.refresh()
+        self.wait(page)
+        self.assertEqual(read_names.call_count, 3)
         self.assertEqual({entry.name for entry in self.entries(page)}, {'Shared', 'Remote-Only'})
         page.close()
+
+    def test_remote_tab_recovers_empty_snapshot_and_retries_failed_refresh(self):
+        from threading import Event
+        self.local_folders = [self.folder('Local')]
+        read_names = self.remote([], 'profile')
+        page = self.page()
+        entered, release = Event(), Event()
+        def names():
+            entered.set()
+            release.wait(5)
+            return ['Restored']
+        read_names.side_effect = names
+        self.addCleanup(release.set)
+        page.source_tabs.setCurrentIndex(self.tab(page, 'Remote'))
+        self.until(entered.is_set)
+        self.assertTrue(page.discovery.busy)
+        release.set()
+        self.wait(page)
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Restored'])
+        read_names.side_effect = OSError('temporarily unavailable')
+        page.refresh_button.click()
+        self.wait(page)
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Restored'])
+        self.assertIn('temporarily unavailable', page.discovery.message.text())
+        read_names.side_effect = None
+        read_names.return_value = ['Recovered']
+        page.refresh_button.click()
+        self.wait(page)
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Recovered'])
 
     def test_main_window_first_display_reads_sources_once_and_returning_refreshes(self):
         read_names = self.remote(['Remote'], 'profile')

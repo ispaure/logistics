@@ -185,9 +185,11 @@ class CloudUI(LocalCryptUI):
             self.cloud_status.style.font_size = 12
             self.cloud_status.style.flex = 1
             self.cloud_transfer_progress = toga.ProgressBar(max=100, value=0, style=Pack(height=12))
+            self.remote_browser.location_bar = NativeBrowser.location_header(self.cloud_status, self.cloud_up)
+            self.remote_browser.location_bar.update('', remote=True)
             self.cloud_view = toga.Box(children=[
                 toga.Box(children=[self.cloud_locations, self.cloud_actions_button], style=Pack(direction=ROW)),
-                toga.Box(children=[self.cloud_up, self.cloud_status], style=Pack(direction=ROW)),
+                self.remote_browser.location_bar,
                 self.cloud_transfer_progress,
                 toga.ScrollContainer(horizontal=False, content=scroll_content(self.remote_browser.widget), style=Pack(flex=1)),
                 self.cloud_cancel],
@@ -275,10 +277,14 @@ class CloudUI(LocalCryptUI):
 
     def loaded_remote_names(self):
         client = getattr(self, 'cloud_client', None)
+        # Package state is shared across iPad scenes; native selectors are not.
+        # Never let an empty or stale selector hide already unlocked remotes.
+        records = getattr(client, 'package_records', None)
+        if records is not None:
+            return self.visible_remote_names([name for item in records for name in item['remotes']])
         generation = getattr(client, 'generation', None)
         if getattr(self, 'cloud_remote_generation', generation) != generation:
-            records = getattr(client, 'package_records', ())
-            return self.visible_remote_names([name for item in records for name in item['remotes']]) if records else []
+            return []
         return [row.value for row in self.cloud_remote.items] if hasattr(self, 'cloud_remote') else []
 
     def set_loaded_remote_names(self, names):
@@ -396,6 +402,8 @@ class CloudUI(LocalCryptUI):
             item.enabled = not value and self.cloud_client is not None
         self.cloud_import.enabled = not value and self.cloud_client is not None and self.cloud_pending_zip is not None
         self.cloud_cancel.enabled = value
+        if not self.cloud_path:
+            self.cloud_up.enabled = True
         self.refresh_folder_actions()
         self.download_open.enabled = self.download_export.enabled = not value and bool(self.download_labels)
         self.refresh_retained_credentials()
@@ -485,17 +493,25 @@ class CloudUI(LocalCryptUI):
         groups = {'All': None}
         associations = {item['zip']: item for item in json.loads(self.preferences.values['remote_packages'])
                         + self.retained_credential_associations() + getattr(self, 'session_credential_packages', [])}
+        loaded = set()
+        for item in getattr(getattr(self, 'cloud_client', None), 'package_records', ()):
+            loaded.add(item['package_name'])
+            associations[item['package_name']] = dict(zip=item['package_name'], remotes=item['remotes'])
         available = {copy['remote'] for entry in (self.folder_choices() if choices is None else choices).values()
                      for copy in entry.get('copies', ()) if copy.get('remote')}
         for item in associations.values():
             if not self.legacy_name_visible(Path(item['zip']).name, prefix='legacy'):
                 continue
             remotes = set(item['remotes']) & available
-            if not remotes:
+            if not remotes and item['zip'] not in loaded:
                 continue
-            title = Path(item['zip']).stem
-            if title in groups:
-                title = item['zip']
+            name = Path(item['zip']).name
+            base = name[:-4] if name.lower().endswith('.zip') else name
+            title = base
+            number = 2
+            while title in groups:
+                title = f'{base} ({number})'
+                number += 1
             groups[title] = remotes
         return groups
 
@@ -763,6 +779,8 @@ class CloudUI(LocalCryptUI):
                 self.remote_browser.closed = False
                 self.remote_browser.thumbnail = None
                 self.remote_browser.set_entries(provider, folder, [dict(row, name=Path(row['path']).name, modified='') for row in rows], location=(remote, folder))
+                self.remote_browser.location_bar.update(folder, remote=True,
+                    encrypted=remote in self.cloud_crypt_remotes)
             self.cloud_status.value = (f'{remote}:{folder} · {len(rows)} items.' if rows else f'{remote}:{folder} is empty.')
             return True
         except Exception as error:
@@ -785,6 +803,9 @@ class CloudUI(LocalCryptUI):
             self.remote_read_busy = False
 
     async def parent_cloud(self, widget=None, **kwargs):
+        if not self.cloud_path:
+            self.show_locations()
+            return
         if not self.cloud_busy:
             self.cloud_location.value = self.cloud_path.rpartition('/')[0]
             await self.browse_cloud()

@@ -29,7 +29,9 @@ class FolderSourceTabTests(unittest.TestCase):
         app.remember_credential_association('Session network shares', ['Home Mac'], session_only=True)
         (app.private_root / 'LocalFiles' / 'Notes').mkdir(parents=True)
         app.show_locations()
-        self.assertEqual(app.folder_source, 'rclone')
+        self.assertEqual(app.folder_source, 'Local')
+        self.assertEqual(set(app.folder_buttons), {'All files', 'Notes'})
+        app.change_folder_source('rclone')
         self.assertEqual(set(app.folder_buttons), {'Personal drive', 'Work drive'})
         self.assertEqual(set(app.folder_credentials), {'All', 'Personal', 'Work'})
         app.folder_credential.value = 'Personal'
@@ -52,6 +54,8 @@ class FolderSourceTabTests(unittest.TestCase):
     def test_source_actions_follow_tab_without_leaving_empty_toolbar_or_duplicate_share(self):
         app = self.app
         app.show_locations()
+        self.assertEqual(list(app.folder_source_actions.children), [])
+        app.change_folder_source('rclone')
         self.assertEqual(list(app.folder_source_actions.children), [app.folder_transfers_button])
         self.assertIsNone(app.folder_add_share_button.parent)
         self.assertEqual(app.folder_source_actions.style.margin_bottom, 12)
@@ -94,16 +98,16 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(app.file_path, 'Notes')
         self.assertEqual({row['name'] for row in app.file_rows.values()}, {'nested.txt'})
 
-    def test_mapped_copies_remain_with_their_remote_owner(self):
+    def test_mapped_copies_also_appear_locally(self):
         from logisticsmobile.folder_hub import source_choices
         choices = {'Offline': dict(source='Local', kind='job', remote='Drive', copies=[
             dict(source='Local', remote='Drive'), dict(source='Remote', remote='Drive')]),
             'Share copy': dict(source='Local', kind='job', remote='Mac', copies=[])}
         self.assertEqual(set(source_choices(choices, 'rclone', {'Mac'})), {'Offline'})
         self.assertEqual(set(source_choices(choices, 'Network shares', {'Mac'})), {'Share copy'})
-        self.assertEqual(source_choices(choices, 'Local', {'Mac'}), {})
+        self.assertEqual(set(source_choices(choices, 'Local', {'Mac'})), {'Offline', 'Share copy'})
 
-    def test_rows_show_icons_for_each_available_storage_copy(self):
+    def test_rows_show_storage_for_selected_tab(self):
         from test_mirror_jobs import MirrorClient
         class Client(MirrorClient):
             def cancel(self): pass
@@ -114,19 +118,57 @@ class FolderSourceTabTests(unittest.TestCase):
         local, _ = store.create(app.cloud_client, 'Remote', 'folder', storage='Local')
         crypt, _ = store.create(app.cloud_client, 'Secret', 'folder', storage='LocalCrypt')
         (app.private_root / 'LocalFiles' / 'Notes').mkdir(parents=True)
+        app.cloud_crypt_remotes = {'Secret'}
         app.show_locations()
+        self.assertNotIn('Online', app.folder_buttons)
 
         def icons(name):
             return [child.control_icon for child in app.folder_buttons[name].parent.children
                     if getattr(child, 'control_icon', '').startswith('storage_')]
 
-        self.assertEqual(icons('Online'), ['storage_remote'])
-        self.assertEqual(icons(local['target']), ['storage_local', 'storage_remote'])
-        self.assertEqual(icons(crypt['target']), ['storage_crypt', 'storage_remote'])
-        app.change_folder_source('Local')
+        self.assertEqual(icons(local['target']), ['storage_local'])
+        self.assertEqual(icons(crypt['target']), ['storage_crypt'])
         self.assertEqual(icons('Notes'), ['storage_local'])
         self.assertEqual(icons('All files'), ['storage_local'])
         app.change_folder_source('rclone')
+        self.assertEqual(icons('Online'), ['storage_remote'])
+        self.assertEqual(icons(local['target']), ['storage_remote'])
+        self.assertEqual(icons(crypt['target']), ['storage_crypt'])
         store.target(crypt).rename(store.target(crypt).with_name('unmapped'))
         app.show_locations()
-        self.assertEqual(icons('Secret'), ['storage_remote'])
+        self.assertEqual(icons('Secret'), ['storage_crypt'])
+        app.change_folder_source('Local')
+        self.assertNotIn('Secret', app.folder_buttons)
+
+    def test_tab_taps_open_matching_copy_and_menus_keep_same_mapping_actions(self):
+        from unittest.mock import AsyncMock, patch
+        from test_mirror_jobs import MirrorClient
+        app = self.app
+        class Client(MirrorClient):
+            def cancel(self): pass
+        app.cloud_client = Client()
+        app.cloud_remote.items = ['Remote', 'Secret']
+        store = app.mirror_store()
+        jobs = [store.create(app.cloud_client, remote, 'folder', storage=storage)[0]
+                for remote, storage in [('Remote', 'Local'), ('Secret', 'LocalCrypt')]]
+        app.show_locations()
+        for job in jobs:
+            menus = []
+            for tab, expected in [('Local', 'job'), ('rclone', 'job-remote')]:
+                app.change_folder_source(tab)
+                name = job['target']
+                with patch.object(app, 'open_picker_folder', new=AsyncMock(return_value=True)) as opened:
+                    app.loop.run_until_complete(app.folder_buttons[name].on_press())
+                    target = opened.call_args.args[0]
+                    self.assertEqual(target['kind'], expected)
+                    self.assertEqual(target['value'], job['id'])
+                menu = next(child for child in app.folder_buttons[name].parent.children
+                            if getattr(child, 'control_icon', '') == 'more')
+                menu.on_press()
+                controls = [button.text for button, _ in app.folder_action_controls]
+                self.assertIn('Pull…', controls)
+                self.assertIn('Push…', controls)
+                self.assertIn('Browse Remote', controls)
+                self.assertIn('Delete local folder…', controls)
+                menus.append(controls)
+            self.assertEqual(*menus)

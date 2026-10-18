@@ -24,6 +24,53 @@ class Engine:
 
 
 class SpeechTests(unittest.TestCase):
+    def test_native_word_offsets_selection_and_stale_events(self):
+        engine = Engine()
+        ranges = []
+        session = SpeechSession(engine, on_range=lambda *r: ranges.append(r), on_state=lambda *s: None)
+        session.play('Skip. 😀 One two.', 6, voice='local')
+        token = session.token
+        engine.started(token)
+        self.assertEqual(ranges[-1], (6, 8))
+        engine.progress(token, 3, 6)
+        self.assertEqual(ranges[-1], (9, 12))
+        count = len(ranges)
+        engine.progress(token, -1, 100)
+        self.assertEqual(len(ranges), count)
+        session.pause()
+        engine.progress(token, 7, 11)
+        engine.started(token)
+        self.assertEqual(len(ranges), count)
+        session.resume()
+        engine.progress(token, 0, 2)
+        self.assertEqual(len(ranges), count)
+        engine.progress(session.token, 7, 11)
+        self.assertEqual(ranges[-1], (13, 17))
+        session.stop()
+        self.assertEqual(ranges[-1], (-1, -1))
+        engine.progress(session.token, 0, 2)
+        self.assertEqual(ranges[-1], (-1, -1))
+        session.dispose()
+
+    def test_estimated_words_wait_for_audio_start_and_yield_to_native_progress(self):
+        import asyncio
+        engine = Engine()
+        engine.loop = asyncio.new_event_loop()
+        self.addCleanup(engine.loop.close)
+        ranges = []
+        session = SpeechSession(engine, on_range=lambda *r: ranges.append(r), on_state=lambda *s: None)
+        self.addCleanup(session.dispose)
+        session.play('One two three.', voice='local')
+        self.assertEqual(ranges, [(-1, -1)])
+        engine.started(session.token)
+        self.assertEqual(ranges[-1], (0, 3))
+        timer = session.word_timer
+        self.assertIsNotNone(timer)
+        engine.progress(session.token, 4, 7)
+        self.assertTrue(timer.cancelled())
+        session.estimated_word(session.token, 2)
+        self.assertEqual(ranges[-1], (4, 7))
+
     def test_unicode_selection_chunks_and_block_boundaries(self):
         chapter = ChapterText(
             "<html><body><h1>😀 Title</h1><p>Straße. Next sentence.</p></body></html>"

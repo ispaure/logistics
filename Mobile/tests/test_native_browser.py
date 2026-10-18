@@ -35,15 +35,48 @@ class NativeBrowserTests(unittest.TestCase):
                     last = browser.entries[-1]
                     self.assertIn(last.identity, browser.buttons)
                     if mode == 'List':
-                        self.assertEqual(browser.items.children[0].children[0].children[0],
+                        self.assertEqual(browser.items.children[0].children[0].children[1],
                                          browser.buttons[last.identity])
                     browser.previous_page()
                     self.assertEqual(len(browser.buttons), 500)
-                def check_no_images(widget):
-                    self.assertNotIsInstance(widget, toga.ImageView)
-                    for child in getattr(widget, "children", ()):
-                        check_no_images(child)
-                check_no_images(browser.items)
+                for row in browser.items.children:
+                    glyph = row.children[0].children[0]
+                    self.assertIsInstance(glyph, toga.ImageView)
+                    self.assertIn(glyph.browser_entry_kind, ('folder', 'file'))
+
+            finally:
+                app.loop.run_until_complete(browser.close())
+                app.main_window.close()
+                app.loop.close()
+
+    def test_selection_highlight_survives_layout_and_paging_without_checkmark(self):
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            browser = FileBrowser()
+            provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path)
+            rows = [dict(path=f'{index}.md', name=f'{index}.md', directory=False, size=index)
+                    for index in range(501)]
+            async def check():
+                browser.set_entries(provider, '', rows)
+                selected, other = browser.entries[:2]
+                await browser.select(selected)
+                for mode in ('List', 'Tiles'):
+                    browser.mode = mode
+                    browser.render()
+                    self.assertEqual(browser.buttons[selected.identity].text, selected.label)
+                    self.assertEqual(browser.entry_rows[selected.identity]._impl._surface_roles[0], 'hover')
+                    self.assertEqual(browser.entry_rows[other.identity]._impl._surface_roles[0], 'surface')
+                    browser.next_page()
+                    browser.previous_page()
+                    self.assertEqual(browser.entry_rows[selected.identity]._impl._surface_roles[0], 'hover')
+                    await browser.select(other)
+                    self.assertFalse(any(button.text.startswith('✓') for button in browser.buttons.values()))
+                    self.assertEqual(browser.entry_rows[selected.identity]._impl._surface_roles[0], 'surface')
+                    await browser.select(selected)
+            try:
+                app.loop.run_until_complete(check())
             finally:
                 app.loop.run_until_complete(browser.close())
                 app.main_window.close()

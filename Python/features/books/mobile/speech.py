@@ -41,6 +41,9 @@ class SpeechSession:
         self.elapsed = 0
         engine.completed = self.completed
         engine.failed = self.failed
+        engine.progress = self.progress
+        engine.started = self.started
+        self.word_timer = None
 
     def play(self, text, start=0, end=None, *, voice='', speed=1, breaks=()):
         if self.closed:
@@ -75,17 +78,58 @@ class SpeechSession:
             self.on_state('stopped', 'Finished the selected passage or current chapter.')
             return
         text, start, end = self.ranges[self.index]
-        self.on_range(start, end)
+        self.cancel_timer()
+        self.native_progress = False
         self.generation += 1
         self.token = str(self.generation)
         try:
             self.started_at = monotonic()
             self.elapsed = 0
-            self.on_state('speaking', 'Reading aloud · current sentence highlighted')
+            self.on_state('speaking', 'Reading aloud · current word highlighted')
             self.engine.speak(text, self.voice, self.speed, self.token)
         except Exception:
             self.stop()
             self.on_state('unavailable', 'Speech failed. Check the installed offline voice.')
+
+    def cancel_timer(self):
+        if self.word_timer is not None:
+            self.word_timer.cancel()
+            self.word_timer = None
+
+    def started(self, token):
+        if self.closed or self.state != 'speaking' or token != self.token:
+            return
+        self.started_at = monotonic()
+        text, base, _ = self.ranges[self.index]
+        self.utterance_words = []
+        for match in re.finditer(r'\S+', text):
+            start = utf16_length(text[:match.start()])
+            self.utterance_words.append((base + start, base + start + utf16_length(match[0])))
+        if not self.native_progress and not getattr(self.engine, 'native_word_events', False):
+            self.estimated_word(token, 0)
+
+    def estimated_word(self, token, index):
+        if (self.closed or self.state != 'speaking' or token != self.token
+                or self.native_progress or index >= len(self.utterance_words)):
+            return
+        self.word_timer = None
+        self.on_range(*self.utterance_words[index])
+        loop = getattr(self.engine, 'loop', None)
+        if loop is not None and index + 1 < len(self.utterance_words):
+            delay = 1 / (3 * self.speed)
+            # Give engines time to deliver their first audio-synchronized range.
+            self.word_timer = loop.call_later(max(.75, delay) if index == 0 else delay,
+                self.estimated_word, token, index + 1)
+
+    def progress(self, token, start, end):
+        if self.closed or self.state != 'speaking' or token != self.token:
+            return
+        _, base, limit = self.ranges[self.index]
+        if not 0 <= start < end <= limit - base:
+            return
+        self.native_progress = True
+        self.cancel_timer()
+        self.on_range(base + start, base + end)
 
     def completed(self, token):
         if not self.closed and self.state == 'speaking' and token == self.token:
@@ -99,6 +143,7 @@ class SpeechSession:
 
     def pause(self):
         if self.state == 'speaking':
+            self.cancel_timer()
             self.elapsed = max(0, monotonic() - self.started_at)
             self.state = 'paused'
             self.engine.stop()
@@ -120,18 +165,23 @@ class SpeechSession:
         current = bisect_right(self.words, self.ranges[self.index][1]) - 1
         target = max(0, min(len(self.words) - 1,
             current + round((elapsed + seconds) * 3 * self.speed)))
+        self.cancel_timer()
         self.engine.stop()
         self.generation += 1
         self.token = str(self.generation)
         self.ranges = list(utterances(self.text, self.words[target], self.end, breaks=self.breaks))
         self.index, self.elapsed = 0, 0
         if paused:
-            self.on_range(self.ranges[0][1], self.ranges[0][2])
+            text, base, _ = self.ranges[0]
+            word = re.search(r'\S+', text)
+            if word:
+                self.on_range(base, base + utf16_length(word[0]))
             self.on_state('paused', 'Paused · Resume reads from the new position.')
         else:
             self.next()
 
     def stop(self):
+        self.cancel_timer()
         self.generation += 1
         self.token = str(self.generation)
         self.state = 'stopped'
@@ -139,6 +189,7 @@ class SpeechSession:
         self.ranges, self.index = [], 0
         self.text, self.words, self.breaks = "", [], ()
         self.elapsed = 0
+        self.on_range(-1, -1)
         self.on_state('stopped', 'Stopped')
 
     def dispose(self):
@@ -146,6 +197,6 @@ class SpeechSession:
             self.stop()
             self.closed = True
             self.engine.close()
-            self.engine.completed = self.engine.failed = lambda *args: None
+            self.engine.completed = self.engine.failed = self.engine.progress = self.engine.started = lambda *args: None
             self.on_range = self.on_state = lambda *args: None
             self.can_speak = lambda: False

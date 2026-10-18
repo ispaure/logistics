@@ -68,6 +68,52 @@ def mount_native_menu(app, menu, destination):
     return menu._native_workspace_item
 
 
+def sync_reader_toolbar(app, view):
+    """Share UIKit's title bar rather than spending a second row on reading."""
+    if not app.routes.apple:
+        return
+    from rubicon.objc import ObjCClass, CGRect
+    adapter = app.native_host.adapter
+    destination = app.native_host.state.destination
+    controller = adapter.navigation[app.native_host.destinations.index(destination)].topViewController
+    controls = getattr(view, '_native_reader_buttons', None)
+    if controls is None:
+        if getattr(app, '_reader_toolbar_controller', None) == controller:
+            controller.navigationItem.rightBarButtonItems = None
+            controller.navigationItem.prompt = None
+            app._reader_toolbar_controller = None
+            app._reader_toolbar_state = None
+            app._reader_toolbar_prompt = None
+        return
+    toolbar = view._native_reader_toolbar
+    detach(toolbar)
+    buttons = [] if getattr(view, '_reader_fullscreen', False) else list(controls())
+    state = (controller.ptr.value, tuple(id(button) for button in buttons))
+    if getattr(app, '_reader_toolbar_state', None) != state:
+        # One group prevents iPad's combined tab/navigation bar from moving
+        # individual custom-view actions into an unlabeled overflow item.
+        group = ObjCClass('UIView').alloc().initWithFrame(CGRect((0, 0), (44 * len(buttons), 44)))
+        item = ObjCClass('UIBarButtonItem').alloc().initWithCustomView(group)
+        for index, button in enumerate(buttons):
+            detach(button)
+            button.app, button.window = app, app.main_window
+            native = button._impl.native
+            native.frame = CGRect((44 * index, 0), (44, 44))
+            group.addSubview(native)
+            button._native_reader_item = item
+        controller.navigationItem.rightBarButtonItems = [item] if buttons else []
+        app._reader_toolbar_group = group
+        app._reader_toolbar_state = state
+    status = getattr(view, '_native_reader_status', None)
+    text = status.text if status is not None else ''
+    prompt = text if text.lower().startswith(('save failed', 'cannot ', 'unsaved changes:',
+        'book import failed', 'could not ')) else None
+    if getattr(app, '_reader_toolbar_prompt', None) != (controller.ptr.value, prompt):
+        controller.navigationItem.prompt = prompt
+        app._reader_toolbar_prompt = (controller.ptr.value, prompt)
+    app._reader_toolbar_controller = controller
+
+
 class WorkspaceNavigation(AdaptiveWorkspace):
     def __init__(self, app):
         super().__init__(app)
@@ -133,7 +179,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             self.frames.add(view._workspace_frame)
         if route == 'preview' and isinstance(view, toga.Box) and not getattr(view, '_workspace_menu', False):
             menu = menu_button(lambda widget, **kw: self.show_browser(destination))
-            view.insert(0, menu)
+            toolbar = getattr(view, '_workspace_toolbar', view)
+            toolbar.insert(0, menu)
             view._workspace_menu_button = menu
             view._workspace_menu = True
         menu = getattr(view, '_workspace_menu_button', None)
@@ -158,7 +205,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         self.app.mark_navigation()
         self.menu_open[destination] = not self.menu_open[destination]
         drawer = self.browser(destination) if self.menu_open[destination] else None
-        self.render()
+        self.render(preserve_drawer=True)
         if drawer is not None:
             drawer.extensions = None
             drawer.schedule_refresh()
@@ -228,7 +275,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         self.app.routes.back()
         self.render()
 
-    def render(self, destination=None):
+    def render(self, destination=None, *, preserve_drawer=False):
         if self.rendering:
             return
         self.rendering = True
@@ -246,12 +293,20 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 for panel in (self.app.native_host.bodies[key], self.app.routes.body(key)):
                     if panel.style.width != width:
                         panel.style.width = width
+            was_wide = self.wide
             self.layout_width = self.width()
             self.wide = self.layout_width >= 640
             if self.pinned is not None and self.session_view(self.pinned) is None:
                 self.pinned = None
             body = self.app.routes.body(destination)
             view = body.children[0] if body.children else None
+            if (was_wide and not self.wide and not preserve_drawer and view is not None
+                    and view is self.session_view(self.app.workspace.active)):
+                # A wide file sidebar is a companion to the open document.
+                # On a phone, keep that document visible at full width rather
+                # than leaving it behind the compact file drawer.
+                key = destination or self.app.native_host.state.destination
+                self.menu_open[key] = False
             frame = getattr(view, '_workspace_frame', None)
             layout = (id(frame), self.wide, self.layout_width, self.pinned,
                       tuple(self.menu_open.items()), frame.row.layout.content_width if frame else 0)
@@ -269,6 +324,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 menu = getattr(view, '_workspace_menu_button', None)
                 if menu is not None:
                     mount_native_menu(self.app, menu, destination or self.app.native_host.state.destination)
+            if view is not None:
+                sync_reader_toolbar(self.app, view)
             if hasattr(self.app, 'render_chat_workspace'):
                 self.app.render_chat_workspace()
             from .appearance import reserve_navigation
@@ -298,12 +355,15 @@ class WorkspaceFrame:
         self.compact_open = False
         self.menu = menu_button(lambda widget, **kw: navigation.toggle(destination))
         self.caption = toga.Label(destination.title(), style=Pack(flex=1, margin_top=10))
-        self.header = toga.Box(children=[self.menu, self.caption], style=Pack(direction=ROW, margin_bottom=4))
+        self.compact_toolbar = getattr(view, '_workspace_toolbar', None)
+        self.header = self.compact_toolbar or toga.Box(children=[self.menu, self.caption], style=Pack(direction=ROW, margin_bottom=4))
+        if self.compact_toolbar is not None:
+            self.header.insert(0, self.menu)
         if destination == 'documents':
             self.pair = toga.Button('Split', on_press=navigation.show_pair_picker, style=Pack(height=48))
             self.header.add(self.pair)
         self.row = toga.Box(children=[self.main], style=Pack(direction=ROW, flex=1))
-        if destination != 'files':
+        if destination != 'files' and self.compact_toolbar is None:
             view.add(self.header)
         view.add(self.row)
 
@@ -335,6 +395,10 @@ class WorkspaceFrame:
             self.header.remove(self.menu)
             if hasattr(self, 'pair') and self.pair in self.header.children:
                 self.header.remove(self.pair)
+        if self.compact_toolbar is not None:
+            detach(self.menu)
+            if hasattr(self, 'pair'):
+                detach(self.pair)
         self.menu.app, self.menu.window = app, app.main_window
         item = controller.navigationItem
         item.leftItemsSupplementBackButton = True
@@ -348,7 +412,8 @@ class WorkspaceFrame:
                 self.native_pair = ObjCClass('UIBarButtonItem').alloc().initWithTitle(
                     'Split', style=0, target=self.pair._impl.native, action=SEL('onPress:'))
             self.native_pair.enabled = self.pair.enabled
-            item.rightBarButtonItem = self.native_pair if self.pair.enabled else None
+            if not hasattr(self.view(), '_native_reader_buttons'):
+                item.rightBarButtonItem = self.native_pair if self.pair.enabled else None
         self.native_menu.accessibilityLabel = (
             'Close file browser' if self.navigation.menu_open[self.destination] else 'Browse files')
 

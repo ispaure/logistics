@@ -29,7 +29,7 @@ class MarkdownEditorTests(unittest.TestCase):
         self.assertEqual(self.app.editor_view.session.view['markdown_mode'], 'preview')
         self.assertIs(self.app.body.children[0], self.app.preview_box)
         next(child for child in self.app.editor_view.markdown_speech.button.parent.children
-             if getattr(child, 'text', '') == 'Edit Markdown').on_press()
+             if getattr(child, 'control_icon', '') == 'edit').on_press()
         self.assertEqual(self.app.editor_view.session.view['markdown_mode'], 'edit')
         self.assertIs(self.app.body.children[0], self.app.document_view)
         self.app.show_documents()  # Ordinary activation returns to reading.
@@ -37,6 +37,48 @@ class MarkdownEditorTests(unittest.TestCase):
         self.app.create_chosen_document('md')
         self.assertEqual(self.app.editor_view.session.view['markdown_mode'], 'edit')
         self.assertEqual(self.app.editor_view.editor_area.children, [self.app.editor_view.formatted.view])
+
+    def test_save_only_appears_after_a_real_markdown_change(self):
+        document = self.app.store.create('Read.md', b'# Original\n')
+        self.app.open_document(document.id)
+        self.app.show_documents(edit=True)
+        owner = self.app.editor_view
+        self.assertNotIn(owner.save_button, owner.toolbar.children)
+        self.assertNotIn('Save', [label for label, _ in owner.actions.actions])
+        self.assertEqual(owner.preview_button.control_icon, 'view')
+        owner.editor.value = '# Changed\n'
+        self.assertIn(owner.save_button, owner.toolbar.children)
+        self.assertIn('Save', [label for label, _ in owner.actions.actions])
+        owner.editor.value = '# Original\n'
+        self.assertNotIn(owner.save_button, owner.toolbar.children)
+        owner.editor.value = '# Changed\n'
+        self.app.save_document()
+        self.assertNotIn(owner.save_button, owner.toolbar.children)
+        self.app.show_preview()
+        self.assertIs(owner.preview_edit.parent, owner.preview_toolbar)
+        self.assertIs(owner.preview_box._workspace_menu_button.parent, owner.preview_toolbar)
+
+    def test_provider_markdown_uses_one_toolbar_and_no_clean_save(self):
+        from commonUtils.runtime.local_files import LocalFiles
+        from features.text_editor.resources import LocalTextCopies
+        root = Path(self.temporary.name) / 'provider-compact'
+        root.mkdir()
+        (root / 'Note.md').write_text('# Note\n')
+        run = self.app.loop.run_until_complete
+        self.assertTrue(run(self.app.open_crypt(copies=LocalTextCopies(LocalFiles(root)), key='Note.md')))
+        owner = self.app.private_sessions.active
+        self.assertEqual(owner.crypt_preview_button.control_icon, 'edit')
+        self.assertIs(owner.crypt_preview_button.parent, owner.reader_toolbar)
+        self.assertNotIn(owner.crypt_save, owner.reader_toolbar.children)
+        self.assertEqual(owner.crypt_markdown_footer.style.height, 0)
+        owner.toggle_private_preview()
+        self.assertEqual(owner.crypt_preview_button.control_icon, 'view')
+        owner.crypt_text.value = '# Edited\n'
+        self.assertIn(owner.crypt_save, owner.reader_toolbar.children)
+        self.assertTrue(owner.crypt_save.enabled)
+        run(owner.save_crypt())
+        self.assertNotIn(owner.crypt_save, owner.reader_toolbar.children)
+        self.assertEqual((root / 'Note.md').read_text(), '# Edited\n')
 
     def test_bridge_updates_only_its_owner_and_stops_after_close(self):
         self.app.create_chosen_document('md')

@@ -250,5 +250,6 @@ Logistics binds single-page and spread canvases through
 `logisticsmobile.magnifier.bind`, alongside PDF canvases. The host persists
 `magnifier_zoom` as one percentage (150–250 in 20-point steps, default 190),
 merges current preferences before saving, and broadcasts updates across retained
-readers and windows. Native control gestures and image transforms belong to
-commonUtils. Controls change the lens without paging or toggling fullscreen.
+readers and windows. Native lens corner buttons and image transforms belong to
+commonUtils. One held image touch plus a corner-button tap changes the saved zoom
+without paging or toggling fullscreen.

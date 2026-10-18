@@ -11,6 +11,59 @@ from test_mirror_jobs import MirrorClient
 
 
 class FolderHubTests(unittest.TestCase):
+    def test_loaded_package_populates_hub_without_selector_or_bridge_access(self):
+        from logisticsmobile.app import LogisticsMobile
+        from types import SimpleNamespace
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            app.show_cloud(present=False)
+            app.cloud_client = SimpleNamespace(generation=7, cancel=lambda: None, package_records=(
+                dict(package_name='Personal.zip', remotes=['PersonalDrive', 'PersonalCrypt']),))
+            # Another scene loaded the ZIP; this scene's selector is still empty
+            # even though its generation matches the shared credential state.
+            app.cloud_remote.items = []
+            app.cloud_remote_generation = 7
+            with patch.object(app, 'existing_crypt_locations', side_effect=AssertionError('Bridge call')), \
+                    patch.object(app, 'retained_credential_associations', return_value=[]), \
+                    patch('socket.create_connection', side_effect=AssertionError('Network call')):
+                app.show_locations()
+                app.change_folder_source('rclone')
+                self.assertEqual(set(app.loaded_remote_names()), {'PersonalDrive', 'PersonalCrypt'})
+                self.assertEqual(app.folder_credentials['Personal'], {'PersonalDrive', 'PersonalCrypt'})
+                self.assertIn('PersonalDrive', app.folder_buttons)
+                self.assertIn('PersonalCrypt', app.folder_buttons)
+                # Credential notifications refresh a visible hub in place;
+                # no page switch or manual refresh should be needed.
+                app.cloud_client.package_records = (
+                    dict(package_name='Personal.zip', remotes=['PersonalDrive', 'PersonalCrypt']),
+                    dict(package_name='All.zip', remotes=[]),
+                    dict(package_name='Personal.ZIP', remotes=[]),
+                    dict(package_name='Work.2026.zip', remotes=[]))
+                app.screen_privacy.retire_stale()
+                labels = [row.value for row in app.folder_credential.items]
+                self.assertEqual(labels, ['All', 'Personal', 'All (2)', 'Personal (2)', 'Work.2026'])
+                # A package label can change without any folder changing.
+                app.cloud_client.package_records = (
+                    dict(package_name='Renamed.zip', remotes=['PersonalDrive', 'PersonalCrypt']),)
+                self.assertTrue(app.loop.run_until_complete(app.refresh_folder_hub()))
+                self.assertIn('Renamed', [row.value for row in app.folder_credential.items])
+                self.assertNotIn('Personal', [row.value for row in app.folder_credential.items])
+                # Loaded packages remain selectable even when their folders
+                # are excluded by the current visibility rules.
+                app.cloud_client.package_records = (dict(package_name='Personal.zip', remotes=[]),)
+                self.assertTrue(app.loop.run_until_complete(app.refresh_folder_hub()))
+                self.assertIn('Personal', [row.value for row in app.folder_credential.items])
+                self.assertEqual(app.folder_credentials['Personal'], set())
+                # Locking from another scene clears the shared records; stale
+                # selector rows must not advertise unlocked credentials.
+                app.cloud_remote.items = ['PersonalDrive']
+                app.cloud_client.package_records = ()
+                self.assertEqual(app.loaded_remote_names(), [])
+
     def test_mapped_remote_identity_and_path_wait_off_ui_thread_and_obey_new_navigation(self):
         import asyncio
         from threading import Event, get_ident
@@ -312,6 +365,7 @@ class FolderHubTests(unittest.TestCase):
                 local = app.private_root / 'LocalFiles' / 'Local-Comics'
                 (local / 'Actual subfolder').mkdir(parents=True)
                 app.show_locations()
+                app.change_folder_source('rclone')
                 self.assertIn('Server-Library-Comics', app.folder_buttons)
                 self.assertIn(('Server', 'Library'), app.folder_tree_buttons)
                 self.assertNotIn('Local-Comics', app.folder_buttons)
@@ -388,7 +442,11 @@ class FolderHubTests(unittest.TestCase):
                 app.cloud_remote.items = ['Loaded drive']
                 app.show_locations()
                 view = app.body.children[0]._workspace_frame.main
-                self.assertEqual([button.text for button in view.children[0].children], ['rclone', 'Local', 'Network shares'])
+                self.assertEqual([button.text for button in view.children[0].children], ['Local', 'rclone', 'Network shares'])
+                self.assertEqual(app.folder_source, 'Local')
+                self.assertFalse(view.children[1].children)
+                self.assertIn('Comics', app.folder_buttons)
+                app.change_folder_source('rclone')
                 self.assertEqual(view.children[1].children[0].children[0].text, 'Credential')
                 self.assertEqual(app.folder_credential.value, 'All')
                 self.assertEqual(app.native_host.labels[app.native_host.destinations.index('files')], 'Folder Hub')

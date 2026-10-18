@@ -370,6 +370,7 @@ class ProviderUI(FilesUI):
             self.crypt_text.readonly = False
             self.crypt_save.enabled = True
             self.set_cloud_busy(False)
+            self.refresh_private_text_controls()
 
     def discard_crypt(self, widget=None, **kwargs):
         if not self.cloud_busy and self.clear_private_reader(discard=True):
@@ -608,6 +609,9 @@ class ProviderUI(FilesUI):
             actions.append(('Close private document', self.close_crypt))
         if view.crypt_reader.book is not None or view.crypt_reader.kind == '.pdf':
             actions.append(('Fullscreen', self.toggle_private_reading_mode))
+        if view.crypt_reader.book is not None or view.crypt_reader.kind in {'.md', '.markdown'}:
+            app = getattr(self, 'app', self)
+            actions.append(('Open beside another document', app.adaptive.show_pair_picker))
         view.crypt_actions_menu = FeatureCommands(view.crypt_actions, self, actions, self.show_private_tools)
         view.crypt_title.style.flex = 1
         view.crypt_page.style.flex = 1
@@ -615,7 +619,8 @@ class ProviderUI(FilesUI):
         controls = [toga.Box(children=[view.crypt_title, view.crypt_actions], style=Pack(direction=ROW))]
         view.reader_toolbar = controls[0]
         if view.crypt_reader.book is not None:
-            view.reader_toolbar.insert(1, icon_button('speaker', 'Read aloud', on_press=self.show_provider_read_aloud))
+            view.reader_speech_button = icon_button('speaker', 'Read aloud', on_press=self.show_provider_read_aloud)
+            view.reader_toolbar.insert(1, view.reader_speech_button)
         if view.crypt_reader.kind == '.pdf':
             async def jump(widget=None, **kwargs):
                 from features.pdf.document import page_index
@@ -645,13 +650,17 @@ class ProviderUI(FilesUI):
                               style=Pack(direction=ROW, margin_top=4))
             view.crypt_save.style.flex = 1
             if view.crypt_reader.kind in {'.md', '.markdown'}:
-                view.crypt_preview_button = toga.Button('Preview', on_press=self.toggle_private_preview,
-                                                       style=Pack(height=44, flex=1))
-                footer.add(view.crypt_preview_button)
+                from .control_icons import apply_icon
+                apply_icon(view.crypt_save, 'save', 'Save Markdown')
+                if view.crypt_save in footer.children:
+                    footer.remove(view.crypt_save)
+                view.crypt_preview_button = icon_button('view', 'View Markdown', on_press=self.toggle_private_preview)
+                view.reader_toolbar.insert(len(view.reader_toolbar.children) - 1, view.crypt_preview_button)
                 if not getattr(view.crypt_reader, 'read_only', False):
                     view.crypt_edit_mode = toga.Selection(items=['Formatted', 'Source'],
                         on_change=self.private_edit_mode_changed, style=Pack(flex=1, height=44))
                     footer.add(view.crypt_edit_mode)
+                view.crypt_markdown_footer = footer
             if footer.children:
                 controls.append(footer)
         if not view.crypt_reader.editable:
@@ -672,23 +681,42 @@ class ProviderUI(FilesUI):
             else:
                 header = toga.Box(children=controls[:-1], style=Pack(direction=COLUMN))
             view.previous_page, view.next_page = page_buttons(self.previous_private_page, self.next_private_page)
-            view.page_footer = PageFooter(view.previous_page, view.next_page, self.move_private_page)
+            view.page_footer = PageFooter(view.previous_page, view.next_page, self.move_private_page,
+                compact=view.crypt_reader.book is not None)
             view.page_footer.sync(comic=view.crypt_reader.kind in {'.cbz', '.zip'},
                                   count=len(view.crypt_reader.labels), index=0,
                                   right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
             footer = view.page_footer.widget
+            if view.crypt_reader.book is not None:
+                view.reader_toolbar.insert(1, footer)
+                view.crypt_title.style.update(flex=1, width=1, height=48, margin=0)
             view.reader_restore = (toga.Button('Show reading controls', on_press=self.toggle_private_reading_mode,
                                              style=Pack(height=48)) if view.crypt_reader.book is not None or view.crypt_reader.kind == '.pdf' else None)
             view.reading_frame = ReadingFrame(view.crypt_content,
-                [header, footer, view.crypt_title] if comic else [header, footer],
+                [header, footer, view.crypt_title] if comic else
+                [header] if view.crypt_reader.book is not None else [header, footer],
                 margin=0 if view.crypt_reader.book is not None else 16, restore=view.reader_restore)
             view.crypt_view = view.reading_frame.widget
+            if view.crypt_reader.book is not None:
+                view.crypt_view._native_reader_toolbar = header
+                view.crypt_view._native_reader_status = view.crypt_title
+                view.crypt_view._native_reader_buttons = lambda: [view.previous_page, view.next_page,
+                    view.reader_speech_button, view.crypt_actions]
             view.crypt_view._workspace_menu_button = reader_menu
             view.crypt_controls = view.reading_frame.controls
             view.previous_page.enabled = False
             view.next_page.enabled = view.crypt_reader.book is not None or len(view.crypt_reader.labels) > 1
         else:
-            view.crypt_view = toga.Box(children=controls, style=Pack(direction=COLUMN, margin=12, flex=1))
+            markdown = view.crypt_reader.kind in {'.md', '.markdown'}
+            view.crypt_view = toga.Box(children=controls, style=Pack(direction=COLUMN, margin=0 if markdown else 12, flex=1))
+            if markdown:
+                view.crypt_view._workspace_toolbar = view.reader_toolbar
+                view._native_reading_buttons = [view.crypt_preview_button, view.crypt_actions]
+                view.crypt_view._native_reader_toolbar = view.reader_toolbar
+                view.crypt_view._native_reader_status = view.crypt_title
+                view.crypt_view._native_reader_buttons = lambda: view._native_reading_buttons
+                view.crypt_title.style.update(flex=1, width=1, height=48, margin=0)
+                self.refresh_private_text_controls(view=view)
             view.crypt_controls = [control for control in controls if control is not view.crypt_content]
         view.crypt_immersive = view.crypt_reader.kind in {'.cbz', '.zip'}
         if view.crypt_immersive:
@@ -712,6 +740,10 @@ class ProviderUI(FilesUI):
         self.resume_crypt()
 
     def clear_private_preview(self):
+        footer = getattr(self, 'crypt_markdown_footer', None)
+        mode = getattr(self, 'crypt_edit_mode', None)
+        if footer is not None and mode is not None and mode not in footer.children:
+            footer.add(mode)
         speech = getattr(self, "markdown_speech", None)
         if speech is not None:
             speech.close()
@@ -740,11 +772,49 @@ class ProviderUI(FilesUI):
                 self.crypt_content.remove(preview)
                 if self.crypt_text not in self.crypt_content.children:
                     self.crypt_content.add(self.crypt_text)
-            self.crypt_preview_button.text = 'Preview'
+            from .control_icons import apply_icon
+            apply_icon(self.crypt_preview_button, 'view', 'View Markdown')
+        self.refresh_private_text_controls()
+
+    def refresh_private_text_controls(self, *, view=None):
+        owner = view or self
+        reader = getattr(owner, 'crypt_reader', None)
+        toolbar = getattr(owner, 'reader_toolbar', None)
+        if reader is None or toolbar is None or reader.kind not in {'.md', '.markdown'}:
+            return
+        dirty = owner.crypt_text.value != reader.text and not getattr(reader, 'read_only', False)
+        owner.crypt_save.enabled = dirty and not self.cloud_busy
+        native_toolbar = type(toolbar._impl).__module__.startswith('toga_iOS.')
+        if dirty and not native_toolbar and owner.crypt_save not in toolbar.children:
+            toolbar.insert(len(toolbar.children) - 1, owner.crypt_save)
+        elif not dirty and owner.crypt_save in toolbar.children:
+            toolbar.remove(owner.crypt_save)
+        footer = getattr(owner, 'crypt_markdown_footer', None)
+        if footer is not None:
+            # A hidden source-mode selector must not leave a blank footer row.
+            footer.style.margin_top = 0
+            if footer.children:
+                del footer.style.height
+            else:
+                footer.style.height = 0
+        buttons = getattr(owner, '_native_reading_buttons', None)
+        if buttons is not None:
+            buttons[:] = ([owner.crypt_save] if dirty else []) + [owner.crypt_preview_button]
+            speech = getattr(owner, 'markdown_speech', None)
+            preview = getattr(owner, 'crypt_preview', None)
+            if speech is not None and preview is not None and preview in owner.crypt_content.children:
+                buttons.append(speech.button)
+            buttons.append(owner.crypt_actions)
+            app = getattr(self, 'app', self)
+            body = app.routes.body()
+            if owner.crypt_view in body.children:
+                from .workspace_navigation import sync_reader_toolbar
+                sync_reader_toolbar(app, owner.crypt_view)
 
     def private_source_changed(self, widget, **kwargs):
         if widget is not getattr(self, 'crypt_text', None):
             return
+        self.refresh_private_text_controls()
         formatted = getattr(self, 'crypt_formatted', None)
         if formatted is not None and formatted.view in self.crypt_content.children:
             try:
@@ -797,6 +867,10 @@ class ProviderUI(FilesUI):
                                                        style=Pack(flex=1))
         preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
         self.crypt_markdown_mode = 'preview'
+        footer = getattr(self, 'crypt_markdown_footer', None)
+        mode = getattr(self, 'crypt_edit_mode', None)
+        if footer is not None and mode is not None and mode in footer.children:
+            footer.remove(mode)
         self.crypt_content.clear()
         self.crypt_content.add(preview)
         from .markdown_speech import MarkdownSpeech
@@ -808,7 +882,10 @@ class ProviderUI(FilesUI):
         speech.web = preview
         if speech.button not in self.reader_toolbar.children:
             self.reader_toolbar.insert(len(self.reader_toolbar.children) - 1, speech.button)
-        self.crypt_preview_button.text = 'Text' if getattr(self.crypt_reader, 'read_only', False) else 'Edit Markdown'
+        from .control_icons import apply_icon
+        apply_icon(self.crypt_preview_button, 'view' if getattr(self.crypt_reader, 'read_only', False) else 'edit',
+            'View source text' if getattr(self.crypt_reader, 'read_only', False) else 'Edit Markdown')
+        self.refresh_private_text_controls()
 
     def private_edit_mode_changed(self, widget=None, **kwargs):
         if getattr(self, 'crypt_reader', None) is None:

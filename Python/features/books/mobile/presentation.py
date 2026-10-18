@@ -109,6 +109,21 @@ SCRIPT = r'''
  document.addEventListener('wheel',wheel,{passive:false});document.addEventListener('keydown',key);
  window.reader = {
    selection: () => selectedRange() || selectedCache,
+   highlight: (start, end) => {
+     if (window.CSS && CSS.highlights) CSS.highlights.delete('logistics-speech');
+     if (start < 0) {getSelection().removeAllRanges();return;}
+     seek(start);
+     const p=point(start), q=point(end,true);if(!p || !q)return;
+     const r=document.createRange();r.setStart(...p);r.setEnd(...q);
+     if(window.CSS && CSS.highlights && window.Highlight) {
+       if(!document.getElementById('logistics-speech-style')) {
+         const style=document.createElement('style');style.id='logistics-speech-style';
+         style.textContent='::highlight(logistics-speech){background:#ffcf40;color:#151515}';
+         document.head.appendChild(style);
+       }
+       CSS.highlights.set('logistics-speech',new Highlight(r));
+     } else getSelection().addRange(r);
+   },
    pagination: () => ({index:page,count:pageCount,width:pageWidth,anchor}),
    seek,
    turn: direction => {
@@ -172,6 +187,13 @@ class ChapterBridge:
         self.offset = offset
         if self.ready:
             self.view.evaluate_javascript(f'window.reader && window.reader.seek({int(offset)}, {json.dumps(end)})')
+
+    def highlight(self, start, end):
+        if not self.closed and self.ready:
+            if start >= 0:
+                self.offset = start
+            self.view.evaluate_javascript(
+                f'window.reader && window.reader.highlight({int(start)}, {int(end)})')
 
     def turn(self, direction):
         if not self.ready:

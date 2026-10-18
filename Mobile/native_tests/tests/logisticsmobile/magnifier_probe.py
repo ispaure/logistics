@@ -1,4 +1,4 @@
-"""Native lens controls, shared preferences and pixel cleanup on synthetic pages."""
+"""Native lens buttons, shared preferences, speech toggle and pixel cleanup."""
 import asyncio
 import json
 from pathlib import Path
@@ -46,12 +46,6 @@ class MagnifierProbe(LogisticsMobile):
         # Publish only after the Android popup and image have drawn this zoom.
         await asyncio.sleep(.25)
         state = {'name':name,'preferences':str(self.preferences.path)}
-        if get_os() is OS.ANDROID:
-            from java import jarray,jint
-            position = jarray(jint)(2)
-            self._probe_less.getLocationOnScreen(position)
-            state['less'] = [int(position[0])+self._probe_less.getWidth()//2,
-                int(position[1])+self._probe_less.getHeight()//2]
         (cache/'magnifier-probe-phase.json').write_text(json.dumps(state))
         from .fixtures import capture_window
         await capture_window(self, cache/('magnifier-'+name+'.png'))
@@ -138,6 +132,31 @@ class MagnifierProbe(LogisticsMobile):
             for canvas in canvases:
                 canvas.dispose()
                 assert canvas.image is None and canvas.on_magnifier_zoom is None
+            from features.books.mobile.speech_view import ReadAloudPanel
+            class Engine:
+                ready, error, default_voice = True, '', 'Offline test voice'
+                voices = {'Offline test voice': None}
+                def speak(self, *args):pass
+                def stop(self):pass
+                def close(self):pass
+            async def source():return SimpleNamespace(text='Read this sentence aloud.'),0,None
+            panel = ReadAloudPanel(loop=self.loop,source=source,on_range=lambda *a:None,
+                close=lambda w:None,engine=Engine())
+            self.show_view(panel,destination='documents',route='speech-toggle',title='Read aloud')
+            await panel.ready_task
+            assert sum(getattr(button,'control_icon','') in ('play','pause')
+                for button in panel.play_button.parent.children)==1
+            await panel.toggle_playback()
+            assert panel.session.state=='speaking' and panel.play_button.control_icon=='pause'
+            await self.phase('speech-toggle')
+            await panel.toggle_playback()
+            assert panel.session.state=='paused' and panel.play_button.control_icon=='play'
+            await panel.toggle_playback()
+            assert panel.session.state=='speaking' and panel.play_button.control_icon=='pause'
+            panel.session.stop()
+            assert panel.play_button.control_icon=='play'
+            panel.dispose()
+            result['speech_single_toggle'] = True
             assert not events,events
             result.update(success=True,settings=True,no_page_or_toggle=True,cleanup=True)
         except BaseException:result['error'] = traceback.format_exc()

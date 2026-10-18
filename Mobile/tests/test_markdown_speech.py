@@ -30,6 +30,63 @@ class MarkdownSpeechTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_source_failure_is_visible_and_word_highlights_are_cleared(self):
+        import toga
+        from logisticsmobile.markdown_speech import MarkdownSpeech, SOURCE_SCRIPT
+
+        async def exercise():
+            web = toga.WebView()
+            speech = MarkdownSpeech(self.app, web, toga.Box())
+            with patch('features.books.mobile.speech_view.NativeSpeech', Engine):
+                speech.show()
+                panel = speech.panel
+                await panel.ready_task
+                with patch.object(web, 'evaluate_javascript', side_effect=RuntimeError('DOM unavailable')):
+                    await panel.play()
+                self.assertEqual(panel.session.state, 'stopped')
+                self.assertIn('Could not read this passage', panel.status.text)
+                self.assertFalse(panel.engine.calls)
+
+                pending = self.app.loop.create_future()
+                async def delayed_source():
+                    return await pending
+                with patch.object(panel, 'source', delayed_source):
+                    task = self.app.loop.create_task(panel.play())
+                    await asyncio.sleep(0)
+                    panel.session.stop()
+                    from types import SimpleNamespace
+                    pending.set_result((SimpleNamespace(text='Canceled text'), 0, None))
+                    await task
+                self.assertEqual(panel.session.state, 'stopped')
+                self.assertFalse(panel.engine.calls)
+
+                def evaluate(script):
+                    result = self.app.loop.create_future()
+                    result.set_result(json.dumps('😀 One two.') if script == SOURCE_SCRIPT else None)
+                    return result
+
+                with patch.object(web, 'evaluate_javascript', side_effect=evaluate) as run:
+                    await panel.play()
+                    token = panel.session.token
+                    panel.engine.progress(token, 3, 6)
+                    self.assertIn('})(3,6)', run.call_args.args[0])
+                    panel.session.pause()
+                    count = run.call_count
+                    panel.engine.progress(token, 7, 10)
+                    self.assertEqual(run.call_count, count)
+                    panel.session.stop()
+                    self.assertIn('})(-1,-1)', run.call_args.args[0])
+                    speech.close()
+                    self.assertEqual(run.call_args.args[0], 'delete window.logisticsSpeech')
+        self.run_async(exercise())
+
+    def javascript_result(self, text):
+        # Toga evaluates immediately and returns an awaitable result, rather
+        # than a coroutine that must be awaited to start execution.
+        result = self.app.loop.create_future()
+        result.set_result(json.dumps(text))
+        return result
+
     def test_document_preview_and_provider_cleanup(self):
         from features.text_editor.resources import LocalTextCopies
         from commonUtils.runtime.local_files import LocalFiles
@@ -50,12 +107,17 @@ class MarkdownSpeechTests(unittest.TestCase):
                 await self.app.open_crypt(copies=LocalTextCopies(LocalFiles(self.root)), key='Private.md')
                 self.assertTrue(panel.closed)
                 owner = self.app.private_sessions.active
+                self.assertNotIn(owner.crypt_edit_mode, owner.crypt_markdown_footer.children)
+                owner.toggle_private_preview()
+                self.assertIn(owner.crypt_edit_mode, owner.crypt_markdown_footer.children)
+                owner.toggle_private_preview()
+                self.assertNotIn(owner.crypt_edit_mode, owner.crypt_markdown_footer.children)
                 speech = owner.markdown_speech
                 self.assertIn(speech.button, owner.reader_toolbar.children)
                 speech.button.on_press()
                 panel = speech.panel
                 await panel.ready_task
-                with patch.object(owner.crypt_preview, 'evaluate_javascript', AsyncMock(return_value=json.dumps('Private'))):
+                with patch.object(owner.crypt_preview, 'evaluate_javascript', return_value=self.javascript_result('Private')):
                     await panel.play()
                 self.assertEqual(panel.engine.calls[0][0], 'Private')
                 owner.clear_private_preview()
@@ -74,13 +136,21 @@ class MarkdownSpeechTests(unittest.TestCase):
                 speech.button.on_press()
                 panel = speech.panel
                 await panel.ready_task
-                with patch.object(owner.web, 'evaluate_javascript', AsyncMock(return_value=json.dumps('Home\nA readable note.'))):
+                with patch.object(owner.web, 'evaluate_javascript', return_value=self.javascript_result('Home\nA readable note.')):
                     await panel.play()
                 self.assertEqual(panel.engine.calls[0][0], 'Home\nA readable note.')
-                panel.pause()
+                self.assertEqual(panel.play_button.control_icon, 'pause')
+                controls = panel.play_button.parent.children
+                self.assertEqual(sum(getattr(button, 'control_icon', '') in ('play', 'pause') for button in controls), 1)
+                await panel.toggle_playback()
                 self.assertEqual(panel.session.state, 'paused')
-                panel.pause()
+                self.assertEqual(panel.play_button.control_icon, 'play')
+                await panel.toggle_playback()
                 self.assertEqual(panel.session.state, 'speaking')
+                self.assertEqual(panel.play_button.control_icon, 'pause')
+                self.assertEqual(panel.engine.calls[-1][0], 'Home\nA readable note.')
+                panel.session.stop()
+                self.assertEqual(panel.play_button.control_icon, 'play')
                 await owner.open_note('Vault/Projects/Plan.MD')
                 self.assertTrue(panel.closed and panel.engine.closed)
                 self.assertEqual(panel.session.ranges, [])

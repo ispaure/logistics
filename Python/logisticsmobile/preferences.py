@@ -11,7 +11,7 @@ from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_
 DEFAULTS = {'android_eink': 'false', 'font_size': '16', 'restore_last_document': 'true', 'last_document': '',
             'document_card_overview': 'true', 'show_legacy': 'false',
             'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false',
-            'magnifier_zoom': '190', 'comic_layout': 'auto', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS}
+            'speech_voice': '', 'magnifier_zoom': '190', 'comic_layout': 'auto', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS}
 
 
 class Preferences:
@@ -57,6 +57,8 @@ class Preferences:
     def validate(values):
         if values.keys() != DEFAULTS.keys():
             raise ValueError('Unknown mobile preference.')
+        if not isinstance(values['speech_voice'], str) or len(values['speech_voice']) > 1024 or any(c in values['speech_voice'] for c in '\r\n\x00'):
+            raise ValueError('Invalid read-aloud voice.')
         if values['session_speech_when_locked'] not in {'true', 'false'}:
             raise ValueError('Invalid session speech lock-screen preference.')
         if values['android_eink'] not in {'true', 'false'}:

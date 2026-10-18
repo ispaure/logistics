@@ -8,7 +8,7 @@ class NativeSpeech:
     def __init__(self, loop):
         self.loop, self.ready, self.error, self.closed = loop, False, '', False
         self.voices, self.completed = {}, lambda *args: None
-        self.failed = lambda *args: None
+        self.failed = self.progress = self.started = lambda *args: None
         self.default_voice = ''
         from toga.platform import get_factory
         backend = get_factory().WebView.__module__
@@ -20,6 +20,8 @@ class NativeSpeech:
                 self.apple()
             else:
                 self.error = 'Read-aloud requires an Android or iOS speech engine.'
+        except ImportError:
+            self.error = 'Speech support is missing from this build. Update the app.'
         except Exception:
             self.error = 'Speech engine unavailable. Install an offline system voice.'
 
@@ -30,6 +32,15 @@ class NativeSpeech:
     def failure(self, token):
         if not self.closed:
             self.loop.call_soon_threadsafe(lambda: None if self.closed else self.failed(token))
+
+    def word_range(self, token, start, end):
+        if not self.closed:
+            self.loop.call_soon_threadsafe(
+                lambda: None if self.closed else self.progress(token, start, end))
+
+    def begin(self, token):
+        if not self.closed:
+            self.loop.call_soon_threadsafe(lambda: None if self.closed else self.started(token))
 
     def android(self):
         from android.speech.tts import TextToSpeech
@@ -43,6 +54,14 @@ class NativeSpeech:
                     engine.loop.call_soon_threadsafe(engine.initialized, status)
         from io.github.ispaure.logistics.books import BookSpeechListener
         class Complete(dynamic_proxy(BookSpeechListener.Listener)):
+            def started(self, token):
+                engine = owner()
+                if engine is not None:
+                    engine.begin(str(token))
+            def progress(self, token, start, end):
+                engine = owner()
+                if engine is not None:
+                    engine.word_range(str(token), int(start), int(end))
             def completed(self, token):
                 engine = owner()
                 if engine is not None:
@@ -54,9 +73,6 @@ class NativeSpeech:
         self.listener, self.init_listener = Complete(), Init()
         self.progress_listener = BookSpeechListener(self.listener)
         self.native = TextToSpeech(MainActivity.singletonThis, self.init_listener)
-        from android.media import AudioAttributes
-        self.native.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
 
     def initialized(self, status):
         try:
@@ -71,26 +87,74 @@ class NativeSpeech:
         if status != 0:
             self.error = 'Speech engine unavailable. Install an offline system voice.'
             return
+        from android.media import AudioAttributes
+        self.native.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
         self.native.setOnUtteranceProgressListener(self.progress_listener)
-        voices = self.native.getVoices()
-        if voices is not None:
-            for voice in voices.toArray():
-                if not voice.isNetworkConnectionRequired() and 'notInstalled' not in {str(v) for v in voice.getFeatures().toArray()}:
+        def offer(voice):
+            if voice is None:
+                return
+            try:
+                features = voice.getFeatures()
+                features = {str(v) for v in features.toArray()} if features is not None else set()
+                if not voice.isNetworkConnectionRequired() and 'notInstalled' not in features:
                     label = str(voice.getLocale().toLanguageTag()) + ' · ' + str(voice.getName())
                     self.voices[label] = voice
-        self.default_voice = next((label for label in self.voices if label.startswith('en-US')), next(iter(self.voices), ''))
+                    return label
+            except Exception:
+                # One malformed engine entry must not hide other usable voices.
+                return
+
+        try:
+            voices = self.native.getVoices()
+            if voices is not None:
+                for voice in voices.toArray():
+                    offer(voice)
+        except Exception:
+            pass
+        # Also ask for the selected/default voice: an engine's enumeration may
+        # be empty or incomplete. Apply the same offline/install checks to both.
+        defaults = []
+        for getter in (self.native.getVoice, self.native.getDefaultVoice):
+            try:
+                candidate = getter()
+                label = offer(candidate)
+                if label is not None:
+                    defaults.append(label)
+            except Exception:
+                pass
+        self.default_voice = next(iter(defaults),
+            next((label for label in self.voices if label.startswith('en-US')), next(iter(self.voices), '')))
         self.ready = bool(self.voices)
         if not self.ready:
-            self.error = 'No installed offline voice. Install one in Android text-to-speech settings.'
+            self.error = ('No offline voice available. In phone Settings, search for Text-to-speech, '
+                'select an engine and install voice data for your language. Then reopen Read aloud.')
 
     def apple(self):
         global _delegate_class
+        self.native_word_events = True
         import ctypes
         ctypes.CDLL('/System/Library/Frameworks/AVFoundation.framework/AVFoundation')
         from rubicon.objc import ObjCClass, ObjCProtocol, objc_method, objc_property
+        from rubicon.objc.types import NSRange
         if _delegate_class is None:
             class LogisticsBookSpeechDelegate(ObjCClass('NSObject'), protocols=(ObjCProtocol('AVSpeechSynthesizerDelegate'),)):
                 owner = objc_property(object, weak=True)
+
+                @objc_method
+                def speechSynthesizer_didStartSpeechUtterance_(self, synth, utterance) -> None:
+                    engine = self.owner
+                    if engine is not None and getattr(engine, 'utterance', None) is not None:
+                        if utterance.ptr.value == engine.utterance.ptr.value:
+                            engine.begin(engine.token)
+
+                @objc_method
+                def speechSynthesizer_willSpeakRangeOfSpeechString_utterance_(self, synth, characterRange: NSRange, utterance) -> None:
+                    engine = self.owner
+                    if engine is not None and getattr(engine, 'utterance', None) is not None:
+                        if utterance.ptr.value == engine.utterance.ptr.value:
+                            engine.word_range(engine.token, int(characterRange.location),
+                                int(characterRange.location + characterRange.length))
 
                 @objc_method
                 def speechSynthesizer_didFinishSpeechUtterance_(self, synth, utterance) -> None:

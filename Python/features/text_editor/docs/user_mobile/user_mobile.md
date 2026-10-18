@@ -3,15 +3,26 @@
 The mobile app provides its text editor in Documents and Folder Hub.
 See the [Documents and editing](../../../../../docs/user_mobile/documents/documents.md) guide for opening, editing, saving and exporting files.
 
-Markdown opens in preview. **Edit Markdown** opens a single formatted editing
-surface; choose **Source** for exact syntax. Formatting and source share the same
+Markdown opens in preview. The top **pencil** icon (**Edit Markdown**) opens a single formatted editing
+surface; choose **Source** there for exact syntax. The Formatted/Source selector
+is hidden while reading. The top **page** icon returns to preview. Save is shown
+only after text changes, and disappears after saving or reverting. Reading uses
+one compact top toolbar in portrait and landscape on iOS and Android, with no
+separate edit/save footer or duplicate file-drawer row.
+Formatting and source share the same
 buffer, recovery and Save actions. There is no automatic preview split on phones
 or tablets. See [Reading and editing](../../../../../docs/user_mobile/documents/reading-and-editing.md)
 for supported formatting and syntax that uses Source mode.
 
+Rotating Android between portrait and landscape keeps the current Markdown
+document open while the content reflows to the available width. A landscape
+file sidebar collapses on return to portrait so the document uses the full
+reading width; the hamburger can reopen the file drawer.
+
 Tap the **speaker** icon in the Markdown preview or vault reader toolbar to open
-**Read aloud**, with offline system
-voices, speed, pause/resume and stop controls. Select a passage to read it, or
+**Read aloud** in a floating panel with speed, pause/resume and stop controls.
+The panel leaves the page layout unchanged. Choose the saved offline voice in
+**Settings → Read aloud → Read-aloud voice**. Select a passage to read it, or
 play the whole rendered note. See [Reading and editing](../../../../../docs/user_mobile/documents/reading-and-editing.md#markdown-read-aloud).
 
 Formatting controls use the same icons as desktop, including Bold, Italic, Undo,
@@ -45,6 +56,9 @@ explicit saved opt-in for background speech; it defaults to off. See
 From a Local, LocalCrypt or Remote location's actions page, choose **Open Notes
 Library** when the root contains an `.obsidian` directory. The reader opens in
 Documents with a folder/page sidebar, note history and read-aloud controls.
+Folder and file icons identify each sidebar entry; the selected row is highlighted.
+When the sidebar and page appear side by side, navigation, edit and read-aloud
+controls sit above the Markdown page.
 Remote libraries have no search or recursive index; folders load only when
 expanded. Local filtering searches only loaded note names. Notes are read-only
 in this view and limited to 2 MiB. Hidden configuration is excluded and links

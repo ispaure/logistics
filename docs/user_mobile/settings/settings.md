@@ -32,8 +32,8 @@ and restoring the normal palette; physical BOOX behavior remains unverified.
 
 **Settings → Books & Comics → Comic & PDF magnifier zoom** controls the shared
 hold-to-magnify bubble: 150%, 170%, 190%, 210%, 230%, or 250% (default 190%).
-While holding a fullscreen comic or PDF, tap the bubble’s top-left **−** or
-top-right **+** with another finger to change the same setting. Changes save
+While holding a fullscreen comic or PDF with one finger, tap **−/+** just outside the bubble’s upper
+left/right corners with another finger to change the same setting. Changes save
 immediately, update open readers and app windows, and survive restarting.
 
 **Settings → Books & Comics → Saved books & comics…** lists every retained
@@ -158,12 +158,26 @@ platform-specific replacements. Document-provider access is a permission-bearing
 platform handle rather than an ordinary path stored in an INI. Preferences
 migration and general app-data backup/reset behavior remain separate work.
 
+## Mobile documentation
+
+In the documentation sidebar, a folder with a same-named Markdown landing page
+uses a combined folder/document icon. Tap its title to open that page; use the
+separate disclosure button to expand or collapse its children. Ordinary folders
+and standalone pages retain their folder and document icons.
+
 ## Speech while locked
 
 In **Settings → Mobile documentation**, tap the speaker beside Back, Forward
 and Up, then Play to read the current page or selected text aloud. Changing
-documentation pages stops playback. The same voice, speed and desktop-style
-15-second skip controls are available in Markdown files and EPUB readers.
+documentation pages stops playback. Playback controls float above the page
+without changing its layout. Speed and 15-second skip controls are available in
+Markdown files and EPUB readers.
+
+Choose the voice in **Settings → Read aloud → Read-aloud voice**. Tap **Load
+installed voices** to list offline voices, then select one; the choice saves on
+this device. **System default** uses the system offline voice. If a saved voice
+is no longer available, playback falls back to the system offline voice. Voice
+selection is not shown when opening playback controls in a document.
 
 Started Markdown and EPUB read-aloud can continue with the screen locked. iOS
 shows Now Playing controls on the lock screen and in Control Center; Android

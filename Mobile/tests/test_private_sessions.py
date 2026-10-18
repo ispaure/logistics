@@ -31,6 +31,29 @@ class PrivateSessionTests(unittest.TestCase):
         self.assertTrue(self.run_async(self.app.open_crypt(copies=self.copies, key=name)))
         return self.app.private_sessions.active
 
+    def test_close_from_documents_immediately_refreshes_cards_and_list(self):
+        def widgets(widget):
+            yield widget
+            content = getattr(widget, 'content', None)
+            if content is not None and content not in getattr(widget, 'children', ()):
+                yield from widgets(content)
+            for child in getattr(widget, 'children', ()):
+                yield from widgets(child)
+
+        for cards in ('true', 'false'):
+            with self.subTest(cards=cards):
+                self.app.preferences.values['document_card_overview'] = cards
+                owner = self.open('close-me.md')
+                key = owner.session.id
+                self.app.show_documents_hub()
+                root = self.app.routes.roots['documents']
+                close = next(widget for widget in widgets(root)
+                             if getattr(widget, 'accessible_name', '') == 'Close close-me.md')
+                close.on_press()
+                self.assertNotIn(key, self.app.workspace.sessions)
+                self.assertFalse(any(getattr(widget, 'accessible_name', '') == 'Close close-me.md'
+                                     for widget in widgets(root)))
+
     def test_save_as_retains_source_privacy_until_exported_draft_closes(self):
         from features.rclone.mobile.session_privacy import ResumePassword
         gate = ResumePassword('session-password')

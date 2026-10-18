@@ -79,11 +79,26 @@ def credential_choices(choices, remotes):
 
 
 def source_choices(choices, source, network_remotes=()):
-    """Separate logical folders by ownership, keeping their related copies together."""
+    """Expose downloaded copies locally while retaining their remote actions."""
     network_remotes = set(network_remotes)
     def owner(entry):
         remotes = {copy.get('remote') for copy in [entry, *entry.get('copies', ())]} - {None, ''}
         if remotes & network_remotes:
             return 'Network shares'
         return 'rclone' if remotes else 'Local'
-    return {name: entry for name, entry in choices.items() if owner(entry) == source}
+    def visible(entry):
+        if source == 'Local':
+            return any(copy['source'] in ('Local', 'LocalCrypt')
+                       for copy in entry.get('copies') or [entry])
+        return owner(entry) == source
+    return {name: entry for name, entry in choices.items() if visible(entry)}
+
+
+def folder_browse_copy(entry, source):
+    """Choose a tab's browse target without changing the logical action entry."""
+    copies = entry.get('copies') or [entry]
+    if source == 'Local':
+        return next((copy for copy in copies if copy['source'] in ('Local', 'LocalCrypt')), entry)
+    if source == 'rclone':
+        return next((copy for copy in copies if copy['source'] == 'Remote'), entry)
+    return entry

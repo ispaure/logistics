@@ -127,9 +127,49 @@ play/pause/resume/stop state. `mobile/speech_native.py` adapts AVSpeechSynthesiz
 and Android TextToSpeech using installed offline voices. Android progress/error
 callbacks are implemented in the feature's `mobile/android/` Java source; the host
 build stages that source and merges the feature-owned speech-service query.
-`mobile/speech_view.py` owns the inline native controls. Hosts provide current
+`Mobile/cloud_build.py` also refreshes the configured Java source roots in reused
+Gradle projects: Briefcase's source update alone does not apply newly added roots.
+Without this refresh, older projects can omit `BookSpeechListener` and report
+that speech support is missing even with an installed system voice.
+`mobile/speech_view.py` owns the floating native controls.
+`logisticsmobile/speech_overlay.py` hosts them in a detached iOS container or
+Android popup, leaving the document layout tree unchanged. Disposal detaches the
+surface. Both native hosts size the popup to its status message and controls,
+expanding for wrapped errors and shrinking again for short playback messages.
+Settings owns the persisted `speech_voice` preference and loads installed
+offline voices on demand, releasing its temporary engine afterward. Playback
+resolves the saved voice against the current installed voices and falls back to
+the system default when unavailable. Markdown and EPUB share
+one playback button, which toggles play/pause and resumes without reloading the
+source text; stop and completion restore its play icon. Hosts provide current
 text/selection and range-follow callbacks, then dispose speech before chapter
 replacement or reader retirement. Resume repeats the current bounded utterance.
+
+Android initializes audio attributes after `onInit` succeeds and prefers the
+system's current installed offline voice. Null voice-feature sets are accepted;
+network and uninstalled voices are excluded. Voice discovery also checks the
+engine's current/default voice when enumeration is empty, incomplete or fails;
+the same offline/install checks apply. Malformed individual entries are skipped.
+An empty result leaves the picker and Play disabled and explains how to install
+voice data in phone settings, then reopen the panel. `onRangeStart` and Apple's
+`willSpeakRangeOfSpeechString` forward UTF-16 word ranges onto the application
+loop. Session generation checks reject late start/range/completion events after
+pause, skip, stop or disposal. Android engines without range events use estimated
+word timing starting at the native audio-start event; native ranges cancel it.
+Apple uses native ranges throughout. Stop/completion clear the speech highlight.
+
+EPUB uses a separate DOM speech highlight so playback does not become the next
+user-selected passage. Markdown builds an in-memory rendered-text node map,
+including inline formatting and block separators, and applies those same UTF-16
+ranges to its DOM. The map is removed when controls close. Preview-read failures
+show a recoverable error instead of escaping the Play handler.
+
+`Mobile/native_tests/tests/logisticsmobile/speech_probe.py` is an isolated-bundle
+probe of the real Markdown preview Play handler and EPUB bridge, native range
+callbacks, visible word highlights and completion cleanup. Android emulator and
+iPhone simulator runs completed both passages with native word events and DOM
+highlights during this change. Desktop shared read-aloud and Books reader tests
+also pass; Windows/Linux speakers and physical-device audio remain unverified.
 
 The trusted DOM bridge preserves selection offsets when native controls take
 focus or resize the WebView. Programmatic scroll restoration is distinguished

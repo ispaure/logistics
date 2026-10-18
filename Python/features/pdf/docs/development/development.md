@@ -68,7 +68,7 @@ panel. PDFCanvas specializes the shared ImageCanvas with vertical paging.
 Tapping toggles fullscreen; the ReadingFrame hides header/footer/navigation and
 enables the shared hold magnifier only while fullscreen.
 `logisticsmobile.magnifier.bind` connects PDF and comic canvases to the same
-validated `magnifier_zoom` preference. Native −/+ requests save before applying;
+validated `magnifier_zoom` preference. Native lens-button requests save before applying;
 failed saves preserve the displayed zoom. Live canvases and Settings selectors
 share updates by preference path, including independent app windows. Page replacement keeps
 that eligibility, and disposal clears both callbacks and the lens. Swipes at fit

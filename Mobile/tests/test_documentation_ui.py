@@ -136,6 +136,58 @@ class DocumentationTests(unittest.TestCase):
                 self.assertTrue(panel.closed)
         self.app.loop.run_until_complete(exercise())
 
+    def test_host_wiki_icons_selection_and_toolbar_follow_article_pane(self):
+        from logisticsmobile.documentation_ui import show_documentation
+        root = Path(self.temporary.name).resolve() / 'docs'
+        nested = root / 'folder'
+        nested.mkdir(parents=True)
+        home, child = root / 'README.md', nested / 'child.md'
+        home.write_text('# Home')
+        child.write_text('# Child')
+        owner = show_documentation(self.app, root, child)
+        for width in (900, 390, 900):
+            owner.reflow(width)
+            parent = owner.article if owner.wide else owner.view
+            self.assertIs(owner.navigation.parent, parent)
+            self.assertIs(parent.children[0], owner.navigation)
+            selected = next(row for row in owner.rows.children if row.children[-1].wiki_path == child)
+            self.assertEqual(selected._impl._surface_roles[0], 'hover')
+            self.assertEqual(selected.children[2].browser_entry_kind, 'file')
+            folder = next(row for row in owner.rows.children if row.children[-1].text == 'folder')
+            self.assertEqual(folder.children[2].browser_entry_kind, 'folder')
+            self.assertFalse(any(row.children[-1].text.startswith('✓') for row in owner.rows.children))
+        owner.back()
+        owner.open_page(home)
+        self.assertTrue(all(row.children[-1].wiki_path != child or row._impl._surface_roles[0] == 'surface'
+                            for row in owner.rows.children))
+
+    def test_folder_landing_icon_opens_page_and_keeps_disclosure_separate(self):
+        from logisticsmobile.documentation_ui import show_documentation
+        root = Path(self.temporary.name).resolve() / 'docs'
+        folder = root / 'guide'
+        folder.mkdir(parents=True)
+        (root / 'README.md').write_text('# Home')
+        landing = folder / 'guide.md'
+        landing.write_text('# Guide')
+        (folder / 'child.md').write_text('# Child')
+        owner = show_documentation(self.app, root, root / 'README.md')
+
+        def folder_row():
+            return next(row for row in owner.rows.children if row.children[-1].wiki_path == landing)
+
+        row = folder_row()
+        self.assertEqual(row.children[2].browser_entry_kind, 'folder_document')
+        self.assertIn('Open folder page', row.children[-1].accessible_name)
+        row.children[1].on_press()
+        self.assertIn(folder, owner.expanded)
+        self.assertEqual(owner.path, root / 'README.md')
+        folder_row().children[-1].on_press()
+        self.assertEqual(owner.path, landing)
+        self.assertTrue(owner.reading)
+        folder_row().children[1].on_press()
+        self.assertNotIn(folder, owner.expanded)
+        self.assertEqual(owner.path, landing)
+
     def test_phone_tablet_search_and_contained_links(self):
         root = Path(self.temporary.name).resolve() / 'docs'
         root.mkdir()

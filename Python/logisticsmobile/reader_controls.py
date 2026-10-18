@@ -115,8 +115,9 @@ def page_buttons(previous, next_page):
 
 class PageFooter:
     """Comic scrubbing commits on release; logical page commands stay unchanged."""
-    def __init__(self, previous, following, move):
+    def __init__(self, previous, following, move, *, compact=False):
         self.previous, self.following, self.move = previous, following, move
+        self.compact = compact
         self.count, self.rtl = 0, False
         self.slider = toga.Slider(min=0, max=1, value=0, on_release=self.release,
                                   style=Pack(flex=1, height=48))
@@ -132,6 +133,9 @@ class PageFooter:
         children = [self.following if self.rtl else self.previous,
                     self.slider if comic else self.spacer,
                     self.previous if self.rtl else self.following]
+        if self.compact:
+            children = ([] if hasattr(self.previous, '_native_reader_item') else
+                        [self.previous, self.following])
         if list(self.widget.children) != children:
             for child in list(self.widget.children):
                 self.widget.remove(child)

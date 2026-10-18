@@ -3,6 +3,9 @@ from pathlib import Path
 from commonUtils.ui.native.markdown import MarkdownWikiView
 from .preview import markdown_preview
 from .markdown_speech import MarkdownSpeech
+from .browser_ui import entry_icon, highlight_entry, middle_filename
+from .appearance import accessible_name
+from toga.style.pack import CENTER
 
 
 class DocumentationReader(MarkdownWikiView):
@@ -15,6 +18,37 @@ class DocumentationReader(MarkdownWikiView):
         self.speech.button.on_press = self.show_speech
         self.speech.button.enabled = self.path is not None
         self.navigation.add(self.speech.button)
+
+    def reflow(self, width):
+        super().reflow(width)
+        parent = self.article if self.wide else self.view
+        if self.navigation.parent is not parent:
+            self.navigation.parent.remove(self.navigation)
+            parent.insert(0, self.navigation)
+
+    def filter(self, widget=None, **kwargs):
+        super().filter(widget, **kwargs)
+        if not hasattr(self, 'rows'):
+            return
+        query = self.search.value or ''
+        mode = 'content' if self.mode.value == 'Page text' else 'filename'
+        def visible(entries):
+            for entry in entries:
+                yield entry
+                if query or entry.location in self.expanded:
+                    yield from visible(entry.children)
+        for row, entry in zip(self.rows.children, visible(self.catalog.search(query, mode))):
+            button = row.children[-1]
+            button.text = entry.title
+            middle_filename(button)
+            button.wiki_path = entry.page
+            row.style.align_items = CENTER
+            directory = entry.location != entry.page
+            row.insert(2, entry_icon(directory, landing_page=entry.page is not None))
+            accessible_name(button, entry.title + (' — Open folder page' if directory and entry.page is not None else ''))
+            selected = self.path is not None and entry.page == self.path
+            highlight_entry(row, selected)
+            highlight_entry(button, selected)
 
     def show_speech(self, widget=None, **kwargs):
         self.reading = True

@@ -8,6 +8,25 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class WorkspaceNavigationTests(unittest.TestCase):
+    def test_rotating_a_reader_with_a_wide_file_sidebar_restores_full_width(self):
+        self.app.create_chosen_document('md')
+        owner = self.app.editor_view
+        owner.editor.value = '# Keep this draft open'
+        frame = owner.document_view._workspace_frame
+        with patch.object(self.navigation, 'width', return_value=900):
+            self.navigation.menu_open['documents'] = True
+            self.navigation.render()
+            self.assertEqual(len(frame.row.children), 2)
+        with patch.object(self.navigation, 'width', return_value=390):
+            self.navigation.render()
+            self.assertFalse(self.navigation.menu_open['documents'])
+            self.assertEqual(list(frame.row.children), [frame.main])
+            self.assertEqual(frame.main.style.flex, 1)
+            # The user can still deliberately reopen the compact drawer.
+            self.navigation.toggle('documents')
+            self.assertTrue(self.navigation.menu_open['documents'])
+        self.assertEqual(owner.editor.value, '# Keep this draft open')
+
     def test_readers_use_the_same_native_menu_slot_as_documents(self):
         from unittest.mock import PropertyMock
         from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
@@ -22,9 +41,12 @@ class WorkspaceNavigationTests(unittest.TestCase):
         with patch.object(type(self.app.routes), 'apple', new_callable=PropertyMock, return_value=True):
             self.navigation.prepare(owner.library_view, 'documents', route='reader:test')
             self.assertNotIn(menu, owner.reader_header.children)
-            with patch('logisticsmobile.workspace_navigation.mount_native_menu') as mount:
+            with patch('logisticsmobile.workspace_navigation.mount_native_menu') as mount, patch(
+                'logisticsmobile.workspace_navigation.sync_reader_toolbar'
+            ) as toolbar:
                 self.navigation.render()
                 mount.assert_called_once_with(self.app, menu, 'documents')
+                toolbar.assert_called_once_with(self.app, owner.library_view)
 
     def setUp(self):
         self.directory = TemporaryDirectory()

@@ -46,6 +46,7 @@ class HubDocumentTests(unittest.TestCase):
         app = self.app
         app.transfer_busy = True
         app.show_locations()
+        app.change_folder_source('rclone')
         view = app.body.children[0]
         frame = view._workspace_frame
         self.assertIs(view.children[0], view.transfer_banner)
@@ -60,7 +61,7 @@ class HubDocumentTests(unittest.TestCase):
         app.transfer_notification = True
         app.transfer_complete = True
         app.refresh_transfer_status()
-        self.assertEqual(view.transfer_banner.notice.text, 'Transfer finished · 100% · Details')
+        self.assertNotIn(view.transfer_banner, view.children)
         app.dismiss_transfer_status()
         self.assertNotIn(view.transfer_banner, view.children)
 

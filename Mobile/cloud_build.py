@@ -9,6 +9,7 @@ import plistlib
 import shlex
 import shutil
 import subprocess
+import tomllib
 
 try:
     from .icon_build import configure_android as configure_android_icons, configure_ios as configure_ios_icons
@@ -26,6 +27,18 @@ def ios_compiler(target, sdk_path):
 
 def run(*args, env=None, cwd=ROOT / 'rclone_bridge'):
     subprocess.run(args, check=True, env=env, cwd=cwd)
+
+
+def configure_android_sources(project):
+    """Refresh native source roots even when Briefcase reuses an older project."""
+    config = tomllib.loads((ROOT / 'pyproject.toml').read_text())
+    android = config['tool']['briefcase']['app']['logisticsmobile']['android']
+    gradle = Path(project) / 'app/build.gradle'
+    text = gradle.read_text()
+    for line in android['build_gradle_extra_content'].splitlines():
+        if line.startswith('android.sourceSets.main.java.srcDir(') and line not in text.splitlines():
+            text += '\n' + line + '\n'
+    gradle.write_text(text)
 
 
 def configure_android_appearance(project):
@@ -80,6 +93,7 @@ def android():
     host = 'linux-x86_64' if platform.system() == 'Linux' else 'darwin-x86_64'
     tools = ndk / 'toolchains/llvm/prebuilt' / host / 'bin'
     project = ROOT / 'build/logisticsmobile/android/gradle'
+    configure_android_sources(project)
     configure_android_appearance(project)
     configure_android_icons(project)
     for arch, abi, compiler in [('arm64', 'arm64-v8a', 'aarch64-linux-android24-clang'),

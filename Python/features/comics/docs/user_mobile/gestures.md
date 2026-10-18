@@ -6,12 +6,12 @@ its center and grows larger on tablet screens. The bubble sits close
 to the thumb with a slight overlap. Keep holding and drag to move
 the bubble. Near a screen edge, keep dragging toward the edge to inspect the
 outermost pixels even after the bubble stops moving. Release to dismiss. The page stays still while the bubble is open.
-Keep one finger holding and tap **−** at the bubble’s top left or **+** at its
-top right with another finger. Zoom changes through **150%, 170%, 190%, 210%,
+Keep holding the page and tap **−** at the upper left or **+** at the upper right
+with another finger. The buttons sit slightly outside the bubble’s corners. Zoom changes through **150%, 170%, 190%, 210%,
 230%, 250%**; the default is **190%**. Changes save immediately and are shared
 with PDF readers, other open readers, and the next app launch. The same value
 is available in **Settings → Books & Comics → Comic & PDF magnifier zoom**.
-A second finger outside the controls cancels the bubble for pinch zoom. The bubble is disabled
+A second finger away from the buttons cancels the bubble for ordinary page pinch zoom. The bubble is disabled
 when reading controls are visible and is cleared on page changes or leaving the
 reader. It works on single pages and spreads, including Local/LocalCrypt comics.
 

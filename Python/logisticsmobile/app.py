@@ -168,8 +168,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         from .screen_privacy import ScreenPrivacy
         self.screen_privacy = ScreenPrivacy(self)
         self.native_host.install(self.main_window)
-        from .navigation import install_folder_hub_icon, install_apple_selection
-        install_folder_hub_icon(self.native_host)
+        from .navigation import install_destination_icons, install_apple_selection
+        install_destination_icons(self.native_host)
         install_apple_selection(self)
         self.routes.install()
         self.refresh_native_theme()
@@ -253,6 +253,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.editor_view.session.view['markdown_mode'] = 'edit'
 
     def resize_workspace(self, widget=None, *args, **kwargs):
+        for overlay in tuple(getattr(self, '_speech_overlays', ())):
+            overlay.reposition()
         self.adaptive.render()
         if hasattr(self, 'home_panels') and self.main_window.content is self.native_host.root:
             self.reflow_home()
@@ -432,7 +434,10 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.show_documents_hub()
             return True
         if self.workspace.sessions[key].provider == 'provider-session':
-            return self.provider_sessions().close(key, discard=choice == 'discard')
+            if not self.provider_sessions().close(key, discard=choice == 'discard'):
+                return False
+            self.show_documents_hub()
+            return True
         if self.workspace.sessions[key].provider == 'library':
             return self.reader_manager().close(key)
         owner = self.text_views.get(key)
@@ -520,7 +525,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
 
     def show_settings(self, widget=None, **kwargs):
         from .hub_ui import heading
-        from .settings_ui import switch_row, build_information
+        from .settings_ui import switch_row, build_information, speech_voice_setting
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         box.add(heading('App'))
         self.document_cards_choice = toga.Switch('Document card overview',
@@ -548,6 +553,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 'Use black text on white, strong borders and simpler controls. Overrides dark mode and reader colors '
                 'without changing images or files. Saved immediately. No BOOX hardware refresh control.'))
             self.android_eink_choice.on_change = self.change_android_eink
+        box.add(heading('Read aloud'))
+        box.add(speech_voice_setting(self))
         self.session_speech_choice = toga.Switch('Session-only speech while locked',
             value=self.preferences.values['session_speech_when_locked'] == 'true',
             on_change=self.change_session_speech, style=Pack(height=48))
@@ -563,7 +570,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         box.add(toga.Label('Comic & PDF magnifier zoom'))
         self.magnifier_choice = setting(self)
         box.add(self.magnifier_choice)
-        box.add(toga.Label('Hold to magnify; tap −/+ with another finger.\nShared across comics and PDFs. Saved immediately.', style=Pack(font_size=12)))
+        box.add(toga.Label('Keep holding; tap −/+ just outside the lens’s upper corners.\nShared across comics and PDFs. Saved immediately.', style=Pack(font_size=12)))
         box.add(toga.Button('Saved books & comics…', on_press=self.show_saved_files, style=Pack(height=48)))
         box.add(toga.Label('Use Appearance in an open reader\nto adjust its pages.', style=Pack(font_size=12)))
         box.add(heading('LM Chat'))
@@ -701,17 +708,21 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 self.workspace.activate(owner.session.id)
                 self.show_documents(edit=True)
         if owner.preview_box is None:
+            from .control_icons import icon_button
+            owner.preview_edit = icon_button('edit', 'Edit Markdown', on_press=back_to_editor)
+            owner.preview_toolbar = toga.Box(children=[owner.preview_edit,
+                toga.Box(style=Pack(flex=1))], style=Pack(direction=ROW))
             owner.preview_box = toga.Box(children=[
-                toga.Button('Edit Markdown', on_press=back_to_editor, style=Pack(height=48)),
+                owner.preview_toolbar,
                 owner.preview], style=Pack(direction=COLUMN, flex=1))
+            owner.preview_box._workspace_toolbar = owner.preview_toolbar
+            owner.preview_box._native_reader_toolbar = owner.preview_toolbar
+            owner.preview_box._native_reader_buttons = lambda: [owner.preview_edit, owner.markdown_speech.button]
         from .markdown_speech import MarkdownSpeech
         speech = getattr(owner, 'markdown_speech', None)
         if speech is None:
             owner.markdown_speech = speech = MarkdownSpeech(self, owner.preview, owner.preview_box)
-            edit_button = owner.preview_box.children[0]
-            owner.preview_box.remove(edit_button)
-            owner.preview_box.insert(0, toga.Box(children=[edit_button,
-                toga.Box(style=Pack(flex=1)), speech.button], style=Pack(direction=ROW)))
+            owner.preview_toolbar.add(speech.button)
         speech.close()
         self.preview_box = owner.preview_box
         self.show_view(self.preview_box, route='preview', title=owner.document.name)

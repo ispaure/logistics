@@ -65,17 +65,28 @@ class ObsidianTests(unittest.TestCase):
         def paths():
             return [row.children[-1].vault_path for row in owner.rows.children]
         self.assertEqual(paths(), ['Vault/Projects', 'Vault/Home.md'])
+        self.assertEqual([row.children[1].browser_entry_kind for row in owner.rows.children], ['folder', 'file'])
         self.run_async(owner.toggle_folder('Vault/Projects'))
         self.assertEqual(paths(), ['Vault/Projects', 'Vault/Projects/Plan.MD', 'Vault/Home.md'])
         self.assertEqual(owner.rows.children[1].children[0].style.width, 20)
         self.assertTrue(self.run_async(owner.open_note('Vault/Projects/Plan.MD')))
         self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
+        selected = next(row for row in owner.rows.children if row.children[-1].vault_path == owner.path)
+        self.assertEqual(selected._impl._surface_roles[0], 'hover')
         owner.reflow(390)
+        self.assertIs(owner.toolbar.parent, owner.view)
         self.assertEqual(list(owner.sidebar.view.children), [owner.article])
         owner.menu.on_press()
         self.assertEqual(list(owner.sidebar.view.children), [owner.tree])
         owner.reflow(900)
         self.assertEqual(list(owner.sidebar.view.children), [owner.tree, owner.article])
+        self.assertIs(owner.toolbar.parent, owner.article)
+        self.assertIs(owner.article.children[0], owner.toolbar)
+        self.assertTrue(all(button.parent is owner.toolbar for button in
+            (owner.back_button, owner.forward_button, owner.up_button, owner.speech.button)))
+        owner.reflow(390)
+        self.assertIs(owner.toolbar.parent, owner.view)
+        owner.reflow(900)
         with patch.object(self.app, 'open_crypt', new=AsyncMock(return_value=True)) as opened:
             self.assertTrue(self.run_async(owner.open_editor()))
             self.assertEqual(opened.call_args.kwargs['key'], 'Vault/Projects/Plan.MD')

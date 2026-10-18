@@ -142,10 +142,17 @@ def paint_surface(impl, radius):
     elif backend.startswith('toga_android.'):
         from android.graphics.drawable import GradientDrawable
         colors = android_palette(impl.native.getResources().getConfiguration().uiMode & 0x30 == 0x20)
+        if eink_enabled() and getattr(impl, '_surface_eink_selected', False):
+            colors = dict(colors, surface='#000000', alternate='#000000', hover='#000000',
+                          text='#ffffff', muted='#ffffff')
+        if hasattr(impl.interface, 'on_press') and eink_enabled():
+            paint_eink_button(impl, outlined=False)
         drawable = GradientDrawable()
         drawable.setColor(argb(colors.get(background, colors['surface'])))
         drawable.setCornerRadius(0 if eink_enabled() else impl.scale_in(radius))
-        if outlined or eink_enabled():
+        eink_outline = getattr(impl, '_surface_eink_outlined', True)
+        has_outline = eink_outline if eink_enabled() else outlined
+        if has_outline:
             drawable.setStroke(max(1, impl.scale_in(1)), argb(colors['border']))
         if foreground:
             from android.content.res import ColorStateList
@@ -164,8 +171,11 @@ def paint_surface(impl, radius):
             tint_android(impl)
 
 
-def surface(widget, *, radius=12, background='surface', foreground=None, outlined=True):
+def surface(widget, *, radius=12, background='surface', foreground=None, outlined=True,
+            eink_outlined=True, eink_selected=False):
     widget._impl._surface_roles = (background, foreground, outlined)
+    widget._impl._surface_eink_outlined = eink_outlined
+    widget._impl._surface_eink_selected = eink_selected
     if foreground and hasattr(widget, 'on_press'):
         widget._impl._row_hint = True
     _surfaces[widget._impl] = radius
@@ -410,6 +420,8 @@ def install_appearance(app):
                     action_button(impl.interface, destructive=role == 'destructive')
                 if eink_enabled():
                     paint_eink_button(impl)
+                if impl in _surfaces:
+                    paint_surface(impl, _surfaces[impl])
         TextViewWidget.set_color = set_color
         def selection_color(impl, value):
             _widgets.add(impl)
@@ -576,7 +588,7 @@ def restore_eink_button(impl):
         del impl._eink_button_style
 
 
-def paint_eink_button(impl):
+def paint_eink_button(impl, *, outlined=True):
     from android.graphics.drawable import GradientDrawable
     from android.content.res import ColorStateList
     if not hasattr(impl, '_eink_button_style'):
@@ -585,7 +597,8 @@ def paint_eink_button(impl):
     background = '#000000' if filled else '#ffffff'
     drawable = GradientDrawable()
     drawable.setColor(argb(background))
-    drawable.setStroke(max(1, impl.scale_in(1)), argb('#000000'))
+    if outlined and not getattr(impl, '_eink_borderless', False):
+        drawable.setStroke(max(1, impl.scale_in(1)), argb('#000000'))
     impl.native.setBackground(drawable)
     impl.native.setBackgroundTintList(ColorStateList.valueOf(argb(background)))
     impl.native.setTextColor(argb('#ffffff' if filled else '#000000'))

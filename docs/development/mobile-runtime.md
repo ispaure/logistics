@@ -27,6 +27,27 @@ Format behavior and presentation remain with `features/books/mobile` and
 remain with `features/rclone/mobile`. The host owns navigation, session policy and
 workflow composition. Shared toolkit mechanisms remain in commonUtils.
 
+`navigation.py` installs application-owned Android destination artwork on both
+the bottom bar and side rail: Home, the existing Folder Hub glyph, stacked
+Documents, Chat bubbles and a Settings gear. These avoid manufacturer-dependent
+stock menu artwork (in particular, Android's Send arrow is not the Chat icon).
+Material navigation owns selection/theme tinting; iOS keeps its native symbols.
+
+Markdown readers expose `_workspace_toolbar` so the workspace drawer shares
+their existing control row instead of adding a second header. UIKit still mounts
+the drawer in its native navigation bar. Reading views also expose native
+button/toolbar handles so UIKit hosts the existing buttons as title-bar custom
+views, preserving callbacks, menus, accessibility labels and enabled states.
+Updates cache the controller/button set and never reparent borrowed buttons
+during progress or dirty-state refresh. Error prompts remain visible. Text editors use top pencil/page mode
+icons, and rebuild their native action menu only when clean/dirty state changes;
+clean documents omit Save. Provider Markdown likewise inserts its Save icon only
+for a changed editable buffer and collapses its unused mode-selector footer.
+EPUB uses compact `PageFooter` controls inside its top toolbar; comic scrubbing
+keeps its existing footer. Safe-area and floating-tab clearance remain in force.
+The isolated `compact_reading_probe.py` measures Markdown and EPUB reading areas
+through portrait, landscape and portrait return, including provider sessions.
+
 The pinned Toga iOS backend queues scroll-view refreshes during layout. The
 host's `appearance.py` adapter ignores refresh/scroll callbacks after their weak
 Python interface has been released. Editor preview shutdown remains with the
@@ -163,6 +184,14 @@ choices retain their existing widgets; changed choices update the list in place
 without replacing the page or navigation. Credential loading owns
 `refresh_hub_crypt_locations`, including its client/generation guard.
 
+The default source is Local. `source_choices` includes managed Local/LocalCrypt
+copies there as well as under their remote owner, retaining the full logical
+entry for overflow actions. `folder_browse_copy` selects the device copy for
+Local taps and the Remote copy (including job-remote mappings) for rclone taps;
+action pages keep their existing transfer and deletion identity. Row icons and
+legends describe the active tab’s storage. Remote encryption uses the cached
+crypt-remote snapshot or an existing LocalCrypt copy, without bridge discovery.
+
 Folder Hub uses a source-owned action row: rclone shows Transfers, Network
 shares shows Add share, and Local has no toolbar or reserved toolbar spacing.
 Switching sources moves the existing native controls; the credential selector
@@ -174,3 +203,15 @@ selected tab styling, compact native symbols and clipped rounded row backgrounds
 The shared native destination bar remains platform-owned. Idle loading controls
 are detached from `folder_loading_box`; folder opening temporarily attaches the
 status and progress controls, and removes them on completion.
+
+Android high-contrast surfaces repaint after generic native button styling, so
+refreshes preserve selected-tab inversion and borderless row controls. Surface
+buttons suppress elevation and state animation in that mode; leaving it restores
+the saved native button styling. Folder Hub transfer banners use a live visibility
+predicate: only the rclone source shows running or unsuccessful transfer notices.
+Changing source reevaluates it immediately, without changing transfer state.
+
+`browser_ui.FolderLocationHeader` shows only the currently browsed storage (drive
+or cloud), adding a lock for encrypted providers/remotes. Local and remote
+browsing update it after a successful listing. Its navigation glyph becomes Back
+at the provider root and returns to Folder Hub; nested folders retain Up.

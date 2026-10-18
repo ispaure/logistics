@@ -106,6 +106,7 @@ class ScreenPrivacy:
             self.app.cloud_entries.items = []
             self.app.cloud_open_remote = None
             self.app.cloud_location.value = self.app.cloud_path = ''
+        self.app.refresh_folder_actions()
         self.refresh()
 
     def gates(self):

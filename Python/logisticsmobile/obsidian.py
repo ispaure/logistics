@@ -11,12 +11,13 @@ from uuid import uuid4
 
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW
+from toga.style.pack import COLUMN, ROW, CENTER
 from features.text_editor.notes import NotesLibrary, vault_root, MAX_NOTE, MARKDOWN
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.ui.native.adaptive import AdaptiveSidebar, allocated_width
 from commonUtils.ui.native.presentation import list_button
 from .control_icons import icon_button
+from .browser_ui import entry_icon, highlight_entry
 from .preview import markdown_preview
 
 async def open_vault(app, provider, root, destination='documents', *, title='', rows=None):
@@ -52,6 +53,7 @@ class VaultBrowser:
         self.cancelled = Event()
         self.folders, self.expanded, self.loading = {}, {self.root}, set()
         self.path = None
+        self.selected_path = None
         self.epoch = 0
         self.shown = 500
         self.base = 'https://markdown.invalid/vault/' + uuid4().hex + '/'
@@ -61,12 +63,12 @@ class VaultBrowser:
             toga.ScrollContainer(content=self.rows, horizontal=False, style=Pack(flex=1))],
             style=Pack(direction=COLUMN, flex=1))
         self.title = toga.Label('Choose a Markdown note', style=Pack(font_size=18, flex=1))
-        self.edit = toga.Button('Open in editor', on_press=self.open_editor, enabled=False, style=Pack(height=48))
+        self.edit = icon_button('edit', 'Edit Markdown', on_press=self.open_editor, enabled=False)
         from features.books.mobile.private_view import PrivateWebView, private_webview_supported
         web_type = PrivateWebView if provider.private and private_webview_supported() else toga.WebView
         self.pending_fragment = ''
         self.web = web_type(on_navigation_starting=self.follow_link, on_webview_load=self.page_loaded, style=Pack(flex=1))
-        self.article = toga.Box(children=[self.title, self.edit, self.web], style=Pack(direction=COLUMN, flex=1))
+        self.article = toga.Box(children=[self.web], style=Pack(direction=COLUMN, flex=1))
         from .markdown_speech import MarkdownSpeech
         self.speech = MarkdownSpeech(app, self.web, self.article,
             privacy_gate=lambda: getattr(app.cloud_client, "session_privacy", None) if self.provider.private else None,
@@ -84,9 +86,9 @@ class VaultBrowser:
         if not self.library.remote:
             self.search = toga.TextInput(placeholder='Filter loaded notes', on_change=lambda w: self.render_tree(), style=Pack(height=48))
             self.tree.insert(1, self.search)
-        self.view = toga.Box(children=[toga.Box(children=[self.menu, self.back_button, self.forward_button, self.up_button,
-            toga.Box(style=Pack(flex=1)), self.speech.button], style=Pack(direction=ROW)),
-            self.notice, self.sidebar.view], style=Pack(direction=COLUMN, margin=12, flex=1))
+        self.toolbar = toga.Box(children=[self.menu, self.back_button, self.forward_button, self.up_button,
+            toga.Box(style=Pack(flex=1)), self.edit, self.speech.button], style=Pack(direction=ROW))
+        self.view = toga.Box(children=[self.toolbar, self.notice, self.sidebar.view], style=Pack(direction=COLUMN, flex=1))
         self.reflow(app.adaptive.content_width(destination, margin=0))
         self.sidebar.show_sidebar()
 
@@ -105,6 +107,12 @@ class VaultBrowser:
     def reflow(self, width):
         available = max(0, allocated_width(self.view, width) - 24)
         self.sidebar.reflow(available)
+        # Compact browsing still needs its menu while the article is hidden.
+        # Wide layouts keep document commands over their own article pane.
+        parent = self.article if self.sidebar.expanded else self.view
+        if self.toolbar.parent is not parent:
+            self.toolbar.parent.remove(self.toolbar)
+            parent.insert(0, self.toolbar)
         self.rows.style.width = self.sidebar.policy.sidebar_width if self.sidebar.expanded else available
         self.menu.enabled = not self.sidebar.expanded
 
@@ -137,6 +145,7 @@ class VaultBrowser:
     async def toggle_folder(self, path):
         if not self.valid():
             return
+        self.selected_path = path
         if path in self.expanded:
             self.expanded.remove(path)
         else:
@@ -173,7 +182,11 @@ class VaultBrowser:
             from .browser_ui import middle_filename
             middle_filename(button)
             button.vault_path = path
-            self.rows.add(toga.Box(children=[toga.Box(style=Pack(width=depth * 20)), button], style=Pack(direction=ROW)))
+            row = toga.Box(children=[toga.Box(style=Pack(width=depth * 20)), entry_icon(directory), button],
+                style=Pack(direction=ROW, align_items=CENTER))
+            highlight_entry(row, path == self.selected_path)
+            highlight_entry(button, path == self.selected_path)
+            self.rows.add(row)
         if len(flattened) > self.shown:
             def more(widget=None, **kwargs):
                 self.shown += 500
@@ -205,7 +218,8 @@ class VaultBrowser:
                 del self.history[self.history_index + 1:]
                 self.history.append(path)
                 self.history_index = len(self.history) - 1
-            self.path = path
+            self.path = self.selected_path = path
+            self.render_tree()
             self.title.text = fill(PurePosixPath(path).name, width=28)
             self.base = 'https://markdown.invalid/vault/' + uuid4().hex + '/'
             html = re.sub(r'href="([^"]*)"', lambda match: 'href="' + self.base + '?target='
@@ -305,7 +319,7 @@ class VaultBrowser:
         self.folders.clear()
         self.expanded.clear()
         self.rows.clear()
-        self.path = None
+        self.path = self.selected_path = None
         self.root = ''
         self.title.text = 'Notes Library closed'
         self.edit.enabled = False

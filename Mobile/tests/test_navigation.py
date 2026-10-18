@@ -9,6 +9,36 @@ from commonUtils.ui.native.routes import Routes
 
 
 class NavigationTests(unittest.TestCase):
+    def test_android_rotation_rebinds_tab_without_selecting_or_retiring_its_reader(self):
+        from commonUtils.ui.native.navigation import AndroidNavigation
+        selected = Mock()
+        host = NativeNavigationHost(DESTINATION_ITEMS, on_select=selected)
+        routes = Routes(host, guard=lambda: True, changed=lambda body: None)
+        routes.show(toga.Label('Folder Hub'), destination='files', root=True)
+        reader = toga.Label('Markdown remains open')
+        routes.show(reader, destination='files', route='private:note')
+        selected.reset_mock()
+        adapter = object.__new__(AndroidNavigation)
+        adapter.host, adapter.mode = host, 'rail'
+        adapter.bottom, adapter.rail = Mock(), Mock()
+        adapter.impl = SimpleNamespace(native_navigationview=adapter.rail,
+            native=Mock(), native_content=Mock(), options=[Mock() for _ in host.destinations],
+            onItemSelectedListener=Mock(), _native_activity=Mock(),
+            set_current_tab_index=Mock(side_effect=lambda index: host._selected(host.root)))
+        layout = Mock(HORIZONTAL=0, VERTICAL=1)
+        with patch.dict('sys.modules', {
+            'android.widget': SimpleNamespace(LinearLayout=layout),
+            'android.view': SimpleNamespace(ContextThemeWrapper=Mock()),
+            'com.google.android.material.navigationrail': SimpleNamespace(NavigationRailView=Mock()),
+            'com.google.android.material': SimpleNamespace(R=Mock()),
+        }):
+            adapter.set_mode('bottom')
+            adapter.set_mode('rail')
+        selected.assert_not_called()
+        self.assertFalse(host.changing)
+        self.assertIs(routes.body('files').children[0], reader)
+        self.assertEqual(host.state.routes['files'], ['private:note'])
+
     def test_apple_tab_rebuild_preserves_titles_glyphs_and_selection(self):
         from logisticsmobile.navigation import refresh_apple_tab_items
         selected = Mock()

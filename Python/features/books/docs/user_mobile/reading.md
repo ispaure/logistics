@@ -49,12 +49,17 @@ view; HTML over 2 MiB is refused before the toolkit can create a disk-backed pag
 Other backends use bounded native text passages.
 
 Tap the **speaker** icon in the EPUB reader toolbar to open **Read aloud** (also
-available in the reader actions menu). Select an installed offline voice
-(the label includes its language), choose speed, and press **Play**. Selected text
+available in the reader actions menu). Playback controls float over the page
+without resizing or reformatting it. Choose speed and press **Play**. Choose your
+installed offline voice in **Settings → Read aloud → Read-aloud voice**; the
+voice picker is kept out of document views. Selected text
 is read on its own; with no selection, reading starts at the current passage and
-continues through this chapter. The current sentence or bounded passage is
-highlighted and brought into view. **Pause** stops at the current utterance;
-**Resume** repeats that sentence/passage. **Stop** ends reading. Playback uses icon buttons with accessible names. The
+continues through this chapter. The current word is highlighted and brought into
+view using system speech progress. Android voices that omit word progress use
+estimated highlighting. Android initially selects the system's current voice
+when it is installed and works offline. The same **Play/Pause** button switches to
+pause while reading and back to play when paused. Pausing stops at the current
+utterance; playing again resumes that sentence/passage. **Stop** ends reading. Playback uses icon buttons with accessible names. The
 back/forward **15** controls use the same circular-arrow design as desktop and
 jump approximately 15 seconds within the current
 passage, accounting for the selected speed. System speech has no recorded
@@ -65,6 +70,11 @@ the engine and clears queued text. The app does not download voices or send text
 to a speech service. If no offline voice is available, use the operating system's
 speech settings to install one. Physical-device audio and accessibility ergonomics
 still need a device pass.
+
+In portrait and landscape on iOS and Android, EPUB keeps its chapter browser,
+Previous/Next, compact status, speech and Actions menu in one top toolbar. There
+is no separate page footer or status row. **Appearance…**, chapter search and
+**Fullscreen** remain available in Actions. Comics retain their page scrubber.
 
 **Appearance…** now includes installed local font families, every whole font size
 from 12–32, line spacing from 100–220%, maximum reading width from 480–1400 pixels

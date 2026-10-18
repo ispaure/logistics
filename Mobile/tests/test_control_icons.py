@@ -28,7 +28,7 @@ class ControlIconTests(unittest.TestCase):
         self.assertIn(owner.search.box, owner.document_view.children)
         self.assertEqual(owner.editor.value, 'Keep this unsaved draft')
         self.assertEqual(find.accessible_name, 'Find and replace')
-        self.assertEqual(owner.save_button.text, 'Save')
+        self.assertEqual(owner.save_button.control_icon, 'save')
 
     def test_restyling_browser_back_preserves_disabled_state_and_history_handler(self):
         self.app.show_cloud(present=False)

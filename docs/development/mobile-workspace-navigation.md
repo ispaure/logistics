@@ -293,6 +293,14 @@ local downloads/imports retain their existing local-file semantics.
 
 Drawer taps render cached menu contents immediately, defer credential/provider
 queries to a worker, and do not checkpoint an editor just to reveal its menu.
+Folder Hub takes unlocked remote names and credential groups from the shared
+`CloudClient.package_records` snapshot rather than a scene's native selector.
+An empty selector cannot hide another iPad scene's loaded package; an empty shared
+snapshot cannot revive stale unlocked names. Rendering this list does not call
+the native bridge or probe online services.
+Credential-change notifications refresh a visible hub after stale private readers
+are retired. Source/filter changes also reread the local discovery snapshot.
+ZIP filter labels omit the archive suffix and use numbered collision labels.
 Preparing a retained view invalidates the layout cache; every render rebinds its
 native header. Connection-query failures are reported without stranding the next
 refresh. The initial Chat selection mounts its lazy root without calling
@@ -583,3 +591,24 @@ level, so expanding a folder cannot move child labels left of their parent.
 Focused regressions live in `commonUtils.tests.test_native_markdown` and
 `Mobile/tests/test_documentation_ui.py`; host/dummy checks do not certify native
 iOS or Android visual layout. See the shared native embedding guide for API details.
+
+
+### Browser row selection and Markdown pane controls
+
+The Logistics `FileBrowser` adapter and Notes Library use bundled folder/file
+icons and a filled selected row rather than a checkmark in the filename. Selection
+is repainted after list/tile rendering and page changes. `DocumentationReader`
+applies the same host presentation to the shared wiki's visible catalog rows.
+The Notes Library and documentation navigation toolbars belong to their article
+pane in a wide layout; compact browsing keeps the toolbar above the active pane
+so its browse toggle remains reachable. Reflow reparents the retained toolbar
+without replacing the WebView or speech owner. Focused host coverage lives in
+`test_native_browser`, `test_obsidian` and `test_documentation_ui`.
+
+
+Validation for this presentation change: 67 focused mobile host checks passed.
+An isolated iPad simulator preview verified selected rows and measured both
+Markdown toolbars at the article's left edge (documentation x=284, Notes Library
+x=272 logical points), beyond each 260-point browser pane. Local screenshots
+and measurements are in ignored `Mobile/logs/browser-pane-review/`. Android
+rendering was not visually verified in this pass.

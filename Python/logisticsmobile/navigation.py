@@ -8,9 +8,65 @@ DESTINATION_ITEMS = (
     ('home', 'Home', 'house', 'home'),
     ('files', 'Folder Hub', 'square.grid.2x2', 'ic_menu_mapmode'),
     ('documents', 'Documents', 'doc.on.doc', 'ic_menu_edit'),
-    ('chat', 'Chat', 'bubble.left.and.bubble.right', 'ic_menu_send'),
+    ('chat', 'Chat', 'bubble.left.and.bubble.right', 'ic_dialog_email'),
     ('settings', 'Settings', 'gearshape', 'ic_menu_preferences'),
 )
+
+# Application destinations use explicit artwork rather than OEM menu icons.
+# The 24-point outlines match the meaning of the Apple navigation symbols.
+ANDROID_DESTINATION_PATHS = {
+    'documents': (
+        ((7, 3), (15, 3), (20, 8), (20, 18), (7, 18), (7, 3)),
+        ((15, 3), (15, 8), (20, 8)),
+        ((4, 6), (4, 21), (17, 21)),
+        ((10, 11), (17, 11)), ((10, 14), (17, 14)),
+    ),
+    'chat': (
+        ((16, 13), (20, 13), (23, 16), (23, 5), (9, 5), (9, 7)),
+        ((2, 8), (17, 8), (17, 18), (7, 18), (2, 22), (2, 8)),
+        ((6, 12), (13, 12)), ((6, 15), (11, 15)),
+    ),
+    'settings': (
+        ((9, 1), (15, 1), (15.5, 4), (17, 5), (20, 4), (23, 9),
+         (20.5, 11), (20.5, 13), (23, 15), (20, 20), (17, 19),
+         (15.5, 20), (15, 23), (9, 23), (8.5, 20), (7, 19),
+         (4, 20), (1, 15), (3.5, 13), (3.5, 11), (1, 9),
+         (4, 4), (7, 5), (8.5, 4), (9, 1)),
+    ),
+}
+
+
+def install_destination_icons(host):
+    """Install app-owned glyphs on Android bottom bars and wide-screen rails."""
+    install_folder_hub_icon(host)
+    adapter = host.adapter
+    if adapter is None or not hasattr(adapter, 'bottom'):
+        return
+    from android.graphics import Path, Paint
+    from android.graphics.drawable import ShapeDrawable
+    from android.graphics.drawable.shapes import PathShape
+    for destination, lines in ANDROID_DESTINATION_PATHS.items():
+        path = Path()
+        for line in lines:
+            path.moveTo(*line[0])
+            for point in line[1:]:
+                path.lineTo(*point)
+        if destination == 'settings':
+            path.addCircle(12, 12, 3.5, Path.Direction.CW)
+        drawable = ShapeDrawable(PathShape(path, 24, 24))
+        paint = drawable.getPaint()
+        paint.setStyle(Paint.Style.STROKE)
+        paint.setStrokeWidth(1.6)
+        paint.setStrokeCap(Paint.Cap.ROUND)
+        paint.setStrokeJoin(Paint.Join.ROUND)
+        paint.setAntiAlias(True)
+        drawable.setIntrinsicWidth(24)
+        drawable.setIntrinsicHeight(24)
+        index = host.destinations.index(destination)
+        for bar in (adapter.bottom, adapter.rail):
+            if bar is not None:
+                # Independent instances let Material own each bar's tint state.
+                bar.getMenu().getItem(index).setIcon(drawable.getConstantState().newDrawable().mutate())
 
 
 class NavigationState(DestinationState):

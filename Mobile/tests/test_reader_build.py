@@ -4,10 +4,27 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 import xml.etree.ElementTree as ET
-from Mobile.cloud_build import configure_android_appearance
+from Mobile.cloud_build import configure_android_appearance, configure_android_sources
 
 
 class ReaderBuildTests(unittest.TestCase):
+    def test_existing_android_project_gains_speech_java_sources(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            gradle = root / 'app/build.gradle'
+            gradle.parent.mkdir()
+            existing = ('plugins { id "com.android.application" }\n'
+                'android.sourceSets.main.java.srcDir(new File(rootProject.projectDir, '
+                '"../../../../payload/commonUtils/ui/native/android"))\n')
+            gradle.write_text(existing)
+            configure_android_sources(root)
+            first = gradle.read_text()
+            configure_android_sources(root)
+            self.assertEqual(gradle.read_text(), first)
+            self.assertTrue(first.startswith(existing))
+            self.assertEqual(first.count('payload/commonUtils/ui/native/android'), 1)
+            self.assertEqual(first.count('payload/features/books/mobile/android'), 1)
+
     def test_android_speech_service_visibility_survives_repeated_configuration(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

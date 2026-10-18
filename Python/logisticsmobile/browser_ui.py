@@ -4,10 +4,11 @@ from pathlib import PurePosixPath
 import toga
 from .control_icons import apply_icon, icon_button
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW
+from toga.style.pack import COLUMN, ROW, CENTER
 from commonUtils.ui.native_browser import NativeBrowser
 from commonUtils.ui.native.presentation import list_button
-from .appearance import surface
+from .appearance import surface, template_icon
+from .hub_icons import icon
 
 
 def middle_filename(button):
@@ -23,7 +24,47 @@ def middle_filename(button):
         button._impl.native.setContentDescription(button.text)
 
 
+def entry_icon(directory, *, landing_page=False):
+    """A consistent folder/file glyph for ordinary and Notes Library rows."""
+    kind = 'folder_document' if directory and landing_page else 'files' if directory else 'documents'
+    image = template_icon(toga.ImageView(icon(kind),
+        style=Pack(width=24, height=24, margin_left=8, margin_right=8)))
+    image.browser_entry_kind = 'folder_document' if directory and landing_page else 'folder' if directory else 'file'
+    return image
+
+
+def highlight_entry(widget, selected):
+    surface(widget, radius=8, background='hover' if selected else 'surface',
+            foreground='text' if isinstance(widget, toga.Button) else None,
+            outlined=False, eink_outlined=selected, eink_selected=selected)
+
+
+class FolderLocationHeader(toga.Box):
+    """Current storage identity and a parent/root navigation control."""
+    def __init__(self, status, parent_button):
+        self.parent_button = parent_button
+        self.storage_icons = toga.Box(style=Pack(direction=ROW, align_items=CENTER))
+        super().__init__(children=[parent_button, self.storage_icons, status],
+                         style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
+        self.update('')
+
+    def update(self, path, *, remote=False, encrypted=False):
+        apply_icon(self.parent_button, 'up' if path else 'back',
+                   'Parent folder' if path else 'Back to Folder Hub')
+        for child in list(self.storage_icons.children):
+            self.storage_icons.remove(child)
+        from .folder_hub_style import compact_icon
+        kinds = [('storage_remote', 'Online folder')] if remote else [('storage_local', 'On-device folder')]
+        if encrypted:
+            kinds.append(('storage_crypt', 'Encrypted folder'))
+        for name, label in kinds:
+            indicator = icon_button(name, label, enabled=False)
+            compact_icon(indicator, width=28, height=48, size=20)
+            self.storage_icons.add(indicator)
+
+
 class FileBrowser(NativeBrowser):
+    location_header = FolderLocationHeader
     @property
     def page_size(self):
         # Local and remote folders share the same widget bound in both layouts.
@@ -61,6 +102,7 @@ class FileBrowser(NativeBrowser):
         rows = tuple(rows)
         super().set_entries(provider, directory, rows, location=location)
     def stop(self):
+        self.entry_rows = {}
         return super().stop()
 
     @property
@@ -112,9 +154,10 @@ class FileBrowser(NativeBrowser):
             button = self.buttons[entry.identity]
             # Recursive results retain their full path as identity/payload.
             # Only the visible caption uses the final path component.
-            button.text = ('📁 ' if entry.container else '') + PurePosixPath(entry.label).name
+            button.text = PurePosixPath(entry.label).name
             list_button(button)
             middle_filename(button)
+        self.entry_rows = {}
         entries_by_button = {self.buttons[entry.identity]: entry for entry in entries}
         for row in self.items.children:
             if not isinstance(row, toga.Box):
@@ -141,7 +184,7 @@ class FileBrowser(NativeBrowser):
             for row, entry in zip(self.items.children, entries):
                 if not isinstance(row, toga.Box):
                     continue
-                controls = toga.Box(style=Pack(direction=ROW))
+                controls = toga.Box(style=Pack(direction=ROW, align_items=CENTER))
                 for child in list(row.children):
                     row.remove(child)
                     controls.add(child)
@@ -151,9 +194,18 @@ class FileBrowser(NativeBrowser):
                     for child in list(controls.children):
                         if isinstance(child, toga.ImageView):
                             controls.remove(child)
-                    controls.add(toga.Label('›', style=Pack(width=18, font_size=18, margin_top=12)))
+                    controls.add(toga.Label('›', style=Pack(width=18, font_size=18)))
+                controls.insert(0, entry_icon(entry.container))
                 row.add(controls)
-                surface(row)
+                self.entry_rows[entry.identity] = row
+
+        else:
+            for entry in entries:
+                tile = self.buttons[entry.identity].parent
+                if not any(isinstance(child, toga.ImageView) for child in tile.children):
+                    tile.insert(0, entry_icon(entry.container))
+                self.entry_rows[entry.identity] = tile
+        self.highlight_selection()
 
         from .keyboard import bind_browser
         bind_browser(self)
@@ -189,10 +241,17 @@ class FileBrowser(NativeBrowser):
             finally:
                 self.navigation_busy = False
 
+    def highlight_selection(self):
+        for identity, row in getattr(self, 'entry_rows', {}).items():
+            selected = identity == self.selected
+            highlight_entry(row, selected)
+            button = self.buttons[identity]
+            button.text = button.text.removeprefix('✓ ')
+            highlight_entry(button, selected)
+
     async def select(self, entry):
         try:
             await super().select(entry)
         finally:
             # Selection is for contextual actions, never a multi-select checkbox.
-            for button in self.buttons.values():
-                button.text = button.text.removeprefix('✓ ')
+            self.highlight_selection()

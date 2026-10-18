@@ -23,12 +23,12 @@ above/below or beside the page only when its proportions differ from the screen.
 **Reading mode** in the reader actions also enters fullscreen. Swiping up/down
 changes pages in both modes at fit size. In fullscreen, hold the page for about
 400 ms to show the shared comic/PDF magnifying bubble, drag to move it, and
-release to dismiss it. While holding, use another finger to tap **−** at the
-top left or **+** at the top right of the bubble. The shared zoom levels are
+release to dismiss it. Keep holding the page and tap **−** at the upper left or **+** at the upper right
+with another finger. The buttons sit slightly outside the bubble’s corners. The shared zoom levels are
 **150%, 170%, 190%, 210%, 230%, 250%**, starting at **190%**. Each change saves
 immediately for comics and PDFs, including after restarting. The same setting
 appears in **Settings → Books & Comics → Comic & PDF magnifier zoom**.
-A magnifier hold or zoom-button tap does not turn pages or toggle controls.
+Holding the page or tapping the magnifier buttons does not turn pages or toggle controls.
 Pinch to zoom and pan; return to fit size to swipe between pages.
 Pages & search starts collapsed.
 

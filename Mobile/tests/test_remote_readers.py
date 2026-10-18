@@ -29,7 +29,10 @@ def assert_preview_only_ui(test, owner):
         test.assertNotIn(forbidden, text)
     actions = {label for label, _ in owner.crypt_actions_menu.actions}
     if owner.crypt_reader.editable:
-        test.assertEqual(actions, {'Reader tools…', 'Close private document'})
+        expected = {'Reader tools…', 'Close private document'}
+        if owner.crypt_reader.kind in {'.md', '.markdown'}:
+            expected.add('Open beside another document')
+        test.assertEqual(actions, expected)
     elif getattr(owner.crypt_reader, 'image_document', False):
         test.assertEqual(actions, {'Reader tools…', 'Fit image', 'Close private document'})
 
@@ -516,7 +519,7 @@ class RemoteReaderTests(unittest.TestCase):
                 owner = app.private_sessions.active
                 assert_preview_only_ui(self, owner)
                 owner.toggle_private_preview()
-                self.assertEqual(owner.crypt_preview_button.text, 'Text')
+                self.assertEqual(owner.crypt_preview_button.accessible_name, 'View source text')
                 owner.toggle_private_preview()
                 self.assertTrue(owner.crypt_text.readonly)
             finally:

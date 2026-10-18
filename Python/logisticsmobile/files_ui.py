@@ -164,12 +164,13 @@ class FilesUI:
              ('Pin current folder', self.pin_local_folder),
              ('Delete selected…', self.delete_file), ('Change location…', lambda: self.show_file_actions(operation='location')),
              ('Archive password…', lambda: self.show_file_actions(operation='password'))], self.show_file_actions)
+        self.file_browser.location_bar = NativeBrowser.location_header(self.file_status,
+            icon_button('back', 'Back to Folder Hub', on_press=self.parent_file_folder))
         self.files_view = toga.Box(children=[
             toga.Box(children=[toga.Button('Folder Hub', on_press=self.show_locations, style=Pack(height=48, flex=1)),
                                self.file_actions_button], style=Pack(direction=ROW)),
             self.file_storage,
-            toga.Box(children=[icon_button('up', 'Parent folder', on_press=self.parent_file_folder),
-                               self.file_status], style=Pack(direction=ROW, margin_top=4)),
+            self.file_browser.location_bar,
             toga.ScrollContainer(horizontal=False, content=scroll_content(self.file_browser.widget), style=Pack(flex=1))],
             style=Pack(direction=COLUMN, margin=12, flex=1))
         self.file_status.style.flex = 1
@@ -269,8 +270,11 @@ class FilesUI:
                        route='file-details', title='File details')
 
     async def parent_file_folder(self, widget=None, **kwargs):
+        if not self.file_path:
+            self.show_locations()
+            return
         if not self.cloud_busy or self.can_browse_local(self.file_storage.value):
-            self.file_location.value = self.file_location.value.rpartition('/')[0]
+            self.file_location.value = self.file_path.rpartition('/')[0]
             await self.browse_files()
 
     def browser_file_selected(self, row):
@@ -424,6 +428,7 @@ class FilesUI:
         if location is None:
             self.file_browser.history.clear()
         self.file_browser.set_entries(self.file_provider, self.file_path, rows, location=location)
+        self.file_browser.location_bar.update(self.file_path, encrypted=self.file_provider.private)
 
     def selected_file(self):
         row = self.file_rows.get(self.file_selection.value)

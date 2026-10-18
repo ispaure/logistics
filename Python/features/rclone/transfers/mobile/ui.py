@@ -36,7 +36,7 @@ def coalesced_progress(loop, publish):
 
 
 class MirrorUI(TransferReviewUI):
-    def register_transfer_status(self, view):
+    def register_transfer_status(self, view, *, visible_when=lambda: True):
         import weakref
         button = toga.Button('Transfer details', on_press=self.show_transfers, style=Pack(height=48, flex=1))
         accessible_name = self.rclone_ui.accessible_name
@@ -46,6 +46,7 @@ class MirrorUI(TransferReviewUI):
         bar = toga.Box(children=[toga.Box(children=[button, dismiss], style=Pack(direction=ROW)), progress],
                        style=Pack(direction=COLUMN, margin_bottom=4))
         bar.notice, bar.progress, bar.dismiss = button, progress, dismiss
+        bar.visible_when = visible_when
         view.transfer_banner = bar
         if not hasattr(self, 'transfer_banners'):
             self.transfer_banners = []
@@ -68,7 +69,7 @@ class MirrorUI(TransferReviewUI):
             live.append((parent_ref, bar_ref))
             # Immersive comics use the full reading area. Transfer work and
             # its notification state continue; show the banner with controls.
-            if visible and not (getattr(parent, '_comic_fullscreen', False)
+            if visible and bar.visible_when() and not (getattr(parent, '_comic_fullscreen', False)
                                 or getattr(parent, '_reader_fullscreen', False)):
                 if bar not in parent.children:
                     parent.insert(0, bar)

@@ -40,6 +40,7 @@
     "locations_ui.py",
     "magnifier.py",
     "markdown_speech.py",
+    "speech_overlay.py",
     "navigation.py",
     "notes_actions.py",
     "obsidian.py",

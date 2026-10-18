@@ -182,7 +182,11 @@ For plain-source editing, choose [Text Editor](../../Python/features/text_editor
 
 Choose a source and folder on **Folder Hub**. Local folders normally live under
 `~/Server/Local`; remote sources come from loaded rclone configs, and Dropbox
-contributes its detected account folders. Refresh after adding folders or configs.
+contributes its detected account folders. Switching source tabs refreshes folder
+sources in the background while keeping the cached list available. Use
+**Refresh folders** to retry a failed discovery or reload the current source
+after adding folders or configs. A failed refresh keeps the last displayed list
+and reports the error in the bottom notice row.
 A Calibre library, Minecraft server or other integration must meet its feature's
 detection rules before its actions appear. Discovery itself does not start servers
 or mount remotes.

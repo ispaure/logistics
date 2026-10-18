@@ -142,19 +142,21 @@ class RichBookView(toga.Box):
             return await speech_source(self.webview, self.chapter, self.offset)
         def follow(start, end):
             if not self.disposed:
-                self.offset = start
                 if app is None or not app.screen_privacy.inactive:
-                    self.webview._chapter_bridge.seek(start, end)
-                self.on_position(start)
+                    self.webview._chapter_bridge.highlight(start, end)
+                if start >= 0:
+                    self.offset = start
+                    self.on_position(start)
         self.speech_panel = ReadAloudPanel(loop=loop, source=source, on_range=follow, close=self.close_read_aloud,
             app=app, privacy_gate=privacy_gate, valid=valid)
-        self.insert(0, self.speech_panel)
+        self.speech_panel.show_over(self)
 
     def close_read_aloud(self, widget=None, **kwargs):
         panel = getattr(self, 'speech_panel', None)
         if panel is not None:
             panel.dispose()
-            self.remove(panel)
+            if panel in self.children:
+                self.remove(panel)
             del self.speech_panel
 
 

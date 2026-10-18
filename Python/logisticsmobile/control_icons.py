@@ -21,6 +21,9 @@ ICONS = {
     'appearance': ('textformat.size', 'Aa', (((3, 19), (9, 5), (15, 19)), ((5, 14), (13, 14)), ((16, 19), (19, 12), (22, 19)), ((17, 17), (21, 17)))),
     'more': ('ellipsis', '•••', ()),
     'compose': ('square.and.pencil', '✎', (((14, 4), (4, 4), (4, 20), (20, 20), (20, 10)), ((10, 14), (11, 10), (19, 2), (22, 5), (14, 13), (10, 14)))),
+    'edit': ('pencil', '✎', (((4, 20), (5, 15), (17, 3), (21, 7), (9, 19), (4, 20)), ((14, 6), (18, 10)))),
+    'view': ('doc.text', '▤', (((5, 3), (14, 3), (20, 9), (20, 21), (5, 21), (5, 3)), ((14, 3), (14, 9), (20, 9)), ((8, 13), (17, 13)), ((8, 17), (17, 17)))),
+    'save': ('square.and.arrow.down', '↓', (((4, 13), (4, 21), (20, 21), (20, 13)), ((12, 2), (12, 16)), ((7, 11), (12, 16), (17, 11)))),
     'down': ('chevron.down', '⌄', (((5, 8), (12, 15), (19, 8)),)),
     'fullscreen': ('arrow.up.left.and.arrow.down.right', '⤢', (((10, 3), (3, 3), (3, 10)), ((3, 3), (10, 10)), ((14, 21), (21, 21), (21, 14)), ((21, 21), (14, 14)))),
     'speaker': ('speaker.wave.2', '🔊', (((3, 9), (7, 9), (12, 5), (12, 19), (7, 15), (3, 15), (3, 9)),
@@ -40,9 +43,11 @@ _android_controls = weakref.WeakSet()
 def tint_android(impl):
     from android import R
     from android.content.res import ColorStateList
-    from .palette import argb, android_palette
+    from .palette import argb, android_palette, eink_enabled
     dark = impl.native.getResources().getConfiguration().uiMode & 0x30 == 0x20
     colors = android_palette(dark)
+    if eink_enabled() and getattr(impl, '_surface_eink_selected', False):
+        colors = dict(colors, text='#ffffff', muted='#ffffff')
     foreground = getattr(impl, '_surface_roles', ('', 'text', False))[1]
     impl._control_drawable.setTintList(ColorStateList(
         [[-R.attr.state_enabled], []],

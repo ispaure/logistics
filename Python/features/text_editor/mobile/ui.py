@@ -24,12 +24,12 @@ class TextEditorView:
     def __init__(self, app):
         self.app, self.document, self.session = app, None, None
         icon_button, apply_icon = app.presentation.icon_button, app.presentation.apply_icon
-        action_button, ActionMenu = app.presentation.action_button, app.presentation.ActionMenu
+        ActionMenu = app.presentation.ActionMenu
         self.loading = True
         self.formatted = None
         self.preview = self.preview_box = None
         self.selector = toga.Selection(on_change=self.selected, style=Pack(flex=1, height=48))
-        self.name = toga.TextInput(placeholder='Document name', on_change=self.name_changed, style=Pack(flex=1, height=48))
+        self.name = toga.TextInput(placeholder='Document name', on_change=self.name_changed, style=Pack(flex=1, width=1, height=48))
         self.editor = CodeInput(loop=app.loop, on_change=self.text_changed,
             highlighting=app.preferences.values.get('android_eink') != 'true',
             style=Pack(flex=1, font_size=int(app.preferences.values['font_size']), margin_top=4))
@@ -49,33 +49,38 @@ class TextEditorView:
         self.status = toga.Label('', style=Pack(font_size=12, margin_top=4))
         self.recovery_notice = toga.Label('', style=Pack(font_size=12))
         self.import_button = toga.Button('Import…', on_press=app.import_document, style=Pack(flex=1, height=48))
-        self.save_button = action_button(toga.Button('Save', on_press=app.save_document, style=Pack(flex=1, height=48)))
+        self.save_button = icon_button('save', 'Save document', on_press=app.save_document)
         self.export_button = toga.Button('Export…', on_press=app.export_document, style=Pack(flex=1, height=48))
         box = self.document_view = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=12))
         self.actions_button = icon_button('more', 'Document actions')
         self.conflict_actions = toga.Box(style=Pack(direction=COLUMN))
         self.conflict_copy = toga.Button('Save a copy…',
             on_press=lambda widget, **kw: self.actions.invoke(app.save_copy), style=Pack(height=48))
-        self.actions = ActionMenu(self.actions_button, self, [
+        self.action_items = [
             ('Open documents', app.show_documents_hub), ('New document', app.choose_document_type),
             ('Open beside another document', lambda: app.adaptive.show_pair_picker()),
             ('Import…', lambda: app.import_document(origin=self)), ('Open from Files…', app.show_editor_open),
             ('Save', app.save_document), ('Save a copy', app.save_copy),
             ('Save As…', app.show_document_save_as), ('Export…', lambda: app.export_document(origin=self)),
-            ('Close document', lambda: app.request_close_session(self.session.id))])
+            ('Close document', lambda: app.request_close_session(self.session.id))]
+        self.save_visible = False
+        self.actions = ActionMenu(self.actions_button, self,
+            [item for item in self.action_items if item[0] != 'Save'])
         # A visible left-hand editor still owns its toolbar commands.
         self.save_button.on_press = lambda widget, **kw: self.actions.invoke(app.save_document)
-        box.add(toga.Box(children=[self.name, self.actions_button], style=Pack(direction=ROW, margin_bottom=8)))
+        self.preview_button = icon_button('view', 'View document',
+            on_press=lambda widget, **kw: self.actions.invoke(app.show_preview))
+        self.toolbar = toga.Box(children=[self.name,
+            icon_button('find', 'Find and replace', on_press=self.toggle_search),
+            self.preview_button, self.actions_button], style=Pack(direction=ROW))
+        box.add(self.toolbar)
+        box._workspace_toolbar = self.toolbar
         self.source_tools = toga.Box(children=[self.language_choice, self.line_count], style=Pack(direction=ROW))
         box.add(self.source_tools)
         self.editor_area = toga.Box(children=[self.editor], style=Pack(direction=ROW, flex=1))
         box.add(self.editor_area)
         box.add(self.status)
         box.add(self.conflict_actions)
-        box.add(toga.Box(children=[self.save_button,
-            icon_button('find', 'Find and replace', on_press=self.toggle_search),
-            toga.Button('Preview', on_press=lambda widget, **kw: self.actions.invoke(app.show_preview), style=Pack(flex=1, height=48))],
-            style=Pack(direction=ROW, margin_top=8)))
         self.search = EditorSearch(self.editor, self.document_view)
         previous, next_match = self.search.box.children[1].children
         previous.style.flex = next_match.style.flex = 0
@@ -103,6 +108,17 @@ class TextEditorView:
 
     def refresh_status(self):
         self.status.text = document_status(self.document)
+        dirty = bool(self.document.modified)
+        self.save_button.enabled = dirty
+        if dirty != self.save_visible:
+            self.save_visible = dirty
+            self.actions.dispose()
+            actions = [item for item in self.action_items if dirty or item[0] != 'Save']
+            self.actions = self.app.presentation.ActionMenu(self.actions_button, self, actions)
+            if dirty:
+                self.toolbar.insert(1, self.save_button)
+            elif self.save_button in self.toolbar.children:
+                self.toolbar.remove(self.save_button)
         conflict = not getattr(self.document, 'private', False) and self.document.conflict
         if conflict and self.conflict_copy not in self.conflict_actions.children:
             self.conflict_actions.add(self.conflict_copy)
