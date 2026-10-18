@@ -124,6 +124,11 @@ retains its 45-minute job budget. The large 256 MiB
 LocalCrypt seeding fixture allows four minutes for review revalidation and
 transfer; smaller reviews retain their 30-second budget. Complete native case
 reports and exact source identity are required before a gate can pass.
+Native WebView probes retry only the transient `WKErrorDomain Code=5` evaluation
+error during document replacement. A successful string result must contain the
+expected replacement text and exclude retired private content; repeated errors,
+other failures and non-string results still fail the bounded check.
+
 New pushes and PR updates cancel superseded checks for the same branch/PR;
 tag releases and manual runs retain their validation. Windows platform checks
 collect browser screenshot diagnostics alongside their logs. The separate browser

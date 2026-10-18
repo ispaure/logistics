@@ -72,13 +72,8 @@ async def exercise_obsidian(app, encrypted):
             # a destroyed view cannot produce a callback.
             assert owner.web.private_closed
         else:
-            for _ in range(50):
-                text = await asyncio.wait_for(owner.web.evaluate_javascript('document.body ? document.body.textContent : ""'), 2)
-                if 'Nested Markdown note' not in str(text):
-                    break
-                await asyncio.sleep(.1)
-            else:
-                raise AssertionError('Retired Notes Library retained its preview')
+            from .web_checks import wait_for_text
+            await wait_for_text(owner.web, 'Document closed.', absent='Nested Markdown note')
     assert (ordinary.root / 'Native Obsidian Vault/Projects/Plan.md').read_bytes().startswith(b'# Native plan')
     for path in encrypted.root.rglob('*'):
         if path.is_file():
