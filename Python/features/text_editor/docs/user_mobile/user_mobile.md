@@ -28,6 +28,8 @@ formatting toolbar to place the cursor and open the keyboard.
 The formatting toolbar stays above the writing area while the document scrolls.
 Opening the keyboard resizes that area; continuing to type scrolls only as needed
 to keep the caret visible. Plain text and Markdown Source use native text inputs.
+On short phone screens or with enlarged text, the space around the caret shrinks
+to keep the current line inside the writing area above the keyboard.
 Formatting and source share the same
 buffer, recovery and Save actions. There is no automatic preview split on phones
 or tablets. See [Reading and editing](../../../../../docs/user_mobile/documents/reading-and-editing.md)

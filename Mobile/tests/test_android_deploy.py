@@ -67,6 +67,7 @@ class AndroidDeployTests(unittest.TestCase):
             staged.assert_called_once()
             self.assertTrue((root / 'payload/current-source').exists())
             self.assertIn('update', run.call_args.args[0])
+            self.assertIn('--update-requirements', run.call_args.args[0])
             self.assertNotIn('--test', run.call_args.args[0])
 
     def test_wireless_discovery_uses_connect_services_and_never_pairs(self):

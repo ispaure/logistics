@@ -52,12 +52,12 @@ class FolderHubDesignProbe(LogisticsMobile):
                 assert icon.control_icon == expected, (name, icon.control_icon)
                 assert icon._impl._surface_roles[1] == expected
                 assert ('unlocked' if name in loaded else 'locked') in button.accessible_name
-                assert button.style.font_weight == 'bold'
+                assert button.style.font_weight == 'normal'
             assert all(not hasattr(label, 'on_press') for label in self.folder_tree_buttons.values())
             for label in self.folder_tree_buttons.values():
-                assert label.style.font_weight == 'normal'
+                assert label.style.font_weight == 'bold'
                 assert list(label.parent.children) == [label]
-                assert label._impl._surface_roles[1] == 'muted'
+                assert label._impl._surface_roles[1] == 'text'
             self.folder_collapsed.add(('Server',))
             self.update_folder_list(choices)
             assert set(self.folder_buttons) == set(names)

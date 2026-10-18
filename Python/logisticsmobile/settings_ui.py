@@ -40,7 +40,9 @@ def fit_text(control, width):
         control._settings_source_text = control.text
     source = control._settings_source_text
     button = isinstance(control, toga.Button)
-    width = max(24, width - (24 if button else 0))
+    width = max(24, width - (24 if button else 0)
+                - (24 if getattr(control, '_settings_disclosure', False) else 0)
+                - (32 if getattr(control, 'leading_icons', ()) else 0))
     size = control.style.font_size
     if size is None or size <= 0:
         size = 17
@@ -71,7 +73,7 @@ def fit_text(control, width):
     if button:
         from .appearance import list_button
         list_button(control)
-        control.style.height = max(48, int(line_height * len(rendered.split('\n')) + 20))
+        control.style.height = max(52 if getattr(control, '_settings_row', False) else 48, int(line_height * len(rendered.split('\n')) + 20))
         if type(control._impl).__module__.startswith('toga_iOS.'):
             control._impl.native.titleLabel.numberOfLines = len(rendered.split('\n'))
             control._impl.native.accessibilityLabel = source
@@ -96,19 +98,119 @@ def fit_section(section, width):
             fit_section(child, width)
 
 
-def settings_presentation(section):
-    """Use text hierarchy and native fields rather than boxing every action."""
+def disclosure(button):
+    """A trailing accessory inside the native button's full accessible hit target."""
+    button._settings_disclosure = True
+    backend = type(button._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass
+        native = button._impl.native
+        image = ObjCClass('UIImage').systemImageNamed('chevron.right')
+        accessory = ObjCClass('UIImageView').alloc().initWithImage(image)
+        accessory.translatesAutoresizingMaskIntoConstraints = False
+        from .appearance import apple_color
+        accessory.tintColor = apple_color('muted')
+        accessory.isAccessibilityElement = False
+        native.addSubview(accessory)
+        accessory.trailingAnchor.constraintEqualToAnchor(native.trailingAnchor, constant=-8).active = True
+        accessory.centerYAnchor.constraintEqualToAnchor(native.centerYAnchor).active = True
+        accessory.widthAnchor.constraintEqualToConstant(10).active = True
+        accessory.heightAnchor.constraintEqualToConstant(16).active = True
+    elif backend.startswith('toga_android.'):
+        from android.graphics import Path, Paint
+        from android.graphics.drawable import ShapeDrawable
+        from android.graphics.drawable.shapes import PathShape
+        path = Path()
+        path.moveTo(8, 5)
+        path.lineTo(15, 12)
+        path.lineTo(8, 19)
+        arrow = ShapeDrawable(PathShape(path, 24, 24))
+        arrow.getPaint().setStyle(Paint.Style.STROKE)
+        arrow.getPaint().setStrokeWidth(1.8)
+        arrow.getPaint().setAntiAlias(True)
+        native = button._impl.native
+        size = button._impl.scale_in(24)
+        arrow.setBounds(0, 0, size, size)
+        # State-aware tint follows the title, including Android E Ink selection.
+        arrow.setTintList(native.getTextColors())
+        button._impl._settings_accessory = arrow
+        native.setCompoundDrawablesRelative(getattr(button._impl, '_control_drawable', None), None, arrow, None)
+    return button
+
+
+def group_rows(rows, *, icon_inset=False):
+    """One shared surface with inset separators, never a box per preference."""
     from .appearance import surface
-    for child in section.children:
+    group = surface(toga.Box(style=Pack(direction=COLUMN, margin_bottom=20)),
+                    radius=16, background='settings_group', outlined=False)
+    group._settings_group = True
+    for index, row in enumerate(rows):
+        if index:
+            group.add(surface(toga.Box(style=Pack(height=1, margin_left=48 if icon_inset else 16,
+                                                 margin_right=16)), radius=0,
+                              background='settings_separator', outlined=False, eink_outlined=False))
+        row.style.margin_left = 12
+        row.style.margin_right = 12
+        row.style.margin_top = 4 if index == 0 else 0
+        row.style.margin_bottom = 4 if index == len(rows) - 1 else 0
+        group.add(row)
+    return group
+
+
+def settings_presentation(section):
+    """Group related native controls; keep explanations outside the surface."""
+    from .appearance import surface
+    children = list(section.children)
+    for child in children:
+        section.remove(child)
+    rows = []
+    def flush():
+        if rows:
+            section.add(group_rows(rows))
+            rows.clear()
+    consumed = set()
+    for index, child in enumerate(children):
+        if child in consumed:
+            continue
         if isinstance(child, toga.Button):
-            surface(child, radius=0, background='transparent', foreground='text',
+            child.style.height = 52
+            child._settings_row = True
+            surface(child, radius=0, background='transparent', foreground='accent',
                     outlined=False, eink_outlined=False)
+            if child.text.endswith('…') or child.text == 'Mobile documentation':
+                disclosure(child)
+            rows.append(child)
+        elif getattr(child, '_settings_switch_row', False):
+            label, info, switch = child.children
+            surface(label, radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False)
+            surface(info, radius=0, background='transparent', foreground='accent', outlined=False, eink_outlined=False)
+            child.style.margin_bottom = 0
+            rows.append(child)
+        elif isinstance(child, toga.Selection):
+            child.style.margin_top = 4
+            child.style.margin_bottom = 8
+            rows.append(child)
         elif isinstance(child, toga.Label):
-            primary = child.style.font_weight == 'bold' or getattr(section, '_settings_switch_row', False)
+            primary = child.style.font_weight == 'bold' or (index + 1 < len(children) and isinstance(children[index + 1], toga.Selection))
             surface(child, radius=0, background='transparent', foreground='text' if primary else 'muted',
                     outlined=False, eink_outlined=False)
+            if primary and child.style.font_weight != 'bold':
+                child.style.margin_top = 12
+                choice = children[index + 1]
+                consumed.add(choice)
+                choice.style.margin_top = 4
+                choice.style.margin_bottom = 12
+                rows.append(toga.Box(children=[child, choice], style=Pack(direction=COLUMN)))
+            else:
+                flush()
+                child.style.margin_left = child.style.margin_right = 12
+                child.style.margin_bottom = 12
+                section.add(child)
         elif isinstance(child, toga.Box):
+            flush()
             settings_presentation(child)
+            section.add(child)
+    flush()
 
 
 class SettingsLabel(toga.Label):
@@ -222,7 +324,9 @@ class SettingsNavigation(toga.Box):
         super().__init__(style=Pack(direction=ROW, flex=1))
         self.owner = app
         self.sections = sections
+        from .appearance import surface, list_button
         for section in sections.values():
+            surface(section, radius=0, background='settings_background', outlined=False, eink_outlined=False)
             settings_presentation(section)
         self.selected = next(iter(sections))
         self.wide = None
@@ -230,15 +334,30 @@ class SettingsNavigation(toga.Box):
         self.options = {title: toga.ScrollContainer(horizontal=False, content=section,
                        style=Pack(flex=1)) for title, section in sections.items()}
         self.buttons = {}
+        from .control_icons import button_icons
+        surface(self, radius=0, background='settings_background', outlined=False, eink_outlined=False)
         menu = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        menu.add(toga.Label('Settings', style=Pack(font_size=22, font_weight='bold', margin_bottom=16)))
-        from .appearance import list_button
+        menu.add(surface(toga.Label('Settings', style=Pack(font_size=28, font_weight='bold', margin_bottom=24)),
+                         radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False))
+        icons = {'App': 'preferences', 'Appearance': 'appearance', 'Read aloud': 'speaker',
+                 'Text & Markdown': 'edit', 'Books & Comics': 'books', 'LM Chat': 'chat',
+                 'Workspaces': 'folder', 'Help': 'help', 'About': 'info'}
+        rows = []
         for title in sections:
             def choose(widget=None, selected=title, **kwargs):
                 self.choose(selected)
-            button = list_button(toga.Button(title, on_press=choose, style=Pack(height=52, margin_bottom=4)))
+            button = list_button(toga.Button(title, on_press=choose, style=Pack(height=52)))
+            button_icons(button, [(icons[title], '')])
+            disclosure(button)
+            button._settings_row = True
             self.buttons[title] = button
-            menu.add(button)
+            rows.append(button)
+            end_group = title == ('Appearance' if 'Appearance' in sections else 'App')
+            if end_group or title in ('Books & Comics', 'Workspaces', 'About'):
+                menu.add(group_rows(rows, icon_inset=True))
+                rows = []
+        if rows:
+            menu.add(group_rows(rows, icon_inset=True))
         self.sidebar = toga.ScrollContainer(horizontal=False, content=menu, style=Pack(flex=1))
         self.detail = toga.Box(style=Pack(direction=COLUMN, flex=1))
         self.add(self.sidebar)
@@ -271,10 +390,9 @@ class SettingsNavigation(toga.Box):
             self.detach(status)
             section.add(status)
         for title, button in self.buttons.items():
-            button.text = title if self.wide else title + '  ›'
             selected = bool(self.wide and title == self.selected)
             source_tab(button, selected)
-            surface(button, radius=8, background='alternate' if selected else 'transparent',
+            surface(button, radius=8, background='hover' if selected else 'transparent',
                     foreground='text', outlined=False, eink_outlined=False, eink_selected=selected)
 
     def reflow(self):

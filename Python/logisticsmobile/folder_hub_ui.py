@@ -11,7 +11,11 @@ from features.rclone.mobile.messages import import_hint
 from textwrap import fill
 from .appearance import list_button
 from .appearance import action_button, accessible_name
-from .folder_hub_style import surface, source_tab, compact_icon, toolbar_button, folder_row, folder_name, source_actions, SOURCE_LABELS
+from .folder_hub_style import (
+    surface, source_tab, compact_icon, toolbar_button, folder_row, folder_name,
+    source_actions, SOURCE_LABELS, ROW_HEIGHT, ROW_GAP, ENTRY_ICON_SLOT, ENTRY_ICON_SIZE,
+    tree_anchor, tree_guide,
+)
 
 
 
@@ -312,20 +316,30 @@ class FolderHubUI:
 
         def divider():
             return surface(toga.Box(style=Pack(height=1, margin_left=34)),
-                           radius=0, background='border', outlined=False)
+                           radius=0, background='transparent', outlined=False)
 
-        def branch_height(branch, depth):
+        def branch_height(branch):
             # A fixed-width Box has no intrinsic height on either native
             # backend. Size tree guides from the same fixed row geometry.
-            return sum(48
-                       + (branch_height(node['children'], depth + 1) if node['children'] else 0)
+            return sum(ROW_HEIGHT + ROW_GAP
+                       + (branch_height(node['children']) if node['children'] else 0)
                        for node in branch.values()) + max(0, len(branch) - 1)
+
+        def child_midpoints(branch):
+            offset = 0
+            for _, node in sorted(branch.items(), key=lambda item: item[0].casefold()):
+                yield offset + ROW_HEIGHT / 2
+                offset += ROW_HEIGHT + ROW_GAP + 1
+                if node['children']:
+                    offset += branch_height(node['children'])
 
         def add_branch(branch, parent, ancestors=()):
             for index, (title, node) in enumerate(sorted(branch.items(), key=lambda item: item[0].casefold())):
                 path = (*ancestors, title)
                 children = node['children']
-                row = toga.Box(style=Pack(direction=ROW, align_items=CENTER, height=48))
+                group = None
+                row = toga.Box(style=Pack(direction=ROW, align_items=CENTER,
+                                         height=ROW_HEIGHT, margin_bottom=ROW_GAP))
                 if node['names']:
                     name = node['names'][0]
                     async def select(widget=None, selected=name, **kwargs):
@@ -342,11 +356,11 @@ class FolderHubUI:
                     icon = 'folder_' + state if state else 'folder'
                     description = storage + (', ' + state if state else '')
                     indicator = icon_button(icon, name + ', ' + description, on_press=select)
-                    compact_icon(indicator, width=32, size=23,
+                    compact_icon(indicator, width=ENTRY_ICON_SLOT, size=ENTRY_ICON_SIZE,
                                  foreground='folder_' + state if state else 'accent')
                     row.add(indicator)
                     button = folder_name(list_button(toga.Button(title, on_press=select,
-                        style=Pack(height=48, font_size=15, font_weight='bold', flex=1, margin_left=4))))
+                        style=Pack(height=ROW_HEIGHT, flex=1))))
                     self.folder_buttons[name] = button
                     accessible_name(button, name + ', ' + description)
                     row.add(button)
@@ -363,9 +377,9 @@ class FolderHubUI:
                         style=Pack(height=20, margin_top=14, margin_bottom=14, font_size=15,
                                    # Start at this level's origin; only browsable
                                    # folders reserve an icon slot before the title.
-                                   font_weight='normal', flex=1)),
+                                   font_weight='bold', flex=1)),
                         radius=0, background='transparent',
-                        foreground='muted', outlined=False)
+                        foreground='text', outlined=False)
                     accessible_name(group, title + ', group')
                     self.folder_tree_buttons[path] = group
                     row.add(group)
@@ -373,21 +387,16 @@ class FolderHubUI:
                 if children:
                     content = toga.Box(style=Pack(direction=COLUMN, flex=1))
                     add_branch(children, content, path)
-                    guide = surface(toga.Box(style=Pack(width=1,
-                                    height=branch_height(children, len(path)),
-                                    # Forty points per level puts even the
-                                    # child's folder icon beyond the parent's
-                                    # text origin (32-point icon + 4-point gap).
-                                    margin_left=28, margin_right=11)),
-                                    radius=0, background='border', outlined=False)
+                    guide = tree_guide(branch_height(children),
+                                       child_midpoints(children), tree_anchor(group))
                     parent.add(toga.Box(children=[guide, content], style=Pack(direction=ROW)))
                 if index < len(branch) - 1:
                     parent.add(divider())
 
         for title, node in sorted(folder_tree(visible).items(), key=lambda item: item[0].casefold()):
-            branch_content = toga.Box(style=Pack(direction=COLUMN, margin=12))
+            branch_content = toga.Box(style=Pack(direction=COLUMN))
             panel = surface(toga.Box(children=[branch_content], style=Pack(direction=COLUMN)),
-                            radius=16, outlined=False)
+                            radius=0, background='transparent', outlined=False)
             panel.style.margin_bottom = 12
             add_branch({title: node}, branch_content)
             content.add(panel)

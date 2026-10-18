@@ -48,7 +48,8 @@ class HubDocumentTests(unittest.TestCase):
             dict(type='remote', remote='Drive', identity='a' * 64, key='Cloud note.md'))
         recent, summary = app.recent_items()[0]
         row = app.recent_row(recent, summary)
-        self.assertEqual([child.control_icon for child in row.children[0].children[:-1]],
+        self.assertEqual(len(row.children[0].children), 1)
+        self.assertEqual([glyph for glyph, _ in row.children[0].children[0].leading_icons],
                          ['storage_remote', 'storage_crypt'])
         app.build_documents_hub()
         with patch.object(app, 'require_remote_credentials_async', new_callable=AsyncMock, return_value=False) as unlock:
@@ -250,8 +251,8 @@ class HubDocumentTests(unittest.TestCase):
         session = app.editor_view.session
         for row in (app.session_panel(session, close=True), app.session_card(session, app.session_summary(session))):
             actions = next(child for child in row.children if any(isinstance(button, toga.Button) for button in child.children))
-            badge, name, close = actions.children
-            self.assertEqual(badge.control_icon, 'storage_local')
+            name, close = actions.children
+            self.assertEqual([glyph for glyph, _ in name.leading_icons], ['storage_local'])
             self.assertEqual(name.text, app.session_summary(session)[0])
             self.assertFalse(getattr(name._impl, '_row_hint', False))
             self.assertEqual(close.text, '×')

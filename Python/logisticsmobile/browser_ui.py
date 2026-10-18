@@ -10,6 +10,9 @@ from commonUtils.ui.native_browser import NativeBrowser
 from .appearance import list_button
 from .appearance import accessible_name, surface, template_icon
 from .hub_icons import icon
+from .folder_hub_style import (
+    folder_row, folder_name, ROW_HEIGHT, ROW_GAP, ENTRY_ICON_SIZE, ENTRY_ICON_MARGIN,
+)
 
 
 def browser_command(button):
@@ -35,8 +38,11 @@ def entry_icon(directory, *, landing_page=False):
     """A consistent folder/file glyph for ordinary and Notes Library rows."""
     kind = 'folder_document' if directory and landing_page else 'files' if directory else 'documents'
     image = template_icon(toga.ImageView(icon(kind),
-        style=Pack(width=24, height=24, margin_left=8, margin_right=8)))
+        style=Pack(width=ENTRY_ICON_SIZE, height=ENTRY_ICON_SIZE,
+                   margin_left=ENTRY_ICON_MARGIN, margin_right=ENTRY_ICON_MARGIN)))
     image.browser_entry_kind = 'folder_document' if directory and landing_page else 'folder' if directory else 'file'
+    surface(image, radius=0, background='transparent', foreground='accent',
+            outlined=False, eink_outlined=False)
     return image
 
 
@@ -255,18 +261,20 @@ class FileBrowser(NativeBrowser):
             # Only the visible caption uses the final path component.
             button.text = PurePosixPath(entry.label).name
             list_button(button)
+            if self.mode == 'List':
+                folder_name(button)
             middle_filename(button)
         self.entry_rows = {}
         for row in self.items.children:
             if not isinstance(row, toga.Box):
                 continue
-            row.style.margin_bottom = 4
+            row.style.margin_bottom = ROW_GAP
             if self.mode == 'List':
                 for child in list(row.children):
                     if isinstance(child, toga.ImageView) and self.thumbnail is None:
                         row.remove(child)
                     elif isinstance(child, toga.Button):
-                        child.style.height = 52
+                        child.style.height = ROW_HEIGHT
 
         if self.mode == 'List':
             for row, entry in zip(self.items.children, entries):
@@ -285,6 +293,7 @@ class FileBrowser(NativeBrowser):
                     controls.add(toga.Label('›', style=Pack(width=18, font_size=18)))
                 controls.insert(0, entry_icon(entry.container))
                 row.add(controls)
+                folder_row(row)
                 self.entry_rows[entry.identity] = row
 
         else:

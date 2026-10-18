@@ -37,7 +37,7 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertEqual(list(app.body.children), [nav])
         nav.buttons['Workspaces'].on_press()
         self.assertEqual(list(app.body.children), [nav.options['Workspaces']])
-        self.assertIs(app.show_legacy_choice.parent.parent, nav.sections['Workspaces'])
+        self.assertIs(app.show_legacy_choice.parent.parent.parent, nav.sections['Workspaces'])
         self.assertEqual(app.font_choice.value, '24')
 
     def test_tablet_switches_categories_in_place_with_one_selected_row(self):
@@ -113,7 +113,7 @@ class SettingsNavigationTests(unittest.TestCase):
                     nav.reflow()
                     nav.choose('Workspaces')
                     self.assertEqual(nav.wide, width >= 640)
-                    self.assertIs(self.app.show_legacy_choice.parent.parent, nav.sections['Workspaces'])
+                    self.assertIs(self.app.show_legacy_choice.parent.parent.parent, nav.sections['Workspaces'])
 
     def test_narrow_crease_pane_wraps_all_categories_and_widening_restores_text(self):
         app, nav = self.app, self.nav
@@ -127,17 +127,18 @@ class SettingsNavigationTests(unittest.TestCase):
             self.assertEqual(info.style.width, 48)
             self.assertIs(switch, app.clear_documents_choice)
             nav.choose('LM Chat')
-            button = nav.sections['LM Chat'].children[1]
+            button = nav.sections['LM Chat'].children[1].children[0]
             self.assertIn('\n', button.text)
             self.assertGreater(button.style.height, 48)
             nav.choose('Books & Comics')
-            hint = nav.sections['Books & Comics'].children[3]
+            hint = next(child for child in nav.sections['Books & Comics'].children
+                        if isinstance(child, toga.Label) and child.text.startswith('Keep'))
             original = hint._settings_source_text
             self.assertGreater(len(hint.text.splitlines()), len(original.splitlines()))
         self.width.return_value = 1400
         nav.reflow()
         self.assertEqual(button.text, 'Server & generation settings…')
-        self.assertEqual(button.style.height, 48)
+        self.assertEqual(button.style.height, 52)
         self.assertEqual(hint.text, original)
         self.assertEqual(nav.selected, 'Books & Comics')
 

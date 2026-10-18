@@ -94,7 +94,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(set(app.folder_credentials), {'All', 'Personal'})
         self.assertEqual(set(app.folder_buttons), {'Drive'})
 
-    def test_browsable_siblings_are_bold_and_groups_use_plain_muted_labels(self):
+    def test_browsable_siblings_use_list_titles_and_groups_use_plain_headings(self):
         app = self.app
         names = ['Server-Lib-Books', 'Server-Perforce', 'Server-Perforce-2']
         choices = {}
@@ -106,14 +106,14 @@ class FolderSourceTabTests(unittest.TestCase):
         group = app.folder_tree_buttons[('Server', 'Lib')]
         folder = app.folder_buttons['Server-Perforce']
         self.assertEqual(group.style.font_size, folder.style.font_size)
-        self.assertEqual(group.style.font_weight, 'normal')
-        self.assertEqual(folder.style.font_weight, 'bold')
+        self.assertEqual(group.style.font_weight, 'bold')
+        self.assertEqual(folder.style.font_weight, 'normal')
         self.assertEqual(group.parent.style.height, folder.parent.style.height)
-        self.assertEqual(group._impl._surface_roles[1], 'muted')
+        self.assertEqual(group._impl._surface_roles[1], 'text')
         self.assertEqual(folder._impl._surface_roles[1], 'text')
         for heading in app.folder_tree_buttons.values():
             self.assertEqual(list(heading.parent.children), [heading])
-            self.assertEqual(heading._impl._surface_roles[1], 'muted')
+            self.assertEqual(heading._impl._surface_roles[1], 'text')
         self.assertFalse(hasattr(group, 'on_press'))
         self.assertEqual([child.control_icon for child in folder.parent.children
                           if hasattr(child, 'control_icon')], ['folder', 'more'])

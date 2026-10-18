@@ -132,8 +132,9 @@ copies. SMB remotes imported inside credential ZIPs stay with their package unde
 **Cloud**. Local and Home Server hide the credential selector. **Transfers** appears on **Cloud** only while a transfer is active or a stopped
 transfer needs attention; **Add share…** appears only on **Home Server**. **Local** has
 no action toolbar. The source tabs use a rounded strip with a highlighted
-selection. Compact folder rows share one rounded surface per top-level branch,
-with an overflow menu for each folder. Loading status and
+selection. Workspaces and the file browser use matching compact rows, regular
+titles, icon spacing and rounded row surfaces, with an overflow menu for each
+workspace folder. Loading status and
 progress appear only while a folder is opening or an error needs attention.
 Each encrypted folder has a combined folder-and-lock icon before its name:
 blue with an open padlock when its credentials are available, orange with a
@@ -146,10 +147,12 @@ the copy type and individual lock state. Group headings describe structure,
 not a shared credential state.
 Dash-separated names form expanded levels (for example Server → Lib → ComicRack);
 group labels are informational and remain expanded. Groups and browsable folders
-use the same text size and row height. Groups have plain muted labels
-with regular text and no icon, including the top level; browsable folders have bold names,
+use the same text size and row height. Groups have plain bold labels
+with no icon, including the top level; browsable folders have regular names,
 folder icons and **•••**. Each level has a consistent
-indent and branch guide. Child
+40-point indent and soft grey branch connectors. Connectors start beneath the
+parent heading (or folder icon) and meet the vertical centre of each immediate
+child row; the trunk ends at the last child. Child
 labels and folder icons start to the right of their parent label; there are no
 collapse controls. Only folder rows with folder
 icons and an actions menu open a folder. Its action page reflects the copies available. **Browse Local** opens readable files on this device, **Browse LocalCrypt** opens

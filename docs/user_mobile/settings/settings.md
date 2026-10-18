@@ -6,10 +6,12 @@ Settings opens a category list: **App**, **Read aloud**, **Text & Markdown**,
 **Books & Comics**, **LM Chat**, **Workspaces**, **Help**, and **About**.
 Android also includes **Appearance** for High contrast / E Ink. On a phone, tap
 one category to see its options and use Back to return to the list.
-Categories and actions use unboxed rows. Descriptions and status text use gray
-in light and dark mode; headings, option names and actions use the primary text
-color. Switches and input fields retain their native controls. E Ink uses black
-text for both to keep its high-contrast presentation.
+Categories and related options share rounded groups with inset dividers, like
+system Settings. Category icons and trailing chevrons identify pages you can
+open; immediate commands use the accent color. Descriptions and status text use
+gray in light and dark mode. Switches and pickers retain their native controls.
+Android High contrast / E Ink uses square outlined groups, black text, and a
+solid selected-category highlight in the wide layout.
 
 With at least 640 points/dp of usable width, Settings shows categories on the
 left and the selected category's options on the right. This applies to Android

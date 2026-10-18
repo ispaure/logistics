@@ -46,6 +46,17 @@ class PrivateSessionTests(unittest.TestCase):
         self.assertEqual(reopened._crypt_reader_store.provider.root, self.local)
         self.assertEqual(reopened.crypt_text.value, '# Original')
 
+    def test_open_and_resume_use_the_document_name_as_navigation_title(self):
+        with patch.object(self.app, 'show_view', wraps=self.app.show_view) as present:
+            first = self.open('First.md', b'# First')
+            self.assertEqual(present.call_args.kwargs['title'], 'First.md')
+            self.open('Second.txt', b'Second')
+            self.assertEqual(present.call_args.kwargs['title'], 'Second.txt')
+            self.app.private_sessions.activate(first.session.id)
+            self.assertEqual(present.call_args.kwargs['title'], 'First.md')
+            first.show_view(first.crypt_view, title='Reading appearance')
+            self.assertEqual(present.call_args.kwargs['title'], 'Reading appearance')
+
     def test_unified_recent_matches_local_source_and_keeps_live_unsaved_edits(self):
         from logisticsmobile.document_sources import reopen_file
         owner = self.open('live-draft.md', b'# Original')

@@ -63,6 +63,39 @@ def list_button(button):
     return button
 
 
+def described_button(button, description):
+    """Put a smaller italic description inside a native two-line button."""
+    list_button(button)
+    button.description = description
+    text = button.text + '\n' + description
+    start = len(button.text) + 1
+    backend = type(button._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass, NSRange
+        native = button._impl.native
+        font = ObjCClass('UIFont')
+        title = ObjCClass('NSMutableAttributedString').alloc().initWithString(text,
+            attributes={'NSFont': native.titleLabel.font})
+        title.addAttribute('NSFont', value=font.italicSystemFontOfSize(12),
+                           range=NSRange(start, len(description)))
+        native.titleLabel.numberOfLines = 2
+        native.setAttributedTitle(title, forState=0)
+        native.accessibilityHint = description
+    elif backend.startswith('toga_android.'):
+        native = button._impl.native
+        from android.graphics import Typeface
+        from android.text import SpannableString, Spanned
+        from android.text.style import AbsoluteSizeSpan, StyleSpan
+        title = SpannableString(text)
+        for span in (StyleSpan(Typeface.ITALIC), AbsoluteSizeSpan(12, True)):
+            title.setSpan(span, start, len(text), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        native.setSingleLine(False)
+        native.setMaxLines(2)
+        native.setText(title)
+        native.setContentDescription(button.text + '. ' + description)
+    return button
+
+
 def reserve_navigation(app):
     """Reserve only the measured floating-bar overlap, for the active screen."""
     adapter = app.native_host.adapter
@@ -163,6 +196,9 @@ def paint_surface(impl, radius):
             from android import R
             tint = ColorStateList(
                 [[-R.attr.state_enabled], []], [argb(colors['muted']), argb(colors.get(foreground, colors['text']))])
+            accessory = getattr(impl, '_settings_accessory', None)
+            if accessory is not None:
+                accessory.setTintList(tint)
             if hasattr(impl.interface, 'image'):
                 impl.native.setImageTintList(tint)
             else:

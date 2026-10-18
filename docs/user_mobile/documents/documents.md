@@ -2,6 +2,9 @@
 
 Use the document workspace to return to open text, Markdown, books, comics and
 conversations. Switching to another part of the app keeps these sessions available.
+On iOS, the top navigation bar shows the opened document's name, including files
+opened from local, remote and encrypted storage. Fullscreen reading hides the bar
+until you show the reading controls again.
 
 ## Text and Markdown
 

@@ -225,7 +225,7 @@ class ProviderUI(FilesUI):
                 view.privacy_gate = self.privacy_gate
             handoff = (prepared is not None and getattr(self, 'save_as_source_document', None) is self.current
                        and getattr(self.current, 'private', False))
-            if not self.show_view(view.crypt_view, checkpoint=not handoff, destination='documents'):
+            if not self.show_view(view.crypt_view, checkpoint=not handoff, destination='documents', title=reader.name):
                 return False
             self._crypt_cancel = None
             self.clear_private_reader(discard=True)

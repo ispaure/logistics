@@ -49,8 +49,10 @@ class PrivateController(ReaderHost, ProviderUI):
                 # view or selection the user chose while its bytes were read.
                 return True
         self.manager.bind(self)
+        reader = self.crypt_reader
+        document_title = reader.name if reader is not None else self.session.title
         kwargs.update(destination=self.__dict__.get('presentation_destination', 'documents'), route=kwargs.get('route') or 'private:' + self.session.id,
-                      title=kwargs.get('title') or 'Private document')
+                      title=kwargs.get('title') or document_title or 'Private document')
         presented = self.app.show_view(view, **kwargs)
         if origin is not None:
             self._open_presented = bool(presented)

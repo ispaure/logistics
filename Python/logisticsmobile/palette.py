@@ -9,6 +9,8 @@ DARK = dict(window='#23262c', surface='#2d3035', alternate='#34373c',
             text='#eef1f7', muted='#a6b0c0', border='#52555a', primary='#2563eb', accent='#75a7ff', hover='#3d4045')
 LIGHT.update(control_border='#7b8493', destructive='#c62828')
 DARK.update(control_border='#858c99', destructive='#ff8a80')
+LIGHT.update(tree_guide='#a8b2c1')
+DARK.update(tree_guide='#737f90')
 
 # Blue/orange plus open/closed lock shapes keep folder states distinguishable
 # with red-green colour deficiencies. Both roles follow native appearance.
@@ -22,6 +24,11 @@ LIGHT.update(chat_background='#ffffff', chat_panel='#f7f7f7', chat_selected='#e9
              chat_input='#f0f0f0', chat_bubble='#e9e9e9', chat_primary='#202020', chat_on_primary='#ffffff')
 DARK.update(chat_background='#000000', chat_panel='#141414', chat_selected='#222222',
             chat_input='#141414', chat_bubble='#353535', chat_primary='#f3f3f3', chat_on_primary='#111111')
+
+
+# Settings uses native-style grouped lists rather than independent command cards.
+LIGHT.update(settings_background='#f2f2f7', settings_group='#ffffff', settings_separator='#dedee3')
+DARK.update(settings_background='#000000', settings_group='#1c1c1e', settings_separator='#38383a')
 
 
 def argb(value):
@@ -50,7 +57,9 @@ EINK = dict(window='#ffffff', surface='#ffffff', alternate='#ffffff',
             text='#000000', muted='#000000', border='#000000',
             primary='#000000', accent='#000000', hover='#ffffff')
 EINK.update(folder_unlocked='#000000', folder_locked='#000000')
+EINK.update(settings_background='#ffffff', settings_group='#ffffff', settings_separator='#000000')
 EINK.update(control_border='#000000', destructive='#000000')
+EINK.update(tree_guide='#000000')
 _eink_enabled = False
 
 

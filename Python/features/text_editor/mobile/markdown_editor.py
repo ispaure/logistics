@@ -219,8 +219,13 @@ function revealCaret() {
     if (!rect.height) return;
     const bounds = root.getBoundingClientRect();
     const viewport = window.visualViewport;
-    const top = Math.max(bounds.top, viewport ? viewport.offsetTop : 0) + 12;
-    const bottom = Math.min(bounds.bottom, viewport ? viewport.offsetTop + viewport.height : innerHeight) - 12;
+    const visibleTop = Math.max(bounds.top, viewport ? viewport.offsetTop : 0);
+    const visibleBottom = Math.min(bounds.bottom, viewport ? viewport.offsetTop + viewport.height : innerHeight);
+    // A phone keyboard and large fonts can leave barely one visible line.
+    // Fixed padding then makes fitting the caret impossible and scrolls it
+    // above the writing area on successive input/composition events.
+    const padding = Math.max(0, Math.min(12, (visibleBottom - visibleTop - rect.height) / 2));
+    const top = visibleTop + padding, bottom = visibleBottom - padding;
     if (bottom <= top) return;
     if (rect.bottom > bottom) root.scrollTop += rect.bottom - bottom;
     else if (rect.top < top) root.scrollTop += rect.top - top;

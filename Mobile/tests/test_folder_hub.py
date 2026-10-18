@@ -438,10 +438,10 @@ class FolderHubTests(unittest.TestCase):
                 self.assertEqual(group.accessible_name, 'Library, group')
                 for label in app.folder_tree_buttons.values():
                     self.assertEqual(list(label.parent.children), [label])
-                    self.assertEqual(label._impl._surface_roles[1], 'muted')
+                    self.assertEqual(label._impl._surface_roles[1], 'text')
                     self.assertEqual(label.style.margin_left, 0)
                     self.assertEqual(label.parent.style.height, 48)
-                    self.assertEqual(label.style.font_weight, 'normal')
+                    self.assertEqual(label.style.font_weight, 'bold')
                 # Each nested container keeps the guide plus a 40-point
                 # indent, even though groups no longer reserve an icon slot.
                 for widget in (group, app.folder_buttons['Server-Library-Comics']):

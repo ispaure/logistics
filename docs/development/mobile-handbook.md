@@ -309,6 +309,8 @@ native build preparation. `--login` signs in and verifies setup without building
 `Mobile/firebase-distribution.json`; private credentials are never stored there.
 
 The builder reuses Android local-source staging and the rclone bridge helper.
+Existing generated projects refresh their Python requirements as well as app
+sources, so added dependencies are included in the next device or beta build.
 It uses Gradle `assembleRelease` with a temporary init script for versionCode,
 then SDK zipalign/apksigner and aapt for signature and package/version verification.
 It does not rewrite debug signing or the generated project's default version.

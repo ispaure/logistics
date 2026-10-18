@@ -6,6 +6,10 @@ from .appearance import accessible_name
 
 # Paths use a shared 24-point grid. Keep the fallback readable on desktop/test hosts.
 ICONS = {
+    'folder_hub': ('folder', '▱', (((3, 6), (9, 6), (11, 9), (21, 9), (21, 20), (3, 20), (3, 6)),)),
+    'books': ('books.vertical', '▥', (((3, 4), (8, 4), (8, 21), (3, 21), (3, 4)),
+                                     ((10, 4), (15, 4), (15, 21), (10, 21), (10, 4)),
+                                     ((17, 5), (21, 4), (24, 20), (20, 21), (17, 5)))),
     'group': ('list.bullet.indent', '⑂', (
         ((4, 2), (10, 2), (10, 8), (4, 8), (4, 2)),
         ((7, 8), (7, 20), (15, 20)), ((7, 12), (15, 12)),
@@ -43,6 +47,19 @@ ICONS = {
     'stop': ('stop.fill', '■', (((6, 6), (18, 6), (18, 18), (6, 18), (6, 6)),)),
     'close': ('xmark', '×', (((6, 6), (18, 18)), ((18, 6), (6, 18)))),
 }
+# Settings categories use recognizable symbols rather than unrelated commands.
+_settings_circle = ((12, 2), (17, 3.3), (20.7, 7), (22, 12), (20.7, 17),
+                    (17, 20.7), (12, 22), (7, 20.7), (3.3, 17), (2, 12),
+                    (3.3, 7), (7, 3.3), (12, 2))
+ICONS.update(
+    preferences=('slider.horizontal.3', '☷', (((3, 6), (21, 6)), ((3, 12), (21, 12)),
+                  ((3, 18), (21, 18)), ((8, 3), (8, 9)), ((16, 9), (16, 15)), ((8, 15), (8, 21)))),
+    chat=('bubble.left.and.bubble.right', '☏', (((3, 3), (18, 3), (18, 14), (9, 14), (4, 19), (4, 14), (3, 14), (3, 3)),
+          ((18, 8), (22, 8), (22, 19), (20, 19), (20, 22), (16, 19), (11, 19)))),
+    help=('questionmark.circle', '?', (_settings_circle, ((8, 8), (9, 6), (14, 6), (16, 8), (16, 10), (12, 13), (12, 14)), ((12, 17), (12, 18)))),
+    info=('info.circle', 'ⓘ', (_settings_circle, ((12, 10), (12, 18)), ((12, 6), (12, 7)))),
+)
+
 _android_controls = weakref.WeakSet()
 
 # One folder silhouette with an integrated lock; use the same geometry on both
@@ -82,6 +99,61 @@ def tint_android(impl):
 def refresh_icons():
     for impl in list(_android_controls):
         tint_android(impl)
+
+
+def button_icons(button, icons):
+    """Keep leading glyphs inside the same native hit target as the title."""
+    button.leading_icons = tuple(icons)
+    if not icons:
+        return button
+    backend = type(button._impl).__module__
+    width = 28 * len(icons) - 4
+    labels = ' · '.join(label for _, label in icons)
+    if backend.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass, Block, objc_id
+        from toga_iOS.libs import UIGraphicsImageRenderer, CGSize, CGRect
+        renderer = UIGraphicsImageRenderer.alloc().initWithSize(CGSize(width + 8, 24))
+        configuration = ObjCClass('UIImageSymbolConfiguration').configurationWithPointSize(22, weight=5)
+        images = [ObjCClass('UIImage').systemImageNamed(ICONS[name][0]).imageWithConfiguration(configuration)
+                  for name, _ in icons]
+        def draw(context):
+            for index, image in enumerate(images):
+                # Preserve each symbol's aspect ratio inside a shared icon cell.
+                scale = min(24 / float(image.size.width), 24 / float(image.size.height))
+                w, h = float(image.size.width) * scale, float(image.size.height) * scale
+                image.drawInRect(CGRect((28 * index + (24 - w) / 2, (24 - h) / 2), (w, h)))
+        image = renderer.imageWithActions(Block(draw, None, objc_id)).imageWithRenderingMode(2)
+        native = button._impl.native
+        native.setImage(image, forState=0)
+        native.accessibilityHint = ' · '.join(filter(None, (getattr(button, 'description', ''), labels)))
+    elif backend.startswith('toga_android.'):
+        from android.graphics import Path, Paint
+        from android.graphics.drawable import ShapeDrawable
+        from android.graphics.drawable.shapes import PathShape
+        path = Path()
+        for index, (name, _) in enumerate(icons):
+            for line in ICONS[name][2]:
+                path.moveTo(line[0][0] + 28 * index, line[0][1])
+                for x, y in line[1:]:
+                    path.lineTo(x + 28 * index, y)
+        drawable = ShapeDrawable(PathShape(path, width, 24))
+        paint = drawable.getPaint()
+        paint.setStyle(Paint.Style.STROKE)
+        paint.setStrokeWidth(1.8)
+        paint.setStrokeCap(Paint.Cap.ROUND)
+        paint.setStrokeJoin(Paint.Join.ROUND)
+        paint.setAntiAlias(True)
+        native = button._impl.native
+        density = native.getResources().getDisplayMetrics().density
+        drawable.setBounds(0, 0, round(width * density), round(24 * density))
+        native.setCompoundDrawablesRelative(drawable, None, None, None)
+        native.setCompoundDrawablePadding(round(8 * density))
+        native.setContentDescription(' · '.join(filter(None,
+            (button.text, getattr(button, 'description', ''), labels))))
+        button._impl._control_drawable = drawable
+        _android_controls.add(button._impl)
+        tint_android(button._impl)
+    return button
 
 
 def apply_icon(button, name, label):

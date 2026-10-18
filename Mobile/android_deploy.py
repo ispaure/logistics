@@ -130,7 +130,10 @@ def refresh_sources(env):
                 previous.rename(payload)
             raise
     action = 'update' if (PROJECT / 'gradlew').exists() else 'create'
-    run([sys.executable, '-m', 'briefcase', action, 'android', '--no-input'], env, log=ROOT / 'logs/android-update.log')
+    command = [sys.executable, '-m', 'briefcase', action, 'android', '--no-input']
+    if action == 'update':
+        command.append('--update-requirements')
+    run(command, env, log=ROOT / 'logs/android-update.log')
 
 
 def deploy(device=None, *, build_only=False):

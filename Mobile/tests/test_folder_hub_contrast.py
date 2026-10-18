@@ -84,7 +84,7 @@ class FolderHubContrastTests(unittest.TestCase):
         row = self.widget(button=False)
         row.children = [self.widget(), self.widget()]
         folder_hub_style.folder_row(row)
-        self.assertEqual(row.style.margin_bottom, 0)
+        self.assertEqual(row.style.margin_bottom, folder_hub_style.ROW_GAP)
         self.assertEqual(row.children[0].style.margin_left, 0)
         self.assertEqual(row.children[-1].style.margin_right, 0)
         self.assertTrue(all(child.style.margin_top == child.style.margin_bottom == 0

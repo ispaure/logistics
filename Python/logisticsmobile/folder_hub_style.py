@@ -2,6 +2,54 @@
 from .appearance import surface as app_surface
 
 SOURCE_LABELS = {'Local': 'Local', 'rclone': 'Cloud', 'Network shares': 'Home Server'}
+ROW_HEIGHT = 48
+ROW_GAP = 4
+ENTRY_ICON_SIZE = 24
+ENTRY_ICON_MARGIN = 6
+ENTRY_ICON_SLOT = ENTRY_ICON_SIZE + 2 * ENTRY_ICON_MARGIN
+TREE_INDENT = 40
+TREE_STROKE = 1.5
+
+
+def tree_anchor(label=None):
+    """Anchor groups beneath their text, and folders beneath their icon."""
+    if label is None:
+        return ENTRY_ICON_SLOT / 2
+    backend = type(label._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        width = float(label._impl.native.intrinsicContentSize.width)
+    elif backend.startswith('toga_android.'):
+        width = label._impl.scale_out(label._impl.native.getPaint().measureText(label.text))
+    else:
+        width = len(label.text) * label.style.font_size * .5
+    # Long headings must still leave space for a horizontal branch in the gutter.
+    return min(TREE_INDENT - 8, max(8, width / 2))
+
+
+def tree_guide(height, midpoints, anchor):
+    """A decorative gutter, ending its trunk at the last immediate child.
+
+    Segments use native surfaces so light/dark and E Ink repaint together with
+    the rows. Child midpoints include preceding siblings' entire subtrees.
+    """
+    import toga
+    from toga.style import Pack
+    from toga.style.pack import COLUMN
+
+    guide = toga.Box(style=Pack(direction=COLUMN, width=TREE_INDENT, height=height))
+    cursor = 0
+    for midpoint in midpoints:
+        top = midpoint - TREE_STROKE / 2
+        guide.add(surface(toga.Box(style=Pack(width=TREE_STROKE,
+            height=top - cursor, margin_left=anchor)),
+            radius=0, background='tree_guide', outlined=False))
+        guide.add(surface(toga.Box(style=Pack(width=TREE_INDENT - anchor,
+            height=TREE_STROKE, margin_left=anchor)),
+            radius=0, background='tree_guide', outlined=False))
+        cursor = midpoint + TREE_STROKE / 2
+    if cursor < height:
+        guide.add(toga.Box(style=Pack(height=height - cursor)))
+    return guide
 
 
 def surface(widget, *, outlined=True, **kwargs):
@@ -50,8 +98,10 @@ def toolbar_button(button, symbol):
 
 
 def folder_row(row):
+    """Shared list surface for workspace locations and browser entries."""
+    row.style.margin_bottom = ROW_GAP
     backend = type(row._impl).__module__
-    app_surface(row, radius=0, background='transparent', outlined=False, eink_outlined=False)
+    app_surface(row, radius=8, background='surface', outlined=False, eink_outlined=False)
     if backend.startswith('toga_iOS.'):
         row._impl.native.layer.masksToBounds = True
     elif backend.startswith('toga_android.'):
@@ -60,8 +110,10 @@ def folder_row(row):
 
 
 def folder_name(button):
-    """The title is part of the folder row, rather than a boxed action."""
-    button.style.font_weight = 'bold'
+    """Shared single-line title metrics, inside the row's own surface."""
+    button.style.height = ROW_HEIGHT
+    button.style.font_size = 15
+    button.style.font_weight = 'normal'
     if type(button._impl).__module__.startswith('toga_android.'):
         # Keep the platform's default button family from changing row metrics.
         button.style.font_family = 'sans-serif'

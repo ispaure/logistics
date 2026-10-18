@@ -1,10 +1,10 @@
 """Native launch panels and live document summaries over existing commands."""
 import toga
-from .control_icons import icon_button
+from .control_icons import icon_button, button_icons
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from .hub_icons import icon
-from .appearance import list_button
+from .appearance import list_button, described_button
 from .appearance import template_icon
 from .appearance import surface, action_button, accessible_name
 from .recent_documents import MAX_RECENT
@@ -181,7 +181,8 @@ class HubUI:
         from .browser_ui import middle_filename
         name = list_button(toga.Button(title, on_press=opener, style=Pack(height=48, flex=1)))
         middle_filename(name)
-        row.add(toga.Box(children=[*self.document_source_badges(session, opener), name],
+        self.document_button_icons(name, session)
+        row.add(toga.Box(children=[name],
             style=Pack(direction=ROW, align_items=CENTER)))
         currently_open = session.id in self.workspace.sessions
         if currently_open or details:
@@ -239,13 +240,11 @@ class HubUI:
             ('Workspaces', 'Local · LocalCrypt · Remote', 'folder_hub', self.show_home_files),
             ('Books & Comics', 'Browse your library', 'books', self.show_library),
         ):
-            text = toga.Box(children=[
-                list_button(toga.Button(title, on_press=action, style=Pack(height=48))),
-                toga.Label(subtitle, style=Pack(font_size=12, margin_left=8, margin_right=8))],
-                style=Pack(direction=COLUMN, flex=1))
-            spaces.add(toga.Box(children=[
-                template_icon(toga.ImageView(icon(glyph), style=Pack(width=24, height=24, margin_right=8))),
-                text], style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12)))
+            button = described_button(toga.Button(title, on_press=action,
+                style=Pack(height=64, flex=1)), subtitle)
+            button_icons(button, [(glyph, title)])
+            button.style.margin_bottom = 12
+            spaces.add(button)
         self.home_panels = PanelGrid([recent_box, spaces], self.main_window.size.width, maximum_columns=2)
         box.add(self.home_panels)
         self.register_transfer_status(box)
@@ -336,15 +335,9 @@ class HubUI:
         await self.adaptive.browser('documents').show_main_browser(
             'Local files', extensions=extensions[category], title=category)
 
-    def document_source_badges(self, session, opener):
+    def document_button_icons(self, button, session):
         from .document_sources import source_icons
-        from .folder_hub_style import compact_icon
-        badges = []
-        for glyph, label in source_icons(self.app, session):
-            button = icon_button(glyph, label, on_press=opener)
-            compact_icon(button, width=26)
-            badges.append(button)
-        return badges
+        return button_icons(button, source_icons(self.app, session))
 
     def session_card(self, session, summary, *, recent=False):
         """A lightweight overview; never mount live editors or private readers."""
@@ -355,7 +348,8 @@ class HubUI:
         opener = self.recent_opener(session) if recent else self.session_opener(session.id)
         name = list_button(toga.Button(title, on_press=opener, style=Pack(flex=1, height=48)))
         middle_filename(name)
-        actions = [*self.document_source_badges(session, opener), name]
+        self.document_button_icons(name, session)
+        actions = [name]
         if not recent:
             actions.append(icon_button('close', 'Close ' + title, on_press=self.session_closer(session.id)))
         box.add(toga.Box(children=actions, style=Pack(direction=ROW, margin=12)))
@@ -429,11 +423,12 @@ class HubUI:
         button = list_button(toga.Button(title, on_press=self.session_opener(session.id), style=Pack(height=48, flex=1)))
         from .browser_ui import middle_filename
         middle_filename(button)
+        self.document_button_icons(button, session)
         if close:
             close_button = icon_button('close', 'Close ' + title, on_press=self.session_closer(session.id))
-            box.add(toga.Box(children=[*self.document_source_badges(session, self.session_opener(session.id)), button, close_button], style=Pack(direction=ROW)))
+            box.add(toga.Box(children=[button, close_button], style=Pack(direction=ROW)))
         else:
-            box.add(toga.Box(children=[*self.document_source_badges(session, self.session_opener(session.id)), button],
+            box.add(toga.Box(children=[button],
                              style=Pack(direction=ROW)))
         return box
 
