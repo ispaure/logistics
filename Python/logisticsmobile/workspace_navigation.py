@@ -740,7 +740,9 @@ class FileDrawer:
             if not local_read_available(self.app, private=provider.private):
                 raise ValueError('This connection is busy. Local files remain available.')
             if not provider.private and Path(path).suffix.lower() not in {'.txt', '.md', '.markdown'}:
-                await self.app.open_download(path=provider._locate(path), destination=self.destination)
+                if not await self.app.open_download(path=provider._locate(path), destination=self.destination):
+                    self.status.value = str(self.app.cloud_status.value or 'Could not open this file. Try opening it again.')[:300]
+                    return False
             else:
                 self.app.show_cloud(present=False)
                 source = encrypted_document(provider, path)

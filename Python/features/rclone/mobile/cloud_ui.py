@@ -1049,7 +1049,13 @@ class CloudUI(LocalCryptUI):
 
     async def open_download(self, widget=None, *, path=None, destination=None, **kwargs):
         from commonUtils.runtime.document_access import LocalDocuments
+        if not hasattr(self, 'cloud_view'):
+            self.show_cloud(present=False)
+            restore = getattr(self, 'cloud_restore_task', None)
+            if restore is not None:
+                await restore
         selected = path if path is not None else self.download_labels.get(self.download_selector.value)
+        selected = Path(selected) if selected is not None else None
         if selected is not None and Path(selected).suffix.lower() == '.pdf':
             from features.pdf.mobile.copies import PDFCopies
             from commonUtils.runtime.local_files import LocalFiles
@@ -1059,7 +1065,7 @@ class CloudUI(LocalCryptUI):
         independent = (self.cloud_busy and getattr(self, 'transfer_busy', False) and path is not None
                        and selected.resolve().is_relative_to((collection_path(self.private_root)).resolve()))
         if (self.cloud_busy and not independent) or selected is None:
-            return
+            return False
         destination = destination or 'documents'
         if not independent:
             self.set_cloud_busy(True)
@@ -1073,27 +1079,29 @@ class CloudUI(LocalCryptUI):
             imported = self.resource_imports.find(selected)
             if imported is not None:
                 if imported['provider'] == 'library':
-                    await self.open_book(imported['resource'], destination=destination)
+                    return await self.open_book(imported['resource'], destination=destination)
                 elif self.open_document(imported['resource']):
                     self.show_documents(resume=True, destination=destination)
                 else:
                     raise ValueError('The imported copy is unavailable; its index and source were preserved.')
-                return
+                return True
             if selected.suffix.lower() in {'.epub', '.cbz', '.zip'}:
                 catalog = self.reader_manager().catalog
                 generation = self.navigation_generation
                 record = await asyncio.to_thread(catalog.library_store.import_book, LocalDocuments(), selected)
                 self.resource_imports.remember(selected, 'library', record['id'])
                 if not self.active_host or (independent and self.navigation_generation != generation):
-                    return
+                    return False
                 self.refresh_library()
-                await self.open_book(record['id'], destination=destination)
+                return await self.open_book(record['id'], destination=destination)
             else:
                 doc = await asyncio.to_thread(self.store.import_document, LocalDocuments(), selected)
                 self.resource_imports.remember(selected, 'managed-text', doc.id)
                 self.refresh_documents()
-                self.open_document(doc.id)
+                if not self.open_document(doc.id):
+                    return False
                 self.show_documents(destination=destination)
+                return True
         except Exception as error:
             self.cloud_status.value = 'Open failed: ' + str(error)[:300]
             if independent:
@@ -1101,8 +1109,7 @@ class CloudUI(LocalCryptUI):
                 readers = getattr(self, 'readers', None)
                 if readers is not None and readers.active is not None:
                     readers.active.book_status.text = self.cloud_status.value
-            else:
-                self.show_cloud()
+            return False
         finally:
             if not independent:
                 self.set_cloud_busy(False)

@@ -515,14 +515,15 @@ class FilesUI:
             if source is not None:
                 self.crypt_password.value = self.file_password.value
                 copies, key = source
-                await self.open_crypt(copies=copies, key=key, destination='documents')
+                return await self.open_crypt(copies=copies, key=key, destination='documents')
             elif Path(path).suffix.lower() in SOURCE_EXTENSIONS:
                 from features.text_editor.resources import LocalTextCopies
-                await self.open_crypt(copies=LocalTextCopies(provider), key=path, destination='documents')
+                return await self.open_crypt(copies=LocalTextCopies(provider), key=path, destination='documents')
             else:
-                await self.open_download(path=provider._locate(path), destination='documents')
+                return await self.open_download(path=provider._locate(path), destination='documents')
         except ValueError as error:
             self.file_status.value = str(error)
+            return False
 
     async def use_local_download(self, widget=None, **kwargs):
         if self.cloud_busy:
