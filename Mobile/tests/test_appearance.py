@@ -7,6 +7,21 @@ from features.lm.mobile.presentation import transcript_document
 
 
 class AppearanceTests(unittest.TestCase):
+    def test_ios_workspace_group_anchor_supports_method_and_property_getters(self):
+        from types import SimpleNamespace as NS
+        from logisticsmobile.folder_hub_style import tree_anchor
+
+        class Impl:
+            __module__ = 'toga_iOS.widgets.label'
+
+        impl = Impl()
+        label = NS(_impl=impl)
+        for getter in (NS(width=40), lambda: NS(width=40)):
+            impl.native = NS(intrinsicContentSize=getter)
+            self.assertEqual(tree_anchor(label), 20)
+        impl.native = NS(intrinsicContentSize=lambda: NS(width=200))
+        self.assertEqual(tree_anchor(label), 32)
+
     def test_browser_navigation_returns_to_accent_without_losing_eink_outlines(self):
         import sys
         from types import SimpleNamespace as NS
