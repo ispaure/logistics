@@ -7,6 +7,39 @@ from features.lm.mobile.presentation import transcript_document
 
 
 class AppearanceTests(unittest.TestCase):
+    def test_android_inline_surfaces_have_no_opaque_fill_elevation_or_tint(self):
+        import sys
+        from types import SimpleNamespace as NS
+        from unittest.mock import MagicMock, patch
+        from logisticsmobile.appearance import paint_surface
+        from logisticsmobile.palette import set_eink_enabled
+        class Impl:
+            __module__ = 'toga_android.widgets.button'
+        impl = Impl()
+        impl.interface = NS(on_press=lambda: None)
+        impl.native = MagicMock()
+        impl.native.getResources().getConfiguration().uiMode = 0x20
+        impl.scale_in = lambda n: n
+        impl._surface_roles = ('transparent', 'text', False)
+        impl._surface_eink_outlined = False
+        drawable = MagicMock()
+        factory = MagicMock(return_value=drawable)
+        modules = {'android': NS(R=NS(attr=NS(state_enabled=1))),
+                   'android.content.res': NS(ColorStateList=MagicMock()),
+                   'android.graphics.drawable': NS(GradientDrawable=factory, RippleDrawable=MagicMock())}
+        try:
+            with patch.dict(sys.modules, modules):
+                for eink in (False, True, False):
+                    set_eink_enabled(eink)
+                    paint_surface(impl, 0)
+                    self.assertEqual(drawable.setColor.call_args.args, (0,))
+                    impl.native.setElevation.assert_called_with(0)
+                    impl.native.setStateListAnimator.assert_called_with(None)
+                    impl.native.setBackgroundTintList.assert_called_with(None)
+                    drawable.setStroke.assert_not_called()
+        finally:
+            set_eink_enabled(False)
+
     def test_reader_footer_reserves_floating_tab_bar_without_accumulating_padding(self):
         from types import SimpleNamespace as NS
         from toga.style import Pack

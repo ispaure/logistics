@@ -107,6 +107,9 @@ def reserve_navigation(app):
 
 def apple_color(role):
     """Keep semantic UIColors dynamic; never resolve a colour at construction."""
+    if role == 'transparent':
+        from rubicon.objc import ObjCClass
+        return ObjCClass('UIColor').clearColor()
     if role not in _apple_colors:
         from rubicon.objc import ObjCClass, ObjCInstance, Block, objc_id
         colour = ObjCClass('UIColor')
@@ -148,7 +151,7 @@ def paint_surface(impl, radius):
         if hasattr(impl.interface, 'on_press') and eink_enabled():
             paint_eink_button(impl, outlined=False)
         drawable = GradientDrawable()
-        drawable.setColor(argb(colors.get(background, colors['surface'])))
+        drawable.setColor(0 if background == 'transparent' else argb(colors.get(background, colors['surface'])))
         drawable.setCornerRadius(0 if eink_enabled() else impl.scale_in(radius))
         eink_outline = getattr(impl, '_surface_eink_outlined', True)
         has_outline = eink_outline if eink_enabled() else outlined
@@ -163,6 +166,8 @@ def paint_surface(impl, radius):
             from android.content.res import ColorStateList
             from android.graphics.drawable import RippleDrawable
             impl.native.setBackgroundTintList(None)
+            impl.native.setStateListAnimator(None)
+            impl.native.setElevation(0)
             impl.native.setBackground(RippleDrawable(ColorStateList.valueOf(argb(colors['hover'])), drawable, None))
         else:
             impl.native.setBackground(drawable)

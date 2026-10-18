@@ -161,5 +161,7 @@ def apply_icon(button, name, label):
 
 
 def icon_button(name, label, *, on_press=None, enabled=True):
-    return apply_icon(toga.Button(on_press=on_press, enabled=enabled,
-                                 style=Pack(width=48, height=48)), name, label)
+    from .appearance import surface
+    return surface(apply_icon(toga.Button(on_press=on_press, enabled=enabled,
+                                 style=Pack(width=48, height=48)), name, label),
+                   background='transparent', outlined=False, eink_outlined=False)

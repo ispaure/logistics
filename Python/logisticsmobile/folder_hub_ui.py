@@ -300,7 +300,7 @@ class FolderHubUI:
                     margin_bottom=1 if node['names'] else 0))
                 if ancestors:
                     guide = surface(toga.Label('└', style=Pack(width=20, font_size=16)),
-                                    background='window', foreground='muted', outlined=False)
+                                    background='transparent', foreground='muted', outlined=False)
                     row.add(guide)
                 if node['names']:
                     name = node['names'][0]

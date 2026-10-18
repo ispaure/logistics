@@ -20,7 +20,7 @@ def source_tab(button, selected):
         button._impl.native.setSelected(selected)
 
 
-def compact_icon(button, *, width=24, height=56, size=17, background='surface'):
+def compact_icon(button, *, width=24, height=56, size=17, background='transparent'):
     """Small symbols within a full-height, tappable folder row."""
     button.style.width, button.style.height = width, height
     surface(button, radius=0, background=background, foreground='muted', outlined=False)
@@ -68,9 +68,4 @@ def folder_row(row):
 
 def folder_name(button):
     """The title is part of the folder row, rather than a boxed action."""
-    if type(button._impl).__module__.startswith('toga_android.'):
-        from .appearance import eink_enabled, paint_eink_button
-        button._impl._eink_borderless = True
-        if eink_enabled():
-            paint_eink_button(button._impl)
-    return button
+    return surface(button, radius=0, background='transparent', foreground='text', outlined=False)
