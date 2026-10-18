@@ -92,7 +92,7 @@ def described_button(button, description):
         native.setSingleLine(False)
         native.setMaxLines(2)
         native.setText(title)
-        native.setContentDescription(button.text + '. ' + description)
+        native.setContentDescription(text[:start - 1] + '. ' + description)
     return button
 
 

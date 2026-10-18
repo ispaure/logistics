@@ -149,7 +149,7 @@ def button_icons(button, icons):
         native.setCompoundDrawablesRelative(drawable, None, None, None)
         native.setCompoundDrawablePadding(round(8 * density))
         native.setContentDescription(' · '.join(filter(None,
-            (button.text, getattr(button, 'description', ''), labels))))
+            (button.text.partition('\n')[0], getattr(button, 'description', ''), labels))))
         button._impl._control_drawable = drawable
         _android_controls.add(button._impl)
         tint_android(button._impl)

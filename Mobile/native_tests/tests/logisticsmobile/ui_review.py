@@ -124,7 +124,7 @@ async def exercise_ui_review(app):
     (folder / 'WebP comic.cbz').write_bytes(original)
     (folder / 'Cover.webp').write_bytes(webp)
     def home_browse_button(widget):
-        if isinstance(widget, toga.Button) and widget.text == 'Workspaces':
+        if isinstance(widget, toga.Button) and widget.text.partition('\n')[0] == 'Workspaces':
             return widget
         children = list(widget.children)
         if isinstance(widget, toga.ScrollContainer) and widget.content is not None:
