@@ -522,8 +522,19 @@ class FolderHubTests(unittest.TestCase):
                 self.assertEqual(view.children[1].children[0].children[0].text, 'Credential')
                 self.assertEqual(app.folder_credential.value, 'All')
                 self.assertEqual(app.native_host.labels[app.native_host.destinations.index('files')], 'Folder Hub')
-                self.assertEqual(view.children[2].children,
-                                 [app.folder_transfers_button])
+                self.assertEqual(view.children[2].children, [])
+                app.transfer_busy = True
+                app.refresh_transfer_status()
+                self.assertEqual(view.children[2].children, [app.folder_transfers_button])
+                app.transfer_busy = False
+                app.transfer_notification = True
+                app.transfer_complete = False
+                app.refresh_transfer_status()
+                self.assertEqual(view.children[2].children, [app.folder_transfers_button])
+                app.transfer_complete = True
+                app.refresh_transfer_status()
+                self.assertEqual(view.children[2].children, [])
+                app.transfer_notification = False
                 self.assertIsInstance(view.children[-1], toga.ScrollContainer)
                 self.assertIs(view.children[-1].content, app.folder_list)
                 self.assertEqual(set(app.folder_buttons), {'Loaded drive'})

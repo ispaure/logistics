@@ -10,7 +10,7 @@ from features.rclone.mobile.messages import import_hint
 from textwrap import fill
 from commonUtils.ui.native.presentation import list_button
 from .appearance import action_button, accessible_name
-from .folder_hub_style import surface, source_tab, compact_icon, toolbar_button, folder_row, folder_name
+from .folder_hub_style import surface, source_tab, compact_icon, toolbar_button, folder_row, folder_name, source_actions
 
 
 
@@ -275,15 +275,7 @@ class FolderHubUI:
             self.folder_picker_header.add(self.folder_credential_row)
         elif self.folder_source != 'rclone' and self.folder_picker_header.children:
             self.folder_picker_header.remove(self.folder_credential_row)
-        action = {'rclone': self.folder_transfers_button,
-                  'Network shares': self.folder_add_share_button}.get(self.folder_source)
-        actions = [action] if action is not None else []
-        if list(self.folder_source_actions.children) != actions:
-            for child in list(self.folder_source_actions.children):
-                self.folder_source_actions.remove(child)
-            for child in actions:
-                self.folder_source_actions.add(child)
-        self.folder_source_actions.style.margin_bottom = 12 if actions else 0
+        source_actions(self.app)
         visible = {name: entry for name, entry in visible.items()
                    if self.folder_path_visible(name) and self.folder_path_visible(entry.get('remote') or '')}
         for child in list(self.folder_list.children):

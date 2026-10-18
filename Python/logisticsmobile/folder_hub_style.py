@@ -69,3 +69,20 @@ def folder_row(row):
 def folder_name(button):
     """The title is part of the folder row, rather than a boxed action."""
     return surface(button, radius=0, background='transparent', foreground='text', outlined=False)
+
+
+def source_actions(host):
+    """Only reserve toolbar space when the source has a useful action."""
+    if not hasattr(host, 'folder_source_actions'):
+        return
+    transfer = (getattr(host, 'transfer_busy', False) or
+                (getattr(host, 'transfer_notification', False) and not getattr(host, 'transfer_complete', False)))
+    action = (host.folder_transfers_button if host.folder_source == 'rclone' and transfer else
+              host.folder_add_share_button if host.folder_source == 'Network shares' else None)
+    actions = [action] if action is not None else []
+    if list(host.folder_source_actions.children) != actions:
+        for child in list(host.folder_source_actions.children):
+            host.folder_source_actions.remove(child)
+        for child in actions:
+            host.folder_source_actions.add(child)
+    host.folder_source_actions.style.margin_bottom = 12 if actions else 0
