@@ -181,7 +181,7 @@ async def exercise_ui_review(app):
             assert not app.folder_loading_box.children
         folder = app.folder_buttons['All files']
         indicator = next(child for child in folder.parent.children
-                         if getattr(child, 'control_icon', '') == 'storage_local')
+                         if getattr(child, 'control_icon', '') == 'folder')
         if get_os() is OS.IOS:
             assert indicator._impl.native.imageForState(0) is not None
             folder._impl.native.sendActionsForControlEvents(UIControlEventTouchUpInside)
