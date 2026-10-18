@@ -1,5 +1,6 @@
 """One mobile collection drive; private control state never leaves app storage."""
 from hashlib import sha256
+import errno
 import json
 from datetime import datetime
 import os
@@ -130,9 +131,9 @@ class CollectionFiles(LocalFiles):
 def _inventory(root):
     """Hash bytes, not mtimes (SD filesystems round timestamp precision)."""
     result = {}
+    _unlinked(root)
     if not root.exists():
         return result
-    _unlinked(root)
     if not root.is_dir():
         raise ValueError('Collection storage must be a folder.')
     for folder, directories, files in os.walk(root, followlinks=False):
@@ -157,9 +158,88 @@ def _inventory(root):
 
 def _copy_durable(source, destination):
     shutil.copyfile(source, destination)
-    with open(destination, 'rb') as stream:
-        os.fsync(stream.fileno())
+    with open(destination, 'r+b') as stream:
+        _sync(stream)
     return destination
+
+
+def _sync(stream):
+    try:
+        os.fsync(stream.fileno())
+    except OSError as error:
+        # Some Android removable filesystems do not implement fsync. The copy
+        # still must pass byte verification; real I/O/full-device errors fail.
+        if error.errno not in (errno.EINVAL, errno.ENOTSUP, errno.ENOSYS):
+            raise
+
+
+def _destination(private_root, volume):
+    private_root = _unlinked(private_root)
+    if private_root in _shared_local_roots:
+        raise ValueError('Drive selection is Android-only.')
+    volume = _unlinked(volume) if volume is not None else None
+    if volume is not None and not volume.is_dir():
+        raise OSError('The selected drive is not mounted.')
+    base = _unlinked(volume / 'Logistics' if volume is not None else private_root)
+    if volume is not None and (base.is_relative_to(private_root) or private_root.is_relative_to(base)):
+        raise ValueError('Collection locations cannot contain each other.')
+    names = ('Local', 'LocalCrypt') if volume is not None else ('LocalFiles', 'LocalCryptFolders')
+    return base, [_unlinked(base / name) for name in names]
+
+
+def _activate(private_root, volume, base):
+    if volume is None:
+        _unlinked(Path(private_root) / CONFIG).unlink(missing_ok=True)
+        return
+    marker = _unlinked(base / MARKER)
+    if marker.exists():
+        token = marker.read_text()
+        if len(token) != 32 or any(c not in '0123456789abcdef' for c in token):
+            raise ValueError('Invalid destination collection marker.')
+    else:
+        token = uuid4().hex
+        with marker.open('x') as stream:
+            stream.write(token)
+            stream.flush()
+            _sync(stream)
+    atomic_write_json(_unlinked(Path(private_root) / CONFIG), dict(volume=str(volume), token=token))
+
+
+def recover_location(private_root, volume):
+    """Explicitly use a retained collection without reading the unavailable source."""
+    base, trees = _destination(private_root, volume)
+    if not any(tree.is_dir() for tree in trees):
+        raise ValueError('No existing collection found at this location. Choose a retained backup or copy collections instead.')
+    for tree in trees:
+        _inventory(tree)
+    for tree in trees:
+        tree.mkdir(parents=True, exist_ok=True)
+    _activate(private_root, volume, base)
+    return True
+
+
+def wipe_destination(private_root, volume):
+    """Delete only inactive collection trees and interrupted copy staging folders."""
+    base, trees = _destination(private_root, volume)
+    chosen = selection(private_root)
+    active = Path(chosen['volume']) / 'Logistics' if chosen else Path(private_root)
+    if base == active:
+        raise ValueError('This is the active collection. Recover or switch to another location before wiping this backup.')
+    stages = list(base.glob('.storage-copy-*')) if base.exists() else []
+    targets = trees + stages
+    marker = _unlinked(base / MARKER) if volume is not None else None
+    if marker is not None and marker.exists() and not marker.is_file():
+        raise ValueError('Collection marker must be a regular file.')
+    for target in targets:
+        _inventory(target)
+    for target in targets:
+        if target.exists():
+            shutil.rmtree(target)
+    if marker is not None:
+        marker.unlink(missing_ok=True)
+    # Keep unrelated folders; neither credentials nor the card itself are
+    # erased. A failed/partial wipe can safely be retried.
+    return False
 
 
 def switch_location(private_root, volume):
@@ -190,16 +270,16 @@ def switch_location(private_root, volume):
         existing = _inventory(target)
         if existing and expected and existing != expected:
             raise FileExistsError('Destination already contains different files: ' + str(target))
-    needed = sum(size for snapshot in snapshots for value in snapshot.values()
+    needed = sum(size for target, snapshot in zip(destinations, snapshots)
+                 if not target.exists() or not any(target.iterdir()) for value in snapshot.values()
                  if value is not None for size in [value[0]])
     if shutil.disk_usage(volume or private_root).free < needed + 1024 * 1024:
         raise OSError('Not enough free space to copy both collections.')
     destination_base.mkdir(parents=True, exist_ok=True)
-    token = uuid4().hex
     marker = _unlinked(destination_base / MARKER)
     if volume is not None and marker.exists():
         token = marker.read_text()
-        if len(token) != 32:
+        if len(token) != 32 or any(c not in '0123456789abcdef' for c in token):
             raise ValueError('Invalid destination collection marker.')
     for source, target, expected in zip(sources, destinations, snapshots):
         _unlinked(target)
@@ -227,13 +307,5 @@ def switch_location(private_root, volume):
             raise OSError('Destination verification failed; original location retained.')
     if [_inventory(source) for source in sources] != snapshots:
         raise OSError('Collection changed during copying; original location retained.')
-    if volume is None:
-        (private_root / CONFIG).unlink(missing_ok=True)
-    else:
-        if not marker.exists():
-            with marker.open('x') as stream:
-                stream.write(token)
-                stream.flush()
-                os.fsync(stream.fileno())
-        atomic_write_json(private_root / CONFIG, dict(volume=str(volume), token=token))
+    _activate(private_root, volume, destination_base)
     return True

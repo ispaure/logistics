@@ -89,6 +89,8 @@ class CloudUI(LocalCryptUI):
                 bar.max, bar.value = 100, 0
 
     def show_cloud(self, widget=None, *, present=True, **kwargs):
+        if getattr(self, '_storage_changing', False):
+            return
         if not hasattr(self, 'cloud_view'):
             self.cloud_busy = False
             self.cloud_path = ''
@@ -446,6 +448,10 @@ class CloudUI(LocalCryptUI):
         privacy = getattr(self, 'screen_privacy', None)
         if privacy is not None:
             privacy.refresh()
+        if not hasattr(self, 'cloud_import_entry'):
+            # Storage recovery must work before the cloud browser is created,
+            # including when its selected collection drive is unavailable.
+            return
         for item in (self.cloud_import_entry, self.cloud_settings_toggle, self.cloud_choose, self.cloud_password, self.cloud_import, self.cloud_probe, self.cloud_remote,
                      self.cloud_location, self.cloud_browse, self.cloud_up, self.cloud_entries,
                      self.cloud_open, self.cloud_clear, self.cloud_lock, self.cloud_reload, self.cloud_remember,

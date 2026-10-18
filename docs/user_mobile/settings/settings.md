@@ -151,6 +151,22 @@ backup whose files differ from the current collection. Interrupted migration can
 leave copied destination folders, but the original selection remains active until
 both collections pass verification. Repeating the switch reuses matching copies.
 
+For recovery, select the location containing the backup and tap **Recover existing
+collections on this drive…**. This uses those files directly without copying or
+merging the currently selected collection. You can recover the retained internal
+copy even when the SD card is missing. A backup can be older than the current
+collection; confirm the location carefully. LocalCrypt still needs the original
+credentials. Recovery checks the folders before saving the selection, then closes
+the app so you can reopen it with that collection.
+
+To clear a conflicting destination or an interrupted copy, select it and tap
+**Wipe inactive collections on this drive…**. After confirmation, this permanently
+deletes only that location's Local and LocalCrypt folders and interrupted
+collection-copy folders. It keeps unrelated folders, private credentials, and
+settings. It refuses to wipe the active collection: recover or switch to another
+location first. After wiping a destination, retry **Copy collections and use this
+drive…**. Wiping the retained internal backup also deletes its recovery files.
+
 Credentials, transfer mappings, preferences, imported standalone books, text
 imports and recovery drafts remain in internal app storage. Local is readable
 storage; other apps with access to the card can read it. LocalCrypt preserves

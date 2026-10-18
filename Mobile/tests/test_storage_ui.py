@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from logisticsmobile.app import LogisticsMobile
-from features.rclone.mobile.storage_location import collection_path
+from features.rclone.mobile.storage_location import collection_path, switch_location
 
 
 class StorageUITests(unittest.TestCase):
@@ -53,3 +53,35 @@ class StorageUITests(unittest.TestCase):
         self.app.loop.run_until_complete(self.app.change_collection_storage())
         self.assertIn('Wait', self.app.collection_storage_status.text)
         self.assertFalse((self.card / 'Logistics').exists())
+
+    def test_recover_internal_after_card_removal_without_cloud_browser(self):
+        source = collection_path(self.app.private_root)
+        source.mkdir(exist_ok=True)
+        (source / 'book.txt').write_bytes(b'backup')
+        switch_location(self.app.private_root, self.card)
+        self.card.rename(self.card.parent / 'removed')
+        self.app.collection_drive.value = 'App internal storage'
+        with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value=True)), \
+                patch.object(self.app, 'exit') as exit_app:
+            self.app.loop.run_until_complete(self.app.recover_collection_storage())
+        self.assertEqual(collection_path(self.app.private_root), source)
+        self.assertFalse(self.app.cloud_busy)
+        exit_app.assert_called_once()
+
+    def test_cancel_wipe_preserves_files_and_success_keeps_app_open(self):
+        target = self.card / 'Logistics/Local/old.txt'
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b'old')
+        with patch('logisticsmobile.storage_ui.all_files_allowed', return_value=True), \
+                patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value=False)):
+            self.app.loop.run_until_complete(self.app.wipe_collection_storage())
+        self.assertTrue(target.exists())
+        self.assertFalse(self.app._storage_changing)
+        with patch('logisticsmobile.storage_ui.all_files_allowed', return_value=True), \
+                patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value=True)), \
+                patch.object(self.app, 'exit') as exit_app:
+            self.app.loop.run_until_complete(self.app.wipe_collection_storage())
+        self.assertFalse(target.exists())
+        self.assertIn('wiped', self.app.collection_storage_status.text)
+        self.assertFalse(self.app.cloud_busy)
+        exit_app.assert_not_called()

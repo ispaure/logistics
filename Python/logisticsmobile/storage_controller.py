@@ -4,7 +4,7 @@ from logisticsmobile.storage_ui import StorageUI
 
 
 class StorageController(StorageUI):
-    METHODS = ('open_android_developer_settings', 'show_collection_storage', 'allow_collection_storage', 'change_collection_storage')
+    METHODS = ('open_android_developer_settings', 'show_collection_storage', 'allow_collection_storage', 'change_collection_storage', 'recover_collection_storage', 'wipe_collection_storage')
     FIELDS = ('_storage_changing', 'collection_drive', 'collection_drives', 'collection_storage_status')
 
     def __init__(self, app):

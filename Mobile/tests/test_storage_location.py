@@ -1,5 +1,5 @@
 """Drive migration preserves bytes, private records and unavailable-card boundaries."""
-import json
+import errno
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from features.rclone.mobile.storage_location import (
     CONFIG, MARKER, CollectionFiles, collection_path, switch_location,
+    recover_location, wipe_destination,
 )
 from features.rclone.transfers.mobile.jobs import MirrorJobs
 from test_mirror_jobs import MirrorClient
@@ -109,3 +110,102 @@ class CollectionStorageTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             switch_location(self.private, None)
         self.assertEqual(collection_path(self.private), self.volume / 'Logistics/Local')
+
+    def test_recover_internal_backup_with_missing_card(self):
+        store, client, local, crypt = self.seed()
+        switch_location(self.private, self.volume)
+        self.volume.rename(self.base / 'removed')
+        self.assertTrue(recover_location(self.private, None))
+        self.assertEqual((store.target(local) / 'note.txt').read_bytes(), b'first')
+        self.assertFalse((self.private / CONFIG).exists())
+        self.assertFalse(self.volume.exists())
+
+    def test_recovery_repairs_config_and_keeps_existing_destination(self):
+        self.seed()
+        target = self.volume / 'Logistics/Local/book.epub'
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b'older backup')
+        (self.private / CONFIG).write_text('{broken')
+        recover_location(self.private, self.volume)
+        self.assertEqual(collection_path(self.private), target.parent)
+        self.assertEqual(target.read_bytes(), b'older backup')
+        self.assertTrue((self.private / 'LocalFiles').is_dir())
+
+    def test_wipe_conflict_then_retry_preserves_other_data(self):
+        store, client, local, crypt = self.seed()
+        base = self.volume / 'Logistics'
+        (base / 'Local').mkdir(parents=True)
+        (base / 'Local/old').write_bytes(b'old destination')
+        (base / '.storage-copy-interrupted').mkdir()
+        (base / '.storage-copy-interrupted/partial').write_bytes(b'partial')
+        (base / 'unrelated').write_bytes(b'keep')
+        (base / MARKER).write_text('broken marker')
+        wipe_destination(self.private, self.volume)
+        self.assertFalse((base / 'Local').exists())
+        self.assertFalse(list(base.glob('.storage-copy-*')))
+        self.assertFalse((base / MARKER).exists())
+        self.assertEqual((base / 'unrelated').read_bytes(), b'keep')
+        self.assertEqual((self.private / 'credentials.bin').read_bytes(), b'stay internal')
+        switch_location(self.private, self.volume)
+        self.assertEqual((store.target(local) / 'note.txt').read_bytes(), b'first')
+
+    def test_wipe_active_and_linked_destination_rejected(self):
+        self.seed()
+        with self.assertRaisesRegex(ValueError, 'active collection'):
+            wipe_destination(self.private, None)
+        base = self.volume / 'Logistics'
+        base.mkdir()
+        (base / 'Local').symlink_to(self.private / 'LocalFiles', target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'Linked'):
+            wipe_destination(self.private, self.volume)
+        self.assertTrue((self.private / 'LocalFiles').is_dir())
+
+    def test_recovery_requires_existing_data_and_validates_links(self):
+        with self.assertRaisesRegex(ValueError, 'No existing collection'):
+            recover_location(self.private, self.volume)
+        self.assertFalse((self.private / CONFIG).exists())
+        base = self.volume / 'Logistics/Local'
+        base.mkdir(parents=True)
+        (base / 'escape').symlink_to(self.private, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'Linked'):
+            recover_location(self.private, self.volume)
+        self.assertFalse((self.private / CONFIG).exists())
+
+    def test_android_filesystem_without_fsync_still_verifies_bytes(self):
+        store, client, local, crypt = self.seed()
+        from features.rclone.mobile.storage_location import _sync
+
+        def unsupported_sync(stream):
+            with patch('features.rclone.mobile.storage_location.os.fsync', side_effect=OSError(errno.EINVAL, 'unsupported')):
+                _sync(stream)
+
+        with patch('features.rclone.mobile.storage_location._sync', side_effect=unsupported_sync):
+            switch_location(self.private, self.volume)
+        self.assertEqual((store.target(local) / 'note.txt').read_bytes(), b'first')
+
+    def test_real_sync_failure_never_commits(self):
+        self.seed()
+        with patch('features.rclone.mobile.storage_location.os.fsync', side_effect=OSError(errno.EIO, 'I/O error')):
+            with self.assertRaises(OSError):
+                switch_location(self.private, self.volume)
+        self.assertFalse((self.private / CONFIG).exists())
+
+    def test_interrupted_second_tree_retry_only_requires_remaining_space(self):
+        from types import SimpleNamespace
+        import shutil
+        self.seed()
+        (self.private / 'LocalFiles/large.bin').write_bytes(b'x' * (2 * 1024 * 1024))
+        original_copy = shutil.copytree
+
+        def fail_crypt(source, target, *args, **kwargs):
+            if Path(source).name == 'LocalCryptFolders':
+                raise OSError('Card disconnected')
+            return original_copy(source, target, *args, **kwargs)
+
+        with patch('features.rclone.mobile.storage_location.shutil.copytree', side_effect=fail_crypt):
+            with self.assertRaisesRegex(OSError, 'disconnected'):
+                switch_location(self.private, self.volume)
+        self.assertFalse((self.private / CONFIG).exists())
+        with patch('features.rclone.mobile.storage_location.shutil.disk_usage', return_value=SimpleNamespace(free=2 * 1024 * 1024)):
+            self.assertTrue(switch_location(self.private, self.volume))
+        self.assertEqual((collection_path(self.private) / 'large.bin').stat().st_size, 2 * 1024 * 1024)

@@ -5,7 +5,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
 
-from features.rclone.mobile.storage_location import collection_base, selection, switch_location
+from features.rclone.mobile.storage_location import collection_base, selection, switch_location, recover_location, wipe_destination
 
 
 def android_drives(app):
@@ -61,6 +61,8 @@ class StorageUI:
         box.add(toga.Button('Allow SD card / shared storage access…', on_press=self.allow_collection_storage, style=Pack(height=48)))
         box.add(toga.Label('Android requires All files access for these folders.\nCredentials and settings stay internal.\nLocal files are readable by other apps with storage access.\nLocalCrypt files remain encrypted.'))
         box.add(toga.Button('Copy collections and use this drive…', on_press=self.change_collection_storage, style=Pack(height=48)))
+        box.add(toga.Button('Recover existing collections on this drive…', on_press=self.recover_collection_storage, style=Pack(height=48)))
+        box.add(toga.Button('Wipe inactive collections on this drive…', on_press=self.wipe_collection_storage, style=Pack(height=48)))
         box.add(toga.Button('Refresh drives / permission', on_press=self.show_collection_storage, style=Pack(height=48)))
         self.collection_storage_status = toga.Label('Existing downloads are copied and verified.\nOriginal copies stay as a recovery backup.\nRestart Logistics after changing location.')
         box.add(self.collection_storage_status)
@@ -75,43 +77,76 @@ class StorageUI:
         self._impl.native.startActivity(intent)
 
     async def change_collection_storage(self, widget=None, **kwargs):
+        await self._collection_operation('copy', widget)
+
+    async def recover_collection_storage(self, widget=None, **kwargs):
+        await self._collection_operation('recover', widget)
+
+    async def wipe_collection_storage(self, widget=None, **kwargs):
+        await self._collection_operation('wipe', widget)
+
+    async def _collection_operation(self, action, widget):
         if getattr(self, 'cloud_busy', False) or getattr(self, 'transfer_busy', False) or getattr(self, '_storage_changing', False):
             self.collection_storage_status.text = 'Wait for the current operation to finish.'
             return
         volume = self.collection_drives[self.collection_drive.value]
-        if volume is not None and not all_files_allowed():
+        try:
+            external_source = action == 'copy' and selection(self.private_root) is not None
+        except (OSError, ValueError) as error:
+            self.collection_storage_status.text = 'Use Recover existing collections to repair storage settings: ' + str(error)
+            return
+        if (volume is not None or external_source) and not all_files_allowed():
             self.collection_storage_status.text = 'Tap Allow SD card / shared storage access, enable permission, then return here.'
             return
-        # No retained providers/readers may mutate either collection while copied.
         if any(session.provider != 'managed-text' for session in self.workspace.sessions.values()):
             self.collection_storage_status.text = 'Close open readers and local/remote documents in Open documents, then retry.'
             return
         if not self.checkpoint():
             self.collection_storage_status.text = 'Save your current document before changing storage.'
             return
-        confirmed = await self.main_window.dialog(toga.ConfirmDialog('Change collection drive?',
-            'Copy Local and LocalCrypt to ' + (str(volume / 'Logistics') if volume else 'app internal storage') +
-            '? Existing different files will not be overwritten. Original copies remain as a backup. The app will close when finished; reopen it to use the new location.'))
-        if not confirmed:
-            return
-        if getattr(self, 'cloud_busy', False) or getattr(self, 'transfer_busy', False):
-            self.collection_storage_status.text = 'Wait for the current operation to finish.'
-            return
-        self.show_cloud(present=False)
+        destination = str(volume / 'Logistics') if volume else 'app internal storage'
+        prompts = {
+            'copy': ('Change collection drive?', 'Copy Local and LocalCrypt to ' + destination +
+                     '? Different destination files stop the copy. Original copies remain as a backup.'),
+            'recover': ('Recover existing collections?', 'Use the existing Local and LocalCrypt collections in ' + destination +
+                        '? This does not copy or merge your current collection. A retained backup may be older and omit recent changes. LocalCrypt still needs its original credentials.'),
+            'wipe': ('Permanently wipe inactive collections?', 'Delete Local, LocalCrypt, and interrupted collection copies in ' + destination +
+                     '? These files cannot be recovered by Logistics. Other folders and private credentials are kept. The active collection cannot be wiped.'),
+        }
+        title, message = prompts[action]
+        if action != 'wipe':
+            message += ' The app will close when finished; reopen it to use this location.'
         self._storage_changing = True
-        self.set_cloud_busy(True)
-        self.collection_storage_status.text = 'Copying and verifying collections… Keep Logistics open.'
         if widget is not None:
             widget.enabled = False
         changed = False
+        busy = False
         try:
-            changed = await asyncio.to_thread(switch_location, self.private_root, volume)
-            self.collection_storage_status.text = 'Storage location saved. Reopen Logistics.' if changed else 'Already using this location.'
+            if not await self.main_window.dialog(toga.ConfirmDialog(title, message)):
+                return
+            if getattr(self, 'cloud_busy', False) or getattr(self, 'transfer_busy', False):
+                self.collection_storage_status.text = 'Wait for the current operation to finish.'
+                return
+            if any(session.provider != 'managed-text' for session in self.workspace.sessions.values()) or not self.checkpoint():
+                self.collection_storage_status.text = 'Save and close open readers and local/remote documents, then retry.'
+                return
+            self.set_cloud_busy(True)
+            busy = True
+            self.collection_storage_status.text = {
+                'copy': 'Copying and verifying collections… Keep Logistics open.',
+                'recover': 'Checking existing collections… Keep Logistics open.',
+                'wipe': 'Deleting inactive collection data… Keep Logistics open.',
+            }[action]
+            operation = {'copy': switch_location, 'recover': recover_location, 'wipe': wipe_destination}[action]
+            changed = await asyncio.to_thread(operation, self.private_root, volume)
+            self.collection_storage_status.text = ('Inactive collections wiped. You can copy collections to this drive now.' if action == 'wipe'
+                else 'Storage location saved. Reopen Logistics.' if changed else 'Already using this location.')
         except (OSError, ValueError) as error:
             self.collection_storage_status.text = 'Location unchanged: ' + str(error)
         finally:
             self._storage_changing = False
-            self.set_cloud_busy(False)
+            if busy:
+                self.set_cloud_busy(False)
             if widget is not None:
                 widget.enabled = True
         if changed:
