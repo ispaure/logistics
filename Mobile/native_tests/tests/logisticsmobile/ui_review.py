@@ -15,6 +15,7 @@ async def exercise_ui_review(app):
     from services.documents.readers import PrivateReader
     from commonUtils.runtime.document_access import LocalDocuments
     from zipfile import ZipFile
+    from .reader_checks import wait_for_reader, assert_comic_centered
     comic = app.storage_root / 'WebP review.cbz'
     with ZipFile(comic, 'w') as archive:
         for index, data in enumerate(variants):
@@ -59,6 +60,9 @@ async def exercise_ui_review(app):
     def current_canvas():
         displayed = app.reader_manager().active.book_content.children[0]
         return displayed.canvases[0] if hasattr(displayed, 'canvases') else displayed
+    owner = app.reader_manager().active
+    await wait_for_reader(owner)
+    await assert_comic_centered(current_canvas, fullscreen=True)
     await capture('comic-page')
     def canvas_height():
         native = current_canvas()._impl.native
@@ -67,6 +71,12 @@ async def exercise_ui_review(app):
     if get_os() is OS.IOS:
         assert app.native_host.adapter.controller.isTabBarHidden(), f'Fullscreen lost: {app._comic_chrome_hidden}, detail={app.adaptive.in_detail}, owner={app.readers.active.reader_immersive}'
     current_canvas().toggle_controls()
+    assert not owner.reader_immersive, 'Comic controls did not open'
+    deadline = asyncio.get_running_loop().time() + 15
+    while canvas_height() >= full_height:
+        assert asyncio.get_running_loop().time() < deadline, ('Comic mode did not reclaim reading space', full_height, canvas_height())
+        await asyncio.sleep(.1)
+    await wait_for_reader(owner)
     await capture('comic-controls')
     if get_os() is OS.IOS:
         assert not app.native_host.adapter.controller.isTabBarHidden()
@@ -226,10 +236,13 @@ async def exercise_ui_review(app):
         assert (image.width, image.height) == (20, 30)
     await app.browser_file_location(('Local files', 'UI Review'))
     browser = app.file_browser
+    browser.open_search()
     await asyncio.sleep(.2)
+    toolbar = (browser.location_bar.parent_button, browser.search_button, app.file_actions_button)
+    controls = [browser.search, browser.close_search_button, *toolbar]
     if get_os() is OS.IOS:
         viewport = browser.widget.root._impl.container.native
-        for control in (browser.search, browser.options_button):
+        for control in controls:
             native = control._impl.native
             rect = native.convertRect(native.bounds, toView=viewport)
             assert rect.origin.x >= -1 and rect.origin.x + rect.size.width <= viewport.bounds.size.width + 1, f'Browser control clipped: {type(control).__name__}: {rect}; viewport={viewport.bounds}'
@@ -238,7 +251,6 @@ async def exercise_ui_review(app):
         viewport = app.main_window._impl.container.native_content
         origin = jarray(jint)(2)
         viewport.getLocationOnScreen(origin)
-        controls = [browser.search, browser.options_button]
         controls.extend(child for row in browser.items.children if isinstance(row, toga.Box)
                         for child in row.children[0].children if isinstance(child, toga.Button))
         for control in controls:
@@ -247,9 +259,8 @@ async def exercise_ui_review(app):
             native.getLocationOnScreen(position)
             x = position[0] - origin[0]
             assert x >= -1 and x + native.getWidth() <= viewport.getWidth() + 1, f'Android browser control clipped: {control}: {x}, {native.getWidth()}, viewport={viewport.getWidth()}'
-        for control in (browser.back_button, browser.options_button):
-            layout = control._impl.native.getLayout()
-            assert layout is not None and layout.getEllipsisCount(0) == 0, 'Browser toolbar caption truncated'
+    assert [control.control_icon for control in toolbar] == ['up', 'find', 'more']
+    browser.close_search()
     assert all(not button.text.startswith('✓') for button in browser.buttons.values())
     for row in browser.items.children:
         if isinstance(row, toga.Box):

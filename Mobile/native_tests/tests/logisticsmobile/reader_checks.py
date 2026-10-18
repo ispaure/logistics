@@ -75,7 +75,10 @@ async def assert_comic_centered(view, *, fullscreen=False):
 
 async def wait_for_reader(owner, *, position=None):
     """Wait for real reader operations, including queued position saves."""
-    deadline = asyncio.get_running_loop().time() + 15
+    # Hosted emulators can take longer than 15 seconds to decode/reload a
+    # page after chrome changes. Require the same settled state within a
+    # bounded minute rather than racing the background reader operation.
+    deadline = asyncio.get_running_loop().time() + 60
     settled = 0
     while True:
         pending = getattr(owner, '_epub_location_task', None)
