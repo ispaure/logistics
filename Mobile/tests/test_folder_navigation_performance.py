@@ -190,7 +190,7 @@ class FolderNavigationTests(unittest.TestCase):
                     self.assertEqual(app.file_path, 'books')
                     self.assertEqual(app.file_status.value, '')
                     header = app.file_browser.location_bar
-                    self.assertEqual(header.caption.children, [header.folder_name])
+                    self.assertEqual(header.caption.children, [header.folder_name, header.storage_identity])
                     busy.assert_not_called()
                     downloads.assert_not_called()
                     release.set()
