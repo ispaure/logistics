@@ -412,8 +412,7 @@ async def exercise_localcrypt(app, passed):
     updated = await asyncio.to_thread(copies.save_metadata, reader, {'Title': 'Large native browser sentinel'})
     assert updated.comic.info.get_field('Title') == 'Large native browser sentinel'
     await app.show_files()
-    app.file_storage.value = crypt_label
-    await app.browse_files()
+    assert await app.browser_file_location((crypt_label, ''))
     browser = app.file_browser
     assert browser.entries and browser.mode == 'List'
     browser.show_tiles()
