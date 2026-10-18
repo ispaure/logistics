@@ -155,3 +155,24 @@ When the owner requests **All mobile devices**, deploy in place to the configure
 physical iOS devices and connected/paired Android devices. Tester distribution to
 TestFlight and Firebase remains a separate action when requested. Preserve signing
 identity and app data; do not uninstall to bypass deployment errors.
+
+## Native appearance startup regression (2026-10-18)
+
+The physical iPhone system log identified a startup failure while constructing
+the editor's transparent Save button: `apple_color('transparent')` called
+`UIColor.clearColor()` even though Rubicon exposes that getter as a color
+property. The resulting `TypeError: 'ObjCInstance' object is not callable`
+aborted startup before the main window existed, leaving a black screen.
+The getter now uses property access. `test_appearance.py` covers painting an
+iOS transparent control with a non-callable native color, alongside the
+packaged-startup check. The dummy backend alone cannot exercise UIKit getters.
+
+Python callback tracebacks may appear in the device's unified system log even
+when `devicectl --console` shows only native Python initialization. Inspect the
+system log when installation and process launch succeed without a usable UI.
+
+The corrected signed build was installed in place on the paired iPhone over
+Wi-Fi. A physical-device screenshot showed Folder Hub and the destination bar;
+the local evidence is `Mobile/logs/iphone-startup-appearance-fixed.png`.
+All 10 focused appearance and packaged-startup tests passed. No uninstall or
+app-data reset was performed.

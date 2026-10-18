@@ -7,6 +7,31 @@ from features.lm.mobile.presentation import transcript_document
 
 
 class AppearanceTests(unittest.TestCase):
+    def test_ios_transparent_button_uses_native_color_property(self):
+        import sys
+        from types import SimpleNamespace as NS
+        from unittest.mock import Mock, patch
+        from logisticsmobile.appearance import paint_surface
+
+        class Impl:
+            __module__ = 'toga_iOS.widgets.button'
+
+        # Rubicon exposes UIColor.clearColor as an ObjCInstance, not a method.
+        clear = object()
+        border = NS(resolvedColorWithTraitCollection=lambda traits: NS(CGColor='border'))
+        factory = Mock(return_value=NS(clearColor=clear))
+        impl = Impl()
+        impl.interface = NS()
+        impl.native = NS(layer=NS(), traitCollection=object())
+        impl._surface_roles = ('transparent', None, False)
+        with patch.dict(sys.modules, {'rubicon.objc': NS(ObjCClass=factory)}), patch.dict(
+                'logisticsmobile.appearance._apple_colors', border=border):
+            paint_surface(impl, 0)
+        factory.assert_called_once_with('UIColor')
+        self.assertIs(impl.native.backgroundColor, clear)
+        self.assertIs(impl._default_background_color, clear)
+        self.assertEqual(impl.native.layer.borderWidth, 0)
+
     def test_android_inline_surfaces_have_no_opaque_fill_elevation_or_tint(self):
         import sys
         from types import SimpleNamespace as NS

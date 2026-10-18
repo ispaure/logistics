@@ -109,7 +109,7 @@ def apple_color(role):
     """Keep semantic UIColors dynamic; never resolve a colour at construction."""
     if role == 'transparent':
         from rubicon.objc import ObjCClass
-        return ObjCClass('UIColor').clearColor()
+        return ObjCClass('UIColor').clearColor
     if role not in _apple_colors:
         from rubicon.objc import ObjCClass, ObjCInstance, Block, objc_id
         colour = ObjCClass('UIColor')
