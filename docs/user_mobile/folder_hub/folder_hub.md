@@ -95,7 +95,8 @@ rclone rows show a cloud for ordinary online folders or a lock for encrypted
 remotes. Network shares retain icons for their available copies. Screen readers
 announce the copy types. Group-only headings have no storage icons.
 Dash-separated names form expanded levels (for example Server → Lib → ComicRack);
-triangles collapse or expand parent levels. Its action page reflects the copies available. **Browse Local** opens readable files on this device, **Browse LocalCrypt** opens
+group labels are informational and remain expanded. Each level is indented with
+a branch guide; only folder rows with storage icons and an actions menu open a folder. Its action page reflects the copies available. **Browse Local** opens readable files on this device, **Browse LocalCrypt** opens
 the encrypted device copy, and **Browse Remote** opens the online folder. Only
 available copies receive a browse button; each copy is offered once. Existing
 mapped Local and LocalCrypt folders retain **Browse Remote** even while their

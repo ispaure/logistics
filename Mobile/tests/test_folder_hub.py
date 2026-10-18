@@ -432,6 +432,14 @@ class FolderHubTests(unittest.TestCase):
                 app.change_folder_source('rclone')
                 self.assertIn('Server-Library-Comics', app.folder_buttons)
                 self.assertIn(('Server', 'Library'), app.folder_tree_buttons)
+                group = app.folder_tree_buttons[('Server', 'Library')]
+                self.assertFalse(hasattr(group, 'on_press'))
+                self.assertEqual(group.parent.style.margin_left, 24)
+                self.assertEqual(app.folder_buttons['Server-Library-Comics'].parent.style.margin_left, 48)
+                app.folder_collapsed.add(('Server',))
+                app.update_folder_list(app.folder_picker_choices)
+                self.assertIn('Server-Library-Comics', app.folder_buttons)
+
                 self.assertNotIn('Local-Comics', app.folder_buttons)
                 app.change_folder_source('Local')
                 self.assertIn('Local-Comics', app.folder_buttons)

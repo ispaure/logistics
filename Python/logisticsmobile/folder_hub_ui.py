@@ -296,20 +296,12 @@ class FolderHubUI:
                 path = (*ancestors, title)
                 children = node['children']
                 row = toga.Box(style=Pack(direction=ROW, align_items=CENTER,
-                    margin_left=12 * max(0, len(ancestors) - (1 if node['names'] else 0)),
+                    margin_left=24 * len(ancestors),
                     margin_bottom=1 if node['names'] else 0))
-                if children:
-                    def toggle(widget=None, selected=path, **kwargs):
-                        if selected in self.folder_collapsed:
-                            self.folder_collapsed.remove(selected)
-                        else:
-                            self.folder_collapsed.add(selected)
-                        self.update_folder_list(self.folder_picker_choices)
-                    arrow = toga.Button('▸' if path in self.folder_collapsed else '▾', on_press=toggle,
-                                        style=Pack(width=44, height=36, font_size=12))
-                    surface(arrow, radius=0, background='window', foreground='muted', outlined=False)
-                    self.folder_tree_buttons[path] = arrow
-                    row.add(arrow)
+                if ancestors:
+                    guide = surface(toga.Label('└', style=Pack(width=20, font_size=16)),
+                                    background='window', foreground='muted', outlined=False)
+                    row.add(guide)
                 if node['names']:
                     name = node['names'][0]
                     async def select(widget=None, selected=name, **kwargs):
@@ -346,14 +338,15 @@ class FolderHubUI:
                     menu.style.margin_right = 4
                     row.add(menu)
                 else:
-                    group = list_button(toga.Button(title, on_press=toggle,
-                        style=Pack(height=36, font_size=13, flex=1)))
-                    surface(group, radius=0, background='window', foreground='muted', outlined=False)
+                    group = surface(toga.Label(title + ' · group',
+                        style=Pack(height=36, font_size=13, font_weight='bold', flex=1)),
+                        radius=0, background='window', foreground='muted', outlined=False)
+                    self.folder_tree_buttons[path] = group
                     row.add(group)
                 if node['names']:
                     folder_row(row)
                 self.folder_list.add(row)
-                if children and path not in self.folder_collapsed:
+                if children:
                     add_branch(children, path)
         add_branch(folder_tree(visible))
         if not visible:
