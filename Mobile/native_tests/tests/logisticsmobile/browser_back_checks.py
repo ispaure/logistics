@@ -71,8 +71,16 @@ async def exercise_browser_back(app):
             app.native_host.adapter.navigation[1].popViewControllerAnimated(True)
         else:
             app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
-        await asyncio.sleep(.7)
-        assert app.body is panel and browser.tree is tree
+        # didShow arrives after UIKit's transition and layout work. A fixed
+        # delay races cold hosted iPads; wait for the retained viewport itself.
+        for _ in range(100):
+            if (app.body is panel and browser.tree is tree
+                    and abs(scroll.vertical_position - position) < 2):
+                break
+            await asyncio.sleep(.05)
+        assert app.body is panel and browser.tree is tree, (
+            filename, app.body is panel, browser.tree is tree,
+            app.native_host.state.routes['files'], app.file_path)
         assert app.file_path == 'Back review'
         assert abs(scroll.vertical_position - position) < 2, (position, scroll.vertical_position)
         assert owner.session.id in app.workspace.sessions
