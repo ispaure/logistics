@@ -64,6 +64,7 @@ async def exercise(app):
     except Exception:
         success = False
         traceback.print_exc()
+        (Path(app.paths.cache) / 'logistics-native-ui-error.txt').write_text(traceback.format_exc())
         error = traceback.format_exc().splitlines()[-1][:600]
     import logisticsmobile
     source = json.loads(Path(logisticsmobile.__file__).with_name('source.json').read_text())

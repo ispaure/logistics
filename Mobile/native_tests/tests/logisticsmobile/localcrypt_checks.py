@@ -303,8 +303,9 @@ async def exercise_localcrypt(app, passed):
     app.file_target.value = 'imported'
     await app.move_file()
     assert not (local / 'source').exists(), app.file_status.value
-    app.file_storage.value = crypt_label
-    await app.browse_files()
+    # Navigate once through the awaited production entry point. Assigning the
+    # picker and immediately browsing races its scheduled on_change listing.
+    assert await app.browser_file_location((crypt_label, ''))
     select('imported')
     app.file_name.value = 'renamed'
     await app.rename_file()

@@ -13,6 +13,21 @@ declared iOS 15 minimum and guarding newer controller APIs.
 
 ## Local evidence
 
+### Normal startup and saved-workspace audit
+
+The iOS startup audit uses the normal app storage paths rather than overriding
+`storage_root`. It checks legacy migration with an unsaved draft, grouped shared
+folders, connection pages, file browsing, chat setup, documentation, and EPUB,
+comic and PDF opening. Existing dash-separated shared folders reproduced a cold
+startup failure in `tree_anchor`: Rubicon returned a callable UIKit
+`intrinsicContentSize` getter. The application now accepts both callable and
+property forms without changing folder contents or saved documents.
+
+The full native suite saves its complete exception traceback in the disposable
+test app's cache. Its LocalCrypt navigation check awaits the production browser
+entry point rather than racing a picker-triggered listing against another manual
+listing. Neither diagnostic path is included in the normal app launcher.
+
 ### iOS destination icon retention
 
 The application retains destination artwork in each Toga `OptionItem.icon`.

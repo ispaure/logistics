@@ -88,7 +88,11 @@ class DocumentationTests(unittest.TestCase):
         navigation = self.app.settings_navigation
         navigation.choose('Help')
         box = navigation.sections['Help']
-        button = next(child for child in box.children if getattr(child, 'text', '') == 'Mobile documentation')
+        def descendants(widget):
+            yield widget
+            for child in widget.children:
+                yield from descendants(child)
+        button = next(child for child in descendants(box) if getattr(child, 'text', '') == 'Mobile documentation')
         button.on_press()
         owner = self.app.documentation
         self.assertEqual(owner.title.text, 'Logistics on mobile')
