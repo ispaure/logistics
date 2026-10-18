@@ -14,7 +14,8 @@ def rclone_host_ui(app):
     from logisticsmobile.appearance import accessible_name
     from logisticsmobile.folder_hub_style import source_actions
     from logisticsmobile.files_ui import local_read_available
-    return MobileHostUI(icon_button=icon_button, NativeBrowser=NativeBrowser, FeatureCommands=lambda button, owner, *args, **kwargs: FeatureCommands(button, app, *args, **kwargs), private_label=private_label, visible_remotes=visible_remotes, exclusions=exclusions, pick_document=lambda owner: pickers.pick_document(app), ResourceImports=ResourceImports, export_file=lambda owner, selected: pickers.export_file(app, selected), accessible_name=accessible_name, local_read_available=lambda owner, **kwargs: local_read_available(app, **kwargs), refresh_folder_source_actions=lambda: source_actions(app))
+    from logisticsmobile.settings_ui import ConnectionSettingsPage, connection_group, connection_field, connection_note, connection_heading, connection_disclosure
+    return MobileHostUI(icon_button=icon_button, NativeBrowser=NativeBrowser, FeatureCommands=lambda button, owner, *args, **kwargs: FeatureCommands(button, app, *args, **kwargs), private_label=private_label, visible_remotes=visible_remotes, exclusions=exclusions, pick_document=lambda owner: pickers.pick_document(app), ResourceImports=ResourceImports, export_file=lambda owner, selected: pickers.export_file(app, selected), accessible_name=accessible_name, local_read_available=lambda owner, **kwargs: local_read_available(app, **kwargs), refresh_folder_source_actions=lambda: source_actions(app), settings_page=lambda *args: ConnectionSettingsPage(app, *args), settings_group=connection_group, settings_field=connection_field, settings_note=connection_note, settings_heading=connection_heading, settings_disclosure=connection_disclosure)
 
 
 def mobile_presentation(app):

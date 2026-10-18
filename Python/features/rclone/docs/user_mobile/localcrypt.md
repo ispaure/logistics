@@ -172,12 +172,16 @@ continues to save encrypted bytes through the existing verified transaction.
 
 ### SMB and Mac shared folders
 
-In **Workspaces**, tap **Add SMB / Mac share…** (also available in Remote connections).
+Open **Settings → Workspaces → SMB shares…**, or tap **Add share…** in
+Workspaces’s **Home Server** tab. SMB setup has its own page, separate from
+rclone credential ZIP settings.
 Give each server a unique connection name, enter its IP address or hostname,
-username and password, and choose **Add connection and browse**. Enter only the
+username and password, and choose **Connect & browse shares**. Enter only the
 server in the Server field, without `smb://` or a shared-folder path. The default
-port is 445; change Domain when your server requires one. For guest access, enter
-`guest` and leave the password empty.
+port is 445; expand **Advanced options** to change Domain or Port. For guest
+access, turn on **Connect as guest**. This hides the account fields and clears
+the entered password. Turn it off to sign in with your server account.
+**Need help connecting?** expands the network and Mac setup guidance.
 
 You can add multiple servers. Adding one preserves existing connections and rejects
 names already in use. **Save credentials on this device** defaults to on: usernames

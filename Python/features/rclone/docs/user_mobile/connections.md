@@ -4,8 +4,8 @@
 
 Open a folder’s **•••** actions in **Workspaces**, then choose **Browse Remote** to open its
 online file browser. Credential setup is under
-**Settings → rclone / Remote connections…**. The native app embeds rclone 1.74.1; no desktop
-executable, shell, mount, or separate RC server is required. **Check rclone engine**
+**Settings → Workspaces → rclone connections…**. The native app embeds rclone 1.74.1; no desktop
+executable, shell, mount, or separate RC server is required. **Advanced & troubleshooting → Check rclone engine**
 performs an offline in-memory read and displays the engine version.
 
 Workspaces's **Cloud** tab includes remotes from retained password-protected ZIPs
@@ -26,9 +26,10 @@ elapsed seconds, with an animated progress bar. Remote previews report connectio
 checks, archive index reads and member/data reads; **Cancel** stops the pending
 request. The elapsed time is a wait indicator, not a download percentage.
 
-Tap **Choose credential ZIP…** and select your existing Logistics credential
-package. Its filename appears under the button. Enter its password, then tap
-**Load remotes** beside the password field, or press Return. Leave the password
+Tap **Import credential ZIP…** to open the separate import page and select your
+existing Logistics credential package. Use **Choose credential ZIP…** to select
+a different ZIP. Its filename appears under the button. Enter its password, then tap
+**Load remotes** below the password field, or press Return. Leave the password
 blank for an unencrypted ZIP. A failed load clears the password and keeps the
 selected ZIP ready: correct the password and tap **Load remotes** again without
 selecting the file again. After loading, choose a remote and tap **Browse folder**.
@@ -133,6 +134,16 @@ downloads follow the platform's normal app-data backup policy. Interactive OAuth
 account setup remains future work. Session-only token updates are lost on exit;
 providers that rotate refresh tokens may require a fresh credential package.
 
+The main rclone page groups loaded packages with their saved or session-only
+status and shows **Unlock** for retained, locked ZIPs. Import fields live on
+the import page. **Reload saved credentials**, **Check rclone engine**, and
+**Forget saved credentials** are under the initially collapsed
+**Advanced & troubleshooting** section. **Lock connections** also locks active
+SMB sessions.
+
+SMB setup has its own **Settings → Workspaces → SMB shares…** page; see
+[SMB and Mac shared folders](localcrypt.md#smb-and-mac-shared-folders).
+
 ### Locked credentials and Workspaces
 
 Retained session-only ZIPs keep their remote names visible in Workspaces even
@@ -140,7 +151,7 @@ while locked and without a downloaded copy. Their credential filter remains
 available. Tapping one asks for the matching ZIP password before browsing.
 Wrong passwords keep the prompt open. The Settings connection page also offers
 **Unlock** for each retained ZIP. Use **Choose credential ZIP** for a new ZIP or
-one that was not retained. **Lock credential session** clears decoded credentials
+one that was not retained. **Lock connections** clears decoded credentials
 while keeping discoverable remote names, local copies, retained ZIPs and saved
 credentials. Save or discard private edits
 before locking. **Forget saved credentials** also removes retained ZIPs, keys and encrypted
@@ -176,7 +187,7 @@ key; package vaults use a new header which older builds refuse to load.
 
 Loading a previously saved filename as session-only does not erase its older
 saved copy; use Forget saved credentials if you want to remove saved secrets.
-**Lock credential session** unloads all active contexts. **Forget saved credentials**
+**Lock connections** unloads all active contexts. **Forget saved credentials**
 retains its existing explicit all-credentials removal behavior.
 
 ## Folder search scope

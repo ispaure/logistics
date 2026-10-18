@@ -261,6 +261,10 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.adaptive.render()
         if hasattr(self, 'settings_navigation'):
             self.settings_navigation.reflow()
+        for name in ('cloud_connections_view', 'cloud_import_view', 'smb_view'):
+            page = getattr(self, name, None)
+            if page is not None:
+                page.reflow()
         if hasattr(self, 'home_panels') and self.main_window.content is self.native_host.root:
             self.reflow_home()
         if hasattr(self, 'document_launchers'):
@@ -642,7 +646,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         box.add(switch_row(self, 'Show Legacy', self.show_legacy_choice,
             'Show Legacy- folders in Workspaces, file browsers and library shortcuts, '
             'and credential choices whose names start with Legacy. This choice lasts only until the app closes.'))
-        box.add(toga.Button('rclone / Remote connections…', on_press=self.show_cloud_connections, style=Pack(height=48)))
+        box.add(toga.Button('rclone connections…', on_press=self.show_cloud_connections, style=Pack(height=48)))
+        box.add(toga.Button('SMB shares…', on_press=self.show_smb_connection, style=Pack(height=48)))
         box = sections['App']
         box.add(toga.Label('Preferences save automatically on this device.', style=Pack(font_size=12)))
         box.add(toga.Button('Reload preferences', on_press=self.reload_preferences, style=Pack(height=48)))

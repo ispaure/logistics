@@ -85,6 +85,9 @@ def fit_text(control, width):
 def fit_section(section, width):
     """Keep each category within its scroll viewport, including switch rows."""
     width = max(24, width - section.style.margin_left - section.style.margin_right)
+    if getattr(section, '_connection_switch_row', False):
+        fit_text(section.children[0], max(24, width - 72))
+        return
     if getattr(section, '_settings_switch_row', False):
         label, info, switch = section.children
         # UISwitch has a fixed native width; leave its full target beside help.
@@ -221,6 +224,83 @@ class SettingsLabel(toga.Label):
         width = getattr(self, '_settings_available_width', None)
         if width is not None:
             fit_text(self, width)
+
+
+def connection_note(text):
+    from .appearance import surface
+    return surface(SettingsLabel(text, style=Pack(font_size=12, margin_bottom=12)),
+                   radius=0, background='transparent', foreground='muted', outlined=False, eink_outlined=False)
+
+
+def connection_heading(text):
+    from .appearance import surface
+    return surface(SettingsLabel(text, style=Pack(font_size=12, font_weight='bold', margin_top=16, margin_bottom=8)),
+                   radius=0, background='transparent', foreground='muted', outlined=False, eink_outlined=False)
+
+
+def connection_field(title, control):
+    label = connection_note(title)
+    label.style.margin_bottom = 4
+    return toga.Box(children=[label, control], style=Pack(direction=COLUMN, margin_top=8, margin_bottom=8))
+
+
+def connection_group(rows):
+    from .appearance import surface, list_button, accessible_name
+    result = []
+    for row in rows:
+        if isinstance(row, toga.Button):
+            list_button(row)
+            surface(row, radius=0, background='transparent', foreground='accent', outlined=False, eink_outlined=False)
+        if isinstance(row, toga.Switch):
+            title, row.text = row.text, ''
+            accessible_name(row, title)
+            row.style.flex = 0
+            row.style.width = 64
+            row = toga.Box(children=[SettingsLabel(title, style=Pack(flex=1)), row],
+                           style=Pack(direction=ROW, align_items=CENTER))
+            row._connection_switch_row = True
+        result.append(row)
+    return group_rows(result)
+
+
+def connection_disclosure(title, children):
+    """Retain form values while advanced controls are out of the layout."""
+    from .appearance import surface, list_button
+    body = toga.Box(children=children, style=Pack(direction=COLUMN))
+    box = toga.Box(style=Pack(direction=COLUMN))
+    def toggle(widget=None, **kwargs):
+        if body.parent is None:
+            box.add(body)
+            button.text = title + ' −'
+        else:
+            box.remove(body)
+            button.text = title + ' +'
+        parent = box.parent
+        while parent is not None:
+            if isinstance(parent, ConnectionSettingsPage):
+                parent.reflow()
+                break
+            parent = parent.parent
+    button = list_button(toga.Button(title + ' +', on_press=toggle, style=Pack(height=48)))
+    surface(button, radius=0, background='transparent', foreground='accent', outlined=False, eink_outlined=False)
+    box.add(button)
+    return box, button
+
+
+class ConnectionSettingsPage(toga.ScrollContainer):
+    """Grouped connection forms share Settings colours and fit native phone labels."""
+    def __init__(self, app, title, subtitle, children):
+        from .appearance import surface
+        self.owner = app
+        content = toga.Box(children=[SettingsLabel(title, style=Pack(font_size=27, font_weight='bold', margin_bottom=8)),
+                                     connection_note(subtitle), *children],
+                           style=Pack(direction=COLUMN, margin=20))
+        surface(content, radius=0, background='settings_background', outlined=False, eink_outlined=False)
+        super().__init__(horizontal=False, content=content, style=Pack(flex=1))
+        self.reflow()
+
+    def reflow(self):
+        fit_section(self.content, self.owner.adaptive.content_width('settings', margin=0))
 
 
 def switch_row(app, title, switch, explanation):

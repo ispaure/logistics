@@ -105,7 +105,6 @@ class CloudUI(LocalCryptUI):
                 except Exception:
                     error = 'The native remote engine or device credential protection is unavailable.'
             self.cloud_pending_zip = None
-            self.cloud_add_smb = toga.Button('Add SMB / Mac share…', on_press=self.show_smb_connection, style=Pack(height=44))
             self.cloud_choose = toga.Button('Choose credential ZIP…', on_press=self.choose_cloud_package, style=Pack(height=44))
             self.cloud_selected_zip = toga.Label('No ZIP selected', style=Pack(font_size=14))
             self.cloud_import_message = toga.Label(import_hint('Choose a ZIP, then enter its password and tap Load remotes.'), style=Pack(font_size=14))
@@ -129,24 +128,32 @@ class CloudUI(LocalCryptUI):
             self.cloud_open = toga.Button('Open folder', on_press=self.open_cloud_folder, style=Pack(height=44))
             self.cloud_cancel = toga.Button('Cancel request', on_press=self.cancel_cloud, style=Pack(height=44))
             self.cloud_clear = toga.Button('Forget saved credentials', on_press=self.clear_cloud, style=Pack(height=44))
-            self.cloud_lock = toga.Button('Lock credential session', on_press=self.lock_cloud, style=Pack(height=44))
+            self.cloud_lock = toga.Button('Lock connections', on_press=self.lock_cloud, style=Pack(height=48))
             self.cloud_retained_box = toga.Box(style=Pack(direction=COLUMN))
             self.cloud_status = NativeBrowser.status_label(value=error or 'Choose saved or session-only credentials, then import a ZIP. Its password is never saved.',
                                                        style=Pack(height=20, margin_top=14, margin_bottom=14))
             self.download_selector = toga.Selection(style=Pack(height=44))
             self.download_open = toga.Button('Open private copy', on_press=self.open_download, style=Pack(flex=1, height=44))
             self.download_export = toga.Button('Export private copy…', on_press=self.export_download, style=Pack(flex=1, height=44))
-            self.cloud_connections_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
-                toga.Label('rclone connections', style=Pack(font_size=22)),
-                toga.Label(import_hint('Unlock a retained ZIP for this session, even when it has no local folders.')),
-                self.cloud_retained_box,
-                self.cloud_add_smb,
-                self.cloud_choose, self.cloud_selected_zip, self.cloud_import_message,
-                toga.Box(children=[self.cloud_password, self.cloud_import], style=Pack(direction=ROW)),
-                self.cloud_remember, toga.Label(import_hint('Off: decoded credentials stay in memory. Password-protected ZIPs are kept encrypted for future unlocking.')),
-                self.cloud_package, self.cloud_lock, self.cloud_reload, self.cloud_probe, self.cloud_clear,
-                toga.Button('Browse remote files', on_press=self.show_cloud, style=Pack(height=44))],
-                style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+            ui = self.rclone_ui
+            self.cloud_connections_status = ui.settings_note(error)
+            self.cloud_import_entry = toga.Button('Import credential ZIP…', on_press=self.begin_cloud_import, style=Pack(height=48))
+            troubleshooting, self.cloud_settings_toggle = ui.settings_disclosure('Advanced & troubleshooting', [
+                ui.settings_group([self.cloud_reload, self.cloud_probe, self.cloud_clear])])
+            self.cloud_connections_view = ui.settings_page('rclone connections',
+                'Your cloud storage, ready when you need it.', [
+                    ui.settings_heading('CREDENTIAL PACKAGES'), self.cloud_retained_box,
+                    self.cloud_import_entry, ui.settings_note('Import a package exported from Logistics desktop.'),
+                    ui.settings_heading('SESSION'), ui.settings_group([self.cloud_lock]),
+                    ui.settings_note('Lock to stop access until you unlock again. This also locks SMB connections.'),
+                    troubleshooting, self.cloud_connections_status])
+            self.cloud_import_view = ui.settings_page('Import credential ZIP',
+                'Choose your Logistics credential package.', [
+                    self.cloud_choose, self.cloud_selected_zip,
+                    ui.settings_group([ui.settings_field('ZIP password (if encrypted)', self.cloud_password)]),
+                    self.cloud_import, self.cloud_import_message,
+                    ui.settings_heading('STORAGE'), ui.settings_group([self.cloud_remember]),
+                    ui.settings_note('Off keeps decoded credentials in memory. Password-protected ZIPs are retained encrypted for future unlocking. The ZIP password is never saved.')])
             self.cloud_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
                 toga.Label('Remote files', style=Pack(font_size=22)),
                 toga.Button('Manage connections…', on_press=self.show_cloud_connections, style=Pack(height=44)),
@@ -241,6 +248,14 @@ class CloudUI(LocalCryptUI):
         self.refresh_retained_credentials()
         self.show_view(self.cloud_connections_view, destination='settings', route='connections', title='rclone connections')
 
+    async def begin_cloud_import(self, widget=None, **kwargs):
+        self.show_cloud_import()
+        await self.choose_cloud_package()
+
+    def show_cloud_import(self, widget=None, **kwargs):
+        self.show_cloud(present=False)
+        self.show_view(self.cloud_import_view, destination='settings', route='import-credentials', title='Import credential ZIP')
+
     def refresh_retained_credentials(self):
         for child in list(self.cloud_retained_box.children):
             self.cloud_retained_box.remove(child)
@@ -252,16 +267,41 @@ class CloudUI(LocalCryptUI):
             self.cloud_retained_box.add(toga.Label('Retained ZIPs are unavailable. Unlock the device and try again.'))
             return
         self.cloud_retained_buttons = {}
+        records = {item['package_name']: item for item in getattr(self.cloud_client, 'package_records', ())
+                   if item['package_name'] not in ('Network shares', 'Session network shares')
+                   and self.legacy_name_visible(item['package_name'], prefix='legacy')}
+        if not records and self.cloud_client is not None and self.loaded_remote_names():
+            name = getattr(self.cloud_client, 'package_name', '')
+            if name and name not in ('Network shares', 'Session network shares'):
+                records[name] = dict(remotes=self.loaded_remote_names(), saved=False)
+        ui = self.rclone_ui
+        for name, record in records.items():
+            def browse(widget=None, **kwargs):
+                self.show_locations()
+            names = self.visible_remote_names(record['remotes'])
+            row = ui.settings_group([
+                toga.Label(import_hint(name), style=Pack(font_weight='bold', margin_top=8)),
+                ui.settings_note(f'{len(names)} remotes · ' + ('saved on this device' if record.get('saved') else 'session only')),
+                toga.Button('Browse remote files', on_press=browse, enabled=not self.cloud_busy, style=Pack(height=48))])
+            self.cloud_retained_box.add(row)
         for key, item in rows:
+            if item['zip'] in records:
+                continue
             def unlock(widget=None, selected=key, **kwargs):
                 if not self.cloud_busy:
                     self.show_retained_unlock(selected, destination='settings', resume=self.show_locations)
             button = toga.Button('Unlock ' + item['zip'], on_press=unlock,
                                  enabled=not self.cloud_busy, style=Pack(height=44))
             self.cloud_retained_buttons[key] = button
-            self.cloud_retained_box.add(button)
-        if not rows:
-            self.cloud_retained_box.add(toga.Label('No retained credential ZIPs. Choose a ZIP below to import it.'))
+            self.cloud_retained_box.add(ui.settings_group([
+                toga.Label(import_hint(item['zip']), style=Pack(font_weight='bold', margin_top=8)),
+                ui.settings_note('Locked · retained on this device'), button]))
+        if not rows and not records:
+            self.cloud_retained_box.add(ui.settings_note('No credential packages yet. Import a ZIP to get started.'))
+        if hasattr(self, 'cloud_connections_status'):
+            self.cloud_connections_status.text = self.cloud_status.value
+        if hasattr(self.cloud_connections_view, 'reflow'):
+            self.cloud_connections_view.reflow()
 
     def loaded_remote_names(self):
         client = getattr(self, 'cloud_client', None)
@@ -315,23 +355,41 @@ class CloudUI(LocalCryptUI):
         if not hasattr(self, 'smb_view'):
             self.smb_name = toga.TextInput(placeholder='Connection name (e.g. Home Mac)', style=Pack(height=44))
             self.smb_host = toga.TextInput(placeholder='Server IP or hostname (e.g. 192.168.1.10)', style=Pack(height=44))
-            self.smb_user = toga.TextInput(placeholder='Username (or guest)', style=Pack(height=44))
+            self.smb_user = toga.TextInput(placeholder='Your server account', style=Pack(height=44))
             self.smb_password = PasswordInput(placeholder='Share password', style=Pack(height=44))
             self.smb_domain = toga.TextInput(value='WORKGROUP', style=Pack(height=44))
             self.smb_port = toga.TextInput(value='445', style=Pack(height=44))
             self.smb_remember = toga.Switch('Save credentials on this device', value=True, style=Pack(height=44))
-            self.smb_status = toga.Label('', style=Pack(font_size=12))
-            self.smb_connect = toga.Button('Add connection and browse', on_press=self.connect_smb, style=Pack(height=44))
-            self.smb_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
-                toga.Label('SMB / Mac share', style=Pack(font_size=22)),
-                toga.Label(import_hint('On your Mac, enable File Sharing with SMB and allow your account. Use the server address without smb:// or a share path. Connect on the same network or VPN.')),
-                toga.Label('Connection name'), self.smb_name, toga.Label('Server'), self.smb_host,
-                toga.Label('Username'), self.smb_user, toga.Label('Password'), self.smb_password,
-                toga.Label('Domain'), self.smb_domain, toga.Label('Port'), self.smb_port,
-                self.smb_remember, toga.Label(import_hint('Off keeps connections only for this app session. Saved and session-only connections can be loaded together.')),
-                self.smb_connect, self.smb_status], style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+            ui = self.rclone_ui
+            self.smb_status = ui.settings_note('')
+            self.smb_guest = toga.Switch('Connect as guest', value=False, on_change=self.change_smb_guest, style=Pack(height=44))
+            self.smb_account = toga.Box(children=[ui.settings_field('Username', self.smb_user),
+                ui.settings_field('Password', self.smb_password)], style=Pack(direction=COLUMN))
+            self.smb_signin = ui.settings_group([self.smb_guest, self.smb_account])
+            advanced, self.smb_advanced_toggle = ui.settings_disclosure('Advanced options', [
+                ui.settings_group([ui.settings_field('Domain', self.smb_domain), ui.settings_field('Port', self.smb_port)])])
+            help_box, self.smb_help_toggle = ui.settings_disclosure('Need help connecting?', [
+                ui.settings_note('Use the same network or VPN. On a Mac, enable File Sharing, turn on SMB, and allow your account. Use a hostname or IP without smb:// or a share path.')])
+            self.smb_connect = toga.Button('Connect & browse shares', on_press=self.connect_smb, style=Pack(height=48))
+            self.smb_view = ui.settings_page('SMB shares', 'Connect to a Mac, PC, or NAS on your network.', [
+                ui.settings_heading('NEW CONNECTION'),
+                ui.settings_group([ui.settings_field('Connection name', self.smb_name), ui.settings_field('Server address', self.smb_host)]),
+                ui.settings_note('Use a hostname or IP address. Choose a share after connecting.'),
+                ui.settings_heading('SIGN IN'), self.smb_signin, advanced,
+                ui.settings_group([self.smb_remember]), ui.settings_note('Turn off to connect for this session only.'),
+                self.smb_connect, help_box, self.smb_status])
         self.smb_connect.enabled = self.cloud_client is not None
-        self.show_view(self.smb_view, destination='files', route='smb-connection', title='SMB / Mac share')
+        self.show_view(self.smb_view, destination='settings', route='smb-connection', title='SMB shares')
+
+    def change_smb_guest(self, widget=None, **kwargs):
+        self.smb_password.value = ''
+        if self.smb_guest.value:
+            if self.smb_account.parent is not None:
+                self.smb_signin.remove(self.smb_account)
+        elif self.smb_account.parent is None:
+            self.smb_signin.add(self.smb_account)
+        if hasattr(self, 'smb_view'):
+            self.smb_view.reflow()
 
     async def connect_smb(self, widget=None, **kwargs):
         if self.cloud_busy or self.cloud_client is None:
@@ -340,6 +398,11 @@ class CloudUI(LocalCryptUI):
             (self.smb_name, self.smb_host, self.smb_user, self.smb_domain, self.smb_port))
         password = self.smb_password.value
         self.smb_password.value = ''
+        if self.smb_guest.value:
+            user, password = 'guest', ''
+        if not name or not host or not user:
+            self.smb_status.text = 'Enter a connection name, server address, and username, or choose guest access.'
+            return
         remember = self.smb_remember.value
         self.set_cloud_busy(True)
         self.smb_connect.enabled = False
@@ -383,11 +446,16 @@ class CloudUI(LocalCryptUI):
         privacy = getattr(self, 'screen_privacy', None)
         if privacy is not None:
             privacy.refresh()
-        for item in (self.cloud_add_smb, self.cloud_choose, self.cloud_password, self.cloud_import, self.cloud_probe, self.cloud_remote,
+        for item in (self.cloud_import_entry, self.cloud_settings_toggle, self.cloud_choose, self.cloud_password, self.cloud_import, self.cloud_probe, self.cloud_remote,
                      self.cloud_location, self.cloud_browse, self.cloud_up, self.cloud_entries,
                      self.cloud_open, self.cloud_clear, self.cloud_lock, self.cloud_reload, self.cloud_remember,
                      self.crypt_open, self.crypt_refresh, self.crypt_selector, self.crypt_password):
             item.enabled = not value and self.cloud_client is not None
+        for name in ('smb_name', 'smb_host', 'smb_user', 'smb_password', 'smb_domain', 'smb_port',
+                     'smb_guest', 'smb_remember', 'smb_connect', 'smb_advanced_toggle'):
+            item = getattr(self, name, None)
+            if item is not None:
+                item.enabled = not value and self.cloud_client is not None
         self.cloud_import.enabled = not value and self.cloud_client is not None and self.cloud_pending_zip is not None
         self.cloud_cancel.enabled = value
         # Request controls take no list space while the browser is idle.

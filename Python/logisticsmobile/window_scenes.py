@@ -311,6 +311,8 @@ def workspace_class():
             self.show_window_boundary()
         def show_cloud_connections(self, widget=None, **kwargs):
             self.show_window_boundary()
+        def show_smb_connection(self, widget=None, **kwargs):
+            self.show_window_boundary()
         def show_chat(self, widget=None, **kwargs):
             self.show_window_boundary()
         def show_transfers(self, widget=None, **kwargs):

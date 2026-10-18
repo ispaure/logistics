@@ -17,3 +17,9 @@ class MobileHostUI:
     accessible_name: Callable
     local_read_available: Callable
     refresh_folder_source_actions: Callable = lambda: None
+    settings_page: Callable = None
+    settings_group: Callable = None
+    settings_field: Callable = None
+    settings_note: Callable = None
+    settings_heading: Callable = None
+    settings_disclosure: Callable = None
