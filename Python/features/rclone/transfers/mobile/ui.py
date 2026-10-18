@@ -59,8 +59,7 @@ class MirrorUI(TransferReviewUI):
             self.refresh_transfer_status()
 
     def refresh_transfer_status(self):
-        from logisticsmobile.folder_hub_style import source_actions
-        source_actions(getattr(self, 'app', self))
+        self.rclone_ui.refresh_folder_source_actions()
         live = []
         busy = getattr(self, 'transfer_busy', False)
         visible = busy or getattr(self, 'transfer_notification', False)

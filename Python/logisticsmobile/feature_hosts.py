@@ -12,8 +12,9 @@ def rclone_host_ui(app):
     from logisticsmobile import pickers
     from logisticsmobile.resource_imports import ResourceImports
     from logisticsmobile.appearance import accessible_name
+    from logisticsmobile.folder_hub_style import source_actions
     from logisticsmobile.files_ui import local_read_available
-    return MobileHostUI(icon_button=icon_button, NativeBrowser=NativeBrowser, FeatureCommands=lambda button, owner, *args, **kwargs: FeatureCommands(button, app, *args, **kwargs), private_label=private_label, visible_remotes=visible_remotes, exclusions=exclusions, pick_document=lambda owner: pickers.pick_document(app), ResourceImports=ResourceImports, export_file=lambda owner, selected: pickers.export_file(app, selected), accessible_name=accessible_name, local_read_available=lambda owner, **kwargs: local_read_available(app, **kwargs))
+    return MobileHostUI(icon_button=icon_button, NativeBrowser=NativeBrowser, FeatureCommands=lambda button, owner, *args, **kwargs: FeatureCommands(button, app, *args, **kwargs), private_label=private_label, visible_remotes=visible_remotes, exclusions=exclusions, pick_document=lambda owner: pickers.pick_document(app), ResourceImports=ResourceImports, export_file=lambda owner, selected: pickers.export_file(app, selected), accessible_name=accessible_name, local_read_available=lambda owner, **kwargs: local_read_available(app, **kwargs), refresh_folder_source_actions=lambda: source_actions(app))
 
 
 def mobile_presentation(app):

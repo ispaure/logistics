@@ -514,7 +514,9 @@ class MirrorProgressDisplayTests(unittest.TestCase):
         banner.notice = toga.Button('Details')
         banner.dismiss = toga.Button('Dismiss')
         banner.progress = toga.ProgressBar(max=100, value=0)
-        app = SimpleNamespace(transfer_busy=True, transfer_percentage=42,
+        refresh_folder = Mock()
+        app = SimpleNamespace(rclone_ui=SimpleNamespace(refresh_folder_source_actions=refresh_folder),
+                              transfer_busy=True, transfer_percentage=42,
                               transfer_message='Transferring · 42% of known work',
                               mirror_store=lambda: SimpleNamespace(error=''),
                               show_view=Mock(), cancel_mirror_transfer=Mock(),
@@ -523,5 +525,6 @@ class MirrorProgressDisplayTests(unittest.TestCase):
         self.assertEqual(app.transfer_progress.max, 100)
         self.assertEqual(app.transfer_progress.value, 42)
         MirrorUI.refresh_transfer_status(app)
+        refresh_folder.assert_called_once_with()
         self.assertIn('42% of known work', banner.notice.text)
         self.assertEqual(banner.progress.value, 42)

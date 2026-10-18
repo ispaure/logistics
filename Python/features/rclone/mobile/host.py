@@ -16,3 +16,4 @@ class MobileHostUI:
     export_file: Callable
     accessible_name: Callable
     local_read_available: Callable
+    refresh_folder_source_actions: Callable = lambda: None
