@@ -17,7 +17,7 @@ def tree_anchor(label=None):
         return ENTRY_ICON_SLOT / 2
     backend = type(label._impl).__module__
     if backend.startswith('toga_iOS.'):
-        width = float(label._impl.native.intrinsicContentSize.width)
+        width = float(label._impl.native.intrinsicContentSize().width)
     elif backend.startswith('toga_android.'):
         width = label._impl.scale_out(label._impl.native.getPaint().measureText(label.text))
     else:

@@ -40,6 +40,14 @@ class FolderHubContrastTests(unittest.TestCase):
         impl.interface = widget
         return widget
 
+    def test_tree_group_anchor_uses_the_native_ios_size_getter(self):
+        impl = type('IOSLabel', (), {'__module__': 'toga_iOS.widgets.label'})()
+        impl.native = NS(intrinsicContentSize=lambda: NS(width=28, height=18))
+        label = NS(_impl=impl, text='A long group heading', style=NS(font_size=15))
+        self.assertEqual(folder_hub_style.tree_anchor(label), 14)
+        impl.native.intrinsicContentSize = lambda: NS(width=200, height=18)
+        self.assertEqual(folder_hub_style.tree_anchor(label), folder_hub_style.TREE_INDENT - 8)
+
     def test_source_selection_inverts_only_in_high_contrast_and_repaints(self):
         tab = self.widget()
         palette.set_eink_enabled(True)
