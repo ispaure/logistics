@@ -63,6 +63,9 @@ def eink_selection_indicator(bar, enabled, original=None):
 
 def install_destination_icons(host):
     """Install app-owned glyphs on Android bottom bars and wide-screen rails."""
+    if host.adapter is not None and hasattr(host.adapter, 'navigation'):
+        install_apple_destination_icons(host)
+        return
     install_folder_hub_icon(host)
     adapter = host.adapter
     if adapter is None or not hasattr(adapter, 'bottom'):
@@ -126,12 +129,7 @@ def install_folder_hub_icon(host):
         return
     index = host.destinations.index('files')
     if hasattr(adapter, 'navigation'):
-        from rubicon.objc import ObjCClass
-        data = ObjCClass('NSData').alloc().initWithBase64EncodedString(ICONS['folder_hub'], options=0)
-        image = ObjCClass('UIImage').imageWithData(data)
-        image = ObjCClass('UIImage').imageWithCGImage(image.CGImage, scale=3, orientation=0)
-        adapter.navigation[index].tabBarItem.image = image.imageWithRenderingMode(2)
-        refresh_apple_tab_items(host)
+        install_apple_destination_icons(host)
     elif hasattr(adapter, 'bottom'):
         from android.util import Base64
         from android.graphics import BitmapFactory
@@ -142,6 +140,47 @@ def install_folder_hub_icon(host):
         for bar in (adapter.bottom, adapter.rail):
             if bar is not None:
                 bar.getMenu().getItem(index).setIcon(drawable)
+
+
+def install_apple_destination_icons(host):
+    """Retain real Toga icons so rebuilt tab items cannot restore its star.
+
+    Toga 0.5.7 recreates UITabBarItem from OptionItem.icon when a title or icon
+    changes. Assigning only navigation.tabBarItem.image leaves that model empty.
+    Render native artwork to tiny cache PNGs and give each OptionItem an Icon;
+    UIKit then keeps the same template image through its normal update path.
+    """
+    from pathlib import Path
+    import toga
+    from rubicon.objc import ObjCClass, Block, objc_id
+    from toga_iOS.libs import UIGraphicsImageRenderer, CGSize, CGRect
+    from toga_iOS.images import nsdata_to_bytes
+    from .hub_icons import ICONS
+
+    cache = Path(host.window.app.paths.cache) / 'navigation-icons-v1'
+    cache.mkdir(parents=True, exist_ok=True)
+    renderer = UIGraphicsImageRenderer.alloc().initWithSize(CGSize(24, 24))
+    scale = int(renderer.format.scale)
+    for key, symbol, item in zip(host.destinations, host.symbols, host.root.content):
+        if key == 'files':
+            data = ObjCClass('NSData').alloc().initWithBase64EncodedString(ICONS['folder_hub'], options=0)
+            image = ObjCClass('UIImage').imageWithData(data)
+        else:
+            image = ObjCClass('UIImage').systemImageNamed(symbol)
+        if image is None:
+            raise ValueError('Missing navigation symbol: ' + symbol)
+
+        def draw(context):
+            ratio = min(24 / float(image.size.width), 24 / float(image.size.height))
+            width, height = float(image.size.width) * ratio, float(image.size.height) * ratio
+            image.drawInRect(CGRect(((24 - width) / 2, (24 - height) / 2), (width, height)))
+
+        path = cache / f'{key}@{scale}x.png'
+        path.write_bytes(nsdata_to_bytes(renderer.PNGDataWithActions(Block(draw, None, objc_id))))
+        icon = toga.Icon(path)
+        icon._impl.native = icon._impl.native.imageWithRenderingMode(2)
+        item.icon = icon
+    refresh_apple_tab_items(host)
 
 
 def refresh_apple_tab_items(host):

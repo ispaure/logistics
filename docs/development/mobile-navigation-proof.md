@@ -13,6 +13,22 @@ declared iOS 15 minimum and guarding newer controller APIs.
 
 ## Local evidence
 
+### iOS destination icon retention
+
+The application retains destination artwork in each Toga `OptionItem.icon`.
+Assigning only the native tab item's image leaves Toga's icon empty; rebuilding
+that item after a title update restores its default star. Logistics renders its
+UIKit symbols and Workspaces artwork into small, regenerated cache PNGs and
+assigns real Toga icons before refreshing the native items. The cached artwork
+contains no user content and keeps template tinting for selected and dark states.
+
+`Mobile/native_tests/tests/logisticsmobile/tab_icons_probe.py` reproduces the
+original stars by reapplying tab titles, then checks native images against their
+retained icons through title/icon reconstruction, destination switches, and light
+and dark appearance. Local iPhone and iPad simulator runs on 2026-10-18 passed all
+nine snapshots; the original implementation reproduced five stars. These checks
+do not claim physical-device access.
+
 The native suite retains all existing feature cases and adds
 `native_navigation_foundation`, for 16 required cases. Local reports and
 screenshots are retained under ignored `Mobile/logs/navigation/` directories.
