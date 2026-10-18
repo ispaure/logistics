@@ -56,9 +56,13 @@ class FolderSourceTabTests(unittest.TestCase):
         app.show_locations()
         self.assertEqual(list(app.folder_source_actions.children), [])
         app.change_folder_source('rclone')
+        self.assertEqual(list(app.folder_source_actions.children), [])
+        app.transfer_busy = True
+        app.refresh_transfer_status()
         self.assertEqual(list(app.folder_source_actions.children), [app.folder_transfers_button])
         self.assertIsNone(app.folder_add_share_button.parent)
         self.assertEqual(app.folder_source_actions.style.margin_bottom, 12)
+        app.transfer_busy = False
         app.change_folder_source('Local')
         self.assertEqual(list(app.folder_source_actions.children), [])
         self.assertEqual(app.folder_source_actions.style.margin_bottom, 0)
@@ -73,7 +77,7 @@ class FolderSourceTabTests(unittest.TestCase):
         app.show_locations()
         self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_share_button])
         app.change_folder_source('rclone')
-        self.assertEqual(list(app.folder_source_actions.children), [app.folder_transfers_button])
+        self.assertEqual(list(app.folder_source_actions.children), [])
         self.assertIsNone(app.folder_add_share_button.parent)
         self.assertIn(app.folder_credential_row, app.folder_picker_header.children)
 
@@ -127,16 +131,16 @@ class FolderSourceTabTests(unittest.TestCase):
                     if getattr(child, 'control_icon', '').startswith('storage_')]
 
         self.assertEqual(icons(local['target']), ['storage_local'])
-        self.assertEqual(icons(crypt['target']), ['storage_crypt'])
+        self.assertEqual(icons(crypt['target']), ['storage_local', 'storage_unlocked'])
         self.assertEqual(icons('Notes'), ['storage_local'])
         self.assertEqual(icons('All files'), ['storage_local'])
         app.change_folder_source('rclone')
         self.assertEqual(icons('Online'), ['storage_remote'])
         self.assertEqual(icons(local['target']), ['storage_remote'])
-        self.assertEqual(icons(crypt['target']), ['storage_crypt'])
+        self.assertEqual(icons(crypt['target']), ['storage_remote', 'storage_unlocked'])
         store.target(crypt).rename(store.target(crypt).with_name('unmapped'))
         app.show_locations()
-        self.assertEqual(icons('Secret'), ['storage_crypt'])
+        self.assertEqual(icons('Secret'), ['storage_remote', 'storage_unlocked'])
         app.change_folder_source('Local')
         self.assertNotIn('Secret', app.folder_buttons)
 
