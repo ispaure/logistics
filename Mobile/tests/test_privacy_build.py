@@ -11,6 +11,11 @@ from Mobile.testflight_tools import BUNDLE, inspect_app
 
 class PrivacyBuildTests(unittest.TestCase):
     def project(self, root):
+        project = root / 'Logistics Mobile.xcodeproj'
+        project.mkdir()
+        (project / 'project.pbxproj').write_bytes(plistlib.dumps({'objects': {
+            'group': {'isa': 'PBXGroup', 'path': 'LogisticsMobile', 'children': []},
+            'resources': {'isa': 'PBXResourcesBuildPhase', 'files': []}}}))
         framework = root / 'Support/Python.xcframework'
         (framework / 'build').mkdir(parents=True)
         (framework / 'build/utils.sh').write_text(
@@ -37,6 +42,9 @@ class PrivacyBuildTests(unittest.TestCase):
             self.assertEqual(len(files), 6)
             for p in files:
                 self.assertEqual(p.read_bytes(), privacy_build.MANIFEST.read_bytes())
+            data = plistlib.loads((root / 'Logistics Mobile.xcodeproj/project.pbxproj').read_bytes())
+            self.assertEqual(len(data['objects']['resources']['files']), 1)
+            self.assertEqual((root / 'LogisticsMobile/PrivacyInfo.xcprivacy').read_bytes(), privacy_build.APP_MANIFEST.read_bytes())
 
     def test_existing_different_declaration_is_not_silently_replaced(self):
         with TemporaryDirectory() as directory:
@@ -71,4 +79,7 @@ class PrivacyBuildTests(unittest.TestCase):
                 path = app / 'Frameworks' / (module + '.framework') / 'PrivacyInfo.xcprivacy'
                 path.parent.mkdir(parents=True)
                 path.write_bytes(privacy_build.MANIFEST.read_bytes())
+            with self.assertRaisesRegex(ValueError, 'app privacy manifest'):
+                inspect_app(app, {}, '145', signed=False)
+            (app / 'PrivacyInfo.xcprivacy').write_bytes(privacy_build.APP_MANIFEST.read_bytes())
             self.assertEqual(inspect_app(app, {}, '145', signed=False)['build_number'], '145')

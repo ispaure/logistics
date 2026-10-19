@@ -220,6 +220,33 @@ def recover_location(private_root, volume):
     return True
 
 
+def start_empty_location(private_root, volume):
+    """Select empty collection folders without copying or erasing either side."""
+    base, trees = _destination(private_root, volume)
+    for tree in trees:
+        if _inventory(tree):
+            raise FileExistsError('This location contains files. Use existing files here, or erase this location first.')
+    base.mkdir(parents=True, exist_ok=True)
+    for tree in trees:
+        tree.mkdir(exist_ok=True)
+    _activate(private_root, volume, base)
+    return True
+
+
+def describe_location(private_root, volume):
+    """Cheap local preview; no hashes, copying, activation or directory creation."""
+    base, trees = _destination(private_root, volume)
+    chosen = selection(private_root)
+    active = Path(chosen['volume']) / 'Logistics' if chosen else Path(private_root)
+    folders = []
+    for tree in trees:
+        if tree.exists() and not tree.is_dir():
+            raise ValueError('A collection folder is a file: ' + str(tree))
+        state = 'contains files or folders' if tree.exists() and any(tree.iterdir()) else 'empty' if tree.exists() else 'not created'
+        folders.append((str(tree), state))
+    return dict(base=str(base), active=base == active, folders=folders)
+
+
 def wipe_destination(private_root, volume):
     """Delete only inactive collection trees and interrupted copy staging folders."""
     base, trees = _destination(private_root, volume)

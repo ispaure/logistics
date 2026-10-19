@@ -27,7 +27,7 @@ class StorageUITests(unittest.TestCase):
     def test_permission_is_required_without_writing_files(self):
         with patch('logisticsmobile.storage_ui.all_files_allowed', return_value=False):
             self.app.loop.run_until_complete(self.app.change_collection_storage())
-        self.assertIn('enable permission', self.app.collection_storage_status.text)
+        self.assertIn('enable permission', ' '.join(self.app.collection_storage_status.text.split()))
         self.assertFalse((self.card / 'Logistics').exists())
 
     def test_confirmation_cancel_does_not_switch(self):
@@ -53,6 +53,26 @@ class StorageUITests(unittest.TestCase):
         self.app.loop.run_until_complete(self.app.change_collection_storage())
         self.assertIn('Wait', self.app.collection_storage_status.text)
         self.assertFalse((self.card / 'Logistics').exists())
+
+    def test_preview_identifies_target_and_never_offers_erasing_active_location(self):
+        self.assertIn('NOT CURRENTLY IN USE', self.app.collection_target_status.text)
+        self.assertTrue(self.app.collection_erase.enabled)
+        self.app.collection_drive.value = 'App internal storage'
+        self.assertIn('CURRENTLY IN USE', self.app.collection_target_status.text)
+        self.assertFalse(self.app.collection_erase.enabled)
+        self.assertFalse(self.app.collection_copy.enabled)
+
+    def test_start_empty_keeps_current_files_and_closes_after_confirming(self):
+        old = collection_path(self.app.private_root)
+        old.mkdir(exist_ok=True)
+        (old / 'keep.txt').write_text('old')
+        with patch('logisticsmobile.storage_ui.all_files_allowed', return_value=True), \
+                patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value=True)), \
+                patch.object(self.app, 'exit') as exit_app:
+            self.app.loop.run_until_complete(self.app.start_empty_collection())
+        self.assertEqual((old / 'keep.txt').read_text(), 'old')
+        self.assertFalse(list(collection_path(self.app.private_root).iterdir()))
+        exit_app.assert_called_once()
 
     def test_recover_internal_after_card_removal_without_cloud_browser(self):
         source = collection_path(self.app.private_root)
@@ -82,6 +102,6 @@ class StorageUITests(unittest.TestCase):
                 patch.object(self.app, 'exit') as exit_app:
             self.app.loop.run_until_complete(self.app.wipe_collection_storage())
         self.assertFalse(target.exists())
-        self.assertIn('wiped', self.app.collection_storage_status.text)
+        self.assertIn('erased', self.app.collection_storage_status.text)
         self.assertFalse(self.app.cloud_busy)
         exit_app.assert_not_called()

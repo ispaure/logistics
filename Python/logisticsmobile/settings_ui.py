@@ -421,7 +421,7 @@ class SettingsNavigation(toga.Box):
                          radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False))
         icons = {'App': 'preferences', 'Appearance': 'appearance', 'Read aloud': 'speaker',
                  'Text & Markdown': 'edit', 'Books & Comics': 'books', 'LM Chat': 'chat',
-                 'Workspaces': 'folder', 'Help': 'help', 'About': 'info'}
+                 'Workspaces': 'folder', 'Reset': 'preferences', 'Help': 'help', 'About': 'info'}
         rows = []
         for title in sections:
             def choose(widget=None, selected=title, **kwargs):
@@ -433,7 +433,7 @@ class SettingsNavigation(toga.Box):
             self.buttons[title] = button
             rows.append(button)
             end_group = title == ('Appearance' if 'Appearance' in sections else 'App')
-            if end_group or title in ('Books & Comics', 'Workspaces', 'About'):
+            if end_group or title in ('Books & Comics', 'Workspaces', 'Reset', 'About'):
                 menu.add(group_rows(rows, icon_inset=True))
                 rows = []
         if rows:

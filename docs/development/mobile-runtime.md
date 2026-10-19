@@ -268,3 +268,33 @@ Changing source reevaluates it immediately, without changing transfer state.
 or cloud), adding a lock for encrypted providers/remotes. Local and remote
 browsing update it after a successful listing. Its navigation glyph becomes Back
 at the provider root and returns to Workspaces; nested folders retain Up.
+
+## App reset boundary
+
+`logisticsmobile.app_reset` owns reset operations. Android calls its own
+`ActivityManager.clearApplicationUserData()`; no package argument can target
+another app. iOS records a schema-only durable request in private storage. The
+primary app processes it before `prepare_for_app` migration or service creation.
+The reset never reads collection-volume pointers for erasure. It clears public
+Documents, Application Support (including config/private state), caches, WebKit,
+cookies, saved application state and app temporary files. A contained symlink is
+unlinked without visiting its target; linked root paths are refused. The retry
+marker survives partial deletion and is removed last.
+
+iOS deletes only Logistics's two credential Keychain service namespaces,
+including keys orphaned by corrupt metadata, then clears the app's native user
+defaults. Other Keychain services remain. Key deletion must succeed before file
+erasure. Reset confirmation requires ERASE and no active transfer/generation or
+other window. The iOS reset notice replaces navigation and suppresses exit
+checkpoints until a full process restart; new-window requests are refused.
+
+The collection UI separately previews explicit paths and selected/active state.
+`start_empty_location` refuses any nonempty tree and never copies or deletes the
+old collection. `recover_location` is presented as using existing files without
+copying. `wipe_destination` remains forbidden for the active location.
+
+The app-only UserDefaults reset is declared with CA92.1 in
+`Mobile/privacy/App.xcprivacy`, copied as a target resource before signing and
+verified in exported apps. Platform API references:
+[Android clearApplicationUserData](https://developer.android.com/reference/android/app/ActivityManager#clearApplicationUserData())
+and [Apple Keychain deletion](https://developer.apple.com/documentation/security/secitemdelete(_:)).

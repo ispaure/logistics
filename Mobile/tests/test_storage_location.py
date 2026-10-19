@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from features.rclone.mobile.storage_location import (
     CONFIG, MARKER, CollectionFiles, collection_path, switch_location,
-    recover_location, wipe_destination,
+    recover_location, wipe_destination, start_empty_location, describe_location,
 )
 from features.rclone.transfers.mobile.jobs import MirrorJobs
 from test_mirror_jobs import MirrorClient
@@ -15,6 +15,36 @@ from logisticsmobile.folder_hub import hub_entries
 
 
 class CollectionStorageTests(unittest.TestCase):
+    def test_start_empty_keeps_old_files_and_private_metadata_and_never_overwrites(self):
+        self.seed()
+        self.assertTrue(start_empty_location(self.private, self.volume))
+        self.assertFalse(list(collection_path(self.private).iterdir()))
+        self.assertFalse(list(collection_path(self.private, True).iterdir()))
+        self.assertTrue(any((self.private / 'LocalFiles').rglob('note.txt')))
+        self.assertEqual((self.private / 'credentials.bin').read_bytes(), b'stay internal')
+        (collection_path(self.private) / 'new.txt').write_text('new')
+        with self.assertRaises(FileExistsError):
+            start_empty_location(self.private, self.volume)
+        self.assertEqual((collection_path(self.private) / 'new.txt').read_text(), 'new')
+
+    def test_empty_selection_can_recover_from_missing_active_card(self):
+        self.seed()
+        switch_location(self.private, self.volume)
+        self.volume.rename(self.base / 'removed-card')
+        other = self.base / 'new-card'
+        other.mkdir()
+        self.assertTrue(start_empty_location(self.private, other))
+        self.assertEqual(collection_path(self.private), other / 'Logistics/Local')
+        self.assertTrue(any((self.base / 'removed-card/Logistics/Local').rglob('note.txt')))
+
+    def test_inspect_is_read_only_and_identifies_active_vs_other_location(self):
+        self.assertTrue(describe_location(self.private, None)['active'])
+        description = describe_location(self.private, self.volume)
+        self.assertFalse(description['active'])
+        self.assertEqual([state for _, state in description['folders']], ['not created', 'not created'])
+        self.assertFalse((self.volume / 'Logistics').exists())
+        start_empty_location(self.private, self.volume)
+        self.assertTrue(describe_location(self.private, self.volume)['active'])
     def setUp(self):
         self.temporary = TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

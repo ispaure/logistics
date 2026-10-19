@@ -1,11 +1,12 @@
 """Owned workflow state and explicit application services."""
 from services.workflow_host import HostAttribute
 from logisticsmobile.storage_ui import StorageUI
+from logisticsmobile.reset_ui import ResetUI
 
 
-class StorageController(StorageUI):
-    METHODS = ('open_android_developer_settings', 'show_collection_storage', 'allow_collection_storage', 'change_collection_storage', 'recover_collection_storage', 'wipe_collection_storage')
-    FIELDS = ('_storage_changing', 'collection_drive', 'collection_drives', 'collection_storage_status')
+class StorageController(StorageUI, ResetUI):
+    METHODS = ('open_android_developer_settings', 'show_collection_storage', 'allow_collection_storage', 'change_collection_storage', 'recover_collection_storage', 'wipe_collection_storage', 'start_empty_collection', 'collection_target_changed', 'show_app_reset', 'reset_phrase_changed', 'confirm_app_reset')
+    FIELDS = ('_storage_changing', 'collection_drive', 'collection_drives', 'collection_storage_status', 'collection_target_status', 'collection_copy', 'collection_existing', 'collection_empty', 'collection_erase', 'reset_phrase', 'reset_button', 'reset_status')
 
     def __init__(self, app):
         self.app = app

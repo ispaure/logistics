@@ -72,6 +72,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         install_appearance(self)
         root = Path(self.storage_root or self.paths.data)
         if type(self._impl).__module__.startswith('toga_iOS.') and self.storage_root is None:
+            from .app_reset import finish_ios_reset
+            finish_ios_reset(self, Path(self.paths.config).parent / 'Logistics')
             from .ios_storage import prepare_for_app
             root = prepare_for_app(self)
         self.private_root = root
@@ -657,6 +659,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             if self.window_id != 'primary':
                 box.add(toga.Button('Close window', on_press=lambda widget, **kw:
                     self.scene_manager.close_window(self), style=Pack(height=48)))
+        box = category('Reset')
+        box.add(toga.Button('Erase all app data…', on_press=self.show_app_reset, style=Pack(height=48)))
+        box.add(SettingsLabel('Delete private files, local app data, settings and metadata. Review the full scope before confirming.'))
         box = category('Help')
         if type(self._impl).__module__.startswith('toga_android.'):
             box.add(toga.Button('Developer settings…', on_press=self.open_android_developer_settings, style=Pack(height=48)))
@@ -923,6 +928,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.editor_view.refresh_status()
 
     def checkpoint(self, *args, **kwargs):
+        if getattr(self, '_reset_scheduled', False):
+            return True
         if not self.active_host:
             return False
         if self.current is None or self.loading:
@@ -1018,6 +1025,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             origin.export_button.enabled = True
 
     def exit_app(self, app, **kwargs):
+        if getattr(self, '_reset_scheduled', False):
+            return True
         self.retire_private_comic_batch()
         if getattr(self, 'cloud_busy', False):
             self.cancel_cloud()

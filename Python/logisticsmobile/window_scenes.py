@@ -48,6 +48,8 @@ class SceneManager:
                 pass
 
     def new_window(self, widget=None, *, workspace_id=None, **kwargs):
+        if getattr(self.app, '_reset_scheduled', False):
+            return False
         self.reconcile_scenes()
         if not self.supported or (not self.primary_disconnected and not self.owners.can_add()):
             self.error = 'Close protected items or another window before opening a new window.'

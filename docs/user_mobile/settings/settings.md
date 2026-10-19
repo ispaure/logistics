@@ -129,43 +129,36 @@ the update is installed, so the previous storage layout can be visible to a
 trusted computer until the updated app has been opened and migration completes.
 
 On Android, open **Settings → Workspaces → Local / LocalCrypt location…**.
-One drive setting controls both collections. Select the SD card to use:
+One setting controls both collections. Selecting a drive in the list only
+inspects it; it does not switch storage. The page shows the current location,
+whether the selected location is in use, and the exact Local and LocalCrypt
+paths and whether they are empty or contain files.
 
-```text
-<SD card>/Logistics/Local
-<SD card>/Logistics/LocalCrypt
-```
+On a shared drive, the two folders are `<drive>/Logistics/Local` and
+`<drive>/Logistics/LocalCrypt`. Internal copies use the app's private
+`LocalFiles` and `LocalCryptFolders`. Enable **All files access** using
+**Allow SD card / shared storage access…** before accessing shared drives.
 
-Tap **Allow SD card / shared storage access…**, enable Android's **All files
-access** for Logistics, and return to the app. Then choose **Copy collections
-and use this drive…**. Close open readers and provider documents first and wait
-for transfers to finish. Logistics copies existing managed Local and LocalCrypt
-folders, checks file contents, and saves the new location only after verification.
-Different files already in the destination stop the switch without overwriting;
-when there are no existing source files, collections on the selected drive may
-be adopted. The app closes after a successful switch; reopen it.
+| Action | Result | Files kept |
+| --- | --- | --- |
+| **Copy current files here, then use them…** | Copies and verifies both collections, then selects the destination. Different destination files stop the operation; nothing is merged or overwritten. | Original files remain at the previous location. Matching copied files can be reused after an interrupted copy. |
+| **Use existing files here — no copy…** | Selects the two collection folders already at this location. This is what the old “Recover” button meant. It does not restore newer changes, merge folders or copy the current collection. | Current files stay at their old location. The selected files may be an older backup. Original credentials are still needed for LocalCrypt. |
+| **Start empty here — keep old files…** | Creates/selects empty collection folders without copying. Refuses a location containing files. Works even if the previously selected card is unavailable. | Current files stay at their old location. Private documents, credentials and metadata remain. |
+| **Erase collection files at this location…** | Permanently deletes only the displayed Local and LocalCrypt folders, their contents, interrupted `.storage-copy-*` folders and the location marker. Does not select another location. | Unrelated folders, private documents, credentials, settings and metadata remain. Disabled/refused for the collection currently in use. |
 
-The original copies remain as a recovery backup and continue to occupy space.
-Only the selected location is used afterward. Switching back refuses to replace a
-backup whose files differ from the current collection. Interrupted migration can
-leave copied destination folders, but the original selection remains active until
-both collections pass verification. Repeating the switch reuses matching copies.
+“Inactive” previously meant **not currently selected by Logistics**, not empty,
+obsolete or safe to delete. Example: after copying internal collections to an SD
+card, the internal copy is retained but no longer selected. To return to that
+copy without the SD card, choose **App internal storage → Use existing files
+here — no copy…**. Later SD-card changes will not be present in the older copy.
+To remove that older copy permanently, first verify that the correct SD-card
+collection is in use, then select internal storage and erase its collection
+folders. Never erase your only remaining copy.
 
-For recovery, select the location containing the backup and tap **Recover existing
-collections on this drive…**. This uses those files directly without copying or
-merging the currently selected collection. You can recover the retained internal
-copy even when the SD card is missing. A backup can be older than the current
-collection; confirm the location carefully. LocalCrypt still needs the original
-credentials. Recovery checks the folders before saving the selection, then closes
-the app so you can reopen it with that collection.
-
-To clear a conflicting destination or an interrupted copy, select it and tap
-**Wipe inactive collections on this drive…**. After confirmation, this permanently
-deletes only that location's Local and LocalCrypt folders and interrupted
-collection-copy folders. It keeps unrelated folders, private credentials, and
-settings. It refuses to wipe the active collection: recover or switch to another
-location first. After wiping a destination, retry **Copy collections and use this
-drive…**. Wiping the retained internal backup also deletes its recovery files.
+Finish transfers and close provider readers before switching. Every switch
+requires confirmation and closes the Android app on success; reopen it to use
+the new location. The erase action stays in the current app. All four actions
+preserve private credentials and app metadata; **Settings → Reset** is separate.
 
 Credentials, transfer mappings, preferences, imported standalone books, text
 imports and recovery drafts remain in internal app storage. Local is readable
@@ -176,7 +169,7 @@ transfer associations do not. Reinserting the card alone cannot recover those.
 
 If the card is missing or permission is revoked, local collection operations
 stop; Logistics does not silently download into internal storage. Reinsert the
-same card or restore permission. iOS keeps its existing private storage location.
+same card or restore permission. iOS uses its file-sharing Local folder; drive selection is Android-only.
 
 Developers can update Logistics on a paired iPhone over Wi-Fi using the
 [local deployment workflow](../../development/mobile-launchers.md#build-and-deploy-to-a-paired-iphone-over-wi-fi).
@@ -200,7 +193,33 @@ Desktop preferences cannot simply be copied wholesale: filesystem paths,
 external executable locations and desktop-only options need validation or
 platform-specific replacements. Document-provider access is a permission-bearing
 platform handle rather than an ordinary path stored in an INI. Preferences
-migration and general app-data backup/reset behavior remain separate work.
+migration and general app-data backup remain separate work.
+
+## Erase all app data
+
+Open **Settings → Reset → Erase all app data…**. Read the scope, export anything
+you need, type **ERASE**, then confirm. Finish transfers/generation and close
+other Logistics windows first. This is irreversible.
+
+This deletes private documents and unsaved drafts, imported books, chat,
+credentials and their device keys, settings/configuration, transfer mappings,
+reading progress, metadata, thumbnails and caches. On Android it also deletes
+internal Local and LocalCrypt files. On iOS it deletes **all files under On My
+iPhone/iPad → Logisticks**, including Local and files added using Files.
+
+SD/shared-drive `Logistics` folders and files on cloud/SMB servers are kept.
+Their app-side mappings and saved credentials are removed. To use retained
+LocalCrypt data again, you need the original credential ZIPs and passwords;
+resetting the app cannot recreate encryption credentials. To erase SD contents,
+use the separately scoped collection erase action before resetting the app.
+
+Android uses the system's Clear app data operation, closes the app, and clears
+runtime permissions/provider grants. Reopen it and grant access again as needed.
+On iOS the button says **Erase on next launch…**: after confirmation the app
+locks on a reset notice. Fully close it in the app switcher and reopen it.
+Erasure runs before migration, document restoration or services load. A durable
+request retries interrupted erasure on the next launch; a Keychain error stops
+before deleting credential records. Unlock the device and reopen to retry.
 
 ## Mobile documentation
 
