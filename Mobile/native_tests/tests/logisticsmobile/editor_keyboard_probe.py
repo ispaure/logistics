@@ -17,6 +17,13 @@ MEASURE = """JSON.stringify((() => {
     if (!caret.height && range.startOffset > 0 && range.startContainer.nodeType === 3) {
         range.setStart(range.startContainer, range.startOffset - 1); caret = range.getBoundingClientRect();
     }
+    // Chromium reports a zero rect immediately after Enter in an empty
+    // paragraph. Its BR owns the visible insertion line in that case.
+    if (!caret.height && range.startContainer.nodeType === 1) {
+        const empty = range.startContainer;
+        if (!empty.textContent && empty.querySelector('br'))
+            caret = empty.querySelector('br').getBoundingClientRect();
+    }
     const bounds = root.getBoundingClientRect(), nav = document.querySelector('nav').getBoundingClientRect();
     return {top:bounds.top, bottom:bounds.bottom, caret_top:caret.top, caret_bottom:caret.bottom,
         scroll:root.scrollTop, outer_scroll:scrollY, toolbar_top:nav.top, height:innerHeight,
@@ -237,10 +244,24 @@ class Probe(LogisticsMobile):
                         document=SimpleNamespace(text=actual.crypt_text.value), toolbar=actual.reader_toolbar,
                         document_view=actual.crypt_view, footer=actual.crypt_markdown_footer)
                 else:
-                    document = self.store.create(name, text.encode())
-                    self.refresh_documents()
-                    self.open_document(document.id)
-                    self.show_documents(edit=True)
+                    if name.startswith('New'):
+                        # Exercise the actual creation form while its name
+                        # input still owns the software keyboard.
+                        self.choose_document_type()
+                        form = self.routes.body().children[0].content
+                        form.children[1].value = name
+                        form.children[3].value = ('Markdown (.md)' if name.endswith('.md') else 'Plain text (.txt)')
+                        field = form.children[1]._impl.native
+                        field.requestFocus()
+                        manager.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT)
+                        await asyncio.sleep(.7)
+                        form.children[7]._impl.native.performClick()
+                        assert self.current.name == name
+                    else:
+                        document = self.store.create(name, text.encode())
+                        self.refresh_documents()
+                        self.open_document(document.id)
+                        self.show_documents(edit=True)
                     owner = self.editor_view
                     if name.endswith('.md') and source:
                         owner.edit_mode.value = 'Source'
@@ -269,18 +290,27 @@ class Probe(LogisticsMobile):
                             const bounds = heading.getBoundingClientRect();
                             return JSON.stringify({x:bounds.left+30,y:bounds.top+bounds.height/2,width:innerWidth});
                         })()"""))
+                    if name == 'New.md':
+                        touch = json.loads(await owner.formatted.view.evaluate_javascript("""(() => {
+                            const paragraph = root.querySelector('section p').getBoundingClientRect();
+                            return JSON.stringify({x:paragraph.left+10,y:paragraph.top+paragraph.height/2,width:innerWidth});
+                        })()"""))
                     tap(native, touch)
                     await asyncio.sleep(.4)
                 manager.showSoftInput(native, InputMethodManager.SHOW_IMPLICIT)
                 await asyncio.sleep(1)
                 connection = native.onCreateInputConnection(EditorInfo())
-                for index in range(8):
+                for index in range(40 if name == 'New.md' else 8):
                     # Exercise the IME's composition path, not JavaScript-only
                     # edits which skip Android WebView's caret reveal behavior.
                     connection.setComposingText('typing', 1)
                     await asyncio.sleep(.05)
                     connection.setComposingText('typing continues', 1)
                     connection.commitText('typing continues' + ('\n' if source else ' '), 1)
+                    if name == 'New.md' and index % 3 == 2:
+                        from android.view import KeyEvent
+                        connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
+                        connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
                     await asyncio.sleep(.12)
                     data = sample(owner, native)
                     if not source:
@@ -292,6 +322,9 @@ class Probe(LogisticsMobile):
                         data['caret_bottom'] = data['editor'][1] + native.getTotalPaddingTop() + layout.getLineBottom(line) - native.getScrollY()
                     case['samples'].append(data)
                 await capture_window(self, output / (name + '.png'))
+                if name == 'New.md':
+                    assert owner.document.text.count('typing continues') == 40, owner.document.text
+                    assert len(owner.document.text.splitlines()) > 10, owner.document.text
                 for data in case['samples']:
                     assert data['keyboard'], 'Android software keyboard did not open'
                     assert data['toolbar'][1] >= data['visible_top'], data
