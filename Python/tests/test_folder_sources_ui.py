@@ -337,6 +337,10 @@ class FolderSourceTests(QtTestCase):
             def prepare_close(self):
                 return True
         opened = OpenedBrowser()
+        from features.contributions import FolderFeatureContribution
+        available = Mock(return_value=True)
+        page._folder_features = [RegisteredContribution('test', 'Test', FolderFeatureContribution(
+            'Test', available, get_actions=lambda entry: [], supports_private_folders=True))]
         with patch('ui_new.file_browser._browser_view', return_value=opened) as factory, patch(
                 'features.rclone.localcrypt.ui.views.ensure_session', side_effect=AssertionError('Popup requested')), patch(
                 'features.rclone.session.read_package', side_effect=[ValueError('bad password'), {'Private': {'type': 'crypt'}}]):
@@ -345,12 +349,14 @@ class FolderSourceTests(QtTestCase):
             self.assertIsInstance(view, WorkspaceUnlockView)
             self.assertIs(page.browser_stack.currentWidget(), view)
             factory.assert_not_called()
+            available.assert_not_called()
             view.password.setText('wrong')
             view.submit()
             self.assertEqual(view.password.text(), '')
             self.until(lambda: not view.operation.busy)
             self.assertIn('Check the password', view.error.text())
             self.assertIsNone(session.credentials(config))
+            available.assert_not_called()
             self.assertIs(page._browser_view, view)
             view.password.setText('correct')
             view.submit()
@@ -358,10 +364,57 @@ class FolderSourceTests(QtTestCase):
             self.assertEqual(session.package_path(config), package)
             self.assertEqual(session.credentials(config), {'Private': {'type': 'crypt'}})
             self.assertEqual(page.selected_entry_name, 'Private')
+            self.until(lambda: not page.details.busy)
+            available.assert_called_once()
             factory.assert_called_once()
             self.assertEqual(len(page._entry_items), 2)
             for item in page._entry_items.values():
                 self.assertEqual(item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'LocalCrypt, unlocked')
+
+    def test_plain_local_actions_require_unlock_and_discard_late_password_results(self):
+        from threading import Event
+        from types import SimpleNamespace
+        from features.contributions import FolderFeatureContribution
+        from features.rclone import session
+        from features.rclone.ui_contributions import CopyContext
+        from models.folder_entry import FolderEntry
+        config, package = self.root / 'local.session', self.root / 'local.zip'
+        self.addCleanup(session.forget, config)
+        local = self.folder('Plain')
+        context = CopyContext(SimpleNamespace(context=config, package=package, data=local.path))
+        entry = FolderEntry('Plain', local=local, remote_name='Plain', remote_source='rclone', remote_context=context)
+        page = self.page()
+        available = Mock(return_value=False)
+        page._folder_features = [RegisteredContribution('test', 'Test', FolderFeatureContribution(
+            'Test', available, get_actions=lambda entry: []))]
+        page._show_entry(entry)
+        view = page._actions_unlock_view
+        self.assertIsNotNone(view)
+        available.assert_not_called()
+        with patch('features.rclone.session.read_package', return_value={'Plain': {'type': 'local'}}):
+            view.password.setText('correct')
+            view.submit()
+            self.until(lambda: not view.operation.busy and not page.details.busy)
+        available.assert_called_once()
+        self.assertIsNone(page._actions_unlock_view)
+        session.forget(config)
+        page._show_entry(entry)
+        old_view = page._actions_unlock_view
+        entered, release = Event(), Event()
+        self.addCleanup(release.set)
+        def delayed(*args):
+            entered.set()
+            release.wait(5)
+            return {'Plain': {'type': 'local'}}
+        with patch('features.rclone.session.read_package', side_effect=delayed):
+            old_view.password.setText('correct')
+            old_view.submit()
+            self.until(entered.is_set)
+            page._show_empty_state()
+            release.set()
+            self.until(lambda: not old_view.operation.busy)
+        self.assertIsNone(session.credentials(config))
+        self.assertIsNone(page._actions_unlock_view)
 
     def test_cloud_browser_keeps_associated_package_for_inline_unlock(self):
         from types import SimpleNamespace
@@ -523,7 +576,11 @@ class FolderSourceTests(QtTestCase):
             tools.extend(RegisteredContribution(feature.id, feature.label, tool) for tool in feature.folder_features)
         rclone_tool = get_contributions().folder_features[0]
         tools.append(RegisteredContribution('rclone', 'rclone', rclone_tool))
-        connection = SimpleNamespace(data=self.root / 'ciphertext', remote='Legacy', package=self.root / 'keys.zip')
+        from features.rclone import session
+        config, package = self.root / 'keys.session', self.root / 'keys.zip'
+        session.remember(config, {'Legacy': {'type': 'crypt'}}, package_path=package)
+        self.addCleanup(session.forget, config)
+        connection = SimpleNamespace(data=self.root / 'ciphertext', remote='Legacy', package=package, context=config)
         entry = FolderEntry('Legacy', local=LocalCryptFolder(connection), remote_name='Legacy',
                             remote_source='rclone', remote_context=self.root / 'keys.session')
         with patch('features.registry.get_folder_features', return_value=tools):

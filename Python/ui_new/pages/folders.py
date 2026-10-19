@@ -30,6 +30,7 @@ class FoldersPage(pyside.QWidget):
 
         self.panes_locked = panes_locked
         self._browser_view = None
+        self._actions_unlock_view = None
         self._browser_key = None
         self._retired_browsers = []
         self._sources = None
@@ -471,11 +472,46 @@ class FoldersPage(pyside.QWidget):
             self._clear_browser(f'Cannot browse this workspace: {error}')
             return
         self._browser_key = key
+        self._refresh_lock_icons()
+        item = self.folder_tree.currentItem()
+        entry = item.data(0, pyside.Qt.ItemDataRole.UserRole) if item is not None else None
+        if entry is not None:
+            self._show_entry(entry)
+
+    def _refresh_lock_icons(self):
         # One credential ZIP can unlock several workspace roots at once.
         for item in self._entry_items.values():
             entry = item.data(0, pyside.Qt.ItemDataRole.UserRole)
             if entry is not None:
                 self._style_folder_item(item, entry)
+
+    @staticmethod
+    def _entry_unlock_target(entry):
+        from features.rclone.ui.workspace_unlock import unlock_target
+        from features.rclone.ui.remote_browser import RemoteLocation
+        from ui_new.file_browser import _PrivateBrowserLocation
+        if getattr(entry.local, 'private', False):
+            return unlock_target(_PrivateBrowserLocation(entry.local.connection, entry.local.path))
+        if entry.remote_source == 'rclone' and entry.remote_context is not None:
+            association = getattr(entry.remote_context, 'item', None)
+            return unlock_target(RemoteLocation(Path(entry.remote_context), entry.remote_name),
+                                 package=association.package if association else None)
+        return None
+
+    def _retire_actions_unlock(self):
+        view, self._actions_unlock_view = self._actions_unlock_view, None
+        if view is not None:
+            # Retain the parent until any password worker has discarded its result.
+            self._retired_browsers.append(view)
+            view.setParent(self.browser_stack)
+            view.hide()
+            self._browser_idle()
+
+    def _actions_unlocked(self, view, entry):
+        if self._closing or self._actions_unlock_view is not view:
+            return
+        self._refresh_lock_icons()
+        self._show_entry(entry)
 
     def _clear_browser(self, message):
         self._browser_key = None
@@ -496,6 +532,7 @@ class FoldersPage(pyside.QWidget):
             pyside.QTimer.singleShot(0, self.window().close)
 
     def _show_empty_state(self, message=None):
+        self._retire_actions_unlock()
         self.selected_entry_name = None
         self._selected_entry_key = None
         self._detail_generation += 1
@@ -524,6 +561,32 @@ class FoldersPage(pyside.QWidget):
         self._clear_browser(message)
 
     def _show_entry(self, entry):
+        self._retire_actions_unlock()
+        self._detail_generation += 1
+        self._detail_pending = None
+        self.details.request_cancel()
+        self._tools_status = None
+        target = self._entry_unlock_target(entry)
+        if target is not None:
+            widget = pyside.QWidget()
+            layout = pyside.QVBoxLayout(widget)
+            label = pyside.QLabel('Unlock the workspace credentials to load its actions.')
+            label.setWordWrap(True)
+            layout.addWidget(label)
+            online = self._get_selected_source()[0] == 'remote'
+            if not online and not getattr(entry.local, 'private', False):
+                # Plain local files remain browsable; only the remote actions need a password.
+                from features.rclone.ui.workspace_unlock import WorkspaceUnlockView
+                view = WorkspaceUnlockView(*target, parent=widget)
+                self._actions_unlock_view = view
+                view.unlocked.connect(lambda: self._actions_unlocked(view, entry))
+                view.idle.connect(self._browser_idle)
+                layout.addWidget(view)
+            else:
+                label.setText('Unlock this workspace in Files to load its actions.')
+            layout.addStretch()
+            self.detail_scroll.setWidget(widget)
+            return
         widget = pyside.QWidget()
         layout = pyside.QVBoxLayout(widget)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -545,7 +608,6 @@ class FoldersPage(pyside.QWidget):
         layout.addWidget(self._tools_status)
         layout.addStretch()
         self.detail_scroll.setWidget(widget)
-        self._detail_generation += 1
         self._detail_pending = entry
         if self.details.busy:
             self.details.request_cancel()
@@ -706,7 +768,7 @@ class FoldersPage(pyside.QWidget):
         for task in (self.discovery, self.details):
             task.request_cancel()
         browsers_ready = True
-        for view in [self._browser_view, *self._retired_browsers]:
+        for view in [self._browser_view, self._actions_unlock_view, *self._retired_browsers]:
             if view is not None and not view.prepare_close():
                 browsers_ready = False
         return not (self.discovery.busy or self.details.busy) and browsers_ready

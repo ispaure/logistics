@@ -242,6 +242,9 @@ sources in the background while keeping the cached list available. Use
 **Refresh folders** to retry a failed discovery or reload the current source
 after adding folders or configs. A failed refresh keeps the last displayed list
 and reports the error in the bottom notice row.
+Actions load only after any required credential password succeeds. While a
+workspace is locked, Actions shows an unlock notice. A decrypted Local copy remains
+browsable and offers its credential unlock in Actions.
 A Calibre library, Minecraft server or other integration must meet its feature's
 detection rules before its actions appear. Discovery itself does not start servers
 or mount remotes.
