@@ -63,6 +63,7 @@ async def exercise(app):
         await exercise_localcrypt(app, passed)
         from .ui_review import exercise_ui_review
         ui_review = await exercise_ui_review(app)
+        print('LOGISTICS_UI_REVIEW=complete; checking native browser Back', flush=True)
         from .browser_back_checks import exercise_browser_back
         ui_review.update(await exercise_browser_back(app))
         success = passed == list(CASES)

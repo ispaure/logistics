@@ -82,9 +82,10 @@ def run(target, device, *, local=False, require_independent_windows=False):
     logs.mkdir(exist_ok=True)
     path = logs / (target + '-native-ui.log')
     started_ns = time.time_ns()
-    # Briefcase includes cold simulator startup and installation in this run.
-    # Hosted iPads can spend much of the old 15-minute limit before tests begin.
-    timeout = 1500 if target == 'ios' else 900
+    # Include cold startup, installation, all native cases and the visual audit.
+    # Hosted Android software rendering can finish the 32 core cases but still
+    # exceed 15 minutes in the audit. Keep both platforms bounded at 25 minutes.
+    timeout = 1500
     with path.open('w') as stream:
         process = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
         try:

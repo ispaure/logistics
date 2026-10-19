@@ -43,9 +43,11 @@ async def exercise_ui_review(app):
             assert (image.width, image.height) == (2, 3)
     assert comic.read_bytes() == original
     app.readers.close(app.readers.active.session.id)
+    print('LOGISTICS_UI_REVIEW=started', flush=True)
     screenshots = []
     toolbar_checks = []
     async def capture(name):
+        print('LOGISTICS_UI_REVIEW=begin:' + name, flush=True)
         await asyncio.sleep(.4)
         if get_os() is OS.IOS:
             group = getattr(app, '_reader_toolbar_group', None)
@@ -64,6 +66,7 @@ async def exercise_ui_review(app):
         from .fixtures import capture_window
         await capture_window(app, path)
         screenshots.append(str(path))
+        print('LOGISTICS_UI_REVIEW=done:' + name, flush=True)
 
     # Earlier preference regressions deliberately use very large fonts.
     # Review representative screens at the shipped default instead.
