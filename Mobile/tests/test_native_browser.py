@@ -164,6 +164,37 @@ class NativeBrowserTests(unittest.TestCase):
                 app.main_window.close()
                 app.loop.close()
 
+    def test_native_search_callback_recurses_without_running_loop_context(self):
+        from features.rclone.mobile.storage_location import CollectionFiles
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            provider = CollectionFiles(Path(directory))
+            (provider.root / 'nested' / 'deep').mkdir(parents=True)
+            (provider.root / 'nested' / 'deep' / 'Needle.md').write_text('nested')
+            browser = FileBrowser()
+            try:
+                browser.set_entries(provider, '', provider.list(), location=('Local files', ''))
+                # Native synchronous callbacks can run between asyncio dispatches.
+                browser.search.value = 'needle'
+                async def finish():
+                    for _ in range(100):
+                        await asyncio.sleep(.01)
+                        if any(entry.payload['path'].endswith('Needle.md') for entry in browser.entries):
+                            return
+                    self.fail('Typing in search did not discover the nested local file')
+                app.loop.run_until_complete(finish())
+                self.assertEqual([entry.payload['path'] for entry in browser.entries],
+                                 ['nested/deep/Needle.md'])
+                browser.close_search()
+                app.loop.run_until_complete(asyncio.sleep(.45))
+                self.assertEqual([entry.payload['path'] for entry in browser.entries], ['nested'])
+            finally:
+                app.loop.run_until_complete(browser.close())
+                app.main_window.close()
+                app.loop.close()
+
     def test_views_pagination_info_and_stale_thumbnail(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)

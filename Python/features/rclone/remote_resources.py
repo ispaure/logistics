@@ -8,7 +8,7 @@ import threading
 import weakref
 from uuid import uuid4
 
-from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
+from commonUtils.integrations.wrappers.cmdShellWrapper.binary import BinaryCommandError, run_bytes
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.range_reader import RangeReader
 from commonUtils.runtime.resource_provider import ResourceCapabilities, resource_path
@@ -16,6 +16,39 @@ from . import session
 
 _providers = weakref.WeakSet()
 _providers_lock = threading.RLock()
+
+
+def remote_failure(error):
+    """Translate provider diagnostics to fixed text; never echo secrets or paths."""
+    detail = error.stderr.decode('utf-8', errors='replace').casefold()
+    if any(value in detail for value in ('invalid_grant', 'invalid_client', 'unauthorized_client',
+                                         'token has been expired or revoked',
+                                         'empty token found', 'invalid authentication credentials')):
+        return ('The storage service rejected the account authorization. For Google Drive, '
+                'renew the underlying Drive remote authorization, update the credential ZIP, '
+                'then lock and unlock the account with the updated ZIP.')
+    if "didn't find section in config file" in detail or 'could not find config section' in detail:
+        return ('A backing remote is missing from this credential package. Include the crypt '
+                'remote and every remote it references, including the underlying Google Drive '
+                'account, in the same ZIP, then unlock it again.')
+    if 'failed to decrypt password' in detail:
+        return ('The crypt password setting could not be decoded. Restore the original rclone '
+                'crypt settings in the credential ZIP, then unlock it again.')
+    if any(value in detail for value in ('ratelimitexceeded', 'rate limit exceeded', 'quota exceeded',
+                                         'userratelimitexceeded', 'too many requests')):
+        return 'The storage service rate limit was reached. Wait a moment and retry.'
+    if any(value in detail for value in ('directory not found', 'folder not found', 'filenotfound')):
+        return ('The remote folder was not found or is inaccessible to this account. '
+                'Check the crypt remote path, Drive root folder and shared-folder access.')
+    if any(value in detail for value in ('permission denied', 'insufficientpermissions',
+                                         'insufficient authentication scopes', 'access denied')):
+        return ('The storage service denied access. Check the account permissions and '
+                'the underlying remote authorization scope.')
+    if any(value in detail for value in ('no such host', 'dial tcp', 'i/o timeout',
+                                         'tls handshake timeout', 'x509:', 'network is unreachable')):
+        return 'Could not connect securely to the storage service. Check the network connection and retry.'
+    return (f'rclone could not read this remote (exit status {error.returncode}). '
+            'Check the credential package, underlying account authorization and remote folder access.')
 
 
 def invalidate_config(config_path):
@@ -116,12 +149,16 @@ class RemoteResources:
         if launched is None:
             raise ValueError('The remote credential session has ended.')
         environment, source, _ = launched
-        result = run_bytes([str(self.binary), '--config', session.NULL_CONFIG,
-            '--log-level', 'ERROR', '--retries', '1', '--low-level-retries', '1',
-            '--contimeout', '15s', '--timeout', '30s', operation, *flags, '--', source],
-            environment=environment, max_output=limit,
-            cancelled=lambda: cancelled() or self.closed or session.credentials(self.context) is None
-            or getattr(self._scope, 'cancelled', lambda: False)())
+        try:
+            result = run_bytes([str(self.binary), '--config', session.NULL_CONFIG,
+                '--log-level', 'ERROR', '--retries', '1', '--low-level-retries', '1',
+                '--contimeout', '15s', '--timeout', '30s', operation, *flags, '--', source],
+                environment=environment, max_output=limit, max_stderr=64 * 1024,
+                cancelled=lambda: cancelled() or self.closed or session.credentials(self.context) is None
+                or getattr(self._scope, 'cancelled', lambda: False)())
+        except BinaryCommandError as error:
+            self._check_active()
+            raise OSError(remote_failure(error)) from None
         self._check_active()
         return result
 

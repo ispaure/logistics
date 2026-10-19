@@ -1,4 +1,4 @@
-"""iOS local browser root with a visible, separately managed collection."""
+"""iOS shared browser root with a protected managed Local directory."""
 from commonUtils.runtime.local_files import LocalFiles
 from features.rclone.mobile.storage_location import shared_documents_path
 
@@ -7,7 +7,7 @@ class SharedFiles(LocalFiles):
     def _guard(self, path):
         relative = path.relative_to(self.root)
         if relative.parts == ('Local',):
-            raise ValueError('The Collection folder is managed by Logistics. Open it to manage its contents.')
+            raise ValueError('The Local folder is managed by Logistics. Open it to manage its contents.')
         return super()._guard(path)
 
     def list(self, path='', *, cancelled=lambda: False):
@@ -26,7 +26,6 @@ class SharedFiles(LocalFiles):
                 # Expose the collection as a folder, but keep root mutations
                 # protected; normal navigation switches to CollectionFiles.
                 row = LocalFiles(self.root).entry(child.name)
-                row['display_name'] = 'Collection'
                 rows.append(row)
             else:
                 rows.append(self.entry(child.name))

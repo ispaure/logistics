@@ -46,6 +46,7 @@ class ReaderChrome:
                 ('Fullscreen', self.toggle_reading_mode), ('Read aloud…', self.show_read_aloud),
                 ('Find in chapter…', self.show_epub_search),
                 ('Open beside another document', self.app.adaptive.show_pair_picker)]
+        actions.append(('All documents', self.app.show_documents_hub))
         self.reader_actions = FeatureCommands(self.reader_actions_button, self, actions, self.show_reader_tools)
         from .workspace_navigation import menu_button
         browser = (menu_button(lambda widget, **kw: self.app.adaptive.show_browser(self.presentation_destination))

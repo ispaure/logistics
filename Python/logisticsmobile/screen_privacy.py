@@ -130,6 +130,8 @@ class ScreenPrivacy:
 
     def conceal(self):
         self.inactive = True
+        from .browser_ui import sync_browser_population
+        sync_browser_population(self.app)
         from features.books.mobile.media_controls import enforce_privacy
         enforce_privacy(self.app)
         if self.lock_view is not None:
@@ -154,6 +156,8 @@ class ScreenPrivacy:
     def reveal(self):
         self.inactive = False
         self.refresh()
+        from .browser_ui import sync_browser_population
+        sync_browser_population(self.app)
 
     def refresh(self):
         gates = self.gates()
@@ -206,6 +210,8 @@ class ScreenPrivacy:
                 window.addFlags(0x00002000)  # FLAG_SECURE
             else:
                 window.clearFlags(0x00002000)
+        from .browser_ui import sync_browser_population
+        sync_browser_population(self.app)
 
     def sync_lock_view(self, gates):
         """Replace the entire navigation root; routes may update safely behind it."""

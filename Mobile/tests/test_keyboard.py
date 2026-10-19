@@ -132,3 +132,68 @@ class AndroidEditorLayoutTests(unittest.TestCase):
         keyboard._fit_source(editor, False)
         self.assertEqual(padding, [60, 12, 4, 8])
         self.assertEqual(editor.style.margin_top, 4)
+
+
+class AndroidBrowserBindingTests(unittest.TestCase):
+    def test_retained_controls_keep_one_listener_and_new_rows_dismiss_without_consuming_touch(self):
+        class View:
+            OnTouchListener = object
+            def __init__(self):
+                self.setOnTouchListener = Mock()
+        class ViewGroup(View):
+            def __init__(self, children=()):
+                super().__init__()
+                self.children = list(children)
+            def getChildCount(self):
+                return len(self.children)
+            def getChildAt(self, index):
+                return self.children[index]
+        class EditText(View):
+            pass
+        class Impl:
+            __module__ = 'toga_android.widgets.box'
+            def __init__(self, native):
+                self.native = native
+        def widget(native, children=()):
+            return NS(_impl=Impl(native), children=list(children))
+
+        search_native = EditText()
+        search_native.hasFocus = Mock(return_value=True)
+        search_native.clearFocus = Mock()
+        search_native.getWindowToken = Mock(return_value='token')
+        search = widget(search_native)
+        button_native = View()
+        button = widget(button_native)
+        root_native = ViewGroup([search_native, button_native])
+        root = widget(root_native, [search, button])
+        browser = NS(search=search, widget=root)
+        modules = {
+            'android.content': NS(Context=NS(INPUT_METHOD_SERVICE='ime')),
+            'android.view': NS(View=View, ViewGroup=ViewGroup, MotionEvent=NS(ACTION_DOWN=0)),
+            'android.widget': NS(EditText=EditText),
+            'java': NS(dynamic_proxy=lambda interface: object),
+        }
+        with patch.dict(sys.modules, modules):
+            keyboard.bind_browser(browser)
+            listener = browser._keyboard_touch
+            keyboard.bind_browser(browser)
+            self.assertIs(browser._keyboard_touch, listener)
+            root_native.setOnTouchListener.assert_called_once_with(listener)
+            button_native.setOnTouchListener.assert_called_once_with(listener)
+            search_native.setOnTouchListener.assert_not_called()
+
+            internal_label = View()
+            new_native = ViewGroup([internal_label])
+            new = widget(new_native)
+            root.children.append(new)
+            root_native.children.append(new_native)
+            keyboard.bind_browser(browser, roots=[new])
+            keyboard.bind_browser(browser)
+            new_native.setOnTouchListener.assert_called_once_with(listener)
+            internal_label.setOnTouchListener.assert_called_once_with(listener)
+            button_native.setOnTouchListener.assert_called_once_with(listener)
+            manager = NS(hideSoftInputFromWindow=Mock())
+            new_native.getContext = lambda: NS(getSystemService=lambda kind: manager)
+            self.assertFalse(listener.onTouch(new_native, NS(getAction=lambda: 0)))
+            search_native.clearFocus.assert_called_once()
+            manager.hideSoftInputFromWindow.assert_called_once_with('token', 0)

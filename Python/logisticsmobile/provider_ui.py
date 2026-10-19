@@ -642,6 +642,7 @@ class ProviderUI(FilesUI):
         if view.crypt_reader.book is not None or view.crypt_reader.kind in {'.md', '.markdown'}:
             app = getattr(self, 'app', self)
             actions.append(('Open beside another document', app.adaptive.show_pair_picker))
+        actions.append(('All documents', self.show_documents_hub))
         view.crypt_actions_menu = FeatureCommands(view.crypt_actions, self, actions, self.show_private_tools)
         view.crypt_title.style.flex = 1
         view.crypt_page.style.flex = 1

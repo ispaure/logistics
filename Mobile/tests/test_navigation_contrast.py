@@ -7,6 +7,18 @@ from logisticsmobile.navigation import eink_selection_indicator, install_android
 
 
 class NavigationContrastTests(unittest.TestCase):
+    def test_initial_tablet_rail_is_top_aligned_without_an_activity_bar(self):
+        activity, rail = Mock(), Mock()
+        activity.getSupportActionBar.return_value = None
+        adapter = NS(mode='rail', rail=rail, impl=NS(_native_activity=activity),
+                     set_mode=Mock())
+        with patch.dict('sys.modules', {'android.view': NS(Gravity=NS(TOP=48))}):
+            install_android_navigation_appearance(NS(adapter=adapter))
+            rail.setMenuGravity.assert_called_once_with(48)
+            # Repeated installation must not wrap callbacks or touch geometry.
+            install_android_navigation_appearance(NS(adapter=adapter))
+            rail.setMenuGravity.assert_called_once_with(48)
+
     def test_rail_created_after_theme_application_inverts_only_the_checked_icon(self):
         from logisticsmobile.appearance import refresh_android_navigation
         from logisticsmobile.palette import argb, set_eink_enabled
@@ -22,7 +34,9 @@ class NavigationContrastTests(unittest.TestCase):
             bar.isItemActiveIndicatorEnabled.return_value = False
             bar.getItemActiveIndicatorWidth.return_value = 64
             bar.getItemActiveIndicatorHeight.return_value = 32
-        adapter = NS(mode='bottom', bottom=bottom, rail=None)
+        activity = Mock()
+        adapter = NS(mode='bottom', bottom=bottom, rail=None,
+                     impl=NS(_native_activity=activity))
         def set_mode(mode):
             adapter.mode = mode
             if mode == 'rail':
@@ -31,6 +45,7 @@ class NavigationContrastTests(unittest.TestCase):
         host = NS(adapter=adapter, state=NS(destination='documents'),
                   root=NS(_impl=NS(get_theme_color=lambda role: argb('#ffffff' if role == 4 else '#000000'))))
         modules = {'android': NS(R=NS(attr=NS(state_checked=1, textColorPrimary=2, colorAccent=3))),
+                   'android.view': NS(Gravity=NS(TOP=48)),
                    'android.content.res': NS(ColorStateList=Colors),
                    'com.google.android.material': NS(R=NS(attr=NS(colorSurface=4))),
                    'com.google.android.material.shape': NS(ShapeAppearanceModel=Mock())}
@@ -39,10 +54,12 @@ class NavigationContrastTests(unittest.TestCase):
                 set_eink_enabled(True)
                 refresh_android_navigation(host)
                 install_android_navigation_appearance(host)
+                activity.getSupportActionBar().hide.assert_called_once_with()
                 wrapper = adapter.set_mode
                 install_android_navigation_appearance(host)
                 self.assertIs(adapter.set_mode, wrapper)
                 adapter.set_mode('rail')
+                rail.setMenuGravity.assert_called_with(48)
                 rail.setItemActiveIndicatorEnabled.assert_called_with(True)
                 rail.setItemActiveIndicatorWidth.assert_called_with(40)
                 rail.setItemActiveIndicatorHeight.assert_called_with(40)

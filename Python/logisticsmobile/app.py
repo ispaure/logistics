@@ -68,6 +68,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         return self._rclone_ui
 
     def startup(self):
+        if toga.Command.ABOUT in self.commands:
+            del self.commands[toga.Command.ABOUT]
         from .appearance import install_appearance
         install_appearance(self)
         self._startup_in_progress = True
@@ -239,6 +241,15 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if destination != self.native_host.state.destination:
             self.mark_navigation()
         self.save_workspace()
+        adaptive = getattr(self, 'adaptive', None)
+        if (destination == 'documents' and destination == self.native_host.state.destination
+                and (self.routes.screens['documents']
+                     or (adaptive is not None and adaptive.in_detail and adaptive.detail_routes))):
+            # A second tap means "show the list"; switching back from another
+            # destination still resumes the retained document.
+            self.pending_reader_restore = None
+            self.show_documents_hub()
+            return True
         if destination == 'chat' and not self.routes.screens['chat']:
             self.show_chat(present=False)
         if destination == 'settings':
@@ -246,7 +257,6 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 self.show_settings(present=False)
             self.settings_navigation.reflow()
         self.refresh_hub(destination)
-        adaptive = getattr(self, 'adaptive', None)
         if (destination == 'documents' and adaptive is not None and adaptive.split is not None
                 and adaptive.in_detail and adaptive.detail_routes):
             self.body = adaptive.detail_routes[-1][1]
@@ -277,6 +287,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         from .markdown_speech import stop_markdown_speech
         stop_markdown_speech(self)
         self.body = body
+        from .browser_ui import sync_browser_population
+        sync_browser_population(self, body)
         if self.native_host.state.destination == 'settings' and hasattr(self, 'settings_navigation'):
             self.settings_navigation.reflow()
         batch = getattr(self, 'private_comic_batch', None)

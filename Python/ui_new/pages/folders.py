@@ -47,7 +47,11 @@ class FoldersPage(pyside.QWidget):
         self._refresh_pending = False
         self._closing = False
         self.visibility = workspace_visibility()
-        self.refresh_button = pyside.QPushButton('Refresh folders')
+        self.refresh_button = pyside.QToolButton()
+        self.refresh_button.setIcon(self.style().standardIcon(pyside.QStyle.StandardPixmap.SP_BrowserReload))
+        self.refresh_button.setToolTip('Refresh folders')
+        self.refresh_button.setAccessibleName('Refresh folders')
+        self.refresh_button.setAutoRaise(True)
         self.refresh_button.clicked.connect(self.refresh)
         self.discovery = OperationProgress(self)
         self.discovery.completed.connect(self._discovered)
@@ -58,7 +62,7 @@ class FoldersPage(pyside.QWidget):
 
         self.folder_tree = WorkspaceTree()
         self.folder_tree.setHeaderHidden(True)
-        self.folder_tree.setMinimumWidth(220)
+        self.folder_tree.setMinimumWidth(140)
 
         self.selected_entry_name = None
         self._entry_items = {}
@@ -66,6 +70,15 @@ class FoldersPage(pyside.QWidget):
         self.detail_scroll = pyside.QScrollArea()
         self.detail_scroll.setWidgetResizable(True)
         self.detail_scroll.setFrameShape(pyside.QFrame.Shape.NoFrame)
+
+        self.info_scroll = pyside.QScrollArea()
+        self.info_scroll.setWidgetResizable(True)
+        self.info_scroll.setFrameShape(pyside.QFrame.Shape.NoFrame)
+        self.details_tabs = pyside.QTabWidget()
+        self.details_tabs.setAccessibleName('Workspace details')
+        self.details_tabs.addTab(self.info_scroll, 'Info')
+        self.details_tabs.addTab(self.detail_scroll, 'Actions')
+        self.details_tabs.setCurrentWidget(self.detail_scroll)
 
         self._build_layout()
         self._connect_signals()
@@ -81,25 +94,25 @@ class FoldersPage(pyside.QWidget):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(6)
 
-        title_label = pyside.QLabel('Workspaces')
-        title_font = title_label.font()
-        title_font.setPointSizeF(point_size(setting_size(title_font) + 1.5))
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-
         source_font = self.credential_label.font()
         source_font.setBold(True)
         self.credential_label.setFont(source_font)
 
-        left_layout.addWidget(title_label)
-        subtitle = pyside.QLabel('Libraries, servers and remote folders')
-        subtitle.setWordWrap(True)
-        left_layout.addWidget(subtitle)
-        left_layout.addWidget(self.source_tabs)
+        header = pyside.QHBoxLayout()
+        header.addWidget(self.source_tabs, 1)
+        left_layout.addLayout(header)
         left_layout.addWidget(self.credential_label)
         left_layout.addWidget(self.credential_combo)
-        left_layout.addWidget(self.folder_tree, 1)
-        left_layout.addWidget(self.refresh_button)
+        self.folder_list_panel = pyside.QWidget()
+        folder_list_layout = pyside.QVBoxLayout(self.folder_list_panel)
+        folder_list_layout.setContentsMargins(0, 0, 0, 0)
+        folder_list_layout.setSpacing(0)
+        folder_list_toolbar = pyside.QHBoxLayout()
+        folder_list_toolbar.addStretch(1)
+        folder_list_toolbar.addWidget(self.refresh_button)
+        folder_list_layout.addLayout(folder_list_toolbar)
+        folder_list_layout.addWidget(self.folder_tree, 1)
+        left_layout.addWidget(self.folder_list_panel, 1)
 
         self.browser_stack = pyside.QStackedWidget()
         self.browser_notice = pyside.QLabel('Select a folder to browse its files.')
@@ -107,7 +120,7 @@ class FoldersPage(pyside.QWidget):
         self.browser_notice.setWordWrap(True)
         self.browser_notice.setMargin(12)
         self.browser_stack.addWidget(self.browser_notice)
-        self.panes = WorkspacePanes(self.browser_stack, self.detail_scroll, self,
+        self.panes = WorkspacePanes(self.browser_stack, self.details_tabs, self,
                                     sources=left_widget, locked=self.panes_locked)
         root_layout.addWidget(self.panes, 1)
         # Match the workspace notice row: progress belongs below both panes,
@@ -448,6 +461,8 @@ class FoldersPage(pyside.QWidget):
         view = self._create_browser(location, package=package) if package is not None else self._create_browser(location)
         if view is None:
             return None
+        from features.rclone.ui.workspace_unlock import WorkspaceUnlockView
+        self.panes.set_actions_available(not isinstance(view, WorkspaceUnlockView))
         self._browser_view = view
         self.browser_stack.addWidget(view)
         self.browser_stack.setCurrentWidget(view)
@@ -459,7 +474,8 @@ class FoldersPage(pyside.QWidget):
         from features.rclone.ui.workspace_unlock import unlock_target, WorkspaceUnlockView
         target = unlock_target(location, package=package)
         if target is not None:
-            view = WorkspaceUnlockView(*target, parent=self)
+            name = getattr(location, 'remote', None) or getattr(getattr(location, 'item', None), 'remote', None)
+            view = WorkspaceUnlockView(*target, parent=self, workspace_name=name or self.selected_entry_name)
             view.unlocked.connect(lambda: self._workspace_unlocked(view, location))
             return view
         view = _browser_view(location)
@@ -523,6 +539,7 @@ class FoldersPage(pyside.QWidget):
             self.refresh()
 
     def _clear_browser(self, message):
+        self.panes.set_actions_available(True)
         self._browser_key = None
         view, self._browser_view = self._browser_view, None
         self.browser_notice.setText(message)
@@ -541,6 +558,7 @@ class FoldersPage(pyside.QWidget):
             pyside.QTimer.singleShot(0, self.window().close)
 
     def _show_empty_state(self, message=None):
+        self.panes.set_actions_available(True)
         self._retire_actions_unlock()
         self.selected_entry_name = None
         self._selected_entry_key = None
@@ -567,6 +585,11 @@ class FoldersPage(pyside.QWidget):
         layout.addStretch()
 
         self.detail_scroll.setWidget(widget)
+        info = pyside.QLabel(message)
+        info.setWordWrap(True)
+        info.setMargin(8)
+        info.setAlignment(pyside.Qt.AlignmentFlag.AlignTop)
+        self.info_scroll.setWidget(info)
         self._clear_browser(message)
 
     def _show_entry(self, entry):
@@ -575,9 +598,13 @@ class FoldersPage(pyside.QWidget):
         self._detail_pending = None
         self.details.request_cancel()
         self._tools_status = None
+        self._show_info(entry)
         target = self._entry_unlock_target(entry)
         needs_credentials = (self._get_selected_source()[0] == 'remote'
                              and entry.remote_source == 'rclone' and entry.remote_context is None)
+        online = self._get_selected_source()[0] == 'remote'
+        self.panes.set_actions_available(not (target is not None and
+            (online or getattr(entry.local, 'private', False))))
         if target is not None or needs_credentials:
             widget = pyside.QWidget()
             layout = pyside.QVBoxLayout(widget)
@@ -590,7 +617,8 @@ class FoldersPage(pyside.QWidget):
             elif not online and not getattr(entry.local, 'private', False):
                 # Plain local files remain browsable; only the remote actions need a password.
                 from features.rclone.ui.workspace_unlock import WorkspaceUnlockView
-                view = WorkspaceUnlockView(*target, parent=widget, purpose='load this workspace’s actions')
+                view = WorkspaceUnlockView(*target, parent=widget, purpose='load this workspace’s actions',
+                                           workspace_name=entry.name)
                 self._actions_unlock_view = view
                 view.unlocked.connect(lambda: self._actions_unlocked(view, entry))
                 view.idle.connect(self._browser_idle)
@@ -607,6 +635,7 @@ class FoldersPage(pyside.QWidget):
 
         title_label = pyside.QLabel(entry.name)
         title_label.setTextFormat(pyside.Qt.TextFormat.PlainText)
+        title_label.setWordWrap(True)
         title_font = title_label.font()
         title_font.setPointSizeF(point_size(setting_size(title_font) + 3))
         title_font.setBold(True)
@@ -616,7 +645,6 @@ class FoldersPage(pyside.QWidget):
         scope = pyside.QLabel('Actions apply to this workspace root. Browsing or selecting files in Files does not change this target.')
         scope.setWordWrap(True)
         layout.addWidget(scope)
-        layout.addWidget(self._create_general_section(entry))
         self._tools_status = pyside.QLabel('Checking workspace tools…')
         layout.addWidget(self._tools_status)
         layout.addStretch()
@@ -687,6 +715,18 @@ class FoldersPage(pyside.QWidget):
         except Exception as error:
             self._tools_status.setText(f'Workspace tools unavailable: {error}')
             self._tools_status.show()
+
+    def _show_info(self, entry):
+        widget = pyside.QWidget()
+        layout = pyside.QVBoxLayout(widget)
+        layout.setContentsMargins(8, 8, 8, 8)
+        title = pyside.QLabel(entry.name)
+        title.setTextFormat(pyside.Qt.TextFormat.PlainText)
+        title.setWordWrap(True)
+        layout.addWidget(title)
+        layout.addWidget(self._create_general_section(entry))
+        layout.addStretch()
+        self.info_scroll.setWidget(widget)
 
     def _create_general_section(self, entry):
         group = pyside.QGroupBox('General')

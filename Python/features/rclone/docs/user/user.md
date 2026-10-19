@@ -152,7 +152,7 @@ Unassociated local folders match accounts by remote name. A folder pulled with
 temporary credentials remembers its matching ZIP; a different ZIP cannot claim
 that same local folder name.
 
-For a session-loaded crypt remote, **Pull to LocalCrypt** mirrors the backing
+For a session-loaded crypt remote, choosing **LocalCrypt** after **Pull** mirrors the backing
 remote's ciphertext into `~/Library/Application Support/Logistics/LocalCrypt` on
 macOS (the Logistics per-user preferences folder on Windows/Linux). **Push** sends that copy back to the
 matching backing remote and subpath without encrypting it again. Both operations
@@ -172,6 +172,13 @@ its own tab, labelled with its account and remote name. Navigation stays within 
 account and current directory; tabs use the existing workspace docking.
 In Workspaces, selecting a locked associated remote prompts for its credential
 ZIP password in Files. File Browser’s Open Remote chooser lists loaded accounts.
+
+Desktop connection failures show recovery guidance for recognized authorization,
+missing backing remote, folder access, rate limit and network errors. A crypt
+remote's credential ZIP must also contain its referenced backing remotes. If
+Google Drive rejects authorization, renew the underlying Drive remote's
+authorization, update the ZIP, then lock and unlock the account with that ZIP.
+Unknown failures show rclone's exit status. Raw provider logs are not displayed.
 
 Remote browsing is read-only. Search filters the current folder; it does not scan
 subfolders. Listings, thumbnails and directly opened contents stay in memory,
@@ -196,8 +203,8 @@ Save As or metadata-edit controls.
 
 Remote browsers on desktop, iOS and Android offer browsing and direct previews
 only. They have no standalone file or folder download/copy actions. To create an
-offline copy, use the existing managed **Pull to Local** or **Pull to LocalCrypt**
-workflow from Workspaces. Session-only credentials do not create a persistent
+offline copy, use **Pull** from Workspaces and choose the storage type when
+prompted. Session-only credentials do not create a persistent
 remote document; locking or replacing credentials retires its open readers.
 
 On mobile, open a remote from Workspaces or **Remote files**, then tap a supported
@@ -218,17 +225,20 @@ including both the crypt remote and its backing remote. LocalCrypt describes the
 encrypted copy on disk; session-only describes how its credentials are held.
 The encrypted copy remains after the credentials lock or Logistics exits.
 
-For a session-loaded crypt remote with no existing copy, Workspaces offers:
+For a session-loaded crypt remote with no existing copy, tap **Pull**. A popup
+strongly recommends **LocalCrypt** and lets you choose the storage type before
+reviewing the transfer:
 
-| Action | Destination | Contents on disk |
+| Popup choice | Destination | Contents on disk |
 | --- | --- | --- |
-| Pull to Local | `Server/Local/<remote>` | Ordinary decrypted files |
-| Pull to LocalCrypt | Logistics application support folder, `LocalCrypt/<remote-name>` | Original ciphertext |
+| Regular Local copy | `Server/Local/<remote>` | Ordinary decrypted files |
+| LocalCrypt (recommended) | Logistics application support folder, `LocalCrypt/<remote-name>` | Original ciphertext |
 
 Once a copy exists, **Pull** refreshes the selected kind: Local stays decrypted,
 LocalCrypt stays encrypted. If both exist, select the appropriate entry first;
 the account row prefers Local and the separate LocalCrypt entry selects ciphertext.
-When no local copy exists, choose **Pull to Local** or **Pull to LocalCrypt**.
+The popup appears only when the local storage type has not been set. Remotes
+using saved credentials and non-crypt remotes pull to Local without this choice.
 Pull uses sync and can replace destination files or delete destination-only files.
 
 **Pull to Local** with temporary credentials also saves a small connection record
@@ -248,12 +258,17 @@ unloaded, an existing saved Local or LocalCrypt copy keeps both its Local entry
 and a locked Cloud destination (Home Server for network-share packages). Copies
 of the same remote share one Cloud entry under their credential ZIP. Unlock it in
 Files to discover the package’s other remotes; actions appear after unlocking.
+On desktop, the compact unlock form identifies the selected workspace. While
+Files is locked, the Actions pane collapses so the folder list has more room;
+it returns automatically after unlocking or selecting another browsable folder.
+Ordinary Local files remain browsable when only their remote actions need an
+unlock, so those credentials are requested in Actions instead.
 Unassociated rclone Local folders also have a Cloud placeholder under **Credentials
 required**; load the matching package in Settings and refresh. Connection records
 without a folder do not create entries.
 
 Choose **Load for Session**, unlock the ZIP containing both the crypt
-remote and its direct backing remote, then use **Pull to LocalCrypt**. Open its
+remote and its direct backing remote, then use **Pull** and choose **LocalCrypt**. Open its
 LocalCrypt folder to browse decrypted names. Supported documents are text (`.txt`), Markdown (`.md`, `.markdown`), EPUB books
 and comic ZIP/CBZ files. EPUB and comic metadata are editable from the context
 menu or reader. Other file types stay unopened in this private browser. This workflow needs no mounted filesystem.

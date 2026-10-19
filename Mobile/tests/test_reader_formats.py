@@ -33,12 +33,13 @@ class ReaderFormatTests(unittest.TestCase):
 
             def check(actions, tools, appearance, is_comic):
                 menu = {title for title, _ in actions}
+                self.assertIn('All documents', menu)
                 tools_text = '\n'.join(labels(tools)).lower()
                 form = '\n'.join(labels(appearance)).lower()
                 if is_comic:
                     self.assertIn('Info…', menu)
                     for title in ('Read aloud…', 'Find in chapter…', 'Contents and bookmarks…',
-                                  'All documents', 'Previous comic', 'Next comic', 'First comic page', 'Last comic page'):
+                                  'Previous comic', 'Next comic', 'First comic page', 'Last comic page'):
                         self.assertNotIn(title, menu)
                     self.assertNotIn('bookmark', tools_text)
                     self.assertNotIn('save as', tools_text)
@@ -83,6 +84,7 @@ class ReaderFormatTests(unittest.TestCase):
                         reader = PrivateReader(path.name, path.read_bytes())
                         reader.key = record['id']
                         reader.read_only = read_only
+                        app.show_home()
                         with patch.object(app.crypt_copies, 'open', return_value=reader):
                             self.assertTrue(await app.open_crypt(copies=app.crypt_copies, key=record['id']))
                         provider = app.private_sessions.active
@@ -111,6 +113,10 @@ class ReaderFormatTests(unittest.TestCase):
                             await provider.apply_provider_layout()
                             for key in before.keys() - {'comic_layout'}:
                                 self.assertEqual(app.preferences.values[key], before[key])
+                        provider.crypt_actions_menu.invoke(dict(provider.crypt_actions_menu.actions)['All documents'])
+                        self.assertEqual(app.native_host.state.destination, 'documents')
+                        self.assertFalse(app.routes.screens['documents'])
+                        self.assertIn(provider.session.id, app.workspace.sessions)
                         self.assertTrue(app.private_sessions.close(provider.session.id, discard=True))
                 await app.readers.catalog.metadata_task
                 await app.readers.catalog.library_scan_task

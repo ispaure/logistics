@@ -10,6 +10,93 @@ from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
 
 
 class ReaderNavigationTests(unittest.TestCase):
+    def test_documents_reselection_returns_to_list_but_switching_tabs_retains_reader(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            LogisticsMobile.storage_root = root
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                fixtures = root / 'fixtures'
+                fixtures.mkdir()
+                epub, _ = make_books(fixtures)
+                from commonUtils.runtime.document_access import LocalDocuments
+
+                def tap(destination):
+                    host = app.native_host
+                    host.root._impl._set_value('current_tab_index', host.destinations.index(destination))
+                    host.root.on_select()
+
+                async def exercise():
+                    store = app.reader_manager().catalog.library_store
+                    record = store.import_book(LocalDocuments(), epub)
+                    app.show_home()
+                    await app.open_book(record['id'])
+                    owner = app.readers.active
+                    panel = app.body
+                    # Programmatic activation and a return from Home retain the reader.
+                    app.native_host.activate('documents')
+                    self.assertIs(app.body, panel)
+                    tap('home')
+                    tap('documents')
+                    self.assertIs(app.body, panel)
+                    with patch.object(app, 'checkpoint', return_value=False):
+                        tap('documents')
+                    self.assertIs(app.body, panel)
+                    self.assertTrue(app.routes.screens['documents'])
+                    # Reselect from a nested reader page goes straight to the list.
+                    owner.show_reader_appearance()
+                    tap('documents')
+                    self.assertEqual(app.native_host.state.destination, 'documents')
+                    self.assertIs(app.body, app.routes.roots['documents'])
+                    self.assertFalse(app.routes.screens['documents'])
+                    self.assertIn(owner.session.id, app.workspace.sessions)
+                    await app.open_book(record['id'])
+                    self.assertIs(app.readers.active, owner)
+                    await app.readers.catalog.metadata_task
+                    await app.readers.catalog.library_scan_task
+                app.loop.run_until_complete(exercise())
+            finally:
+                app.main_window.close()
+                app.loop.close()
+
+    def test_all_documents_from_home_reader_keeps_session_and_can_resume(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            LogisticsMobile.storage_root = root
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                fixtures = root / 'fixtures'
+                fixtures.mkdir()
+                paths = make_books(fixtures)
+                from commonUtils.runtime.document_access import LocalDocuments
+
+                async def exercise():
+                    store = app.reader_manager().catalog.library_store
+                    for path in paths:
+                        record = store.import_book(LocalDocuments(), path)
+                        app.show_home()
+                        await app.open_book(record['id'])
+                        owner = app.readers.active
+                        key = owner.session.id
+                        self.assertEqual(app.routes.origins['documents', 'reader:' + key], 'home')
+                        owner.reader_actions.invoke(dict(owner.reader_actions.actions)['All documents'])
+                        self.assertEqual(app.native_host.state.destination, 'documents')
+                        self.assertFalse(app.routes.screens['documents'])
+                        self.assertIs(app.body, app.routes.roots['documents'])
+                        self.assertIn(key, app.workspace.sessions)
+                        self.assertFalse(app.routes.origins)
+                        await app.open_book(record['id'])
+                        self.assertIs(app.readers.active, owner)
+                        self.assertEqual(owner.session.id, key)
+                    await app.readers.catalog.metadata_task
+                    await app.readers.catalog.library_scan_task
+                app.loop.run_until_complete(exercise())
+            finally:
+                app.main_window.close()
+                app.loop.close()
+
     def test_folder_open_selects_documents_and_folder_tab_retains_browser(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)

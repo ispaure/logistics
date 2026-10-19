@@ -159,7 +159,7 @@ class LocalCryptTests(QtTestCase):
                 entry, = get_folder_entries(source.get_remote_names(), remote_source='rclone',
                                             remote_context=source.context, local_folders=source.get_local_folders(),
                                             include_local_only=False)
-                self.assertEqual([action.name for action in ui_contributions._get_actions(entry)], ['Push...', 'Browse', 'Pull'])
+                self.assertEqual([action.name for action in ui_contributions._get_actions(entry)], ['Push...', 'Pull'])
                 with patch.object(actions, 'pull_remote', return_value=True) as pull:
                     next(action for action in ui_contributions._get_actions(entry) if action.name == 'Pull').callback()
                 pull.assert_called_once_with('Secret', item.context, package=f.package, review=True)
@@ -848,11 +848,11 @@ class LocalCryptTests(QtTestCase):
         from types import SimpleNamespace
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             entry = FolderEntry('Secret', remote_name='Secret', remote_source='rclone', remote_context=f.context)
-            self.assertEqual([a.name for a in _get_actions(entry)], ['Browse', 'Pull to Local', 'Pull to LocalCrypt'])
+            self.assertEqual([a.name for a in _get_actions(entry)], ['Pull'])
             entry.local = SimpleNamespace(name='Secret')
             names = [a.name for a in _get_actions(entry)]
             self.assertIn('Pull', names)
-            self.assertEqual(names, ['Push...', 'Browse', 'Pull'])
+            self.assertEqual(names, ['Push...', 'Pull'])
             with patch.object(actions, 'pull_remote') as plain:
                 next(action for action in _get_actions(entry) if action.name == 'Pull').callback()
                 plain.assert_called_once_with('Secret', f.context, review=True)
@@ -862,7 +862,7 @@ class LocalCryptTests(QtTestCase):
                 choices['Pull'].callback()
                 encrypted.assert_called_once_with('Secret', f.context, item=f.item, review=True)
                 plain.assert_not_called()
-                self.assertEqual(set(choices), {'Push...', 'Browse', 'Pull'})
+                self.assertEqual(set(choices), {'Push...', 'Pull'})
             with patch('models.folder_discovery.get_local_folders', return_value=[]):
                 self.assertIsInstance(_matching_local_folders(f.context)[0], local_crypt.LocalCryptFolder)
             ordinary = SimpleNamespace(name='Secret')

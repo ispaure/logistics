@@ -6,6 +6,16 @@ process I/O, range streams and Markdown storage hooks. Its
 [provider contracts](../../../../commonUtils/ui/resource-providers.md) are owned
 and documented in that repository.
 
+## Initial Pull storage choice
+
+Desktop exposes one Pull action. For a session-loaded crypt remote without a
+selected local copy, it opens the LocalCrypt/Local choice with LocalCrypt as the
+recommended default. Mobile uses a native question popup for the equivalent
+choice, scoped to the selected remote's unsaved credential package. Saved
+credentials and non-crypt remotes create Local copies directly through review.
+Existing copies retain their storage type. This presentation policy does not
+change encryption, transfer routing or existing LocalCrypt mappings.
+
 ## Desktop
 
 New LocalCrypt copies require a crypt remote from session-only credentials
@@ -408,6 +418,10 @@ The model suppresses children below provider boundaries; no crypt logic lives in
 commonUtils. Unknown mappings fail closed. Raw deep paths open the copy root;
 trusted private-tab cloning preserves the decoded directory instead. Credential
 unlock cancellation leaves the existing locked-view retry workflow intact.
+The desktop inline unlock form names the selected workspace. The host hides the
+Actions dock while Files needs credentials, retaining its previous vertical split
+for restoration after unlock or selection changes. Plain Local copies keep their
+browser and use the Actions unlock form when only remote tools need credentials.
 
 rclone sources omit the extra saved-copy source when the loaded account source
 already represents that exact connection. Distinct Local and LocalCrypt copies

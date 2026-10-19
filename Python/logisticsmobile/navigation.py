@@ -99,21 +99,33 @@ def install_destination_icons(host):
 
 
 def install_android_navigation_appearance(host):
-    """A rail first created by a resize needs the current theme immediately."""
+    """Keep Android chrome compact, including rails first created by a resize."""
     adapter = host.adapter
     if getattr(adapter, '_logistics_appearance_installed', False):
         return
     original = adapter.set_mode
 
+    def compact_chrome():
+        # Screens own their headings and Back controls. The activity bar only
+        # repeats the application name and consumes a full row on every page.
+        bar = adapter.impl._native_activity.getSupportActionBar()
+        if bar is not None and bar.isShowing():
+            bar.hide()
+        if adapter.rail is not None:
+            from android.view import Gravity
+            adapter.rail.setMenuGravity(Gravity.TOP)
+
     def set_mode(mode):
         previous = adapter.mode
         original(mode)
         if adapter.mode != previous:
+            compact_chrome()
             from .appearance import refresh_android_navigation
             refresh_android_navigation(host)
 
     adapter.set_mode = set_mode
     adapter._logistics_appearance_installed = True
+    compact_chrome()
 
 
 class NavigationState(DestinationState):

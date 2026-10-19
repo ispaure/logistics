@@ -202,17 +202,44 @@ Online folder search filters the complete native bridge listing in memory;
 ordinary and crypt remote listings have no entry count cap. Local providers use
 the cancellable recursive search with no scan or result count cap. Mobile List
 and Tiles display every matching entry in one scrolling view, without paging.
+The mobile browser queues search work on its owning Toga app loop: synchronous
+native text callbacks may run between cooperative asyncio dispatches and lack a
+running-loop context. Search still debounces, cancels superseded queries and
+restores the immediate folder listing when cleared.
+`document_sources.reopen_file` wraps credential resolution and the complete open
+in a compact status/activity strip below the current view, including Home/Recent
+and restored credential entries. Its `finally` cleanup stops the indicator and
+removes only its own strip; completion never restores an earlier view.
 Local reads use the cancellable listing path
 without toggling global cloud controls or refreshing the download inventory.
 Folder pages are built offscreen before attachment. Local and LocalCrypt List/Tiles
 views use names and generic icons, without queuing content or thumbnail reads.
 Plain List views reuse styled row slots for the current folder. The view is detached once
 while its names, actions and file/folder indicators are updated, then mounted
-again; unchanged rows keep their native controls and appearance. Unused slots
+again; unchanged rows keep their native controls and appearance. Local, remote
+and drawer browser scroll containers initially mount up to 40 plain List rows.
+After a short idle delay, the visible browser continues filling the listing
+in slices of at most two rows, yielding to the native event loop between slices.
+Each slice checks a four-millisecond construction budget; native mounting/layout
+runs on the UI thread and cannot be interrupted. An over-budget slice reduces
+subsequent work to one row and increases the interval before the next update.
+During scrolling, ordinary idle work waits for the gesture to settle; within
+24 row heights of the bottom, one-row slices keep extending the list. Existing
+rows and the scroll container remain mounted, preserving the scroll offset. The complete sorted,
+filtered entry snapshot remains available to search; the widget batch size is
+not a listing or result limit. A render computes that snapshot once, and scroll
+appends reuse it. Provider reads and item activation hold population until they
+finish, including failed navigation. Route/tab/drawer changes pause hidden
+browsers; returning resumes them. App inactivity, search/sort changes, view
+changes and stopping cancel queued work. Every callback rechecks visibility,
+query identity and navigation ownership before creating controls. Android keyboard dismissal shares one listener per
+browser and binds newly created controls without rebinding retained views.
+Unused slots
 clear captions, accessibility names and entry callbacks, then are released. Stopping a browser
 clears the entire pool, so a credential lock retains no row-owned plaintext.
 Tiles and rich thumbnail lists continue through the shared renderer.
 Regression coverage lives in
+`Mobile/tests/test_browser_progressive.py`, `Mobile/tests/test_keyboard.py`,
 `Mobile/tests/test_native_browser.py`, `Mobile/tests/test_settings_ui.py`,
 `Python/tests/test_mobile_hub.py` and `Mobile/rclone_bridge/list_test.go`.
 
@@ -341,6 +368,8 @@ folders use shared vector folder/lock geometry on both native platforms, with
 individual blue `folder_unlocked` and orange `folder_locked` roles. These roles
 have light/dark palettes and turn black in Android monochrome mode; distinct
 open/closed shackles and accessible names preserve the state without color.
+See [shared folder artwork](ui-architecture.md#shared-lockedunlocked-folder-artwork)
+for the canonical desktop/mobile source and browser PNG regeneration command.
 The shared native destination bar remains platform-owned. Idle loading controls
 are detached from `folder_loading_box`; folder opening temporarily attaches the
 status and progress controls, and removes them on completion.

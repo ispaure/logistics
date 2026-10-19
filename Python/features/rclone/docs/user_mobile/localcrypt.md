@@ -11,8 +11,13 @@ available crypt remotes and confirms when a crypt is selected. If it reports
 no crypt remote, the loaded ZIP must include both the crypt configuration and
 its backing remote configuration; choosing only the backing Dropbox/Drive/etc.
 remote does not apply crypt decryption.
-For a new encrypted offline folder, use Workspaces's managed **Pull to LocalCrypt**
-workflow. Existing individual encrypted copies remain readable with matching
+For a new offline folder, tap **Pull** in Workspaces. A session-only crypt
+remote opens a popup strongly recommending LocalCrypt: choose **Yes** to keep
+the existing ciphertext or **No** for a regular Local copy. Regular Local files
+remain decrypted and readable after credentials lock or the app exits. Both kinds
+of copy persist on disk. You can cancel in the transfer review before any pull.
+Remotes using saved credentials and non-crypt remotes pull to Local without this
+choice. An existing copy keeps its storage type on subsequent pulls. Existing individual encrypted copies remain readable with matching
 credentials; the remote browser no longer creates them.
 
 Remote browsing and unlocked copies show decrypted names. **Manage local files

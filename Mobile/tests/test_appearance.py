@@ -155,11 +155,13 @@ class AppearanceTests(unittest.TestCase):
         from logisticsmobile.palette import EINK
         self.assertNotEqual(ICONS['folder_locked'][2], ICONS['folder_unlocked'][2])
         for colors in (LIGHT, DARK):
+            self.assertEqual(colors['folder'], colors['folder_unlocked'])
             self.assertNotEqual(colors['folder_locked'], colors['folder_unlocked'])
             for state in ('folder_locked', 'folder_unlocked'):
                 for background in ('surface', 'window'):
                     self.assertGreaterEqual(contrast_ratio(argb(colors[state]), argb(colors[background])), 4.5)
         self.assertEqual(EINK['folder_locked'], EINK['folder_unlocked'])
+        self.assertEqual(EINK['folder'], EINK['folder_unlocked'])
 
     def test_ios_transparent_button_uses_native_color_property(self):
         import sys

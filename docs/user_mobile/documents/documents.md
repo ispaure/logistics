@@ -2,6 +2,14 @@
 
 Use the document workspace to return to open text, Markdown, books, comics and
 conversations. Switching to another part of the app keeps these sessions available.
+Tap **Documents** while that tab is already selected to return to the Documents
+list without closing the current document. Switching to Documents from another
+tab resumes the document you were viewing; tap Documents again to see the list.
+In a book, comic or provider-backed document reader, open the **…** actions menu
+and choose **All documents** to return to the Documents list without closing the
+document. This also works when you opened the file from Home or Files. Android's
+system Back follows the opening location instead and may first dismiss reading
+controls or fullscreen mode.
 On iOS, the top navigation bar shows the opened document's name, including files
 opened from local, remote and encrypted storage. Fullscreen reading hides the bar
 until you show the reading controls again.

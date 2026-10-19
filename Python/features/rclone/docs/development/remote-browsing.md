@@ -32,6 +32,13 @@ policy and previews. The commonUtils provider browser and range-reader contracts
 are reused without modification. No remote path is passed to the ordinary local
 filesystem browser, index, local mutation actions or external document launchers.
 
+Desktop remote commands retain at most 64 KiB of rclone stderr in memory on a
+failed request. The adapter translates recognized authorization, missing backing
+remote, invalid crypt password setting, folder access, rate limit and network errors to fixed recovery messages;
+unknown failures report the exit status. Raw provider text, tokens and paths are
+never included in the presented exception. Credential revocation takes precedence
+over command failure when a session is locked during a request.
+
 Mobile remote listings deliberately have no thumbnail callback, including tile
 mode: enumerating a folder must not enqueue archive-cover reads on the serial
 native connection. `CloudUI.remote_activity` runs a UI-loop timer and marshals

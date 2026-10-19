@@ -197,9 +197,11 @@ Add share opens the SMB / Mac share connection form. The transfer banner also
 shows completion and opens the existing transfer details screen.
 
 
-Home has a Logistics navigation title above the compact Your workspace
-heading. The former “Read. Write. Organize.” tagline has been removed; the bottom
-navigation tab remains named Home.
+On Android, the app-name title bar is hidden so page content starts higher.
+Wide screens place Home at the top of the left navigation rail. Home's
+Your workspace heading has only a small top inset. On iOS, Home retains its
+native Home navigation title. The header has no About Logistics Mobile
+overflow menu; build information is available in Settings → About.
 
 
 Long file-browser names are shortened visually in the middle when needed, keeping

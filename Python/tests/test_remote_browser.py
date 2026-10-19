@@ -15,6 +15,29 @@ from features.rclone.remote_policy import direct_kind, LocalCopyRequired
 from local_crypt_fixture import crypt_fixture
 
 
+class RemoteFailureTests(unittest.TestCase):
+    def test_provider_errors_become_fixed_recovery_messages_without_private_details(self):
+        from commonUtils.integrations.wrappers.cmdShellWrapper.binary import BinaryCommandError
+        from features.rclone.remote_resources import remote_failure
+        for diagnostic, expected in [
+            ('oauth2: invalid_grant', 'renew the underlying Drive remote authorization'),
+            ('empty token found', 'account authorization'),
+            ("didn't find section in config file", 'backing remote is missing'),
+            ('failed to decrypt password', 'Restore the original rclone crypt settings'),
+            ('googleapi: Error 403: userRateLimitExceeded', 'rate limit'),
+            ('directory not found', 'folder was not found'),
+            ('insufficientPermissions', 'denied access'),
+            ("couldn't fetch token: dial tcp: no such host", 'network connection'),
+            ('unexpected provider error', 'exit status 7'),
+        ]:
+            with self.subTest(diagnostic=diagnostic):
+                error = BinaryCommandError(7, (diagnostic + ' token=private-sentinel /private/path').encode())
+                message = remote_failure(error)
+                self.assertIn(expected, message)
+                self.assertNotIn('private-sentinel', message)
+                self.assertNotIn('/private/path', message)
+
+
 class RemoteBrowserTests(QtTestCase):
     @classmethod
     def setUpClass(cls):
@@ -59,6 +82,21 @@ class RemoteBrowserTests(QtTestCase):
             from features.comics.pages import ComicPages
             comic = ComicDocument(provider.root / 'plain.cbz', source=provider)
             self.assertEqual(ComicPages(comic.path, comic).read_page(0)[0], fixture.image)
+
+    def test_crypt_missing_backing_remote_reports_package_recovery(self):
+        from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
+        with TemporaryDirectory() as folder:
+            context = Path(folder) / 'MissingBacking.session'
+            password = run_bytes([str(self.binary), 'obscure', 'synthetic-crypt-password']).decode().strip()
+            session.remember(context, {'Secret': {
+                'type': 'crypt', 'remote': 'MissingDrive:encrypted', 'password': password,
+            }})
+            self.addCleanup(session.forget, context)
+            provider = RemoteResources(context, 'Secret', binary=self.binary)
+            self.addCleanup(provider.close)
+            with self.assertRaisesRegex(OSError, 'backing remote is missing'):
+                provider.list()
+
     def test_nested_encrypted_folder_navigation(self):
         from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
         with TemporaryDirectory() as folder, crypt_fixture(folder, self.binary) as fixture:

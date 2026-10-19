@@ -28,14 +28,20 @@ class WorkspaceUnlockView(qt.QWidget):
     idle = qt.Signal()
     unlocked = qt.Signal()
 
-    def __init__(self, config, package, parent=None, *, purpose='browse this folder'):
+    def __init__(self, config, package, parent=None, *, purpose='browse this folder', workspace_name=None):
         super().__init__(parent)
         self.config, self.package, self.closing = config, package, False
         layout = qt.QVBoxLayout(self)
         layout.addStretch()
         form = qt.QWidget(self)
-        form.setMaximumWidth(440)
+        form.setMaximumWidth(360)
         fields = qt.QVBoxLayout(form)
+        if workspace_name:
+            name = qt.QLabel(workspace_name)
+            name.setTextFormat(qt.Qt.TextFormat.PlainText)
+            name.setWordWrap(True)
+            name.setAccessibleName('Selected workspace')
+            fields.addWidget(name)
         title = qt.QLabel('Unlock this workspace')
         font = title.font()
         font.setBold(True)

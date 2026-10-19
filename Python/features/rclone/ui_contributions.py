@@ -61,22 +61,24 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
         from . import session
         from features.rclone.localcrypt.backend import LocalCryptFolder
         values = session.credentials(config_path)
-        is_crypt = bool(values and values.get(entry.remote_name, {}).get('type') == 'crypt')
+        is_crypt = bool(config_path.suffix == '.session' and values
+                        and values.get(entry.remote_name, {}).get('type') == 'crypt')
         encrypted = isinstance(entry.local, LocalCryptFolder)
         if encrypted:
             item = entry.local.connection
             ui_actions.append(UIAction(name='Pull',
                 callback=lambda: actions.pull_encrypted_copy(entry.remote_name, config_path, item=item, review=True),
                 description='Refresh this LocalCrypt copy with ciphertext from its backing remote.', destructive=True))
+        elif is_crypt and entry.local is None:
+            from features.rclone.transfers.ui.pull_dialog import pull_new_copy
+            ui_actions.append(UIAction(name='Pull',
+                callback=lambda: pull_new_copy(entry.remote_name, config_path),
+                description='Choose LocalCrypt (recommended) or a readable Local copy.', destructive=True))
         else:
             association = getattr(entry.remote_context, 'item', None)
-            ui_actions.append(UIAction(name='Pull to Local' if entry.local is None and is_crypt else 'Pull',
+            ui_actions.append(UIAction(name='Pull',
                 callback=lambda: actions.pull_remote(entry.remote_name, config_path, review=True, **({'package': association.package} if association else {})),
                 description='Sync decrypted files into the Local folder.', destructive=True))
-            if is_crypt and entry.local is None:
-                ui_actions.append(UIAction(name='Pull to LocalCrypt',
-                    callback=lambda: actions.pull_encrypted_copy(entry.remote_name, config_path, review=True),
-                    description='Create or replace the separate ciphertext copy. Destination-only files can be deleted.', destructive=True))
     return ui_actions
 
 

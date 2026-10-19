@@ -43,6 +43,10 @@ Recent lists up to ten recently used documents, including ones still open. An
 **Open** badge indicates an existing workspace session; selecting it resumes that
 session without reloading its file. **All open** always shows every visible open
 item and its Close button; there is no expand/collapse button.
+Reopening a file from Home or Recent shows a small activity bar and an
+**Opening file…** status below the current view. Cloud files show
+**Opening cloud file…** while credentials are checked and any required download
+finishes. The indicator clears when opening finishes, fails or is cancelled.
 Home and document lists show names and useful status badges without a separate
 file-type subheader. **Unsaved changes** and **Draft** badges mark pending edits. **Recovered draft**
 marks edits restored from recovery; saving clears these badges.

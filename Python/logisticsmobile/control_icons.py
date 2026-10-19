@@ -30,6 +30,7 @@ ICONS = {
     'contents': ('list.bullet', '≡', tuple(((7, y), (21, y)) for y in (6, 12, 18))),
     'appearance': ('textformat.size', 'Aa', (((3, 19), (9, 5), (15, 19)), ((5, 14), (13, 14)), ((16, 19), (19, 12), (22, 19)), ((17, 17), (21, 17)))),
     'more': ('ellipsis', '•••', ()),
+    'overflow': ('ellipsis.circle', '⋮', ()),
     'compose': ('square.and.pencil', '✎', (((14, 4), (4, 4), (4, 20), (20, 20), (20, 10)), ((10, 14), (11, 10), (19, 2), (22, 5), (14, 13), (10, 14)))),
     'edit': ('pencil', '✎', (((4, 20), (5, 15), (17, 3), (21, 7), (9, 19), (4, 20)), ((14, 6), (18, 10)))),
     'view': ('doc.text', '▤', (((5, 3), (14, 3), (20, 9), (20, 21), (5, 21), (5, 3)), ((14, 3), (14, 9), (20, 9)), ((8, 13), (17, 13)), ((8, 17), (17, 17)))),
@@ -64,7 +65,7 @@ _android_controls = weakref.WeakSet()
 
 # One folder silhouette with an integrated lock; use the same geometry on both
 # platforms rather than depending on an OS-specific locked-folder symbol.
-from services.folders.appearance import FOLDER_PATHS
+from services.folders.appearance import FOLDER_FILLS, FOLDER_PATHS, FOLDER_STROKE_WIDTH
 ICONS.update((name, ('folder', {'folder_locked': '▱⚿', 'folder_unlocked': '▱🔓'}.get(name, '▱'), paths))
              for name, paths in FOLDER_PATHS.items())
 
@@ -155,7 +156,7 @@ def apply_icon(button, name, label):
         from rubicon.objc import ObjCClass
         button.text = ''
         image = ObjCClass('UIImage').systemImageNamed(symbol)
-        if name in {'group', 'obsidian', 'skip_back', 'skip_forward', 'folder_locked', 'folder_unlocked'}:
+        if name in {'group', 'obsidian', 'skip_back', 'skip_forward', 'folder', 'folder_locked', 'folder_unlocked'}:
             from math import radians
             from rubicon.objc import Block, objc_id
             from toga_iOS.libs import UIGraphicsImageRenderer, CGSize, CGPoint, CGRect
@@ -164,7 +165,7 @@ def apply_icon(button, name, label):
                 ObjCClass('UIColor').blackColor.setStroke()
                 path = ObjCClass('UIBezierPath').bezierPath()
                 skip = name.startswith('skip_')
-                path.lineWidth = 1.6 if name.startswith('folder_') else 1.7 if skip else 1.8
+                path.lineWidth = FOLDER_STROKE_WIDTH if name in FOLDER_PATHS else 1.7 if skip else 1.8
                 path.lineCapStyle = 1
                 path.lineJoinStyle = 1
                 if skip:
@@ -175,6 +176,16 @@ def apply_icon(button, name, label):
                     for point in line[1:]:
                         path.addLineToPoint(CGPoint(*point))
                 path.stroke()
+                if name in FOLDER_FILLS:
+                    fill = ObjCClass('UIBezierPath').bezierPath()
+                    fill.usesEvenOddFillRule = True
+                    for contour in FOLDER_FILLS[name]:
+                        fill.moveToPoint(CGPoint(*contour[0]))
+                        for point in contour[1:]:
+                            fill.addLineToPoint(CGPoint(*point))
+                        fill.closePath()
+                    ObjCClass('UIColor').blackColor.setFill()
+                    fill.fill()
                 if skip:
                     from rubicon.objc import ns_from_py
                     paragraph = ObjCClass('NSMutableParagraphStyle').alloc().init()
@@ -207,10 +218,13 @@ def apply_icon(button, name, label):
         elif name == 'more':
             for x in (5, 12, 19):
                 path.addCircle(x, 12, 1, Path.Direction.CW)
+        elif name == 'overflow':
+            for y in (5, 12, 19):
+                path.addCircle(12, y, 1, Path.Direction.CW)
         drawable = ShapeDrawable(PathShape(path, 24, 24))
         paint = drawable.getPaint()
         paint.setStyle(Paint.Style.FILL if name in {'stop', 'play'} else Paint.Style.STROKE)
-        paint.setStrokeWidth(1.6 if name.startswith('folder_') else 1.8)
+        paint.setStrokeWidth(FOLDER_STROKE_WIDTH if name in FOLDER_PATHS else 1.8)
         paint.setStrokeCap(Paint.Cap.ROUND)
         paint.setStrokeJoin(Paint.Join.ROUND)
         paint.setAntiAlias(True)
@@ -234,6 +248,24 @@ def apply_icon(button, name, label):
             paint.setTextSize(10)
             paint.setTextAlign(Paint.Align.CENTER)
             canvas.drawText('15', 12, 12.5 - (paint.ascent() + paint.descent()) / 2, paint)
+            drawable = BitmapDrawable(native.getResources(), bitmap)
+            drawable.setBounds(0, 0, size, size)
+        if name in FOLDER_FILLS:
+            from android.graphics import Bitmap, Canvas
+            from android.graphics.drawable import BitmapDrawable
+            bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            canvas = Canvas(bitmap)
+            canvas.scale(size / 24, size / 24)
+            canvas.drawPath(path, paint)
+            fill = Path()
+            fill.setFillType(Path.FillType.EVEN_ODD)
+            for contour in FOLDER_FILLS[name]:
+                fill.moveTo(*contour[0])
+                for point in contour[1:]:
+                    fill.lineTo(*point)
+                fill.close()
+            paint.setStyle(Paint.Style.FILL)
+            canvas.drawPath(fill, paint)
             drawable = BitmapDrawable(native.getResources(), bitmap)
             drawable.setBounds(0, 0, size, size)
         native.setCompoundDrawablesRelative(drawable, None, None, None)

@@ -18,7 +18,7 @@ class WorkspacePanes(qt.QMainWindow):
             dock = qt.QDockWidget(name, self)
             dock.setObjectName('workspaces.' + name.lower())
             dock.setWidget(widget)
-            dock.setMinimumWidth(240)
+            dock.setMinimumWidth(240 if name == 'Files' else 160)
             if name != 'Sources':
                 dock.setMinimumHeight(120)
             area = (qt.Qt.DockWidgetArea.RightDockWidgetArea if name == 'Files'
@@ -29,13 +29,24 @@ class WorkspacePanes(qt.QMainWindow):
         if sources is not None:
             files, actions_dock, sources_dock = self.docks
             self.splitDockWidget(sources_dock, actions_dock, qt.Qt.Orientation.Vertical)
-            self.resizeDocks([sources_dock, files], [300, 750], qt.Qt.Orientation.Horizontal)
+            self.resizeDocks([sources_dock, files], [200, 850], qt.Qt.Orientation.Horizontal)
             self.resizeDocks([sources_dock, actions_dock], [400, 250], qt.Qt.Orientation.Vertical)
         else:
             self.resizeDocks(self.docks, [650, 350], qt.Qt.Orientation.Horizontal)
 
     def createPopupMenu(self):
         return None
+
+    def set_actions_available(self, available):
+        dock = self.docks[1]
+        if available == (not dock.isHidden()):
+            return
+        if not available and len(self.docks) > 2:
+            self._detail_heights = [self.docks[2].height(), dock.height()]
+        dock.setVisible(available)
+        if available and len(self.docks) > 2 and hasattr(self, '_detail_heights'):
+            self.resizeDocks([self.docks[2], dock], self._detail_heights,
+                             qt.Qt.Orientation.Vertical)
 
     def set_locked(self, locked):
         self.locked = bool(locked)

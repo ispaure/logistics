@@ -15,6 +15,7 @@ class LaunchCard(qt.QPushButton):
         self.setAccessibleName(title)
         self.setAccessibleDescription(detail)
         self.setMinimumHeight(88)
+        self.setCursor(qt.Qt.CursorShape.PointingHandCursor)
         layout = qt.QHBoxLayout(self)
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(14)
@@ -49,15 +50,16 @@ class LandingPage(qt.QWidget):
         self._tool_cards = []
         self._document_cards = []
         self._preparing_layout = False
+        self._layout_pending = True
         self._card_timer = qt.QTimer(self)
         self._card_timer.setSingleShot(True)
-        self._card_timer.timeout.connect(self._fit_card_heights)
+        self._card_timer.timeout.connect(self._settle_layout)
         self.setStyleSheet('''
             QPushButton#launchCard, QFrame#documentCard {
                 background: palette(base); border: 1px solid palette(mid);
                 border-radius: 10px;
             }
-            QPushButton#launchCard:hover { background: palette(midlight); border-color: palette(highlight); }
+            QPushButton#launchCard:hover, QFrame#documentCard:hover { background: palette(midlight); border-color: palette(highlight); }
             QPushButton#launchCard:focus { border: 2px solid palette(highlight); }
             QPushButton#launchCard:pressed { background: palette(button); }
             QPushButton#launchCard:disabled { background: palette(window); }
@@ -137,15 +139,35 @@ class LandingPage(qt.QWidget):
             # previous measurement when the text metrics or available width change.
             watched.setMinimumHeight(0)
         if event.type() in (qt.QEvent.Type.FontChange, qt.QEvent.Type.LayoutRequest, qt.QEvent.Type.Resize):
-            self._card_timer.start(0)
+            self._schedule_layout()
         return super().eventFilter(watched, event)
 
+    def _schedule_layout(self):
+        if self._preparing_layout:
+            return
+        self._layout_pending = True
+        self._card_timer.start(0)
+        self.update()
+
+    def paintEvent(self, event):
+        # Font and viewport changes can arrive after showEvent. Resolve dirty
+        # geometry before Qt paints any of the child cards.
+        if self._layout_pending:
+            self._settle_layout()
+        super().paintEvent(event)
+
     def showEvent(self, event):
-        # Polish fonts and settle height-for-width before the first visible
-        # paint, rather than showing provisional cards and replacing them later.
+        self._settle_layout()
+        self._layout_pending = True
+        super().showEvent(event)
+
+    def _settle_layout(self):
+        # Card heights and their parent grids must change in one pass: a height
+        # update alone leaves the old row spacing visible until another event.
         self._preparing_layout = True
         try:
-            for widget in (self, *self.findChildren(qt.QWidget)):
+            widgets = (self, *self.findChildren(qt.QWidget))
+            for widget in widgets:
                 widget.ensurePolished()
             previous = None
             for _ in range(6):
@@ -157,17 +179,25 @@ class LandingPage(qt.QWidget):
                     if card is not None:
                         card.layout().activate()
                 self._fit_card_heights()
+                self.content.layout().invalidate()
                 self.content.layout().activate()
+                self.content.updateGeometry()
+                self.scroll.widget().layout().invalidate()
                 self.scroll.widget().layout().activate()
-                state = (self.content.width(), self._document_columns,
-                         tuple((c.width(), c.height()) for c in self._tool_cards + self._document_cards))
+                # Drain only our layout requests while the reentrancy guard is
+                # active. Otherwise this pass schedules another pass indefinitely.
+                for widget in widgets:
+                    qt.QCoreApplication.sendPostedEvents(widget, qt.QEvent.Type.LayoutRequest)
+                state = (self.content.geometry().getRect(), self.scroll.viewport().size(),
+                         self._document_columns,
+                         tuple(c.geometry().getRect() for c in self._tool_cards + self._document_cards))
                 if state == previous:
                     break
                 previous = state
             self._card_timer.stop()
+            self._layout_pending = False
         finally:
             self._preparing_layout = False
-        super().showEvent(event)
 
     def _watch_card(self, card):
         card.installEventFilter(self)
@@ -230,7 +260,7 @@ class LandingPage(qt.QWidget):
         if hasattr(self, 'tool_grid'):
             self._arrange_cards(self.tool_grid, self._tool_cards, columns)
         self._arrange_cards(self.document_grid, self._document_cards, columns)
-        self._card_timer.start(0)
+        self._schedule_layout()
 
     @staticmethod
     def _arrange_cards(grid, cards, columns):
@@ -280,6 +310,7 @@ class LandingPage(qt.QWidget):
         for index, (key, entry) in enumerate(launchers.items()):
             card = qt.QFrame()
             card.setObjectName('documentCard')
+            card.setAttribute(qt.Qt.WidgetAttribute.WA_Hover)
             layout = qt.QHBoxLayout(card)
             layout.setContentsMargins(20, 16, 20, 16)
             layout.setSpacing(14)
@@ -303,12 +334,14 @@ class LandingPage(qt.QWidget):
             if entry.new_document:
                 new = qt.QPushButton('New')
                 new.setObjectName('documentAction')
+                new.setCursor(qt.Qt.CursorShape.PointingHandCursor)
                 new.setAccessibleName('New ' + entry.name)
                 new.clicked.connect(lambda checked=False, key=key: self.document_requested.emit(key, True))
                 actions.addWidget(new)
                 self.editor_new_buttons[key] = new
             button = qt.QPushButton('Open…')
             button.setObjectName('documentAction')
+            button.setCursor(qt.Qt.CursorShape.PointingHandCursor)
             button.setAccessibleName('Open ' + entry.name)
             button.clicked.connect(lambda checked=False, key=key: self.document_requested.emit(key, False))
             actions.addWidget(button)

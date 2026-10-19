@@ -1,5 +1,21 @@
 # Mobile workspace drawers and paired documents
 
+## Compact Android top chrome
+
+`logisticsmobile.navigation.install_android_navigation_appearance` hides the
+redundant activity ActionBar after startup restores native chrome. Page headings
+and in-page Back controls remain owned by their existing screens. Both bottom
+navigation and the tablet rail use this policy; rail menus explicitly use
+`Gravity.TOP` on initial installation and after presentation changes. The app
+window title remains available as metadata. Reader fullscreen and keyboard
+chrome snapshots therefore normally capture an already hidden activity bar.
+Home uses an 8-point content top margin without an additional heading top margin.
+
+`Mobile/tests/test_navigation_contrast.py` checks initial tablet installation,
+late rail creation, and preserved selection appearance with mocked Android APIs.
+`Mobile/tests/test_hub_documents.py` checks the Home heading inset. Physical Boox
+layout still requires device validation.
+
 ## Android Back policy and panel audit (2026-10-18)
 
 `logisticsmobile.routes.MobileRoutes` specializes the shared route host at
@@ -697,14 +713,25 @@ locking. Imported ZIPs, including ZIPs containing SMB remotes, remain under rclo
 Rendering uses cached associations without querying the native bridge. Only
 rclone displays the credential selector; changing source clears collapsed groups
 and resets the credential to All. The source survives rebuilding the hub during
-the current app session.
+the current app session. Setup actions appear only for unconfigured sources:
+Home Server offers **Add share…**, and Cloud offers **Add Remote…**. A cached
+`folder_configured_sources` snapshot includes loaded, saved, session and retained
+connection metadata before folder visibility or credential filtering. Transfer
+feedback takes precedence over Cloud's setup action.
 
 On iOS, `storage_location.shared_documents_path` exposes the registered public
-Documents root separately from the managed Local collection. The app-owned
-`local_sources.SharedFiles` provider rejects access through `Local` and omits it
-from root listings. Local's All files and subfolder entries use this provider
-through the existing file browser. Private app data is never used as the shared
-root. Managed copies continue using CollectionFiles and their transfer mappings.
+Documents root separately from the managed Local directory. The app-owned
+`local_sources.SharedFiles` provider lists `Local` under its actual name and
+protects its root from mutations. Entering it switches to `CollectionFiles`.
+Local lists imported folders and downloaded/synced copies individually, alongside
+shared subfolders. The root choice is marked `browser_root` and rendered as a
+**Browse All Files** action below the folder tree, without a workspace menu.
+The ordinary local browser omits the single-source strip and places its actions
+button at the trailing edge of `FolderLocationHeader`, alongside Search. The
+`overflow` icon uses `ellipsis.circle` on iOS and vertical dots on Android.
+Only an opened encrypted source adds the source-switching strip.
+Private app data is never used as the shared root. Managed copies continue using
+`CollectionFiles` and their transfer mappings.
 Regression coverage is in `Mobile/tests/test_folder_source_tabs.py` and the hub
 and document-layout tests. Native device appearance still requires a device run.
 

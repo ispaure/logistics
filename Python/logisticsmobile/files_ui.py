@@ -45,47 +45,48 @@ class FilesUI:
                 and (label == 'Local files' or label in getattr(self, 'file_roots', {})))
 
     async def browse_local_during_transfer(self, folder):
-        previous = getattr(self, '_local_browse_cancel', None)
-        if previous is not None:
-            previous.set()
-        cancel = self._local_browse_cancel = threading.Event()
-        label = self.file_storage.value
-        client = self.cloud_client
-        generation = getattr(client, 'generation', None)
-        try:
-            provider = self.file_provider_for(label)
-            path = provider.relative(folder)
-            rows = await asyncio.to_thread(provider.list, path, cancelled=cancel.is_set)
-            if (not self.active_host or cancel.is_set()
-                    or (self.file_storage.value, self.file_location.value) != (label, folder)
-                    or (provider.private and (client is not self.cloud_client
-                        or generation != getattr(self.cloud_client, 'generation', None)))):
+        with self.file_browser.population_paused():
+            previous = getattr(self, '_local_browse_cancel', None)
+            if previous is not None:
+                previous.set()
+            cancel = self._local_browse_cancel = threading.Event()
+            label = self.file_storage.value
+            client = self.cloud_client
+            generation = getattr(client, 'generation', None)
+            try:
+                provider = self.file_provider_for(label)
+                path = provider.relative(folder)
+                rows = await asyncio.to_thread(provider.list, path, cancelled=cancel.is_set)
+                if (not self.active_host or cancel.is_set()
+                        or (self.file_storage.value, self.file_location.value) != (label, folder)
+                        or (provider.private and (client is not self.cloud_client
+                            or generation != getattr(self.cloud_client, 'generation', None)))):
+                    return False
+                self.file_provider, self.file_path = provider, path
+                self.file_rows = {f'{i + 1}. {"Folder" if row["directory"] else "File"}: {row["name"]}' : row
+                                  for i, row in enumerate(rows)}
+                # set_entries publishes selection reset once with the new snapshot.
+                self.file_loaded_location = label, path
+                self.populate_file_browser(rows, self.file_password.value, location=self.file_loaded_location)
+                self.file_status.value = ''
+                return True
+            except Exception as error:
+                if (self.active_host and not cancel.is_set()
+                        and (self.file_storage.value, self.file_location.value) == (label, folder)):
+                    self.file_status.value = 'Could not browse local folder: ' + str(error)[:200]
+                    if self.file_provider is not None and self.file_browser.tree is not None:
+                        self.file_changing_location = True
+                        try:
+                            self.file_storage.value, self.file_location.value = self.file_loaded_location
+                        finally:
+                            self.file_changing_location = False
+                        self.refresh_file_source_tabs()
+                    else:
+                        self.file_provider = None
+                        self.file_rows = {}
+                        self.file_selection.items = []
+                        self.file_browser.stop()
                 return False
-            self.file_provider, self.file_path = provider, path
-            self.file_rows = {f'{i + 1}. {"Folder" if row["directory"] else "File"}: {row["name"]}' : row
-                              for i, row in enumerate(rows)}
-            # set_entries publishes selection reset once with the new snapshot.
-            self.file_loaded_location = label, path
-            self.populate_file_browser(rows, self.file_password.value, location=self.file_loaded_location)
-            self.file_status.value = ''
-            return True
-        except Exception as error:
-            if (self.active_host and not cancel.is_set()
-                    and (self.file_storage.value, self.file_location.value) == (label, folder)):
-                self.file_status.value = 'Could not browse local folder: ' + str(error)[:200]
-                if self.file_provider is not None and self.file_browser.tree is not None:
-                    self.file_changing_location = True
-                    try:
-                        self.file_storage.value, self.file_location.value = self.file_loaded_location
-                    finally:
-                        self.file_changing_location = False
-                    self.refresh_file_source_tabs()
-                else:
-                    self.file_provider = None
-                    self.file_rows = {}
-                    self.file_selection.items = []
-                    self.file_browser.stop()
-            return False
 
     async def show_files(self, widget=None, *, local_root=False, **kwargs):
         # Files can be opened directly from Home/Documents on a cold launch.
@@ -176,13 +177,12 @@ class FilesUI:
         # A widget has one native parent; move browser/status into the main view.
         operation_box = self.file_operation_view.content
         operation_box.remove(self.file_browser.widget)
-        from commonUtils.ui.native.presentation import scroll_content
         operation_box.remove(self.file_status)
         operation_box.remove(buttons[1])
         operation_box.remove(buttons[2])
         operation_box.remove(self.file_storage)
         from .action_menu import FeatureCommands
-        self.file_actions_button = icon_button('more', 'File and folder actions')
+        self.file_actions_button = icon_button('overflow', 'File and folder actions')
         self.file_actions = FeatureCommands(self.file_actions_button, self,
             [('New folder…', lambda: self.show_file_actions(operation='new')),
              ('Rename…', lambda: self.show_file_actions(operation='rename')),
@@ -192,13 +192,15 @@ class FilesUI:
              ('Archive password…', lambda: self.show_file_actions(operation='password'))], self.show_file_actions)
         self.file_browser.attach_location_header(self.file_status,
             icon_button('back', 'Back to Workspaces', on_press=self.parent_file_folder))
-        self.file_source_tabs = toga.Box(style=Pack(direction=ROW, flex=1))
-        self.refresh_file_source_tabs()
+        from .browser_ui import browser_command
+        browser_command(self.file_actions_button)
+        self.file_browser.location_bar.add(self.file_actions_button)
+        self.file_source_tabs = toga.Box(style=Pack(direction=ROW, height=48))
         self.files_view = toga.Box(children=[
-            toga.Box(children=[self.file_source_tabs, self.file_actions_button], style=Pack(direction=ROW)),
             self.file_browser.location_bar,
-            toga.ScrollContainer(horizontal=False, content=scroll_content(self.file_browser.widget), style=Pack(flex=1))],
+            self.file_browser.scroll_container()],
             style=Pack(direction=COLUMN, margin=12, flex=1))
+        self.refresh_file_source_tabs()
         self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser')
         await self.browse_files()
         self.file_storage.on_change = self.change_file_storage
@@ -218,6 +220,12 @@ class FilesUI:
         if selected not in roots:
             roots[selected] = self.file_roots.get(selected)
         self.file_source_buttons = {}
+        # Ordinary local browsing has no source choice. Keep the extra source
+        # strip only when an encrypted workspace actually offers a switch.
+        if len(roots) == 1:
+            if self.file_source_tabs.parent is not None:
+                self.file_source_tabs.parent.remove(self.file_source_tabs)
+            return
         for label in roots:
             def choose(widget=None, label=label, **kwargs):
                 if self.file_storage.value != label:
@@ -227,6 +235,10 @@ class FilesUI:
             source_tab(button, selected == label)
             self.file_source_buttons[label] = button
             self.file_source_tabs.add(button)
+        if self.file_source_tabs.parent is None:
+            header = self.file_browser.location_bar
+            parent = header.parent
+            parent.insert(list(parent.children).index(header), self.file_source_tabs)
 
     def change_file_storage(self, widget=None, **kwargs):
         # Check programmatic-change guards synchronously. Native async handlers
@@ -467,7 +479,7 @@ class FilesUI:
         managed_root = (self.file_storage.value == 'Local files' and not self.file_path
                         and self.local_browser_root() == 'Shared files')
         name = (Path(self.file_path).name if self.file_path else
-                'Collection' if managed_root else
+                'Local' if managed_root else
                 'On this device' if self.file_storage.value in ('Local files', 'Shared files') else self.file_storage.value)
         self.file_browser.location_bar.update(self.file_path or ('Local' if managed_root else ''),
             encrypted=self.file_provider.private, unlocked=True, name=name)

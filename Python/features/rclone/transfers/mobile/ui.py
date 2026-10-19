@@ -267,23 +267,24 @@ class MirrorUI(TransferReviewUI):
         if matches:
             self.choose_transfer_copy(matches)
             return
-        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Pull ' + remote, style=Pack(font_size=22)))
-        box.add(toga.Label('Choose local storage type.\nLocal stores readable files.\nLocalCrypt retains encrypted names and bytes.\nPull replaces local contents to match this remote.'))
-        def start(storage):
-            def handler(widget=None, **kw):
-                if client is not self.cloud_client or client.generation != generation:
-                    self.cloud_status.value = 'Connections changed. Select the source again.'
-                    self.show_cloud()
-                    return
-                self.begin_transfer_review(remote=remote, folder=folder, storage=storage)
-            return handler
-        box.add(toga.Button('Pull to Local', on_press=start('Local'), style=Pack(height=48)))
-        box.add(toga.Button('Pull to LocalCrypt', on_press=start('LocalCrypt'), enabled=raw['crypt'], style=Pack(height=48)))
-        if not raw['crypt']:
-            box.add(toga.Label('LocalCrypt needs a crypt remote in your credential ZIP.'))
-        box.add(toga.Button('Cancel', on_press=self.show_cloud, style=Pack(height=44)))
-        self.show_view(box, destination='files', route='pull-destination', title='Pull destination')
+        # Credential storage and file storage are separate choices. Saved packages
+        # create ordinary Local copies; only session-loaded crypts offer LocalCrypt.
+        session_only = any(remote in record.get('remotes', ()) and not record.get('saved', False)
+                           for record in getattr(client, 'package_records', ()))
+        storage = 'Local'
+        if raw['crypt'] and session_only:
+            encrypted = await self.main_window.dialog(toga.QuestionDialog(
+                'Use LocalCrypt (recommended)?',
+                'LocalCrypt is strongly recommended for session-only credentials. '
+                'Yes: keep the existing encrypted names and file contents on disk. '
+                'No: create a regular Local copy with decrypted files that remain '
+                'readable after credentials lock or the app exits. Both copies remain '
+                'on disk. You can review and cancel the transfer after choosing.'))
+            storage = 'LocalCrypt' if encrypted else 'Local'
+        if not self.active_host or client is not self.cloud_client or client.generation != generation:
+            self.cloud_status.value = 'Connections changed. Select the source again.'
+            return
+        self.begin_transfer_review(remote=remote, folder=folder, storage=storage)
 
     async def push_remote_copy(self, widget=None, **kwargs):
         if self.cloud_busy or getattr(self, 'transfer_busy', False):

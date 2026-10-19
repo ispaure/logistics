@@ -1,10 +1,12 @@
 """Compact Logistics presentation over the shared native browser."""
 import inspect
+from contextlib import contextmanager
 from functools import partial
+from time import monotonic
 import weakref
 from pathlib import PurePosixPath
 import toga
-from .control_icons import apply_icon, icon_button
+from .control_icons import apply_icon
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from commonUtils.ui.native_browser import NativeBrowser
@@ -51,6 +53,12 @@ def highlight_entry(widget, selected):
     surface(widget, radius=8, background='hover' if selected else 'surface',
             foreground='text' if isinstance(widget, toga.Button) else None,
             outlined=False, eink_outlined=selected, eink_selected=selected)
+
+
+def sync_browser_population(app, body=None):
+    """Pause hidden browsers and resume retained browsers when shown again."""
+    for browser in tuple(getattr(app, '_populating_browsers', ())):
+        browser.sync_population(body)
 
 
 class BrowserStatusLabel(toga.Label):
@@ -161,6 +169,12 @@ class FolderLocationHeader(toga.Box):
 class FileBrowser(NativeBrowser):
     location_header = FolderLocationHeader
     status_label = BrowserStatusLabel
+    row_batch_size = 40
+    population_slice_size = 2
+    population_budget = .004
+    population_interval = .016
+    population_idle_delay = .12
+    scroll_prefetch = 24 * (ROW_HEIGHT + ROW_GAP)
     @property
     def page_size(self):
         # The shared renderer also uses this for Tiles and rich previews.
@@ -169,8 +183,24 @@ class FileBrowser(NativeBrowser):
 
     def __init__(self, *, open_file=None, folder_visible=None, bounded_pages=True,
                  **kwargs):
+        self._app = toga.App.app
+        self._loop = self._app.loop
+        if not hasattr(self._app, '_populating_browsers'):
+            self._app._populating_browsers = weakref.WeakSet()
+        self._app._populating_browsers.add(self)
         self.bounded_pages = bounded_pages
         self._list_slots = []
+        self._list_entries = ()
+        self._render_entries = None
+        self._rendering = False
+        self._append_handle = None
+        self._scroll = None
+        self._population_epoch = 0
+        self._population_holds = {}
+        self._last_scroll = float('-inf')
+        self._last_scroll_position = 0
+        self._slice_size = self.population_slice_size
+        self._list_query = None
         self.folder_visible = folder_visible
         self.on_open_file = open_file
         super().__init__(**kwargs)
@@ -197,6 +227,14 @@ class FileBrowser(NativeBrowser):
         self.page_label.style.font_size = 12
         self.widget.add(self.items)
 
+    def _spawn(self, coroutine):
+        # Native synchronous text callbacks can arrive between cooperative loop
+        # dispatches. Queue search on the owning loop even without a running-loop
+        # context, as Toga does for its asynchronous event handlers.
+        task = self._loop.create_task(coroutine)
+        self.tasks.add(task)
+        task.add_done_callback(self.tasks.discard)
+
     def attach_location_header(self, status, parent_button):
         for action in (self.search_button,):
             if action.parent is not None:
@@ -211,8 +249,15 @@ class FileBrowser(NativeBrowser):
     def set_entries(self, provider, directory, rows, *, location=None):
         rows = tuple(rows)
         super().set_entries(provider, directory, rows, location=location)
+
+    def set_tree(self, tree):
+        self._population_epoch += 1
+        return super().set_tree(tree)
+
     @property
     def entries(self):
+        if self._render_entries is not None:
+            return self._render_entries
         rows = super().entries
         if self.folder_visible is None:
             return rows
@@ -234,6 +279,120 @@ class FileBrowser(NativeBrowser):
             self.widget.remove(self.search_panel)
 
     def render(self):
+        self._cancel_append()
+        # Sorting and host visibility filtering run once for this render, even
+        # when the shared rich renderer asks for entries/page_size repeatedly.
+        self._render_entries = self.entries
+        self._rendering = True
+        try:
+            return self._render_page()
+        finally:
+            self._render_entries = None
+            self._rendering = False
+            self.sync_population()
+
+    def scroll_container(self):
+        """Mount the browser with continuous, progressively populated rows."""
+        from commonUtils.ui.native.presentation import scroll_content
+        self._scroll = toga.ScrollContainer(horizontal=False,
+            content=scroll_content(self.widget), on_scroll=self._scrolled,
+            style=Pack(flex=1))
+        return self._scroll
+
+    def _cancel_append(self):
+        if self._append_handle is not None:
+            self._append_handle.cancel()
+            self._append_handle = None
+
+    def _population_visible(self, body=None):
+        privacy = getattr(self._app, 'screen_privacy', None)
+        if (not self._app.active_host or self._scroll is None
+                or getattr(privacy, 'inactive', False)
+                or getattr(privacy, 'saved_content', None) is not None):
+            return False
+        body = body if body is not None else self._app.routes.body()
+        current = self._scroll
+        while current is not None:
+            if current is body:
+                return True
+            current = current.parent
+        return False
+
+    def _population_pending(self):
+        return (not self.closed and not self._rendering and not self.navigation_busy
+                and self._population_epoch not in self._population_holds.values()
+                and self._list_query == (self.search.value, self.sort.value)
+                and len(self._list_slots) < len(self._list_entries))
+
+    def sync_population(self, body=None):
+        if not self._population_pending() or not self._population_visible(body):
+            self._cancel_append()
+        elif self._append_handle is None:
+            self._append_handle = self._loop.call_later(self.population_idle_delay, self._extend_list)
+
+    @contextmanager
+    def population_paused(self):
+        """Stop old-folder work for the full duration of an async navigation."""
+        token = object()
+        self._population_holds[token] = self._population_epoch
+        self._cancel_append()
+        try:
+            yield
+        finally:
+            self._population_holds.pop(token)
+            self.sync_population()
+
+    def query_changed(self, widget=None, **kwargs):
+        self._cancel_append()
+        return super().query_changed(widget, **kwargs)
+
+    async def go_back(self, widget=None, **kwargs):
+        with self.population_paused():
+            return await super().go_back(widget, **kwargs)
+
+    def _scrolled(self, widget, **kwargs):
+        if not self._population_pending() or not self._population_visible():
+            return
+        position = widget.vertical_position
+        if position == self._last_scroll_position:
+            return  # Layout notifications are not a new scrolling gesture.
+        self._last_scroll_position = position
+        self._last_scroll = monotonic()
+        if widget.max_vertical_position - position <= self.scroll_prefetch:
+            # Bring idle work forward, but coalesce repeated native callbacks.
+            if (self._append_handle is not None
+                    and self._append_handle.when() > self._loop.time() + self.population_interval):
+                self._cancel_append()
+            if self._append_handle is None:
+                self._append_handle = self._loop.call_later(self.population_interval, self._extend_list)
+
+    def _extend_list(self):
+        self._append_handle = None
+        if not self._population_pending() or not self._population_visible():
+            return
+        scrolling = monotonic() - self._last_scroll < self.population_idle_delay
+        near_end = self._scroll.max_vertical_position - self._scroll.vertical_position <= self.scroll_prefetch
+        if scrolling and not near_end:
+            self._append_handle = self._loop.call_later(self.population_idle_delay, self._extend_list)
+            return
+        self._rendering = True
+        started = monotonic()
+        try:
+            start = len(self._list_slots)
+            count = 1 if scrolling else self._slice_size
+            self._populate_rows(self._list_entries[start:start + count], start,
+                                deadline=started + self.population_budget)
+        finally:
+            self._rendering = False
+        elapsed = monotonic() - started
+        # Native mounting/layout is indivisible. If a slice overruns, shrink
+        # subsequent slices and leave UIKit/Android time before the next one.
+        self._slice_size = 1 if elapsed > self.population_budget else self.population_slice_size
+        if self._population_pending() and self._population_visible():
+            self._append_handle = self._loop.call_later(
+                max(self.population_interval, elapsed * 2), self._extend_list)
+
+    def _render_page(self):
         if not self.bounded_pages or self.closed:
             return self._render()
         # Build the folder offscreen. Mutating a live UIKit stack for every
@@ -259,18 +418,35 @@ class FileBrowser(NativeBrowser):
         self.widget.insert(index, self.items)
 
     def _render_list(self):
-        """Reuse app-styled rows for the full folder, retaining no old entries."""
+        """Keep all entries searchable; create only the first batch of rows."""
         self._cancel()
         self.page = 0
         self.previous.enabled = self.next.enabled = False
         visible = self.entries
+        self._list_entries = visible
+        self._list_query = self.search.value, self.sort.value
+        count = min(len(visible), self.row_batch_size) if self._scroll is not None else len(visible)
         self.buttons.clear()
         self.entry_rows = {}
         retained = {slot[0] for slot in self._list_slots}
         for child in list(self.items.children):
             if child not in retained:
                 self.items.remove(child)
-        for index, entry in enumerate(visible):
+        self._populate_rows(visible[:count])
+        # Unused slots contain no decrypted names, entry closures or payloads.
+        for row, _, _, button, _ in self._list_slots[count:]:
+            if row.parent is not None:
+                row.parent.remove(row)
+            button.text = ''
+            accessible_name(button, '')
+            button.on_press = None
+        del self._list_slots[count:]
+        if not visible:
+            self.items.add(toga.Label('No matching items.' if self.search.value else 'This folder is empty.'))
+
+    def _populate_rows(self, entries, start=0, *, deadline=None):
+        mounted = []
+        for index, entry in enumerate(entries, start):
             if index == len(self._list_slots):
                 button = toga.Button('', style=Pack(height=ROW_HEIGHT, flex=1))
                 list_button(button)
@@ -301,22 +477,26 @@ class FileBrowser(NativeBrowser):
             button.on_press = partial(self._select_pressed, entry)
             self.buttons[entry.identity] = button
             self.entry_rows[entry.identity] = row
+            selected = entry.identity == self.selected
+            if getattr(row, '_browser_selected', None) != selected:
+                highlight_entry(row, selected)
+                highlight_entry(button, selected)
+                row._browser_selected = selected
             if row.parent is not self.items:
                 if row.parent is not None:
                     row.parent.remove(row)
-                self.items.add(row)
-        # Unused slots contain no decrypted names, entry closures or payloads.
-        for row, _, _, button, _ in self._list_slots[len(visible):]:
-            if row.parent is not None:
-                row.parent.remove(row)
-            button.text = ''
-            accessible_name(button, '')
-            button.on_press = None
-        del self._list_slots[len(visible):]
-        if not visible:
-            self.items.add(toga.Label('No matching items.' if self.search.value else 'This folder is empty.'))
+                mounted.append(row)
+            if deadline is not None and monotonic() >= deadline:
+                break
+        from .keyboard import bind_browser
+        bind_browser(self, roots=mounted)
+        # One layout refresh for the batch; leave the live scroll view mounted
+        # so adding rows preserves its offset and native scrolling gesture.
+        self.items.add(*mounted)
 
     def stop(self):
+        self._cancel_append()
+        self._list_entries = ()
         super().stop()
         for _, _, _, button, _ in self._list_slots:
             button.text = ''
@@ -330,6 +510,7 @@ class FileBrowser(NativeBrowser):
         if plain_list and not self.closed:
             self._render_list()
         else:
+            self._list_entries = ()
             # Rich previews and tiles retain the shared browser renderer.
             for _, _, _, button, _ in self._list_slots:
                 button.text = ''
@@ -398,42 +579,43 @@ class FileBrowser(NativeBrowser):
         self.page_label.text = ''
 
     async def _select_pressed(self, entry, widget, **kwargs):
-        if self.closed or self.navigation_busy or not self.tree or entry.identity not in self.tree.entries or entry not in self.entries:
-            return
-        if entry.container and self.on_open_folder:
-            self.navigation_busy = True
-            try:
-                result = self.on_open_folder(entry.payload)
-                if inspect.isawaitable(result):
-                    await result
-            finally:
-                self.navigation_busy = False
-            return
-        if not entry.container and self.on_open_file and not self.closed:
-            tree = self.tree
-            self.navigation_busy = True
-            try:
-                # A file tap opens the document. Do not first read its archive
-                # metadata (or queue behind thumbnail workers) for the browser's
-                # information panel, which is about to leave the screen.
-                self.selected = entry.identity
-                for child in list(self.info.children):
-                    self.info.remove(child)
-                self.highlight_selection()
-                if self.on_selected:
-                    selected = self.on_selected(entry.payload)
-                    if inspect.isawaitable(selected):
-                        await selected
-                if (self.closed or self.tree is not tree or self.selected != entry.identity
-                        or entry.identity not in tree.entries or entry not in self.entries):
-                    return
-                result = self.on_open_file(entry.payload)
-                if inspect.isawaitable(result):
-                    await result
-            finally:
-                self.navigation_busy = False
-            return
-        await super()._select_pressed(entry, widget, **kwargs)
+        with self.population_paused():
+            if self.closed or self.navigation_busy or not self.tree or entry.identity not in self.tree.entries or entry not in self.entries:
+                return
+            if entry.container and self.on_open_folder:
+                self.navigation_busy = True
+                try:
+                    result = self.on_open_folder(entry.payload)
+                    if inspect.isawaitable(result):
+                        await result
+                finally:
+                    self.navigation_busy = False
+                return
+            if not entry.container and self.on_open_file and not self.closed:
+                tree = self.tree
+                self.navigation_busy = True
+                try:
+                    # A file tap opens the document. Do not first read its archive
+                    # metadata (or queue behind thumbnail workers) for the browser's
+                    # information panel, which is about to leave the screen.
+                    self.selected = entry.identity
+                    for child in list(self.info.children):
+                        self.info.remove(child)
+                    self.highlight_selection()
+                    if self.on_selected:
+                        selected = self.on_selected(entry.payload)
+                        if inspect.isawaitable(selected):
+                            await selected
+                    if (self.closed or self.tree is not tree or self.selected != entry.identity
+                            or entry.identity not in tree.entries or entry not in self.entries):
+                        return
+                    result = self.on_open_file(entry.payload)
+                    if inspect.isawaitable(result):
+                        await result
+                finally:
+                    self.navigation_busy = False
+                return
+            await super()._select_pressed(entry, widget, **kwargs)
 
     def highlight_selection(self):
         for identity, row in getattr(self, 'entry_rows', {}).items():

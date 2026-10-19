@@ -55,6 +55,58 @@ class HubDocumentTests(unittest.TestCase):
             app.loop.run_until_complete(app.recent_opener(recent)())
             self.assertEqual(unlock.await_args.kwargs['identity'], 'a' * 64)
 
+    def test_recent_cloud_open_shows_activity_until_finished_and_cleans_up_on_failure(self):
+        import asyncio
+        import toga
+        from unittest.mock import AsyncMock, patch
+        from logisticsmobile.workspace import Session
+        app = self.app
+        session = Session('live', 'provider-session', 'memory-only', 'markdown', title='Cloud note.md', transient=True)
+        app.recent_documents.remember_file(session,
+            dict(type='remote', remote='Drive', identity='a' * 64, key='Cloud note.md'))
+        recent, _ = app.recent_items()[0]
+
+        async def check():
+            for destination in ('home', 'documents'):
+                for outcome in ('success', 'failure', 'cancel'):
+                    if destination == 'home':
+                        app.show_home()
+                    else:
+                        app.show_documents_hub()
+                    original = app.body.children[0]
+                    started, finish = asyncio.Event(), asyncio.Event()
+                    async def delayed_open(*args):
+                        started.set()
+                        await finish.wait()
+                        if outcome == 'failure':
+                            raise OSError('Offline')
+                        return True
+                    with (patch('logisticsmobile.document_sources._reopen_file', side_effect=delayed_open),
+                          patch.object(app.main_window, 'dialog', new_callable=AsyncMock)):
+                        task = asyncio.create_task(app.recent_opener(recent)())
+                        await started.wait()
+                        self.assertIs(app.body.children[0], original)
+                        banner = app.body.children[-1]
+                        self.assertEqual(labels(banner), ['Opening cloud file…'])
+                        progress = next(child for child in banner.children if isinstance(child, toga.ProgressBar))
+                        self.assertTrue(progress.is_running)
+                        # Exercise both an attached strip and navigation away.
+                        # Completion must never restore the originating view.
+                        if outcome == 'failure':
+                            app.show_documents_hub()
+                        replacement = app.body.children[0]
+                        if outcome == 'cancel':
+                            task.cancel()
+                            with self.assertRaises(asyncio.CancelledError):
+                                await task
+                        else:
+                            finish.set()
+                            await task
+                        self.assertFalse(progress.is_running)
+                        self.assertIsNone(banner.parent)
+                        self.assertIs(app.body.children[0], replacement)
+        app.loop.run_until_complete(check())
+
     def test_new_from_home_displays_new_editor_and_keeps_previous_draft(self):
         app = self.app
         first = app.current.id
@@ -77,7 +129,8 @@ class HubDocumentTests(unittest.TestCase):
         view = app.build_home()
         labels = [child.text for child in view.content.children if isinstance(child, toga.Label)]
         self.assertEqual(labels[0], 'Your workspace')
-        self.assertEqual(view.content.children[0].style.margin_top, 8)
+        self.assertEqual(view.content.style.margin_top, 8)
+        self.assertEqual(view.content.children[0].style.margin_top, 0)
         self.assertNotIn('Read. Write. Organize.', labels)
         self.assertEqual(app.native_host.labels[0], 'Home')
 

@@ -17,7 +17,9 @@ Cancelling keeps the chooser visible. Opened documents use the shared workspace.
 
 Cards adapt to the available width: up to three per row in landscape windows,
 fewer columns in narrower windows. Wider views give cards more room. Cards
-settle into their layout before the chooser first appears. Long lists
+settle into their layout before the chooser first appears. Workspace and document
+cards highlight on hover; clickable workspace cards and New/Open buttons also
+show a hand cursor. Long lists
 scroll vertically with the scrollbar or mouse wheel. The New / Open Document
 chooser is a utility tab and is omitted from the document list and document counts.
 
@@ -62,17 +64,19 @@ one. Refresh preserves an explicitly selected folder; removing or hiding that
 folder returns to the placeholder without opening another one. Locked workspaces
 show their credential ZIP password form directly in Files. Enter the password and
 choose **Unlock** to browse; errors stay in the form. Selecting another folder
-cancels the attempt. Files and Actions headers span their panes with centered text.
+cancels the attempt. Use the refresh icon in the folder-list panel below the source dropdown
+to reload folders while preserving your selection.
 Names starting with **Legacy-** (ignoring case) are hidden by default across all
 three sources. Use **Settings → Workspaces → Show Legacy (session only)** to reveal them.
 The choice survives refreshes and source changes, and resets to off on the next launch.
-Its files open in the middle **Files** pane and its tools appear in **Actions** on
-the right. The Files pane starts with its file/folder information panel off;
+Its files open in the **Files** pane on the right. Below the folder list,
+**Info** shows general workspace details and **Actions** contains feature tools.
+Actions is selected by default. The Files pane starts with its file/folder information panel off;
 use its preview button to show it. Refresh keeps the current browser and your
 preview choice. Actions always target the workspace selected on the left; navigating
 into a subfolder or selecting files in Files does not change the Push/Pull target.
-The Actions heading and paths identify that target. Both panes resize, while their
-headers stay fixed and cannot be moved or undocked by default. Opened documents
+The Actions heading identifies that target; Info shows its paths and availability.
+The panes resize and cannot be moved or undocked by default. Opened documents
 continue through the normal reader/editor document hosts. **Workspace actions** retains running
 operations and their results.
 The **Documents** menu lists open editors/readers. Switching destinations keeps
@@ -222,8 +226,10 @@ For plain-source editing, choose [Text Editor](../../Python/features/text_editor
 ## Find a configured integration
 
 Choose a source and folder on **Workspaces**. Sources occupy the upper left,
-with Actions below them and Files filling the right side. Drag the dividers to
-give the hierarchy or actions more room. The fixed panes have no tab headers.
+with Info and Actions tabs below them and Files filling the right side. The left
+column starts at roughly one fifth of the available width, leaving more room for files. Drag
+the dividers to give the hierarchy or details more room. Actions opens by default;
+switch to Info for the selected workspace’s local and remote availability and paths.
 Local folders normally live under
 `~/Server/Local`. **Local** includes all available local copies, including detected
 Dropbox account folders and rclone-linked Local and LocalCrypt copies. **Cloud**
@@ -242,7 +248,9 @@ rclone sources (including locked associations) from the `Network shares` or `Ses
 credential package, matching mobile's explicit package grouping. Other rclone
 sources remain in Cloud; protocols alone do not determine the category.
 
-Blue open-lock and orange closed-lock folder glyphs match mobile and distinguish
+Regular folders use the same blue as unlocked folders. Centered solid padlocks
+with an outward-opening shackle for unlocked folders match mobile.
+Blue open-lock and orange closed-lock folder glyphs distinguish
 unlocked and locked credential-backed locations. LocalCrypt opens through the credential
 unlock flow and private browser. An unavailable location shows a browsing status;
 it does not silently fall back to another copy. Switching source tabs refreshes folder

@@ -56,7 +56,7 @@ class FolderSourceTabTests(unittest.TestCase):
         app.show_locations()
         self.assertEqual(list(app.folder_source_actions.children), [])
         app.change_folder_source('rclone')
-        self.assertEqual(list(app.folder_source_actions.children), [])
+        self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_remote_button])
         app.transfer_busy = True
         app.refresh_transfer_status()
         self.assertEqual(list(app.folder_source_actions.children), [app.folder_transfers_button])
@@ -77,7 +77,7 @@ class FolderSourceTabTests(unittest.TestCase):
         app.show_locations()
         self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_share_button])
         app.change_folder_source('rclone')
-        self.assertEqual(list(app.folder_source_actions.children), [])
+        self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_remote_button])
         self.assertIsNone(app.folder_add_share_button.parent)
         self.assertIn(app.folder_credential_row, app.folder_picker_header.children)
 
@@ -93,6 +93,44 @@ class FolderSourceTabTests(unittest.TestCase):
         app.change_folder_source('rclone')
         self.assertEqual(set(app.folder_credentials), {'All', 'Personal'})
         self.assertEqual(set(app.folder_buttons), {'Drive'})
+
+    def test_setup_actions_disappear_for_configured_connections_and_return_when_removed(self):
+        app = self.app
+        app.show_locations()
+        app.remember_credential_association('Personal.zip', ['Drive'], session_only=True)
+        app.remember_credential_association('Session network shares', ['Mac'], session_only=True)
+        app.change_folder_source('Network shares')
+        self.assertEqual(list(app.folder_source_actions.children), [])
+        self.assertEqual(app.folder_source_actions.style.margin_bottom, 0)
+        app.change_folder_source('rclone')
+        self.assertEqual(list(app.folder_source_actions.children), [])
+        # Filtering every workspace out must not offer to add an existing connection.
+        app.update_folder_list({})
+        self.assertEqual(list(app.folder_source_actions.children), [])
+        app.session_credential_packages = []
+        app.update_folder_list(app.folder_choices())
+        self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_remote_button])
+        app.change_folder_source('Network shares')
+        self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_share_button])
+
+    def test_retained_locked_connections_suppress_setup_actions(self):
+        from unittest.mock import patch
+        app = self.app
+        with patch.object(app, 'retained_credential_associations', return_value=[
+                dict(zip='Personal.zip', remotes=['Drive']),
+                dict(zip='Network shares', remotes=['Mac'])]):
+            app.change_folder_source('rclone')
+            self.assertEqual(list(app.folder_source_actions.children), [])
+            app.change_folder_source('Network shares')
+            self.assertEqual(list(app.folder_source_actions.children), [])
+
+    def test_empty_cloud_add_remote_opens_connection_settings(self):
+        app = self.app
+        app.show_locations()
+        app.change_folder_source('rclone')
+        app.folder_add_remote_button.on_press()
+        self.assertEqual(app.native_host.state.destination, 'settings')
+        self.assertEqual(app.routes.screens['settings'][-1][0], 'connections')
 
     def test_browsable_siblings_use_list_titles_and_groups_use_plain_headings(self):
         app = self.app
@@ -128,20 +166,26 @@ class FolderSourceTabTests(unittest.TestCase):
         use_shared_local(app.private_root, documents)
         app.show_locations()
         app.change_folder_source('Local')
-        self.assertEqual(set(app.folder_buttons), {'All files', 'Collection', 'Notes'})
+        self.assertEqual(set(app.folder_buttons), {'All files', 'Managed', 'Notes'})
+        self.assertEqual(list(app.folder_buttons)[-1], 'All files')
+        self.assertEqual(app.folder_buttons['All files'].text, 'Browse All Files')
         app.loop.run_until_complete(app.folder_buttons['All files'].on_press())
         self.assertEqual(app.file_provider.root, documents)
-        self.assertEqual(set(app.file_source_buttons), {'Shared files'})
-        self.assertEqual(app.file_source_buttons['Shared files'].text, 'On this device')
+        self.assertEqual(app.file_source_buttons, {})
+        self.assertIsNone(app.file_source_tabs.parent)
+        header = app.file_browser.location_bar
+        self.assertIs(header.parent.children[0], header)
+        self.assertIs(app.file_browser.location_bar.children[-1], app.file_actions_button)
+        self.assertEqual(app.file_actions_button.control_icon, 'overflow')
         self.assertIsNone(app.file_storage.parent)
         self.assertEqual({row['name'] for row in app.file_rows.values()}, {'Local', 'Notes', 'note.md'})
         collection = next(row for row in app.file_rows.values() if row['name'] == 'Local')
-        self.assertEqual(collection['display_name'], 'Collection')
-        self.assertIn('Collection', [button.text for button in app.file_browser.buttons.values()])
+        self.assertNotIn('display_name', collection)
+        self.assertIn('Local', [button.text for button in app.file_browser.buttons.values()])
         app.loop.run_until_complete(app.browser_file_folder(collection))
         self.assertEqual(app.file_provider.root, documents / 'Local')
-        self.assertEqual(app.file_browser.location_bar.folder_name.text, 'Collection')
-        self.assertEqual(set(app.file_source_buttons), {'Shared files'})
+        self.assertEqual(app.file_browser.location_bar.folder_name.text, 'Local')
+        self.assertEqual(app.file_source_buttons, {})
         self.assertEqual(app.file_browser.location_bar.parent_button.control_icon, 'up')
         app.loop.run_until_complete(app.browser_file_folder(next(iter(app.file_rows.values()))))
         self.assertEqual(app.file_path, 'Managed')
@@ -160,10 +204,11 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertTrue(result.complete)
         self.assertEqual([row['path'] for row in result.rows], ['Local/Managed/find-me.txt'])
         app.file_browser.show_tiles()
-        self.assertIn('Collection', [button.text for button in app.file_browser.buttons.values()])
+        self.assertIn('Local', [button.text for button in app.file_browser.buttons.values()])
         app.show_locations()
-        app.loop.run_until_complete(app.folder_buttons['Collection'].on_press())
+        app.loop.run_until_complete(app.folder_buttons['Managed'].on_press())
         self.assertEqual(app.file_provider.root, documents / 'Local')
+        self.assertEqual(app.file_path, 'Managed')
         app.show_locations()
         app.loop.run_until_complete(app.folder_buttons['Notes'].on_press())
         self.assertEqual(app.file_path, 'Notes')
@@ -205,6 +250,51 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(app.file_provider.root, documents / 'Local')
         self.assertEqual(app.file_path, 'Managed')
 
+    def test_source_strip_mounts_only_for_encrypted_workspace_inside_browser_frame(self):
+        app = self.app
+        app.loop.run_until_complete(app.show_files())
+        header = app.file_browser.location_bar
+        parent = header.parent
+        self.assertIsNone(app.file_source_tabs.parent)
+        self.assertIs(parent.children[0], header)
+        app.file_changing_location = True
+        try:
+            app.file_roots['LocalCrypt: Secret'] = 'Secret'
+            app.file_storage.items = list(app.file_roots)
+            app.file_storage.value = 'LocalCrypt: Secret'
+            app.refresh_file_source_tabs()
+            app.refresh_file_source_tabs()
+            self.assertIs(app.file_source_tabs.parent, parent)
+            self.assertEqual(list(parent.children).count(app.file_source_tabs), 1)
+            self.assertEqual(set(app.file_source_buttons), {'Local files', 'LocalCrypt: Secret'})
+            app.file_storage.value = 'Local files'
+            app.refresh_file_source_tabs()
+            self.assertIsNone(app.file_source_tabs.parent)
+            self.assertIs(parent.children[0], header)
+            self.assertIs(header.children[-1], app.file_actions_button)
+        finally:
+            app.file_changing_location = False
+
+    def test_ios_imported_and_synced_folders_open_directly_above_browse_all(self):
+        from test_mirror_jobs import MirrorClient
+        app = self.app
+        documents = Path(self.directory.name) / 'Documents'
+        (documents / 'Local' / 'Imported').mkdir(parents=True)
+        use_shared_local(app.private_root, documents)
+        job, _ = app.mirror_store().create(MirrorClient(), 'Drive', 'folder', storage='Local')
+        app.show_locations()
+        self.assertIn('Imported', app.folder_buttons)
+        self.assertIn(job['target'], app.folder_buttons)
+        self.assertNotIn('Collection', app.folder_buttons)
+        self.assertEqual(list(app.folder_buttons)[-1], 'All files')
+        self.assertEqual(app.folder_buttons['All files'].text, 'Browse All Files')
+        app.loop.run_until_complete(app.folder_buttons[job['target']].on_press())
+        self.assertEqual(app.file_provider.root, documents / 'Local')
+        self.assertEqual(app.file_path, job['target'])
+        app.show_locations()
+        app.loop.run_until_complete(app.folder_buttons['Imported'].on_press())
+        self.assertEqual(app.file_path, 'Imported')
+
     def test_mapped_copies_also_appear_locally(self):
         from logisticsmobile.folder_hub import source_choices
         choices = {'Offline': dict(source='Local', kind='job', remote='Drive', copies=[
@@ -236,7 +326,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(icons(local['target']), ['folder'])
         self.assertEqual(icons(crypt['target']), ['folder_unlocked'])
         self.assertEqual(icons('Notes'), ['folder'])
-        self.assertEqual(icons('All files'), ['folder'])
+        self.assertEqual(app.folder_buttons['All files'].text, 'Browse All Files')
         app.change_folder_source('rclone')
         self.assertEqual(icons('Online'), ['folder'])
         self.assertEqual(icons(local['target']), ['folder'])

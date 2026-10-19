@@ -190,8 +190,8 @@ class HubUI:
         return row
 
     def build_home(self):
-        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        title = toga.Label('Your workspace', style=Pack(font_size=22, font_weight='bold', margin_top=8, margin_bottom=16))
+        box = toga.Box(style=Pack(direction=COLUMN, margin=(8, 16, 16, 16)))
+        title = toga.Label('Your workspace', style=Pack(font_size=22, font_weight='bold', margin_bottom=16))
         if self.app.home_unlock_candidates():
             title.style.flex = 1
             unlock = surface(icon_button('storage_crypt', 'Unlock credentials',

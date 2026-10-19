@@ -1,4 +1,6 @@
 """Source badges and credential-bound reopen references for mobile documents."""
+import asyncio
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -74,7 +76,43 @@ def source_icons(app, session):
     return icons
 
 
+@contextmanager
+def opening_status(app, source):
+    """Show quiet activity below the current view until a source has reopened."""
+    body = getattr(app, 'body', None)
+    if body is None:
+        yield
+        return
+    import toga
+    from toga.style import Pack
+    from toga.style.pack import COLUMN
+    from .appearance import surface
+    message = 'Opening cloud file…' if source['type'] == 'remote' else 'Opening file…'
+    label = toga.Label(message, style=Pack(font_size=12, margin_left=12, margin_right=12))
+    surface(label, radius=0, background='transparent', foreground='muted',
+            outlined=False, eink_outlined=False)
+    progress = toga.ProgressBar(max=None, style=Pack(height=3, margin_top=2))
+    banner = toga.Box(children=[label, progress], style=Pack(direction=COLUMN))
+    body.add(banner)
+    progress.start()
+    try:
+        yield
+    finally:
+        progress.stop()
+        # Navigation may already have detached the originating view. Never
+        # restore it or touch the newly selected document when the read ends.
+        if banner.parent is not None:
+            banner.parent.remove(banner)
+
+
 async def reopen_file(app, source):
+    with opening_status(app, source):
+        # Let native controls paint before credential resolution or file I/O.
+        await asyncio.sleep(0)
+        return await _reopen_file(app, source)
+
+
+async def _reopen_file(app, source):
     """Resolve credentials again before constructing any encrypted provider."""
     if source['type'] == 'local':
         path = Path(source['path'])

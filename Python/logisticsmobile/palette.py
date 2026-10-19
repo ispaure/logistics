@@ -57,7 +57,7 @@ def themed_chapter(content, mode):
 EINK = dict(window='#ffffff', surface='#ffffff', alternate='#ffffff',
             text='#000000', muted='#000000', border='#000000',
             primary='#000000', accent='#000000', hover='#ffffff')
-EINK.update(folder_unlocked='#000000', folder_locked='#000000')
+EINK.update(folder='#000000', folder_unlocked='#000000', folder_locked='#000000')
 EINK.update(settings_background='#ffffff', settings_group='#ffffff', settings_separator='#000000')
 EINK.update(control_border='#000000', destructive='#000000')
 EINK.update(tree_guide='#000000')

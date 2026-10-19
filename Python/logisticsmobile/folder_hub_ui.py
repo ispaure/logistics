@@ -122,7 +122,7 @@ class FolderHubUI:
             self.hub_crypt_locations = list(crypt.items())
         # Rendering and menu opening must never enter the native bridge. A
         # credential load updates this discovery snapshot.
-        choices = {'All files': dict(source='Local', kind='local', value='', name='All files', copies=[])}
+        choices = {'All files': dict(source='Local', kind='local', value='', name='Browse All Files', copies=[], browser_root=True)}
         for name, parts, copies in hub_entries(self.private_root, jobs, remotes, crypt.items()):
             for source, (kind, value) in copies:
                 title = (name if not jobs[value]['prefix'] else jobs[value]['target']) if kind == 'job' else name
@@ -153,12 +153,10 @@ class FolderHubUI:
         from .local_sources import shared_files
         shared = shared_files(self.private_root)
         if shared is not None:
-            # Keep one local browser root and a shortcut into its collection.
-            choices = {name: entry for name, entry in choices.items()
-                       if entry.get('remote') or entry.get('source') == 'LocalCrypt'}
-            choices['All files'] = dict(source='Local', kind='shared-local', value='', name='All files', copies=[])
-            key = 'Collection' if 'Collection' not in choices else 'Collection (Local)'
-            choices[key] = dict(source='Local', kind='local', value='', name='Collection', copies=[])
+            # Imported folders and mapped copies stay individually accessible.
+            # The shared directory is a separate browse action below the list.
+            choices['All files'] = dict(source='Local', kind='shared-local', value='',
+                                        name='Browse All Files', copies=[], browser_root=True)
             for row in shared.list():
                 if row['directory'] and row['name'] != 'Local':
                     title = row['name']
@@ -249,6 +247,9 @@ class FolderHubUI:
         self.folder_add_share_button = toga.Button('Add share…', on_press=self.show_smb_connection,
                                                   style=Pack(height=44, font_size=13, flex=1))
         toolbar_button(self.folder_add_share_button, 'plus')
+        self.folder_add_remote_button = toga.Button('Add Remote…', on_press=self.show_cloud_connections,
+                                                   style=Pack(height=44, font_size=13, flex=1))
+        toolbar_button(self.folder_add_remote_button, 'plus')
         self.folder_loading_status = toga.Label('', style=Pack(font_size=12, margin_bottom=4))
         self.folder_loading_progress = toga.ProgressBar(max=100, value=0, style=Pack(height=4, margin_bottom=8))
         backend = type(self.folder_add_share_button._impl).__module__
@@ -276,7 +277,22 @@ class FolderHubUI:
         return box
 
     def update_folder_list(self, choices):
+        import json
         network_remotes = self.network_share_remotes()
+        # Setup hints depend on configuration, not search/visibility filters or
+        # the selected credential. Retained locked connections count too.
+        associations = (json.loads(self.preferences.values['remote_packages'])
+                        + self.retained_credential_associations()
+                        + list(getattr(self, 'session_credential_packages', ())))
+        configured = set(self.loaded_remote_names())
+        configured.update(remote for item in associations for remote in item['remotes'])
+        configured.update(remote for item in getattr(getattr(self, 'cloud_client', None), 'package_records', ())
+                          for remote in item['remotes'])
+        self.folder_configured_sources = set()
+        if network_remotes:
+            self.folder_configured_sources.add('Network shares')
+        if configured - network_remotes:
+            self.folder_configured_sources.add('rclone')
         credentials = self.credential_groups(source_choices(choices, 'rclone', network_remotes))
         if credentials != self.folder_credentials:
             self.folder_credentials = credentials
@@ -370,7 +386,7 @@ class FolderHubUI:
                     description = storage + (', ' + state if state else '')
                     indicator = icon_button(icon, name + ', ' + description, on_press=select)
                     compact_icon(indicator, width=ENTRY_ICON_SLOT, size=ENTRY_ICON_SIZE,
-                                 foreground='folder_' + state if state else 'accent')
+                                 foreground='folder_' + state if state else 'folder')
                     row.add(indicator)
                     button = folder_name(list_button(toga.Button(title, on_press=select,
                         style=Pack(height=ROW_HEIGHT, flex=1))))
@@ -406,15 +422,24 @@ class FolderHubUI:
                 if index < len(branch) - 1:
                     parent.add(divider())
 
-        for title, node in sorted(folder_tree(visible).items(), key=lambda item: item[0].casefold()):
+        folders = {name: entry for name, entry in visible.items() if not entry.get('browser_root')}
+        for title, node in sorted(folder_tree(folders).items(), key=lambda item: item[0].casefold()):
             branch_content = toga.Box(style=Pack(direction=COLUMN))
             panel = surface(toga.Box(children=[branch_content], style=Pack(direction=COLUMN)),
                             radius=0, background='transparent', outlined=False)
             panel.style.margin_bottom = 12
             add_branch({title: node}, branch_content)
             content.add(panel)
-        if not visible:
+        if not folders:
             content.add(toga.Label('No folders available for this source.'))
+        for name, entry in visible.items():
+            if entry.get('browser_root'):
+                async def browse_all(widget=None, selected=name, **kwargs):
+                    return await self.browse_hub_folder(selected)
+                button = list_button(toga.Button('Browse All Files', on_press=browse_all,
+                    style=Pack(height=ROW_HEIGHT, margin_top=12)))
+                self.folder_buttons[name] = button
+                content.add(button)
         legend = toga.Box(style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
         labels = (('Locked', 'folder_locked', 'folder_locked'),
                   ('Unlocked', 'folder_unlocked', 'folder_unlocked'))

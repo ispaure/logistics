@@ -907,6 +907,59 @@ class FolderHubTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'crypt remote'):
                 store.create(client, 'Remote', 'folder', storage='LocalCrypt')
 
+    def test_initial_pull_choice_scoped_to_session_crypt_and_rechecks_generation(self):
+        from logisticsmobile.app import LogisticsMobile
+        class Client(MirrorClient):
+            package_records = ()
+            def crypt_remotes(self): return ['Secret']
+            def cancel(self): pass
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            app.cloud_client = client = Client()
+            app.show_cloud(present=False)
+            app.cloud_remote.items = ['Secret', 'Remote']
+            async def exercise():
+                for remote, saved, response, expected in [
+                        ('Secret', False, True, 'LocalCrypt'),
+                        ('Secret', False, False, 'Local'),
+                        ('Secret', True, True, 'Local'),
+                        ('Remote', False, True, 'Local')]:
+                    with self.subTest(remote=remote, saved=saved, response=response):
+                        client.package_records = (dict(package_name='Fixture.zip', remotes=[remote], saved=saved),
+                                                  dict(package_name='Other.zip', remotes=['Other'], saved=False))
+                        app.cloud_remote.value = app.cloud_open_remote = remote
+                        app.cloud_path = 'folder'
+                        with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=response)) as dialog, \
+                             patch.object(app, 'begin_transfer_review') as review:
+                            await app.pull_remote_copy()
+                            review.assert_called_once_with(remote=remote, folder='folder', storage=expected)
+                            self.assertEqual(dialog.await_count, int(remote == 'Secret' and not saved))
+                            self.assertEqual(app.mirror_store().jobs, {})
+                app.cloud_remote.value = app.cloud_open_remote = 'Secret'
+                client.package_records = (dict(package_name='Fixture.zip', remotes=['Secret'], saved=True),)
+                store = app.mirror_store()
+                store.jobs['existing'] = dict(id='existing', remote='Secret', identity=client.identity,
+                                              prefix='encoded', crypt=True)
+                with patch.object(app.main_window, 'dialog', new=AsyncMock()) as dialog, \
+                     patch.object(app, 'start_mirror_pull') as pull:
+                    await app.pull_remote_copy()
+                    pull.assert_called_once_with('existing')
+                    dialog.assert_not_awaited()
+                store.jobs.clear()
+                client.package_records = (dict(package_name='Fixture.zip', remotes=['Secret'], saved=False),)
+                async def changed(dialog):
+                    client.generation += 1
+                    return True
+                with patch.object(app.main_window, 'dialog', new=AsyncMock(side_effect=changed)), \
+                     patch.object(app, 'begin_transfer_review') as review:
+                    await app.pull_remote_copy()
+                    review.assert_not_called()
+            app.loop.run_until_complete(exercise())
+
     def test_destination_chooser_existing_default_and_confirmed_local_deletion(self):
         from logisticsmobile.app import LogisticsMobile
         class Client(MirrorClient):
@@ -924,16 +977,13 @@ class FolderHubTests(unittest.TestCase):
                 app.cloud_path = 'folder'
                 async def exercise():
                     from test_mirror_ui import drive_review
-                    await app.pull_remote_copy()
-                    self.assertEqual(app.routes.screens['files'][-1][0], 'pull-destination')
                     store = app.mirror_store()
-                    pull_here = app.body.children[0].children[2].on_press
                     with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=False)):
-                        pull_here()
+                        await app.pull_remote_copy()
                         self.assertFalse(await drive_review(app, declined=True))
                         self.assertEqual(store.jobs, {})
                     with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
-                        pull_here()
+                        await app.pull_remote_copy()
                         self.assertTrue(await drive_review(app))
                     job = next(iter(store.jobs.values()))
                     with patch.object(app, 'start_mirror_pull') as pull:

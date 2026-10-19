@@ -30,12 +30,12 @@ def assert_preview_only_ui(test, owner):
         test.assertNotIn(forbidden, text)
     actions = {label for label, _ in owner.crypt_actions_menu.actions}
     if owner.crypt_reader.editable:
-        expected = {'Reader tools…', 'Close private document'}
+        expected = {'Reader tools…', 'Close private document', 'All documents'}
         if owner.crypt_reader.kind in {'.md', '.markdown'}:
             expected.add('Open beside another document')
         test.assertEqual(actions, expected)
     elif getattr(owner.crypt_reader, 'image_document', False):
-        test.assertEqual(actions, {'Reader tools…', 'Fit image', 'Close private document'})
+        test.assertEqual(actions, {'Reader tools…', 'Fit image', 'Close private document', 'All documents'})
 
 
 class RemoteClient:
@@ -183,11 +183,24 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertTrue(await task)
                 browser = app.remote_browser
                 self.assertEqual(len(browser.entries), 200)
-                self.assertEqual(len(browser.buttons), 200)
+                self.assertEqual(len(browser.buttons), browser.row_batch_size)
                 self.assertNotIn(browser.paging, browser.widget.children)
                 self.assertFalse(browser.next.enabled)
-                browser.render()
+                # Continuous scrolling reaches every result without relisting
+                # the remote folder or replacing the initial row controls.
+                first_button = next(iter(browser.buttons.values()))
+                app.show_view(app.cloud_view, destination='files', route='remote-browser')
+                scroll = browser._scroll
+                scroll.vertical_position = scroll.max_vertical_position
+                for _ in range(500):
+                    if len(browser.buttons) == 200:
+                        break
+                    await asyncio.sleep(.02)
                 self.assertEqual(len(browser.buttons), 200)
+                self.assertIs(next(iter(browser.buttons.values())), first_button)
+                self.assertEqual(client.calls, [('list', 'mangas')])
+                browser.render()
+                self.assertEqual(len(browser.buttons), browser.row_batch_size)
                 browser.show_tiles()
                 self.assertEqual(len(browser.buttons), browser.page_size)
                 browser.search.value = 'series-199'

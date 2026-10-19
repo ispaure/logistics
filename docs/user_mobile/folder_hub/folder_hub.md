@@ -40,17 +40,20 @@ does not run Obsidian plugins.
 
 ## File browser locations and actions
 
-**Local File Browser** has one **On this device** source. On iOS it opens
+**Local File Browser** opens directly on the current folder, without a source
+button above it. The folder header has Back/Parent, Search and an upper-right
+actions menu (circled ellipsis on iOS, vertical dots on Android). On iOS it opens
 Logistics’ shared Files directory, showing files and folders saved there alongside
-**Collection**. Open Collection to browse the managed Local folder; Parent folder
-returns to the shared directory. Collection is the display name for the existing
+**Local**. Open Local to browse the managed folder; Parent folder
+returns to the shared directory. This is the existing
 `Local` folder in Apple’s Files app; no files are moved or duplicated. Its root
 cannot be renamed, moved or deleted from the outer browser; open it to manage its
-contents. Workspaces provides **All files** and **Collection** shortcuts, and
-managed workspace copies still open their collection folders directly.
-On Android, On this device continues to open the managed Local collection.
-Opening LocalCrypt shows its selected source as an additional tab. Workspace
-actions are under **…**; the back control returns to the parent folder or
+contents. Workspaces lists imported folders and downloaded/synced copies
+individually, opening each folder directly. **Browse All Files** appears underneath
+the folder list and opens the shared directory on iOS.
+On Android, it opens the managed Local folder.
+Opening LocalCrypt shows source tabs for switching back to local files. Workspace
+actions are in the header menu; the back control returns to the parent folder or
 Workspaces. **Cloud File Browser** uses the same directory, search and listing
 controls.
 
@@ -64,8 +67,15 @@ Cloud or On-device and, for encrypted folders, Locked or Unlocked labels.
 Opening, download, result and error messages temporarily replace that line; the
 indicators return when the message clears. Tap the magnifying glass on the right to
 reveal search; close it with **×** to clear the filter and hide the field.
+Local file search includes files and folders in every subfolder beneath the
+current location. Typing pauses briefly before searching; clearing search restores
+the current folder's immediate children.
 This control stays beside the folder name in local, remote and drawer browsers,
 including when a long folder name is shortened to fit.
+Large file lists gradually prepare more rows while you wait and as you approach
+the bottom. Keep scrolling to reach every item; there are no page buttons.
+Preparation pauses when you leave the browser and resumes when you return. Search includes all available
+entries, including those you have not scrolled to yet.
 The top bar has no Sort control. The
 rows show filenames rather than full paths, shortening long names in the middle.
 File sizes remain available in **Details** instead of beside every filename. The
@@ -80,7 +90,7 @@ outlines and monochrome icons.
 Beneath the folder name, a drive identifies on-device storage and a cloud
 identifies online storage. Encrypted folders additionally show the same
 combined folder-and-lock icon as Workspaces: an open blue padlock after successful
-unlocked browsing, or an orange closed padlock with chains when locked.
+unlocked browsing, or an orange closed padlock when locked.
 These indicators describe the folder currently open, including when a remote
 also has an on-device copy.
 **•••** beside an item selects that item and opens its commands without opening
@@ -127,25 +137,29 @@ visible folders; refreshing the hub also refreshes the package choices.
 Credential labels omit `.zip` (including uppercase `.ZIP`). Duplicate labels use
 a number, such as **Personal (2)**. Loaded-package changes refresh a visible hub
 automatically, including changes made in another iPad window.
-**Local** browses ordinary files: on iOS, **All files** opens the `Logisticks` shared
-folder and other subfolders beside `Local`, excluding the managed `Local` folder.
-On Android it browses the ordinary collection folder. **Home Server** contains
+**Local** lists imported folders, downloaded/synced copies and, on iOS, folders
+beside `Local` in the `Logisticks` shared directory. **Browse All Files** below the
+list opens that directory, including the managed `Local` folder.
+On Android it opens the ordinary Local folder. **Home Server** contains
 SMB/Mac connections added through **Add share…**, including their managed offline
 copies. SMB remotes imported inside credential ZIPs stay with their package under
 **Cloud**. Local and Home Server hide the credential selector. **Transfers** appears on **Cloud** only while a transfer is active or a stopped
-transfer needs attention; **Add share…** appears only on **Home Server**. **Local** has
-no action toolbar. The source tabs use a rounded strip with a highlighted
+transfer needs attention. **Add share…** appears on **Home Server** only when no
+share is configured; **Add Remote…** appears on **Cloud** only when no remote is
+configured and opens connection settings. Saved or locked connections count as
+configured, even when filters hide their folders. Further connections can be
+added from Settings. **Local** has no action toolbar. The source tabs use a rounded strip with a highlighted
 selection. Workspaces and the file browser use matching compact rows, regular
 titles, icon spacing and rounded row surfaces, with an overflow menu for each
 workspace folder. Loading status and
 progress appear only while a folder is opening or an error needs attention.
 Each encrypted folder has a combined folder-and-lock icon before its name:
 blue with an open padlock when its credentials are available, orange with a
-closed padlock and a short pair of chain links when locked. The unlocked padlock's
-raised shackle has a clear gap above its body. Sibling folders can have different states. The
+closed padlock when locked. Both solid padlock bodies sit in the center of the
+folder; the unlocked shackle swings outward to the right. Sibling folders can have different states. The
 blue/orange colors, distinct padlock shapes and Locked/Unlocked legend avoid
 relying on red/green differences. Android monochrome mode retains the distinct
-shapes in black. Ordinary folders use a plain folder icon. Screen readers announce
+shapes in black. Ordinary folders use a plain folder icon in the same blue as unlocked folders. Screen readers announce
 the copy type and individual lock state. Group headings describe structure,
 not a shared credential state.
 Dash-separated names form expanded levels (for example Server → Lib → ComicRack);
@@ -167,7 +181,9 @@ returns to the mapped online subfolder. Remote
 browsing opens the read-only online file browser, with direct previews and existing offline-copy
 actions. Choose folders and start Push/Pull from their Workspaces action pages.
 Existing managed copies remember their storage type and transfer association.
-The first pull chooses storage; later transfers reuse it. Workspaces updates
+For the first pull from a session-only crypt remote, a popup strongly recommends
+LocalCrypt and offers a regular Local copy instead. Saved-credential and non-crypt
+remotes create Local copies. Later transfers reuse the existing storage type. Workspaces updates
 when you return to it and when transfers or loaded credentials change. Switching
 back to an unchanged source tab reuses its existing folder rows; folder and
 credential changes refresh those rows automatically. Discovery uses

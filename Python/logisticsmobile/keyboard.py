@@ -116,8 +116,8 @@ def install(app):
     app.main_window._impl.native.addGestureRecognizer(app._keyboard_tap)
 
 
-def bind_browser(browser):
-    """Android browser controls and empty space dismiss a focused search field."""
+def bind_browser(browser, *, roots=None):
+    """Bind new Android controls once, sharing one outside-touch listener."""
     if not type(browser.search._impl).__module__.startswith('toga_android.'):
         return
     from android.content import Context
@@ -126,15 +126,16 @@ def bind_browser(browser):
     from java import dynamic_proxy
     search = browser.search._impl.native
 
-    class OutsideTouch(dynamic_proxy(View.OnTouchListener)):
-        def onTouch(self, view, event):
-            if event.getAction() == MotionEvent.ACTION_DOWN and search.hasFocus():
-                search.clearFocus()
-                manager = view.getContext().getSystemService(Context.INPUT_METHOD_SERVICE)
-                manager.hideSoftInputFromWindow(search.getWindowToken(), 0)
-            return False
+    if getattr(browser, '_keyboard_touch', None) is None:
+        class OutsideTouch(dynamic_proxy(View.OnTouchListener)):
+            def onTouch(self, view, event):
+                if event.getAction() == MotionEvent.ACTION_DOWN and search.hasFocus():
+                    search.clearFocus()
+                    manager = view.getContext().getSystemService(Context.INPUT_METHOD_SERVICE)
+                    manager.hideSoftInputFromWindow(search.getWindowToken(), 0)
+                return False
 
-    browser._keyboard_touch = OutsideTouch()
+        browser._keyboard_touch = OutsideTouch()
 
     def bind(view):
         if isinstance(view, EditText):
@@ -143,4 +144,19 @@ def bind_browser(browser):
         if isinstance(view, ViewGroup):
             for index in range(view.getChildCount()):
                 bind(view.getChildAt(index))
-    bind(browser.widget._impl.native)
+
+    def mark(widget):
+        widget._impl._browser_keyboard_touch = browser._keyboard_touch
+        for child in widget.children:
+            mark(child)
+
+    def bind_widget(widget):
+        if getattr(widget._impl, '_browser_keyboard_touch', None) is not browser._keyboard_touch:
+            bind(widget._impl.native)
+            mark(widget)
+        else:
+            for child in widget.children:
+                bind_widget(child)
+
+    for root in (browser.widget,) if roots is None else roots:
+        bind_widget(root)

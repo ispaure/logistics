@@ -62,7 +62,18 @@ Menus launch preference can disable it); cancellation leaves the
 chooser visible. Documents opened from the chooser become the return destination
 for the settings menu. The chooser scrolls vertically at compact window heights.
 Before its first paint, the chooser polishes child widgets and settles card
-height-for-width layouts. Deferred resize updates reuse an unchanged card grid
+height-for-width layouts. The same complete pass handles deferred font and
+resize updates: changing fixed card heights alone can paint overlapping rows before
+the grid receives its next layout request. Dirty layouts are also settled in
+`paintEvent` before children paint, invalidating parent size hints and comparing
+positions as well as sizes. Only this chooser's layout requests are flushed under
+the reentrancy guard; startup does not process arbitrary application events and
+idle layout work stops when the geometry settles. Workspace buttons and document
+frames share palette-based hover feedback; document frames retain separate New/Open
+actions. `test_landing_appearance.py` checks first-paint positions around the column
+breakpoint, every painted row after delayed font/width changes, idle settling, and
+rendered hover colors in light and dark themes.
+Deferred resize updates reuse an unchanged card grid
 instead of rebuilding it, avoiding a second visible layout during startup.
 
 `LaunchSurface` parents an opaque, 36-pixel settings icon above the central stack,

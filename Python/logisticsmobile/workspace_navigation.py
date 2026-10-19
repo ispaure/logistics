@@ -11,7 +11,6 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.resource_selection import ResourceSelection
-from commonUtils.ui.native.presentation import scroll_content
 from .appearance import list_button
 from .adaptive_workspace import AdaptiveWorkspace
 from .files_ui import local_read_available
@@ -138,9 +137,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         # their existing native navigation controller, including compact Back.
         adapter = self.app.native_host.adapter
         if adapter is not None and hasattr(adapter, 'navigation'):
-            # Brand the page title while preserving Home as the tab label.
             home = adapter.navigation[self.app.native_host.destinations.index('home')]
-            home.topViewController.navigationItem.title = 'Logistics'
+            home.topViewController.navigationItem.title = 'Home'
             home.setNavigationBarHidden(False, animated=False)
         self.render()
 
@@ -352,6 +350,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             reserve_navigation(self.app)
             if hasattr(self.app, 'home_content'):
                 self.app.reflow_home()
+            from .browser_ui import sync_browser_population
+            sync_browser_population(self.app, body)
         finally:
             self.rendering = False
 
@@ -563,7 +563,7 @@ class FileDrawer:
         header = self.browser.attach_location_header(self.status, self.parent_button)
         self.breadcrumb = header.folder_name
         self.widget = toga.Box(children=[self.storage, header,
-            toga.ScrollContainer(horizontal=False, content=scroll_content(self.browser.widget), style=Pack(flex=1)),
+            self.browser.scroll_container(),
             toga.Button('Workspaces', on_press=self.app.show_locations, style=Pack(height=48))],
             style=Pack(direction=COLUMN, flex=1))
         self.browser_widget = self.widget
@@ -648,71 +648,72 @@ class FileDrawer:
         return roots
 
     async def refresh(self):
-        self.generation += 1
-        generation = self.generation
-        try:
-            roots = await asyncio.to_thread(self.available_roots)
-        except (OSError, ValueError) as error:
-            # A failed credential query must not strand the menu refresh task.
-            # Keep Local files usable and report the connection error in-place.
+        with self.browser.population_paused():
+            self.generation += 1
+            generation = self.generation
+            try:
+                roots = await asyncio.to_thread(self.available_roots)
+            except (OSError, ValueError) as error:
+                # A failed credential query must not strand the menu refresh task.
+                # Keep Local files usable and report the connection error in-place.
+                if generation != self.generation or not self.app.active_host:
+                    return False
+                self.status.value = str(error)[:160]
+                return False
             if generation != self.generation or not self.app.active_host:
                 return False
-            self.status.value = str(error)[:160]
-            return False
-        if generation != self.generation or not self.app.active_host:
-            return False
-        scope = getattr(self, 'scoped_provider', None)
-        if scope is not None:
-            roots.setdefault(scope[0], None)
-        selected = self.storage.value if self.storage.value in roots else 'Local files'
-        self.changing_storage = True
-        try:
-            self.roots = roots
-            self.storage.items = list(roots)
-            self.storage.value = selected
-        finally:
-            self.changing_storage = False
-        try:
-            if selected != 'Local files' and not local_read_available(self.app):
-                raise ValueError('This connection is busy. Local files remain available.')
-            if scope is not None and scope[0] == selected:
-                provider = scope[1]
-                if provider.private and (self.app.cloud_client is not scope[2]
-                        or self.app.cloud_client.generation != scope[3]):
+            scope = getattr(self, 'scoped_provider', None)
+            if scope is not None:
+                roots.setdefault(scope[0], None)
+            selected = self.storage.value if self.storage.value in roots else 'Local files'
+            self.changing_storage = True
+            try:
+                self.roots = roots
+                self.storage.items = list(roots)
+                self.storage.value = selected
+            finally:
+                self.changing_storage = False
+            try:
+                if selected != 'Local files' and not local_read_available(self.app):
+                    raise ValueError('This connection is busy. Local files remain available.')
+                if scope is not None and scope[0] == selected:
+                    provider = scope[1]
+                    if provider.private and (self.app.cloud_client is not scope[2]
+                            or self.app.cloud_client.generation != scope[3]):
+                        raise ValueError('Unlock the library connection again.')
+                else:
+                    provider = self.app.storage_provider(selected, roots)
+                client = getattr(self.app, 'cloud_client', None)
+                credential_generation = getattr(client, 'generation', None)
+                model = ResourceSelection(provider, extensions=self.extensions or ())
+                folder = self.folder
+                rows = await asyncio.to_thread(model.list, folder)
+                if (not self.app.active_host or generation != self.generation
+                        or (selected, folder) != (self.storage.value, self.folder)):
+                    return False
+                if provider.private and (client is not self.app.cloud_client
+                        or credential_generation != getattr(client, 'generation', None)):
                     raise ValueError('Unlock the library connection again.')
-            else:
-                provider = self.app.storage_provider(selected, roots)
-            client = getattr(self.app, 'cloud_client', None)
-            credential_generation = getattr(client, 'generation', None)
-            model = ResourceSelection(provider, extensions=self.extensions or ())
-            folder = self.folder
-            rows = await asyncio.to_thread(model.list, folder)
-            if (not self.app.active_host or generation != self.generation
-                    or (selected, folder) != (self.storage.value, self.folder)):
-                return False
-            if provider.private and (client is not self.app.cloud_client
-                    or credential_generation != getattr(client, 'generation', None)):
-                raise ValueError('Unlock the library connection again.')
-            self.provider = provider
-            self.provider_client = getattr(self.app, 'cloud_client', None)
-            self.provider_generation = getattr(self.provider_client, 'generation', None)
-            self.browser.set_entries(model, folder, rows, location=(selected, folder))
-            self.browser.location_bar.update(folder, remote=getattr(provider, 'remote_storage', False),
-                                             encrypted=provider.private, unlocked=True)
-            self.parent_button.enabled = bool(folder)
-            self.status.value = ''
-            if self.destination == 'documents':
-                self.refresh_menu()
-                catalog = self.app.reader_manager().catalog
-                await catalog.refresh_library_folders()
-                if generation == self.generation and self.app.active_host:
+                self.provider = provider
+                self.provider_client = getattr(self.app, 'cloud_client', None)
+                self.provider_generation = getattr(self.provider_client, 'generation', None)
+                self.browser.set_entries(model, folder, rows, location=(selected, folder))
+                self.browser.location_bar.update(folder, remote=getattr(provider, 'remote_storage', False),
+                                                 encrypted=provider.private, unlocked=True)
+                self.parent_button.enabled = bool(folder)
+                self.status.value = ''
+                if self.destination == 'documents':
                     self.refresh_menu()
-            return True
-        except (OSError, ValueError) as error:
-            self.provider = None
-            self.browser.stop()
-            self.status.value = str(error)[:160]
-            return False
+                    catalog = self.app.reader_manager().catalog
+                    await catalog.refresh_library_folders()
+                    if generation == self.generation and self.app.active_host:
+                        self.refresh_menu()
+                return True
+            except (OSError, ValueError) as error:
+                self.provider = None
+                self.browser.stop()
+                self.status.value = str(error)[:160]
+                return False
 
     async def open_folder(self, row):
         self.folder = row['path']

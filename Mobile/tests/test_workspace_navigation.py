@@ -208,16 +208,18 @@ class WorkspaceNavigationTests(unittest.TestCase):
                 self.assertFalse(app.loop.run_until_complete(drawer.open_file({'path': 'comic.cbz'})))
         self.assertIn('archive is damaged', drawer.status.text)
 
-    def test_home_uses_visible_logistics_navigation_title_without_renaming_tab(self):
+    def test_home_title_matches_tab_without_about_command(self):
+        import toga
         from types import SimpleNamespace
         from unittest.mock import Mock
+        self.assertNotIn(toga.Command.ABOUT, self.app.commands)
         original = self.app.native_host.adapter
         bars = [Mock() for _ in self.app.native_host.destinations]
         self.app.native_host.adapter = SimpleNamespace(navigation=bars)
         try:
             with patch.object(self.navigation, 'render'):
                 self.navigation.install()
-            self.assertEqual(bars[0].topViewController.navigationItem.title, 'Logistics')
+            self.assertEqual(bars[0].topViewController.navigationItem.title, 'Home')
             bars[0].setNavigationBarHidden.assert_called_once_with(False, animated=False)
             self.assertEqual(self.app.native_host.labels[0], 'Home')
         finally:

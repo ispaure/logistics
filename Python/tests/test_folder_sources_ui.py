@@ -350,6 +350,9 @@ class FolderSourceTests(QtTestCase):
             view = page._browser_view
             self.assertIsInstance(view, WorkspaceUnlockView)
             self.assertIs(page.browser_stack.currentWidget(), view)
+            self.assertTrue(page.panes.docks[1].isHidden())
+            self.assertIn('Private', [label.text() for label in view.findChildren(qt.QLabel)
+                                     if label.accessibleName() == 'Selected workspace'])
             factory.assert_not_called()
             available.assert_not_called()
             view.password.setText('wrong')
@@ -360,6 +363,7 @@ class FolderSourceTests(QtTestCase):
             self.assertIsNone(session.credentials(config))
             available.assert_not_called()
             self.assertIs(page._browser_view, view)
+            self.assertTrue(page.panes.docks[1].isHidden())
             view.password.setText('correct')
             view.submit()
             self.until(lambda: page._browser_view is opened)
@@ -367,6 +371,7 @@ class FolderSourceTests(QtTestCase):
             self.assertEqual(session.credentials(config), {'Private': {'type': 'crypt'}})
             self.assertEqual(page.selected_entry_name, 'Private')
             self.wait(page)
+            self.assertFalse(page.panes.docks[1].isHidden())
             available.assert_called()
             factory.assert_called_once()
             self.assertEqual(len(page._entry_items), 2)
@@ -404,6 +409,7 @@ class FolderSourceTests(QtTestCase):
             self.until(lambda: session.credentials(config) is not None and not view.operation.busy)
             self.wait(page)
             self.assertIn('synthetic browser failure', page.browser_notice.text())
+            self.assertFalse(page.panes.docks[1].isHidden())
             for item in page._entry_items.values():
                 self.assertEqual(item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'LocalCrypt, unlocked')
             buttons = {button.text() for button in page.detail_scroll.widget().findChildren(qt.QPushButton)}
@@ -490,6 +496,7 @@ class FolderSourceTests(QtTestCase):
         page._show_entry(entry)
         view = page._actions_unlock_view
         self.assertIsNotNone(view)
+        self.assertFalse(page.panes.docks[1].isHidden())
         self.assertTrue(any('load this workspace’s actions' in label.text() for label in view.findChildren(qt.QLabel)))
         available.assert_not_called()
         with patch('features.rclone.session.read_package', return_value={'Plain': {'type': 'local'}}):
@@ -556,10 +563,12 @@ class FolderSourceTests(QtTestCase):
             from features.rclone.ui.remote_browser import open_remote
             view = open_remote(config, 'Remote', page, package=package)
             self.assertIsInstance(view, WorkspaceUnlockView)
+            self.assertTrue(page.panes.docks[1].isHidden())
             view.password.setText('password')
             view.submit()
             self.until(entered.is_set)
             page._clear_browser('Select a folder')
+            self.assertFalse(page.panes.docks[1].isHidden())
             self.assertIn(view, page._retired_browsers)
             self.assertIsNone(page._browser_view)
             release.set()
@@ -772,6 +781,39 @@ class FolderSourceTests(QtTestCase):
         self.assertGreater(page.folder_tree.height(), 0)
         self.assertGreater(actions.height(), 120)
 
+    def test_info_and_actions_are_separate_and_refresh_is_in_folder_list(self):
+        self.local_folders = [self.folder('One'), self.folder('Two')]
+        page = self.page()
+        page.resize(1100, 800)
+        page.show()
+        self.app.processEvents()
+        files, actions, sources = page.panes.docks
+        self.assertIs(page.details_tabs.currentWidget(), page.detail_scroll)
+        self.assertEqual([page.details_tabs.tabText(i) for i in range(2)], ['Info', 'Actions'])
+        self.assertEqual(page.refresh_button.text(), '')
+        self.assertFalse(page.refresh_button.icon().isNull())
+        self.assertEqual(page.refresh_button.accessibleName(), 'Refresh folders')
+        button_position = page.refresh_button.mapTo(sources.widget(), qt.QPoint(0, 0))
+        self.assertIs(page.refresh_button.parentWidget(), page.folder_list_panel)
+        self.assertIs(page.folder_tree.parentWidget(), page.folder_list_panel)
+        combo_position = page.credential_combo.mapTo(sources.widget(), qt.QPoint(0, 0))
+        self.assertGreaterEqual(button_position.y(), combo_position.y() + page.credential_combo.height())
+        self.assertLess(page.refresh_button.y(), page.folder_tree.y())
+        self.assertGreater(button_position.x(), sources.widget().width() / 2)
+        self.assertLess(sources.width(), page.panes.width() * .24)
+        for entry in self.entries(page):
+            page.folder_tree.setCurrentItem(page._entry_items[page._entry_key(entry)])
+            self.wait(page)
+            self.assertIn(str(entry.local.path), [label.text() for label in
+                          page.info_scroll.widget().findChildren(qt.QLabel)])
+            self.assertFalse(page.info_scroll.widget().findChildren(qt.QPushButton))
+            self.assertNotIn('General', [group.title() for group in
+                             page.detail_scroll.widget().findChildren(qt.QGroupBox)])
+            page.details_tabs.setCurrentWidget(page.info_scroll)
+        page._show_empty_state('Select a folder')
+        self.assertNotIn(str(entry.local.path), [label.text() for label in
+                         page.info_scroll.widget().findChildren(qt.QLabel)])
+
     def test_busy_browser_is_retained_until_idle_and_panes_can_unlock(self):
         self.local_folders = [self.folder('One'), self.folder('Two')]
         page = self.page()
@@ -814,9 +856,9 @@ class FolderSourceTests(QtTestCase):
         self.until(lambda: browser.navigation.directory == child)
         self.assertEqual(page.selected_entry_name, 'Workspace')
         self.assertEqual(page._selected_entry_key[-1], str(root.path))
-        self.assertIn(str(root.path), [label.text() for label in page.detail_scroll.widget().findChildren(qt.QLabel)])
+        self.assertIn(str(root.path), [label.text() for label in page.info_scroll.widget().findChildren(qt.QLabel)])
         self.assertIs(page.browser_stack.currentWidget(), page._browser_view)
-        self.assertTrue(all(dock.width() >= 240 for dock in page.panes.docks))
+        self.assertTrue(all(dock.width() >= dock.minimumWidth() for dock in page.panes.docks))
         # Refresh keeps the browsed child and retained view for the same workspace.
         view = page._browser_view
         page.refresh()
