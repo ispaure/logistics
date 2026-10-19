@@ -3,10 +3,39 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 from logisticsmobile.workspace import Workspace, MAX_SESSIONS
 
 
 class WorkspaceTests(unittest.TestCase):
+    def test_unchanged_workspace_skips_durable_writes_but_rechecks_disk_and_view_changes(self):
+        from logisticsmobile.workspace import atomic_write_json
+        with TemporaryDirectory() as directory:
+            workspace = Workspace(Path(directory))
+            session = workspace.open('managed-text', 'a' * 32, 'text')
+            with patch('logisticsmobile.workspace.atomic_write_json', wraps=atomic_write_json) as write:
+                workspace.save()
+                workspace.save()
+                self.assertEqual(write.call_count, 1)
+                session.view['cursor'] = 1
+                workspace.save()
+                self.assertEqual(write.call_count, 2)
+                # Same-sized external edits must invalidate the snapshot too.
+                original = workspace.path.read_text()
+                workspace.path.write_text(original.replace('"cursor": 1', '"cursor": 2'))
+                workspace.save()
+                self.assertEqual(write.call_count, 3)
+                self.assertEqual(workspace.path.read_text(), original)
+                workspace.path.unlink()
+                workspace.save()
+                self.assertEqual(write.call_count, 4)
+                target = Path(directory) / 'target.json'
+                workspace.path.rename(target)
+                workspace.path.symlink_to(target)
+                with self.assertRaises(ValueError):
+                    workspace.save()
+                self.assertEqual(write.call_count, 4)
+
     def test_independent_view_state_restore_duplicate_open_and_stale_completion(self):
         with TemporaryDirectory() as directory:
             workspace = Workspace(Path(directory))

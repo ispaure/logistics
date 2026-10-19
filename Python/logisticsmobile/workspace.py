@@ -157,6 +157,11 @@ class Workspace:
             self.close(session.id, guard=lambda value: True)
         return True
 
+    def _storage_revision(self):
+        info = self.path.stat()
+        return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
+                info.st_ctime_ns, info.st_mode, info.st_nlink)
+
     def save(self):
         if self.error:
             raise ValueError(self.error)
@@ -169,5 +174,14 @@ class Workspace:
         ordinary = {entry['id'] for entry in entries}
         active = self.active if self.active in ordinary else (entries[-1]['id'] if entries else None)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(self.path, dict(schema=1, active=active, sessions=entries),
+        state = dict(schema=1, active=active, sessions=entries)
+        serialized = json.dumps(state, ensure_ascii=False, allow_nan=False)
+        if serialized == getattr(self, '_saved_state', None):
+            try:
+                if self._storage_revision() == self._saved_revision:
+                    return
+            except FileNotFoundError:
+                pass
+        atomic_write_json(self.path, state,
                           max_bytes=MAX_MANIFEST, durable_directory=True)
+        self._saved_state, self._saved_revision = serialized, self._storage_revision()

@@ -170,6 +170,17 @@ class ProviderUI(FilesUI):
                 kind, content = await asyncio.to_thread(self.provider_page_content, reader, 0)
             else:
                 reader, kind, content = prepared
+            initial_preview = None
+            initial_preview_error = None
+            if (not edit and reader.editable and not getattr(reader, 'read_only', False)
+                    and reader.kind in {'.md', '.markdown'}):
+                from .preview import markdown_preview, reader_image_source
+                try:
+                    initial_preview = await asyncio.to_thread(markdown_preview, content,
+                        int(self.preferences.values['font_size']), image_source=reader_image_source(copies, reader))
+                except ValueError as error:
+                    # Keep the established source fallback and error feedback.
+                    initial_preview_error = str(error)
             check_cancelled(self._crypt_cancel.is_set)
             from types import SimpleNamespace
             view = SimpleNamespace()
@@ -236,8 +247,10 @@ class ProviderUI(FilesUI):
             if reader.editable and not getattr(reader, 'read_only', False) and reader.kind in {'.md', '.markdown'}:
                 if edit:
                     self.show_private_markdown_editor()
+                elif initial_preview_error is not None:
+                    self.crypt_title.text = private_label(initial_preview_error)
                 else:
-                    self.toggle_private_preview(initial=True)
+                    self.toggle_private_preview(initial=True, rendered=initial_preview)
             privacy = getattr(getattr(self, 'app', self), 'screen_privacy', None)
             if privacy is not None:
                 privacy.refresh()
@@ -867,7 +880,7 @@ class ProviderUI(FilesUI):
                 self.crypt_title.text = private_label(str(error))
         self._private_preview_pending = self.loop.call_later(.25, render)
 
-    def toggle_private_preview(self, widget=None, *, initial=False, **kwargs):
+    def toggle_private_preview(self, widget=None, *, initial=False, rendered=None, **kwargs):
         if (not initial and self.cloud_busy and not getattr(self, 'transfer_busy', False)) or self.crypt_reader is None or not self.crypt_reader.editable:
             return
         preview = getattr(self, 'crypt_preview', None)
@@ -880,7 +893,8 @@ class ProviderUI(FilesUI):
         from .preview import markdown_preview, reader_image_source
         from uuid import uuid4
         try:
-            content = markdown_preview(self.crypt_text.value, int(self.preferences.values['font_size']),
+            content = rendered if rendered is not None else markdown_preview(
+                self.crypt_text.value, int(self.preferences.values['font_size']),
                 image_source=reader_image_source(self._crypt_reader_store, self.crypt_reader))
         except ValueError as error:
             self.crypt_title.text = private_label(str(error))

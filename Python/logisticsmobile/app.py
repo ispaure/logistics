@@ -274,7 +274,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         for overlay in tuple(getattr(self, '_speech_overlays', ())):
             overlay.reposition()
         self.adaptive.render()
-        if hasattr(self, 'settings_navigation'):
+        if self.native_host.state.destination == 'settings' and hasattr(self, 'settings_navigation'):
             self.settings_navigation.reflow()
         for name in ('collection_storage_page', 'reset_page'):
             page = getattr(self, name, None)

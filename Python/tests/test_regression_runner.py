@@ -1,5 +1,6 @@
 """Isolated GUI checks must run every module and preserve all failure statuses."""
 from pathlib import Path
+import os
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -10,6 +11,18 @@ RUNNER = Path(__file__).with_name('run_regressions.py')
 
 
 class RegressionRunnerTests(unittest.TestCase):
+    def test_selected_suite_takes_precedence_over_runner_directory(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'test_pdf_reader.py').write_text(
+                'import unittest\nclass SelectedSuite(unittest.TestCase):\n'
+                ' def test_selected_suite(self): pass\n')
+            env = dict(os.environ, PYTHONPATH=str(root) + os.pathsep + os.environ.get('PYTHONPATH', ''))
+            result = subprocess.run([sys.executable, str(RUNNER), str(root), '--isolate-modules'],
+                                    capture_output=True, text=True, timeout=30, env=env)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('test_selected_suite', result.stderr)
+
     def run_modules(self, directory):
         return subprocess.run([sys.executable, str(RUNNER), str(directory), '--isolate-modules'],
                               capture_output=True, text=True, timeout=30)

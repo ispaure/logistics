@@ -57,6 +57,10 @@ def main():
         parser.error('--traceback-after must be positive')
     if args.isolate_modules:
         return run_isolated(args.directory.resolve(), args.pattern, args.traceback_after)
+    # The runner itself lives in Python/tests. A mobile suite can contain the
+    # same module name (e.g. test_pdf_reader); discovery must import its own file
+    # even when its directory already appears later in PYTHONPATH.
+    sys.path.insert(0, str(args.directory.resolve()))
     faulthandler.enable()
     status = {'test': 'test discovery', 'started': monotonic(), 'completed': 0}
 

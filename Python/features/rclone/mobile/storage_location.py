@@ -2,7 +2,7 @@
 from hashlib import sha256
 import errno
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import shutil
@@ -123,10 +123,21 @@ class CollectionFiles(LocalFiles):
                     (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns))
                 rows.append(dict(name=child.name, path='/'.join(p for p in (path, child.name) if p),
                     directory=directory, size=info.st_size, revision=revision,
-                    modified=datetime.fromtimestamp(info.st_mtime).astimezone().isoformat(sep=' ', timespec='seconds')))
+                    modified=_modified_time(info.st_mtime)))
         check_cancelled(cancelled)
         self._guard(folder)
         return sorted(rows, key=lambda row: (not row['directory'], row['name'].casefold()))
+
+
+def _modified_time(timestamp):
+    # localtime supplies the offset for this date, including DST. astimezone()
+    # probes the system timezone again for every row, which is costly on mobile.
+    # Match datetime's microsecond rounding before choosing an offset; a value
+    # just before a DST transition can round into the following second.
+    instant = datetime.fromtimestamp(timestamp, timezone.utc)
+    offset = time.localtime(instant.timestamp()).tm_gmtoff
+    zone = timezone(timedelta(seconds=offset))
+    return instant.astimezone(zone).isoformat(sep=' ', timespec='seconds')
 
 
 class _Progress:

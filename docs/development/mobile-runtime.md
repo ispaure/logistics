@@ -192,6 +192,50 @@ locked gates, updating after each accepted password. Unnamed private-document
 gates use a generic private-session label. The scrollable form preserves the
 existing root replacement, safe-area handling and lifecycle race checks.
 
+## Startup and document responsiveness
+
+The host builds Settings on first use rather than during startup. Native Settings
+tab selection mounts its root without recursively activating a destination;
+direct settings-detail actions initialize the root before pushing their detail.
+Navigation and resize callbacks reflow Settings only while that destination is
+visible. Selecting it again measures the retained controls at the current width.
+
+A browser file tap publishes selection and opens the document directly. It does
+not first await the browser's detailed metadata callback; explicit information
+selection still supports that callback. Folder navigation, bounded row counts,
+selection validation and cancellation remain in place.
+Async selection callbacks must still reference the same listing and visible
+entry before opening; replacing the listing cancels that tap. Selection styling
+updates only rows whose selected state changed, rather than reapplying native
+surface styles and fetching every button's text on each tap.
+
+Provider-backed Markdown, including ordinary local files, prepares its initial
+preview and sibling images on a worker before constructing the native preview.
+The rendered HTML is handed to the UI once, with the existing cancellation check
+before publication. Source editing and subsequent preview toggles retain their
+existing behavior. Rendering errors retain the source view and existing feedback.
+
+`CollectionFiles.list` formats timestamps using the date's local UTC offset from
+`time.localtime`, avoiding repeated system-timezone probes by `astimezone` for
+every file. Tests compare the resulting strings across DST transitions and
+half-hour offsets, including fractional seconds that round across DST changes.
+In a macOS host microbenchmark, 1,000 timestamp conversions
+dropped from about 604 ms to 62 ms; this is not Android device timing.
+
+`Mobile/tests/test_mobile_responsiveness.py` covers deferred Settings, native tab
+selection without reentry, file taps bypassing metadata, and worker-only initial
+Markdown rendering. Existing browser, folder-navigation, private-session and
+Android Back tests cover lifecycle behavior. Physical Android launch, filesystem
+and WebView timings still require a device run. Shared syntax detection changes
+are documented and tested in commonUtils, not duplicated in the host contract.
+
+Workspace saves skip repeated durable publication only when the serialized
+ordinary-session state and on-disk revision are unchanged. The revision includes
+device/inode, size, nanosecond modification/change times, mode and link count.
+Deletion or replacement forces a write; linked paths are still rejected before
+checking the cache. Draft recovery writes keep their existing durability policy.
+`Python/tests/test_mobile_workspace.py` covers view changes and external edits.
+
 ## Workspaces refresh
 
 Workspaces has no routine Refresh button; returning to the hub and credential/

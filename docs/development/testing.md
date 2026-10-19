@@ -33,7 +33,9 @@ environment before synchronizing the environment used by a running application.
 The [mobile owner map](mobile-runtime.md) explains controller
 and packaging boundaries. For focused desktop runs, pass a filename to the
 regression runner's `--pattern`. Preserve the flat test layout: its isolated
-mode requires a nonempty flat directory. Use the separate mobile environment
+mode requires a nonempty flat directory. The runner puts the selected suite first
+on the import path so mobile and desktop files with the same test-module name
+cannot shadow each other. Use the separate mobile environment
 and [host validation commands](mobile-launchers.md#host-validation) for Toga
 widget tests. Loopback fixtures need permission to bind localhost; native file
 watchers also need functioning OS notification access.

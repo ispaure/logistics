@@ -329,23 +329,46 @@ class FileBrowser(NativeBrowser):
             finally:
                 self.navigation_busy = False
             return
-        await super()._select_pressed(entry, widget, **kwargs)
         if not entry.container and self.on_open_file and not self.closed:
+            tree = self.tree
             self.navigation_busy = True
             try:
+                # A file tap opens the document. Do not first read its archive
+                # metadata (or queue behind thumbnail workers) for the browser's
+                # information panel, which is about to leave the screen.
+                self.selected = entry.identity
+                for child in list(self.info.children):
+                    self.info.remove(child)
+                self.highlight_selection()
+                if self.on_selected:
+                    selected = self.on_selected(entry.payload)
+                    if inspect.isawaitable(selected):
+                        await selected
+                if (self.closed or self.tree is not tree or self.selected != entry.identity
+                        or entry.identity not in tree.entries or entry not in self.entries):
+                    return
                 result = self.on_open_file(entry.payload)
                 if inspect.isawaitable(result):
                     await result
             finally:
                 self.navigation_busy = False
+            return
+        await super()._select_pressed(entry, widget, **kwargs)
 
     def highlight_selection(self):
         for identity, row in getattr(self, 'entry_rows', {}).items():
             selected = identity == self.selected
-            highlight_entry(row, selected)
             button = self.buttons[identity]
-            button.text = button.text.removeprefix('✓ ')
-            highlight_entry(button, selected)
+            if getattr(row, '_browser_selected', None) != selected:
+                highlight_entry(row, selected)
+                highlight_entry(button, selected)
+                row._browser_selected = selected
+            # The shared selection handler marks only the current button.
+            # Avoid native text reads and restyling every other visible row.
+            if selected:
+                text = button.text
+                if text.startswith('✓ '):
+                    button.text = text.removeprefix('✓ ')
 
     async def select(self, entry):
         try:
