@@ -14,6 +14,7 @@ async def exercise_ui_review(app):
     from services.documents.readers import PrivateReader
     from commonUtils.runtime.document_access import LocalDocuments
     from zipfile import ZipFile
+    from .reader_checks import wait_for_reader, assert_comic_centered
     comic = app.storage_root / 'WebP review.cbz'
     with ZipFile(comic, 'w') as archive:
         for index, data in enumerate(variants):
@@ -72,6 +73,9 @@ async def exercise_ui_review(app):
     def current_canvas():
         displayed = app.reader_manager().active.book_content.children[0]
         return displayed.canvases[0] if hasattr(displayed, 'canvases') else displayed
+    owner = app.reader_manager().active
+    await wait_for_reader(owner)
+    await assert_comic_centered(current_canvas, fullscreen=True)
     await capture('comic-page')
     def canvas_height():
         native = current_canvas()._impl.native
@@ -80,6 +84,12 @@ async def exercise_ui_review(app):
     if get_os() is OS.IOS:
         assert app.native_host.adapter.controller.isTabBarHidden(), f'Fullscreen lost: {app._comic_chrome_hidden}, detail={app.adaptive.in_detail}, owner={app.readers.active.reader_immersive}'
     current_canvas().toggle_controls()
+    assert not owner.reader_immersive, 'Comic controls did not open'
+    deadline = asyncio.get_running_loop().time() + 15
+    while canvas_height() >= full_height:
+        assert asyncio.get_running_loop().time() < deadline, ('Comic mode did not reclaim reading space', full_height, canvas_height())
+        await asyncio.sleep(.1)
+    await wait_for_reader(owner)
     await capture('comic-controls')
     if get_os() is OS.IOS:
         assert not app.native_host.adapter.controller.isTabBarHidden()
@@ -137,7 +147,7 @@ async def exercise_ui_review(app):
     (folder / 'WebP comic.cbz').write_bytes(original)
     (folder / 'Cover.webp').write_bytes(webp)
     def home_browse_button(widget):
-        if isinstance(widget, toga.Button) and widget.text == 'Workspaces':
+        if isinstance(widget, toga.Button) and widget.text.partition('\n')[0] == 'Workspaces':
             return widget
         children = list(widget.children)
         if isinstance(widget, toga.ScrollContainer) and widget.content is not None:
@@ -265,6 +275,7 @@ async def exercise_ui_review(app):
         density = viewport.getResources().getDisplayMetrics().density
         for control in (*header_controls, browser.close_search_button):
             assert control._impl.native.getWidth() / density >= 44, 'Browser icon hit target too narrow'
+    assert [control.control_icon for control in (*header_controls, app.file_actions_button)] == ['up', 'find', 'more']
     browser.close_search()
     while browser.tasks:
         await asyncio.gather(*tuple(browser.tasks))

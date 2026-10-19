@@ -80,7 +80,9 @@ class DocumentationViewerTests(QtTestCase):
         window = (set(_windows) - before).pop()
         self.assert_scope(window.viewer, ROOT / 'docs/user/files-and-documents.md', ROOT / 'docs')
         window.close()
-        bulk = BulkRenameWindow()
+        bulk = BulkRenameWindow(self.temporary_directory().name)
+        self.wait_until(lambda: bulk.renamer._generation > 0 and not bulk.renamer.progress.busy,
+                        message="Bulk Rename fixture scan did not finish")
         help_menu = next(action.menu() for action in bulk.menuBar().actions() if action.text() == 'Help')
         before = set(_windows)
         help_menu.actions()[0].trigger()

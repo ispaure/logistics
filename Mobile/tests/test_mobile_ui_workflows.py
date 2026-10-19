@@ -136,7 +136,9 @@ class MobileWorkflowTests(unittest.TestCase):
             def cancel(self): release.set()
             def copy_remote_file(self, path, stream):
                 started.set()
-                if not release.wait(30):
+                # Keep the synthetic transfer alive through native reader setup
+                # on loaded CI runners; finally always releases it.
+                if not release.wait(120):
                     raise RuntimeError('Pull fixture was not released')
                 return super().copy_remote_file(path, stream)
         app.cloud_client = Client()

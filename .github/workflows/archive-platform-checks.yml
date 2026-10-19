@@ -35,9 +35,9 @@ jobs:
       - run: ruff check --config Python/pyproject.toml Python Mobile .github/scripts
       - name: Check native mobile widget and picker contracts
         env:
-          PYTHONPATH: Python
+          PYTHONPATH: .:Python
           TOGA_BACKEND: toga_dummy
-        run: python -m unittest discover -s Mobile/tests -v
+        run: python Python/tests/run_regressions.py Mobile/tests --isolate-modules
       - name: Check portable document core without desktop dependencies
         env:
           PYTHONPATH: Python

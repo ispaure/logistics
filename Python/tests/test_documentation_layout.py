@@ -74,7 +74,7 @@ class DocumentationLayoutTests(unittest.TestCase):
             scope = ROOT / 'Python/features' / owner / 'docs'
             self.assertTrue((scope / 'user_mobile/user_mobile.md').is_file())
         guide = ROOT / 'docs/user_mobile/user_mobile.md'
-        self.assertIn('## Folder Hub and Local / LocalCrypt sync', guide.read_text())
+        self.assertIn('## Workspaces and Local / LocalCrypt sync', guide.read_text())
         self.assertEqual(documentation_root(guide), ROOT / 'docs')
 
     def test_external_acknowledgement_remains_single_sentence(self):

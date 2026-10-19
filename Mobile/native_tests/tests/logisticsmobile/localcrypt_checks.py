@@ -303,9 +303,8 @@ async def exercise_localcrypt(app, passed):
     app.file_target.value = 'imported'
     await app.move_file()
     assert not (local / 'source').exists(), app.file_status.value
-    # Navigate once through the awaited production entry point. Assigning the
-    # picker and immediately browsing races its scheduled on_change listing.
-    assert await app.browser_file_location((crypt_label, ''))
+    # Await navigation before selecting rows; on_change listings are asynchronous.
+    assert await app.browser_file_location((crypt_label, '')), app.file_status.value
     select('imported')
     app.file_name.value = 'renamed'
     await app.rename_file()
@@ -412,7 +411,7 @@ async def exercise_localcrypt(app, passed):
     updated = await asyncio.to_thread(copies.save_metadata, reader, {'Title': 'Large native browser sentinel'})
     assert updated.comic.info.get_field('Title') == 'Large native browser sentinel'
     await app.show_files()
-    assert await app.browser_file_location((crypt_label, ''))
+    assert await app.browser_file_location((crypt_label, '')), app.file_status.value
     browser = app.file_browser
     assert browser.entries and browser.mode == 'List'
     browser.show_tiles()

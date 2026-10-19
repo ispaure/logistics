@@ -434,7 +434,7 @@ See [Rclone mobile workflows](../user_mobile/workflows.md#side-by-side-mobile-cr
 
 ### Mobile Folder Hub source tabs
 
-See [Rclone mobile workflows](../user_mobile/workflows.md#mobile-folder-hub-source-tabs).
+See [Rclone mobile workflows](../user_mobile/workflows.md#mobile-workspaces-source-tabs).
 
 
 - [Choose rclone download versions](download-versions.md)

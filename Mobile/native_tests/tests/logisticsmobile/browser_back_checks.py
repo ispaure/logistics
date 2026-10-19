@@ -1,4 +1,4 @@
-"""Real platform Back returns file readers to the retained browser viewport."""
+"""Native document Back and tab return preserve the browser viewport."""
 import asyncio
 import base64
 from zipfile import ZipFile
@@ -47,6 +47,8 @@ async def exercise_browser_back(app):
         assert app.native_host.state.destination == 'documents'
         owner = app.readers.active if filename.endswith('.cbz') else app.private_sessions.active
         if filename.endswith('.cbz'):
+            from .reader_checks import wait_for_reader
+            await wait_for_reader(owner)
             # Reveal the native Back button, as a user would from fullscreen.
             if owner.reader_immersive:
                 owner.book_content.children[0].toggle_controls()
@@ -54,8 +56,9 @@ async def exercise_browser_back(app):
             owner.show_reader_tools()
             await asyncio.sleep(.2)
             if get_os() is OS.IOS:
-                app.native_host.adapter.navigation[
-                    app.native_host.destinations.index('documents')].popViewControllerAnimated(True)
+                navigation = (app.adaptive.secondary if app.adaptive.split is not None else
+                              app.native_host.adapter.navigation[app.native_host.destinations.index('documents')])
+                navigation.popViewControllerAnimated(True)
             else:
                 app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
             for _ in range(60):
@@ -90,6 +93,7 @@ async def exercise_browser_back(app):
         if filename.endswith('.md'):
             assert owner.crypt_text.value == '# Unsaved note after opening from Files'
     assert not hasattr(app, 'book_reader') and not hasattr(app, 'crypt_text')
-    return {'native_back_to_files': True, 'browser_scroll_preserved': True,
+    return {'native_back_to_files': True,
+            'native_tab_to_files': False, 'browser_scroll_preserved': True,
             'draft_retained_on_back': True, 'reader_tools_back_preserved': True,
             'controller_state_is_owned': True}

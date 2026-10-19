@@ -314,10 +314,13 @@ authentication dependency in the separate environment, then run:
 
 ```sh
 python -m pip install toga-dummy==0.5.7 -r Mobile/requirements-testflight.txt
-PYTHONPATH=Python TOGA_BACKEND=toga_dummy python -m unittest discover -s Mobile/tests -v
+PYTHONPATH=.:Python TOGA_BACKEND=toga_dummy python Python/tests/run_regressions.py Mobile/tests --isolate-modules
 ```
 
-These commands verify host behavior; they do not certify device interfaces.
+The widget suite starts each test module in a fresh process to keep retained
+dummy-backend GUI state from slowing later modules and expiring asynchronous
+fixtures. Every discovered module runs; failures and per-module timeouts fail
+the suite. These commands verify host behavior; they do not certify device interfaces.
 
 ## Hosted builds and runtime checks
 

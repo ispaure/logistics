@@ -19,7 +19,9 @@ The mobile browser is titled **Cloud File Browser** and starts with its compact
 location header and the listing. Open documents and Recent use cloud/device and
 connection lock badges. The mobile host's `document_sources` keeps saved-credential
 references in ordinary app-private history. Session-only credential paths and
-filenames use `mobile.document_lists.CredentialDocumentLists` instead. Native
+filenames use `mobile.document_lists.CredentialDocumentLists` instead. The host
+injects its reference validator, history limit and reopen callback; the feature
+does not import the mobile application package. Native
 `document_lists_seal/open` writes/reads an AES-256 ZIP containing one generic
 `entries.json` member, under hashes of the credential package and window. The
 credential ZIP's original password is held only in native session memory and is
