@@ -9,7 +9,7 @@ from commonUtils.persistence import atomic_write_bytes
 from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_SIZES, validate as validate_reading
 
 DEFAULTS = {'android_eink': 'false', 'font_size': '16', 'restore_last_document': 'true', 'last_document': '',
-            'document_card_overview': 'true', 'show_legacy': 'false',
+            'document_card_overview': 'false', 'show_legacy': 'false',
             'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false',
             'speech_voice': '', 'magnifier_zoom': '190', 'comic_layout': 'auto', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS}
 
@@ -39,7 +39,7 @@ class Preferences:
                 self.text = self.original.decode('utf-8-sig')
                 parser = INIFile.parse(self.text)
                 for key in DEFAULTS:
-                    if key != 'show_legacy' and parser.has_option('Mobile', key):
+                    if key not in {'show_legacy', 'document_card_overview'} and parser.has_option('Mobile', key):
                         self.values[key] = parser['Mobile'][key]
                 self.validate(self.values)
                 # Older session-only imports persisted package/remote labels.
@@ -69,7 +69,7 @@ class Preferences:
             raise ValueError('Invalid document restore preference.')
         if values['show_legacy'] not in {'true', 'false'}:
             raise ValueError('Invalid legacy folder preference.')
-        if values['document_card_overview'] not in {'true', 'false'}:
+        if values['document_card_overview'] != 'false':
             raise ValueError('Invalid document overview preference.')
         if values['clear_unmodified_documents_on_restart'] not in {'true', 'false'}:
             raise ValueError('Invalid document clearing preference.')
@@ -95,8 +95,8 @@ class Preferences:
     def save(self, **changes):
         if self.error:
             raise ValueError('Repair or move the preserved preferences file before saving settings.')
-        # Retain the old key for INI compatibility, but never persist a session toggle.
-        changes = dict(changes, show_legacy='false')
+        # Retain retired keys for INI compatibility, but keep cards and the saved legacy toggle off.
+        changes = dict(changes, show_legacy='false', document_card_overview='false')
         values = dict(self.values, **changes)
         self.validate(values)
         # Session-only associations must never reach disk, including through autosave.

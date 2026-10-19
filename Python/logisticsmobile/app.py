@@ -166,7 +166,6 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 key = next(iter(self.labels.values()))
             self.open_document(key)
         self.show_documents_hub()
-        self.show_settings()
         self.show_folder_picker(initialize=False)
         self.show_home()
         self.save_workspace(capture=False)
@@ -211,6 +210,10 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.save_workspace()
         if destination == 'chat' and not self.routes.screens['chat']:
             self.show_chat(present=False)
+        if destination == 'settings':
+            if not hasattr(self, 'settings_navigation'):
+                self.show_settings(present=False)
+            self.settings_navigation.reflow()
         self.refresh_hub(destination)
         adaptive = getattr(self, 'adaptive', None)
         if (destination == 'documents' and adaptive is not None and adaptive.split is not None
@@ -243,7 +246,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         from .markdown_speech import stop_markdown_speech
         stop_markdown_speech(self)
         self.body = body
-        if hasattr(self, 'settings_navigation'):
+        if self.native_host.state.destination == 'settings' and hasattr(self, 'settings_navigation'):
             self.settings_navigation.reflow()
         batch = getattr(self, 'private_comic_batch', None)
         if batch is not None and batch.view is not None and batch.view not in body.children:
@@ -309,6 +312,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 editor.changed(notify=False)
 
     def show_view(self, view, *, checkpoint=True, destination=None, route=None, title='', root=False):
+        target = destination or self.native_host.state.destination
+        if target == 'settings' and not root and not hasattr(self, 'settings_navigation'):
+            self.show_settings(present=False)
         self.retire_private_comic_batch(view=view)
         privacy = getattr(self, 'screen_privacy', None)
         if privacy is not None:
@@ -595,7 +601,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             box.add(toga.Button(title, on_press=command, style=Pack(height=48)))
         self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), route='actions', title='Document actions')
 
-    def show_settings(self, widget=None, **kwargs):
+    def show_settings(self, widget=None, *, present=True, **kwargs):
         from .hub_ui import heading
         from .settings_ui import switch_row, build_information, speech_voice_setting, SettingsNavigation, SettingsLabel
         sections = {}
@@ -605,10 +611,6 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             sections[title] = section
             return section
         box = category('App')
-        self.document_cards_choice = toga.Switch('Document card overview',
-            value=self.preferences.values['document_card_overview'] == 'true', style=Pack(height=48))
-        box.add(switch_row(self, 'Document card overview', self.document_cards_choice,
-            'Show Recent as preview cards. Turn off to use compact rows.'))
         self.font_choice = toga.Selection(items=[str(size) for size in range(12, 33)],
             value=self.preferences.values['font_size'], style=Pack(height=48))
         self.restore_choice = toga.Switch('Restore last document',
@@ -686,12 +688,20 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.build_version_label = toga.Label(build_information(self.version),
             style=Pack(font_size=12, color='#808080'))
         box.add(self.build_version_label)
-        self.document_cards_choice.on_change = self.change_document_overview
         self.font_choice.on_change = self.save_preferences
         self.restore_choice.on_change = self.save_preferences
         self.clear_documents_choice.on_change = self.save_preferences
         self.settings_navigation = SettingsNavigation(self, sections)
-        self.show_view(self.settings_navigation, destination='settings', root=True)
+        if present:
+            self.show_view(self.settings_navigation, destination='settings', root=True)
+        else:
+            # Native tab-selection callbacks must not activate another tab or
+            # recursively dispatch selection while its adapter is committing it.
+            view = self.adaptive.prepare(self.settings_navigation, 'settings', root=True)
+            root = self.routes.roots['settings']
+            for child in list(root.children):
+                root.remove(child)
+            root.add(view)
         self.settings_navigation.reflow()
 
     def refresh_document_overview(self):
@@ -704,19 +714,6 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         for child in list(root.children):
             root.remove(child)
         root.add(view)
-
-    def change_document_overview(self, widget, **kwargs):
-        value = 'true' if widget.value else 'false'
-        if value == self.preferences.values['document_card_overview']:
-            return
-        try:
-            self.preferences.save(document_card_overview=value)
-        except (OSError, ValueError) as error:
-            widget.value = self.preferences.values['document_card_overview'] == 'true'
-            self.settings_status.text = str(error)
-            return
-        self.refresh_document_overview()
-        self.settings_status.text = 'Document view saved on this device.'
 
     def change_android_eink(self, widget, **kwargs):
         try:
@@ -748,7 +745,6 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
     def save_preferences(self, widget=None, **kwargs):
         try:
             self.preferences.save(font_size=self.font_choice.value,
-                document_card_overview='true' if self.document_cards_choice.value else 'false',
                 clear_unmodified_documents_on_restart='true' if self.clear_documents_choice.value else 'false',
                 restore_last_document='true' if self.restore_choice.value else 'false')
             self.editor.style.font_size = int(self.preferences.values['font_size'])

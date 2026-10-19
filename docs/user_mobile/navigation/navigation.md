@@ -61,21 +61,19 @@ names in this button. Disabled Legacy credentials are excluded from the chooser;
 if only Legacy is available and Show Legacy is off, the button stays hidden.
 Passwords are never saved.
 
-Documents shows **New document** and **Open file…**, a compact **Open · count**
-switcher, and a unified **Recent** list. Recent includes open and closed documents;
-selecting an open entry returns to its existing editor and pending edits. Expand
-Open to switch between all open documents or close individual items. Closing keeps
-saved files and retains the existing unsaved-change choices. The switcher is
-collapsed when you return to the hub.
+Documents shows **New document** and **Open file…**, an always-visible **All open**
+section, and a unified **Recent** list. Recent includes open and closed documents;
+selecting an open entry returns to its existing editor and pending edits.
+All open lists every visible open document with its Close button, without an
+expand/collapse control. Closing keeps saved files and retains the existing
+unsaved-change choices. An empty section shows **No open documents**.
 
 **Currently open** appears as plain status text beneath recent filenames for documents
 still open in the workspace. Select the filename to return to that document. **Unsaved changes** and
 **Draft** mark pending edits; **Recovered draft** identifies edits available from
 a recovery copy. These badges do not mean changes have been saved back to the
-source. Saving clears the draft badges. **Document card overview** switches Recent
-between preview cards and compact rows. Cards use bounded excerpts of ordinary
-text drafts; private provider contents are never previewed. Cards use one column
-on phones, two in wider windows and three on large tablets. A disk or cloud icon beside each
+source. Saving clears the draft badges. Recent always uses compact rows without
+text-preview cards. A disk or cloud icon beside each
 filename identifies its source; connection-backed files also show a locked or
 unlocked padlock. Ordinary local files and files using saved credentials can remain
 in Recent after closing or restarting. For a password-protected session-only

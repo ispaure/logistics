@@ -97,10 +97,10 @@ class SpeechOverlayTests(unittest.TestCase):
                 await panel.toggle_playback()
                 media = panel.playback.media
                 self.assertEqual(media.title, 'Spoken.epub')
-                self.assertEqual(media.excerpt, 'One two.')
+                self.assertFalse(hasattr(media, 'excerpt'))
                 deadline = panel.timer.deadline
                 panel.session.completed(panel.session.token)
-                self.assertEqual(media.excerpt, 'Three four.')
+                self.assertFalse(hasattr(media, 'excerpt'))
                 self.assertEqual(panel.timer.deadline, deadline)
                 self.assertEqual(media.timer_text, panel.timer_remaining.text)
                 self.assertEqual(media.states[-1], 'speaking')

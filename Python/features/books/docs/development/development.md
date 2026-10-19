@@ -162,10 +162,9 @@ update metadata without reactivating audio, requesting focus, renewing a wake
 lock or recreating system controls. Android refreshes the existing notification;
 playback transitions retain foreground-service ownership. Public reader hosts
 opt in through `document_title`: metadata uses only its basename (up to 120
-characters) and a whitespace-normalized preview of the current utterance (up to
-97 characters, including an ellipsis). Playback transitions refresh the preview,
-including utterance changes, skips and pause/resume. Private hosts leave the
-title provider empty; credential-session sources remain generic regardless of
+characters), without reading or forwarding utterance text to the native adapters.
+The subtitle contains only the listening timer or app name. Private hosts leave
+the title provider empty; credential-session sources remain generic regardless of
 the background-audio opt-in. The OS controls subtitle presentation and refresh timing.
 Hosts provide current
 text/selection and range-follow callbacks, then dispose speech before chapter
@@ -243,7 +242,7 @@ background mode. `media_android.py` connects to the non-exported
 `SpeechMediaService`, which owns a media-playback foreground service, MediaSession,
 MediaStyle notification, audio focus and a bounded wake lock. Ordinary imported
 EPUBs, ordinary Markdown previews, public vault notes and documentation publish
-a filename and bounded current-passage preview alongside the timer. Private
+a filename alongside the timer; document passages never enter native metadata. Private
 sources publish only generic metadata and timer information, even with background
 speech enabled. Full paths and credential labels are excluded, and command
 intents never carry document text.

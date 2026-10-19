@@ -73,7 +73,7 @@ On iOS these imports live in private app storage and do not appear in Files.
 Older import records do not identify their original source; the inventory says
 so rather than guessing whether a copy originally came from cloud storage.
 
-**Close** in the Open switcher keeps the saved file and its progress. To reclaim
+**Close** in All open keeps the saved file and its progress. To reclaim
 space, use **Delete local copy…**, or **Delete all local copies…** to clear the
 listed saved books and comics with one confirmation. These actions
 close the affected readers and remove their imported archives, reading progress,
@@ -84,7 +84,7 @@ On iPhone and iPad, choosing a dropdown option closes its picker immediately.
 
 Settings switches use one compact row: label, **ⓘ** help, then the on/off switch.
 Tap **ⓘ** for an explanation without changing the setting. This includes
-**Document card overview**, **Restore last document**, **Close saved documents on restart** and,
+**Restore last document**, **Close saved documents on restart** and,
 on Android and iOS, **Show Legacy**. Preferences save automatically when changed.
 **Show Legacy** applies immediately for the current session only and resets to off
 when the app starts. Reloading preferences keeps the current session choice.
@@ -253,7 +253,9 @@ shows Now Playing controls on the lock screen and in Control Center; Android
 shows media controls in the lock screen and notification shade. Use Play/Pause
 and the backward/forward 15-second controls. Skips remain approximate, using
 word count and playback speed. Stop or close the document to remove its controls.
-Only a generic **Read aloud** title is shown, without document or credential names.
+Ordinary documents may show their filename; private readers use **Read aloud**.
+Document passages never appear in lock-screen or notification metadata. The subtitle
+shows the timer when enabled, otherwise the app name.
 
 **Session-only speech while locked** defaults to off. With it off, speech from
 session-only credentials stops and its queued text clears when the app locks or

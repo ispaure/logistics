@@ -137,13 +137,11 @@ and approximate backward/forward 15-second skips. With a timer selected, their
 subtitle shows **Time remaining: MM:SS**, refreshed from the same countdown as
 the floating panel. Pause freezes it; Reset timer and duration changes in the
 panel update it immediately. Turning the timer Off removes the countdown.
-Ordinary imported EPUBs, Markdown previews, public notes and documentation also
-show the filename as the heading and a short preview of the current spoken
-passage beside the timer. The preview advances with each passage and updates on
-skips and pause/resume; long text may be truncated on the lock screen. Private
-readers keep the generic **Read aloud** heading and never show their filename
-or passage text there, including when background speech is enabled. Turning the
-timer Off leaves an available passage preview visible.
+Ordinary imported EPUBs, Markdown previews, public notes and documentation may
+show their filename as the heading. Document passages never appear in the lock
+screen, Control Center or Android media notifications. Private readers keep the
+generic **Read aloud** heading and never show filenames or credential names.
+Turning the timer Off leaves only the app name in the subtitle.
 The operating system controls the exact lock-screen layout and refresh timing.
 Playback and controls end when
 the passage finishes, the document closes or its credentials are revoked. For

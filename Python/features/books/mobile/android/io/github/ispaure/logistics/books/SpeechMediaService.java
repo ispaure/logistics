@@ -14,7 +14,7 @@ public final class SpeechMediaService extends Service {
     private static volatile SpeechMediaService instance;
     private static volatile boolean playing;
     private static volatile String timerText = "";
-    private static volatile String title = "Read aloud", excerpt = "";
+    private static volatile String title = "Read aloud";
     private static volatile long epoch;
     private MediaSession session;
     private AudioManager audio;
@@ -25,7 +25,7 @@ public final class SpeechMediaService extends Service {
     private static final int NOTICE = 8715;
 
     public static synchronized void attach(Context context, Listener value) {
-        epoch++; playing = true; timerText = ""; title = "Read aloud"; excerpt = ""; listener = value;
+        epoch++; playing = true; timerText = ""; title = "Read aloud"; listener = value;
         Intent intent = new Intent(context, SpeechMediaService.class);
         if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent);
         else context.startService(intent);
@@ -40,14 +40,14 @@ public final class SpeechMediaService extends Service {
         SpeechMediaService service = instance;
         if (service != null) service.publish(false);
     }
-    public static void updateContent(Context context, String name, String passage) {
-        title = name; excerpt = passage;
+    public static void updateContent(Context context, String name) {
+        title = name;
         SpeechMediaService service = instance;
         if (service != null) service.publish(false);
     }
     public static synchronized void detach(Context context, Listener value) {
         if (listener != value) return;
-        epoch++; playing = false; timerText = ""; title = "Read aloud"; excerpt = ""; listener = null;
+        epoch++; playing = false; timerText = ""; title = "Read aloud"; listener = null;
         context.stopService(new Intent(context, SpeechMediaService.class));
         SpeechMediaService service = instance;
         if (service != null) service.cleanup();
@@ -129,8 +129,7 @@ public final class SpeechMediaService extends Service {
     }
     private void publish(boolean foreground) {
         if (listener == null || session == null) return;
-        String subtitle = timerText.isEmpty() ? excerpt : timerText + (excerpt.isEmpty() ? "" : " · " + excerpt);
-        if (subtitle.isEmpty()) subtitle = "Logisticks";
+        String subtitle = timerText.isEmpty() ? "Logisticks" : timerText;
         session.setMetadata(new MediaMetadata.Builder()
             .putString(MediaMetadata.METADATA_KEY_TITLE, title)
             .putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, title)

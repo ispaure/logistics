@@ -18,8 +18,7 @@ class SettingsUITests(unittest.TestCase):
             app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile', version='0.1.5')
             app.show_settings()
             box = app.settings_navigation.sections['About']
-            for switch, title in ((app.document_cards_choice, 'Document card overview'),
-                                  (app.restore_choice, 'Restore last document'),
+            for switch, title in ((app.restore_choice, 'Restore last document'),
                                   (app.clear_documents_choice, 'Close saved documents on restart')):
                 label, info, control = switch.parent.children
                 self.assertEqual(label.text.replace('\n', ' '), title)

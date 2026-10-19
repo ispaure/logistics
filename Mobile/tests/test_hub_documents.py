@@ -18,12 +18,11 @@ def labels(root):
     return [widget.text for widget in widgets(root) if isinstance(widget, toga.Label)]
 
 
-def expand_open(content):
+def open_documents(content):
     import toga
-    button = next(widget for widget in widgets(content)
-                  if isinstance(widget, toga.Button) and widget.text.startswith('Open ·'))
-    button.on_press()
-    return button.parent
+    heading = next(widget for widget in widgets(content)
+                   if isinstance(widget, toga.Label) and widget.text == 'All open')
+    return heading.parent
 
 
 class HubDocumentTests(unittest.TestCase):
@@ -249,7 +248,7 @@ class HubDocumentTests(unittest.TestCase):
         import toga
         app = self.app
         session = app.editor_view.session
-        for row in (app.session_panel(session, close=True), app.session_card(session, app.session_summary(session))):
+        for row in (app.session_panel(session, close=True),):
             actions = next(child for child in row.children if any(isinstance(button, toga.Button) for button in child.children))
             name, close = actions.children
             self.assertEqual([glyph for glyph, _ in name.leading_icons], ['storage_local'])
@@ -262,7 +261,7 @@ class HubDocumentTests(unittest.TestCase):
         row.children[-1].children[-1].on_press()
         self.assertNotIn(session.id, app.workspace.sessions)
 
-    def test_documents_unify_recent_and_keep_open_switcher_collapsed(self):
+    def test_documents_show_all_open_without_expanding(self):
         app = self.app
         app.preferences.save(document_card_overview='false')
         documents = [app.store.create(name) for name in ('Notes.txt', 'Plan.MD', 'Plan.MD')]
@@ -271,14 +270,14 @@ class HubDocumentTests(unittest.TestCase):
             app.recent_documents.remember(session)
         content = app.build_documents_hub().content
         self.assertIn('Recent', labels(content))
-        self.assertFalse(any(hasattr(widget, 'session_id') for widget in widgets(content)))
-        switcher = expand_open(content)
-        rows = [widget for widget in widgets(switcher) if hasattr(widget, 'session_id')]
+        self.assertFalse(any(getattr(widget, 'text', '').startswith('Open ·') for widget in widgets(content)))
+        section = open_documents(content)
+        rows = [widget for widget in widgets(section) if hasattr(widget, 'session_id')]
         self.assertEqual(len(rows), len(app.workspace.sessions))
         names = [row.children[-1].children[-2].text for row in rows]
         self.assertEqual(names.count('Plan.MD'), 2)  # Identity, not name, defines a document.
-        switcher.children[0].on_press()
-        self.assertEqual(len(switcher.children), 1)
+        rebuilt = open_documents(app.build_documents_hub().content)
+        self.assertEqual(sum(hasattr(widget, 'session_id') for widget in widgets(rebuilt)), len(rows))
         recent = app.recent_items()
         self.assertTrue({doc.id for doc in documents} <= {item.resource for item, _ in recent})
         self.assertEqual(len(recent), len({item.identity for item, _ in recent}))
@@ -294,8 +293,8 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual([summary[0] for _, summary in recent],
                          [f'File-{index}.txt' for index in range(11, 1, -1)])
         content = app.build_documents_hub().content
-        switcher = expand_open(content)
-        self.assertEqual(sum(hasattr(widget, 'session_id') for widget in widgets(switcher)),
+        section = open_documents(content)
+        self.assertEqual(sum(hasattr(widget, 'session_id') for widget in widgets(section)),
                          len(app.workspace.sessions))
 
     def test_recent_live_draft_uses_current_owner_and_closed_draft_recovers(self):
@@ -339,94 +338,45 @@ class HubDocumentTests(unittest.TestCase):
         app.loop.run_until_complete(app.recent_opener(first)())
         self.assertEqual(app.recent_items()[0][0].resource, first.resource)
 
-    def test_card_overview_defaults_on_reflows_and_resumes_live_draft(self):
+    def test_documents_stay_compact_with_legacy_card_preference(self):
+        from logisticsmobile.preferences import Preferences
         app = self.app
         app.name.value = 'Draft.md'
         app.editor.value = '# Current draft\nStill unsaved'
-        session_id = app.editor_view.session.id
+        owner = app.editor_view
+        app.preferences.path.write_text('[Mobile]\ndocument_card_overview = true\nfont_size = 20\n')
+        app.preferences.reload()
+        self.assertEqual(app.preferences.values['document_card_overview'], 'false')
+        self.assertEqual(app.preferences.values['font_size'], '20')
+        self.assertEqual(app.preferences.error, '')
         app.show_documents_hub()
-        self.assertEqual(app.preferences.values['document_card_overview'], 'true')
-        grid = next(grid for grid in app.document_grids
-                    if any(card.session_id == session_id for card in grid.cards))
-        card = next(card for card in grid.cards if card.session_id == session_id)
-        self.assertIn('Current draft', card.children[1].text)
-        self.assertTrue({'Currently open', 'Unsaved changes', 'Draft'} <= set(labels(card)))
-        for width, columns in ((390, 1), (1200, 3), (390, 1)):
-            grid.reflow(width)
-            self.assertEqual(grid.columns, columns)
-            self.assertEqual(len(grid.children[0].children), columns)
-        app.loop.run_until_complete(card.children[0].children[-1].on_press())
-        self.assertEqual(app.workspace.active, session_id)
+        self.assertEqual(app.document_grids, [])
+        self.assertFalse(any('Current draft' in value for value in labels(app.body)))
+        recent = app.recent_row(owner.session, app.session_summary(owner.session))
+        app.loop.run_until_complete(recent.children[0].children[0].on_press())
+        self.assertIs(app.editor_view, owner)
         self.assertEqual(app.editor.value, '# Current draft\nStill unsaved')
-        app.session_closer(session_id)()
-        self.assertIn(session_id, app.workspace.sessions)  # Unsaved close guard.
+        app.session_closer(owner.session.id)()
+        self.assertIn(owner.session.id, app.workspace.sessions)
+        app.preferences.save(document_card_overview='true')
+        self.assertEqual(Preferences(app.private_root).values['document_card_overview'], 'false')
 
-    def test_overview_setting_persists_and_feature_settings_are_grouped(self):
+    def test_settings_have_no_card_overview_and_keep_feature_groups(self):
         import toga
-        from logisticsmobile.preferences import Preferences
         app = self.app
         app.show_settings()
         categories = app.settings_navigation.sections
         sections = ['App', 'Text & Markdown', 'Books & Comics', 'LM Chat', 'Workspaces']
         self.assertEqual([title for title in categories if title in sections], sections)
-        app.document_cards_choice.value = False
+        self.assertFalse(any(getattr(widget, 'text', '') == 'Document card overview'
+                             for section in categories.values() for widget in widgets(section)))
+        self.assertFalse(hasattr(app, 'document_cards_choice'))
         app.save_preferences()
-        self.assertEqual(Preferences(app.private_root).values['document_card_overview'], 'false')
+        self.assertEqual(app.preferences.error, '')
         app.show_documents_hub()
         self.assertEqual(app.document_grids, [])
-        switcher = expand_open(app.routes.roots['documents'])
-        self.assertTrue(any(hasattr(widget, 'session_id') for widget in widgets(switcher)))
-
-    def test_cards_do_not_preview_provider_text_or_open_missing_records(self):
-        app = self.app
-        app.editor.value = 'Private provider text'
-        session = app.editor_view.session
-        original = session.provider
-        try:
-            session.provider = 'provider-session'
-            card = app.session_card(session, app.session_summary(session))
-            self.assertEqual(card.children[1].text, 'No preview available')
-        finally:
-            session.provider = original
-        missing = app.workspace.open('managed-text', 'd' * 32, 'text')
-        card = app.session_card(missing, app.session_summary(missing))
-        self.assertEqual(card.children[1].text, 'No preview available')
-        self.assertTrue(any('Unavailable' in text for text in labels(card)))
-
-    def test_overview_switch_immediately_updates_retained_root_and_keeps_editor(self):
-        from logisticsmobile.preferences import Preferences
-        app = self.app
-        app.editor.value = 'Keep this draft'
-        owner = app.editor_view
-        app.show_documents_hub()
-        app.session_opener(owner.session.id)()
-        routes = list(app.routes.screens['documents'])
-        app.show_settings()
-        settings_body = app.body
-        for enabled in (False, True, False):
-            app.document_cards_choice.value = enabled
-            self.assertEqual(bool(app.document_grids), enabled)
-            self.assertEqual(Preferences(app.private_root).values['document_card_overview'],
-                             'true' if enabled else 'false')
-            self.assertEqual(app.routes.screens['documents'], routes)
-            self.assertIs(app.body, settings_body)
-            self.assertIs(app.editor_view, owner)
-            self.assertEqual(owner.document.text, 'Keep this draft')
-        app.select_destination('documents')
-        self.assertEqual(app.document_grids, [])
-
-    def test_overview_switch_save_failure_restores_switch_and_existing_cards(self):
-        from unittest.mock import patch
-        app = self.app
-        app.show_documents_hub()
-        grids = list(app.document_grids)
-        app.show_settings()
-        with patch.object(app.preferences, 'save', side_effect=OSError('Cannot save settings')):
-            app.document_cards_choice.value = False
-        self.assertTrue(app.document_cards_choice.value)
-        self.assertEqual(app.preferences.values['document_card_overview'], 'true')
-        self.assertEqual(app.document_grids, grids)
-        self.assertIn('Cannot save settings', app.settings_status.text)
+        section = open_documents(app.routes.roots['documents'])
+        self.assertTrue(any(hasattr(widget, 'session_id') for widget in widgets(section)))
 
     def test_restored_sessions_resolve_filenames_without_opening_readers(self):
         from commonUtils.runtime.document_access import LocalDocuments

@@ -26,7 +26,7 @@ class Media:
         self.states.append(state)
         self.timer_text = timer_text
     def update_timer(self, text): self.timer_text = text
-    def update_content(self, title, excerpt): self.title, self.excerpt = title, excerpt
+    def update_content(self, title): self.title = title
     def close(self): self.closed = True
 
 
@@ -47,18 +47,16 @@ class SpeechMediaTests(unittest.TestCase):
         panel.session.play(' '.join('word'+str(i) for i in range(400)))
         return panel, playback
 
-    def test_public_filename_and_passage_are_bounded_and_private_sources_stay_generic(self):
+    def test_system_metadata_has_title_and_timer_but_never_document_passages(self):
         panel, owner = self.player(title='/folder/Notes😀.md')
         media = owner.media
         self.assertEqual(media.title, 'Notes😀.md')
-        self.assertTrue(media.excerpt.startswith('word0 word1'))
-        self.assertLessEqual(len(media.excerpt), 97)
-        self.assertTrue(media.excerpt.endswith('…'))
+        self.assertFalse(hasattr(media, 'excerpt'))
         panel.session.skip(15)
-        self.assertTrue(media.excerpt.startswith('word45 word46'))
+        self.assertFalse(hasattr(media, 'excerpt'))
         owner.timer_changed('Time remaining: 15:00')
         self.assertEqual(media.timer_text, 'Time remaining: 15:00')
-        self.assertTrue(media.excerpt.startswith('word45 word46'))
+        self.assertFalse(hasattr(media, 'excerpt'))
         panel.session.pause()
         self.assertEqual(media.states[-1], 'paused')
         owner.command('stop')
@@ -68,11 +66,11 @@ class SpeechMediaTests(unittest.TestCase):
         self.app.preferences.save(session_speech_when_locked='true')
         private, private_owner = self.player(ResumePassword('secret'), title='Secret.md')
         self.assertEqual(private_owner.media.title, 'Read aloud')
-        self.assertEqual(private_owner.media.excerpt, '')
+        self.assertFalse(hasattr(private_owner.media, 'excerpt'))
         private_owner.timer_changed('Time remaining: 15:00')
         self.assertEqual(private_owner.media.timer_text, 'Time remaining: 15:00')
         private.session.skip(15)
-        self.assertEqual(private_owner.media.excerpt, '')
+        self.assertFalse(hasattr(private_owner.media, 'excerpt'))
 
     def test_regular_speech_commands_ownership_and_teardown(self):
         panel, owner = self.player()

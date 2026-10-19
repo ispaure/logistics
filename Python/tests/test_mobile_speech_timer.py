@@ -78,7 +78,7 @@ class NativeMediaTimerTests(unittest.TestCase):
         from features.books.mobile.media_ios import AppleMedia
         media = AppleMedia.__new__(AppleMedia)
         media.closed = False
-        media.title, media.excerpt = 'Read aloud', ''
+        media.title = 'Read aloud'
         media.audio, media.info = Mock(), SimpleNamespace()
         media._key = lambda name: name
         with patch.dict('sys.modules', {'rubicon.objc': SimpleNamespace(ns_from_py=lambda value: value)}):
@@ -95,15 +95,15 @@ class NativeMediaTimerTests(unittest.TestCase):
             self.assertEqual(media.info.nowPlayingInfo['MPNowPlayingInfoPropertyPlaybackRate'], 0)
             media.update_timer('')
             self.assertEqual(media.info.nowPlayingInfo['MPMediaItemPropertyArtist'], 'Logisticks')
-            media.update_content('Book.epub', 'The current passage.')
+            media.update_content('Book.epub')
             self.assertEqual(media.info.nowPlayingInfo['MPMediaItemPropertyTitle'], 'Book.epub')
-            self.assertEqual(media.info.nowPlayingInfo['MPMediaItemPropertyArtist'], 'The current passage.')
+            self.assertEqual(media.info.nowPlayingInfo['MPMediaItemPropertyArtist'], 'Logisticks')
             media.update_timer('Time remaining: 15:00')
             self.assertEqual(media.info.nowPlayingInfo['MPMediaItemPropertyArtist'],
-                'Time remaining: 15:00 · The current passage.')
+                'Time remaining: 15:00')
             self.assertEqual(media.info.playbackState, 2)
             media.closed = True
-            media.update_content('ignored', 'ignored')
+            media.update_content('ignored')
             self.assertEqual(media.info.nowPlayingInfo['MPMediaItemPropertyTitle'], 'Book.epub')
 
     def test_android_timer_refresh_uses_metadata_only_path(self):
@@ -119,11 +119,11 @@ class NativeMediaTimerTests(unittest.TestCase):
         media.service.update.assert_called_with(media.context, False, 'Time remaining: 14:59')
         media.update_timer('')
         media.service.updateTimer.assert_called_with(media.context, '')
-        media.update_content('Book.epub', 'The current passage.')
-        media.service.updateContent.assert_called_once_with(media.context, 'Book.epub', 'The current passage.')
+        media.update_content('Book.epub')
+        media.service.updateContent.assert_called_once_with(media.context, 'Book.epub')
         media.closed = True
         media.update_timer('ignored')
-        media.update_content('ignored', 'ignored')
+        media.update_content('ignored')
         media.service.updateContent.assert_called_once()
         self.assertEqual(media.service.updateTimer.call_count, 2)
 

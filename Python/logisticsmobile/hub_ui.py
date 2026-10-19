@@ -286,37 +286,16 @@ class HubUI:
         self.document_categories = {}
         self.document_launchers = PanelGrid([], self.main_window.size.width)
         sessions = [session for session in self.workspace.sessions.values() if self.session_visible(session)]
-        switcher = toga.Box(style=Pack(direction=COLUMN))
-        entries = toga.Box(style=Pack(direction=COLUMN))
-
-        def toggle(widget, **kwargs):
-            if entries in switcher.children:
-                switcher.remove(entries)
-                widget.text = f'Open · {len(sessions)} ▸'
-                accessible_name(widget, f'Show {len(sessions)} open documents')
-            else:
-                switcher.add(entries)
-                widget.text = f'Open · {len(sessions)} ▾'
-                accessible_name(widget, f'Hide {len(sessions)} open documents')
-
-        switcher.add(accessible_name(toga.Button(f'Open · {len(sessions)} ▸', on_press=toggle,
-                                enabled=bool(sessions), style=Pack(height=48)),
-                                f'Show {len(sessions)} open documents'))
-        entries.add(toga.Label('Closing keeps saved files.\nYou’ll be asked about unsaved edits.',
-                              style=Pack(font_size=12, margin_bottom=8)))
+        entries = toga.Box(children=[heading('All open')], style=Pack(direction=COLUMN))
+        entries.add(toga.Label('Closing keeps saved files.\nYou’ll be asked about unsaved edits.' if sessions
+                              else 'No open documents.', style=Pack(font_size=12, margin_bottom=8)))
         for session in sessions:
             entries.add(self.session_panel(session, close=True))
-        box.add(switcher)
+        box.add(entries)
         box.add(heading('Recent'))
         recent = self.recent_items()
-        if self.preferences.values['document_card_overview'] == 'true' and recent:
-            grid = PanelGrid([self.session_card(session, summary, recent=True) for session, summary in recent],
-                             self.main_window.size.width, maximum_columns=3)
-            self.document_grids.append(grid)
-            box.add(grid)
-        else:
-            for session, summary in recent:
-                box.add(self.recent_row(session, summary))
+        for session, summary in recent:
+            box.add(self.recent_row(session, summary))
         if not recent:
             box.add(toga.Label('Recently used documents will appear here.', style=Pack(font_size=13)))
         if self.workspace.error:
@@ -338,39 +317,6 @@ class HubUI:
     def document_button_icons(self, button, session):
         from .document_sources import source_icons
         return button_icons(button, source_icons(self.app, session))
-
-    def session_card(self, session, summary, *, recent=False):
-        """A lightweight overview; never mount live editors or private readers."""
-        title, kind, details = summary
-        box = toga.Box(style=Pack(direction=COLUMN, margin_bottom=12))
-        box.session_id = session.id
-        from .browser_ui import middle_filename
-        opener = self.recent_opener(session) if recent else self.session_opener(session.id)
-        name = list_button(toga.Button(title, on_press=opener, style=Pack(flex=1, height=48)))
-        middle_filename(name)
-        self.document_button_icons(name, session)
-        actions = [name]
-        if not recent:
-            actions.append(icon_button('close', 'Close ' + title, on_press=self.session_closer(session.id)))
-        box.add(toga.Box(children=actions, style=Pack(direction=ROW, margin=12)))
-        preview = ''
-        owner = self.text_views.get(session.id)
-        if owner is not None and session.provider == 'managed-text':
-            preview = owner.document.text
-        elif session.provider == 'managed-text':
-            try:
-                preview = self.store.open(session.resource).text
-            except (OSError, ValueError, KeyError, TypeError):
-                pass
-        # A bounded excerpt keeps card height and native layout work predictable.
-        from textwrap import wrap
-        excerpt = '\n'.join(wrap(' '.join(preview[:600].split()), width=32)[:4])
-        box.add(toga.Label(excerpt or 'No preview available',
-                           style=Pack(height=80, font_size=12, margin_left=12, margin_right=12, margin_bottom=8)))
-        currently_open = recent and session.id in self.workspace.sessions
-        if currently_open or details:
-            box.add(status_badges(details, currently_open=currently_open))
-        return surface(box)
 
     def session_summary(self, session):
         """Resolve display metadata from its owner; workspace manifests omit names."""

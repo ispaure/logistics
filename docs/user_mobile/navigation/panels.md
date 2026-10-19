@@ -3,13 +3,10 @@
 ## Using the mobile panels
 
 Home offers Continue and compact shortcuts to Workspaces, writing and the library.
-Documents groups open sessions by type and shows preview cards by default. Tap
-a filename to continue. Cards show a short text excerpt for ordinary text/Markdown documents
-and a type placeholder for books, comics and private provider sessions. The **×**
-button closes a session through the existing unsaved-change guard.
-In **Settings → App**, turn off **Document card overview** to use the grouped list
-with the same direct **×** close control. This switch saves immediately and updates the document
-overview, including when an editor is open. Stored documents are not listed in the overview.
+Documents lists every open session under **All open** and shows Recent as compact rows without
+text-preview cards. Tap a filename to continue. The **×** button closes an open
+session through the existing unsaved-change guard. Card overview is permanently
+off and has no Settings switch. Stored documents are not listed in the overview.
 Settings groups feature options under Text & Markdown, Books & Comics, LM Chat
 and Workspaces; reader appearance stays in each open reader. Documents offers New document and Open file in its toolbar; Chat has
 its own bottom navigation destination. The Library shortcut has been removed
@@ -158,7 +155,7 @@ saves them. Unencrypted ZIPs must be selected again next time. **Forget saved
 credentials** removes retained ZIPs and their device key. Previously saved
 credentials remain saved until explicitly forgotten.
 
-Documents lists open files in type groups below its compact New/Open toolbar. The menu opens immediately using cached shortcuts, then refreshes
+Documents lists open files below its compact New/Open toolbar. The menu opens immediately using cached shortcuts, then refreshes
 available folders in the background. Chat opens on its first tab selection.
 On iPhone, plain text actions retain at least a 44-point-wide hit area around
 their text or icon, bounded by their own controls. Bordered rows and icon controls
@@ -166,16 +163,16 @@ retain their full visible touch targets.
 
 LocalCrypt and private provider documents remain memory-only: their names, paths,
 content and previews do not enter Recent or the saved open-document manifest.
-They disappear from Home and the opened-document cards when their credential
+They disappear from Home and the open-document list when their credential
 session is no longer current, and cannot reopen until unlocked. Recent contains
 up to six ordinary local/imported document identities. Pulling an
 unencrypted managed Local copy makes that copy an ordinary local file, which can appear
 in local document history independently of the original remote's lock state.
 
 
-Opened documents use their filename as the resume link, with a direct ×
-close control beside it. There is no separate opened-count heading. Turning off
-card previews in Preferences keeps the same name/close row without the excerpt.
+All open lists each opened document using its filename as the resume link, with
+a direct × close control beside it. Recent uses compact rows without document
+text previews. This layout is always used; there is no card-overview setting.
 On iPhone, tab selection waits for UIKit to finish changing its selected screen
 before laying out Documents or Chat, so their content and menus appear on the
 first tap.

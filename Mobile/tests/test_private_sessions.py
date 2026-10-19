@@ -94,9 +94,6 @@ class PrivateSessionTests(unittest.TestCase):
                 key = owner.session.id
                 self.app.show_documents_hub()
                 root = self.app.routes.roots['documents']
-                switcher = next(widget for widget in widgets(root)
-                                if getattr(widget, 'text', '').startswith('Open ·'))
-                switcher.on_press()
                 close = next(widget for widget in widgets(root)
                              if getattr(widget, 'accessible_name', '') == 'Close close-me.md')
                 close.on_press()

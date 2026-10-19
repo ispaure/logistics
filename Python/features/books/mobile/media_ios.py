@@ -8,7 +8,7 @@ class AppleMedia:
         self.library = ctypes.CDLL('/System/Library/Frameworks/MediaPlayer.framework/MediaPlayer')
         self.closed, self.targets = False, []
         self.state, self.timer_text = 'paused', ''
-        self.title, self.excerpt = 'Read aloud', ''
+        self.title = 'Read aloud'
         self.observer = self.interruption_block = None
         def value(owner, name):
             result = getattr(owner, name)
@@ -57,7 +57,7 @@ class AppleMedia:
     def _publish_info(self):
         from rubicon.objc import ns_from_py
         key = self._key
-        subtitle = ' · '.join(filter(None, (self.timer_text, self.excerpt))) or 'Logisticks'
+        subtitle = self.timer_text or 'Logisticks'
         self.info.nowPlayingInfo = ns_from_py({key('MPMediaItemPropertyTitle'): self.title,
             key('MPMediaItemPropertyArtist'): subtitle,
             key('MPNowPlayingInfoPropertyPlaybackRate'): 1.0 if self.state == 'speaking' else 0.0,
@@ -68,9 +68,9 @@ class AppleMedia:
             self.timer_text = text
             self._publish_info()
 
-    def update_content(self, title, excerpt):
+    def update_content(self, title):
         if not self.closed:
-            self.title, self.excerpt = title, excerpt
+            self.title = title
             self._publish_info()
 
     def close(self):

@@ -33,7 +33,7 @@ Back action that would leave the screen.
 The Documents hamburger lists configured Comics Library folders. Recent files,
 local browsing, and new-document actions stay on the main page.
 
-Choose a document from **Open** in Documents or **Recent** on its main page,
+Choose a document from **All open** in Documents or **Recent** on its main page,
 or use **Actions → New document**. Edit its name in the name field and
 its contents in the text area. **Save** publishes the edited file inside the app.
 Text, source files and Markdown share the native source editor. Markdown can
@@ -41,16 +41,16 @@ show a live formatted preview while you edit. See [Text and Markdown](documents.
 
 Recent lists up to ten recently used documents, including ones still open. An
 **Open** badge indicates an existing workspace session; selecting it resumes that
-session without reloading its file. Expand **Open · count** to see all open items
-and their Close buttons. The switcher starts collapsed each time you return.
+session without reloading its file. **All open** always shows every visible open
+item and its Close button; there is no expand/collapse button.
 Home and document lists show names and useful status badges without a separate
 file-type subheader. **Unsaved changes** and **Draft** badges mark pending edits. **Recovered draft**
 marks edits restored from recovery; saving clears these badges.
 
 Each open text/Markdown document owns its editor and draft. **New**, opening a
-stored document, and successful imports add it to **Documents → Open**;
+stored document, and successful imports add it to **Documents → All open**;
 opening the same stored identity again activates it. Documents with the same name
-remain separate. Switch using the expandable Open switcher or Recent. Closing a document keeps
+remain separate. Switch using All open or Recent. Closing a document keeps
 its stored data; the ten most recent eligible files can be reopened from Recent. Disk, cloud and
 padlock icons beside names in Open and Recent show each source and
 connection lock state. Local files and files using saved credentials retain ordinary history entries.
@@ -71,8 +71,8 @@ overwriting changes made outside the editor or recreating a deleted file. A
 failed save or conflict keeps the document open; use **Save a copy** to preserve
 both versions. Session-only drafts offer Save, Discard, and Cancel without durable
 draft retention. **Close saved documents on restart** is enabled
-by default in Settings. On restart, saved text and reader sessions leave the Open
-switcher; stored files and reading progress remain available. Unsaved text,
+by default in Settings. On restart, saved text and reader sessions leave All open;
+stored files and reading progress remain available. Unsaved text,
 conflicts and unreadable recovery entries stay in the open list. Turn this setting
 off to retain all ordinary open items at the next launch. There is a maximum of
 32 open items. An empty workspace stays empty until you create or open a file. Their active selection resumes when **Restore last

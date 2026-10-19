@@ -39,7 +39,7 @@ class SpeechPlayback:
                 try:
                     if self.media is None:
                         self.media = self.factory(self.app.loop, self.command)
-                    self.media.update_content(*self.content())
+                    self.media.update_content(self.content())
                     self.media.update(state, timer_text=self.timer_text)
                 except Exception as error:
                     self.media_error = str(error)
@@ -56,13 +56,9 @@ class SpeechPlayback:
         # it empty; credential-session readers remain generic even with opt-in audio.
         title = getattr(self.panel, 'document_title', lambda: '')() if self.gate() is None else ''
         if not title:
-            return 'Read aloud', ''
+            return 'Read aloud'
         title = ' '.join(str(title).replace('\\', '/').rsplit('/', 1)[-1].split())[:120]
-        session = self.panel.session
-        passage = session.ranges[session.index][0] if session.index < len(session.ranges) else ''
-        passage = ' '.join(passage.split())
-        excerpt = passage[:96].rsplit(' ', 1)[0] + '…' if len(passage) > 96 else passage
-        return title or 'Read aloud', excerpt
+        return title or 'Read aloud'
 
     def timer_changed(self, text):
         """Refresh existing system controls without activating audio or an owner."""

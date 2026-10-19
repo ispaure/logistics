@@ -15,8 +15,8 @@ a local file to try the readers before configuring a remote connection.
 
 ## Make the app comfortable
 
-In Settings, choose whether open documents use a card overview. Under Text &
-Markdown, choose an editor and preview font size, then save your preferences.
+Documents always uses compact rows without text-preview cards. Under Settings →
+Text & Markdown, choose an editor and preview font size.
 Books and comics have their own Appearance controls inside their readers.
 
 Android also offers High contrast / E Ink. Its switch applies immediately and

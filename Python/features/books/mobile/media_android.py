@@ -21,9 +21,9 @@ class AndroidMedia:
         if not self.closed:
             self.service.updateTimer(self.context, text)
 
-    def update_content(self, title, excerpt):
+    def update_content(self, title):
         if not self.closed:
-            self.service.updateContent(self.context, title, excerpt)
+            self.service.updateContent(self.context, title)
 
     def close(self):
         if not self.closed:
