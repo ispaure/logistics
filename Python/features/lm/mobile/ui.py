@@ -242,7 +242,8 @@ class ChatUI:
         if container is None or container.native.bounds.size.height <= 0:
             return
         tab = adapter.controller.tabBar
-        if tab.isHidden():
+        hidden = adapter.tabs_hidden() if hasattr(adapter, 'tabs_hidden') else bool(tab.isHidden())
+        if hidden:
             margin = 12
         else:
             window = self.main_window._impl.native

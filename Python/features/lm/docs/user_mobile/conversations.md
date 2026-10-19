@@ -51,7 +51,8 @@ control during generation, inside the same rounded composer. The header’s penc
 button starts a new conversation. On Android phones, the bottom navigation keeps
 its normal height when the keyboard opens. The transcript shrinks and long drafts
 scroll within a smaller message field, keeping the text and Send button above
-the keyboard. Completed messages omit visible role headings;
+the keyboard. On iOS, destination tabs and their reserved spacing disappear
+while the keyboard is open, then return after dismissal. Completed messages omit visible role headings;
 interrupted and incomplete replies keep their status labels. Status appears only for ongoing
 work, feedback or problems. Server/model settings and **Export conversation…**
 are in the **•••** menu. Configuration is scrollable when the keyboard reduces

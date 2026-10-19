@@ -240,10 +240,38 @@ class AppearanceTests(unittest.TestCase):
         self.assertEqual(view.style.margin_bottom, 96)
         reserve_navigation(app)
         self.assertEqual(view.style.margin_bottom, 96)
+        # Modern UIKit hides the active tab container while tabBar.isHidden
+        # can still be false. That must release the old floating-bar margin.
+        app.native_host.adapter.tabs_hidden = lambda: True
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 16)
+        app.native_host.adapter.tabs_hidden = lambda: False
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 96)
         view._comic_fullscreen = True
         view.style.margin = 0
         reserve_navigation(app)
         self.assertEqual(view.style.margin_bottom, 0)
+
+    def test_chat_releases_modern_hidden_tab_clearance(self):
+        from types import SimpleNamespace as NS
+        from toga.style import Pack
+        from features.lm.mobile.ui import ChatUI
+        def rect(y, height, width=400):
+            return NS(origin=NS(y=y), size=NS(height=height, width=width))
+        native = NS(bounds=rect(0, 800), convertRect=lambda *a, **kw: rect(0, 800))
+        view = NS(style=Pack(margin=12), _impl=NS(container=NS(
+            native=native, top_inset=0, bottom_inset=0)))
+        tab = NS(isHidden=lambda: False, bounds=rect(720, 80),
+                 convertRect=lambda *a, **kw: rect(720, 80))
+        adapter = NS(navigation=[], controller=NS(tabBar=tab), tabs_hidden=lambda: False)
+        app = NS(native_host=NS(adapter=adapter), chat_view=view,
+                 main_window=NS(_impl=NS(native=object())))
+        ChatUI.reserve_chat_navigation(app)
+        self.assertGreater(view.style.margin_bottom, 12)
+        adapter.tabs_hidden = lambda: True
+        ChatUI.reserve_chat_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 12)
 
     def test_user_picker_selection_closes_field_before_dispatching_change(self):
         from types import SimpleNamespace

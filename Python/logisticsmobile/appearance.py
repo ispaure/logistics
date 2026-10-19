@@ -119,7 +119,8 @@ def reserve_navigation(app):
         view._navigation_margin = view.style.margin_bottom
     extra = 0
     bar = adapter.controller.tabBar
-    if not bar.isHidden():
+    hidden = adapter.tabs_hidden() if hasattr(adapter, 'tabs_hidden') else bool(bar.isHidden())
+    if not hidden:
         window = app.main_window._impl.native
         viewport = container.native.convertRect(container.native.bounds, toView=window)
         bounds = bar.convertRect(bar.bounds, toView=window)

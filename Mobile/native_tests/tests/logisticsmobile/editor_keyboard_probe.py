@@ -82,16 +82,12 @@ class Probe(LogisticsMobile):
                 report['markdown_keyboard_inset'] = self.native_host.adapter.keyboard_inset
                 assert report['markdown_keyboard_inset'] > 100, 'Markdown software keyboard did not open'
                 assert bool(controller.isTabBarHidden()), 'Destination tabs stayed above the keyboard'
-                # Measure the actual space recovered, not only a hidden flag.
-                controller.setTabBarHidden(False, animated=False)
-                await asyncio.sleep(.4)
-                with_tabs = json.loads(await web.evaluate_javascript(MEASURE))['height']
-                controller.setTabBarHidden(True, animated=False)
-                await asyncio.sleep(.4)
-                without_tabs = json.loads(await web.evaluate_javascript(MEASURE))['height']
-                report['writing_area'] = dict(with_tabs=with_tabs, without_tabs=without_tabs,
-                                              gained=without_tabs - with_tabs)
-                assert without_tabs >= with_tabs + 20, report['writing_area']
+                # No floating-tab clearance may remain after the tabs disappear.
+                view = self.routes.body().children[0]
+                report['writing_area'] = dict(height=json.loads(await web.evaluate_javascript(MEASURE))['height'],
+                    bottom_margin=view.style.margin_bottom, base_margin=view._navigation_margin)
+                assert abs(view.style.margin_bottom - view._navigation_margin) < .5, report['writing_area']
+            (output / 'progress.json').write_text(json.dumps(dict(phase='markdown-typing')))
             for index in range(16):
                 await web.evaluate_javascript("document.execCommand('insertText', false, ' typing continues');")
                 await asyncio.sleep(.08)
@@ -131,17 +127,26 @@ class Probe(LogisticsMobile):
                     for index in range(12):
                         native.insertText('Native typing\n')
                         await asyncio.sleep(.08)
-                        caret = native.caretRectForPosition(native.selectedTextRange.end)
-                        bounds = native.bounds
-                        sample = dict(name=name, caret_top=float(caret.origin.y),
-                            caret_bottom=float(caret.origin.y + caret.size.height),
-                            top=float(bounds.origin.y), bottom=float(bounds.origin.y + bounds.size.height))
+                        # UITextView animates its automatic caret scroll. Wait
+                        # for that bounded native transition without scrolling it.
+                        for attempt in range(12):
+                            caret = native.caretRectForPosition(native.selectedTextRange.end)
+                            bounds = native.bounds
+                            sample = dict(name=name, caret_top=float(caret.origin.y),
+                                caret_bottom=float(caret.origin.y + caret.size.height),
+                                top=float(bounds.origin.y), bottom=float(bounds.origin.y + bounds.size.height))
+                            if sample['caret_top'] >= sample['top'] - 2 and sample['caret_bottom'] <= sample['bottom'] + 2:
+                                break
+                            await asyncio.sleep(.025)
                         report['source'].append(sample)
                         assert sample['caret_top'] >= sample['top'] - 2, sample
                         assert sample['caret_bottom'] <= sample['bottom'] + 2, sample
                     await capture_window(self, output / (name + '.png'))
                     self.main_window._impl.native.endEditing(True)
-                    await asyncio.sleep(.3)
+                    for attempt in range(20):
+                        if not bool(controller.isTabBarHidden()):
+                            break
+                        await asyncio.sleep(.05)
                     assert not bool(controller.isTabBarHidden()), (name, 'Destination tabs did not restore')
             report['success'] = True
         except BaseException:
