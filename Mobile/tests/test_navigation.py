@@ -20,6 +20,7 @@ class NavigationTests(unittest.TestCase):
         selected.reset_mock()
         adapter = object.__new__(AndroidNavigation)
         adapter.host, adapter.mode = host, 'rail'
+        adapter.keyboard_chrome = None
         adapter.bottom, adapter.rail = Mock(), Mock()
         adapter.impl = SimpleNamespace(native_navigationview=adapter.rail,
             native=Mock(), native_content=Mock(), options=[Mock() for _ in host.destinations],
