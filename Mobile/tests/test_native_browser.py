@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 from logisticsmobile.app import LogisticsMobile
 from logisticsmobile.browser_ui import FileBrowser
 import toga
@@ -10,7 +11,7 @@ from commonUtils.ui.native_browser import NativeBrowser
 
 
 class NativeBrowserTests(unittest.TestCase):
-    def test_reused_rows_update_actions_icons_paging_and_scrub_private_names(self):
+    def test_reused_rows_update_actions_icons_and_scrub_private_names(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
@@ -25,10 +26,10 @@ class NativeBrowserTests(unittest.TestCase):
                     for i in range(45)]
             browser.set_entries(provider, '', rows, location=('Private', ''))
             slots = list(browser._list_slots)
-            self.assertEqual(len(slots), 40)
+            self.assertEqual(len(slots), 45)
             old = browser.entries[0]
-            browser.next_page()
-            self.assertEqual(browser._list_slots, slots)
+            browser.set_entries(provider, '', rows[40:], location=('Private', 'next'))
+            self.assertEqual(browser._list_slots, slots[:5])
             button = next(iter(browser.buttons.values()))
             app.loop.run_until_complete(button.on_press())
             self.assertEqual(opened, [rows[40]])
@@ -52,49 +53,40 @@ class NativeBrowserTests(unittest.TestCase):
             self.assertFalse(browser.entry_rows)
             self.assertTrue(all(slot[3].text == '' and slot[3].accessible_name == '' for slot in slots))
 
-    def test_mobile_large_folders_bound_native_rows_and_controls_precede_rows(self):
+    def test_mobile_list_and_tiles_show_every_item_without_paging(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            browser = FileBrowser(bounded_pages=True)
+            browser = FileBrowser()
             provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path)
             rows = [dict(path=f'{index}.txt', name=f'{index}.txt', directory=index % 2 == 0, size=index)
-                    for index in range(41)]
+                    for index in range(301)]
             try:
-                for mode in ('List', 'Tiles'):
+                for mode in ('List', 'Tiles', 'List'):
                     browser.mode = mode
-                    browser.set_entries(provider, '', rows[:40])
-                    self.assertEqual(len(browser.buttons), 40)
+                    browser.set_entries(provider, '', rows)
+                    self.assertEqual(len(browser.buttons), len(rows))
+                    self.assertEqual(set(browser.buttons), {entry.identity for entry in browser.entries})
+                    self.assertFalse(browser.previous.enabled)
+                    self.assertFalse(browser.next.enabled)
                     self.assertNotIn(browser.paging, browser.widget.children)
                     self.assertEqual(browser.page_label.text, '')
-                    browser.set_entries(provider, '', rows)
-                    self.assertTrue(browser.next.enabled)
-                    self.assertLess(browser.widget.children.index(browser.paging),
-                                    browser.widget.children.index(browser.items))
-                    browser.next_page()
-                    self.assertEqual(len(browser.buttons), 1)
-                    last = browser.entries[-1]
-                    self.assertIn(last.identity, browser.buttons)
                     if mode == 'List':
+                        self.assertEqual(len(browser.items.children), len(rows))
                         controls = browser.items.children[0].children[0]
-                        self.assertEqual([child for child in controls.children if isinstance(child, toga.Button)],
-                                         [browser.buttons[last.identity]])
-                        self.assertEqual(browser.items.children[0].children[0].children[1],
-                                         browser.buttons[last.identity])
-                    browser.previous_page()
-                    self.assertEqual(len(browser.buttons), 40)
-                for row in browser.items.children:
-                    glyph = row.children[0].children[0]
-                    self.assertIsInstance(glyph, toga.ImageView)
-                    self.assertIn(glyph.browser_entry_kind, ('folder', 'file'))
-
+                        first = browser.buttons[browser.entries[0].identity]
+                        self.assertEqual(controls.children[1], first)
+                browser.set_entries(provider, '', [])
+                self.assertFalse(browser.buttons)
+                self.assertFalse(browser._list_slots)
+                self.assertEqual(browser.page_size, 1)  # Empty folders do not divide by zero.
             finally:
                 app.loop.run_until_complete(browser.close())
                 app.main_window.close()
                 app.loop.close()
 
-    def test_selection_highlight_survives_layout_and_paging_without_checkmark(self):
+    def test_selection_highlight_survives_layout_without_checkmark(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
@@ -113,8 +105,7 @@ class NativeBrowserTests(unittest.TestCase):
                     self.assertEqual(browser.buttons[selected.identity].text, selected.label)
                     self.assertEqual(browser.entry_rows[selected.identity]._impl._surface_roles[0], 'hover')
                     self.assertEqual(browser.entry_rows[other.identity]._impl._surface_roles[0], 'surface')
-                    browser.next_page()
-                    browser.previous_page()
+                    browser.render()
                     self.assertEqual(browser.entry_rows[selected.identity]._impl._surface_roles[0], 'hover')
                     await browser.select(other)
                     self.assertFalse(any(button.text.startswith('✓') for button in browser.buttons.values()))
@@ -144,12 +135,16 @@ class NativeBrowserTests(unittest.TestCase):
             async def check():
                 browser.set_entries(provider, '', listing('', cancelled=lambda: False))
                 browser.search.value = 'match'
-                await browser._search_subfolders(browser.search_epoch, browser.search_cancelled)
+                # Separate the recursive-search completeness contract from the
+                # full-folder rendering check above, without allocating 10k UI rows.
+                with patch.object(browser, 'render'):
+                    await browser._search_subfolders(browser.search_epoch, browser.search_cancelled)
                 self.assertEqual(len(browser.entries), 10005)
                 self.assertIn('sub', calls)
-                browser.page = (len(browser.entries) - 1) // browser.page_size
+                self.assertEqual(browser.page_size, 10005)
+                browser.search.value = 'match-10004'
                 browser.render()
-                self.assertEqual(len(browser.buttons), 10_005 % browser.page_size)
+                self.assertEqual(len(browser.buttons), 1)
                 self.assertIn('/virtual/sub/match-10004.txt', [str(key) for key in browser.buttons])
                 self.assertFalse(browser.next.enabled)
                 for mode in ('List', 'Tiles'):

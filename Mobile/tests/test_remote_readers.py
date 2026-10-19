@@ -141,7 +141,7 @@ class RemoteReaderTests(unittest.TestCase):
 
             app.loop.run_until_complete(check())
 
-    def test_slow_200_folder_listing_keeps_timer_and_hub_menus_live_then_pages_without_relisting(self):
+    def test_slow_200_folder_listing_keeps_timer_and_hub_menus_live_and_shows_all_without_relisting(self):
         from threading import Event, get_ident
         started, release = Event(), Event()
         ui_thread = get_ident()
@@ -183,10 +183,11 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertTrue(await task)
                 browser = app.remote_browser
                 self.assertEqual(len(browser.entries), 200)
-                self.assertEqual(len(browser.buttons), browser.page_size)
-                self.assertIn(browser.paging, browser.widget.children)
-                browser.next_page()
-                self.assertEqual(len(browser.buttons), browser.page_size)
+                self.assertEqual(len(browser.buttons), 200)
+                self.assertNotIn(browser.paging, browser.widget.children)
+                self.assertFalse(browser.next.enabled)
+                browser.render()
+                self.assertEqual(len(browser.buttons), 200)
                 browser.show_tiles()
                 self.assertEqual(len(browser.buttons), browser.page_size)
                 browser.search.value = 'series-199'

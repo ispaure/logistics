@@ -1,4 +1,4 @@
-"""Compact Logistics presentation over the shared, bounded native browser."""
+"""Compact Logistics presentation over the shared native browser."""
 import inspect
 from functools import partial
 import weakref
@@ -163,8 +163,9 @@ class FileBrowser(NativeBrowser):
     status_label = BrowserStatusLabel
     @property
     def page_size(self):
-        # Local and remote folders share the same widget bound in both layouts.
-        return 40
+        # The shared renderer also uses this for Tiles and rich previews.
+        # Mobile folders and search results form one scrolling list.
+        return max(1, len(self.entries))
 
     def __init__(self, *, open_file=None, folder_visible=None, bounded_pages=True,
                  **kwargs):
@@ -235,7 +236,7 @@ class FileBrowser(NativeBrowser):
     def render(self):
         if not self.bounded_pages or self.closed:
             return self._render()
-        # Build a bounded page offscreen. Mutating a live UIKit stack for every
+        # Build the folder offscreen. Mutating a live UIKit stack for every
         # button and menu repeatedly relays out the entire screen.
         previous = self.items
         if self.mode == 'List' and self.thumbnail is None and not self.icons:
@@ -258,13 +259,11 @@ class FileBrowser(NativeBrowser):
         self.widget.insert(index, self.items)
 
     def _render_list(self):
-        """Reuse a bounded page of app-styled rows, retaining no old entries."""
+        """Reuse app-styled rows for the full folder, retaining no old entries."""
         self._cancel()
-        entries = self.entries
-        pages = max(1, (len(entries) + self.page_size - 1) // self.page_size)
-        self.page = min(self.page, pages - 1)
-        self.previous.enabled, self.next.enabled = self.page > 0, self.page + 1 < pages
-        visible = entries[self.page * self.page_size:(self.page + 1) * self.page_size]
+        self.page = 0
+        self.previous.enabled = self.next.enabled = False
+        visible = self.entries
         self.buttons.clear()
         self.entry_rows = {}
         retained = {slot[0] for slot in self._list_slots}
@@ -313,6 +312,7 @@ class FileBrowser(NativeBrowser):
             button.text = ''
             accessible_name(button, '')
             button.on_press = None
+        del self._list_slots[len(visible):]
         if not visible:
             self.items.add(toga.Label('No matching items.' if self.search.value else 'This folder is empty.'))
 
@@ -339,7 +339,7 @@ class FileBrowser(NativeBrowser):
             super().render()
         if self.closed:
             return
-        entries = self.entries[self.page * self.page_size:(self.page + 1) * self.page_size]
+        entries = self.entries
         for entry in (() if plain_list else entries):
             button = self.buttons[entry.identity]
             # Recursive results retain their full path as identity/payload.
@@ -393,17 +393,9 @@ class FileBrowser(NativeBrowser):
         from .keyboard import bind_browser
         bind_browser(self)
 
-        if self.previous.enabled or self.next.enabled:
-            if self.paging not in self.widget.children:
-                # During bounded rendering the replacement list is offscreen;
-                # the current list remains the last visible child until commit.
-                index = (self.widget.children.index(self.items) if self.items in self.widget.children
-                         else len(self.widget.children) - (0 if plain_list else 1))
-                self.widget.insert(index, self.paging)
-        elif self.paging in self.widget.children:
+        if self.paging in self.widget.children:
             self.widget.remove(self.paging)
-        pages = max(1, (len(self.entries) + self.page_size - 1) // self.page_size)
-        self.page_label.text = f'{self.page + 1} / {pages}' if pages > 1 else ''
+        self.page_label.text = ''
 
     async def _select_pressed(self, entry, widget, **kwargs):
         if self.closed or self.navigation_busy or not self.tree or entry.identity not in self.tree.entries or entry not in self.entries:

@@ -81,10 +81,8 @@ also has an on-device copy.
 **•••** beside an item selects that item and opens its commands without opening
 its contents. Rename, Move, New folder and archive-password entry have focused
 screens. **Details** shows metadata and bounded previews.
-Folders show up to 40 items per page, in both List and Tiles, so large folders
-open promptly while thumbnails load in the background.
-Larger listings show **Previous** and **Next** above the items, keeping paging
-controls clear of the bottom destination bar.
+Folders and search results show all matching items in one scrolling view, in
+both List and Tiles. There is no per-page limit or Previous/Next paging.
 Files opened from this browser open under **Documents**, which becomes the
 selected tab. Tap the **Workspaces** tab/icon to return to the folder you opened
 them from, with its search, sorting and selection retained. Documents keeps the
