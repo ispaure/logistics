@@ -205,6 +205,12 @@ remain paginated at 40 per page. Local reads use the cancellable listing path
 without toggling global cloud controls or refreshing the download inventory.
 Folder pages are built offscreen before attachment. Local and LocalCrypt List/Tiles
 views use names and generic icons, without queuing content or thumbnail reads.
+Plain List pages reuse up to 40 styled row slots. The page is detached once
+while its names, actions and file/folder indicators are updated, then mounted
+again; unchanged rows keep their native controls and appearance. Unused slots
+clear captions, accessibility names and entry callbacks. Stopping a browser
+clears the entire pool, so a credential lock retains no row-owned plaintext.
+Tiles and rich thumbnail lists continue through the shared renderer.
 Regression coverage lives in
 `Mobile/tests/test_native_browser.py`, `Mobile/tests/test_settings_ui.py`,
 `Python/tests/test_mobile_hub.py` and `Mobile/rclone_bridge/list_test.go`.

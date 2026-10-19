@@ -1,5 +1,6 @@
 """Compact Logistics presentation over the shared, bounded native browser."""
 import inspect
+from functools import partial
 import weakref
 from pathlib import PurePosixPath
 import toga
@@ -8,7 +9,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from commonUtils.ui.native_browser import NativeBrowser
 from .appearance import list_button
-from .appearance import accessible_name, surface, template_icon
+from .appearance import accessible_name, apple_color, surface, template_icon
 from .hub_icons import icon
 from .folder_hub_style import (
     folder_row, folder_name, ROW_HEIGHT, ROW_GAP, ENTRY_ICON_SIZE, ENTRY_ICON_MARGIN,
@@ -168,6 +169,7 @@ class FileBrowser(NativeBrowser):
     def __init__(self, *, open_file=None, folder_visible=None, bounded_pages=True,
                  **kwargs):
         self.bounded_pages = bounded_pages
+        self._list_slots = []
         self.folder_visible = folder_visible
         self.on_open_file = open_file
         super().__init__(**kwargs)
@@ -208,10 +210,6 @@ class FileBrowser(NativeBrowser):
     def set_entries(self, provider, directory, rows, *, location=None):
         rows = tuple(rows)
         super().set_entries(provider, directory, rows, location=location)
-    def stop(self):
-        self.entry_rows = {}
-        return super().stop()
-
     @property
     def entries(self):
         rows = super().entries
@@ -240,6 +238,15 @@ class FileBrowser(NativeBrowser):
         # Build a bounded page offscreen. Mutating a live UIKit stack for every
         # button and menu repeatedly relays out the entire screen.
         previous = self.items
+        if self.mode == 'List' and self.thumbnail is None and not self.icons:
+            # Detach the page once; update its retained rows offscreen without
+            # moving every native child or laying out the mounted screen.
+            self.widget.remove(previous)
+            try:
+                self._render()
+            finally:
+                self.widget.add(previous)
+            return
         self.items = toga.Box(style=Pack(direction=COLUMN))
         try:
             self._render()
@@ -250,12 +257,90 @@ class FileBrowser(NativeBrowser):
         self.widget.remove(previous)
         self.widget.insert(index, self.items)
 
+    def _render_list(self):
+        """Reuse a bounded page of app-styled rows, retaining no old entries."""
+        self._cancel()
+        entries = self.entries
+        pages = max(1, (len(entries) + self.page_size - 1) // self.page_size)
+        self.page = min(self.page, pages - 1)
+        self.previous.enabled, self.next.enabled = self.page > 0, self.page + 1 < pages
+        visible = entries[self.page * self.page_size:(self.page + 1) * self.page_size]
+        self.buttons.clear()
+        self.entry_rows = {}
+        retained = {slot[0] for slot in self._list_slots}
+        for child in list(self.items.children):
+            if child not in retained:
+                self.items.remove(child)
+        for index, entry in enumerate(visible):
+            if index == len(self._list_slots):
+                button = toga.Button('', style=Pack(height=ROW_HEIGHT, flex=1))
+                list_button(button)
+                folder_name(button)
+                middle_filename(button)
+                glyph = entry_icon(entry.container)
+                chevron = toga.Label('›', style=Pack(width=18, font_size=18))
+                controls = toga.Box(children=[glyph, button], style=Pack(direction=ROW, align_items=CENTER))
+                row = toga.Box(children=[controls], style=Pack(direction=COLUMN))
+                folder_row(row)
+                self._list_slots.append((row, controls, glyph, button, chevron))
+            row, controls, glyph, button, chevron = self._list_slots[index]
+            kind = 'folder' if entry.container else 'file'
+            if glyph.browser_entry_kind != kind:
+                glyph.image = icon('files' if entry.container else 'documents')
+                if type(glyph._impl).__module__.startswith('toga_iOS.'):
+                    template_icon(glyph)
+                    glyph._impl.native.tintColor = apple_color('accent')
+                glyph.browser_entry_kind = kind
+            if entry.container and chevron.parent is None:
+                controls.add(chevron)
+            elif not entry.container and chevron.parent is not None:
+                controls.remove(chevron)
+            caption = PurePosixPath(entry.label).name
+            if button.text != caption:
+                button.text = caption
+                middle_filename(button)
+            button.on_press = partial(self._select_pressed, entry)
+            self.buttons[entry.identity] = button
+            self.entry_rows[entry.identity] = row
+            if row.parent is not self.items:
+                if row.parent is not None:
+                    row.parent.remove(row)
+                self.items.add(row)
+        # Unused slots contain no decrypted names, entry closures or payloads.
+        for row, _, _, button, _ in self._list_slots[len(visible):]:
+            if row.parent is not None:
+                row.parent.remove(row)
+            button.text = ''
+            accessible_name(button, '')
+            button.on_press = None
+        if not visible:
+            self.items.add(toga.Label('No matching items.' if self.search.value else 'This folder is empty.'))
+
+    def stop(self):
+        super().stop()
+        for _, _, _, button, _ in self._list_slots:
+            button.text = ''
+            accessible_name(button, '')
+            button.on_press = None
+        self._list_slots.clear()
+        self.entry_rows = {}
+
     def _render(self):
-        super().render()
+        plain_list = self.mode == 'List' and self.thumbnail is None and not self.icons
+        if plain_list and not self.closed:
+            self._render_list()
+        else:
+            # Rich previews and tiles retain the shared browser renderer.
+            for _, _, _, button, _ in self._list_slots:
+                button.text = ''
+                accessible_name(button, '')
+                button.on_press = None
+            self._list_slots.clear()
+            super().render()
         if self.closed:
             return
         entries = self.entries[self.page * self.page_size:(self.page + 1) * self.page_size]
-        for entry in entries:
+        for entry in (() if plain_list else entries):
             button = self.buttons[entry.identity]
             # Recursive results retain their full path as identity/payload.
             # Only the visible caption uses the final path component.
@@ -264,8 +349,9 @@ class FileBrowser(NativeBrowser):
             if self.mode == 'List':
                 folder_name(button)
             middle_filename(button)
-        self.entry_rows = {}
-        for row in self.items.children:
+        if not plain_list:
+            self.entry_rows = {}
+        for row in (() if plain_list else self.items.children):
             if not isinstance(row, toga.Box):
                 continue
             row.style.margin_bottom = ROW_GAP
@@ -276,7 +362,7 @@ class FileBrowser(NativeBrowser):
                     elif isinstance(child, toga.Button):
                         child.style.height = ROW_HEIGHT
 
-        if self.mode == 'List':
+        if self.mode == 'List' and not plain_list:
             for row, entry in zip(self.items.children, entries):
                 if not isinstance(row, toga.Box):
                     continue
@@ -296,7 +382,7 @@ class FileBrowser(NativeBrowser):
                 folder_row(row)
                 self.entry_rows[entry.identity] = row
 
-        else:
+        elif self.mode != 'List':
             for entry in entries:
                 tile = self.buttons[entry.identity].parent
                 if not any(isinstance(child, toga.ImageView) for child in tile.children):
@@ -311,7 +397,9 @@ class FileBrowser(NativeBrowser):
             if self.paging not in self.widget.children:
                 # During bounded rendering the replacement list is offscreen;
                 # the current list remains the last visible child until commit.
-                self.widget.insert(len(self.widget.children) - 1, self.paging)
+                index = (self.widget.children.index(self.items) if self.items in self.widget.children
+                         else len(self.widget.children) - (0 if plain_list else 1))
+                self.widget.insert(index, self.paging)
         elif self.paging in self.widget.children:
             self.widget.remove(self.paging)
         pages = max(1, (len(self.entries) + self.page_size - 1) // self.page_size)

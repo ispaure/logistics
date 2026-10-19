@@ -10,6 +10,48 @@ from commonUtils.ui.native_browser import NativeBrowser
 
 
 class NativeBrowserTests(unittest.TestCase):
+    def test_reused_rows_update_actions_icons_paging_and_scrub_private_names(self):
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            opened = []
+            browser = FileBrowser(open_file=opened.append, open_folder=opened.append)
+            self.addCleanup(browser.stop)
+            provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path)
+            rows = [dict(path=f'private-{i:02d}.md', name=f'private-{i:02d}.md', directory=False)
+                    for i in range(45)]
+            browser.set_entries(provider, '', rows, location=('Private', ''))
+            slots = list(browser._list_slots)
+            self.assertEqual(len(slots), 40)
+            old = browser.entries[0]
+            browser.next_page()
+            self.assertEqual(browser._list_slots, slots)
+            button = next(iter(browser.buttons.values()))
+            app.loop.run_until_complete(button.on_press())
+            self.assertEqual(opened, [rows[40]])
+            self.assertTrue(all(slot[3].text == '' and slot[3].accessible_name == ''
+                                for slot in slots[5:]))
+            fresh = dict(path='new-folder', name='new-folder', directory=True)
+            browser.set_entries(provider, '', [fresh], location=('Other', ''))
+            self.assertIs(browser._list_slots[0][0], slots[0][0])
+            self.assertEqual(slots[0][2].browser_entry_kind, 'folder')
+            self.assertIn(slots[0][4], slots[0][1].children)
+            app.loop.run_until_complete(browser._select_pressed(old, slots[0][3]))
+            self.assertEqual(opened, [rows[40]])  # A delayed old entry cannot activate.
+            app.loop.run_until_complete(slots[0][3].on_press())
+            self.assertEqual(opened[-1], fresh)
+            for mode in ('Tiles', 'List', 'Tiles', 'List'):
+                browser.mode = mode
+                browser.render()
+                self.assertEqual(len(browser.items.children), 1)
+            browser.stop()
+            self.assertFalse(browser._list_slots)
+            self.assertFalse(browser.entry_rows)
+            self.assertTrue(all(slot[3].text == '' and slot[3].accessible_name == '' for slot in slots))
+
     def test_mobile_large_folders_bound_native_rows_and_controls_precede_rows(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)
