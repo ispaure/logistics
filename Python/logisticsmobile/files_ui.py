@@ -445,7 +445,10 @@ class FilesUI:
     def populate_file_browser(self, rows, password='', *, location=None):
         from .browser_preview import callbacks
         client = self.cloud_client
-        self.file_browser.thumbnail, self.file_browser.details = callbacks(self.file_provider, client, password)
+        # A folder listing needs names and filesystem metadata, not archive
+        # covers or decrypted content. Rich details remain explicit actions.
+        _, self.file_browser.details = callbacks(self.file_provider, client, password)
+        self.file_browser.thumbnail = None
         if location is None:
             self.file_browser.history.clear()
         self.file_browser.set_entries(self.file_provider, self.file_path, rows, location=location)

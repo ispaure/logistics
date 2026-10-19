@@ -421,11 +421,33 @@ Workspaces filters private folder contributions before running availability dete
 
 The native host uses commonUtils' portable browse snapshots and Toga list/tile
 presentation for Local files, LocalCrypt, remote listings and the editor picker.
-Logistics supplies domain cover/metadata callbacks and retains storage selection,
-credentials, navigation and mutations. File details sit below entries on mobile.
-Covers are memory-only and limited to visible entries; clearing credentials stops
-browsers and clears decoded labels, covers and details. Crypt ciphers are cached
-within the serialized native credential session and discarded on session changes.
+Logistics retains storage selection, credentials, navigation and mutations.
+Local and LocalCrypt folder listings do not register thumbnail callbacks in
+either List or Tiles mode. Merely displaying, sorting or searching names does
+not open archives, inspect covers or decrypt file contents. Explicit information
+selection can use the metadata callback; file taps open their reader directly.
+Clearing credentials stops browsers and clears decoded labels and details.
+Crypt ciphers are cached within the native credential session and discarded on
+session changes.
+
+`CryptFiles.list` enumerates direct children with `scandir`, checks each child's
+link/type/independent-file constraints, and validates the parent/collection at
+both snapshot boundaries. It decodes only basenames in batches of at most 256,
+then appends the already-validated logical parent. Decoded names containing a path
+are refused. A second no-follow stat rejects entries replaced during decoding;
+revision tuples and modified times remain available for sorting and later
+operation checks. It shares the fast local-offset timestamp formatter with
+`CollectionFiles`. None of these listing steps reads document bytes or contacts
+the backing remote.
+
+An isolated macOS host benchmark using the real native bridge measured 1,000
+synthetic files at about 39 ms for Local and 17 ms for LocalCrypt, down from
+72 ms for the previous LocalCrypt listing. This excludes native UI construction,
+credential import and device/SD-card latency; it is not an Android timing claim.
+`test_mobile_folder_listing_native.py` verifies real nested filename decoding,
+batch boundaries and locked-session rejection. Mobile tests also cover zero
+content/thumbnail calls, invalid decoded paths, cancelled listings, links,
+hardlinks, special files and parent replacement during decoding.
 
 Descriptor-backed downloads and crypt moves stream bytes. Local archive preview
 and reading seek encrypted ranges, decrypting bounded members on demand. Native

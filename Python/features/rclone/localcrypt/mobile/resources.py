@@ -1,10 +1,11 @@
 """Local mobile folder providers; crypt naming/bytes stay in the native bridge."""
-from features.rclone.mobile.storage_location import collection_path
+from features.rclone.mobile.storage_location import collection_path, _modified_time
 from contextlib import contextmanager
 from io import BytesIO
-from datetime import datetime
 import base64
+import os
 import re
+import stat
 from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
@@ -97,41 +98,55 @@ class CryptFiles(LocalFiles):
         # boundary across filenames. Keep plaintext names only in this snapshot.
         folder = self._locate(path)
         children = []
-        for child in folder.iterdir():
-            check_cancelled(cancelled)
-            LocalFiles._guard(self, child)
-            if re.fullmatch(r'.+\.[0-9a-f]{8}\.partial', child.name):
-                continue
-            try:
-                info = child.stat()
-                children.append((child, info, child.is_dir()))
-            except FileNotFoundError:
-                continue
+        with os.scandir(folder) as entries:
+            for entry in entries:
+                check_cancelled(cancelled)
+                child = Path(entry.path)
+                # _locate and the final guard validate the parent chain and
+                # collection boundary. Direct children still reject links and
+                # special/shared files without rewalking every ancestor.
+                if entry.is_symlink() or (hasattr(Path, 'is_junction') and child.is_junction()):
+                    raise ValueError('Linked storage is not supported.')
+                try:
+                    info = entry.stat(follow_symlinks=False)
+                    directory = stat.S_ISDIR(info.st_mode)
+                    if not directory and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
+                        raise ValueError('Choose an independent regular file or folder.')
+                    if re.fullmatch(r'.+\.[0-9a-f]{8}\.partial', child.name):
+                        continue
+                    children.append((child, info, directory))
+                except FileNotFoundError:
+                    continue
         for offset in range(0, len(children), 256):
             check_cancelled(cancelled)
             batch = children[offset:offset + 256]
             names = self.client.request('crypt_paths', remote=self.remote, identity=self.identity,
-                entries=[dict(path=child.relative_to(self.root).as_posix(), directory=directory)
+                # The parent path was already located and validated. Decode
+                # each basename once, rather than its ancestors for every row.
+                entries=[dict(path=child.name, directory=directory)
                          for child, _, directory in batch])
             if len(names) != len(batch):
                 raise ValueError('Incomplete encrypted folder listing.')
             for plain, (child, info, directory) in zip(names, batch):
                 check_cancelled(cancelled)
                 plain = self.relative(plain)
-                if plain.rpartition('/')[0] != path:
+                if not plain or '/' in plain:
                     raise ValueError('Invalid encrypted folder entry.')
+                plain = '/'.join(part for part in (path, plain) if part)
                 try:
-                    current = child.stat()
+                    current = child.stat(follow_symlinks=False)
                 except FileNotFoundError:
                     continue  # A concurrent Pull retired this entry during decode.
                 if (current.st_dev, current.st_ino, current.st_mode) != (info.st_dev, info.st_ino, info.st_mode):
+                    continue
+                if not directory and current.st_nlink != 1:
                     continue
                 info = current
                 revision = ((info.st_dev, info.st_ino) if directory else
                     (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns))
                 rows.append(dict(name=PurePosixPath(plain).name, path=plain, directory=directory,
                     size=info.st_size, revision=revision,
-                    modified=datetime.fromtimestamp(info.st_mtime).astimezone().isoformat(sep=' ', timespec='seconds')))
+                    modified=_modified_time(info.st_mtime)))
         check_cancelled(cancelled)
         self._guard(folder)
         return sorted(rows, key=lambda row: (not row['directory'], row['name'].casefold()))

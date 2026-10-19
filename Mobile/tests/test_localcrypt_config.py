@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from io import BytesIO
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -12,6 +13,75 @@ from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
 
 
 class LocalCryptConfigurationTests(unittest.TestCase):
+    def listing_provider(self, root):
+        def request(action, **values):
+            if action == 'crypt_path':
+                return dict(identity='a' * 64, path=values['path'])
+            self.assertEqual(action, 'crypt_paths')
+            return [entry['path'] for entry in values['entries']]
+        return CryptFiles(root, SimpleNamespace(request=request), 'Secret')
+
+    def test_listing_rejects_links_shared_files_and_special_files(self):
+        from commonUtils.runtime.operations import OperationCancelled
+        with TemporaryDirectory() as directory:
+            provider = self.listing_provider(directory)
+            target = provider.root / 'original'
+            target.write_bytes(b'fixture')
+            linked = provider.root / 'linked'
+            for create in (lambda: linked.symlink_to(target), lambda: os.link(target, linked)):
+                create()
+                with self.assertRaises(ValueError):
+                    provider.list()
+                linked.unlink()
+            if hasattr(os, 'mkfifo'):
+                os.mkfifo(linked)
+                with self.assertRaises(ValueError):
+                    provider.list()
+                linked.unlink()
+            with self.assertRaises(OperationCancelled):
+                provider.list(cancelled=lambda: True)
+
+    def test_listing_rechecks_parent_if_replaced_during_name_decode(self):
+        with TemporaryDirectory() as directory:
+            provider = self.listing_provider(directory)
+            parent = provider.root / 'folder'
+            parent.mkdir()
+            (parent / 'file').write_bytes(b'fixture')
+            original = provider.client.request
+            def request(action, **values):
+                if action == 'crypt_paths':
+                    parent.rename(provider.root / 'moved')
+                    parent.symlink_to(provider.root / 'moved', target_is_directory=True)
+                return original(action, **values)
+            provider.client.request = request
+            with self.assertRaises(ValueError):
+                provider.list('folder')
+
+    def test_nested_listing_decodes_only_basenames_without_opening_files(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            folder = root / 'parent' / 'nested'
+            folder.mkdir(parents=True)
+            (folder / 'encoded-file').write_bytes(b'ciphertext fixture')
+            provider = object.__new__(CryptFiles)
+            LocalFiles.__init__(provider, root)
+            provider.collection_storage_root = None
+            provider.mapping = lambda path, directory=False, decode=False: path
+            provider.remote, provider.identity = 'Secret', 'a' * 64
+            def request(action, **values):
+                self.assertEqual(action, 'crypt_paths')
+                self.assertEqual(values['entries'], [dict(path='encoded-file', directory=False)])
+                return ['Book.epub']
+            provider.client = SimpleNamespace(request=request)
+            with patch.object(provider, 'open', side_effect=AssertionError('Content read')):
+                rows = provider.list('parent/nested')
+            self.assertEqual(rows[0]['name'], 'Book.epub')
+            self.assertEqual(rows[0]['path'], 'parent/nested/Book.epub')
+            for invalid in ['other/Book.epub', '../Book.epub', '']:
+                provider.client = SimpleNamespace(request=lambda *a, **k: [invalid])
+                with self.assertRaises(ValueError):
+                    provider.list('parent/nested')
+
     def test_listing_hides_rclone_partial_files_and_tolerates_removed_entries(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

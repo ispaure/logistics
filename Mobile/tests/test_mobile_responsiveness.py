@@ -152,6 +152,33 @@ class ResponsivenessTests(unittest.TestCase):
             await browser.close()
         self.app.loop.run_until_complete(exercise())
 
+    def test_local_and_localcrypt_listings_do_not_read_content_in_list_or_tiles(self):
+        app = self.app
+        app.show_cloud(present=False)
+        app.loop.run_until_complete(app.show_files())
+        original_client = app.cloud_client
+        client = SimpleNamespace(supports_streaming=True, request=Mock(side_effect=AssertionError('Content request')))
+        app.cloud_client = client
+        self.addCleanup(setattr, app, 'cloud_client', original_client)
+        provider = SimpleNamespace(root=Path(self.temp.name), relative=lambda path: path,
+            open=Mock(side_effect=AssertionError('File content read')))
+        rows = [dict(path=name, name=name, directory=False, revision=(1, index))
+                for index, name in enumerate(['Book.epub', 'Comic.cbz', 'Image.jpg', 'Note.md'])]
+        async def exercise():
+            for private in (False, True):
+                provider.private = private
+                app.file_provider = provider
+                for mode in ('List', 'Tiles'):
+                    app.file_browser.mode = mode
+                    app.populate_file_browser(rows)
+                    await asyncio.sleep(.02)
+                    self.assertEqual(len(app.file_browser.buttons), 4)
+                    self.assertIsNone(app.file_browser.thumbnail)
+                    self.assertIsNotNone(app.file_browser.details)
+                    provider.open.assert_not_called()
+                    client.request.assert_not_called()
+        app.loop.run_until_complete(exercise())
+
     def test_local_markdown_initial_render_runs_once_off_ui_thread(self):
         from commonUtils.runtime.local_files import LocalFiles
         from features.text_editor.resources import LocalTextCopies

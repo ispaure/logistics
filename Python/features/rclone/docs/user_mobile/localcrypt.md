@@ -17,10 +17,10 @@ credentials; the remote browser no longer creates them.
 
 Remote browsing and unlocked copies show decrypted names. **Manage local files
 and folders** opens a local browser with **Local files** and existing
-**LocalCrypt** copies. **List** and **Tiles** use the same shared browsing
-model as desktop. Visible PNG/JPEG/WebP images and comic/EPUB covers load in the
-background, with a bounded memory cache. Select a file to see its name, size and
-modified time, plus available comic/EPUB metadata below the entries.
+**LocalCrypt** copies. **List** and **Tiles** show filenames and generic file/folder
+icons. Browsing reads basic filesystem information and decrypts LocalCrypt names;
+it does not open file contents, load covers or parse comic/EPUB metadata. Open a
+file to read it and load its reader metadata.
 The storage picker and **Parent folder** are visible directly in the local browser.
 Changing storage opens its root. Navigation supports tapping folder entries, **Parent folder** and **Back** through
 successful folder/storage visits. **Search** opens a full-width field and searches this folder and its subfolders
@@ -30,8 +30,8 @@ natural name order, size and modified time in either
 direction, with folders first. A failed folder load preserves the previous
 listing and history. Searching reads folder listings, without reading file contents. Closing search
 restores the current folder listing. Use **Inner
-archive password** and browse again when a protected comic or EPUB needs its own
-password for covers or metadata. File-name browsing and moves do not need this
+archive password** when opening a protected comic or EPUB that needs its own
+password. File-name browsing and moves do not need this
 inner password. Browse a folder, then create a folder, rename, delete
 or move the selected item. For a move, select the destination storage and enter a
 relative path including the final file/folder name; its parent folder must exist.
