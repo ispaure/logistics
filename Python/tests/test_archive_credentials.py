@@ -9,25 +9,24 @@ from features.rclone import credentials
 
 
 class ArchiveCredentialsTests(unittest.TestCase):
-    def test_plain_and_aes_credential_packages_have_identical_results(self):
-        for password in (None, 'test-only-password'):
-            with self.subTest(encrypted=password is not None), TemporaryDirectory() as tmp:
-                root = Path(tmp)
-                source, output = root / 'credentials.zip', root / 'credentials.conf'
-                with open_archive(source, 'w', password=password) as archive:
-                    archive.writestr('remote.txt', '[TestRemote]\ntype = local\n')
-                before = source.read_bytes()
-                with patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(temp_path=root / 'temp')), patch.object(credentials.configuration, 'get_credential_config_path', return_value=output):
-                    self.assertTrue(credentials.load_remote_from_zip_to_config(source, password))
-                self.assertEqual(output.read_text().strip(), '[TestRemote]\ntype = local')
-                self.assertEqual(source.read_bytes(), before)
-                self.assertEqual(list((root / 'temp').iterdir()), [])
+    def test_aes_credential_package_preserves_layout_and_cleans_workspace(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, output = root / 'credentials.zip', root / 'credentials.conf'
+            with open_archive(source, 'w', password='test-only-password') as archive:
+                archive.writestr('remote.txt', '[TestRemote]\ntype = local\n')
+            before = source.read_bytes()
+            with patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(temp_path=root / 'temp')), patch.object(credentials.configuration, 'get_credential_config_path', return_value=output):
+                self.assertTrue(credentials.load_remote_from_zip_to_config(source, 'test-only-password'))
+            self.assertEqual(output.read_text().strip(), '[TestRemote]\ntype = local')
+            self.assertEqual(source.read_bytes(), before)
+            self.assertEqual(list((root / 'temp').iterdir()), [])
 
     def test_credentials_extract_inside_configured_temp_and_cleanup_on_exception(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp); temp = root/'Application Support/commonUtils/Temp'
             source = root/'credentials.zip'; output = root/'credentials.conf'; seen = []
-            with open_archive(source,'w') as archive:
+            with open_archive(source,'w', password='test-only-password') as archive:
                 archive.writestr('remote.txt','[Synthetic]\ntype = local\n')
             unzip = credentials.zipUtils.unzip_file
             def record(source, destination, password):
@@ -42,7 +41,7 @@ class ArchiveCredentialsTests(unittest.TestCase):
                  patch.object(credentials.zipUtils,'unzip_file',side_effect=record), \
                  patch.object(credentials,'write_remote_credentials_to_config',side_effect=OSError('synthetic write failure')):
                 with self.assertRaises(OSError):
-                    credentials.load_remote_from_zip_to_config(source,None)
+                    credentials.load_remote_from_zip_to_config(source,'test-only-password')
             self.assertEqual(len(seen),1)
             self.assertFalse(seen[0].exists())
             self.assertFalse((root/'remote.txt').exists())
@@ -59,4 +58,4 @@ class ArchiveCredentialsTests(unittest.TestCase):
                 self.assertFalse(credentials.load_remote_from_zip_to_config(source, 'test-only-wrong'))
             message.assert_called_once()
             self.assertEqual(output.read_text(), 'existing config')
-            self.assertEqual(list((root / 'temp').iterdir()), [])
+            self.assertFalse((root / 'temp').exists())

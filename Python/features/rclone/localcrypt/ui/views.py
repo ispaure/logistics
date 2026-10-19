@@ -243,6 +243,9 @@ class CryptBrowserView(qt.QMainWindow):
         self.file_browser.activated.connect(self.open_document)
         self.file_browser.directory_changed.connect(lambda path: self.title_changed.emit(self.view_title))
         self.file_browser.idle.connect(self.idle)
+        from ui_new.location_context import install_browser_location
+        install_browser_location(self.file_browser, self.provider)
+        self._private_view_guard.revoked.connect(self.file_browser.storage_location.refresh)
         self.workspace_controls = self.file_browser.workspace_controls
         from commonUtils.ui.file_browser.controls import navigation_button
         self.import_button = navigation_button(self, 'Move into this folder…', qt.QStyle.StandardPixmap.SP_DialogOpenButton)

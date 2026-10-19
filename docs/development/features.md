@@ -71,13 +71,49 @@ behavior or data needed by dependent features.
 Remote features may contribute multiple selectable Folders sources through
 `RemoteFolderSourceContribution`.
 
-The generic Folders page always owns a `Local` source. A remote source supplies
+The Folders page owns fixed `Local`, `Cloud` and `Home Server` categories. A remote source supplies
 remote names plus opaque backend context. That context is carried through the
 generic `FolderEntry` model and interpreted only by the feature that owns it.
 
 For rclone, the context is the selected credential `.conf` path. The context
 does not change the managed local sync folder name. FUSE separately derives a
 mount-path identity from that config path; do not discard it when mounting.
+
+The desktop category adapter is `services/folders/workspaces.py`. Local merges
+physical copies by path while retaining the provider context used by sync tools.
+The Local Source dropdown filters that merged list into Dropbox, Rclone and
+Others, defaulting to Rclone; there is no combined All option locally. Classification uses provider ownership and physical paths: managed Local
+folders and rclone-supplied LocalCrypt copies belong to Rclone, Dropbox sources
+belong to Dropbox, and remaining copies belong to Others. Refresh preserves the
+filter and selected entry; changing tabs resets Local to Rclone and remote
+credential filters to All. Source/filter changes clear folder selection; tree
+rebuilds only restore an explicit selection and never choose the first entry.
+A missing or hidden selection clears both browser and action scope.
+Loaded rclone contexts appear online; `CopyContext` records supply offline copies
+only. Home Server uses mobile's explicit network-share package names, not protocol
+inference. Encrypted remote metadata is read on the discovery worker.
+
+`FoldersPage` owns a browser stack between the source tree and action details.
+The selected tree entry owns the action scope; browser navigation never rewrites
+it. Browser construction waits for page visibility. Replaced views cancel work and
+remain owned until `idle` and `prepare_close()` permit deletion; page shutdown
+waits for discovery, detail detection and every retained browser.
+
+`ui_new/pages/workspace_panes.py` supplies resizable native dock panes. Set
+`WORKSPACE_PANES_LOCKED = False` or construct `FoldersPage(panes_locked=False)` to
+experiment with moving/detaching them. The default keeps Files/Actions headers
+fixed, expands their tabs across each pane with centered labels, and removes
+closing, moving and floating controls. This is a code setting,
+not a persisted user preference. `services/folders/appearance.py` owns portable
+folder paths and lock colours shared by desktop and mobile; it is included in the
+mobile services manifest. `WorkspaceTree` paints the expanded hierarchy guides,
+without a top-level branch gutter, using 20-pixel nested indentation, 18-pixel
+icons and compact rows. Embedded browser creation turns its preview toggle off
+for ordinary, encrypted and remote views; retained browsers keep the user's
+subsequent toggle choice during refresh. Locked session locations are intercepted
+before browser construction and hosted by rclone's `WorkspaceUnlockView` in Files.
+Its password validation runs off the GUI thread. Cancelled or retired views never
+publish credentials, and worker-owning views stay retained until idle.
 
 ## Shared file types and browser bindings
 

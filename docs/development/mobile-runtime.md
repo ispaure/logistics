@@ -467,3 +467,16 @@ The app-only UserDefaults reset is declared with CA92.1 in
 verified in exported apps. Platform API references:
 [Android clearApplicationUserData](https://developer.android.com/reference/android/app/ActivityManager#clearApplicationUserData())
 and [Apple Keychain deletion](https://developer.apple.com/documentation/security/secitemdelete(_:)).
+
+## Unified iOS local browsing
+
+The local browser presents one On this device source. `SharedFiles` lists the
+iOS Documents root and exposes its `Local` child with the display name Collection.
+`FilesUI.browser_file_location` routes that child and its descendants into the
+existing CollectionFiles provider; Parent at the collection root returns to
+Documents. The outer provider rejects direct entry access to Local so root mutations
+cannot rename or remove the managed collection; recursive search can list its
+contents. Internal Local files and Shared
+files location identities remain distinct for existing pins, managed workflows,
+provider documents and history, but share one source control. No storage migration
+is involved; Android's collection root is unchanged.

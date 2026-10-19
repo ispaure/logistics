@@ -123,7 +123,7 @@ class FilesUI:
             if local_root or (self.cloud_busy and not self.can_browse_local(self.file_storage.value)):
                 self.file_changing_location = True
                 try:
-                    self.file_storage.value = 'Local files'
+                    self.file_storage.value = self.local_browser_root()
                     self.file_location.value = self.file_path if (not local_root and isinstance(self.file_provider, LocalFiles)
                         and self.file_provider.root == collection_path(self.private_root)) else ''
                 finally:
@@ -142,7 +142,7 @@ class FilesUI:
             self.file_roots.update(self.existing_crypt_locations())
             self.file_roots.update(self.linked_crypt_locations())
         self.file_storage = toga.Selection(items=list(self.file_roots), style=Pack(height=48))
-        self.file_storage.value = 'Local files'
+        self.file_storage.value = self.local_browser_root()
         self.file_location = toga.TextInput(placeholder='Folder path (empty for root)', style=Pack(height=48))
         self.file_selection = toga.Selection(style=Pack(height=48))
         from .browser_ui import FileBrowser as NativeBrowser
@@ -211,6 +211,10 @@ class FilesUI:
             self.file_source_tabs.remove(child)
         selected = self.file_storage.value
         roots = self.ordinary_file_roots()
+        if 'Shared files' in roots:
+            roots.pop('Local files')
+            if selected == 'Local files':
+                selected = 'Shared files'
         if selected not in roots:
             roots[selected] = self.file_roots.get(selected)
         self.file_source_buttons = {}
@@ -218,7 +222,7 @@ class FilesUI:
             def choose(widget=None, label=label, **kwargs):
                 if self.file_storage.value != label:
                     self.file_storage.value = label
-            title = {'Local files': 'On this device', 'Shared files': 'Shared with Files'}.get(label, label)
+            title = {'Local files': 'On this device', 'Shared files': 'On this device'}.get(label, label)
             button = toga.Button(title, on_press=choose, style=Pack(height=44, flex=1, font_size=13, margin=2))
             source_tab(button, selected == label)
             self.file_source_buttons[label] = button
@@ -317,6 +321,8 @@ class FilesUI:
                        route='file-details', title='File details')
 
     async def parent_file_folder(self, widget=None, **kwargs):
+        if not self.file_path and self.file_storage.value == 'Local files' and self.local_browser_root() == 'Shared files':
+            return await self.browser_file_location(('Shared files', ''))
         if not self.file_path:
             self.show_locations()
             return
@@ -345,6 +351,9 @@ class FilesUI:
         return await self.browser_file_location((self.file_storage.value, row['path']))
 
     async def browser_file_location(self, location):
+        label, path = location
+        if label == 'Shared files' and (path == 'Local' or path.startswith('Local/')):
+            location = ('Local files', path.removeprefix('Local').lstrip('/'))
         if self.cloud_busy and not self.can_browse_local(location[0]):
             return False
         self.file_changing_location = True
@@ -370,6 +379,9 @@ class FilesUI:
     def files_back(self, widget=None, **kwargs):
         if not self.cloud_busy:
             self.show_cloud()
+
+    def local_browser_root(self):
+        return 'Shared files' if 'Shared files' in self.ordinary_file_roots() else 'Local files'
 
     def ordinary_file_roots(self):
         from .local_sources import shared_files
@@ -452,8 +464,13 @@ class FilesUI:
         if location is None:
             self.file_browser.history.clear()
         self.file_browser.set_entries(self.file_provider, self.file_path, rows, location=location)
-        self.file_browser.location_bar.update(self.file_path, encrypted=self.file_provider.private, unlocked=True,
-            name=Path(self.file_path).name if self.file_path else self.file_storage.value)
+        managed_root = (self.file_storage.value == 'Local files' and not self.file_path
+                        and self.local_browser_root() == 'Shared files')
+        name = (Path(self.file_path).name if self.file_path else
+                'Collection' if managed_root else
+                'On this device' if self.file_storage.value in ('Local files', 'Shared files') else self.file_storage.value)
+        self.file_browser.location_bar.update(self.file_path or ('Local' if managed_root else ''),
+            encrypted=self.file_provider.private, unlocked=True, name=name)
 
     def selected_file(self):
         row = self.file_rows.get(self.file_selection.value)
@@ -466,8 +483,7 @@ class FilesUI:
             return
         row = self.file_rows.get(self.file_selection.value)
         if row and row['directory']:
-            self.file_location.value = row['path']
-            await self.browse_files()
+            return await self.browser_file_location((self.file_storage.value, row['path']))
 
     async def new_file_folder(self, widget=None, **kwargs):
         name = self.file_name.value
@@ -520,6 +536,10 @@ class FilesUI:
     async def read_managed_file(self, widget=None, **kwargs):
         try:
             provider, path = self.selected_file()
+            if self.file_storage.value == 'Shared files' and path.startswith('Local/'):
+                # Search can find collection files from the outer root. Keep
+                # their editor identity the same as opening inside Collection.
+                provider, path = self.file_provider_for('Local files'), path.removeprefix('Local/')
             if self.cloud_busy and not (local_read_available(self, private=getattr(provider, 'private', False)) and isinstance(provider, LocalFiles)):
                 return
             if provider.entry(path)['directory']:

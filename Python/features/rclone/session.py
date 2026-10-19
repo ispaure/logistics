@@ -68,6 +68,8 @@ def read_package(path, password):
         for member in archive.infolist():
             if member.is_dir():
                 continue
+            if not member.flag_bits & 1:
+                raise ValueError('Every credential TXT entry must be password-protected.')
             if Path(member.filename).suffix.lower() != '.txt' or member.file_size > 256 * 1024:
                 raise ValueError('Credential ZIPs must contain small TXT files.')
             with archive.open(member) as stream:
@@ -123,6 +125,19 @@ def forget(config_path):
         removed, callbacks = _forget_locked(Path(config_path))
     _notify(callbacks)
     return removed
+
+
+def revocation_check(config_path):
+    """Capture a generation; forgetting/reloading it permanently cancels its work."""
+    path = Path(config_path)
+    with _lock:
+        entry = _sets.get(path)
+        identity = entry[0] if entry else None
+    def revoked():
+        with _lock:
+            current = _sets.get(path)
+            return identity is None or current is None or current[0] != identity
+    return revoked
 
 
 def launch(config_path, source, destination):

@@ -52,11 +52,49 @@ feature contributions as right-clicking the current selection.
 
 File Browser starts at your home folder. Use it for arbitrary paths;
 **Workspaces** brings configured local folders and remote integrations together.
-Each workspace provides the tools and actions relevant to that folder, such as
-library features, sync and remote browsing. **Workspace actions** retains running
+Choose **Local**, **Cloud** or **Home Server**, then a workspace in the compact left
+tree. Local's **Source** dropdown defaults to **Rclone** (ordinary
+Local and encrypted LocalCrypt copies), with **Dropbox** and **Others** for the remaining providers.
+The Local source filter survives refresh; switching tabs returns it to Rclone.
+Cloud and Home Server keep their **Credential** dropdown. Opening a source tab or
+changing its dropdown leaves the Files pane at **Select a folder** until you choose
+one. Refresh preserves an explicitly selected folder; removing or hiding that
+folder returns to the placeholder without opening another one. Locked workspaces
+show their credential ZIP password form directly in Files. Enter the password and
+choose **Unlock** to browse; errors stay in the form. Selecting another folder
+cancels the attempt. Files and Actions headers span their panes with centered text.
+Names starting with **Legacy-** (ignoring case) are hidden by default across all
+three sources. Use **Settings → Workspaces → Show Legacy (session only)** to reveal them.
+The choice survives refreshes and source changes, and resets to off on the next launch.
+Its files open in the middle **Files** pane and its tools appear in **Actions** on
+the right. The Files pane starts with its file/folder information panel off;
+use its preview button to show it. Refresh keeps the current browser and your
+preview choice. Actions always target the workspace selected on the left; navigating
+into a subfolder or selecting files in Files does not change the Push/Pull target.
+The Actions heading and paths identify that target. Both panes resize, while their
+headers stay fixed and cannot be moved or undocked by default. Opened documents
+continue through the normal reader/editor document hosts. **Workspace actions** retains running
 operations and their results.
 The **Documents** menu lists open editors/readers. Switching destinations keeps
 those documents alive. Feature-specific actions appear only for eligible selections.
+Documents inside a workspace show their filename and storage in their tab title,
+for example **guide.pdf [Local: Books]** or
+**guide.pdf [Remote: Books (🕵️ Session-Only)]**. LocalCrypt documents use **Local**
+with the same session-only marker: the encrypted copy is local, while its opened
+contents stay private for the session. These titles also appear in detached windows
+and the Documents menu. Saving under another name or workspace updates the title;
+unsaved changes keep their asterisk.
+
+File browsers show a storage row directly below the folder navigation, with a
+folder, cloud or lock icon and labels such as **Local · Books**,
+**Cloud · Unlocked · Books · 🕵️ Session-Only**, or
+**Local · Unlocked · Books · 🕵️ Session-Only** for a LocalCrypt copy.
+**Unlocked** identifies encrypted storage being accessed through an unlocked
+provider. Ordinary cloud folders use the cloud icon without an unlock label.
+Network-share packages use **Home Server** instead of **Cloud**.
+**Session-Only** describes the private opened view; it does not mean the original
+file disappears when Logistics closes. The breadcrumbs above this row retain
+the folder path. Navigating updates the storage row to match the current location.
 The compact left sidebar keeps full-size destination icons with narrow side margins
 and 40-pixel vertical steps, fitting more destinations in the available height.
 File Browser and Workspaces use the full page width. Indexing and folder-source
@@ -184,8 +222,19 @@ For plain-source editing, choose [Text Editor](../../Python/features/text_editor
 ## Find a configured integration
 
 Choose a source and folder on **Workspaces**. Local folders normally live under
-`~/Server/Local`; remote sources come from loaded rclone configs, and Dropbox
-contributes its detected account folders. Switching source tabs refreshes folder
+`~/Server/Local`. **Local** includes all available local copies, including detected
+Dropbox account folders and rclone-linked Local and LocalCrypt copies. **Cloud**
+contains remotes from loaded rclone credentials and browses them online. Offline
+copy associations alone do not create Cloud rows. A folder can appear in both
+Local and Cloud; each tab opens its corresponding storage. **Home Server** contains
+loaded rclone sources from the `Network shares` or `Session network shares`
+credential package, matching mobile's explicit package grouping. Other rclone
+sources remain in Cloud; protocols alone do not determine the category.
+
+Blue open-lock and orange closed-lock folder glyphs match mobile and distinguish
+unlocked and locked encrypted storage. LocalCrypt opens through the credential
+unlock flow and private browser. An unavailable location shows a browsing status;
+it does not silently fall back to another copy. Switching source tabs refreshes folder
 sources in the background while keeping the cached list available. Use
 **Refresh folders** to retry a failed discovery or reload the current source
 after adding folders or configs. A failed refresh keeps the last displayed list
@@ -332,7 +381,8 @@ Blue Hole separately checks its selected GitHub branch on each Blender launch.
 
 
 Opening or expanding a LocalCrypt copy in File Browser automatically opens its
-private tab with resolved names. The ordinary tab stays available at its previous
+private tab with resolved names. In Workspaces, that private browser replaces the
+middle Files pane. The ordinary tab stays available at its previous
 location. Workspaces lists each encrypted copy once; separate Local and LocalCrypt
 copies have distinct labels, with full source details available on hover.
 

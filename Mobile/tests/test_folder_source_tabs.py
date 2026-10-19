@@ -128,26 +128,82 @@ class FolderSourceTabTests(unittest.TestCase):
         use_shared_local(app.private_root, documents)
         app.show_locations()
         app.change_folder_source('Local')
-        self.assertEqual(set(app.folder_buttons), {'All files', 'Notes'})
+        self.assertEqual(set(app.folder_buttons), {'All files', 'Collection', 'Notes'})
         app.loop.run_until_complete(app.folder_buttons['All files'].on_press())
         self.assertEqual(app.file_provider.root, documents)
-        self.assertEqual(app.file_source_buttons['Shared files'].text, 'Shared with Files')
+        self.assertEqual(set(app.file_source_buttons), {'Shared files'})
+        self.assertEqual(app.file_source_buttons['Shared files'].text, 'On this device')
         self.assertIsNone(app.file_storage.parent)
-        self.assertEqual(app.file_source_buttons['Shared files'].style.font_weight, 'bold')
-        app.file_source_buttons['Local files'].on_press()
-        app.loop.run_until_complete(__import__('asyncio').sleep(0.05))
+        self.assertEqual({row['name'] for row in app.file_rows.values()}, {'Local', 'Notes', 'note.md'})
+        collection = next(row for row in app.file_rows.values() if row['name'] == 'Local')
+        self.assertEqual(collection['display_name'], 'Collection')
+        self.assertIn('Collection', [button.text for button in app.file_browser.buttons.values()])
+        app.loop.run_until_complete(app.browser_file_folder(collection))
         self.assertEqual(app.file_provider.root, documents / 'Local')
-        self.assertEqual(app.file_source_buttons['Local files'].style.font_weight, 'bold')
-        app.file_source_buttons['Shared files'].on_press()
-        app.loop.run_until_complete(__import__('asyncio').sleep(0.05))
+        self.assertEqual(app.file_browser.location_bar.folder_name.text, 'Collection')
+        self.assertEqual(set(app.file_source_buttons), {'Shared files'})
+        self.assertEqual(app.file_browser.location_bar.parent_button.control_icon, 'up')
+        app.loop.run_until_complete(app.browser_file_folder(next(iter(app.file_rows.values()))))
+        self.assertEqual(app.file_path, 'Managed')
+        app.loop.run_until_complete(app.parent_file_folder())
+        self.assertEqual(app.file_provider.root, documents / 'Local')
+        app.loop.run_until_complete(app.parent_file_folder())
         self.assertEqual(app.file_provider.root, documents)
-        self.assertEqual({row['name'] for row in app.file_rows.values()}, {'Notes', 'note.md'})
+        self.assertEqual(app.file_path, '')
+        self.assertEqual(app.file_browser.location_bar.folder_name.text, 'On this device')
+        self.assertEqual(app.file_browser.location_bar.parent_button.control_icon, 'back')
         with self.assertRaises(ValueError):
-            app.file_provider.entry('Local/Managed')
+            app.file_provider.entry('Local')
+        from commonUtils.runtime.resource_search import search_resources
+        (documents / 'Local' / 'Managed' / 'find-me.txt').write_text('collection content')
+        result = search_resources(app.file_provider, '', 'find-me')
+        self.assertTrue(result.complete)
+        self.assertEqual([row['path'] for row in result.rows], ['Local/Managed/find-me.txt'])
+        app.file_browser.show_tiles()
+        self.assertIn('Collection', [button.text for button in app.file_browser.buttons.values()])
+        app.show_locations()
+        app.loop.run_until_complete(app.folder_buttons['Collection'].on_press())
+        self.assertEqual(app.file_provider.root, documents / 'Local')
         app.show_locations()
         app.loop.run_until_complete(app.folder_buttons['Notes'].on_press())
         self.assertEqual(app.file_path, 'Notes')
         self.assertEqual({row['name'] for row in app.file_rows.values()}, {'nested.txt'})
+
+    def test_unified_root_preserves_collection_mutations_pins_and_editor_identity(self):
+        from unittest.mock import AsyncMock, patch
+        from commonUtils.runtime.resource_mutations import delete_resource
+        from logisticsmobile.local_sources import shared_files
+        app = self.app
+        documents = Path(self.directory.name) / 'Documents'
+        managed = documents / 'Local' / 'Managed'
+        managed.mkdir(parents=True)
+        (managed / 'note.txt').write_text('Keep this content')
+        use_shared_local(app.private_root, documents)
+        provider = shared_files(app.private_root)
+        with self.assertRaises(ValueError):
+            provider.rename('Local', 'Renamed')
+        with self.assertRaises(ValueError):
+            delete_resource(provider, 'Local')
+        self.assertEqual((managed / 'note.txt').read_text(), 'Keep this content')
+        app.loop.run_until_complete(app.show_files())
+        self.assertEqual(app.file_provider.root, documents)
+        # A recursive search result uses the same editor provider/key as a file
+        # opened from a managed workspace or the collection's own browser.
+        app.browser_file_selected(provider.entry('Local/Managed/note.txt'))
+        with patch.object(app, 'open_crypt', new_callable=AsyncMock) as opened:
+            app.loop.run_until_complete(app.read_managed_file())
+        self.assertEqual(opened.call_args.kwargs['copies'].provider.root, documents / 'Local')
+        self.assertEqual(opened.call_args.kwargs['key'], 'Managed/note.txt')
+        app.loop.run_until_complete(app.browser_file_location(('Shared files', 'Local/Managed')))
+        self.assertEqual(app.file_provider.root, documents / 'Local')
+        self.assertEqual(app.file_path, 'Managed')
+        app.pin_local_folder()
+        pin = app.pinned_locations().items[0]
+        self.assertEqual(pin['path'], 'Managed')
+        app.loop.run_until_complete(app.browser_file_location(('Shared files', '')))
+        app.loop.run_until_complete(app.pinned_opener(pin)())
+        self.assertEqual(app.file_provider.root, documents / 'Local')
+        self.assertEqual(app.file_path, 'Managed')
 
     def test_mapped_copies_also_appear_locally(self):
         from logisticsmobile.folder_hub import source_choices

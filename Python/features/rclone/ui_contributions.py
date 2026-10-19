@@ -58,12 +58,10 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
         )
 
     if entry.remote_name is not None:
-        from .ui.remote_browser import open_remote
         association = getattr(entry.remote_context, 'item', None)
         ui_actions.append(UIAction(name='Browse',
             description='Browse this remote in a read-only File Browser tab.',
-            callback=lambda: open_remote(config_path, entry.remote_name,
-                package=association.package if association else None)))
+            workflow_id='rclone_browse', workflow_data=entry))
         from . import session
         from features.rclone.localcrypt.backend import LocalCryptFolder
         values = session.credentials(config_path)
@@ -160,6 +158,13 @@ def _get_remote_sources() -> list[RemoteFolderSource]:
     return sources
 
 
+def _open_browse_workflow(data=None, parent=None):
+    from .ui.remote_browser import open_remote
+    association = getattr(data.remote_context, 'item', None)
+    return open_remote(_get_config_path(data), data.remote_name, parent,
+                       package=association.package if association else None)
+
+
 def _open_push_workflow(data=None, parent=None):
     from features.rclone.transfers.ui.push_dialog import RclonePushDialog
     from features.rclone.localcrypt.ui.views import ensure_session
@@ -212,6 +217,7 @@ def get_contributions() -> Feature:
             )
         ],
         workflows=[
+            WorkflowContribution(workflow_id='rclone_browse', handler=_open_browse_workflow),
             WorkflowContribution(
                 workflow_id='rclone_push',
                 handler=_open_push_workflow

@@ -40,14 +40,19 @@ does not run Obsidian plugins.
 
 ## File browser locations and actions
 
-**Local File Browser** uses source tabs rather than a storage dropdown.
-**On this device** opens the managed Local collection. On iOS, **Shared with
-Files** opens files beside that collection in the app's shared Files directory;
-the collection itself is accessed through the other tab. The shared tab appears
-only when that storage location is available. Opening LocalCrypt shows its
-selected source as an additional tab. Workspace actions are under **…**; the back
-control returns to the parent folder or Workspaces. **Cloud File Browser** uses
-the same directory, search and listing controls.
+**Local File Browser** has one **On this device** source. On iOS it opens
+Logistics’ shared Files directory, showing files and folders saved there alongside
+**Collection**. Open Collection to browse the managed Local folder; Parent folder
+returns to the shared directory. Collection is the display name for the existing
+`Local` folder in Apple’s Files app; no files are moved or duplicated. Its root
+cannot be renamed, moved or deleted from the outer browser; open it to manage its
+contents. Workspaces provides **All files** and **Collection** shortcuts, and
+managed workspace copies still open their collection folders directly.
+On Android, On this device continues to open the managed Local collection.
+Opening LocalCrypt shows its selected source as an additional tab. Workspace
+actions are under **…**; the back control returns to the parent folder or
+Workspaces. **Cloud File Browser** uses the same directory, search and listing
+controls.
 
 The file browser keeps your current folder, selection, list/tile mode, search, sort and browse
 history when you visit Documents or Settings. Local and remote browsers give most

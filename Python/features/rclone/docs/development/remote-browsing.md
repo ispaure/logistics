@@ -5,6 +5,15 @@ Desktop hosts `RemoteBrowserView` in the existing File Browser workspace. Its
 cloning a tab retains all three. Workspaces's Browse action and the browser's
 Open Remote command share this route. Local and LocalCrypt routing is preserved.
 
+In desktop Workspaces, selecting a locked session-backed remote or LocalCrypt
+copy shows `ui/workspace_unlock.py:WorkspaceUnlockView` inside Files. Remote Browse
+actions route to that host before invoking the standalone password dialog. The
+form reads the credential ZIP on an OperationProgress worker and publishes the
+session only after successful completion while still active. Invalid passwords
+remain inline; cancelling, changing folder/source or closing the page discards
+late results. Unlock resumes the selected location and updates its lock icon.
+Standalone File Browser windows retain their existing unlock dialog.
+
 The rclone feature owns remote credentials, CLI/native adapters, direct-open
 policy and previews. The commonUtils provider browser and range-reader contracts
 are reused without modification. No remote path is passed to the ordinary local

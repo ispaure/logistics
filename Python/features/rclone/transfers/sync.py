@@ -12,6 +12,32 @@ from features.rclone import executable, session
 from features.rclone.transfers.transfer_options import TransferOptions
 
 
+def _watch_session_transfer(window, config_path, revoked):
+    """Deliver cross-thread revocation to the GUI process on its owning thread."""
+    from commonUtils.ui import pyside as qt
+
+    class Guard(qt.QObject):
+        stop = qt.Signal()
+
+        def invalidate(self):
+            self.stop.emit()
+
+        def release(self, *_):
+            self.unsubscribe()
+
+    guard = Guard(window)
+    guard.stop.connect(window.runner.cancel, qt.Qt.ConnectionType.QueuedConnection)
+    guard.unsubscribe = session.on_forget(config_path, guard.invalidate)
+    window.runner.completed.connect(guard.release)
+    window.destroyed.connect(guard.release)
+    window._session_guard = guard
+    # A reload between launch and subscription must not attach old work to new keys.
+    if revoked():
+        guard.invalidate()
+    if not window.busy:
+        guard.release()
+
+
 def rclone_sync(source_path, destination_path, *, config_path, query=False, wait_for_output=False,
                 dry_run=False, track_renames=False, bw_limit=None, integrated=True, copy_links=True,
                 cancelled=lambda: False, executable_path=None, excludes=None):
@@ -97,10 +123,14 @@ def _run_sync(
 
     source_path_str = str(source_path)
     destination_path_str = str(destination_path)
+    credential_path = Path(config_path)
+    revoked = session.revocation_check(credential_path)
     session_launch = session.launch(config_path, source_path, destination_path)
     environment = None
     if session_launch is not None:
         environment, source_path, destination_path = session_launch
+        requested = cancelled
+        cancelled = lambda: requested() or revoked()
         config_path = 'NUL' if get_os() == OS.WIN else '/dev/null'
     elif Path(config_path).suffix == '.session':
         raise ValueError('This credential session has ended. Unlock the package again.')
@@ -123,8 +153,11 @@ def _run_sync(
 
     if query or wait_for_output:
         result = cmdShellWrapper.run_command(arguments, cancelled=cancelled, **({'environment': environment} if environment is not None else {}))
-        if not result.success:
-            detail = '\n'.join(result.stderr) or ('Cancelled' if result.cancelled else f'Exit status {result.returncode}')
+        if not result.success or cancelled():
+            if cancelled():
+                detail = 'Cancelled'
+            else:
+                detail = '\n'.join(result.stderr) or ('Cancelled' if result.cancelled else f'Exit status {result.returncode}')
             if query:
                 raise RuntimeError(f'rclone preview failed: {detail}')
             log(Severity.ERROR, 'rclone sync', detail)
@@ -139,19 +172,23 @@ def _run_sync(
         if application is not None and qt.QThread.currentThread() == application.thread():
             from commonUtils.ui.tasks.process_progress import open_process
             from features.rclone.transfers.progress import RcloneProgressParser
-            open_process('rclone sync (dry run)' if dry_run else 'rclone sync',
+            if cancelled():
+                return False
+            window = open_process('rclone sync (dry run)' if dry_run else 'rclone sync',
                          arguments[0], arguments[1:], parser=RcloneProgressParser(),
                          context={'operation': 'Sync (dry run)' if dry_run else 'Sync', 'source': source_path_str,
                                   'destination': destination_path_str, 'dry_run': dry_run},
                          **({'environment': environment} if environment is not None else {}))
+            if environment is not None:
+                _watch_session_transfer(window, credential_path, revoked)
             return True
 
     if environment is not None:
         # Session secrets never enter terminal command strings or global env.
         result = cmdShellWrapper.run_command(arguments, environment=environment, cancelled=cancelled)
-        if not result.success:
+        if not result.success or cancelled():
             log(Severity.ERROR, 'rclone sync', 'The session transfer failed or was cancelled.')
-        return result.success
+        return result.success and not cancelled()
     return cmdShellWrapper.exec_cmd(baseline, wait_for_output=False, in_new_window=True) is not False
 
 

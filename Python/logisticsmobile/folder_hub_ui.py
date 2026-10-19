@@ -153,13 +153,14 @@ class FolderHubUI:
         from .local_sources import shared_files
         shared = shared_files(self.private_root)
         if shared is not None:
-            # The managed Local collection is represented by its rclone copies;
-            # ordinary files beside Local have a separate browsing root.
+            # Keep one local browser root and a shortcut into its collection.
             choices = {name: entry for name, entry in choices.items()
                        if entry.get('remote') or entry.get('source') == 'LocalCrypt'}
             choices['All files'] = dict(source='Local', kind='shared-local', value='', name='All files', copies=[])
+            key = 'Collection' if 'Collection' not in choices else 'Collection (Local)'
+            choices[key] = dict(source='Local', kind='local', value='', name='Collection', copies=[])
             for row in shared.list():
-                if row['directory']:
+                if row['directory'] and row['name'] != 'Local':
                     title = row['name']
                     key = title if title not in choices else title + ' (Local)'
                     choices[key] = dict(source='Local', kind='shared-local', value=title, name=title, copies=[])
@@ -640,7 +641,7 @@ class FolderHubUI:
             return await self.browser_file_location(('Shared files', value))
         if kind == 'local':
             await self.show_files(local_root=True)
-            return await self.browser_file_location(('Local files', value)) if value else True
+            return await self.browser_file_location(('Local files', value))
         if kind == 'crypt':
             await self.show_files()
             return await self.browser_file_location((value, ''))

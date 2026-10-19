@@ -11,6 +11,7 @@
     "documents/zip_passwords.py",
     "folders/__init__.py",
     "folders/policy.py",
+    "folders/appearance.py",
     "identifiers.py",
     "mobile_presentation.py",
     "workflow_host.py"

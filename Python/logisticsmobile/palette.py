@@ -14,8 +14,9 @@ DARK.update(tree_guide='#737f90')
 
 # Blue/orange plus open/closed lock shapes keep folder states distinguishable
 # with red-green colour deficiencies. Both roles follow native appearance.
-LIGHT.update(folder_unlocked='#175eab', folder_locked='#a64b00')
-DARK.update(folder_unlocked='#86b9ff', folder_locked='#ffb86b')
+from services.folders.appearance import LOCK_LIGHT, LOCK_DARK
+LIGHT.update(LOCK_LIGHT)
+DARK.update(LOCK_DARK)
 
 
 # Chat uses neutral layers like the conversation drawer, independent of Slate's

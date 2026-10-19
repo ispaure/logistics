@@ -143,7 +143,10 @@ the system default when unavailable. Markdown and EPUB share
 one playback button, which toggles play/pause and resumes without reloading the
 source text; stop and completion restore its play icon. Speed changes re-synthesize
 from the current word with a fresh generation, or update the rate for a paused
-session's next resume. The close button detaches only the overlay; hosts reuse
+session's next resume. An outside tap detaches only the overlay; iOS observes taps
+outside its native subtree without consuming them, and Android uses a focusable,
+outside-touchable popup with a dismissal callback. Teardown removes the observer
+or callback before releasing the native surface. Hosts reuse
 the panel when reopening controls and retain session disposal for reader teardown.
 `PlaybackTimer` in `mobile/speech.py` owns a monotonic listening-time budget.
 The panel forwards speaking/paused/stopped transitions, including system media

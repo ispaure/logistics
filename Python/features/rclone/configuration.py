@@ -110,3 +110,15 @@ def clear_all_conf_files() -> list[Path]:
             deleted_paths.append(config_path)
 
     return deleted_paths
+
+
+def get_crypt_remote_names(config_path):
+    """Inspect loaded configuration metadata without opening a remote connection."""
+    from . import session
+    values = session.credentials(config_path)
+    if values is not None:
+        return {name for name, settings in values.items() if settings.get('type') == 'crypt'}
+    from configparser import ConfigParser
+    parser = ConfigParser(interpolation=None)
+    parser.read(config_path, encoding='utf-8-sig')
+    return {name for name in parser.sections() if parser.get(name, 'type', fallback='') == 'crypt'}

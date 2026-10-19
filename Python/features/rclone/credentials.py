@@ -114,14 +114,14 @@ def load_remote_from_zip_to_config(zip_path: str | Path, zip_pw: str, *, remembe
     """
 
     zip_path = Path(zip_path)
+    from . import session
+    try:
+        values = session.read_package(zip_path, zip_pw)
+    except Exception:
+        ui.display_msg_box_ok('Load Remote Credential',
+            'The password or credential package is invalid. Every credential TXT must be password-protected. Existing credentials were preserved.')
+        return False
     if not remember:
-        from . import session
-        try:
-            values = session.read_package(zip_path, zip_pw)
-        except Exception:
-            ui.display_msg_box_ok('Load Remote Credential',
-                'The password or credential package is invalid. Existing credentials were preserved.')
-            return False
         session.remember(configuration.get_credential_config_path(zip_path).with_suffix('.session'), values, package_path=zip_path)
         return True
     logistics_cfg = config.LogisticsConfig()

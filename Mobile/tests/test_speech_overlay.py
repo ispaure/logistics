@@ -56,8 +56,9 @@ class SpeechOverlayTests(unittest.TestCase):
                 await panel.toggle_playback()
                 self.assertEqual(panel.engine.calls[-1][2], 2)
                 token = panel.session.token
-                close_button = panel.play_button.parent.children[-1]
-                close_button.on_press()
+                self.assertEqual([button.control_icon for button in panel.play_button.parent.children],
+                    ['skip_back', 'pause', 'skip_forward', 'stop'])
+                panel.hide()
                 self.assertIsNone(panel.overlay)
                 self.assertFalse(panel.closed)
                 self.assertEqual(panel.session.state, 'speaking')

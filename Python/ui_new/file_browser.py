@@ -179,6 +179,13 @@ class _BrowserHost:
                             return
                     if workspace.add_view(item.data) is not None:
                         return
+                host = self.parentWidget()
+                while host is not None:
+                    opener = getattr(host, 'open_browser_location', None)
+                    if callable(opener):
+                        opener(_PrivateBrowserLocation(item, item.data))
+                        return
+                    host = host.parentWidget()
                 from features.rclone.localcrypt.ui.views import open_browser
                 open_browser(item, self)
             except Exception as error:
@@ -287,6 +294,8 @@ class BrowserView(_BrowserHost, qt.QMainWindow):
         self.file_browser.idle.connect(self.idle)
         from .browser_menus import BrowserMenus
         self.header_menus = BrowserMenus(self)
+        from ui_new.location_context import install_browser_location
+        install_browser_location(self.file_browser)
 
     @property
     def view_title(self):

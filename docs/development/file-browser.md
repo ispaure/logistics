@@ -19,7 +19,37 @@ to compact the shared workspace footer's padding, font, buttons and activity
 track. Embedded, standalone and detached browser workspaces use this same
 presentation; progress subscriptions and index actions remain owned by
 `WorkspaceIndexStatus`. Workspaces likewise uses zero outer margins and places
-its source-discovery progress in one horizontal row below both panes.
+its source-discovery progress in one horizontal row below the source tree and
+Files/Actions panes. The Workspaces Files pane reuses `_browser_view` for Local,
+LocalCrypt and remote browsing, retaining normal document activation. See the
+[folder source contract](features.md#remote-folder-source-context) for its action
+scope, browser retirement and pane-lock policy.
+
+Desktop `FoldersPage` filters `Legacy-` workspace names case-insensitively after
+source/credential selection, before building the tree. **Settings → Workspaces →
+Show Legacy (session only)** starts unchecked and uses an application-owned
+`WorkspaceVisibility` object shared by all desktop workspace and Settings pages.
+Discovery refreshes and window changes preserve it; no configuration value is
+read or written for it.
+
+`ui_new.location_context` presents storage identity in document dock titles and
+a browser row beneath the navigation controls. `FoldersPage` publishes local
+workspace roots from its discovered snapshot; longest-root matching distinguishes
+nested workspace names. The configured managed Local root covers files opened
+before discovery completes. Provider identity takes precedence over synthetic
+paths for remote and LocalCrypt documents. Remote providers expose their crypt
+type as `encrypted`; all direct remote document buffers and LocalCrypt views are
+private, so their titles carry `(🕵️ Session-Only)`.
+
+`DocumentPane` formats the active filename while leaving the reader/editor's
+original title authority intact. Title/idle changes and refreshed root snapshots
+update the dock through `title_changed`, including detached containers. Editor
+choices, Markdown storage, EPUB/comic sources and PDF file paths supply active
+identity; Save As and adjacent-reader navigation are resolved anew. Locked private
+guards retain their redacted title. Browser state uses the same context and the
+shared mobile folder/cloud geometry, updates on navigation, and clears the remote
+name on credential revocation. This presentation never discovers remote folders
+or performs provider I/O itself.
 
 Declare new capabilities in the feature's `register() -> Feature`, importing
 `Feature` from `features.contributions`. That Logistics declaration extends the

@@ -15,7 +15,9 @@ remote config. FUSE is optional and only needed for mounting.
 **Load on Disk** saves credentials for later use. Each saved package creates
 its own config, such as `~/.config/rclone/Personal.conf`.
 Credential ZIPs contain TXT entries with a remote section header as their first
-line and the remote's rclone settings below it. Packages must be supplied separately;
+line and the remote's rclone settings below it. Every TXT entry must be encrypted
+with the package password; plain or mixed encrypted/plain packages are rejected
+by both desktop load options. Packages must be supplied separately;
 Logistics does not create account credentials for you.
 
 Choose **Load for Session** to use a package only for this Logistics session.
@@ -403,6 +405,11 @@ or replacing the credential session revokes open private providers, clears their
 caches and hides their document/browser/metadata windows. Reopen after unlocking;
 old windows cannot resume under a new unlock. Cached stream reads also check the
 session. This is not secure erasure of process memory.
+
+Forgetting or replacing a desktop session also requests cancellation of its active
+transfers, comparison previews and LocalCrypt commands. Re-unlocking cannot resume
+those old jobs. Pending LocalCrypt command output is rejected after revocation;
+destination changes already completed by a transfer remain.
 
 On Android and iOS, loading session-only credentials immediately enables screen
 privacy. Leaving the app locks access; returning requires the session password

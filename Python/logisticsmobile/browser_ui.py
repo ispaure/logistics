@@ -294,7 +294,7 @@ class FileBrowser(NativeBrowser):
                 controls.add(chevron)
             elif not entry.container and chevron.parent is not None:
                 controls.remove(chevron)
-            caption = PurePosixPath(entry.label).name
+            caption = entry.payload.get('display_name') or PurePosixPath(entry.label).name
             if button.text != caption:
                 button.text = caption
                 middle_filename(button)
@@ -344,7 +344,7 @@ class FileBrowser(NativeBrowser):
             button = self.buttons[entry.identity]
             # Recursive results retain their full path as identity/payload.
             # Only the visible caption uses the final path component.
-            button.text = PurePosixPath(entry.label).name
+            button.text = entry.payload.get('display_name') or PurePosixPath(entry.label).name
             list_button(button)
             if self.mode == 'List':
                 folder_name(button)

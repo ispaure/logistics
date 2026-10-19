@@ -65,6 +65,7 @@ class PrivateViewGuard(qt.QObject):
 
 
 def protect_private_view(window, provider):
+    window.document_provider = provider
     if hasattr(window, '_private_view_guard'):
         return window
     if getattr(provider, 'private', False) and hasattr(provider, 'context'):

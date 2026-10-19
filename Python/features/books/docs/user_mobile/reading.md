@@ -67,7 +67,7 @@ back/forward **15** controls use the same circular-arrow design as desktop and
 jump approximately 15 seconds within the current
 passage, accounting for the selected speed. System speech has no recorded
 timeline, so skips estimate distance at 180 words per minute at normal speed.
-Skipping while paused keeps playback paused. The **×** button hides the controls
+Skipping while paused keeps playback paused. Tapping outside the popup hides the controls
 and keeps playback running, including automatic page turns within the chapter.
 Tap the speaker again to reopen the same controls. Changing chapters,
 leaving a private reader or closing its session stops

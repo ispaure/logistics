@@ -12,10 +12,17 @@ from commonUtils.ui.workspaces.workspace_policy import WorkspacePolicy
 
 class DocumentPane(qt.QWidget):
     """Keep the original reader/editor as the authority for closing its document."""
+    title_changed = qt.Signal(str)
+
     def __init__(self, window):
         super().__init__()
         self.document = window
-        self.view_title = window.windowTitle()
+        from ui_new.location_context import document_title, location_catalog
+        self.view_title = document_title(window)
+        location_catalog().changed.connect(self.refresh_title)
+        idle = getattr(window, 'idle', None)
+        if idle is not None:
+            idle.connect(self.refresh_title)
         if getattr(window, 'document_editor_id', None) == 'text':
             self.setProperty('workspace_show_icon', True)
             self.setWindowIcon(window.windowIcon())
@@ -38,6 +45,11 @@ class DocumentPane(qt.QWidget):
         window.setParent(self, qt.Qt.WindowType.Widget)
         layout.addWidget(window)
         window.show()
+
+    def refresh_title(self):
+        from ui_new.location_context import document_title
+        self.view_title = document_title(self.document)
+        self.title_changed.emit(self.view_title)
 
     def prepare_close(self):
         close_document(self.document)
@@ -94,6 +106,9 @@ class DocumentsPage(qt.QWidget):
             if not record['closed'] and not getattr(window, '_document_chooser', False):
                 entries = getattr(window, 'document_entries', lambda: [(window.windowTitle(), None)])()
                 for title, tab in entries:
+                    if tab is None:
+                        from ui_new.location_context import document_title
+                        title = document_title(window, title)
                     yield window, title, tab, record['detached']
 
     def present(self, window, *, detached=False, allow_new_tabs=True):
@@ -138,6 +153,7 @@ class DocumentsPage(qt.QWidget):
                 if sys.platform == "darwin":
                     window.menuBar().hide()
             pane = destination.add_view(window)
+            pane.title_changed.connect(self.changed)
             dock = next(item for item in destination.docks if item.widget() is pane)
             record['container'], record['dock'] = pane, dock
             dock.tab_header.installEventFilter(self.workspace)
@@ -252,7 +268,7 @@ class DocumentsPage(qt.QWidget):
     def _title_changed(self, window, title):
         record = self.records.get(window)
         if record and record['dock'] is not None:
-            record['dock'].setWindowTitle(title)
+            record['container'].refresh_title()
         self.changed.emit()
 
     def _unembed(self, window):

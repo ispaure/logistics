@@ -28,6 +28,7 @@ class RemoteSourceSnapshot:
     source: RemoteFolderSource
     remote_names: tuple[str, ...]
     local_folders: tuple[LocalFolder, ...] | None = None
+    encrypted_remote_names: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -50,9 +51,13 @@ def discover_folder_sources(*, remote_providers=None, local_providers=None, canc
         check_cancelled(cancelled)
         for source in registered.contribution.get_sources():
             check_cancelled(cancelled)
+            encrypted = frozenset()
+            if registered.feature_name == 'rclone' and not hasattr(source.context, 'item'):
+                from features.rclone.configuration import get_crypt_remote_names
+                encrypted = frozenset(get_crypt_remote_names(source.context))
             remote_sources.append(RemoteSourceSnapshot(registered.feature_name, registered.contribution.name,
                                                        source, tuple(source.get_remote_names()),
-                                                       tuple(source.get_local_folders()) if source.get_local_folders else None))
+                                                       tuple(source.get_local_folders()) if source.get_local_folders else None, encrypted))
     for registered in local_providers:
         check_cancelled(cancelled)
         for source in registered.contribution.get_sources():

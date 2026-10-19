@@ -292,12 +292,19 @@ class CryptResources(LocalFiles):
         self._check_active()
         scoped = getattr(self._operation, 'cancelled', lambda: False)
         requested = cancelled
-        cancelled = lambda: scoped() or requested()
+        revoked = session.revocation_check(self.context)
+        cancelled = lambda: self.closed or revoked() or scoped() or requested()
         relative = self.relative(path)
-        environment, remote, _ = session.launch(self.context, 'view:' + relative, '')
+        launched = session.launch(self.context, 'view:' + relative, '')
+        if launched is None:
+            raise ValueError('The credential session is locked. Reopen the document after unlocking its ZIP.')
+        environment, remote, _ = launched
         arguments = [str(self.binary), '--config', session.NULL_CONFIG, '--log-level', 'ERROR', '--retries', '1',
                      '--low-level-retries', '1', '--contimeout', '15s', '--timeout', '30s', operation, remote, *extra]
-        return run_bytes(arguments, environment=environment, input_data=input_data, input_writer=input_writer, max_output=limit, cancelled=cancelled)
+        result = run_bytes(arguments, environment=environment, input_data=input_data, input_writer=input_writer, max_output=limit, cancelled=cancelled)
+        self._check_active()
+        check_cancelled(cancelled)
+        return result
 
     def list(self, path='', *, cancelled=lambda: False):
         # Transfers and initial unlock validate the whole tree. Navigation only
@@ -380,9 +387,17 @@ class CryptResources(LocalFiles):
         relative = self.relative(path)
         target = self._encoded_paths.get(relative)
         if target is None:
-            environment, remote, _ = session.launch(self.context, 'view:', '')
+            revoked = session.revocation_check(self.context)
+            launched = session.launch(self.context, 'view:', '')
+            if launched is None:
+                raise ValueError('The credential session is locked. Reopen the document after unlocking its ZIP.')
+            environment, remote, _ = launched
             arguments = [str(self.binary), '--config', session.NULL_CONFIG, 'backend', 'encode', remote, relative, '--json']
-            result = json.loads(run_bytes(arguments, environment=environment, max_output=16384, cancelled=getattr(self._operation, 'cancelled', lambda: False)))
+            scoped = getattr(self._operation, 'cancelled', lambda: False)
+            cancelled = lambda: self.closed or revoked() or scoped()
+            result = json.loads(run_bytes(arguments, environment=environment, max_output=16384, cancelled=cancelled))
+            self._check_active()
+            check_cancelled(cancelled)
             if not isinstance(result, list) or len(result) != 1:
                 raise ValueError('Encrypted path could not be resolved.')
             target = self.root / self.relative(result[0])

@@ -47,6 +47,9 @@ class RemoteResources:
             values = {name: dict(parser[name]) for name in parser.sections()}
         if remote not in values:
             raise ValueError('This remote is no longer available in the selected account.')
+        self.encrypted = values[remote].get('type') == 'crypt'
+        self.storage_label = ('Home Server' if self.config_path.stem.casefold()
+                              in {'network shares', 'session network shares'} else 'Cloud')
         from services.local_storage import install_local_storage_policy
         install_local_storage_policy()
         self.context = self.config_path.with_name('remote-' + uuid4().hex + '.session')

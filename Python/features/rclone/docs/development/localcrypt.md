@@ -114,6 +114,16 @@ only its own lease, preserving still-open documents. Worker-local cancellation i
 propagated to subprocesses and streaming writers. Cancelled opens never present a
 window. Completed publication cannot be rolled back by a later cancellation.
 
+Desktop credential imports require every non-directory TXT entry to be encrypted,
+including when saving a config. Validation completes before extraction or session
+replacement, so plain/mixed packages leave existing credentials intact.
+`session.revocation_check` captures a credential generation without copying its
+secrets. Sync and comparison subprocesses poll that generation; integrated Qt
+transfers receive revocation through a queued signal on their owning thread.
+LocalCrypt commands and path encoding include revocation in cancellation and
+recheck it before returning output. A new unlock cannot revive an old generation.
+Cancellation does not undo transfer changes already published to the destination.
+
 Already displayed document content can remain in RAM after credential revocation;
 this is not secure memory erasure. Per-process rclone environments contain keys,
 but settings are not written to plaintext config files or command arguments.

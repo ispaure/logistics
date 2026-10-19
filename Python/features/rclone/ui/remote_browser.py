@@ -62,6 +62,8 @@ class RemoteBrowserView(qt.QMainWindow):
         self.file_browser.activated.connect(self.open_document)
         self.file_browser.directory_changed.connect(lambda *_: self.title_changed.emit(self.view_title))
         self.file_browser.idle.connect(self.idle)
+        from ui_new.location_context import install_browser_location
+        install_browser_location(self.file_browser, self.provider)
         self.operation = OperationProgress(self)
         self.operation.completed.connect(self._completed)
         layout.addWidget(self.file_browser)
@@ -71,6 +73,7 @@ class RemoteBrowserView(qt.QMainWindow):
         menu.addAction('Open Remote…', lambda: choose_remote(self))
         from services.documents.ui.private_views import protect_private_view
         protect_private_view(self, self.provider)
+        self._private_view_guard.revoked.connect(self.file_browser.storage_location.refresh)
 
     @property
     def view_title(self):
@@ -111,6 +114,7 @@ class RemoteBrowserView(qt.QMainWindow):
                 window = qt.QMainWindow()
                 window.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
                 window.setWindowTitle('Remote — ' + Path(path).name + ' (read-only)')
+                window.document_resource_path = path
                 window.resize(900, 700)
                 if kind == 'text':
                     view = qt.QPlainTextEdit()
@@ -157,6 +161,13 @@ def _workspace(parent):
 def open_remote(config, remote, parent=None, directory='', *, package=None):
     location = RemoteLocation(Path(config), remote, directory)
     parent = parent or qt.QApplication.activeWindow()
+    # Workspaces owns an inline unlock route; standalone tabs keep their dialog.
+    host = parent
+    while host is not None:
+        opener = getattr(host, 'open_browser_location', None)
+        if callable(opener):
+            return opener(location, package=package)
+        host = host.parentWidget()
     from features.rclone.localcrypt.ui.views import ensure_session
     if not ensure_session(config, package=package, parent=parent):
         return
@@ -164,12 +175,6 @@ def open_remote(config, remote, parent=None, directory='', *, package=None):
     try:
         if workspace is not None:
             return workspace.add_view(location)
-        host = parent
-        while host is not None:
-            opener = getattr(host, 'open_browser_location', None)
-            if callable(opener):
-                return opener(location)
-            host = host.parentWidget()
         from ui_new.file_browser import FileBrowserWindow, _windows
         window = FileBrowserWindow(location, parent)
         _windows.append(window)

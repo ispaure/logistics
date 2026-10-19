@@ -50,15 +50,20 @@ def _lines(arguments, environment, cancelled, consume):
 def scanner(binary, source, destination, config_path, options=TransferOptions(), *,
             display_path=lambda path, cancelled: path, display_directory=None, cleanup_plan=lambda cancelled: {}):
     def scan(emit, cancelled):
+        revoked = session.revocation_check(config_path)
         launched = session.launch(config_path, source, destination)
         environment = None
         src, dst, config = str(source), str(destination), str(config_path)
         if launched is not None:
+            requested = cancelled
+            cancelled = lambda: requested() or revoked()
             values, src, dst = launched
             environment = values
             config = session.NULL_CONFIG
         elif Path(config_path).suffix == '.session':
             raise ValueError('This credential session has ended. Unlock the package again.')
+        if cancelled():
+            return ''
         digest = sha256()
         cleanup = cleanup_plan(cancelled)
         digest.update(json.dumps(cleanup, sort_keys=True).encode())
@@ -93,6 +98,8 @@ def scanner(binary, source, destination, config_path, options=TransferOptions(),
         arguments = [str(binary), 'sync', '--config', config, '--dry-run', '--combined', '-',
                      '--use-json-log', '--log-level', 'DEBUG', '--create-empty-src-dirs', *flags, '--', src, dst]
         _lines(arguments, environment, cancelled, comparison)
+        if cancelled():
+            return ''
         replace_changes(emit, [*changes.values(), *[('cleanup', label) for label, _ in cleanup.values()]])
         # Record both trees for stale-review detection, including matching files.
         # Metadata is streamed to RAM, never written to plaintext report files.
@@ -127,5 +134,5 @@ def scanner(binary, source, destination, config_path, options=TransferOptions(),
                 kind = 'match' if source_dir and destination_dir else 'add' if source_dir else 'delete'
                 record_change(kind, directory_label(name, cancelled) + '/')
         replace_changes(emit, [*changes.values(), *[('cleanup', label) for label, _ in cleanup.values()]])
-        return digest.hexdigest()
+        return '' if cancelled() else digest.hexdigest()
     return scan

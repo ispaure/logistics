@@ -21,6 +21,31 @@ class SettingsPageTests(QtTestCase):
         return SimpleNamespace(name='test', label='Test', enabled=True, available=True,
                                dependencies=(), dependents=())
 
+    def test_workspaces_legacy_setting_is_shared_and_independent_of_configuration_scope(self):
+        from ui_new.settings.workspaces import workspace_visibility, WorkspaceVisibility
+        visibility = workspace_visibility()
+        visibility.set_show_legacy(False)
+        self.addCleanup(visibility.set_show_legacy, False)
+        with patch.object(registry, 'get_feature_states', return_value=[]):
+            first = SettingsPage(); self.addCleanup(first.deleteLater)
+            first.show_category('workspaces')
+            choice = first.panels['workspaces'].show_legacy_choice
+            self.assertFalse(choice.isChecked())
+            choice.setChecked(True)
+            second = SettingsPage(); self.addCleanup(second.deleteLater)
+            second.show_category('workspaces')
+            other = second.panels['workspaces'].show_legacy_choice
+            self.assertTrue(other.isChecked())
+            for index in range(first.scope_selector.count()):
+                first.scope_selector.setCurrentIndex(index)
+                self.assertTrue(choice.isChecked())
+            first.refresh()
+            self.assertTrue(choice.isChecked())
+            other.setChecked(False)
+            self.assertFalse(choice.isChecked())
+            self.assertFalse(visibility.show_legacy)
+            self.assertFalse(WorkspaceVisibility().show_legacy)
+
     def test_global_personal_reset_is_available_across_categories_and_hidden_in_software_mode(self):
         with TemporaryDirectory() as temporary, patch('pathlib.Path.home', return_value=Path(temporary) / 'marca'), \
                 patch.object(registry, 'get_feature_states', return_value=[]):

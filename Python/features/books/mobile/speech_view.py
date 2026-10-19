@@ -40,8 +40,7 @@ class ReadAloudPanel(toga.Box):
                 self.reset_timer_button], style=Pack(direction=ROW)),
             self.timer_remaining,
             toga.Box(children=[self.skip_back, self.play_button, self.skip_forward,
-                icon_button('stop', 'Stop read-aloud', on_press=lambda w: self.session.stop()),
-                icon_button('close', 'Hide read-aloud controls', on_press=self.hide)], style=Pack(direction=ROW))],
+                icon_button('stop', 'Stop read-aloud', on_press=lambda w: self.session.stop())], style=Pack(direction=ROW))],
             style=Pack(direction=COLUMN, margin=12))
         self.speed_choice.on_change = self.change_speed
         self.timer_choice.on_change = self.change_timer

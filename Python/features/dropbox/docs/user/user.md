@@ -5,8 +5,8 @@ or credentials. Account roots are detected from Dropbox's installed account sett
 
 ## Browse
 
-Choose the **Dropbox** source on **Workspaces** and select a folder. Multiple accounts
-are listed separately. Missing/unconfigured Dropbox installations contribute no
+Choose **Workspaces → Local**, select **Dropbox** in the **Source** dropdown,
+then select a folder. The dropdown includes folders from all detected accounts. Missing/unconfigured Dropbox installations contribute no
 sources; install and configure Dropbox separately if you want this source.
 
 ## Review conflicting copies

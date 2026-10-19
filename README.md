@@ -56,7 +56,8 @@ readers, including comics, EPUBs and archives. Single-tool views keep a small
 settings icon at the bottom-left; clicking it opens settings and navigation choices.
 
 Use **File Browser** for any folder, or **Workspaces** for configured libraries
-and remote storage. **Documents** collects open readers and editors; their tabs can
+and remote storage. Workspaces groups **Local**, **Cloud** and **Home Server**
+locations beside a docked file browser and workspace actions. **Documents** collects open readers and editors; their tabs can
 be split or detached. Text, Markdown, EPUB and comic Open dialogs share a Local/LocalCrypt
 file picker; encrypted copies open in private readers or editors. Regular and private file browsers
 share list, tile and column views. **Settings** saves feature choices and configuration and

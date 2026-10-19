@@ -15,6 +15,7 @@ class PDFWindow(qt.QMainWindow):
         super().__init__()
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle(Path(name).name)
+        self.setWindowFilePath(str(name))
         self.resize(850, 1000)
         self.buffer = QBuffer(self)
         self.buffer.setData(QByteArray(data))
