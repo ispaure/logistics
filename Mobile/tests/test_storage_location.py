@@ -64,6 +64,20 @@ class CollectionStorageTests(unittest.TestCase):
         self.assertIn('Final verification', [event['phase'] for event in events])
         self.assertEqual(events[-1]['phase'], 'Complete')
 
+    def test_small_file_progress_is_throttled_and_folder_completion_is_flushed(self):
+        source = self.private / 'LocalFiles'
+        source.mkdir()
+        for index in range(200):
+            (source / str(index)).write_bytes(b'x')
+        events = []
+        with patch('features.rclone.mobile.storage_location.time.monotonic', return_value=0):
+            switch_location(self.private, self.volume, progress=events.append)
+        copy = [event for event in events if event['phase'] == 'Copying Local']
+        self.assertEqual(len(copy), 2)  # initial and final; no per-file queue flood
+        self.assertEqual((copy[-1]['files'], copy[-1]['bytes'], copy[-1]['total']), (200, 200, 200))
+        self.assertEqual(events[-1]['phase'], 'Complete')
+        self.assertEqual(len(list(collection_path(self.private).iterdir())), 200)
+
     def test_progress_failure_never_reports_complete_or_changes_location(self):
         self.seed()
         events = []

@@ -196,7 +196,7 @@ def _copy_durable(source, destination, progress=None):
         writer.flush()
         _sync(writer)
     if progress:
-        progress.update(path=source, file=True, force=True)
+        progress.update(path=source, file=True)
     return destination
 
 
@@ -376,6 +376,7 @@ def switch_location(private_root, volume, *, progress=None):
                 shutil.copytree(source, temporary, symlinks=True, copy_function=lambda src, dst: _copy_durable(src, dst, report))
             else:
                 temporary.mkdir()
+            report.update(force=True)  # Flush the completed folder once, not every small file.
             report.update('Verifying files')
             if _inventory(temporary, report) != expected or _inventory(source, report) != expected:
                 raise OSError('Collection verification failed; original location retained.')
