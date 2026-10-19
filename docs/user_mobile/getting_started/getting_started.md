@@ -1,5 +1,11 @@
 # Getting started on mobile
 
+On iOS and Android, a loading screen shows the current startup step, such as
+preparing storage or restoring documents. The bar advances as startup phases
+finish; it is not a download percentage or time estimate. Your workspace appears
+when initialization is complete. If startup cannot finish, close and reopen the
+app as the loading screen instructs.
+
 Logistics brings files, readers and chat into one mobile workspace. The available
 sources and actions depend on your device and configured connections.
 

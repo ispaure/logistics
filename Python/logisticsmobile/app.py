@@ -70,6 +70,21 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
     def startup(self):
         from .appearance import install_appearance
         install_appearance(self)
+        self._startup_in_progress = True
+        native = type(self._impl).__module__.startswith(('toga_iOS.', 'toga_android.'))
+        if native and getattr(self, 'window_id', 'primary') == 'primary':
+            from .startup import begin_startup
+            begin_startup(self)
+        else:
+            # Scene creation needs a fully constructed host before attaching its
+            # native window. Non-native callers retain synchronous startup too.
+            for _ in self._startup_steps():
+                pass
+            self._startup_in_progress = False
+
+    def _startup_steps(self):
+        from .startup import STEPS
+        yield STEPS[0]
         root = Path(self.storage_root or self.paths.data)
         if type(self._impl).__module__.startswith('toga_iOS.') and self.storage_root is None:
             from .app_reset import finish_ios_reset
@@ -77,9 +92,13 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             from .ios_storage import prepare_for_app
             root = prepare_for_app(self)
         self.private_root = root
+        yield STEPS[1]
         host_identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
         previous_host = _active_hosts.get(host_identity)
         if previous_host is not None:
+            pending = getattr(previous_host, 'startup_task', None)
+            if pending is not None and not pending.done():
+                pending.cancel()
             from .markdown_speech import stop_markdown_speech
             stop_markdown_speech(previous_host)
             from features.books.mobile.media_controls import stop_media
@@ -94,13 +113,14 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             if privacy is not None:
                 privacy.dispose()
             previous_host.active_host = False
-            if hasattr(previous_host, 'cloud_client'):
+            if getattr(previous_host, 'cloud_client', None) is not None:
                 previous_host.cancel_cloud()
             picker = getattr(previous_host, '_editor_picker', None)
             if picker is not None:
                 picker.clear()
-            for session in previous_host.workspace.sessions.values():
-                previous_host.workspace.invalidate(session.id)
+            previous_workspace = getattr(previous_host, 'workspace', None)
+            for session in getattr(previous_workspace, 'sessions', {}).values():
+                previous_workspace.invalidate(session.id)
             cancelled = getattr(previous_host, '_crypt_cancel', None)
             if cancelled is not None:
                 cancelled.set()
@@ -114,6 +134,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.preferences = Preferences(workspace_root)
         from .appearance import configure_android_eink
         configure_android_eink(self)
+        yield STEPS[2]
         self.store = DocumentStore(root / 'Documents')
         from .recent_documents import RecentDocuments, MAX_RECENT
         self.recent_documents = RecentDocuments(workspace_root)
@@ -131,12 +152,14 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if hasattr(self, 'scene_manager'):
             self.scene_manager.owners.attach(self.window_id, self)
             self.scene_manager.bind_workspace(self.window_id, self)
+        yield STEPS[3]
         self.text_views = {}
         self.current = None
         self.loading = True
         self.labels = {}
         self.editor_view = TextEditorView(self)
         self.editor_view.bind()
+        yield STEPS[4]
         self.native_host = NativeNavigationHost(DESTINATION_ITEMS, on_select=self.select_destination)
         self.routes = MobileRoutes(self, self.native_host, guard=self.checkpoint, changed=self.route_changed,
                              intent=self.mark_navigation)
@@ -144,13 +167,16 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.routes.on_render = self.adaptive.render
         self.navigation = self.native_host.root
         self.body = self.routes.body()
-        self.main_window = getattr(self, 'window_class', toga.MainWindow)(title='Logistics', content=self.navigation,
-                                           on_lose_focus=self.checkpoint, on_resize=self.resize_workspace)
+        if not hasattr(self, '_startup_window'):
+            self.main_window = getattr(self, 'window_class', toga.MainWindow)(title='Logistics', content=self.navigation)
+        self.main_window.on_lose_focus = self.checkpoint
+        self.main_window.on_resize = self.resize_workspace
         if not hasattr(self, 'scene_manager'):
             from .window_scenes import install_scenes
             install_scenes(self)
         self.scene_manager.activate()
         self.on_exit = self.exit_app
+        yield STEPS[5]
         self.refresh_documents()
         self.loading = False
         if self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
@@ -165,10 +191,15 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             if self.preferences.values['restore_last_document'] != 'true' or key not in self.labels.values():
                 key = next(iter(self.labels.values()))
             self.open_document(key)
+        yield STEPS[6]
         self.show_documents_hub()
         self.show_folder_picker(initialize=False)
         self.show_home()
         self.save_workspace(capture=False)
+        yield STEPS[7]
+        if hasattr(self, 'startup_screen'):
+            self.startup_screen.restore_chrome(self)
+        self.main_window.content = self.navigation
         self.main_window.show()
         from .keyboard import install as install_keyboard
         install_keyboard(self)
@@ -265,6 +296,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.editor_view.session.view['markdown_mode'] = 'edit'
 
     def resize_workspace(self, widget=None, *args, **kwargs):
+        if getattr(self, '_startup_in_progress', False):
+            return
         from .keyboard import fit_editors
         fit_editors(self)
         from .settings_ui import fit_section
@@ -861,6 +894,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.editor_view.refresh_status()
 
     def checkpoint(self, *args, **kwargs):
+        if getattr(self, '_startup_in_progress', False) and not hasattr(self, 'current'):
+            return True
         if getattr(self, '_reset_scheduled', False):
             return True
         if not self.active_host:
@@ -958,6 +993,12 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             origin.export_button.enabled = True
 
     def exit_app(self, app, **kwargs):
+        if getattr(self, '_startup_in_progress', False):
+            pending = getattr(self, 'startup_task', None)
+            if pending is not None:
+                pending.cancel()
+            self.active_host = False
+            return True
         if getattr(self, '_reset_scheduled', False):
             return True
         self.retire_private_comic_batch()

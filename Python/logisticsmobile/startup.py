@@ -1,0 +1,102 @@
+"""Visible, phased native startup without exposing document or account names."""
+import asyncio
+import inspect
+import logging
+
+import toga
+from toga.style import Pack
+from toga.style.pack import CENTER, COLUMN
+
+STEPS = ('Preparing private storage…', 'Loading preferences…', 'Restoring documents…',
+         'Preparing the editor…', 'Preparing navigation…', 'Restoring open documents…',
+         'Preparing your workspace…', 'Opening your workspace…')
+
+
+class StartupScreen:
+    def __init__(self):
+        from .appearance import surface
+        self.status = surface(toga.Label(STEPS[0], style=Pack(text_align=CENTER, margin_bottom=16)),
+                              radius=0, background='transparent', foreground='text', outlined=False)
+        self.progress = toga.ProgressBar(max=len(STEPS), value=0, style=Pack(height=8, margin_bottom=12))
+        self.detail = surface(toga.Label('Step 1 of ' + str(len(STEPS)), style=Pack(text_align=CENTER, font_size=12)),
+                              radius=0, background='transparent', foreground='muted', outlined=False)
+        title = surface(toga.Label('Logisticks', style=Pack(text_align=CENTER, font_size=28,
+                            font_weight='bold', margin_bottom=24)), radius=0,
+                            background='transparent', foreground='text', outlined=False)
+        panel = toga.Box(children=[title, self.status, self.progress, self.detail],
+                         style=Pack(direction=COLUMN, margin=32))
+        self.view = surface(toga.Box(children=[panel],
+            style=Pack(direction=COLUMN, justify_content=CENTER, flex=1)),
+            radius=0, background='window', outlined=False)
+
+    def hide_chrome(self, app):
+        backend = type(app._impl).__module__
+        if backend.startswith('toga_android.'):
+            self.bar = app._impl.native.getSupportActionBar()
+            self.bar_visible = bool(self.bar and self.bar.isShowing())
+            if self.bar is not None:
+                self.bar.hide()
+        elif backend.startswith('toga_iOS.'):
+            self.bar = app.main_window._impl.native.rootViewController
+            self.bar_visible = not bool(self.bar.isNavigationBarHidden())
+            self.bar.setNavigationBarHidden(True, animated=False)
+
+    def restore_chrome(self, app):
+        if getattr(self, 'bar', None) is not None:
+            if type(app._impl).__module__.startswith('toga_android.'):
+                if self.bar_visible:
+                    self.bar.show()
+            else:
+                self.bar.setNavigationBarHidden(not self.bar_visible, animated=False)
+
+    def show_step(self, index, name):
+        self.status.text = name
+        self.progress.value = index
+        self.detail.text = f'Step {index + 1} of {len(STEPS)}'
+
+    def failed(self):
+        self.status.text = 'Couldn’t finish starting Logisticks.'
+        self.detail.text = 'Close and reopen the app to try again.'
+
+
+async def finish_startup(app):
+    """Run UI work on its native thread, allowing a frame between real phases."""
+    try:
+        for index, name in enumerate(app._startup_steps()):
+            app.startup_screen.show_step(index, name)
+            # A timed yield gives UIKit/Android a draw turn; sleep(0) can keep
+            # draining Python callbacks without presenting the updated screen.
+            await asyncio.sleep(1 / 60)
+        app.startup_screen.progress.value = len(STEPS)
+        app._startup_in_progress = False
+        app.resize_workspace()
+        return True
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logging.getLogger(__name__).exception('Application startup failed')
+        app.active_host = False
+        app._startup_in_progress = True
+        app.startup_screen.failed()
+        app.main_window.content = app.startup_screen.view
+        app.main_window.on_lose_focus = None
+        app.main_window.on_resize = None
+        app.on_exit = lambda app: True
+        return False
+
+
+def begin_startup(app):
+    app.active_host = False
+    app.startup_screen = StartupScreen()
+    app._startup_window = app.main_window = toga.MainWindow(title='Logisticks', content=app.startup_screen.view)
+    app.main_window.show()
+    app.startup_screen.hide_chrome(app)
+    running = app.on_running
+    app.startup_task = app.loop.create_task(finish_startup(app))
+
+    async def when_ready(sender):
+        if await app.startup_task:
+            result = running(app)
+            if inspect.isawaitable(result):
+                await result
+    app.on_running = when_ready

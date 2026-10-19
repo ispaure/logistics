@@ -66,6 +66,7 @@
     "saved_files_ui.py",
     "screen_privacy.py",
     "settings_ui.py",
+    "startup.py",
     "smoke.py",
     "storage_controller.py",
     "storage_ui.py",

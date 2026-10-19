@@ -9,6 +9,8 @@ class Probe(LogisticsMobile):
     def startup(self):
         self.storage_root = Path(self.paths.cache) / 'synthetic-reader'
         super().startup()
+
+    def on_running(self):
         self.loop.create_task(self.probe())
 
     async def probe(self):

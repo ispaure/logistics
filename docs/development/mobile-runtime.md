@@ -165,6 +165,33 @@ keyboards, IME/undo gestures or Android runtime editor appearance.
 
 ## Settings persistence and folder search
 
+### Native startup progress
+
+Primary iOS and Android startup first shows a lightweight `StartupScreen` in the
+main window. `LogisticsMobile._startup_steps` yields eight real phases: private
+storage, preferences, document state, editor, navigation, restored documents,
+workspace and opening the workspace. The driver yields a draw turn before each
+phase. Its bar counts completed phases; it does not estimate time, bytes or remote
+requests. Status labels contain no document paths, filenames or credential names.
+Native title bars are hidden while loading and restored before installing the
+normal navigation host. The same window is reused for the ready workspace.
+
+Toga's `on_running` callback waits for successful initialization. Native probes
+and other startup consumers must begin UI interaction there, rather than directly
+after `super().startup()`. Synchronously constructed secondary iPad scene hosts
+and non-native hosts retain their existing construction contract. Resize callbacks
+wait until startup finishes. Closing during startup cancels initialization without
+checkpointing partially built services; replacement hosts cancel an earlier
+unfinished startup and tolerate missing workspace state.
+
+Startup errors keep a generic recovery message in the loading screen and do not
+report completion. Cancellation does not display a startup error. Existing iOS
+reset and migration still run before preferences and document services. The system
+launch screen covers the native/Python runtime boot preceding this application UI.
+`test_startup_progress.py` verifies draw/work ordering, lifecycle callbacks,
+failure and cancellation. The disposable `startup_progress_probe.py` captures
+actual iOS/Android stages and verifies readiness and navigation after loading.
+
 Mobile Settings saves font size, restore behavior and restart clearing on change,
 alongside the existing immediate overview and Android appearance handlers.
 `show_legacy_session` belongs to the running host; preference loading ignores
@@ -176,7 +203,9 @@ ordinary and crypt remote listings have no entry count cap. Local providers use
 the cancellable recursive search with no scan or result count cap. Native rows
 remain paginated at 40 per page. Local reads use the cancellable listing path
 without toggling global cloud controls or refreshing the download inventory.
-Folder pages are built offscreen before attachment; thumbnails remain asynchronous. Regression coverage lives in
+Folder pages are built offscreen before attachment. Local and LocalCrypt List/Tiles
+views use names and generic icons, without queuing content or thumbnail reads.
+Regression coverage lives in
 `Mobile/tests/test_native_browser.py`, `Mobile/tests/test_settings_ui.py`,
 `Python/tests/test_mobile_hub.py` and `Mobile/rclone_bridge/list_test.go`.
 

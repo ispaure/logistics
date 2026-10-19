@@ -14,7 +14,6 @@ class DocumentationProbe(LogisticsMobile):
     def startup(self):
         self.storage_root = Path(self.paths.cache) / ('documentation-proof-' + uuid4().hex)
         super().startup()
-        self.loop.create_task(self.probe())
 
     def on_running(self):
         self.loop.create_task(self.probe())

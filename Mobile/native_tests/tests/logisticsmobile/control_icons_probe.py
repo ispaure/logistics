@@ -14,6 +14,8 @@ class Probe(LogisticsMobile):
     def startup(self):
         self.storage_root = Path(self.paths.cache) / 'isolated-icon-workspace'
         super().startup()
+
+    def on_running(self):
         self.main_window.title = 'Mobile control icons'
         self.buttons = []
         rows = []
@@ -24,7 +26,6 @@ class Probe(LogisticsMobile):
         panel = toga.Box(children=rows, style=Pack(direction=COLUMN, margin=20))
         self.show_view(panel, destination='documents', route='icon-probe', title='Mobile control icons')
         self.main_window.show()
-    def on_running(self):
         self.loop.create_task(self.probe())
     async def probe(self):
         output = Path(self.paths.cache) / 'icon-evidence'

@@ -117,10 +117,10 @@ class NativeCheckApp(LogisticsMobile):
             # Preserve chained backend errors before the native launcher wraps them.
             traceback.print_exc()
             raise
-        self.show_documents()
-        self.show_home()
 
     def on_running(self):
+        self.show_documents()
+        self.show_home()
         if self.workspace_hold:
             from .workspace_hold import hold_workspace
             start_native_check(self, hold_workspace)
