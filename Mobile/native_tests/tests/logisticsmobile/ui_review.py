@@ -226,10 +226,12 @@ async def exercise_ui_review(app):
         assert (image.width, image.height) == (20, 30)
     await app.browser_file_location(('Local files', 'UI Review'))
     browser = app.file_browser
+    browser.open_search()
     await asyncio.sleep(.2)
+    header_controls = (browser.location_bar.parent_button, browser.search_button)
     if get_os() is OS.IOS:
         viewport = browser.widget.root._impl.container.native
-        for control in (browser.search, browser.options_button):
+        for control in (browser.search, browser.close_search_button, *header_controls):
             native = control._impl.native
             rect = native.convertRect(native.bounds, toView=viewport)
             assert rect.origin.x >= -1 and rect.origin.x + rect.size.width <= viewport.bounds.size.width + 1, f'Browser control clipped: {type(control).__name__}: {rect}; viewport={viewport.bounds}'
@@ -238,7 +240,7 @@ async def exercise_ui_review(app):
         viewport = app.main_window._impl.container.native_content
         origin = jarray(jint)(2)
         viewport.getLocationOnScreen(origin)
-        controls = [browser.search, browser.options_button]
+        controls = [browser.search, browser.close_search_button, *header_controls]
         controls.extend(child for row in browser.items.children if isinstance(row, toga.Box)
                         for child in row.children[0].children if isinstance(child, toga.Button))
         for control in controls:
@@ -247,9 +249,12 @@ async def exercise_ui_review(app):
             native.getLocationOnScreen(position)
             x = position[0] - origin[0]
             assert x >= -1 and x + native.getWidth() <= viewport.getWidth() + 1, f'Android browser control clipped: {control}: {x}, {native.getWidth()}, viewport={viewport.getWidth()}'
-        for control in (browser.back_button, browser.options_button):
-            layout = control._impl.native.getLayout()
-            assert layout is not None and layout.getEllipsisCount(0) == 0, 'Browser toolbar caption truncated'
+        density = viewport.getResources().getDisplayMetrics().density
+        for control in (*header_controls, browser.close_search_button):
+            assert control._impl.native.getWidth() / density >= 44, 'Browser icon hit target too narrow'
+    browser.close_search()
+    while browser.tasks:
+        await asyncio.gather(*tuple(browser.tasks))
     assert all(not button.text.startswith('✓') for button in browser.buttons.values())
     for row in browser.items.children:
         if isinstance(row, toga.Box):
