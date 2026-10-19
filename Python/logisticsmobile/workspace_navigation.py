@@ -98,6 +98,8 @@ def sync_reader_toolbar(app, view):
         group.distribution = 1  # fill equally
         group.alignment = 0  # fill
         group.spacing = 0
+        group.widthAnchor.constraintEqualToConstant(44 * len(buttons)).active = True
+        group.heightAnchor.constraintEqualToConstant(44).active = True
         item = ObjCClass('UIBarButtonItem').alloc().initWithCustomView(group)
         for button in buttons:
             detach(button)
