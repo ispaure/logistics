@@ -429,7 +429,7 @@ class FoldersPage(pyside.QWidget):
                 if item is not None:
                     self._style_folder_item(item, entry)
             else:
-                self.browser_notice.setText('Unlock this workspace to browse its files. Select Browse in Logistics to try again.')
+                self.browser_notice.setText('Unlock this workspace to browse its files. Reselect the folder to try again.')
         except Exception as error:
             self.browser_notice.setText(f'Cannot browse this workspace: {error}')
 
@@ -649,17 +649,6 @@ class FoldersPage(pyside.QWidget):
 
         status_layout.setColumnStretch(1, 1)
         layout.addLayout(status_layout)
-
-        if entry.local is not None or entry.has_remote:
-            browse_button = pyside.QPushButton('Browse in Logistics')
-            browse_button.clicked.connect(lambda checked=False, entry=entry: self._browse_entry(entry, force=True))
-            layout.addWidget(browse_button)
-        if entry.local is not None:
-            open_button = pyside.QPushButton('Open Folder')
-            open_button.clicked.connect(
-                lambda _checked=False, folder=entry.local: folder.open()
-            )
-            layout.addWidget(open_button)
 
         return group
 

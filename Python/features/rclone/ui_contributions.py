@@ -58,10 +58,6 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
         )
 
     if entry.remote_name is not None:
-        association = getattr(entry.remote_context, 'item', None)
-        ui_actions.append(UIAction(name='Browse',
-            description='Browse this remote in a read-only File Browser tab.',
-            workflow_id='rclone_browse', workflow_data=entry))
         from . import session
         from features.rclone.localcrypt.backend import LocalCryptFolder
         values = session.credentials(config_path)

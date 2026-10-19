@@ -141,8 +141,8 @@ The Logistics indexing settings apply on the next index request after **Save**:
 
 ## Remote tabs
 
-Choose **File → Open Remote…** to browse a loaded rclone account, or choose
-**Browse** on a Workspaces remote. These tabs have their own read-only actions,
+Choose **File → Open Remote…** to browse a loaded rclone account, or select
+a remote on Workspaces to browse it in the Files pane. These tabs have their own read-only actions,
 current-folder search and memory-only previews. Supported files open directly;
 other files show a dialog asking you to manually make a local copy. There are no standalone file or folder download actions. Use managed Pull
 workflows for offline Local or LocalCrypt folders.

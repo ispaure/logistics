@@ -511,8 +511,9 @@ class FolderSourceTests(QtTestCase):
         local_detector.assert_not_called()
         self.assertTrue(page._tools_status.isHidden())
         labels = {button.text() for button in page.detail_scroll.widget().findChildren(qt.QPushButton)}
-        self.assertTrue({'Push...', 'Pull', 'Browse in Logistics'}.issubset(labels), labels)
-        self.assertNotIn('Browse encrypted copy', labels)
+        self.assertTrue({'Push...', 'Pull'}.issubset(labels), labels)
+        for removed in ('Browse encrypted copy', 'Browse in Logistics', 'Open Folder', 'Browse'):
+            self.assertNotIn(removed, labels)
         # Ordinary local entries still go through availability detection.
         local_detector.side_effect = None
         local_detector.return_value = False

@@ -164,8 +164,8 @@ A missing or invalid credential mapping blocks Push rather than guessing a remot
 
 ## Browse remote files directly
 
-On desktop choose **File Browser → File → Open Remote…**, or **Browse** on a
-Workspaces remote. Each remote opens in its own tab, labelled with its account
+On desktop choose **File Browser → File → Open Remote…**, or select a remote on
+Workspaces to browse it in the Files pane. Each remote opens in its own tab, labelled with its account
 and remote name. Navigation stays within that remote. Duplicate tabs retain the
 account and current directory; tabs use the existing workspace docking.
 Credentials must already be loaded through rclone settings.
@@ -395,7 +395,7 @@ and leaves it focused for another try. Enter submits once; Cancel abandons the
 unlock without creating an empty private browser. Password-protected file opens
 and metadata edits use the same retry behavior for inner archive passwords.
 
-Workspaces keeps **Pull** and **Push...** available for LocalCrypt entries. Use the General section’s **Browse in Logistics** button to open the private browser. Tools that require ordinary local files (such as Calibre or Obsidian detection) are excluded from private copies.
+Workspaces keeps **Pull** and **Push...** available for LocalCrypt entries. Select the workspace to open its private browser in the Files pane. Tools that require ordinary local files (such as Calibre or Obsidian detection) are excluded from private copies.
 
 ### Session privacy
 
