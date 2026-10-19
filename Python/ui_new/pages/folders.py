@@ -59,7 +59,6 @@ class FoldersPage(pyside.QWidget):
         self.folder_tree = WorkspaceTree()
         self.folder_tree.setHeaderHidden(True)
         self.folder_tree.setMinimumWidth(220)
-        self.folder_tree.setMaximumWidth(380)
 
         self.selected_entry_name = None
         self._entry_items = {}
@@ -102,22 +101,15 @@ class FoldersPage(pyside.QWidget):
         left_layout.addWidget(self.folder_tree, 1)
         left_layout.addWidget(self.refresh_button)
 
-        splitter = pyside.QSplitter(pyside.Qt.Orientation.Horizontal)
-        splitter.addWidget(left_widget)
         self.browser_stack = pyside.QStackedWidget()
         self.browser_notice = pyside.QLabel('Select a folder to browse its files.')
         self.browser_notice.setAlignment(pyside.Qt.AlignmentFlag.AlignCenter)
         self.browser_notice.setWordWrap(True)
         self.browser_notice.setMargin(12)
         self.browser_stack.addWidget(self.browser_notice)
-        self.panes = WorkspacePanes(self.browser_stack, self.detail_scroll, self, locked=self.panes_locked)
-        splitter.setChildrenCollapsible(False)
-        splitter.addWidget(self.panes)
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([250, 750])
-
-        root_layout.addWidget(splitter, 1)
+        self.panes = WorkspacePanes(self.browser_stack, self.detail_scroll, self,
+                                    sources=left_widget, locked=self.panes_locked)
+        root_layout.addWidget(self.panes, 1)
         # Match the workspace notice row: progress belongs below both panes,
         # rather than taking three rows out of the folder list.
         self.discovery.layout().setDirection(pyside.QBoxLayout.Direction.LeftToRight)

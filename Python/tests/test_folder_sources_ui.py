@@ -507,6 +507,23 @@ class FolderSourceTests(QtTestCase):
         self.wait(page)
         self.assertEqual([entry.name for entry in self.entries(page)], ['CloudFolder'])
 
+    def test_actions_are_below_sources_and_files_uses_full_height(self):
+        page = self.page()
+        page.resize(1100, 800)
+        page.show()
+        self.app.processEvents()
+        files, actions, sources = page.panes.docks
+        self.assertLess(sources.geometry().bottom(), actions.geometry().top())
+        self.assertLess(actions.geometry().right(), files.geometry().left())
+        self.assertLessEqual(files.geometry().top(), sources.geometry().top())
+        self.assertGreaterEqual(files.geometry().bottom(), actions.geometry().bottom())
+        before = sources.height()
+        page.panes.resizeDocks([sources, actions], [250, 450], qt.Qt.Orientation.Vertical)
+        self.app.processEvents()
+        self.assertLess(sources.height(), before)
+        self.assertGreater(page.folder_tree.height(), 0)
+        self.assertGreater(actions.height(), 120)
+
     def test_busy_browser_is_retained_until_idle_and_panes_can_unlock(self):
         self.local_folders = [self.folder('One'), self.folder('Two')]
         page = self.page()
@@ -663,6 +680,7 @@ class FolderSourceTests(QtTestCase):
             known_index = next(index for index in range(window.tabs.count())
                                if window.tabs.tabText(index) == 'Workspaces')
             self.assertEqual(window.tabs.tabText(0), 'File Browser')
+            window.launch_stack.setCurrentWidget(window.hub)
             window.tabs.setCurrentIndex(known_index)
             page = window.tabs.widget(known_index)
             self.wait(page)

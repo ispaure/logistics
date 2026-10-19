@@ -221,7 +221,9 @@ For plain-source editing, choose [Text Editor](../../Python/features/text_editor
 
 ## Find a configured integration
 
-Choose a source and folder on **Workspaces**. Local folders normally live under
+Choose a source and folder on **Workspaces**. Sources occupy the upper left,
+with Actions below them and Files filling the right side. Drag the dividers to
+give the hierarchy or actions more room. The fixed panes have no tab headers. Local folders normally live under
 `~/Server/Local`. **Local** includes all available local copies, including detected
 Dropbox account folders and rclone-linked Local and LocalCrypt copies. **Cloud**
 contains remotes from loaded rclone credentials, including **Load for Session**,
