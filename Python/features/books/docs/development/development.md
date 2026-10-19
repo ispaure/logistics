@@ -145,6 +145,28 @@ source text; stop and completion restore its play icon. Speed changes re-synthes
 from the current word with a fresh generation, or update the rate for a paused
 session's next resume. The close button detaches only the overlay; hosts reuse
 the panel when reopening controls and retain session disposal for reader teardown.
+`PlaybackTimer` in `mobile/speech.py` owns a monotonic listening-time budget.
+The panel forwards speaking/paused/stopped transitions, including system media
+commands, without resetting the budget at utterance boundaries or speed changes.
+An event-loop callback refreshes the remaining-time label at most once per second
+and pauses the session at expiry; elapsed time is measured against a deadline,
+so delayed callbacks do not extend the budget. Reset and duration changes restore
+the selected budget in the current playback state. Play after expiry starts a
+fresh budget. Hiding the overlay leaves the timer active; disposal cancels its
+callback. The timer defaults to Off and is not persisted.
+`SpeechPlayback.timer_changed` forwards the displayed countdown to an existing,
+allowed native media owner and caches it for initial metadata publication.
+iOS uses the Now Playing artist/subtitle field; Android uses media-session artist
+and display-subtitle metadata plus notification content text. Timer refreshes
+update metadata without reactivating audio, requesting focus, renewing a wake
+lock or recreating system controls. Android refreshes the existing notification;
+playback transitions retain foreground-service ownership. Public reader hosts
+opt in through `document_title`: metadata uses only its basename (up to 120
+characters) and a whitespace-normalized preview of the current utterance (up to
+97 characters, including an ellipsis). Playback transitions refresh the preview,
+including utterance changes, skips and pause/resume. Private hosts leave the
+title provider empty; credential-session sources remain generic regardless of
+the background-audio opt-in. The OS controls subtitle presentation and refresh timing.
 Hosts provide current
 text/selection and range-follow callbacks, then dispose speech before chapter
 replacement or reader retirement. Resume continues from the current word.
@@ -216,11 +238,15 @@ passage bounds and preserve pause state. Stop/disposal clear text and word offse
 
 `mobile/media_controls.py` arbitrates one active speech session per process.
 `media_ios.py` uses a playback/spoken-audio AVAudioSession, public MediaPlayer
-remote commands and generic Now Playing metadata; the host declares the audio
+remote commands and Now Playing metadata; the host declares the audio
 background mode. `media_android.py` connects to the non-exported
 `SpeechMediaService`, which owns a media-playback foreground service, MediaSession,
-MediaStyle notification, audio focus and a bounded wake lock. No text, document
-path or credential label enters metadata, intents or notification storage.
+MediaStyle notification, audio focus and a bounded wake lock. Ordinary imported
+EPUBs, ordinary Markdown previews, public vault notes and documentation publish
+a filename and bounded current-passage preview alongside the timer. Private
+sources publish only generic metadata and timer information, even with background
+speech enabled. Full paths and credential labels are excluded, and command
+intents never carry document text.
 Commands are generation-bound; stopped/revoked sessions cannot resume through
 a stale notification. The service is not sticky and never reconstructs speech
 after process death.

@@ -1,12 +1,12 @@
 # Open Obsidian vaults
 
-Vault controls appear on **Folder Hub** for local folders containing `.obsidian`
+Vault controls appear on **Workspaces** for local folders containing `.obsidian`
 directories within the bounded discovery search.
 
 ## Open a vault
 
 1. Install Obsidian and make sure it can launch.
-2. Select the containing local folder on **Folder Hub**.
+2. Select the containing local folder on **Workspaces**.
 3. Choose **Open Vault** for the vault you want.
 4. If the vault is not registered, close Obsidian when asked and retry.
 

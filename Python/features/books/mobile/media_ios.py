@@ -7,6 +7,8 @@ class AppleMedia:
         from rubicon.objc import ObjCClass, Block, objc_id, ns_from_py
         self.library = ctypes.CDLL('/System/Library/Frameworks/MediaPlayer.framework/MediaPlayer')
         self.closed, self.targets = False, []
+        self.state, self.timer_text = 'paused', ''
+        self.title, self.excerpt = 'Read aloud', ''
         self.observer = self.interruption_block = None
         def value(owner, name):
             result = getattr(owner, name)
@@ -39,19 +41,37 @@ class AppleMedia:
             target = remote.addTargetWithHandler(block)
             self.targets.append((remote, target, block))
 
-    def update(self, state):
+    def update(self, state, *, timer_text=''):
         if self.closed:
             return
-        from rubicon.objc import ns_from_py
-        from rubicon.objc import ObjCInstance
-        def key(name):
-            return str(ObjCInstance(ctypes.c_void_p.in_dll(self.library, name).value))
-        self.info.nowPlayingInfo = ns_from_py({key('MPMediaItemPropertyTitle'): 'Read aloud',
-            key('MPNowPlayingInfoPropertyPlaybackRate'): 1.0 if state == 'speaking' else 0.0,
-            key('MPNowPlayingInfoPropertyIsLiveStream'): False})
+        self.state, self.timer_text = state, timer_text
+        self._publish_info()
         if state == 'speaking':
             self.audio.setActive(True, error=None)
         self.info.playbackState = 1 if state == 'speaking' else 2
+
+    def _key(self, name):
+        from rubicon.objc import ObjCInstance
+        return str(ObjCInstance(ctypes.c_void_p.in_dll(self.library, name).value))
+
+    def _publish_info(self):
+        from rubicon.objc import ns_from_py
+        key = self._key
+        subtitle = ' · '.join(filter(None, (self.timer_text, self.excerpt))) or 'Logisticks'
+        self.info.nowPlayingInfo = ns_from_py({key('MPMediaItemPropertyTitle'): self.title,
+            key('MPMediaItemPropertyArtist'): subtitle,
+            key('MPNowPlayingInfoPropertyPlaybackRate'): 1.0 if self.state == 'speaking' else 0.0,
+            key('MPNowPlayingInfoPropertyIsLiveStream'): False})
+
+    def update_timer(self, text):
+        if not self.closed:
+            self.timer_text = text
+            self._publish_info()
+
+    def update_content(self, title, excerpt):
+        if not self.closed:
+            self.title, self.excerpt = title, excerpt
+            self._publish_info()
 
     def close(self):
         if not self.closed:

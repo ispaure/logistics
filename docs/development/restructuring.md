@@ -116,7 +116,7 @@ all current code. Its completed extractions should not be proposed again.
 2. Pilot the feature presentation convention on LM. Separate simple widgets
    first, then lifecycle ownership. Verify streaming, persistence failure,
    lease release and cooperative closing before proceeding to other features.
-3. Extract the mobile editor picker after the active Folder Hub work settles.
+3. Extract the mobile editor picker after the active Workspaces work settles.
    Update `Mobile/tools.py` in the same change; exercise host tests, packaging
    checks and native Open/Save As behavior across Local/LocalCrypt providers.
 4. Reduce mobile host inheritance one workflow at a time. Preserve multi-window
@@ -153,7 +153,7 @@ rclone mobile adapters no longer import `logisticsmobile`. Provider readers, doc
 
 ### 3. Mobile workflow composition
 
-The app now composes Chat, Cloud, Transfers, Folder Hub, Home/Documents, Locations and Storage controllers. Each controller enumerates its host dependencies and owned fields; compatibility accessors delegate to that owner without broad attribute forwarding. Transfer/review cancellation is separate from file/cloud cancellation and global Cancel dispatches to both. Reader/session managers and host/provider document lifecycle retain their existing composition.
+The app now composes Chat, Cloud, Transfers, Workspaces, Home/Documents, Locations and Storage controllers. Each controller enumerates its host dependencies and owned fields; compatibility accessors delegate to that owner without broad attribute forwarding. Transfer/review cancellation is separate from file/cloud cancellation and global Cancel dispatches to both. Reader/session managers and host/provider document lifecycle retain their existing composition.
 
 ### 4. Text Editor mobile ownership
 

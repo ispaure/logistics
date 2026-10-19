@@ -33,7 +33,7 @@ class SpeechOverlayTests(unittest.TestCase):
                 self.assertFalse(hasattr(panel, 'voice_choice'))
                 self.assertEqual(panel.voice, 'Another voice')
                 compact_height = panel.overlay_height
-                self.assertLess(compact_height, 180)
+                self.assertLess(compact_height, 260)
                 with patch.object(panel.overlay, 'reposition') as reposition:
                     message = 'Could not read this passage. Try reopening the document.'
                     panel.set_status(message)
@@ -76,6 +76,74 @@ class SpeechOverlayTests(unittest.TestCase):
                 self.assertEqual(speech.panel.voice, 'Offline')
                 speech.close()
         self.run_async(exercise())
+
+    def test_timer_follows_playback_and_survives_hidden_controls(self):
+        from features.books.mobile.speech_view import ReadAloudPanel
+        from test_speech_media import Media
+
+        async def exercise():
+            async def source():
+                return SimpleNamespace(text='One two. Three four.'), 0, None
+            panel = ReadAloudPanel(loop=self.app.loop, source=source, on_range=lambda *a: None,
+                close=lambda: None, engine=Engine(self.app.loop), app=self.app,
+                document_title=lambda: '/books/Spoken.epub')
+            try:
+                await panel.ready_task
+                now = 0
+                panel.timer.clock = lambda: now
+                panel.timer_choice.value = '15 min'
+                self.assertEqual(panel.timer_remaining.text, 'Time remaining: 15:00')
+                self.assertIsNone(panel.playback.media)
+                await panel.toggle_playback()
+                media = panel.playback.media
+                self.assertEqual(media.title, 'Spoken.epub')
+                self.assertEqual(media.excerpt, 'One two.')
+                deadline = panel.timer.deadline
+                panel.session.completed(panel.session.token)
+                self.assertEqual(media.excerpt, 'Three four.')
+                self.assertEqual(panel.timer.deadline, deadline)
+                self.assertEqual(media.timer_text, panel.timer_remaining.text)
+                self.assertEqual(media.states[-1], 'speaking')
+                now = 10
+                panel.timer._cancel()
+                panel.timer._tick()
+                self.assertEqual(media.timer_text, 'Time remaining: 14:50')
+                now = 20
+                panel.playback.command('pause')
+                self.assertEqual(panel.timer_remaining.text, 'Time remaining: 14:40')
+                self.assertEqual(media.timer_text, panel.timer_remaining.text)
+                self.assertEqual(media.states[-1], 'paused')
+                now = 200
+                self.assertEqual(panel.timer.remaining, 880)
+                panel.reset_timer_button.on_press()
+                self.assertEqual(panel.session.state, 'paused')
+                self.assertEqual(panel.timer.remaining, 900)
+                self.assertEqual(media.timer_text, 'Time remaining: 15:00')
+                panel.playback.command('play')
+                panel.hide()
+                now = 1101
+                panel.timer._cancel()
+                panel.timer._tick()
+                self.assertEqual(panel.session.state, 'paused')
+                self.assertEqual(panel.timer_remaining.text, 'Time remaining: 00:00')
+                self.assertEqual(media.timer_text, panel.timer_remaining.text)
+                self.assertEqual(media.states[-1], 'paused')
+                self.assertIn('Timer finished', panel.status.text)
+                await panel.toggle_playback()
+                self.assertEqual(panel.timer.remaining, 900)
+                panel.timer_choice.value = 'Off'
+                self.assertEqual(panel.timer_remaining.text, 'Timer off')
+                self.assertEqual(media.timer_text, '')
+                self.assertFalse(panel.reset_timer_button.enabled)
+                self.assertEqual(panel.session.state, 'speaking')
+                panel.timer_choice.value = '1 hr'
+                self.assertEqual(media.timer_text, 'Time remaining: 60:00')
+            finally:
+                panel.dispose()
+            self.assertIsNone(panel.timer.handle)
+            self.assertTrue(media.closed)
+        with patch('features.books.mobile.media_controls.native_media', Media):
+            self.run_async(exercise())
 
     def test_settings_load_and_persist_voice_then_release_engine(self):
         from logisticsmobile.preferences import Preferences

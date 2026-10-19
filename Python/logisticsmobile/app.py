@@ -813,7 +813,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         from .markdown_speech import MarkdownSpeech
         speech = getattr(owner, 'markdown_speech', None)
         if speech is None:
-            owner.markdown_speech = speech = MarkdownSpeech(self, owner.preview, owner.preview_box)
+            owner.markdown_speech = speech = MarkdownSpeech(self, owner.preview, owner.preview_box,
+                document_title=lambda: owner.document.name)
             owner.preview_toolbar.insert(len(owner.preview_toolbar.children) - 1, speech.button)
         speech.close()
         self.preview_box = owner.preview_box

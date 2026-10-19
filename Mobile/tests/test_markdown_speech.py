@@ -95,6 +95,7 @@ class MarkdownSpeechTests(unittest.TestCase):
         self.app.editor.value = '# Draft'
         self.app.show_preview()
         normal = self.app.editor_view.markdown_speech
+        self.assertEqual(normal.document_title(), 'Draft.md')
         self.assertIn(normal.button.parent, self.app.preview_box.children)
         self.assertEqual(normal.button.control_icon, 'speaker')
 
@@ -113,6 +114,7 @@ class MarkdownSpeechTests(unittest.TestCase):
                 owner.toggle_private_preview()
                 self.assertNotIn(owner.crypt_edit_mode, owner.crypt_markdown_footer.children)
                 speech = owner.markdown_speech
+                self.assertEqual(speech.document_title(), '')
                 self.assertIn(speech.button, owner.reader_toolbar.children)
                 speech.button.on_press()
                 panel = speech.panel

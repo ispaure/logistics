@@ -1,18 +1,21 @@
 """Feature-owned floating speech controls; private text never enters a route cache."""
 import asyncio
+import math
 import textwrap
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
-from .speech import SpeechSession
+from .speech import PlaybackTimer, SpeechSession
 from .speech_native import NativeSpeech
 
 
 class ReadAloudPanel(toga.Box):
-    def __init__(self, *, loop, source, on_range, close, engine=None, app=None, privacy_gate=lambda: None, valid=lambda: True):
+    def __init__(self, *, loop, source, on_range, close, engine=None, app=None, privacy_gate=lambda: None, valid=lambda: True,
+                 document_title=lambda: ''):
         from logisticsmobile.control_icons import icon_button
         self.playback = None
         self.source, self.closed = source, False
+        self.document_title = document_title
         self.engine = engine or NativeSpeech(loop)
         self.status = toga.Label('Starting system speech engine…', style=Pack(height=24))
         self.speech_app = app
@@ -25,13 +28,23 @@ class ReadAloudPanel(toga.Box):
         self.skip_forward = icon_button('skip_forward', 'Skip forward about 15 seconds', on_press=lambda w: self.session.skip(15))
         self.skip_back.enabled = self.skip_forward.enabled = False
         self.session = SpeechSession(self.engine, on_range=on_range, on_state=self.state)
+        self.timer_choice = toga.Selection(items=['Off', '15 min', '30 min', '45 min', '1 hr'],
+            value='Off', style=Pack(height=44, width=100))
+        self.timer_remaining = toga.Label('Timer off', style=Pack(height=28))
+        self.reset_timer_button = toga.Button('Reset timer', on_press=self.reset_timer,
+            enabled=False, style=Pack(height=44))
+        self.timer = PlaybackTimer(loop, changed=self.show_remaining, expired=self.timer_expired)
         super().__init__(children=[self.status,
             toga.Box(children=[toga.Label('Speed', style=Pack(margin_right=12)), self.speed_choice], style=Pack(direction=ROW)),
+            toga.Box(children=[toga.Label('Timer', style=Pack(margin_right=12)), self.timer_choice,
+                self.reset_timer_button], style=Pack(direction=ROW)),
+            self.timer_remaining,
             toga.Box(children=[self.skip_back, self.play_button, self.skip_forward,
                 icon_button('stop', 'Stop read-aloud', on_press=lambda w: self.session.stop()),
                 icon_button('close', 'Hide read-aloud controls', on_press=self.hide)], style=Pack(direction=ROW))],
             style=Pack(direction=COLUMN, margin=12))
         self.speed_choice.on_change = self.change_speed
+        self.timer_choice.on_change = self.change_timer
         if app is not None:
             from .media_controls import SpeechPlayback
             self.playback = SpeechPlayback(self, app, gate=privacy_gate, valid=valid)
@@ -51,10 +64,28 @@ class ReadAloudPanel(toga.Box):
     def change_speed(self, widget=None, **kwargs):
         self.session.set_speed(float(self.speed_choice.value))
 
+    def change_timer(self, widget=None, **kwargs):
+        minutes = {'Off': 0, '15 min': 15, '30 min': 30, '45 min': 45, '1 hr': 60}
+        self.timer.select(minutes[self.timer_choice.value] * 60)
+        self.reset_timer_button.enabled = bool(self.timer.duration)
+
+    def reset_timer(self, widget=None, **kwargs):
+        self.timer.reset()
+
+    def show_remaining(self, remaining):
+        minutes, seconds = divmod(math.ceil(remaining), 60)
+        self.timer_remaining.text = f'Time remaining: {minutes:02d}:{seconds:02d}' if self.timer.duration else 'Timer off'
+        if self.playback is not None:
+            self.playback.timer_changed(self.timer_remaining.text if self.timer.duration else '')
+
+    def timer_expired(self):
+        self.session.pause()
+        self.set_status('Timer finished · Play to start a new timer.')
+
     @property
     def overlay_height(self):
-        # Status, speed picker, playback buttons and the panel's outer margins.
-        return self.status.style.height + 44 + 48 + 24
+        # Status, speed, timer controls, remaining time, playback and outer margins.
+        return self.status.style.height + 44 + 44 + 28 + 48 + 24
 
     def set_status(self, message):
         self.status.text = textwrap.fill(message, 36)
@@ -80,6 +111,7 @@ class ReadAloudPanel(toga.Box):
 
     def state(self, state, message):
         if not self.closed:
+            self.timer.set_running(state == 'speaking')
             if self.playback is not None:
                 self.playback.changed(state)
             self.set_status(message)
@@ -127,6 +159,7 @@ class ReadAloudPanel(toga.Box):
         if not self.closed:
             self.ready_task.cancel()
             self.session.dispose()
+            self.timer.dispose()
             if self.playback is not None:
                 self.playback.dispose()
             self.closed = True
@@ -136,3 +169,4 @@ class ReadAloudPanel(toga.Box):
                 self.overlay = None
             self.status.text = ''
             self.source = None
+            self.document_title = lambda: ''

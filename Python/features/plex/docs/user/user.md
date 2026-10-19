@@ -1,6 +1,6 @@
 # Back up and restore Plex server data
 
-Manage PMS is offered on **Folder Hub** when a local folder has a matching
+Manage PMS is offered on **Workspaces** when a local folder has a matching
 `<folder>-PMSDATA` rclone remote. Load credentials using [rclone](../../../rclone/docs/user/user.md).
 
 ## Back up

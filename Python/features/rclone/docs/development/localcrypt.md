@@ -382,7 +382,7 @@ widgets and recovery policy remain in their existing Logistics owners.
 Shared-handoff validation: 30 desktop/provider checks, 3 focused shared lifecycle checks and 11 mobile UI checks passed. Both native simulator/emulator suites passed all 15 groups for source SHA-256 `010cfbeed8df7931f309393e0b10a8a6127f64f0400283a30a756d2d4dbc085f`; reports are `mobile-evidence/2026-10-13-shared-handoff-{ios,android}-native-ui-local.json`.
 
 
-### Regular browser navigation and Folder Hub
+### Regular browser navigation and Workspaces
 
 The Logistics browser host owns LocalCrypt routing via the shared FileBrowser
 `directory_handler`/`directory_boundary` callbacks. Navigation is consumed before
@@ -395,10 +395,10 @@ unlock cancellation leaves the existing locked-view retry workflow intact.
 
 rclone sources omit the extra saved-copy source when the loaded account source
 already represents that exact connection. Distinct Local and LocalCrypt copies
-remain separate, and Folder Hub adds short storage labels and full tooltips.
+remain separate, and Workspaces adds short storage labels and full tooltips.
 
 
-Folder Hub source construction snapshots ordinary folders and LocalCrypt mappings
+Workspaces source construction snapshots ordinary folders and LocalCrypt mappings
 once per rclone refresh, shared across all account sources and duplicate detection.
 Qt's repeated model queries use a bounded one-second host boundary cache, avoiding
 repeated configuration reads and path resolution during painting. Explicit
@@ -410,7 +410,7 @@ not decrypted filenames or credentials.
 
 Private browser view titles and document window titles begin with `🕵️ Private - `; the document host inherits these titles for its tabs. Text and Markdown refresh the prefix through their normal dirty/save title lifecycle. Comic reader and metadata titles use the source privacy flag. Browser detached titles place the view title first. The shared provider browser reuses the regular list/tile/column presentation, navigation icons and breadcrumb drawing, with generic folder icons that never inspect virtual paths through QFileInfo. Picker storage selection and provider worker/lease ownership remain unchanged.
 
-Folder Hub filters private folder contributions before running availability detection. LocalCryptFolder declares its private storage boundary, and rclone explicitly opts into the private-folder tool contract, retaining encrypted Pull/Push/browse without invoking local-only detectors on ciphertext.
+Workspaces filters private folder contributions before running availability detection. LocalCryptFolder declares its private storage boundary, and rclone explicitly opts into the private-folder tool contract, retaining encrypted Pull/Push/browse without invoking local-only detectors on ciphertext.
 
 ### Reader picker handoff
 
@@ -462,7 +462,7 @@ Credential import, replacement and clear take an exclusive scope; cipher-cache
 publication is separately synchronized. Online operations and local crypt writes
 remain serialized with the transfer.
 
-Folder Hub and Files permit LocalCrypt browsing and private document opening
+Workspaces and Files permit LocalCrypt browsing and private document opening
 during transfers. These providers are offline reads even though they require
 unlocked keys in the native bridge. Browser cancellation and private-session
 cancellation remain independent of transfer cancellation. Listings omit rclone's
@@ -661,9 +661,9 @@ autosave isolation, wrong-password retry and unencrypted ZIP rejection.
 Existing saved vaults remain until explicitly forgotten. The native report above
 predates this follow-up; its screen and revocation protections are unchanged.
 
-## Mobile Folder Hub visibility and Settings unlocking
+## Mobile Workspaces visibility and Settings unlocking
 
-Folder Hub combines `CloudUI.loaded_remote_names` with retained ZIP remote names.
+Workspaces combines `CloudUI.loaded_remote_names` with retained ZIP remote names.
 Retained names allow online-only folders to remain discoverable while locked;
 all opens still use `require_remote_credentials_async` and the matching ZIP's
 password guard. Optional `crypt_remotes` metadata preserves encryption icons
@@ -672,10 +672,10 @@ Mirror records with an existing physical target contribute local rows while lock
 Credential groups intersect their associated remotes with the available Hub rows.
 
 Settings' rclone connections page enumerates retained ZIP labels independently of
-Folder Hub. Its unlock action uses the same password-only session import as a
+Workspaces. Its unlock action uses the same password-only session import as a
 local-copy unlock, with no required remote/folder selection. Wrong passwords leave
 the prompt open; success publishes a generation-stamped remote list and returns
-to Folder Hub. The explicit session lock uses native `clear` without deleting the
+to Workspaces. The explicit session lock uses native `clear` without deleting the
 saved vault or retained-package key, clears selectors/private catalog state, and
 preserves the existing save/discard guard for private edits. Saved-vault reload
 remains an explicit separate action after locking.
@@ -690,7 +690,7 @@ bridge; the new credential-visibility case checks Settings unlocking, wrong
 passwords, hidden locked remote-only actions and preservation of saved ciphertext.
 [Native evidence](../../../../../docs/development/mobile-evidence/2026-10-15-folder-hub-credential-visibility-ios-native-ui-local.json).
 Ruff and diff whitespace checks passed. Android native runtime behavior was not
-rerun for this change; its Folder Hub and Settings controller code is shared.
+rerun for this change; its Workspaces and Settings controller code is shared.
 
 The old native per-file mirror list/read/stat/mkdir/write operations are retired.
 Test fixtures seed and inspect synthetic remotes with `mirror_sync`; backing

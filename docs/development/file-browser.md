@@ -18,7 +18,7 @@ The Logistics browser host uses zero outer pane margins and `BrowserIndexStatus`
 to compact the shared workspace footer's padding, font, buttons and activity
 track. Embedded, standalone and detached browser workspaces use this same
 presentation; progress subscriptions and index actions remain owned by
-`WorkspaceIndexStatus`. Folder Hub likewise uses zero outer margins and places
+`WorkspaceIndexStatus`. Workspaces likewise uses zero outer margins and places
 its source-discovery progress in one horizontal row below both panes.
 
 Declare new capabilities in the feature's `register() -> Feature`, importing

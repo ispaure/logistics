@@ -1,11 +1,11 @@
 # Open and export Calibre libraries
 
-Calibre controls appear on **Folder Hub** when the selected local folder contains an
+Calibre controls appear on **Workspaces** when the selected local folder contains an
 immediate child library with `metadata.db`.
 
 ## Open a library
 
-1. Select the local folder on **Folder Hub**.
+1. Select the local folder on **Workspaces**.
 2. Choose the library in its Calibre section.
 3. Use the launch action. Calibre must be installed or available through the
    feature's platform-specific software resources.

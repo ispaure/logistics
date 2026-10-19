@@ -6,6 +6,23 @@ pushes, tags or releases were made for this refresh.
 
 ## Implemented presentation
 
+### Workspace tree connectors — 2026-10-18
+
+The always-expanded tree retains 40-point nesting and individual rounded folder
+rows. Plain group headings use bold primary text. Decorative connectors use a
+1.5-point `tree_guide` surface role, with softer grey in light mode, a separate
+dark value and black in E Ink. Group trunks anchor beneath the measured heading
+centre, constrained to the indentation gutter for long labels; browsable parent
+folders anchor beneath their icon. Horizontal branches meet immediate child row
+centres. Their offsets include preceding siblings' nested subtrees, and trunks
+stop at the last immediate child rather than extending below the branch.
+Connectors are native boxes without press handlers or disclosure glyphs.
+
+Validation: 63 focused Workspaces, source-tab, contrast, workspace UI,
+appearance and control-icon host tests passed. The cached iPhone preview stalled
+at native launch before displaying the app, so updated native screenshots and
+physical-device verification remain pending.
+
 ### Command boundaries — 2026-10-18
 
 Browser navigation is an explicit exception to boxed commands: Back, Parent,
@@ -31,9 +48,18 @@ document, followed by long plain-text and Markdown Source inputs. It checks
 caret bounds through repeated typing, stable toolbar position, zero outer-page
 scroll and unchanged WebView ownership. The iOS software-keyboard check requires
 a nonzero native keyboard inset; screenshots/reports are retained locally under
-`Mobile/logs/editor-keyboard/`. Android device validation remains pending the
-next user-requested deployment; local tests cover the shared rendering and
-browser light/dark/E Ink appearance transitions.
+`Mobile/logs/editor-keyboard/`. The Android probe also exercises native IME
+composition, plain/source caret bounds, new documents and the last blank
+Markdown block. A 360 × 640 logical-pixel phone at 1.3 system font scale
+reproduced a caret clipped above its writing viewport: fixed 12-pixel padding
+could not fit around a line in the keyboard-reduced area. Caret spacing now
+shrinks to the available room. Before/after reports and screenshots are retained
+under `Mobile/logs/editor-keyboard/android/`; these are Android 15 emulator
+checks at phone sizes, not Samsung firmware or physical keyboard certification.
+The fixed build passed all six scenarios at 360 × 640 with 1.3 system font
+scale, 360 × 780, and approximately 411 × 914 logical pixels. Checks cover
+native keyboard visibility, caret containment, stationary native ancestor views
+and zero outer HTML scroll. The focused Markdown/source host run passed 15 tests.
 The focused host run passed 44 tests. The final iOS run retained the caret for
 16 formatted edits with a 362-point software-keyboard inset and 24 native edits
 across plain text and Markdown Source; outer-page scroll remained zero. The
@@ -55,11 +81,14 @@ against the app and chat surfaces. iOS rounds the corners, supplies horizontal
 title inset, and refreshes resolved strokes on trait changes. Android retains
 ripple feedback and disabled text state lists; E Ink makes command boundaries
 square and monochrome. Explicit surfaces still own folder rows, tabs and actual
-selection states. Settings is an explicit exception: category/action rows are
-unboxed, descriptive and status labels use the dynamic muted text role, and
-headings/control labels retain primary ink. Only the selected wide-sidebar
-category has a background. Chat New/Setup, conversation choices and Copy/Latest
-controls have boundaries; Send/Stop keeps its contrasting composer treatment.
+selection states. Settings uses shared rounded groups, inset separators and
+borderless rows. Category buttons retain leading icons and native trailing
+chevrons inside their full hit target. Navigation actions have chevrons; immediate
+commands use accent ink. Descriptions and status labels use dynamic muted ink,
+while headings and control labels use primary ink. The selected wide-sidebar
+category has a highlight. Android E Ink makes groups square and outlined, with
+an inverted selected category. Native switches and pickers stay intact.
+Chat New/Setup, conversation choices and Copy/Latest controls have boundaries; Send/Stop keeps its contrasting composer treatment.
 
 The disposable `command_buttons_probe` captures Home, Documents, Chat, Settings
 and Workspaces in light/dark appearance and checks that ordinary commands remain
@@ -1068,3 +1097,13 @@ the timer advanced and another remote’s Workspace actions menu opened before l
 Bounded remote pages are built offscreen before attachment, avoiding repeated
 layout of the live screen for each row decoration. Evidence:
 `mobile-evidence/2026-10-15-remote-listing-responsiveness-ios-native-ui-local.json`.
+
+## Grouped settings review
+
+`settings_groups_probe` runs every category in light and dark appearance, checks
+control bounds against each viewport, verifies the last option is reachable, and
+checks that category icons survive reflow. Disposable iPhone and iPad simulators
+and an iPhone Duo simulator with an injected landscape crease exercise compact
+routes, wide panes and seam alignment. Evidence is stored locally under
+`Mobile/logs/settings-groups/`. Android backend category/navigation tests also run;
+Android native rendering still needs a device or emulator review.

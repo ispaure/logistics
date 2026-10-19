@@ -243,14 +243,21 @@ def _activate(private_root, volume, base):
 
 
 def recover_location(private_root, volume, *, progress=None):
-    """Explicitly use a retained collection without reading the unavailable source."""
+    """Select retained folders without walking or reading either collection."""
     report = _Progress(progress)
-    report.update('Checking files')
+    report.update('Checking location')
     base, trees = _destination(private_root, volume)
-    if not any(tree.is_dir() for tree in trees):
-        raise ValueError('No existing collection found at this location. Choose a retained backup or copy collections instead.')
+    found = False
     for tree in trees:
-        _inventory(tree, report)
+        try:
+            info = tree.stat()
+        except FileNotFoundError:
+            continue
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError('Collection storage must be a folder: ' + str(tree))
+        found = True
+    if not found:
+        raise ValueError('No existing collection found at this location. Choose a retained backup or copy collections instead.')
     for tree in trees:
         tree.mkdir(parents=True, exist_ok=True)
     report.update('Saving location')

@@ -56,7 +56,7 @@ written to the test app's cache under `documentation-evidence/`.
 The independent host passed five cases on both an iPhone simulator (402 logical
 units, browse/article switching) and an iPad simulator (834 logical units, pinned
 tree and article): opening the mobile guide, rendering the expected H1 in the
-native WebView, selecting Folder Hub's folder landing and Up, clicking an actual
+native WebView, selecting Workspaces's folder landing and Up, clicking an actual
 rendered link into the Chat wiki, and restoring scopes through Back/Forward.
 The linked article is revealed in its expanded tree. Native screenshots were
 visually reviewed. This host calls the production `show_documentation` entry

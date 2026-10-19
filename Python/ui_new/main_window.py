@@ -18,7 +18,7 @@ from commonUtils.ui.tasks.process_host import register_process_host
 
 CORE_TABS = (
     (0, 'File Browser', FileBrowserPage),
-    (5, 'Folder Hub', FoldersPage),
+    (5, 'Workspaces', FoldersPage),
     (90, 'Settings', SettingsPage),
     (100, 'Debug', DebugPage),
 )
@@ -223,7 +223,7 @@ class MainWindow(pyside.Window):
         entries = []
         for key, title, detail, icon in (
                 ('browser', 'File Browser', 'Browse and organize files.', 'browser'),
-                ('folders', 'Folder Hub', 'Browse configured folders and services.', 'hub'),
+                ('folders', 'Workspaces', 'Browse configured folders and services.', 'hub'),
                 ('bulk_rename', 'Bulk Rename', 'Preview and rename files and folders.', 'rename')):
             if key in targets or key == 'bulk_rename':
                 entries.append((key, title, detail, icon))
@@ -236,7 +236,7 @@ class MainWindow(pyside.Window):
                 detail = contribution.launch_description or getattr(state, 'description', '') or f'Open {contribution.name}.'
                 entries.append((key, contribution.name, detail, contribution.navigation_icon))
         if 'actions' in targets:
-            entries.append(('actions', 'Folder Actions', 'Continue running operations and review their results.', 'actions'))
+            entries.append(('actions', 'Workspace actions', 'Continue running operations and review their results.', 'actions'))
         return entries
 
     def _launch(self, mode):
@@ -454,7 +454,7 @@ class MainWindow(pyside.Window):
         if self.tabs.indexOf(self.documents) >= 0:
             entries.append((80, 'Open documents', self.documents))
         if self.actions.count:
-            entries.append((85, 'Folder Actions', self.actions))
+            entries.append((85, 'Workspace actions', self.actions))
         if self.bulk_rename is not None:
             entries.append((86, 'Bulk Rename', self.bulk_rename))
         for registered in pages:
@@ -546,7 +546,7 @@ class MainWindow(pyside.Window):
     def _show_actions(self):
         self._reveal_hub()
         if self.tabs.indexOf(self.actions) < 0:
-            self.tabs.addTab(self.actions, 'Folder Actions')
+            self.tabs.addTab(self.actions, 'Workspace actions')
         self.tabs.setCurrentWidget(self.actions)
         self.dlg.show(); self.dlg.raise_(); self.dlg.activateWindow()
         self.actions.acknowledge_current()

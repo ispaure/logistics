@@ -76,6 +76,15 @@ to a speech service. If no offline voice is available, use the operating system'
 speech settings to install one. Physical-device audio and accessibility ergonomics
 still need a device pass.
 
+Below Speed, **Timer** offers **Off** (the default), **15 min**, **30 min**,
+**45 min**, and **1 hr**. **Time remaining** counts down only during playback;
+pausing or stopping keeps the remaining budget for the next Play. **Reset timer**
+restores the selected duration without changing whether speech is playing or
+paused. Changing the duration also resets the budget. At zero, speech pauses at
+the current word; Play resumes with a fresh full timer. Hiding the controls keeps
+the timer active. The timer belongs to the open speech panel, is shared by mobile
+EPUB and Markdown read-aloud, and clears when that panel is disposed.
+
 In portrait and landscape on iOS and Android, EPUB keeps its chapter browser,
 Previous/Next, compact status, speech and Actions menu in one top toolbar. There
 is no separate page footer or status row. **Appearance…**, chapter search and
@@ -124,7 +133,19 @@ for scan limits, explicit-field saves and private-session cleanup.
 ### Lock-screen read-aloud
 
 Started read-aloud uses system media controls on iOS and Android, with Play/Pause
-and approximate backward/forward 15-second skips. Playback and controls end when
+and approximate backward/forward 15-second skips. With a timer selected, their
+subtitle shows **Time remaining: MM:SS**, refreshed from the same countdown as
+the floating panel. Pause freezes it; Reset timer and duration changes in the
+panel update it immediately. Turning the timer Off removes the countdown.
+Ordinary imported EPUBs, Markdown previews, public notes and documentation also
+show the filename as the heading and a short preview of the current spoken
+passage beside the timer. The preview advances with each passage and updates on
+skips and pause/resume; long text may be truncated on the lock screen. Private
+readers keep the generic **Read aloud** heading and never show their filename
+or passage text there, including when background speech is enabled. Turning the
+timer Off leaves an available passage preview visible.
+The operating system controls the exact lock-screen layout and refresh timing.
+Playback and controls end when
 the passage finishes, the document closes or its credentials are revoked. For
 session-only credentials, background speech is disabled unless **Settings →
 Session-only speech while locked** is enabled. The saved opt-in does not unlock

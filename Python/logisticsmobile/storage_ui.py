@@ -75,7 +75,7 @@ class StorageUI:
         self.collection_erase = toga.Button('Erase collection files at this location…', on_press=self.wipe_collection_storage, style=Pack(height=48))
         for button, explanation in (
             (self.collection_copy, 'Copies and verifies Local + LocalCrypt. Keeps the original files. Stops if the destination has different files; no merge or overwrite.'),
-            (self.collection_existing, 'Switches to files already at the selected location. Copies nothing. Current files stay where they are. These files may be an older backup; LocalCrypt needs its original credentials.'),
+            (self.collection_existing, 'Switches to files already at the selected location without scanning or copying their contents. Current files stay where they are. These files may be an older backup; LocalCrypt needs its original credentials.'),
             (self.collection_empty, 'Selects empty Local + LocalCrypt folders without copying anything. Current files stay where they are. Refuses a destination that already contains files.'),
             (self.collection_erase, 'Permanently deletes only the two collection folders shown above and interrupted copy folders at that location. Does not switch location. Disabled for the collection currently in use.')):
             box.add(button, SettingsLabel(explanation))
@@ -183,7 +183,7 @@ class StorageUI:
             from .settings_ui import SettingsLabel, fit_section, fit_text
             width = max(280, self.app.adaptive.content_width('settings'))
             progress_box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-            heading = {'copy': 'Moving Local + LocalCrypt', 'recover': 'Checking existing files',
+            heading = {'copy': 'Moving Local + LocalCrypt', 'recover': 'Selecting existing collection',
                        'empty': 'Preparing empty folders', 'wipe': 'Erasing files at selected location'}[action]
             progress_box.add(SettingsLabel(heading, style=Pack(font_size=22, margin_bottom=16)))
             if action == 'copy':
@@ -229,7 +229,8 @@ class StorageUI:
             progress_bar.stop()
             progress_bar.max = 100
             progress_bar.value = 100
-            details.text = 'Finished. All checks passed.'
+            details.text = ('Location saved. Existing file contents were not scanned.' if action == 'recover'
+                            else 'Finished. All checks passed.')
             current_file.text = ''
             self.collection_storage_status.text = ('Collection folders erased. You can copy files here or start empty here now.' if action == 'wipe'
                 else 'Storage location saved. Reopen Logistics.' if changed else 'Already using this location.')

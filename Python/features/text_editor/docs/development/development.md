@@ -144,10 +144,26 @@ of the reading/editing `markdown_mode`. Ordinary Markdown opening defaults to
 preview, while New and explicit edit commands enter editing. Each managed
 document owns its preview WebView too, so paired/resumed previews do not replace
 another session’s content; closing a document retires both WebViews.
-The formatted page uses a viewport-height flex column. Its trailing editable
-section fills the remaining writing area, so blank-page taps reach a native
-`contenteditable` target without programmatic focus or keyboard requests. Dynamic
-viewport height follows the available space when the mobile keyboard opens.
+The formatted page uses a fixed-height flex column with one scrolling document
+area and a stationary formatting toolbar. The HTML/body do not scroll separately.
+Its trailing editable section fills the remaining writing area, so blank-page
+taps reach a native `contenteditable` target. Keyboard/viewport resizing and
+typing schedule a coalesced caret check; it scrolls only enough to reveal a caret
+outside the document viewport, rather than recentering it on every keystroke.
+The caret's desired 12-pixel vertical breathing room shrinks to the space left
+around one line when a phone keyboard or enlarged text leaves a short viewport.
+Otherwise fixed padding can scroll the caret above the document area even when
+the native editor panel itself stays in place. The Android keyboard probe checks
+native IME composition, caret bounds, ancestor scroll offsets, new documents and
+appending to the last Markdown block at phone sizes.
+IME composition is published only after completion. Native source/plain-text
+editing retains its platform caret behavior. Status and line-count captions are
+updated only when their text changes to avoid relaying out the editor on each key.
+The Format menu's link command opens a modal HTML dialog instead of keeping a URL
+field in the toolbar. It snapshots the editable range before moving focus to the
+URL input and restores that exact range on insertion or cancellation, including
+when WebKit restores focus as the dialog closes. Unsafe URL schemes remain
+rejected before applying an undoable native link command.
 Memory-pressure cleanup retains the active provider Markdown surface, including
 its reading/editing choice. Android can request trimming while the activity is
 backgrounded; clearing that preview would expose the retained source input on

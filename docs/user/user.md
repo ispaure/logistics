@@ -1,6 +1,6 @@
 # Using Logistics
 
-Start in **File Browser** to work with any folder, or **Folder Hub** for configured
+Start in **File Browser** to work with any folder, or **Workspaces** for configured
 libraries, servers and remote storage. **Documents** lists open readers/editors;
 **Settings → Features** saves which tools are enabled. Required features are enabled
 together, and disabling a dependency with active dependents is refused.
@@ -25,7 +25,7 @@ to find the same guides.
 ## If a tool does not work
 
 Check feature enablement, the selected source/credential, required software and
-folder detection rules in its guide. Refresh Folder Hub after changing its folders
+folder detection rules in its guide. Refresh Workspaces after changing its folders
 or loaded configs. Missing credentials do not prevent ordinary local browsing.
 
 Several Logistics instances can run at once and share file indexing work.

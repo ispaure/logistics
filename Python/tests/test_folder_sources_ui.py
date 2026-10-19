@@ -230,7 +230,7 @@ class FolderSourceTests(QtTestCase):
             self.wait(window._core_pages[1][2])
             read_names.assert_called_once_with()
             known_index = next(index for index in range(window.tabs.count())
-                               if window.tabs.tabText(index) == 'Folder Hub')
+                               if window.tabs.tabText(index) == 'Workspaces')
             self.assertEqual(window.tabs.tabText(0), 'File Browser')
             window.tabs.setCurrentIndex(known_index)
             page = window.tabs.widget(known_index)

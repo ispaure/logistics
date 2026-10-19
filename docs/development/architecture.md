@@ -36,8 +36,8 @@ Python environment and invokes `Python/launch.py`. Startup creates QApplication,
 starts the shared indexing participant, applies the theme, loads feature preferences, registers
 and initializes enabled features, constructs MainWindow and enters the Qt event loop.
 
-`MainWindow` hosts File Browser, Folder Hub, Settings and Debug as core destinations,
-then adds declared feature pages. Documents and Folder Actions register shared
+`MainWindow` hosts File Browser, Workspaces, Settings and Debug as core destinations,
+then adds declared feature pages. Documents and Workspace actions register shared
 hosts, so readers and process jobs can outlive their originating browser pane.
 Bulk Rename has one retained application page. `models/` carries folder identities;
 `services/` owns discovery, software provisioning, safety policy and indexing lifecycle.
@@ -175,7 +175,7 @@ above the content splitter and do not consume its stretch allocation.
 for the QApplication. Features publish Notice events through `notify`, with source,
 ID, title, plain-text message, outcome, optional details action and native delivery
 preference. Stable IDs deduplicate an event; acknowledgement clears unread state.
-The main window owns a shared Toast presenter. Folder Actions retains its result
+The main window owns a shared Toast presenter. Workspace actions retains its result
 panes and badge, and forwards completion/native notice presentation to the service.
 Archives publishes create/edit/extract/test outcomes through the same service.
 Cancellation is distinct from failure. Native delivery is optional; retained

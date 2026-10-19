@@ -22,7 +22,11 @@ class Engine:
 class Media:
     def __init__(self, loop, command):
         self.command, self.states, self.closed = command, [], False
-    def update(self, state): self.states.append(state)
+    def update(self, state, *, timer_text=''):
+        self.states.append(state)
+        self.timer_text = timer_text
+    def update_timer(self, text): self.timer_text = text
+    def update_content(self, title, excerpt): self.title, self.excerpt = title, excerpt
     def close(self): self.closed = True
 
 
@@ -34,14 +38,41 @@ class SpeechMediaTests(unittest.TestCase):
         self.addCleanup(self.loop.close)
         self.app = NS(loop=self.loop, preferences=Preferences(Path(self.temp.name)), screen_privacy=NS(inactive=False))
 
-    def player(self, gate=None, valid=lambda: True):
-        panel = NS()
+    def player(self, gate=None, valid=lambda: True, title=''):
+        panel = NS(document_title=lambda: title)
         playback = SpeechPlayback(panel, self.app, gate=lambda: gate, valid=valid, factory=Media)
         panel.session = SpeechSession(Engine(), on_range=lambda *a: None, on_state=lambda state, msg: playback.changed(state))
         panel.session.can_speak = playback.can_start
         self.addCleanup(playback.dispose)
         panel.session.play(' '.join('word'+str(i) for i in range(400)))
         return panel, playback
+
+    def test_public_filename_and_passage_are_bounded_and_private_sources_stay_generic(self):
+        panel, owner = self.player(title='/folder/Notes😀.md')
+        media = owner.media
+        self.assertEqual(media.title, 'Notes😀.md')
+        self.assertTrue(media.excerpt.startswith('word0 word1'))
+        self.assertLessEqual(len(media.excerpt), 97)
+        self.assertTrue(media.excerpt.endswith('…'))
+        panel.session.skip(15)
+        self.assertTrue(media.excerpt.startswith('word45 word46'))
+        owner.timer_changed('Time remaining: 15:00')
+        self.assertEqual(media.timer_text, 'Time remaining: 15:00')
+        self.assertTrue(media.excerpt.startswith('word45 word46'))
+        panel.session.pause()
+        self.assertEqual(media.states[-1], 'paused')
+        owner.command('stop')
+        self.assertTrue(media.closed)
+        self.assertIsNone(owner.media)
+
+        self.app.preferences.save(session_speech_when_locked='true')
+        private, private_owner = self.player(ResumePassword('secret'), title='Secret.md')
+        self.assertEqual(private_owner.media.title, 'Read aloud')
+        self.assertEqual(private_owner.media.excerpt, '')
+        private_owner.timer_changed('Time remaining: 15:00')
+        self.assertEqual(private_owner.media.timer_text, 'Time remaining: 15:00')
+        private.session.skip(15)
+        self.assertEqual(private_owner.media.excerpt, '')
 
     def test_regular_speech_commands_ownership_and_teardown(self):
         panel, owner = self.player()

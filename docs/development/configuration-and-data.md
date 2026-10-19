@@ -45,6 +45,17 @@ temp and settings paths are separate; use its storage helpers, not hard-coded
 Logistics preference paths. Feature enablement is saved atomically; malformed
 preferences are retained under a `.broken-...` name where possible.
 
+## Android collection location recovery
+
+`features.rclone.mobile.storage_location.recover_location` reconnects retained
+Local and LocalCrypt folders after a reset or when switching to a backup. It
+validates the destination root paths, requires at least one collection folder,
+creates a missing companion folder and saves the private location selection using
+the collection marker. It does not traverse descendants, read collection file
+contents or calculate checksums. Descendant path and file checks remain the
+responsibility of collection access; reconnecting is not an integrity check.
+`switch_location` still copies and verifies bytes before saving a new location.
+
 ## Compatibility requirements
 
 commonUtils owns shared code family and point size (11 by default) in
@@ -188,7 +199,7 @@ a launch warning. First installs and invalid payloads still fail explicitly.
 
 Desktop credential unlocks select saved same-named `.conf` files or process-local
 sets in `features/rclone/session.py`. Session packages are bounded/authenticated
-directly in RAM; virtual `.session` paths identify their Folder Hub contexts but
+directly in RAM; virtual `.session` paths identify their Workspaces contexts but
 are never written. CLI launches use a complete per-child environment, safe internal
 remote aliases and the platform null config. Human remote names stay in the UI and
 local destinations. Session mode does not change existing saved configs; it supports

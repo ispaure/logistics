@@ -660,6 +660,14 @@ These are simulator results, not physical fold/keyboard interaction evidence.
 
 ## Workspaces source tabs
 
+Workspaces and `FileBrowser` list mode share `folder_hub_style.folder_row` and
+`folder_name`: 48-point rows, regular 15-point titles, four-point spacing,
+24-point accent icons in a 36-point slot, and borderless rounded row surfaces.
+The landing page's outer branch containers are transparent; indentation and
+branch guides retain its always-expanded naming hierarchy. Group labels remain
+noninteractive. This presentation does not add tree expansion to browser
+entries or change discovery, filtering, activation, menus, paging or tile mode.
+
 `WorkspaceFrame` retains the Workspaces root's actual `main` container as the
 leading pane on wide folder-options, local/LocalCrypt, remote and workspace-browser
 routes. The root shows a choose-workspace placeholder before opening a folder.

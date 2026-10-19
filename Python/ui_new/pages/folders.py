@@ -73,7 +73,7 @@ class FoldersPage(pyside.QWidget):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(6)
 
-        title_label = pyside.QLabel('Folder Hub')
+        title_label = pyside.QLabel('Workspaces')
         title_font = title_label.font()
         title_font.setPointSizeF(point_size(setting_size(title_font) + 1.5))
         title_font.setBold(True)
@@ -426,7 +426,7 @@ class FoldersPage(pyside.QWidget):
 
         layout.addWidget(title_label)
         layout.addWidget(self._create_general_section(entry))
-        self._tools_status = pyside.QLabel('Checking folder tools…')
+        self._tools_status = pyside.QLabel('Checking workspace tools…')
         layout.addWidget(self._tools_status)
         layout.addStretch()
         self.detail_scroll.setWidget(widget)
@@ -468,7 +468,7 @@ class FoldersPage(pyside.QWidget):
             return
         if result is None or result[0] != self._detail_generation:
             if error and self._tools_status is not None:
-                self._tools_status.setText(f'Folder tools unavailable: {error}')
+                self._tools_status.setText(f'Workspace tools unavailable: {error}')
             return
         _, entry, found = result
         layout = self.detail_scroll.widget().layout()
@@ -485,7 +485,7 @@ class FoldersPage(pyside.QWidget):
                 if widget is not None:
                     layout.insertWidget(layout.count() - 1, widget)
         except Exception as error:
-            self._tools_status.setText(f'Folder tools unavailable: {error}')
+            self._tools_status.setText(f'Workspace tools unavailable: {error}')
             self._tools_status.show()
 
     def _create_general_section(self, entry):

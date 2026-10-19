@@ -281,9 +281,11 @@ source and destination, current folder/file, copied MiB and a percentage for the
 folder being copied. Scanning and byte verification use an activity indicator
 because their total work is not known yet. A completed copy is followed by final
 verification before the new location is saved. Keep Logistics open throughout.
-Checking existing files, preparing empty folders and erasing an unused location
-also show their current stage. Failures keep the original location selected and
-show a retry message; an interrupted erase can leave some old files deleted.
+Selecting existing files checks only the collection folder paths and saves the
+location, without scanning or hashing their contents. Preparing empty folders
+and erasing an unused location also show their current stage. Failures keep the
+original location selected and show a retry message; an interrupted erase can
+leave some old files deleted.
 
 ### Keeping your place during delayed opens
 

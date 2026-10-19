@@ -275,8 +275,8 @@ class DestinationRail(qt.QWidget):
         self.home_button.setCheckable(False)
         self.home_button.clicked.connect(self._home)
         layout.addWidget(self.home_button)
-        for key, title in [('browser', 'File Browser'), ('hub', 'Folder Hub'),
-                           ('actions', 'Folder Actions'), ('documents', 'Open documents')]:
+        for key, title in [('browser', 'File Browser'), ('hub', 'Workspaces'),
+                           ('actions', 'Workspace actions'), ('documents', 'Open documents')]:
             button = self._button(key, title)
             layout.addWidget(button)
             if key == 'actions':
@@ -405,7 +405,7 @@ class DestinationRail(qt.QWidget):
             button = self.buttons['actions']
             button.setVisible(bool(self.actions.count))
             button.unread = self.actions.unread_count
-            button.setToolTip(f'Folder Actions ({self.actions.count}; {button.unread} unseen results)')
+            button.setToolTip(f'Workspace actions ({self.actions.count}; {button.unread} unseen results)')
             button.setAccessibleName(button.toolTip())
             button.update()
         detached = sum(record['detached'] and not record['closed'] for record in self.documents.records.values())

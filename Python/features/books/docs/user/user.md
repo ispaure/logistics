@@ -17,7 +17,7 @@ It opens the appropriate editors without opening a reader.
 In the main app, readers open as tabs in **Open documents**. Metadata editors
 open in separate popup windows.
 Use **Detach** for a separate window and **Bring back** to return it to the same
-workspace. Switching to File Browser or Folder Hub retains your open documents.
+workspace. Switching to File Browser or Workspaces retains your open documents.
 
 Choose a chapter or nested section in the chapter list. **Previous chapter** and
 **Next chapter** follow the book's reading order. Links to another chapter or

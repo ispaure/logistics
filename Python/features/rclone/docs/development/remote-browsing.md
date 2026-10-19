@@ -2,7 +2,7 @@
 
 Desktop hosts `RemoteBrowserView` in the existing File Browser workspace. Its
 `RemoteLocation` carries config identity, remote name and relative directory;
-cloning a tab retains all three. Folder Hub's Browse action and the browser's
+cloning a tab retains all three. Workspaces's Browse action and the browser's
 Open Remote command share this route. Local and LocalCrypt routing is preserved.
 
 The rclone feature owns remote credentials, CLI/native adapters, direct-open
@@ -41,10 +41,10 @@ list limits, explicit close and forget actions. Live readers remain transient.
 below it only during requests, removing both on completion. It uses the header’s
 current parent because adaptive presentation may wrap the browser contents.
 Successful remote listings mark the location header unlocked. Encrypted locations
-reuse Folder Hub's combined folder/lock glyph and color beside the cloud icon;
+reuse Workspaces's combined folder/lock glyph and color beside the cloud icon;
 local encrypted listings use the same unlocked glyph beside the device icon.
 Remote provider opening holds the application's cloud-busy state, and Cancel
-signals both pending private controllers and the native request. Folder Hub
+signals both pending private controllers and the native request. Workspaces
 shows a status and spinner in its existing list before awaiting a folder,
 rejecting duplicate taps while opening. Its menu uses the displayed snapshot
 without rediscovery; credential grouping reuses the same discovery result instead
@@ -80,7 +80,7 @@ These calls do not create temporary plaintext files or change the transfer engin
 Network reads can wait for an active serialized network operation; LocalCrypt's
 independent offline read scope remains separate.
 
-Folder Hub checks online busy state before native credential lookups. A pending
+Workspaces checks online busy state before native credential lookups. A pending
 online folder does not suppress a different local tap; completion respects the
 newer navigation. LocalCrypt can share transfers and credential-stable remote
 reads. Credential writes retain their guard. Busy action pages expose Cancel.
@@ -111,9 +111,9 @@ buttons. Inner ZIP password errors route to an item-specific password form that
 retains the item and credential generation; retry clears the field before opening.
 Credential retirement clears the item page and password. The browser reports
 opening progress, setup exceptions and unsuccessful session presentation instead
-of leaving only a selection message. Folder Hub retains name-based groups but
+of leaving only a selection message. Workspaces retains name-based groups but
 does not promote the current remote listing's subfolders into its entry tree.
-Explicit Folder Hub locations preserve their folder when switching remotes.
+Explicit Workspaces locations preserve their folder when switching remotes.
 
 The browser exposes no standalone download/copy actions for files or folders on
 any platform. Retired Python copy/folder-download helpers and native `read`,

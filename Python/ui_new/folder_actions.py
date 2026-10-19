@@ -7,7 +7,7 @@ from .documents import DocumentsPage
 class FolderActionsPage(DocumentsPage):
     def __init__(self, activate, parent=None):
         super().__init__(activate, parent)
-        self.workspace._drop_target.widget().setText('Folder actions appear here when you start a sync.')
+        self.workspace._drop_target.widget().setText('Workspace actions appear here when you start a sync.')
         self.workspace.active_changed.connect(lambda pane: self.acknowledge_current())
         self.window().installEventFilter(self)
 
@@ -54,7 +54,7 @@ class FolderActionsPage(DocumentsPage):
         window.setWindowTitle(f"{record['name']} · {label}")
         self.changed.emit()
         if not self.closing:
-            notice = self.notify(f"{record['name']} · {label}", result.error or 'Open Folder Actions for details.',
+            notice = self.notify(f"{record['name']} · {label}", result.error or 'Open Workspace actions for details.',
                         failed=result.state != 'cancelled' and not result.succeeded,
                         outcome='cancelled' if result.state == 'cancelled' else None)
             if notice is not None:

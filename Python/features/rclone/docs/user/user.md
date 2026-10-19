@@ -8,7 +8,7 @@ remote config. FUSE is optional and only needed for mounting.
 1. Place your credential ZIP packages in the checkout's `Credentials/rclone/`
    directory (or the configured credentials resource directory).
 2. Open **Settings → rclone → Credential packages** and load a package, entering its password when asked.
-3. Return to **Folder Hub** and select the rclone source and credential.
+3. Return to **Workspaces** and select the rclone source and credential.
 4. Select a remote. If a local folder has exactly the same name, it is associated
    with that entry.
 
@@ -20,7 +20,7 @@ Logistics does not create account credentials for you.
 
 Choose **Load for Session** to use a package only for this Logistics session.
 Pressing Enter in the password field also loads for the session. The ZIP is decrypted directly in memory, with no extracted
-TXT or `.conf` file. Folder Hub shows the package with a **(session)** label. Push,
+TXT or `.conf` file. Workspaces shows the package with a **(session)** label. Push,
 Pull and previews pass its settings to each rclone child in a private environment,
 with a memory-only config and no secret command arguments. Existing saved configs
 remain unchanged. Session credentials disappear when Logistics exits, or when you
@@ -54,7 +54,7 @@ Sync inventories, comparison reviews and their generated-file cleanup plans
 have no fixed entry limit on desktop or mobile. Local safety checks still scan
 the full folder and can be cancelled.
 
-GUI Push/Pull opens a retained **Folder Actions** job with live transfer statistics,
+GUI Push/Pull opens a retained **Workspace actions** job with live transfer statistics,
 command output, operation state and retry attempt. Results stay available after completion.
 Success requires a normal exit with code zero; failures show the exit code and
 recent output. rclone retains its own retry policy, and a successful retry reports
@@ -99,7 +99,7 @@ the ZIP; the other verifies its executable. Saving does not download anything or
 replace a running tool. See [download settings](download-versions.md#rclone-download-versions)
 for the field details.
 
-Sync progress opens in **Folder Actions** on the left rail. Each job has its own
+Sync progress opens in **Workspace actions** on the left rail. Each job has its own
 tab with transfer statistics and logs; completed and failed jobs remain available
 until you close them. A red badge marks results you haven't viewed. Completion
 and errors also use system notifications when the platform supports them.
@@ -163,7 +163,7 @@ A missing or invalid credential mapping blocks Push rather than guessing a remot
 ## Browse remote files directly
 
 On desktop choose **File Browser → File → Open Remote…**, or **Browse** on a
-Folder Hub remote. Each remote opens in its own tab, labelled with its account
+Workspaces remote. Each remote opens in its own tab, labelled with its account
 and remote name. Navigation stays within that remote. Duplicate tabs retain the
 account and current directory; tabs use the existing workspace docking.
 Credentials must already be loaded through rclone settings.
@@ -192,10 +192,10 @@ Save As or metadata-edit controls.
 Remote browsers on desktop, iOS and Android offer browsing and direct previews
 only. They have no standalone file or folder download/copy actions. To create an
 offline copy, use the existing managed **Pull to Local** or **Pull to LocalCrypt**
-workflow from Folder Hub. Session-only credentials do not create a persistent
+workflow from Workspaces. Session-only credentials do not create a persistent
 remote document; locking or replacing credentials retires its open readers.
 
-On mobile, open a remote from Folder Hub or **Remote files**, then tap a supported
+On mobile, open a remote from Workspaces or **Remote files**, then tap a supported
 file to read it directly. Current-folder filtering and the manual-local-copy
 dialog apply on mobile too. Failed navigation retains the previous listing and
 selection while credentials remain current; credential changes clear stale views.
@@ -208,7 +208,7 @@ See [Rclone mobile workflows](../user_mobile/workflows.md#android-and-ios-protot
 
 ## Read and edit a LocalCrypt copy on desktop
 
-For a session-loaded crypt remote with no existing copy, Folder Hub offers:
+For a session-loaded crypt remote with no existing copy, Workspaces offers:
 
 | Action | Destination | Contents on disk |
 | --- | --- | --- |
@@ -223,7 +223,7 @@ Pull uses sync and can replace destination files or delete destination-only file
 
 **Pull to Local** with temporary credentials also saves a small connection record
 under the Logistics application support folder's `Connections/Local`. It contains the credential ZIP's location and
-remote name. After credentials lock or Logistics restarts, Folder Hub still shows
+remote name. After credentials lock or Logistics restarts, Workspaces still shows
 that Local copy under its account; **Push…** and **Pull** request the matching ZIP's
 password. Keep that ZIP at its recorded location. Previously pulled folders acquire
 this association the next time you Pull with their temporary credentials.
@@ -374,7 +374,7 @@ previous location; encrypted contents are not listed there. Unmapped LocalCrypt
 folders show an error instead of opening as ordinary files. Finder and other
 external file browsers still show ciphertext names.
 
-Folder Hub shows a loaded credential's encrypted copy once. If both decrypted Local
+Workspaces shows a loaded credential's encrypted copy once. If both decrypted Local
 and LocalCrypt copies exist, both remain selectable with short **Local** and
 **LocalCrypt** labels. Hover an entry to see its complete source and path.
 
@@ -393,7 +393,7 @@ and leaves it focused for another try. Enter submits once; Cancel abandons the
 unlock without creating an empty private browser. Password-protected file opens
 and metadata edits use the same retry behavior for inner archive passwords.
 
-Folder Hub keeps **Pull** and **Push...** available for LocalCrypt entries. Use the General section’s **Browse in Logistics** button to open the private browser. Tools that require ordinary local files (such as Calibre or Obsidian detection) are excluded from private copies.
+Workspaces keeps **Pull** and **Push...** available for LocalCrypt entries. Use the General section’s **Browse in Logistics** button to open the private browser. Tools that require ordinary local files (such as Calibre or Obsidian detection) are excluded from private copies.
 
 ### Session privacy
 
@@ -432,7 +432,7 @@ See [Rclone mobile workflows](../user_mobile/workflows.md#android-collection-dri
 
 See [Rclone mobile workflows](../user_mobile/workflows.md#side-by-side-mobile-credential-packages).
 
-### Mobile Folder Hub source tabs
+### Mobile Workspaces source tabs
 
 See [Rclone mobile workflows](../user_mobile/workflows.md#mobile-workspaces-source-tabs).
 

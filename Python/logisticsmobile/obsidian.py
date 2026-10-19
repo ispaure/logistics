@@ -71,6 +71,7 @@ class VaultBrowser:
         self.article = toga.Box(children=[self.web], style=Pack(direction=COLUMN, flex=1))
         from .markdown_speech import MarkdownSpeech
         self.speech = MarkdownSpeech(app, self.web, self.article,
+            document_title=lambda: '' if self.provider.private else self.path,
             privacy_gate=lambda: getattr(app.cloud_client, "session_privacy", None) if self.provider.private else None,
             valid=lambda: not self.cancelled.is_set() and app.active_host
                 and (not self.provider.private or (self.client is app.cloud_client

@@ -3,7 +3,7 @@
 Enable **Minecraft Server** under **Settings → Features** to use these tools.
 
 Minecraft controls appear for servers discovered below a selected local folder
-on **Folder Hub**. A directory with `server.properties` is recognized as a server;
+on **Workspaces**. A directory with `server.properties` is recognized as a server;
 searching is limited to one to three directory levels.
 
 ## Configure launching
@@ -26,7 +26,7 @@ must have execute permission. Logistics does not download server distributions.
 
 ## Use the controls
 
-1. Select the containing local folder on **Folder Hub**.
+1. Select the containing local folder on **Workspaces**.
 2. Choose a server in the Minecraft section.
 3. Launch it, open its folder/documentation, or edit its properties.
 
@@ -38,7 +38,7 @@ logs when launch fails. These controls do not replace the server's own console.
 
 See [Using Logistics](../../../../../docs/user/user.md) for navigation and settings.
 
-Refresh Folder Hub after adding or moving a server. Select the parent containing
+Refresh Workspaces after adding or moving a server. Select the parent containing
 your server directories; discovery is bounded and does not scan the whole disk.
 The properties action opens the file in the default external editor. Save there;
 Logistics does not apply those edits to a running server for you. Restart or reload through the server's own controls as appropriate.

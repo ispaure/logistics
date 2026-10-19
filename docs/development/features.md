@@ -138,7 +138,7 @@ Every folder has a same-named landing (`banana/banana.md`). Begin every page
 with an H1, below optional YAML properties, and mention each child page in its
 parent's text. Use relative links. User guides explain prerequisites, controls,
 outcomes and recovery; developer guides explain ownership, contracts and checks.
-Application-wide UI and Folder Hub workflows live in the root Logistics wiki;
+Application-wide UI and Workspaces workflows live in the root Logistics wiki;
 Bulk Rename stays with its existing `ui_new` owner. Shared APIs and external
 feature internals remain documented in their own repositories.
 

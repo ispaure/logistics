@@ -39,7 +39,7 @@ not the source to edit. Root platform launchers remain desktop entry points.
 | Feature discovery, enablement or dependencies | `Python/features/registry.py`, `contributions.py` | [Feature lifecycle](features.md) |
 | Register a feature page, settings group or launcher | The feature's `__init__.py` and any delegated contribution module | [Extension points](extension-points.md) |
 | Browser actions, previews or file activation | Feature registration and handlers; `Python/ui_new/file_browser.py` for host integration | [Browser extensions](file-browser.md) |
-| Desktop Folder Hub | `Python/ui_new/pages/folders.py`, `Python/services/folders/sources.py` | [Feature lifecycle](features.md#remote-folder-source-context) |
+| Desktop Workspaces | `Python/ui_new/pages/folders.py`, `Python/services/folders/sources.py` | [Feature lifecycle](features.md#remote-folder-source-context) |
 | Git commands versus Git presentation | `Python/features/git/repository.py` versus `Python/features/git/ui/` | [Git developer guide](../../Python/features/git/docs/development/development.md) |
 | LM transport, saved data or desktop chat | `Python/features/lm/{transport,storage,session}.py`, `Python/features/lm/ui/` | [LM integration](../../Python/features/lm/docs/development/lm.md) |
 | EPUB or comic format behavior | `Python/features/books/`, `Python/features/comics/` | The owning feature's `README.md` |

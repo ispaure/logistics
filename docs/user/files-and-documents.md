@@ -1,7 +1,7 @@
 # Files and documents in Logistics
 
 Logistics starts with a launch chooser. **Open full hub with sidebar** opens all
-available destinations. Below it, File Browser is always available; Folder Hub,
+available destinations. Below it, File Browser is always available; Workspaces,
 Bulk Rename and enabled features with their own navigation buttons open workspaces
 with the sidebar by default. **Appearance & shared controls → Menus → Launch with
 sidebar** can switch launch-page choices to focused workspaces without it. Disabled features are absent. Use Settings to
@@ -51,12 +51,15 @@ File Browser's **File → Selected Items** exposes the same eligible commands an
 feature contributions as right-clicking the current selection.
 
 File Browser starts at your home folder. Use it for arbitrary paths;
-**Folder Hub** brings configured local folders and remote integrations together.
+**Workspaces** brings configured local folders and remote integrations together.
+Each workspace provides the tools and actions relevant to that folder, such as
+library features, sync and remote browsing. **Workspace actions** retains running
+operations and their results.
 The **Documents** menu lists open editors/readers. Switching destinations keeps
 those documents alive. Feature-specific actions appear only for eligible selections.
 The compact left sidebar keeps full-size destination icons with narrow side margins
 and 40-pixel vertical steps, fitting more destinations in the available height.
-File Browser and Folder Hub use the full page width. Indexing and folder-source
+File Browser and Workspaces use the full page width. Indexing and folder-source
 loading appear in compact bottom notice rows, leaving more room for files and
 folders. Hover over a shortened indexing notice to read its full text; use
 **Index details…** when shown to inspect unfinished folders and scan errors.
@@ -101,7 +104,7 @@ The Logistics indexing settings apply on the next index request after **Save**:
 ## Remote tabs
 
 Choose **File → Open Remote…** to browse a loaded rclone account, or choose
-**Browse** on a Folder Hub remote. These tabs have their own read-only actions,
+**Browse** on a Workspaces remote. These tabs have their own read-only actions,
 current-folder search and memory-only previews. Supported files open directly;
 other files show a dialog asking you to manually make a local copy. There are no standalone file or folder download actions. Use managed Pull
 workflows for offline Local or LocalCrypt folders.
@@ -180,7 +183,7 @@ For plain-source editing, choose [Text Editor](../../Python/features/text_editor
 
 ## Find a configured integration
 
-Choose a source and folder on **Folder Hub**. Local folders normally live under
+Choose a source and folder on **Workspaces**. Local folders normally live under
 `~/Server/Local`; remote sources come from loaded rclone configs, and Dropbox
 contributes its detected account folders. Switching source tabs refreshes folder
 sources in the background while keeping the cached list available. Use
@@ -330,12 +333,12 @@ Blue Hole separately checks its selected GitHub branch on each Blender launch.
 
 Opening or expanding a LocalCrypt copy in File Browser automatically opens its
 private tab with resolved names. The ordinary tab stays available at its previous
-location. Folder Hub lists each encrypted copy once; separate Local and LocalCrypt
+location. Workspaces lists each encrypted copy once; separate Local and LocalCrypt
 copies have distinct labels, with full source details available on hover.
 
 Private File Browser tabs and their detached windows begin with **🕵️ Private -**. Their navigation, list, tile and column views share the regular browser’s presentation. Selecting a file shows File Information and supported comic/book metadata in the right Preview panel, or in the final column. Private views omit storage maps; thumbnails stay in memory. Editor Open/Save As omits Preview and retains its Local/LocalCrypt storage picker at the top.
 
-Folder Hub shows backend-aware tools for private LocalCrypt copies, including rclone Pull and Push. Ordinary local-folder detection does not run against their ciphertext paths.
+Workspaces shows backend-aware tools for private LocalCrypt copies, including rclone Pull and Push. Ordinary local-folder detection does not run against their ciphertext paths.
 
 EPUB Reader and Comic Reader **Open** buttons in New Document, and their reader File menus, use the shared Local/LocalCrypt picker with format-specific filters. Cancelling leaves the current document or chooser in place. Private selections open separate readers with **🕵️ Private -** titles.
 
@@ -360,7 +363,7 @@ not show hover previews. Missing, binary and external web links have no preview.
 
 ## Notes Library
 
-On a location's Folder Hub actions page, **Open Notes Library** is offered when
+On a location's Workspaces actions page, **Open Notes Library** is offered when
 its root contains an `.obsidian` directory. It opens a document under Documents
 with an expandable folder/page sidebar and Back/Forward/Up navigation. Remote
 libraries have no search or recursive index; local filtering only filters loaded

@@ -1,4 +1,4 @@
-"""One process-wide Now Playing owner; metadata never contains document text."""
+"""One Now Playing owner; private readers never publish titles or passage text."""
 from weakref import WeakSet
 
 _owners = WeakSet()
@@ -11,6 +11,7 @@ class SpeechPlayback:
         self.factory = factory or native_media
         self.media, self.closed = None, False
         self.media_error = ""
+        self.timer_text = ''
         _owners.add(self)
 
     def allowed(self):
@@ -38,7 +39,8 @@ class SpeechPlayback:
                 try:
                     if self.media is None:
                         self.media = self.factory(self.app.loop, self.command)
-                    self.media.update(state)
+                    self.media.update_content(*self.content())
+                    self.media.update(state, timer_text=self.timer_text)
                 except Exception as error:
                     self.media_error = str(error)
                     self.clear()
@@ -48,6 +50,31 @@ class SpeechPlayback:
             self.clear()
             if _active is self:
                 _active = None
+
+    def content(self):
+        # Hosts opt ordinary readers in with a title provider. Private hosts leave
+        # it empty; credential-session readers remain generic even with opt-in audio.
+        title = getattr(self.panel, 'document_title', lambda: '')() if self.gate() is None else ''
+        if not title:
+            return 'Read aloud', ''
+        title = ' '.join(str(title).replace('\\', '/').rsplit('/', 1)[-1].split())[:120]
+        session = self.panel.session
+        passage = session.ranges[session.index][0] if session.index < len(session.ranges) else ''
+        passage = ' '.join(passage.split())
+        excerpt = passage[:96].rsplit(' ', 1)[0] + '…' if len(passage) > 96 else passage
+        return title or 'Read aloud', excerpt
+
+    def timer_changed(self, text):
+        """Refresh existing system controls without activating audio or an owner."""
+        if self.closed or text == self.timer_text:
+            return
+        self.timer_text = text
+        if self.media is not None and self.active():
+            try:
+                self.media.update_timer(text)
+            except Exception as error:
+                self.media_error = str(error)
+                self.clear()
 
     def command(self, action):
         if not self.active():

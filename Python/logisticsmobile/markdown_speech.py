@@ -64,9 +64,10 @@ class MarkdownSpeechPanel(ReadAloudPanel):
 
 
 class MarkdownSpeech:
-    def __init__(self, app, web, container, *, privacy_gate=lambda: None, valid=lambda: True):
+    def __init__(self, app, web, container, *, privacy_gate=lambda: None, valid=lambda: True, document_title=lambda: ''):
         self.app, self.web, self.container = app, web, container
         self.privacy_gate, self.valid = privacy_gate, valid
+        self.document_title = document_title
         self.panel = None
         self.generation = 0
         self.highlight_active = self.source_ready = False
@@ -81,7 +82,8 @@ class MarkdownSpeech:
             return
         stop_markdown_speech(self.app)
         self.panel = MarkdownSpeechPanel(loop=self.app.loop, source=self.source,
-            on_range=self.highlight, close=self.close, app=self.app, privacy_gate=self.privacy_gate, valid=self.valid)
+            on_range=self.highlight, close=self.close, app=self.app, privacy_gate=self.privacy_gate, valid=self.valid,
+            document_title=self.document_title)
         self.panel.show_over(self.container)
 
     async def source(self):

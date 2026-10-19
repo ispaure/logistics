@@ -13,9 +13,17 @@ class AndroidMedia:
         self.listener = Listener()
         SpeechMediaService.attach(self.context, self.listener)
 
-    def update(self, state):
+    def update(self, state, *, timer_text=''):
         if not self.closed:
-            self.service.update(self.context, state == 'speaking')
+            self.service.update(self.context, state == 'speaking', timer_text)
+
+    def update_timer(self, text):
+        if not self.closed:
+            self.service.updateTimer(self.context, text)
+
+    def update_content(self, title, excerpt):
+        if not self.closed:
+            self.service.updateContent(self.context, title, excerpt)
 
     def close(self):
         if not self.closed:

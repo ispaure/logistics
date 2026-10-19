@@ -493,7 +493,7 @@ class MainWindowTests(QtTestCase):
                     patch.object(main_window,'CORE_TABS',core):
                 window = main_window.MainWindow()
                 self.assertEqual([window.tabs.tabText(i) for i in range(window.tabs.count())],
-                                 ['File Browser','Folder Hub','Settings','Debug'])
+                                 ['File Browser','Workspaces','Settings','Debug'])
                 # Drain the application's event queue, including completion
                 # callbacks queued before entering a nested test event loop.
                 from time import monotonic, sleep
@@ -666,7 +666,7 @@ class MainWindowTests(QtTestCase):
         self.root = Path(self.temporary.name)
         (self.root / 'file.txt').write_text('fixture')
         with patch.object(main_window, 'CORE_TABS', ((0, 'File Browser', FileBrowserPage),
-                (5, 'Folder Hub', self.page), (90, 'Settings', self.page))), patch.object(
+                (5, 'Workspaces', self.page), (90, 'Settings', self.page))), patch.object(
                 main_window.registry, 'get_pages', return_value=[]), patch.object(
                 main_window.registry, 'get_browser_extensions', return_value=extensions), patch.object(Path, 'home', return_value=self.root):
             window = main_window.MainWindow()
@@ -689,7 +689,7 @@ class MainWindowTests(QtTestCase):
         browser = window.tabs.widget(0)
         self.wait_browser(browser)
         self.assertEqual(window.tabs.tabText(0), 'File Browser')
-        self.assertEqual(window.tabs.tabText(1), 'Folder Hub')
+        self.assertEqual(window.tabs.tabText(1), 'Workspaces')
         self.assertEqual(window.tabs.currentIndex(), 0)
         self.assertEqual(browser.file_browser.navigation.library, Path(self.root.anchor))
         self.assertEqual(browser.file_browser.navigation.directory, self.root)

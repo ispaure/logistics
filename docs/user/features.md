@@ -2,7 +2,7 @@
 
 Choose a feature to open its own documentation tree. Its user guide explains
 controls and workflows; its development branch explains implementation.
-Folder Hub, navigation and general file browsing remain in the
+Workspaces, navigation and general file browsing remain in the
 [Logistics guide](files-and-documents.md).
 
 | Feature | Mobile help |

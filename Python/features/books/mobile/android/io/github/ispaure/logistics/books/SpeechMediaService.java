@@ -7,12 +7,14 @@ import android.media.*;
 import android.media.session.*;
 import android.os.*;
 
-/** Process-owned, non-exported live speech controls. Never stores source text. */
+/** Process-owned, non-exported speech controls; private sources stay generic. */
 public final class SpeechMediaService extends Service {
     public interface Listener { void command(String action); }
     private static volatile Listener listener;
     private static volatile SpeechMediaService instance;
     private static volatile boolean playing;
+    private static volatile String timerText = "";
+    private static volatile String title = "Read aloud", excerpt = "";
     private static volatile long epoch;
     private MediaSession session;
     private AudioManager audio;
@@ -23,19 +25,29 @@ public final class SpeechMediaService extends Service {
     private static final int NOTICE = 8715;
 
     public static synchronized void attach(Context context, Listener value) {
-        epoch++; playing = true; listener = value;
+        epoch++; playing = true; timerText = ""; title = "Read aloud"; excerpt = ""; listener = value;
         Intent intent = new Intent(context, SpeechMediaService.class);
         if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent);
         else context.startService(intent);
     }
-    public static void update(Context context, boolean value) {
-        playing = value;
+    public static void update(Context context, boolean value, String timer) {
+        playing = value; timerText = timer;
         SpeechMediaService service = instance;
         if (service != null) service.render();
     }
+    public static void updateTimer(Context context, String timer) {
+        timerText = timer;
+        SpeechMediaService service = instance;
+        if (service != null) service.publish(false);
+    }
+    public static void updateContent(Context context, String name, String passage) {
+        title = name; excerpt = passage;
+        SpeechMediaService service = instance;
+        if (service != null) service.publish(false);
+    }
     public static synchronized void detach(Context context, Listener value) {
         if (listener != value) return;
-        epoch++; playing = false; listener = null;
+        epoch++; playing = false; timerText = ""; title = "Read aloud"; excerpt = ""; listener = null;
         context.stopService(new Intent(context, SpeechMediaService.class));
         SpeechMediaService service = instance;
         if (service != null) service.cleanup();
@@ -84,8 +96,6 @@ public final class SpeechMediaService extends Service {
                 else if ("forward15".equals(action)) send("forward");
             }
         });
-        session.setMetadata(new MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE, "Read aloud")
-            .putString(MediaMetadata.METADATA_KEY_ARTIST, "Logisticks").build());
         session.setActive(true);
     }
     private PendingIntent action(String action, int code) {
@@ -115,11 +125,22 @@ public final class SpeechMediaService extends Service {
             .addCustomAction("back15", "Back 15 seconds", skipIcon("back15"))
             .addCustomAction("forward15", "Forward 15 seconds", skipIcon("forward15"));
         session.setPlaybackState(state.build());
+        publish(true);
+    }
+    private void publish(boolean foreground) {
+        if (listener == null || session == null) return;
+        String subtitle = timerText.isEmpty() ? excerpt : timerText + (excerpt.isEmpty() ? "" : " · " + excerpt);
+        if (subtitle.isEmpty()) subtitle = "Logisticks";
+        session.setMetadata(new MediaMetadata.Builder()
+            .putString(MediaMetadata.METADATA_KEY_TITLE, title)
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, title)
+            .putString(MediaMetadata.METADATA_KEY_ARTIST, subtitle)
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, subtitle).build());
         Notification.Builder notice = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
         Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (launch != null) notice.setContentIntent(PendingIntent.getActivity(this, 0, launch,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
-        Notification notification = notice.setContentTitle("Read aloud").setContentText("Logisticks")
+        Notification notification = notice.setContentTitle(title).setContentText(subtitle)
             .setSmallIcon(android.R.drawable.ic_media_play).setVisibility(Notification.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true).setOngoing(playing)
             .addAction(skipIcon("back15"), "Back 15 seconds", action("back", 1))
@@ -128,7 +149,8 @@ public final class SpeechMediaService extends Service {
             .addAction(skipIcon("forward15"), "Forward 15 seconds", action("forward", 3))
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", action("stop", 4))
             .setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()).setShowActionsInCompactView(0, 1, 2)).build();
-        if (Build.VERSION.SDK_INT >= 29) startForeground(NOTICE, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+        if (!foreground) ((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(NOTICE, notification);
+        else if (Build.VERSION.SDK_INT >= 29) startForeground(NOTICE, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
         else startForeground(NOTICE, notification);
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {

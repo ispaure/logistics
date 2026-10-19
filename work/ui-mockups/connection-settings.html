@@ -1,0 +1,72 @@
+<style>
+#logistics-connections{--lc-bg:light-dark(#f3f3f8,#19191f);--lc-paper:light-dark(#fff,#25252d);--lc-text:light-dark(#20212b,#f1f0f7);--lc-sub:light-dark(#626473,#b4b4c3);--lc-line:light-dark(#e5e5ed,#3c3c48);--lc-accent:light-dark(#6550c8,#b6a5ff);--lc-tint:light-dark(#eeebfc,#353047);--lc-on:light-dark(#fff,#201a37);font:15px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--lc-text);padding:28px 12px;}
+#logistics-connections *{box-sizing:border-box}#logistics-connections .lc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;max-width:760px;margin:auto;align-items:start}
+#logistics-connections .lc-phone{background:var(--lc-bg);border:1px solid var(--lc-line);border-radius:28px;overflow:hidden;min-width:0;}
+#logistics-connections .lc-top{display:flex;align-items:center;justify-content:space-between;padding:16px 22px 4px;font-size:13px;font-weight:500}
+#logistics-connections .lc-nav{padding:4px 12px;display:flex;align-items:center;justify-content:space-between}
+#logistics-connections button{font:inherit;cursor:inherit}#logistics-connections .lc-back{display:inline-flex;align-items:center;gap:3px;background:none;border:0;color:var(--lc-accent);padding:9px 0;min-height:44px}
+#logistics-connections .lc-content{padding:4px 20px 22px;min-height:670px}#logistics-connections h2{font-size:27px;letter-spacing:-.8px;font-weight:650;margin:5px 0 6px;line-height:1.2}#logistics-connections p{margin:0;color:var(--lc-sub);font-size:13px}#logistics-connections .lc-eyebrow{font-size:11px;letter-spacing:1.3px;color:var(--lc-sub);margin:24px 4px 8px;font-weight:600;text-transform:uppercase}
+#logistics-connections .lc-group{background:var(--lc-paper);border:1px solid var(--lc-line);border-radius:15px;overflow:hidden}#logistics-connections .lc-row{display:flex;gap:12px;align-items:center;padding:14px}#logistics-connections .lc-row+.lc-row{border-top:1px solid var(--lc-line)}#logistics-connections .lc-icon{display:grid;place-items:center;background:var(--lc-tint);color:var(--lc-accent);width:36px;height:36px;border-radius:10px;flex-shrink:0}#logistics-connections .lc-copy{flex:1;min-width:0}#logistics-connections strong{font-weight:600;font-size:14px;display:block}#logistics-connections .lc-small{font-size:12px;color:var(--lc-sub);margin-top:3px}#logistics-connections .lc-tag{font-size:11px;color:var(--lc-accent);white-space:nowrap}#logistics-connections .lc-action{border:0;border-radius:11px;min-height:46px;padding:10px 13px;background:var(--lc-accent);color:var(--lc-on);font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:12px}#logistics-connections .lc-secondary{background:var(--lc-tint);color:var(--lc-accent)}#logistics-connections .lc-linkrow{border:0;background:none;color:var(--lc-text);text-align:left;width:100%;min-height:48px;display:flex;align-items:center;justify-content:space-between;padding:12px 14px;gap:10px}#logistics-connections .lc-linkrow+.lc-linkrow{border-top:1px solid var(--lc-line)}#logistics-connections .lc-foot{font-size:12px;color:var(--lc-sub);margin:9px 4px 0}#logistics-connections .lc-field{display:block;padding:11px 14px;font-size:12px;color:var(--lc-sub)}#logistics-connections .lc-field+.lc-field{border-top:1px solid var(--lc-line)}#logistics-connections input:not([type=checkbox]){display:block;border:0;background:transparent;color:var(--lc-text);width:100%;font:inherit;font-size:16px;margin-top:3px;padding:2px 0;min-height:26px}#logistics-connections .lc-check{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;font-size:14px;min-height:49px}#logistics-connections input[type=checkbox]{accent-color:var(--lc-accent);width:20px;height:20px;flex-shrink:0}#logistics-connections details{margin-top:16px}#logistics-connections summary{padding:8px 2px;min-height:44px;color:var(--lc-sub);font-size:13px;cursor:inherit}#logistics-connections .lc-inline{background:var(--lc-paper);border:1px solid var(--lc-line);padding:14px;border-radius:12px;margin-top:10px}#logistics-connections .lc-inline .lc-field{padding:4px 0}#logistics-connections .lc-inline input{border-bottom:1px solid var(--lc-line);padding:8px 0}#logistics-connections .lc-status{color:var(--lc-accent);font-size:12px;margin-top:10px}#logistics-connections .lc-home{width:100px;height:4px;background:var(--lc-text);opacity:.6;border-radius:4px;margin:0 auto 9px}#logistics-connections [hidden]{display:none!important}#logistics-connections .lc-danger{color:light-dark(#ad343b,#ffa4ab)}
+@media(max-width:620px){#logistics-connections .lc-grid{grid-template-columns:minmax(0,360px);justify-content:center}#logistics-connections{padding:20px 0}#logistics-connections .lc-content{min-height:0;padding-bottom:28px}}
+</style>
+<div id="logistics-connections" class="viz-dotted-background">
+<div class="lc-grid">
+<section class="lc-phone" aria-label="rclone connections settings mockup">
+<div class="lc-top"><span>9:41</span><span aria-label="Wi-Fi and battery">••• ▰</span></div>
+<div class="lc-nav"><button class="lc-back cursor-interaction" type="button" data-settings><i data-lucide="chevron-left" aria-hidden="true"></i>Settings</button></div>
+<div class="lc-content">
+<h2>rclone connections</h2><p>Your cloud storage, ready when you need it.</p>
+<div class="lc-eyebrow">Credential packages</div>
+<div class="lc-group">
+<div class="lc-row"><span class="lc-icon"><i data-lucide="cloud" aria-hidden="true"></i></span><div class="lc-copy"><strong>Personal cloud</strong><div class="lc-small">2 remotes · saved on this device</div></div><span class="lc-tag" id="lc-ready">Ready</span></div>
+<button class="lc-linkrow cursor-interaction" type="button" id="lc-remotes"><span>Google Drive · Dropbox</span><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+<div id="lc-remote-detail" class="lc-row" hidden><p>Google Drive and Dropbox are available in Files → Remote files.</p></div>
+</div>
+<button type="button" class="lc-action cursor-interaction" id="lc-import"><i data-lucide="plus" aria-hidden="true"></i>Import credential ZIP</button>
+<div class="lc-inline" id="lc-import-form" hidden><label class="lc-field">Credential package<input type="file" accept=".zip" id="lc-zip"></label><label class="lc-field">ZIP password<input type="password" placeholder="If encrypted" autocomplete="off"></label><label class="lc-check">Save on this device<input type="checkbox" checked></label><button type="button" class="lc-action cursor-interaction" id="lc-load">Load remotes</button><p class="lc-status" id="lc-import-status" aria-live="polite"></p></div>
+<div class="lc-foot">Import a package exported from Logistics desktop.</div>
+<div class="lc-eyebrow">Session</div>
+<div class="lc-group"><button class="lc-linkrow cursor-interaction" id="lc-lock" type="button"><span>Lock connections</span><i data-lucide="lock-keyhole" aria-hidden="true"></i></button></div>
+<div class="lc-foot" id="lc-session-hint" aria-live="polite">Lock to stop access until you unlock again.</div>
+<details><summary class="cursor-interaction">Advanced &amp; troubleshooting</summary><div class="lc-group"><button class="lc-linkrow cursor-interaction" type="button" data-demo="Saved credentials reloaded — preview only.">Reload saved credentials<i data-lucide="refresh-cw" aria-hidden="true"></i></button><button class="lc-linkrow cursor-interaction" type="button" data-demo="Engine check passed — simulated preview.">Check rclone engine<i data-lucide="activity" aria-hidden="true"></i></button><button class="lc-linkrow lc-danger cursor-interaction" type="button" data-demo="In the app, forgetting credentials would require confirmation.">Forget saved credentials<i data-lucide="trash-2" aria-hidden="true"></i></button></div></details>
+<div class="lc-status" id="lc-cloud-status" aria-live="polite"></div>
+</div><div class="lc-home"></div>
+</section>
+<section class="lc-phone" aria-label="SMB shares settings mockup">
+<div class="lc-top"><span>9:41</span><span aria-label="Wi-Fi and battery">••• ▰</span></div>
+<div class="lc-nav"><button class="lc-back cursor-interaction" type="button" data-settings><i data-lucide="chevron-left" aria-hidden="true"></i>Settings</button></div>
+<div class="lc-content">
+<h2>SMB shares</h2><p>Connect to a Mac, PC, or NAS on your network.</p>
+<div class="lc-eyebrow">New connection</div>
+<form id="lc-smb-form">
+<div class="lc-group"><label class="lc-field">Connection name<input name="connection" value="Home Mac" required autocomplete="off"></label><label class="lc-field">Server address<input name="server" placeholder="mac-mini.local or 192.168.1.10" value="mac-mini.local" required autocapitalize="none" spellcheck="false"></label></div>
+<div class="lc-foot">Use a hostname or IP address. Choose a share after connecting.</div>
+<div class="lc-eyebrow">Sign in</div>
+<div class="lc-group"><label class="lc-check">Connect as guest<input type="checkbox" id="lc-guest"></label><div id="lc-account"><label class="lc-field">Username<input name="username" placeholder="Your server account" value="marc" autocomplete="off"></label><label class="lc-field">Password<input name="password" type="password" placeholder="Server account password" autocomplete="off"></label></div></div>
+<details><summary class="cursor-interaction">Advanced options</summary><div class="lc-group"><label class="lc-field">Domain<input value="WORKGROUP" autocomplete="off"></label><label class="lc-field">Port<input type="number" min="1" max="65535" value="445"></label></div></details>
+<div class="lc-group" style="margin-top:8px"><label class="lc-check">Save credentials on this device<input type="checkbox" checked></label></div><div class="lc-foot">Turn off to connect for this session only.</div>
+<button type="submit" class="lc-action cursor-interaction"><i data-lucide="folder-open" aria-hidden="true"></i>Connect &amp; browse shares</button>
+</form>
+<details><summary class="cursor-interaction">Need help connecting?</summary><p>Use the same network or VPN. On a Mac, enable File Sharing, turn on SMB, and allow your account.</p></details>
+<div class="lc-status" id="lc-smb-status" aria-live="polite"></div>
+<div class="lc-group" id="lc-shares" hidden><div class="lc-row"><span class="lc-icon"><i data-lucide="folder" aria-hidden="true"></i></span><div class="lc-copy"><strong>Shared</strong><div class="lc-small">Example share · preview only</div></div></div></div>
+</div><div class="lc-home"></div>
+</section>
+</div>
+</div>
+<script>
+(()=>{
+const root=document.getElementById('logistics-connections');
+const el=id=>root.querySelector('#'+id);
+el('lc-import').onclick=()=>{el('lc-import-form').hidden=!el('lc-import-form').hidden;};
+el('lc-load').onclick=()=>{el('lc-import-status').textContent=el('lc-zip').files.length?'Package selected. This preview does not read credentials.':'Choose a credential ZIP first.';};
+el('lc-remotes').onclick=()=>{el('lc-remote-detail').hidden=!el('lc-remote-detail').hidden;};
+let locked=false;
+el('lc-lock').onclick=()=>{locked=!locked;el('lc-ready').textContent=locked?'Locked':'Ready';el('lc-lock').querySelector('span').textContent=locked?'Unlock connections':'Lock connections';el('lc-session-hint').textContent=locked?'Saved package stays on this device. Unlock to use its remotes.':'Lock to stop access until you unlock again.';el('lc-cloud-status').textContent=locked?'Connections locked — simulated preview.':'Connections unlocked — simulated preview.';};
+el('lc-guest').onchange=e=>{el('lc-account').hidden=e.target.checked;};
+el('lc-smb-form').onsubmit=e=>{e.preventDefault();el('lc-smb-status').textContent='Connected to '+new FormData(e.target).get('server')+' — simulated preview.';el('lc-shares').hidden=false;};
+root.querySelectorAll('[data-demo]').forEach(b=>b.onclick=()=>{el('lc-cloud-status').textContent=b.dataset.demo;});
+root.querySelectorAll('[data-settings]').forEach(b=>b.onclick=()=>{const status=b.closest('section').querySelector('[aria-live]');status.textContent='Settings → Connections: rclone connections · SMB shares';});
+if(globalThis.Tweak){const state={showHelp:false};const t=new Tweak({container:root,onChange:()=>{root.querySelectorAll('details').forEach(d=>d.open=state.showHelp);}});t.addToggle(state,'showHelp',{label:'Expand advanced options'});}
+})();
+</script>

@@ -79,7 +79,7 @@ does not expose reset/clean.
 
 The declaration contributes `git.workspace` with the `git` navigation icon.
 The shell places the page using its contribution and page navigation properties;
-feature code does not insert controls into the rail. Folder Actions independently
+feature code does not insert controls into the rail. Workspace actions independently
 hosts rclone jobs. Keep exact ordering in the shell rather than treating a proposed
 future destination as part of this feature's contract.
 

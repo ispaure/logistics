@@ -134,7 +134,7 @@ page-specific explanation; otherwise the card uses the feature's `FEATURE_DESCRI
 or its name. The declaration's existing name, page ID, factory and order remain the
 source of truth. Cards reuse retained page instances; their factories do not run
 again when the user selects a launch mode. Core File Browser is mandatory, with
-Folder Hub and Bulk Rename provided by the host.
+Workspaces and Bulk Rename provided by the host.
 
 `DocumentLauncherContribution` adds a Read & edit card through `editor_id`, `name`,
 `icon`, `order`, `open_document`, optional `new_document`, and `description`.

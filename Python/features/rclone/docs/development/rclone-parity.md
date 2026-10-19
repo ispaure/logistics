@@ -323,7 +323,7 @@ credential identifiers and native request names remain unchanged.
    facades in `logisticsmobile/native_archives.py`. The focused presentation group
    passed 50 tests.
 3. Moved the local-Push chooser form into the feature review controller, leaving
-   Folder Hub with navigation/action dispatch. Updated the separate Qt proof to
+   Workspaces with navigation/action dispatch. Updated the separate Qt proof to
    package/import the feature-owned bridge, with an isolated import regression.
 4. Updated all source/test callers directly and removed old module paths, without
    compatibility forwarding files. Packaging explicitly lists feature modules and
@@ -331,7 +331,7 @@ credential identifiers and native request names remain unchanged.
    regression coverage for missing feature dependencies, package ownership and
    core imports that must not initialize the app, credentials or either UI.
 
-Folder Hub, generic Files/document hosting, navigation/scenes, OS picker access,
+Workspaces, generic Files/document hosting, navigation/scenes, OS picker access,
 private-session lifecycle and screen privacy stay app-owned. Generic ID validators
 live in `services/identifiers.py`; generic resource-import records do not depend
 on a transfer-job module for hash validation. Mobile adapters consume generic host
@@ -370,7 +370,7 @@ on the current path. Transfer-baseline validation now belongs to `mirror_jobs`.
 
 Moved encrypted provider/store resolution into feature `mobile/file_resources.py`,
 the downloaded-crypt catalog action into `mobile/localcrypt_ui.py`, and encrypted
-root lookup for Folder Hub deletion into `mobile/mirror_ui.py`. Generic Files
+root lookup for Workspaces deletion into `mobile/mirror_ui.py`. Generic Files
 continues to host browsing, mutation controls and ordinary text/document opening;
 it calls feature adapter functions without constructing crypt provider classes
 or knowing their storage layout.
@@ -435,7 +435,7 @@ local and unstaged; no commits.
   Crypt Push still authenticates every file through `mirror_validate`, validates
   encoded directory paths, and compares file and tree versions before Sync.
 - Encrypted library-source discovery and reader-store resolution use feature
-  adapter functions. Folder Hub delegates managed-target and decoded remote-path
+  adapter functions. Workspaces delegates managed-target and decoded remote-path
   resolution to feature helpers. Generic library INI parsing, browsing and
   navigation stay app-owned.
 

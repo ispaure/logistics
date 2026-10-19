@@ -5,6 +5,62 @@ from time import monotonic
 from features.books.locations import utf16_length
 
 
+class PlaybackTimer:
+    """A listening-time budget, independent of utterances and playback speed."""
+    def __init__(self, loop, *, changed, expired, clock=monotonic):
+        self.loop, self.changed, self.expired, self.clock = loop, changed, expired, clock
+        self.duration = self.remaining = 0
+        self.running = False
+        self.deadline = None
+        self.handle = None
+
+    def select(self, seconds):
+        self.duration = seconds
+        self.reset()
+
+    def reset(self):
+        self._cancel()
+        self.remaining = self.duration
+        self.deadline = self.clock() + self.remaining if self.running and self.duration else None
+        self._tick()
+
+    def set_running(self, running):
+        if running == self.running:
+            return
+        if self.deadline is not None:
+            self.remaining = max(0, self.deadline - self.clock())
+        self._cancel()
+        self.running = running
+        # A deliberate Play after expiry starts a fresh listening period.
+        if running and self.duration and self.remaining <= 0:
+            self.remaining = self.duration
+        self.deadline = self.clock() + self.remaining if running and self.duration else None
+        self._tick()
+
+    def _cancel(self):
+        if self.handle is not None:
+            self.handle.cancel()
+            self.handle = None
+
+    def _tick(self):
+        self.handle = None
+        if self.deadline is not None:
+            self.remaining = max(0, self.deadline - self.clock())
+        self.changed(self.remaining)
+        if self.deadline is not None:
+            if self.remaining <= 0:
+                self.deadline = None
+                self.running = False
+                self.expired()
+            else:
+                self.handle = self.loop.call_later(min(1, self.remaining), self._tick)
+
+    def dispose(self):
+        self._cancel()
+        self.running = False
+        self.deadline = None
+
+
 def utterances(text, start=0, end=None, *, limit=1000, breaks=()):
     """Keep browser offsets intact, including astral characters and block edges."""
     units = [0]

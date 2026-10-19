@@ -18,7 +18,7 @@ class FolderActionTests(QtTestCase):
         self.tabs = qt.QTabWidget()
         self.tabs.addTab(qt.QLabel('Browser'), 'Browser')
         self.page = FolderActionsPage(self.activate, self.host)
-        self.tabs.addTab(self.page, 'Folder Actions')
+        self.tabs.addTab(self.page, 'Workspace actions')
         self.host.setCentralWidget(self.tabs)
         self.host.resize(1000, 700); self.host.show(); self.host.activateWindow()
         register_process_host(self.page)

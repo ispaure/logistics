@@ -6,7 +6,7 @@ also enables its Images dependency.
 
 ## Open a library
 
-Select a configured comics folder on **Folder Hub** and choose **Open Comics Library…**.
+Select a configured comics folder on **Workspaces** and choose **Open Comics Library…**.
 To define its library tabs, place `remoteConfig.ini` at the collection root:
 
 ```ini
@@ -154,7 +154,7 @@ not preserved. Book-level metadata remains. Metadata-only edits preserve page by
 and page records. A batch compression marker prevents automatic recompression even
 if your desired settings later change.
 
-For collection tools offered through Folder Hub/Debug, review the target before
+For collection tools offered through Workspaces/Debug, review the target before
 organization or author/series changes. Organization copies before removing its
 source and stops on the first failure; this differs from compression, which can
 continue past failed comics. There is no collection-wide Undo. If an action fails,

@@ -203,7 +203,7 @@ The platform runner invokes both suites plus compression parity.
 
 Windows/Linux native desktop behavior has not been tested here. These checks do
 not establish debugger, diagnostics, crash recovery, or full dynamic Python/Blade
-analysis support. Concurrent unrelated File Browser/Folder Hub/workspace changes
+analysis support. Concurrent unrelated File Browser/Workspaces/workspace changes
 were present in the shared checkout during validation and were not staged in IDE
 commits.
 

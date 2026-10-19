@@ -148,7 +148,7 @@ live under this feature; portable policy lives in its owning workflow.
 | Feature ciphertext storage | `localcrypt/mobile/copies.py`, `file_resources.py`, `crypt_stream.py`, `previews.py` |
 | Feature native presentation | `mobile/cloud_ui.py`, `mirror_ui.py`, `transfer_review_ui.py`, `localcrypt_ui.py`, `messages.py` |
 | Generic app document hosting | `logisticsmobile/provider_ui.py`, `provider_readers.py`, `text_resources.py`, `native_archives.py`, `private_sessions.py` |
-| Generic app integration | Folder Hub, Files, navigation/scenes, document persistence, screen privacy and OS picker access stay in `logisticsmobile` |
+| Generic app integration | Workspaces, Files, navigation/scenes, document persistence, screen privacy and OS picker access stay in `logisticsmobile` |
 
 Feature UI adapters consume host navigation, pickers and document services through
 explicit imports and the existing app/controller interfaces. Ciphertext storage

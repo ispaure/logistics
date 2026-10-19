@@ -3,7 +3,7 @@
 The [Logistics wiki](../docs.md) contains systemic desktop usage, mobile usage
 and development guides. [Feature infrastructure](feature-infrastructure.md)
 explains feature ownership; each feature keeps its own `docs/` wiki. Common UI
-and Folder Hub help belong to Logistics; Bulk Rename remains under `ui_new`.
+and Workspaces help belong to Logistics; Bulk Rename remains under `ui_new`.
 Shared commonUtils API guides and optional external feature internals stay in
 their own repositories. This migration moves existing manuals before editing
 or splitting them; compatibility entries contain links rather than copied guides.

@@ -25,7 +25,7 @@ pinned by Logistics.
 
 ## Download
 
-1. Select the configured local folder on **Folder Hub**.
+1. Select the configured local folder on **Workspaces**.
 2. Open **YouTube Downloader…**.
 3. Start the intended download operation and review process output and failures.
 

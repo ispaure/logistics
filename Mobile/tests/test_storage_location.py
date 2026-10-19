@@ -238,23 +238,51 @@ class CollectionStorageTests(unittest.TestCase):
             recover_location(self.private, self.volume)
         self.assertFalse((self.private / CONFIG).exists())
 
-        base = self.volume / 'Logistics/Local'
+        base = self.volume / 'Logistics'
         base.mkdir(parents=True)
-        (base / 'escape').symlink_to(self.private, target_is_directory=True)
+        (base / 'Local').symlink_to(self.private, target_is_directory=True)
         with self.assertRaisesRegex(ValueError, 'Linked'):
             recover_location(self.private, self.volume)
         self.assertFalse((self.private / CONFIG).exists())
 
-    def test_unreadable_recovery_tree_never_activates(self):
-        (self.volume / 'Logistics/Local').mkdir(parents=True)
-
-        def unreadable(root, **kwargs):
-            kwargs['onerror'](PermissionError('Storage access denied'))
-            return iter(())
-
-        with patch('features.rclone.mobile.storage_location.os.walk', side_effect=unreadable):
+    def test_unreadable_recovery_root_never_activates(self):
+        tree = self.volume / 'Logistics/Local'
+        tree.mkdir(parents=True)
+        original_stat = Path.stat
+        def unreadable(path, *args, **kwargs):
+            if path == tree:
+                raise PermissionError('Storage access denied')
+            return original_stat(path, *args, **kwargs)
+        with patch.object(Path, 'stat', unreadable):
             with self.assertRaisesRegex(PermissionError, 'denied'):
                 recover_location(self.private, self.volume)
+        self.assertFalse((self.private / CONFIG).exists())
+
+    def test_reconnect_after_reset_never_scans_or_reads_collection_contents(self):
+        target = self.volume / 'Logistics/LocalCrypt/unreadable-file'
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b'retained ciphertext')
+        original_open = Path.open
+        def unreadable(path, *args, **kwargs):
+            if path == target:
+                raise OSError(errno.EIO, 'I/O error', str(path))
+            return original_open(path, *args, **kwargs)
+        events = []
+        with patch.object(Path, 'open', unreadable), \
+                patch('features.rclone.mobile.storage_location.os.walk', side_effect=AssertionError('Must not scan')), \
+                patch('features.rclone.mobile.storage_location._inventory', side_effect=AssertionError('Must not hash')):
+            self.assertTrue(recover_location(self.private, self.volume, progress=events.append))
+        self.assertEqual(collection_path(self.private, True), target.parent)
+        self.assertTrue(collection_path(self.private).is_dir())
+        self.assertEqual(target.read_bytes(), b'retained ciphertext')
+        self.assertEqual([event['phase'] for event in events], ['Checking location', 'Saving location', 'Complete'])
+
+    def test_recovery_rejects_file_in_place_of_either_collection_folder(self):
+        base = self.volume / 'Logistics'
+        (base / 'Local').mkdir(parents=True)
+        (base / 'LocalCrypt').write_bytes(b'not a folder')
+        with self.assertRaisesRegex(ValueError, 'must be a folder'):
+            recover_location(self.private, self.volume)
         self.assertFalse((self.private / CONFIG).exists())
 
     def test_android_filesystem_without_fsync_still_verifies_bytes(self):

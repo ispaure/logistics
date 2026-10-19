@@ -146,6 +146,12 @@ On a shared drive, the two folders are `<drive>/Logistics/Local` and
 | **Start empty here — keep old files…** | Creates/selects empty collection folders without copying. Refuses a location containing files. Works even if the previously selected card is unavailable. | Current files stay at their old location. Private documents, credentials and metadata remain. |
 | **Erase collection files at this location…** | Permanently deletes only the displayed Local and LocalCrypt folders, their contents, interrupted `.storage-copy-*` folders and the location marker. Does not select another location. | Unrelated folders, private documents, credentials, settings and metadata remain. Disabled/refused for the collection currently in use. |
 
+After reinstalling or resetting the app, select the SD card and choose **Use
+existing files here — no copy…** to reconnect retained collections. This checks
+the collection folder paths and saves the location without scanning subfolders,
+reading file contents or calculating checksums. It is not an integrity check;
+an unreadable file can still report an error when opened later.
+
 “Inactive” previously meant **not currently selected by Logistics**, not empty,
 obsolete or safe to delete. Example: after copying internal collections to an SD
 card, the internal copy is retained but no longer selected. To return to that

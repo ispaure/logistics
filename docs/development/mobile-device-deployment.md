@@ -176,3 +176,26 @@ Wi-Fi. A physical-device screenshot showed Workspaces and the destination bar;
 the local evidence is `Mobile/logs/iphone-startup-appearance-fixed.png`.
 All 10 focused appearance and packaged-startup tests passed. No uninstall or
 app-data reset was performed.
+
+## Grouped workspace startup regression (2026-10-18)
+
+The physical iPhone log exposed an `AttributeError` in `folder_hub_style.tree_anchor`:
+on its UIKit version, Rubicon exposes `intrinsicContentSize` as a bound method.
+Reading `.width` directly aborted startup while building saved nested workspace
+groups, before installing the native navigation adapter. The partially built
+window showed Toga's default star tab icons and an empty Workspaces page.
+An empty test workspace did not exercise the failing group-heading measurement.
+
+`tree_anchor` now resolves either a callable getter or a size property before
+reading the width. The appearance regression test covers both bridge shapes and
+the long-heading anchor limit. When investigating default stars together with
+missing page content, inspect startup exceptions before changing tab artwork.
+
+The fix was installed in place on the paired iPhone and iPad. Physical iPhone
+screenshots confirmed the normal destination icons and the populated, saved
+Cloud workspace hierarchy. Local evidence is retained at
+`Mobile/logs/iphone-workspace-startup-fixed-home.png`,
+`iphone-workspaces-restored.png` and `iphone-workspace-startup-failure.log`.
+All 44 appearance, workspace-hub and packaged-startup host checks passed.
+No uninstall or app-data reset was performed; this does not certify every
+feature workflow on the physical devices.

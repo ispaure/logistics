@@ -55,7 +55,7 @@ and **IDE** without the sidebar. **Read & edit** cards launch enabled editors an
 readers, including comics, EPUBs and archives. Single-tool views keep a small
 settings icon at the bottom-left; clicking it opens settings and navigation choices.
 
-Use **File Browser** for any folder, or **Folder Hub** for configured libraries
+Use **File Browser** for any folder, or **Workspaces** for configured libraries
 and remote storage. **Documents** collects open readers and editors; their tabs can
 be split or detached. Text, Markdown, EPUB and comic Open dialogs share a Local/LocalCrypt
 file picker; encrypted copies open in private readers or editors. Regular and private file browsers
